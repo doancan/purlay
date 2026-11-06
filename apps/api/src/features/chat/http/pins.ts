@@ -2,18 +2,20 @@
  * A channel's pins through HTTP (#485, D-130): pin, let go, and the list. A change tells everyone
  * watching the channel (`PINS_UPDATED`), after the commit, and only when it was one.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import type { PinList } from '@purlay/types';
-import { requireChannelById } from '../../features/chat/channels/guard';
-import { NO_LOG, publication, publishAfterCommit, publishPinsUpdated } from '../../platform/events';
-import { atomicallyOn } from '../../platform/transactions';
+import { requireChannelById } from '../channels/guard';
 import {
-  channelPins,
-  pinMessage,
-  unpinMessage,
-  type PinChange,
-} from '../../features/chat/pins/pins';
-import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
+  NO_LOG,
+  publication,
+  publishAfterCommit,
+  publishPinsUpdated,
+} from '../../../platform/events';
+import { atomicallyOn } from '../../../platform/transactions';
+import { channelPins, pinMessage, unpinMessage, type PinChange } from '../pins/pins';
+import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import { requireSession } from '../../../ingress/http/session';
 
 const told = async (
   { bus, clock, log = NO_LOG }: ChannelWriteDependencies,
@@ -54,7 +56,7 @@ export const deletePin = async (
 };
 
 /** `GET /api/channels/:channelId/pins` — newest pin first, bounded by `PINS_MAX`. */
-export const listPins = async (
+const listPins = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -63,3 +65,21 @@ export const listPins = async (
   const context = await requireChannelById(database, userId, channelId);
   return await channelPins(database, context);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const pinRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/channels/:channelId/pins',
+      async ({ request, params }) => await listPins(context, request, params.channelId),
+    )
+    .put('/api/messages/:messageId/pin', async ({ request, params, set }) => {
+      await putPin(context, request, params.messageId);
+      set.status = 204;
+      return null;
+    })
+    .delete('/api/messages/:messageId/pin', async ({ request, params, set }) => {
+      await deletePin(context, request, params.messageId);
+      set.status = 204;
+      return null;
+    });

@@ -72,6 +72,30 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/module-compat.test.ts'],
   },
   {
+    id: 'chat-handler-records-an-issues-action',
+    why: 'a route handler of chat records an action issues owns, which no manifest lists for chat, and the sweep that held only a module’s folder never read the handler (D-265)',
+    file: 'apps/api/src/features/chat/http/pins.ts',
+    find: "import type { PinList } from '@purlay/types';",
+    replace: "import type { PinList } from '@purlay/types';\nvoid { action: 'issue.deleted' };",
+    tests: ['apps/api/src/audit-emissions.test.ts'],
+  },
+  {
+    id: 'chat-routes-leave-out-a-resource',
+    why: 'a resource whose routes moved into chat’s folder is not used by chat’s plugin, so its paths are the 404 of an unknown one (D-280)',
+    file: 'apps/api/src/features/chat/http/routes.ts',
+    find: '    .use(pinRoutes(context))\n',
+    replace: '',
+    tests: ['apps/api/src/features/chat/http/pins.integration.test.ts'],
+  },
+  {
+    id: 'chat-routes-slot-dropped',
+    why: 'chat’s slot supplies no routes, so the paths that left `app.ts` are the 404 of an unknown one with chat running (D-280)',
+    file: 'apps/api/src/features/chat/module.ts',
+    find: '  routes: chatRoutes,\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/route-ownership.test.ts'],
+  },
+  {
     id: 'chat-sends-an-event-its-manifest-does-not-list',
     why: 'chat’s code sends an event its manifest does not list, so a process that does not run chat would still be told it (D-250)',
     file: 'apps/api/src/features/chat/module.ts',
@@ -328,6 +352,14 @@ export const API_CHAT: readonly Mutation[] = [
     replace:
       "    .where(notHiddenBy(context.userId))\n    .orderBy('pinned_messages.pinned_at', 'desc')\n",
     tests: ['apps/api/src/features/chat/pins/pins.integration.test.ts'],
+  },
+  {
+    id: 'pins-told-of-nothing',
+    why: 'a pin that changed nothing tells the whole channel',
+    file: 'apps/api/src/features/chat/http/pins.ts',
+    find: '  if (!change.changed) return;\n',
+    replace: '',
+    tests: ['apps/api/src/features/chat/http/pins.integration.test.ts'],
   },
   {
     id: 'postmortem-save-unlocked',

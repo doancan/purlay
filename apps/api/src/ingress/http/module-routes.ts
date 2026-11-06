@@ -11,6 +11,9 @@
 import type { Executor } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Clock } from '../../platform/clock';
+import type { EventBus } from '../../platform/events';
+import type { Logger } from '../../platform/logging';
+import type { Atomically } from '../../platform/transactions';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 
 export interface ModuleRouteDependencies {
@@ -21,4 +24,10 @@ export interface ModuleRouteDependencies {
   readonly clock: Clock;
   /** What a role may do in a process that runs these modules. */
   readonly permissions: PermissionTable;
+  /** What a write tells the sockets through. */
+  readonly bus: EventBus;
+  /** The transaction boundary a write that tells the sockets runs in, so that it tells them only once committed. */
+  readonly atomically: Atomically;
+  /** Where a failed publish is written; the write it follows is already committed. */
+  readonly log: Logger;
 }

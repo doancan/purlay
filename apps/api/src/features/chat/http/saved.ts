@@ -2,19 +2,21 @@
  * Saved messages through HTTP (#484, D-128): save, move, let go, and the lists. Each is the
  * caller's own; a change tells only their own tabs (`SAVED_UPDATED`), after the commit.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import { SaveMessageRequest, SavedQuery, type SavedIds, type SavedPage } from '@purlay/types';
 import {
   NO_LOG,
   publication,
   publishAfterCommit,
   publishSavedUpdated,
-} from '../../platform/events';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { atomicallyOn } from '../../platform/transactions';
-import { saveMessage, savedIds, savedPage, unsaveMessage } from '../../features/chat/saved/saved';
-import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
-import { queryOf, validated } from './validate';
+} from '../../../platform/events';
+import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { atomicallyOn } from '../../../platform/transactions';
+import { saveMessage, savedIds, savedPage, unsaveMessage } from '../saved/saved';
+import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import { requireSession } from '../../../ingress/http/session';
+import { queryOf, validated } from '../../../ingress/http/validate';
 
 const told = async (
   { bus, clock, log = NO_LOG }: ChannelWriteDependencies,
@@ -55,7 +57,7 @@ export const deleteSaved = async (
 };
 
 /** `GET /api/workspaces/:workspaceId/saved?state=` — one state's saves, newest first. */
-export const listSaved = async (
+const listSaved = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   workspaceId: string,
@@ -67,7 +69,7 @@ export const listSaved = async (
 };
 
 /** `GET /api/workspaces/:workspaceId/saved/ids` — which messages are saved, to mark them. */
-export const listSavedIds = async (
+const listSavedIds = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   workspaceId: string,
@@ -76,3 +78,25 @@ export const listSavedIds = async (
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   return await savedIds(database, context);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const savedRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/workspaces/:workspaceId/saved',
+      async ({ request, params }) => await listSaved(context, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/saved/ids',
+      async ({ request, params }) => await listSavedIds(context, request, params.workspaceId),
+    )
+    .put('/api/messages/:messageId/saved', async ({ request, params, body, set }) => {
+      await putSaved(context, request, params.messageId, body);
+      set.status = 204;
+      return '';
+    })
+    .delete('/api/messages/:messageId/saved', async ({ request, params, set }) => {
+      await deleteSaved(context, request, params.messageId);
+      set.status = 204;
+      return '';
+    });

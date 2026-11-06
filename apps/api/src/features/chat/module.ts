@@ -15,6 +15,7 @@ import { forgetWhatChatKeeps } from './channels/user-hooks';
 import { requireAttachmentById } from './channels/guard';
 import { chatWorkspaceChannels } from './channels/workspace-channels';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
+import { chatRoutes } from './http/routes';
 import { chatJobWork } from './jobs';
 import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
@@ -107,4 +108,6 @@ export const chatModule = {
   jobWork: chatJobWork,
   // What the router asks of chat for the operations of `frames` above that it has moved here (`MODULES.md` §9).
   frameHandlers: chatFrameHandlers,
+  // Chat's routes that have left `ingress/http/` (D-280); `route-ownership.test.ts` lists the module until the last has.
+  routes: chatRoutes,
 };

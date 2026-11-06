@@ -4,6 +4,7 @@
  * test client's refusal of a call nobody expected, and the motion hook where there is no window.
  */
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { waitFor } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { Outlet } from '../../app/outlet';
 import { ApiError } from '../../data/errors';
@@ -15,6 +16,7 @@ import { SetupFailure } from './client';
 import { useReducedMotion } from './motion';
 import { CopyField } from './parts';
 import { aClient, aState, openSetup, ORIGIN, settle } from './testing';
+import { SetupScreen } from './setup-screen';
 import { VerifyScreen } from './verify-screen';
 
 installDom();
@@ -113,6 +115,35 @@ describe('the wizard, when what it needs could not be read', () => {
     await settle();
     expect(asked).toBe(2);
     expect(view.queryByText('Could not read the setup')).toBeNull();
+  });
+});
+
+describe('the wizard with no client of its own', () => {
+  let network: ReturnType<typeof spyOn<typeof globalThis, 'fetch'>>;
+  beforeEach(() => {
+    network = spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(aState()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  });
+  afterEach(() => {
+    network.mockRestore();
+  });
+
+  // Every other test hands the screen a client; this is the one that reads the state through the page's own `fetch`, as the
+  // front door does, and waits for that request instead of for a number of turns of the event loop.
+  test('reads its state through the page’s fetch, once the server says it is open', async () => {
+    const view = await renderApp(<SetupScreen />, {
+      api: anApi({ setupStatus: () => Promise.resolve({ open: true, appUrl: ORIGIN }) }),
+    });
+    await waitFor(() => {
+      expect(network).toHaveBeenCalledTimes(1);
+    });
+    expect(network.mock.calls[0]?.[0]).toBe('/setup/state');
+    expect(network.mock.calls[0]?.[1]?.method).toBe('GET');
+    expect(await view.findByText('Step 2 of 8')).toBeDefined();
   });
 });
 
