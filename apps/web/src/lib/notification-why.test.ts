@@ -4,10 +4,10 @@
  */
 import { describe, expect, test } from 'bun:test';
 import type { Notification } from '@purlay/types';
-import { en } from '../../../i18n/catalogue/en';
-import { tr } from '../../../i18n/catalogue/tr';
-import { createTranslate } from '../../../i18n/translate';
-import { whyOf } from './why';
+import { en } from '../i18n/catalogue/en';
+import { tr } from '../i18n/catalogue/tr';
+import { createTranslate } from '../i18n/translate';
+import { whyOf } from './notification-why';
 
 const reminder = {
   id: 'n-1',

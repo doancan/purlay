@@ -24,7 +24,7 @@ import {
 import { CONVERSATION_PEOPLE_MAX } from '@purlay/types';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
-import { groups } from '../sidebar/ordering';
+import { groups } from '../../../lib/channel-lists';
 
 installDom();
 

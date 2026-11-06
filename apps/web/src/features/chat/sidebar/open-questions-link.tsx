@@ -14,7 +14,7 @@ import { Link, useRoute } from '../../../router/router-provider';
 import { Tooltip } from '../../../ui/tooltip';
 import { RailItemContent, railItemClasses } from '../../shell/rail-item';
 import { useWorkspace } from '../../shell/workspace';
-import { shownQuestionCount } from './ordering';
+import { shownQuestionCount } from '../../../lib/channel-lists';
 
 export const OpenQuestionsLink = (): React.JSX.Element => {
   const { t, format } = useI18n();

@@ -42,7 +42,7 @@ import { useToast } from '../../../ui/toast';
 import { useLeaveRefusal } from '../channel/leave';
 import { GroupDetailsDialog } from '../conversations/group-details';
 import { useWorkspace } from '../../shell/workspace';
-import { forgetChannel } from '../questions/last-channel';
+import { forgetChannel } from '../../../data/last-channel';
 
 /** The same chunk the header's name opens (D-49): fetched once, by whichever asks first. */
 const ChannelDetailsDialog = lazy(async () => ({
