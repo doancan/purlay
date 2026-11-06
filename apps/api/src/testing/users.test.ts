@@ -18,6 +18,6 @@ describe('test users', () => {
 
   test('two slugs for one name are never the same', () => {
     expect(aUniqueSlug('team')).not.toBe(aUniqueSlug('team'));
-    expect(aUniqueSlug('team')).toMatch(/^team-[0-9a-f]{6}$/);
+    expect(aUniqueSlug('team')).toMatch(/^team-[0-9a-f]{8}$/);
   });
 });
