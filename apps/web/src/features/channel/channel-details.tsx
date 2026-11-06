@@ -21,7 +21,7 @@ import {
   type UserRole,
 } from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
-import { fold } from '../../lib/fold';
+import { fold } from '../composer/mention-suggest';
 import { useActions } from '../../data/actions-provider';
 import { useApi } from '../../data/api-provider';
 import { isApiError } from '../../data/errors';

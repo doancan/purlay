@@ -22,7 +22,7 @@ import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
 import { useChannelTitle } from '../channel/channel-header';
-import { fold } from '../../lib/fold';
+import { fold } from '../composer/mention-suggest';
 import { useWorkspace } from '../shell/workspace';
 import { messageUrl } from './message-link';
 

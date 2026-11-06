@@ -20,7 +20,7 @@ import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 import { FINDABLE_FROM, TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
-import { fold } from '../../lib/fold';
+import { fold } from '../composer/mention-suggest';
 import { useWorkspace } from '../shell/workspace';
 import { joinableChannels } from './ordering';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
