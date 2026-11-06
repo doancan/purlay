@@ -76,3 +76,17 @@ export const APT_TIMEOUTS = [
 ].join('\n');
 
 export const APT_TIMEOUTS_FILE = '/etc/apt/apt.conf.d/99purlay-timeouts';
+
+/**
+ * The mirrors apt tries, in order. The runner lists only its own cloud's mirror, and on Ubuntu 26.04 that
+ * one stalls, at certain hours, on the same few font packages of the browser's dependencies, three tries
+ * out of three (the "install the browser" step, cut at three minutes each time). The archive's own host
+ * goes first; the cloud's stays as the second.
+ */
+export const APT_MIRRORS = [
+  'http://archive.ubuntu.com/ubuntu/\tpriority:1',
+  'http://azure.archive.ubuntu.com/ubuntu/\tpriority:2',
+  '',
+].join('\n');
+
+export const APT_MIRRORS_FILE = '/etc/apt/apt-mirrors.txt';

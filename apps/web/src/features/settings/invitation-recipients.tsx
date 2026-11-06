@@ -1,3 +1,4 @@
+import { systemClock } from '../../system-clock';
 import { useEffect, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -97,6 +98,15 @@ const Recipient = ({ value }: { readonly value: InvitationRecipient }): React.JS
   const [history, setHistory] = useState(false);
   const [busy, setBusy] = useState<'resend' | 'revoke' | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // The recipient poll sees asynchronous receipts and revocations. Refresh an open history
+  // when that evidence changes; a closed history is only marked stale until it is opened.
+  // Cancel an older read first, including a first page that has not answered yet.
+  useEffect(() => {
+    const queryKey = keys.invitationDeliveries(workspace.id, value.id);
+    void client.cancelQueries({ queryKey }).then(async () => {
+      await client.invalidateQueries({ queryKey });
+    });
+  }, [client, workspace.id, value.id, value.latest]);
   const act = async (action: 'resend' | 'revoke'): Promise<void> => {
     if (busy !== null) return;
     setBusy(action);

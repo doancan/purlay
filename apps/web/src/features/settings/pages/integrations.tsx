@@ -10,11 +10,11 @@
  * GitHub stopped accepting one (revoked, expired) and when a classic token is broader than cards need
  * (D-23, amended; #884): both are shown here, to whoever can configure it.
  */
-import { GITHUB_TOKEN_MAX } from '@purlay/types';
+import { GITHUB_TOKEN_MAX, type GitHubIntegration } from '@purlay/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
-import { isApiError } from '../../../data/errors';
+import { isApiError, isUnconfirmedMutation } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
@@ -52,6 +52,10 @@ export const IntegrationsPage = (): React.JSX.Element => {
   const reread = async (): Promise<void> => {
     await client.invalidateQueries({ queryKey: keys.githubIntegration(workspace.id) });
   };
+  const apply = async (receipt: GitHubIntegration): Promise<void> => {
+    await client.cancelQueries({ queryKey: keys.githubIntegration(workspace.id), exact: true });
+    client.setQueryData(keys.githubIntegration(workspace.id), receipt);
+  };
 
   const save = async (event: React.SyntheticEvent): Promise<void> => {
     event.preventDefault();
@@ -64,20 +68,22 @@ export const IntegrationsPage = (): React.JSX.Element => {
     setBusy('save');
     setProblem(null);
     try {
-      await api.setGitHubToken(workspace.id, wanted);
+      const receipt = await api.setGitHubToken(workspace.id, wanted);
+      await apply(receipt);
       setToken('');
       show({ message: t('github.saved') });
       await reread();
     } catch (failure) {
       setProblem(
-        !isApiError(failure)
-          ? { field: 'form', message: `${t('github.saveFailed')} ${describe(failure)}` }
-          : failure.code === 'VALIDATION_FAILED'
+        isUnconfirmedMutation(failure)
+          ? { field: 'form', message: t('github.unconfirmed') }
+          : isApiError(failure) && failure.code === 'VALIDATION_FAILED'
             ? { field: 'token', message: t('github.rejected') }
-            : failure.code === 'GITHUB_UNAVAILABLE'
+            : isApiError(failure) && failure.code === 'GITHUB_UNAVAILABLE'
               ? { field: 'form', message: `${t('github.saveFailed')} ${t('github.unreachable')}` }
               : { field: 'form', message: `${t('github.saveFailed')} ${describe(failure)}` },
       );
+      void reread();
     } finally {
       setBusy(null);
     }
@@ -88,13 +94,18 @@ export const IntegrationsPage = (): React.JSX.Element => {
     setBusy('disconnect');
     setProblem(null);
     try {
-      await api.removeGitHubToken(workspace.id);
+      const receipt = await api.removeGitHubToken(workspace.id);
+      await apply(receipt);
+      show({ message: t('github.disconnected') });
       await reread();
     } catch (failure) {
       setProblem({
         field: 'form',
-        message: `${t('github.disconnectFailed')} ${describe(failure)}`,
+        message: isUnconfirmedMutation(failure)
+          ? t('github.unconfirmed')
+          : `${t('github.disconnectFailed')} ${describe(failure)}`,
       });
+      void reread();
     } finally {
       setBusy(null);
     }
@@ -153,52 +164,61 @@ export const IntegrationsPage = (): React.JSX.Element => {
                       : t('github.notConnected'),
                 })}
           >
-            {status.isError ? (
-              <span className="flex items-center gap-3">
-                <span className="text-label text-ink-muted">{describe(status.error)}</span>
-                <Button
-                  onClick={() => {
-                    void status.refetch();
-                  }}
-                >
-                  {t('common.retry')}
-                </Button>
-              </span>
-            ) : status.data === undefined ? (
-              <LoadingStatus label={t('common.loading')} className="w-full">
-                <Skeleton />
-              </LoadingStatus>
-            ) : (
-              <span className="flex min-w-0 items-center gap-3">
-                <span
-                  className={
-                    refused !== null
-                      ? 'inline-flex h-badge items-center rounded-pill bg-danger-subtle px-2 text-caption font-medium text-danger-text'
-                      : connected
-                        ? 'inline-flex h-badge items-center rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text'
-                        : 'inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption font-medium text-ink-muted'
-                  }
-                >
-                  {refused !== null
-                    ? t('settings.integrations.refused')
-                    : connected
-                      ? t('settings.integrations.connected')
-                      : t('settings.integrations.notConnected')}
-                </span>
-                {connected && (
+            <span className="flex min-w-0 flex-col gap-3">
+              {status.isError && (
+                <span className="flex flex-wrap items-center gap-3">
+                  <span role="alert" className="text-label text-ink-muted">
+                    {status.data !== undefined && t('github.refreshFailed')}{' '}
+                    {describe(status.error)}
+                  </span>
                   <Button
-                    variant="dangerQuiet"
-                    busy={busy === 'disconnect'}
-                    disabled={busy !== null}
+                    busy={status.isFetching}
                     onClick={() => {
-                      void disconnect();
+                      void status.refetch();
                     }}
                   >
-                    {t('github.disconnect')}
+                    {t('common.retry')}
                   </Button>
-                )}
-              </span>
-            )}
+                </span>
+              )}
+              {status.data === undefined ? (
+                !status.isError && (
+                  <LoadingStatus label={t('common.loading')} className="w-full">
+                    <Skeleton />
+                  </LoadingStatus>
+                )
+              ) : (
+                <span className="flex min-w-0 items-center gap-3">
+                  <span
+                    className={
+                      refused !== null
+                        ? 'inline-flex h-badge items-center rounded-pill bg-danger-subtle px-2 text-caption font-medium text-danger-text'
+                        : connected
+                          ? 'inline-flex h-badge items-center rounded-pill bg-success-subtle px-2 text-caption font-medium text-success-text'
+                          : 'inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption font-medium text-ink-muted'
+                    }
+                  >
+                    {refused !== null
+                      ? t('settings.integrations.refused')
+                      : connected
+                        ? t('settings.integrations.connected')
+                        : t('settings.integrations.notConnected')}
+                  </span>
+                  {connected && (
+                    <Button
+                      variant="dangerQuiet"
+                      busy={busy === 'disconnect'}
+                      disabled={busy !== null}
+                      onClick={() => {
+                        void disconnect();
+                      }}
+                    >
+                      {t('github.disconnect')}
+                    </Button>
+                  )}
+                </span>
+              )}
+            </span>
           </SettingsRow>
           <SettingsTextRow
             readOnly={busy !== null}

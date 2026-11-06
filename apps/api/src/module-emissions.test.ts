@@ -41,7 +41,8 @@ describe('what a module’s code names on the socket', () => {
   test('a module’s sources are its folder and the files of the doors that import it, never the composition root', () => {
     const chat = sourcesOf('chat').map(shown);
     expect(chat).toContain('features/chat/module.ts');
-    expect(chat).toContain('ingress/http/messages.ts');
+    expect(chat).toContain('features/chat/http/messages.ts');
+    expect(chat).toContain('ingress/http/missed-mail.ts');
     expect(sourcesOf('issues').map(shown)).toContain('features/issues/http/routes.ts');
     for (const module of carried) {
       expect(sourcesOf(module.manifest.id).map(shown)).not.toContain('ingress/http/app.ts');

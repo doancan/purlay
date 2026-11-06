@@ -309,4 +309,142 @@ describe('private invitation history', () => {
     expect(view.getAllByText('ann@example.test')).toHaveLength(2);
     view.unmount();
   });
+
+  test('an open history follows a send completed after it opened, keeping its older pages', async () => {
+    let value = row({ latest: { ...row().latest, result: 'queued', finishedAt: null } });
+    const older = {
+      ...row().latest,
+      id: ID + 'a',
+      result: 'failed' as const,
+      failure: 'connection' as const,
+    };
+    const view = await render({
+      invitationRecipients: () => Promise.resolve({ data: [value], nextCursor: null }),
+      invitationDeliveries: (_workspace, _recipient, before) =>
+        Promise.resolve({
+          data: [before === undefined ? value.latest : older],
+          nextCursor: before === undefined ? ID : null,
+        }),
+    });
+    await view.findByText('ann@example.test');
+    await person().click(view.getByRole('button', { name: 'Send history' }));
+    await person().click(await view.findByRole('button', { name: 'Load older links' }));
+    expect(await view.findByText('The mail server could not be reached.')).toBeDefined();
+    expect(view.getAllByText(/^Sending ·/)).toHaveLength(2);
+
+    value = row();
+    await act(async () => {
+      await view.world.client.invalidateQueries({
+        queryKey: keys.invitationRecipients(IDS.workspace),
+      });
+    });
+
+    const list = within(view.getByRole('list', { name: 'Email invitations' }));
+    await waitFor(() => {
+      expect(list.getByRole('status').textContent).toBe('Accepted by mail server');
+      expect(list.queryAllByText(/^Sending ·/)).toHaveLength(0);
+      expect(list.getAllByText(/^Accepted by mail server ·/)).toHaveLength(2);
+    });
+    expect(list.getByText('The mail server could not be reached.')).toBeDefined();
+    view.unmount();
+  });
+
+  test('a closed history waits until reopened, while a failed automatic refresh preserves its rows and offers Retry', async () => {
+    let value = row();
+    let reads = 0;
+    let failed = false;
+    const view = await render({
+      invitationRecipients: () => Promise.resolve({ data: [value], nextCursor: null }),
+      invitationDeliveries: () => {
+        reads++;
+        return failed
+          ? Promise.reject(new Error('offline'))
+          : Promise.resolve({ data: [value.latest], nextCursor: null });
+      },
+    });
+    await view.findByText('ann@example.test');
+    expect(reads).toBe(0);
+    const history = view.getByRole('button', { name: 'Send history' });
+    await person().click(history);
+    await waitFor(() => {
+      expect(reads).toBe(1);
+    });
+    await person().click(history);
+
+    value = row({ latest: { ...row().latest, revokedAt: '2026-09-02T12:00:00.000Z' } });
+    await act(async () => {
+      await view.world.client.invalidateQueries({
+        queryKey: keys.invitationRecipients(IDS.workspace),
+      });
+    });
+    await waitFor(() => {
+      expect(view.getByRole('list', { name: 'Email invitations' }).textContent).toContain(
+        'Link revoked',
+      );
+    });
+    expect(reads).toBe(1);
+    await person().click(history);
+    await waitFor(() => {
+      expect(view.getAllByText('Link revoked')).toHaveLength(3);
+    });
+    expect(reads).toBe(2);
+
+    failed = true;
+    value = row({
+      latest: { ...row().latest, id: ID + 'b', result: 'failed', failure: 'recipient' },
+    });
+    await act(async () => {
+      await view.world.client.invalidateQueries({
+        queryKey: keys.invitationRecipients(IDS.workspace),
+      });
+    });
+    expect(await view.findByText('Could not refresh invitation history.')).toBeDefined();
+    expect(view.getByText('Link revoked')).toBeDefined();
+    failed = false;
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(view.queryByText('Could not refresh invitation history.')).toBeNull();
+      expect(view.queryByText('Link revoked')).toBeNull();
+      expect(view.getAllByText('The mail server refused the recipient.')).toHaveLength(2);
+    });
+    view.unmount();
+  });
+
+  test('a delayed first history read cannot hide the receipt that arrived while it was loading', async () => {
+    let value = row({ latest: { ...row().latest, result: 'queued', finishedAt: null } });
+    const queued = value.latest;
+    let complete: (page: InvitationDeliveryPage) => void = () => undefined;
+    let reads = 0;
+    const view = await render({
+      invitationRecipients: () => Promise.resolve({ data: [value], nextCursor: null }),
+      invitationDeliveries: () => {
+        reads++;
+        return reads === 1
+          ? new Promise((resolve) => {
+              complete = resolve;
+            })
+          : Promise.resolve({ data: [value.latest], nextCursor: null });
+      },
+    });
+    await view.findByText('ann@example.test');
+    await person().click(view.getByRole('button', { name: 'Send history' }));
+    expect(reads).toBe(1);
+    value = row();
+    await act(async () => {
+      await view.world.client.invalidateQueries({
+        queryKey: keys.invitationRecipients(IDS.workspace),
+      });
+    });
+    const list = within(view.getByRole('list', { name: 'Email invitations' }));
+    await waitFor(() => {
+      expect(list.getAllByText(/^Accepted by mail server ·/)).toHaveLength(2);
+    });
+    await act(async () => {
+      complete({ data: [queued], nextCursor: null });
+      await Promise.resolve();
+    });
+    expect(list.queryAllByText(/^Sending ·/)).toHaveLength(0);
+    expect(list.getAllByText(/^Accepted by mail server ·/)).toHaveLength(2);
+    view.unmount();
+  });
 });

@@ -30,7 +30,21 @@ test.describe('exporting a workspace', () => {
     await expectNoAxe();
     const href = await link.getAttribute('href');
     expect(href).toMatch(/\/download$/);
-    const [download] = await Promise.all([page.waitForEvent('download'), link.click()]);
+    const exportId = href?.split('/').at(-2);
+    await link.click({ button: 'right' });
+    await page.keyboard.press('Escape');
+    await expect(link).toBeVisible();
+    // Native downloads do not surface as page requests in every engine: attest consumption at the API.
+    const untouched = await page.request.get(`/api/workspaces/${tenant.workspaceId}/exports`);
+    expect(await untouched.json()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: exportId, status: 'ready' })]),
+    );
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      link.focus().then(async () => {
+        await page.keyboard.press('Enter');
+      }),
+    ]);
     const saved = join(mkdtempSync(join(tmpdir(), 'purlay-e2e-export-')), 'export.tar');
     await download.saveAs(saved);
     const entries = execFileSync('tar', ['-tf', saved], { encoding: 'utf8' }).split('\n');
@@ -40,6 +54,10 @@ test.describe('exporting a workspace', () => {
     // Once: the link is gone here, and the server refuses it a second time.
     await expect(card.getByText(/^Downloaded\./)).toBeVisible();
     await expect(card.getByRole('link')).toHaveCount(0);
+    const consumed = await page.request.get(`/api/workspaces/${tenant.workspaceId}/exports`);
+    expect(await consumed.json()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: exportId, status: 'downloaded' })]),
+    );
     const again = await page.request.get(href ?? '');
     expect(again.status()).toBe(404);
 

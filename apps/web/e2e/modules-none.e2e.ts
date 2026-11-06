@@ -134,6 +134,9 @@ test.describe('a server with no module', () => {
     for (const name of ['Notifications', 'Integrations']) {
       await expect(settings.getByRole('link', { name })).toHaveCount(0);
     }
+    await page.goto(`/w/${world.workspace.slug}/settings/general`);
+    await expect(page.getByRole('heading', { level: 1, name: 'General' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Archived channels' })).toHaveCount(0);
     await expectNoAxe();
 
     expect(seen.chat, 'requests to a route of chat').toEqual([]);

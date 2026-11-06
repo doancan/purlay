@@ -69,7 +69,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     replace: '/([A-Za-z0-9._-]{1,100})/',
     tests: [
       'packages/types/src/contract.test.ts',
-      'apps/api/src/ingress/http/integrations.integration.test.ts',
+      'apps/api/src/features/chat/http/integrations.integration.test.ts',
     ],
   },
   {
