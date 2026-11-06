@@ -3,6 +3,7 @@ import {
   readAdministrationPreferences,
   writeAdministrationPreferences,
   writeAdministrationAdmission,
+  writeAdministrationBatchApproval,
   readOwnAdmission,
   readAdministrationBackups,
   readAdministrationMail,
@@ -1112,6 +1113,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get(
       '/api/server/audit',
       async ({ request }) => await readAdministrationAudit(administration, request),
+    )
+    .post(
+      '/api/server/users/approve',
+      async ({ request, body }) =>
+        await writeAdministrationBatchApproval(administration, request, body),
     )
     .post('/api/server/users/:userId/admin', async ({ request, params, body, set }) => {
       await writeAdministrationRole(administration, request, params.userId, body);

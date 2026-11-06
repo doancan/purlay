@@ -25,10 +25,12 @@ test('administration is independent, responsive, keyboard accessible and backed 
   const { origin, code, github, relay, mailbox } = fresh.manifest;
   const owner = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
   const applicant = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  const secondApplicant = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
   owner.setDefaultTimeout(10_000);
   applicant.setDefaultTimeout(10_000);
   await skipReleaseNotes(owner);
   await skipReleaseNotes(applicant);
+  await skipReleaseNotes(secondApplicant);
   const send = async (path: string, data?: unknown): Promise<void> => {
     const response = await owner.request.post(path, { data, headers: { origin } });
     expect(response.ok(), `${path}: ${String(response.status())} ${await response.text()}`).toBe(
@@ -116,20 +118,97 @@ test('administration is independent, responsive, keyboard accessible and backed 
       'mailto:help@example.test',
     );
     expect((await applicant.request.get('/api/workspaces')).status()).toBe(401);
+    expect(
+      (
+        await secondApplicant.request.post('/auth/email', {
+          data: { email: 'applicant-two@example.test', locale: 'en' },
+          headers: { origin },
+        })
+      ).status(),
+    ).toBe(202);
+    const secondLetter = await letterWith(mailbox, /sign.in/i, 1);
+    const secondToken = /#([0-9a-f]{64})/.exec(secondLetter.text)?.[1];
+    expect(secondToken).toBeDefined();
+    expect(
+      (
+        await secondApplicant.request.post('/auth/email/consume', {
+          data: { token: secondToken },
+          headers: { origin },
+        })
+      ).status(),
+    ).toBe(204);
+    const secondPending = await secondApplicant.newPage();
+    await secondPending.goto('/');
+    await expect(
+      secondPending.getByRole('heading', { name: 'Your account is awaiting approval' }),
+    ).toBeVisible();
     await page.goto('/server/users');
     await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('pending');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
-    await page.getByRole('button', { name: 'Approve account' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Confirm change' }).click();
-    await expect(page.getByText('Change saved')).toBeVisible();
+    await page.getByRole('button', { name: 'Select pending accounts on this page' }).click();
+    await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => {
+        document.documentElement.setAttribute('data-theme', value);
+      }, theme);
+      for (const width of [1360, 768, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await page.getByRole('button', { name: 'Approve selected accounts', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        const review = page.getByRole('dialog', { name: 'Approve selected accounts' });
+        await expect(review.getByText('applicant-two@example.test', { exact: true })).toBeVisible();
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        if (width === 320)
+          await page.screenshot({
+            path: info.outputPath(`batch-approval-${theme}-320.png`),
+            fullPage: true,
+          });
+        await page.keyboard.press('Escape');
+        await expect(review).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Approve selected accounts', exact: true }),
+        ).toBeFocused();
+      }
+    }
+    await page.getByRole('button', { name: 'Approve selected accounts', exact: true }).click();
+    const approvals = page.getByRole('dialog', { name: 'Approve selected accounts' });
+    await expect(approvals.getByText('applicant@example.test', { exact: true })).toBeVisible();
+    await expect(approvals.getByText('applicant-two@example.test', { exact: true })).toBeVisible();
+    await approvals.getByRole('button', { name: 'Confirm approvals' }).click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Approval results' })
+        .getByText('Approved: 2/2', { exact: true }),
+    ).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: info.outputPath('batch-approval-results-320.png'),
+      fullPage: true,
+    });
     await expect(
       pending.getByRole('heading', { name: 'Your account is awaiting approval' }),
     ).toHaveCount(0);
     expect((await applicant.request.get('/api/me')).status()).toBe(200);
+    await expect(
+      secondPending.getByRole('heading', { name: 'Your account is awaiting approval' }),
+    ).toHaveCount(0);
+    expect((await secondApplicant.request.get('/api/me')).status()).toBe(200);
     const users = (await (
       await owner.request.get('/api/server/users?status=active')
     ).json()) as ServerUserPage;
     expect(users.data.some((user) => user.email === 'applicant@example.test')).toBe(true);
+    expect(users.data.some((user) => user.email === 'applicant-two@example.test')).toBe(true);
     await page.goto('/server/workspaces');
     await page.getByRole('button', { name: 'Change quota' }).click();
     await page.getByRole('dialog').getByLabel('Quota in bytes').fill('1024');
@@ -206,9 +285,10 @@ test('administration is independent, responsive, keyboard accessible and backed 
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(
       page.getByRole('listitem').getByText('server.account_approved', { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(2);
     expect(errors).toEqual([]);
   }
   await applicant.close();
+  await secondApplicant.close();
   await owner.close();
 });

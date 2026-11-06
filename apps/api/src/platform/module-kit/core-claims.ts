@@ -47,6 +47,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/server/overview',
   '/api/server/operations',
   '/api/server/users',
+  '/api/server/users/approve',
   '/api/server/users/:userId',
   '/api/server/users/:userId/admin',
   '/api/server/users/:userId/revoke-sessions',

@@ -1,4 +1,6 @@
 import { signInWithOidc } from '../../testing/oidc-sign-in';
+import * as admissionChanges from '../../modules/administration/admission';
+import * as setupAuthority from '../../modules/setup/setup';
 import { signInWithGoogle } from '../../testing/google-sign-in';
 import { startGitHubSignIn, returnFromGitHub } from '../../testing/github-sign-in';
 import type {
@@ -1694,6 +1696,300 @@ describe('integration: Administration → Server — Google (D-251)', () => {
 });
 
 describe('integration — server administration inventory', () => {
+  test('an account denied while a batch waits cannot be admitted from its earlier selection', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'pending' })
+      .where('id', '=', server.member.userId)
+      .execute();
+    let enter: () => void = () => undefined;
+    let resume: () => void = () => undefined;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    const released = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    const original = admissionChanges.decideAdmission;
+    const blocked = spyOn(admissionChanges, 'decideAdmission').mockImplementationOnce(
+      async (...args) => {
+        enter();
+        await released;
+        return await original(...args);
+      },
+    );
+    const pending = call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds: [server.member.userId] },
+    });
+    try {
+      await entered;
+      await server.db
+        .updateTable('users')
+        .set({ admission_state: 'denied' })
+        .where('id', '=', server.member.userId)
+        .execute();
+      resume();
+      const response = await pending;
+      expect(await response.json()).toEqual({
+        results: [{ userId: server.member.userId, outcome: 'refused' }],
+      });
+      expect(
+        (
+          await server.db
+            .selectFrom('users')
+            .select('admission_state')
+            .where('id', '=', server.member.userId)
+            .executeTakeFirstOrThrow()
+        ).admission_state,
+      ).toBe('denied');
+    } finally {
+      resume();
+      await pending;
+      blocked.mockRestore();
+    }
+  });
+
+  test('one bounded batch approves fifty accounts without granting administrator access', async () => {
+    const server = await aServer();
+    const accounts = await server.db
+      .insertInto('users')
+      .values(
+        Array.from({ length: 50 }, (_, index) => {
+          const username = `batch-${String(index)}-${crypto.randomUUID().slice(0, 8)}`;
+          return {
+            username,
+            email: `${username}@example.test`,
+            display_name: username,
+            admission_state: 'pending',
+            email_verified: true,
+          };
+        }),
+      )
+      .returning('id')
+      .execute();
+    const userIds = accounts.map((row) => row.id);
+    const answer = await call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds },
+    });
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({
+      results: userIds.map((userId) => ({ userId, outcome: 'approved' })),
+    });
+    const users = await server.db
+      .selectFrom('users')
+      .select(['admission_state', 'is_server_admin', 'email_verified'])
+      .where('id', 'in', userIds)
+      .execute();
+    expect(users).toHaveLength(50);
+    expect(
+      users.every(
+        (user) =>
+          user.admission_state === 'approved' && !user.is_server_admin && user.email_verified,
+      ),
+    ).toBe(true);
+  });
+  test.each([true, false])(
+    'batch approval stops when authority is lost and reports an unconfirmed database failure honestly (%s)',
+    async (loseAuthority) => {
+      const server = await aServer();
+      await server.db
+        .updateTable('users')
+        .set({ admission_state: 'pending' })
+        .where('id', 'in', [server.member.userId, server.owner.userId])
+        .execute();
+      const original = admissionChanges.decideAdmission;
+      const changed = spyOn(admissionChanges, 'decideAdmission').mockImplementationOnce(
+        async (tx, clock, admin, id, decision, pendingOnly) => {
+          if (!loseAuthority) throw new Error('private database failure');
+          const ended = await original(tx, clock, admin, id, decision, pendingOnly);
+          await tx
+            .updateTable('users')
+            .set({ is_server_admin: false })
+            .where('id', '=', server.admin.userId)
+            .execute();
+          return ended;
+        },
+      );
+      try {
+        const ids = [server.member.userId, server.owner.userId, crypto.randomUUID()];
+        const answer = await call(server, 'POST', '/api/server/users/approve', {
+          cookie: server.admin.cookie,
+          body: { userIds: ids },
+        });
+        expect(answer.status).toBe(200);
+        const body: unknown = await answer.json();
+        expect(body).toEqual({
+          results: ids.map((userId, index) => ({
+            userId,
+            outcome:
+              index === 0
+                ? loseAuthority
+                  ? 'approved'
+                  : 'unconfirmed'
+                : index === 1 && loseAuthority
+                  ? 'refused'
+                  : 'not_processed',
+          })),
+        });
+        expect(JSON.stringify(body)).not.toContain('private database failure');
+        expect(
+          (
+            await server.db
+              .selectFrom('users')
+              .select('admission_state')
+              .where('id', '=', server.owner.userId)
+              .executeTakeFirstOrThrow()
+          ).admission_state,
+        ).toBe('pending');
+      } finally {
+        changed.mockRestore();
+      }
+    },
+  );
+
+  test.each([true, false])(
+    'batch cancellation stops between accounts and after authorization, without undoing committed approvals (%s)',
+    async (duringAuthorization) => {
+      const server = await aServer();
+      await server.db
+        .updateTable('users')
+        .set({ admission_state: 'pending' })
+        .where('id', 'in', [server.member.userId, server.owner.userId])
+        .execute();
+      const abort = new AbortController();
+      const originalGuard = setupAuthority.requireServerAdmin;
+      const originalChange = admissionChanges.decideAdmission;
+      let guards = 0;
+      const guard = spyOn(setupAuthority, 'requireServerAdmin').mockImplementation(
+        async (...args) => {
+          const authority = await originalGuard(...args);
+          guards++;
+          if (duringAuthorization && guards === 2) abort.abort();
+          return authority;
+        },
+      );
+      const changed = spyOn(admissionChanges, 'decideAdmission').mockImplementationOnce(
+        async (...args) => {
+          const ended = await originalChange(...args);
+          abort.abort();
+          return ended;
+        },
+      );
+      try {
+        const userIds = [server.member.userId, server.owner.userId];
+        const answer = await server.app.handle(
+          new Request(`${ORIGIN}/api/server/users/approve`, {
+            method: 'POST',
+            signal: abort.signal,
+            headers: {
+              cookie: server.admin.cookie,
+              origin: ORIGIN,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ userIds }),
+          }),
+        );
+        expect(answer.status).toBe(200);
+        expect(await answer.json()).toEqual({
+          results: userIds.map((userId, index) => ({
+            userId,
+            outcome: index === 0 && !duringAuthorization ? 'approved' : 'not_processed',
+          })),
+        });
+        expect(
+          (
+            await server.db
+              .selectFrom('users')
+              .select('admission_state')
+              .where('id', '=', server.member.userId)
+              .executeTakeFirstOrThrow()
+          ).admission_state,
+        ).toBe(duringAuthorization ? 'pending' : 'approved');
+      } finally {
+        guard.mockRestore();
+        changed.mockRestore();
+      }
+    },
+  );
+  test('batch approval is pending-only, idempotent and independently reports refused targets', async () => {
+    const server = await aServer();
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'pending' })
+      .where('id', '=', server.member.userId)
+      .execute();
+    await server.db
+      .updateTable('users')
+      .set({ admission_state: 'denied' })
+      .where('id', '=', server.owner.userId)
+      .execute();
+    const missing = crypto.randomUUID();
+    const userIds = [server.member.userId, server.owner.userId, server.admin.userId, missing];
+    const response = await call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      results: userIds.map((userId, index) => ({
+        userId,
+        outcome: index === 0 || index === 2 ? 'approved' : 'refused',
+      })),
+    });
+    const user = await server.db
+      .selectFrom('users')
+      .select(['admission_state', 'is_server_admin'])
+      .where('id', '=', server.member.userId)
+      .executeTakeFirstOrThrow();
+    expect(user).toEqual({ admission_state: 'approved', is_server_admin: false });
+    expect(
+      (
+        await server.db
+          .selectFrom('users')
+          .select('admission_state')
+          .where('id', '=', server.owner.userId)
+          .executeTakeFirstOrThrow()
+      ).admission_state,
+    ).toBe('denied');
+    const again = await call(server, 'POST', '/api/server/users/approve', {
+      cookie: server.admin.cookie,
+      body: { userIds: [server.member.userId] },
+    });
+    expect(again.status).toBe(200);
+    const trail = await server.db
+      .selectFrom('server_audit_log')
+      .select('id')
+      .where('action', '=', 'server.account_approved')
+      .where('target_user_id', '=', server.member.userId)
+      .execute();
+    expect(trail).toHaveLength(1);
+    for (const body of [
+      { userIds: [] },
+      { userIds: [missing, missing] },
+      { userIds: Array.from({ length: 51 }, () => crypto.randomUUID()) },
+      { userIds: [missing], force: true },
+    ]) {
+      expect(
+        (
+          await call(server, 'POST', '/api/server/users/approve', {
+            cookie: server.admin.cookie,
+            body,
+          })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await call(server, 'POST', '/api/server/users/approve', {
+            cookie: server.owner.cookie,
+            body,
+          })
+        ).status,
+      ).toBe(404);
+    }
+  });
   test('metadata routes are absent before input is parsed for strangers, members and workspace owners', async () => {
     const server = await aServer();
     for (const cookie of [undefined, server.member.cookie, server.owner.cookie]) {
