@@ -743,7 +743,7 @@ modules, entries and screens `budget:web` looks for.
 the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
 (#988), its non-vacuous form (#1010), the purge coverage (#1009), the set-keyed enum allowance (#1007) and the row-level
 lifecycle proof for `deleted` and `window` decisions (#1011) are merged, and every `anonymised` lifecycle decision is
-probed (all 28; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
+probed (all 29; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
 no index starts with is held too (`query-columns.integration.test.ts`, seven reasoned exceptions, capped at 7), but
 only as far as a source scan sees: a `where` or `orderBy` with a literal column on a chain it can follow to its table.
 It does not see a column named inside a `where((eb) => ...)` callback, in a `sql` template, or in a variable, a chain
