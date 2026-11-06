@@ -149,8 +149,8 @@ purlay/
 │   │       │   ├── setup/       the first-run wizard and the server's settings
 │   │       │   ├── export/ jobs/ push/ images/
 │   │       │   └── (chat's modules moved to `features/chat/` in step 9 of `MODULES.md`)
-│   │       ├── platform/        the bottom layer: config, clock, errors, tenancy, channel
-│   │       │                  visibility, the EventBus seam, the transaction boundary,
+│   │       ├── platform/        the bottom layer: config, clock, errors, tenancy, the
+│   │       │                  EventBus seam, the transaction boundary,
 │   │       │                  `module-kit/` — the manifest type and which modules a process runs
 │   │       ├── testing/         fixtures every layer's tests may use; never imported by code
 │   │       └── index.ts
@@ -163,7 +163,7 @@ purlay/
 │           │                    and deferred.ts: the deferred chunk — settings, image viewer, the
 │           │                    overlays opened on purpose — fetched once the browser is idle (D-159, D-163)
 │           ├── features/        vertical slices: chat, threads, palette, notifications, auth, and the modules'
-│           │                  screens (`chat/load.tsx`, `issues/load.tsx`): each a lazy chunk behind
+│           │                  screens (`chat/chat.ts`, `issues/issues-screen.tsx`): each a lazy chunk behind
 │           │                  `ModuleGate`, shown only where `GET /api/me` lists the module (`MODULES.md` §6)
 │           ├── ui/              primitives on Radix where focus and ARIA fail silently; token classes only
 │           ├── components/      shared pieces: Icon (the one door to the icon set), CodeBlock, Markdown
@@ -171,7 +171,7 @@ purlay/
 │           ├── i18n/            typed catalogues over Intl, one chunk per language (D-41)
 │           ├── router/          a typed route table, Link, useRoute — no dependency (D-98)
 │           ├── realtime/        socket client, reconnect, replay, Zustand stores
-│           ├── api/             TanStack Query hooks, typed fetch client
+│           ├── data/            TanStack Query hooks, typed fetch client
 │           ├── gallery/         every primitive in both themes at once; development only
 │           ├── testing/         the component-test DOM, fakes, axe — registered here, never globally
 │           └── main.tsx         the entry: mounts the application

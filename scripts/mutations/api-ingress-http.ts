@@ -97,6 +97,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
+    id: 'chat-budget-test-stops-naming-its-module',
+    why: 'chat’s pool-share test no longer says it needs chat, so it would run in a cell without the module and the convention that holds a share to a test is met by a file that tests nothing of it (D-266)',
+    file: 'apps/api/src/ingress/http/chat-budget.integration.test.ts',
+    find: ' * @needs-modules chat, issues\n',
+    replace: ' * @needs-modules issues\n',
+    tests: ['apps/api/src/module-budgets.test.ts'],
+  },
+  {
     id: 'client-contract-floor-inclusive',
     why: 'a client at the minimum contract is refused: the emergency brake stops the very release it was raised to allow',
     file: 'apps/api/src/ingress/http/client-policy.ts',

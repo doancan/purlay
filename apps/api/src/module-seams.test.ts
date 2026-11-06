@@ -148,7 +148,7 @@ describe('the doors name no module’s files outside its routes and the composit
  * every connection of the one database `createApp` hands the handlers, so what would get round it is another handle:
  * the raw one the application was given, used a second time, or a pool a module opened for itself. Neither exists today,
  * and this holds both to that. The rest, that a request of a module is noted as its own and held, is
- * `issues-budget.integration.test.ts` and `chat-budget.integration.test.ts`, and the mutation
+ * `features/issues/http/budget.integration.test.ts` and `ingress/http/chat-budget.integration.test.ts`, and the mutation
  * `application-database-not-leased`.
  */
 const APP_FILE = join('ingress', 'http', 'app.ts');
