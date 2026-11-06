@@ -1,7 +1,7 @@
 /** The standalone console, saved SMTP, account approval and quota changes against an isolated server. */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import type { ServerUserPage } from '@purlay/types';
+import type { ServerOperations, ServerOverview, ServerUserPage } from '@purlay/types';
 import { letterWith, linkIn, portFor, startFresh, type FreshServer } from './fresh';
 import { skipReleaseNotes } from './support';
 let fresh: FreshServer | null = null;
@@ -66,7 +66,12 @@ test('administration is independent, responsive, keyboard accessible and backed 
     await send('/setup/finish');
     const page = await owner.newPage();
     const errors: string[] = [];
+    const failedReads: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    page.on('response', (response) => {
+      if (response.status() >= 400 && response.url().includes('/api/server/'))
+        failedReads.push(`${String(response.status())} ${new URL(response.url()).pathname}`);
+    });
     await page.goto('/server/email');
     const mail = page.getByRole('region', { name: 'Test saved mail configuration' });
     await mail.getByRole('button', { name: 'Send test email' }).click();
@@ -81,6 +86,101 @@ test('administration is independent, responsive, keyboard accessible and backed 
       mail.getByText('The relay accepted this test message. Check your inbox and spam folder.'),
     ).toBeVisible();
     await page.goto('/server/overview');
+    const problems = page.getByRole('region', { name: 'Server problems' });
+    const operations = (await (
+      await owner.request.get('/api/server/operations')
+    ).json()) as ServerOperations;
+    const issueCount =
+      operations.jobs.filter((job) => job.status !== 'ok' || job.consecutiveFailures > 0).length +
+      1;
+    await expect(
+      problems.getByText(`Reported problems: ${String(issueCount)}`, { exact: true }),
+    ).toBeVisible();
+    await expect(problems.getByRole('link', { name: 'View operations' }).first()).toHaveAttribute(
+      'href',
+      '/server/operations',
+    );
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => {
+        document.documentElement.setAttribute('data-theme', value);
+      }, theme);
+      for (const width of [1360, 768, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        if (width === 320)
+          await problems.screenshot({ path: info.outputPath(`server-problems-${theme}-320.png`) });
+        const details = problems.locator('summary');
+        await details.focus();
+        await page.keyboard.press('Enter');
+        await expect(problems.getByText('sweep:sessions', { exact: true })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await page.keyboard.press('Enter');
+        await expect(problems.getByText('sweep:sessions', { exact: true })).toBeHidden();
+      }
+    }
+    await page.route('**/api/server/operations', async (route) => {
+      await route.fulfill({
+        status: 503,
+        json: { error: { code: 'INTERNAL', message: 'Unavailable' } },
+      });
+    });
+    await problems.getByRole('button', { name: 'Refresh' }).click();
+    await expect(problems.getByRole('alert')).toHaveText('Could not read Scheduled jobs.');
+    await expect(problems.getByText('No problems reported by these checks.')).toHaveCount(0);
+    await page.unroute('**/api/server/operations');
+    await problems.getByRole('button', { name: 'Retry' }).click();
+    await expect(problems.getByRole('alert')).toHaveCount(0);
+    await expect(
+      problems.getByText(`Reported problems: ${String(issueCount)}`, { exact: true }),
+    ).toBeVisible();
+    await problems.getByRole('link', { name: 'View operations' }).first().focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(`${origin}/server/operations`);
+    await expect(page.getByRole('region', { name: 'Scheduled jobs' })).toBeVisible();
+    await page.goto('/server/overview');
+    // Controlled export failure metadata exercises its navigation without making a real export fail.
+    await page.route('**/api/server/overview', async (route) => {
+      const response = await route.fetch();
+      const report = (await response.json()) as ServerOverview;
+      await route.fulfill({ response, json: { ...report, exportFailures: 3 } });
+    });
+    await problems.getByRole('button', { name: 'Refresh' }).click();
+    await expect(problems.getByText('Failed exports: 3', { exact: true })).toBeVisible();
+    await expect(
+      problems.getByText(`Reported problems: ${String(issueCount + 3)}`, { exact: true }),
+    ).toBeVisible();
+    await problems.getByRole('link', { name: 'View data management' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(`${origin}/server/data`);
+    await page.unroute('**/api/server/overview');
+    await page.goto('/server/overview');
+    await page.evaluate(() => {
+      localStorage.setItem('purlay.locale', 'tr');
+    });
+    await page.reload();
+    const turkishProblems = page.getByRole('region', { name: 'Sunucu sorunları' });
+    await expect(
+      turkishProblems.getByText(`Bildirilen sorunlar: ${String(issueCount)}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      turkishProblems.getByRole('link', { name: 'İşletimi görüntüle' }).first(),
+    ).toBeVisible();
+    await turkishProblems.screenshot({ path: info.outputPath('server-problems-tr-320.png') });
+    await page.evaluate(() => {
+      localStorage.setItem('purlay.locale', 'en');
+    });
+    await page.reload();
     const identity = page.getByRole('region', { name: 'Server identity' });
     await identity.getByLabel('Server display name').fill('Research server');
     await identity.getByLabel('Support address').fill('mailto:help@example.test');
@@ -138,29 +238,30 @@ test('administration is independent, responsive, keyboard accessible and backed 
     await expect(
       page.getByRole('region', { name: 'Console team' }).locator('[title="1024 B"]'),
     ).toBeVisible();
-    for (const dark of [false, true]) {
-      await page.evaluate(
-        (theme) => {
-          localStorage.setItem('purlay.theme', theme);
-        },
-        dark ? 'dark' : 'light',
-      );
-      for (const width of [1360, 320]) {
-        await page.setViewportSize({ width, height: 900 });
-        for (const section of [
-          'overview',
-          'users',
-          'workspaces',
-          'security',
-          'email',
-          'data',
-          'integrations',
-          'operations',
-          'audit',
-        ]) {
-          await page.goto(`/server/${section}`);
-          await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
-          await expect(page.getByRole('region').first()).toBeVisible();
+    // Resize and retheme each loaded section without spending another metadata read for each layout.
+    for (const section of [
+      'overview',
+      'users',
+      'workspaces',
+      'security',
+      'email',
+      'data',
+      'integrations',
+      'operations',
+      'audit',
+    ]) {
+      await page.goto(`/server/${section}`);
+      await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(
+        page.getByRole('region').first(),
+        `${section}: ${failedReads.join(', ')}`,
+      ).toBeVisible();
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((value) => {
+          document.documentElement.setAttribute('data-theme', value);
+        }, theme);
+        for (const width of [1360, 320]) {
+          await page.setViewportSize({ width, height: 900 });
           expect(
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           ).toBe(true);
