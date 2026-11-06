@@ -22,12 +22,12 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId, ReactionsResponse, REACTIONS_PER_PERSON_MAX } from '@purlay/types';
-import { REACTION_KINDS_MAX } from '../../features/chat/reactions/reactions';
-import { fixedClock } from '../../platform/clock';
-import { NOW, testDependencies } from '../../testing/doubles';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
-import { createApp } from './app';
+import { REACTION_KINDS_MAX } from '../reactions/reactions';
+import { fixedClock } from '../../../platform/clock';
+import { NOW, testDependencies } from '../../../testing/doubles';
+import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { aUniqueSlug } from '../../../testing/users';
+import { createApp } from '../../../ingress/http/app';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

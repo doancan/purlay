@@ -1,6 +1,8 @@
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import type { Message } from '@purlay/types';
-import { requireLiveSession } from '../../modules/auth/sessions';
-import { hideMessage } from '../../features/chat/messages/hide';
+import { requireLiveSession } from '../../../modules/auth/sessions';
+import { hideMessage } from '../messages/hide';
 import {
   inboxPublications,
   NO_LOG,
@@ -10,10 +12,10 @@ import {
   publishRemindersUpdated,
   publishSavedUpdated,
   userTopic,
-} from '../../platform/events';
-import { atomicallyOn } from '../../platform/transactions';
-import type { ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
+} from '../../../platform/events';
+import { atomicallyOn } from '../../../platform/transactions';
+import type { ChannelWriteDependencies } from '../../../ingress/http/channels';
+import { requireSession } from '../../../ingress/http/session';
 
 export const hideMyMessage = async (
   dependencies: ChannelWriteDependencies,
@@ -58,3 +60,10 @@ export const hideMyMessage = async (
   ]);
   return result.message;
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const hiddenRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia().put(
+    '/api/messages/:messageId/hidden',
+    async ({ request, params }) => await hideMyMessage(context, request, params.messageId),
+  );

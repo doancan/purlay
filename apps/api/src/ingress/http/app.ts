@@ -239,7 +239,6 @@ import {
   editMessage,
   removeMessage,
 } from './messages';
-import { changeReaction } from './reactions';
 import {
   CORE_COLLATED_COLUMNS,
   readiness,
@@ -284,18 +283,15 @@ import { unfurlLink } from './integrations';
 import { createSocketLifecycle, type ConnectionLimits, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
-import { hideMyMessage } from './hidden';
 import { moduleConnections } from '../../platform/module-budget';
 import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-deadline';
 import { deleteReminder, listReminders, putReminder } from './reminders';
 import { deleteScheduled, listScheduled, putScheduled } from './scheduled';
-import { deleteSaved, listSaved, listSavedIds, putSaved } from './saved';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail, stopMissedMailByLink } from './missed-mail';
 import { starChannel } from './star';
-import { deleteVersion, listVersions } from './versions';
 import { readPresence } from './presence';
 import { receiveWebhook } from './webhooks';
 import { connectFeed, disconnectFeed, listFeeds, regenerateFeedSecret } from './feeds';
@@ -305,8 +301,6 @@ import {
   postIncomingWebhook,
   revokeIncomingWebhook,
 } from './incoming-webhooks';
-import { deletePin, listPins, putPin } from './pins';
-import { deleteBookmark, listBookmarks, postBookmark } from './bookmarks';
 import { runningModuleIds, type Composition } from '../../composition';
 import {
   listIncidentUpdates,
@@ -597,7 +591,14 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const moduleRoutes = modules.bundled.flatMap((module) =>
     module.routes === undefined
       ? []
-      : [module.routes({ ...dependencies, permissions: modules.permissions })],
+      : [
+          module.routes({
+            ...dependencies,
+            permissions: modules.permissions,
+            bus: sockets.bus,
+            atomically: sockets.atomically,
+          }),
+        ],
   );
   // The jobs run in the scheduler's container: their record is read from the database per scrape.
   const readJobs = jobMetrics({
@@ -1559,10 +1560,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
     .put(
-      '/api/messages/:messageId/hidden',
-      async ({ request, params }) => await hideMyMessage(sending, request, params.messageId),
-    )
-    .put(
       '/api/messages/:messageId/reminder',
       async ({ request, params, body }) =>
         await putReminder(sending, request, params.messageId, body),
@@ -1590,14 +1587,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
-    .get(
-      '/api/workspaces/:workspaceId/saved',
-      async ({ request, params }) => await listSaved(dependencies, request, params.workspaceId),
-    )
-    .get(
-      '/api/workspaces/:workspaceId/saved/ids',
-      async ({ request, params }) => await listSavedIds(dependencies, request, params.workspaceId),
-    )
     .use(moduleRoutes)
     .get(
       '/api/channels/:channelId/github-feeds',
@@ -1721,53 +1710,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params }) =>
         await listIncidentUpdates(dependencies, request, params.channelId, params.incidentId),
     )
-    .get(
-      '/api/channels/:channelId/pins',
-      async ({ request, params }) => await listPins(dependencies, request, params.channelId),
-    )
-    .get(
-      '/api/channels/:channelId/bookmarks',
-      async ({ request, params }) => await listBookmarks(dependencies, request, params.channelId),
-    )
-    .post('/api/channels/:channelId/bookmarks', async ({ request, params, body, set }) => {
-      const bookmark = await postBookmark(sending, request, params.channelId, body);
-      set.status = 201;
-      return bookmark;
-    })
-    .delete('/api/channels/:channelId/bookmarks/:bookmarkId', async ({ request, params, set }) => {
-      await deleteBookmark(sending, request, params.channelId, params.bookmarkId);
-      set.status = 204;
-      return null;
-    })
-    .get(
-      '/api/messages/:messageId/versions',
-      async ({ request, params }) => await listVersions(dependencies, request, params.messageId),
-    )
-    .delete('/api/messages/:messageId/versions/:versionId', async ({ request, params, set }) => {
-      await deleteVersion(sending, request, params.messageId, params.versionId);
-      set.status = 204;
-      return null;
-    })
-    .put('/api/messages/:messageId/pin', async ({ request, params, set }) => {
-      await putPin(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .delete('/api/messages/:messageId/pin', async ({ request, params, set }) => {
-      await deletePin(sending, request, params.messageId);
-      set.status = 204;
-      return null;
-    })
-    .put('/api/messages/:messageId/saved', async ({ request, params, body, set }) => {
-      await putSaved(sending, request, params.messageId, body);
-      set.status = 204;
-      return '';
-    })
-    .delete('/api/messages/:messageId/saved', async ({ request, params, set }) => {
-      await deleteSaved(sending, request, params.messageId);
-      set.status = 204;
-      return '';
-    })
 
     .get(
       '/api/workspaces/:workspaceId/channels',
@@ -2112,17 +2054,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get(
       '/api/workspaces/:workspaceId/search',
       async ({ request, params }) => await readSearch(dependencies, request, params.workspaceId),
-    )
-
-    .put(
-      '/api/messages/:messageId/reactions/:emoji',
-      async ({ request, params }) =>
-        await changeReaction(sending, request, params.messageId, params.emoji, true),
-    )
-    .delete(
-      '/api/messages/:messageId/reactions/:emoji',
-      async ({ request, params }) =>
-        await changeReaction(sending, request, params.messageId, params.emoji, false),
     )
 
     /**
