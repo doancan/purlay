@@ -31,6 +31,12 @@ const CORE_WRITES: Readonly<Record<string, string>> = {
     'missed mail moves the person’s `missed_mail_since` (a core preference port could own it)',
 };
 
+/**
+ * The size `CORE_WRITES` may have. The list only shrinks, but "an entry is still a write" cannot see one being added; this
+ * can. A write joins it only with this raised in the same change, a line a reviewer reads and has to accept.
+ */
+const MAX_CORE_WRITES = 4;
+
 const TABLES = Object.keys(TABLE_OWNERS);
 const moduleIds = readdirSync(FEATURES, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -189,6 +195,10 @@ describe('the tables a module names', () => {
       }
     });
   }
+
+  test('the list of writes is no longer than its cap', () => {
+    expect(Object.keys(CORE_WRITES).length).toBeLessThanOrEqual(MAX_CORE_WRITES);
+  });
 
   test('an entry of the list of writes is still a write, so the list only shrinks', () => {
     for (const entry of Object.keys(CORE_WRITES)) {
