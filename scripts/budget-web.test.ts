@@ -17,7 +17,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   BUDGET_BYTES,
-  HEAVY_SOURCES,
   MODULE_BYTES,
   SHELL_BYTES,
   describeReport,
@@ -298,19 +297,21 @@ describe("where each module's code is", () => {
     ).toEqual([]);
   });
 
-  test("the screens are read from the manifests' entries, and the heavy files are real files", () => {
+  test("a module's lazy-only files are derived from its folder: its screens and the composer, not what the shell imports", () => {
     const sources = Object.fromEntries(
       webModules().map((module) => [module.id, screenSources(module)]),
     );
     expect(sources['chat']).toContain('features/chat/chat.ts');
     expect(sources['chat']).toContain('features/chat/channel/channel-screen.tsx');
     expect(sources['chat']).toContain('features/chat/unreads/unreads-screen.tsx');
+    expect(sources['chat']).toContain('features/chat/composer/composer.tsx');
+    expect(sources['chat']).toContain('features/chat/threads/thread.tsx');
     expect(sources['issues']).toEqual(['features/issues/issues-screen.tsx']);
-    // A type-only import of the manifest is no screen, and a shared helper is not named.
+    // The manifest and the tests are not held, nor what the shell imports with a listed reason or what that imports.
     expect(sources['chat']?.some((file) => file.endsWith('manifest.ts'))).toBe(false);
-    for (const file of Object.values(HEAVY_SOURCES).flat()) {
-      expect(existsSync(join(FEATURES_DIRECTORY, '..', file))).toBe(true);
-    }
+    expect(sources['chat']?.some((file) => file.endsWith('.test.tsx'))).toBe(false);
+    expect(sources['chat']).not.toContain('features/chat/channel/feed-ports.tsx');
+    expect(sources['chat']).not.toContain('features/chat/sidebar/channel-list.tsx');
   });
 
   test('a chat screen or the composer in the shell is named, and the shared files are not', () => {
@@ -322,7 +323,7 @@ describe("where each module's code is", () => {
       ]),
     );
     expect(rest).toEqual([]);
-    expect(problem).toContain("assets/index-aaa.js contains the chat module's screens");
+    expect(problem).toContain("assets/index-aaa.js contains the chat module's code");
     expect(problem).toContain(
       'features/chat/channel/channel-screen.tsx, features/chat/composer/composer.tsx',
     );
@@ -332,7 +333,7 @@ describe("where each module's code is", () => {
   test("issues' screen in the shell is named", () => {
     const [problem, ...rest] = problemsOf(aShell(['../../src/features/issues/issues-screen.tsx']));
     expect(rest).toEqual([]);
-    expect(problem).toContain("assets/index-aaa.js contains the issues module's screens");
+    expect(problem).toContain("assets/index-aaa.js contains the issues module's code");
   });
 
   test('a shell with no source map is a failure that says how to build one, not a pass', () => {
@@ -395,15 +396,6 @@ describe("where each module's code is", () => {
     ).toBe(true);
   });
 
-  test('a heavy file that is gone is named, so a move cannot leave the check holding nothing', () => {
-    const features = mkdtempSync(join(tmpdir(), 'features-'));
-    made.push(features);
-    const problems = problemsOf(aShell([]), features);
-    expect(
-      problems.some((problem) => problem.includes('is named in HEAVY_SOURCES and is not a file')),
-    ).toBe(true);
-  });
-
   test('the shell bound sits under the backstop', () => {
     expect(SHELL_BYTES).toBeLessThan(BUDGET_BYTES);
   });
@@ -438,6 +430,6 @@ describe('the command', () => {
     const result = main(dist);
     expect(result.code).toBe(1);
     expect(result.err).toContain('features/chat/unreads/unreads-screen.tsx');
-    expect(result.err).toContain('features/chat/chat.ts');
+    expect(result.err).toContain('features/chat/chat, on demand');
   });
 });
