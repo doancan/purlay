@@ -93,7 +93,7 @@ const head = [
       joined_at: 'export',
     },
     (userId) => ({
-      where: sql`applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId})`,
+      where: sql`applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true)`,
       order: 'id',
     }),
   ),
@@ -110,7 +110,7 @@ const head = [
       failure: 'export',
     },
     (userId) => ({
-      where: sql`recipient_id in (select id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId}))`,
+      where: sql`recipient_id in (select id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true))`,
       order: 'id',
     }),
   ),
@@ -126,7 +126,7 @@ export const corePersonalExport: CorePersonalContribution = {
   tables: [],
   workspaces: (userId) => [
     sql`select workspace_id from workspace_members where user_id = ${userId}`,
-    sql`select workspace_id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId})`,
+    sql`select workspace_id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true)`,
   ],
 };
 

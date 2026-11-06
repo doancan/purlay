@@ -272,6 +272,11 @@ const aPersonWithAFootprint = async (db: Transaction): Promise<Fixture> => {
       .where('id', '=', pat.userId)
       .executeTakeFirstOrThrow()
   ).email;
+  await db
+    .updateTable('users')
+    .set({ email_verified: true })
+    .where('id', '=', pat.userId)
+    .execute();
   await makeAndMailInvitation(
     db,
     clock,
@@ -302,6 +307,31 @@ const aPersonWithAFootprint = async (db: Transaction): Promise<Fixture> => {
 };
 
 describe('integration: exporting a person’s own data', () => {
+  test('an unverified address cannot export someone else’s received invitation evidence', async () => {
+    await withRollback(async (db) => {
+      const { store, pat } = await aPersonWithAFootprint(db);
+      await db
+        .updateTable('users')
+        .set({ email_verified: false })
+        .where('id', '=', pat.userId)
+        .execute();
+      const target = join(await mkdtemp(join(tmpdir(), 'purlay-unverified-receipts-')), 'out');
+      await exportPerson(
+        {
+          database: db,
+          clock,
+          log: aRecordingLogger().log,
+          storage: store,
+          personalCatalogue: personalExportCatalogue,
+        },
+        { id: pat.userId, username: pat.username },
+        target,
+      );
+      expect(await lines(target, 'workspace_invitation_recipients')).toEqual([]);
+      expect(await lines(target, 'workspace_invitation_mail_attempts')).toEqual([]);
+    });
+  });
+
   test('holds exactly their rows, the places they name, and nothing of anybody else’s', async () => {
     await withRollback(async (db) => {
       const {

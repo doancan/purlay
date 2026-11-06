@@ -105,7 +105,7 @@ export const eraseAccount = async (
   // Read first, locking nothing: the checks refuse before anything is held.
   const person = await executor
     .selectFrom('users')
-    .select(['id', 'username', 'email'])
+    .select(['id', 'username', 'email', 'email_verified'])
     .where('id', '=', caller.userId)
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
@@ -235,7 +235,7 @@ export const eraseAccount = async (
     .deleteFrom('workspace_invitation_recipients')
     .where((eb) =>
       eb.or([
-        eb('email', '=', person.email.trim().toLowerCase()),
+        ...(person.email_verified ? [eb('email', '=', person.email.trim().toLowerCase())] : []),
         eb('applicant_user_id', '=', person.id),
       ]),
     )

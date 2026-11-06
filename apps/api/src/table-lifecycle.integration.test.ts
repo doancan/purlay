@@ -207,6 +207,11 @@ const inWorkspace = (world: World): { workspace_id: string; channel_id: string }
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   workspace_invitation_mail_attempts: {
     seed: async (db, world) => {
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', world.adaId)
+        .execute();
       await makeAndMailInvitation(
         db,
         clock,
