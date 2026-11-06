@@ -23,7 +23,7 @@
  * - **Audited by identifier**: who, which repository, which issue — never a title or a body.
  */
 import { createHash } from 'node:crypto';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import {
   githubIssueMarker,
   GITHUB_REPOSITORIES_MAX,
@@ -189,7 +189,7 @@ const personOf = async (dependencies: GitHubAppDependencies, userId: string): Pr
 
 /** The workspace's installation, in use: there is one, and GitHub has not suspended it. */
 const installationOf = async (
-  database: Executor,
+  database: ChatDb,
   workspaceId: string,
 ): Promise<{ readonly installationId: number }> => {
   const row = await database
@@ -257,7 +257,7 @@ const digestOf = (input: CreateGitHubIssueRequest): string =>
     .digest('hex');
 
 const operationOf = async (
-  database: Executor,
+  database: ChatDb,
   workspaceId: string,
   actorId: string,
   clientRequestId: string,
@@ -306,7 +306,7 @@ const settle = async (
     .execute();
 };
 
-const dropped = async (database: Executor, operation: Pick<Operation, 'id'>): Promise<void> => {
+const dropped = async (database: ChatDb, operation: Pick<Operation, 'id'>): Promise<void> => {
   await database.deleteFrom('github_operations').where('id', '=', operation.id).execute();
 };
 

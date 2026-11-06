@@ -20,7 +20,7 @@
  *   github.com, and the API address is the configured one, as the sign-in's is.
  */
 import { createHash } from 'node:crypto';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { GitHubCardMetadata, GitHubLink } from '@purlay/types';
@@ -303,7 +303,7 @@ export const verifiedToken = async (
 };
 
 export interface UnfurlDependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly cipher: CredentialCipher;
   readonly github: GitHubApi;
@@ -319,7 +319,7 @@ export interface UnfurlDependencies {
 }
 
 const remember = async (
-  database: Executor,
+  database: ChatDb,
   key: string,
   url: string,
   payload: Static<typeof Cached>,

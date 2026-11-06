@@ -4,15 +4,15 @@
  * scheduler's jobs, not the manifest's (`MODULES.md` §3) — and what they delete is why they are chat's code and not
  * the jobs module's (D-250).
  */
-import type { Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
+import type { ChatDb } from './schema';
 
 /**
  * `sweep:link-previews` (D-23): the unfurl cache past its expiry. The expiry is also enforced where
  * the cache is read, so a sweep that did not run serves nothing stale — it only lets the table grow.
  */
 export const sweepLinkPreviews = async (dependencies: {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
 }): Promise<{ removed: number }> => {
   const result = await dependencies.database
@@ -33,7 +33,7 @@ export const GITHUB_DELIVERIES_KEPT_DAYS = 30;
  * the indexes on `received_at` and `expires_at`; idempotent, as every job is (D-30).
  */
 export const sweepGitHubDeliveries = async (dependencies: {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
 }): Promise<{ removed: number }> => {
   const before = new Date(

@@ -13,7 +13,8 @@
  * - **Only for the workspaces the installation is.** A link is updated by a delivery for the installation its
  *   workspace connected, never another's, whatever repository the payload names.
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { ThreadSummary } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import {
@@ -35,7 +36,7 @@ export interface ThreadNotice {
 
 /** The root's state version moved and its thread read as it now is: what a client is told to replace. */
 export const announce = async (
-  transaction: Executor,
+  transaction: ChatDb,
   channelId: string,
   rootId: string,
 ): Promise<ThreadNotice> => {
@@ -84,7 +85,7 @@ export interface ItemEvent {
 
 /** Applies one event to every link of the item, in the workspaces of the installation; the threads that changed. */
 export const applyItemEvent = async (
-  transaction: Executor,
+  transaction: ChatDb,
   event: ItemEvent,
 ): Promise<readonly ThreadNotice[]> => {
   const rows = await transaction

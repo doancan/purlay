@@ -14,7 +14,7 @@
  *   the newest whatever the clock says, so the order is the order they were made.
  */
 import { Value } from '@sinclair/typebox/value';
-import type { Executor, Transaction } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import {
   RunbookUrl,
   Uuid,
@@ -133,7 +133,7 @@ const asIncident = (row: IncidentRow, responders: readonly User[]): Incident => 
  * latest (`NULLS FIRST` under `DESC` is PostgreSQL's own order, said out loud).
  */
 const findIncident = async (
-  executor: Executor,
+  executor: ChatDb,
   by: { readonly id: string } | { readonly channelId: string },
 ): Promise<IncidentRow | undefined> => {
   const query = executor
@@ -166,7 +166,7 @@ const findIncident = async (
 };
 
 /** Who is responding to it, first brought in first. Bounded by `INCIDENT_RESPONDERS_MAX`. */
-const respondersOf = async (executor: Executor, incidentId: string): Promise<readonly User[]> => {
+const respondersOf = async (executor: ChatDb, incidentId: string): Promise<readonly User[]> => {
   const rows = await executor
     .selectFrom('incident_responders')
     .innerJoin('users', 'users.id', 'incident_responders.user_id')
@@ -189,7 +189,7 @@ const respondersOf = async (executor: Executor, incidentId: string): Promise<rea
 
 /** An incident as the contract says it, with its responders; undefined when there is none. */
 const loadIncident = async (
-  executor: Executor,
+  executor: ChatDb,
   by: { readonly id: string } | { readonly channelId: string },
 ): Promise<Incident | undefined> => {
   const row = await findIncident(executor, by);
@@ -198,7 +198,7 @@ const loadIncident = async (
 
 /** The channel's open incident, or once none is open its latest; null when it never had one. */
 export const channelIncident = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<Incident | null> => {
   if (context.channelType === 'direct_message') return null;
@@ -228,7 +228,7 @@ const entryOf = (
 
 /** Appends one entry to the timeline, after the newest whatever the clock says. */
 export const record = async (
-  executor: Transaction,
+  executor: ChatTx,
   incidentId: string,
   actorId: string,
   now: Date,
@@ -258,10 +258,7 @@ export const record = async (
 };
 
 /** The channel is one an incident may be declared in, and the caller is in it. */
-export const requireWriter = async (
-  executor: Transaction,
-  context: ChannelContext,
-): Promise<void> => {
+export const requireWriter = async (executor: ChatTx, context: ChannelContext): Promise<void> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
   await requireChannelMember(executor, context, 'Join the channel to change its incident.');
 };
@@ -272,7 +269,7 @@ export const requireWriter = async (
  * Null when the id is not in use.
  */
 const sameDeclaration = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   input: DeclareIncidentRequest,
 ): Promise<IncidentWrite | null> => {
@@ -299,7 +296,7 @@ const sameDeclaration = async (
  * answered with the incident it made, and tells nobody.
  */
 export const declareIncident = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   input: DeclareIncidentRequest,
@@ -353,7 +350,7 @@ export const declareIncident = async (
 };
 
 /** The incident as it is, for a change that was none. */
-export const unchanged = async (executor: Executor, incidentId: string): Promise<IncidentWrite> => {
+export const unchanged = async (executor: ChatDb, incidentId: string): Promise<IncidentWrite> => {
   const incident = await loadIncident(executor, { id: incidentId });
   if (incident === undefined) throw incidentNotFound();
   return { incident, changed: false };
@@ -389,7 +386,7 @@ const runbookOf = (value: string): string => {
  * is part of what is written up, and may still change (D-137 §3).
  */
 export const changeIncident = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   incidentId: string,
@@ -454,7 +451,7 @@ export const changeIncident = async (
  * again change nothing. Written while open and after.
  */
 export const savePostmortem = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   incidentId: string,
@@ -521,7 +518,7 @@ const changeOf = (
 
 /** The incident's timeline, newest first, a page at a time. */
 export const incidentUpdates = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   incidentId: string,
   query: OlderPageQuery,

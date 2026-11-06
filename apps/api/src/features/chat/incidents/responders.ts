@@ -13,7 +13,7 @@
  * - **On the timeline**, each change with who made it, under the incident's row lock.
  */
 import { Value } from '@sinclair/typebox/value';
-import type { Transaction } from '@purlay/db';
+import type { ChatTx } from '../schema';
 import { INCIDENT_RESPONDERS_MAX, Uuid } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import type { ChannelContext } from '../channels/guard';
@@ -31,7 +31,7 @@ const personNotFound = (): AppError =>
 
 /** The incident is this channel's, locked for the change: two at once are one after the other. */
 const lockIncident = async (
-  executor: Transaction,
+  executor: ChatTx,
   context: ChannelContext,
   incidentId: string,
 ): Promise<void> => {
@@ -48,7 +48,7 @@ const lockIncident = async (
 
 /** Brings somebody in the channel in to respond; already responding, they are left as they were. */
 export const addResponder = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   incidentId: string,
@@ -111,7 +111,7 @@ export const addResponder = async (
 
 /** Takes somebody off; not responding, nothing changes. */
 export const removeResponder = async (
-  executor: Transaction,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   incidentId: string,

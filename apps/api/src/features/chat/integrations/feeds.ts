@@ -8,7 +8,7 @@
  * its address (#884). What the audit trail records is the repository, never the secret.
  */
 import { Value } from '@sinclair/typebox/value';
-import type { Executor, Transaction } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import {
   GITHUB_FEEDS_PER_CHANNEL_MAX,
   GitHubFeedEventName,
@@ -33,7 +33,7 @@ const feedNotFound = (): AppError =>
  * The role read again inside the caller's transaction, through the guard: a demotion that committed
  * first is the answer, and it is this workspace's role, never another membership's.
  */
-const mayConfigure = async (executor: Executor, context: ChannelContext): Promise<void> => {
+const mayConfigure = async (executor: ChatDb, context: ChannelContext): Promise<void> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
   const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
   // Each role decided, so a role added later is refused until somebody says otherwise.
@@ -107,7 +107,7 @@ const COLUMNS = [
 
 /** `GET /api/channels/:channelId/github-feeds` — oldest first, bounded by the cap. */
 export const channelFeeds = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<GitHubFeedList> => {
   await mayConfigure(executor, context);
@@ -127,7 +127,7 @@ export const channelFeeds = async (
  * turns: the second sees the first's feed, and the cap counts both.
  */
 export const createFeed = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   cipher: CredentialCipher,
   context: ChannelContext,
@@ -200,7 +200,7 @@ export const createFeed = async (
  * at its end. The audit trail names the repository and the channel, never a secret.
  */
 export const regenerateSecret = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   cipher: CredentialCipher,
   context: ChannelContext,
@@ -237,7 +237,7 @@ export const regenerateSecret = async (
 
 /** `DELETE /api/channels/:channelId/github-feeds/:feedId` — disconnected; its secret goes with it. */
 export const removeFeed = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   context: ChannelContext,
   feedId: string,

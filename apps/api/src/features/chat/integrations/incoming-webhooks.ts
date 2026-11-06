@@ -17,7 +17,7 @@
  * secret or the words.
  */
 import { Value } from '@sinclair/typebox/value';
-import type { Executor, Transaction } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import {
   INCOMING_WEBHOOKS_PER_CHANNEL_MAX,
   IncomingWebhookName,
@@ -51,7 +51,7 @@ const hookNotFound = (): AppError =>
  * The role read again inside the caller's transaction, through the guard: a demotion that committed
  * first is the answer, and it is this workspace's role, never another membership's.
  */
-const mayConfigure = async (executor: Executor, context: ChannelContext): Promise<void> => {
+const mayConfigure = async (executor: ChatDb, context: ChannelContext): Promise<void> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
   const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
   // Each role decided, so a role added later is refused until somebody says otherwise.
@@ -100,7 +100,7 @@ const webhookOf = (row: HookRow): IncomingWebhook => ({
 
 /** A channel's hooks, oldest first and bounded by the cap, or the one hook named — with who made each. */
 const hookRows = async (
-  executor: Executor,
+  executor: ChatDb,
   which: { readonly channelId: string } | { readonly webhookId: string },
 ): Promise<HookRow[]> =>
   await executor
@@ -129,7 +129,7 @@ const hookRows = async (
 
 /** `GET /api/channels/:channelId/incoming-webhooks` — oldest first, bounded by the cap. */
 export const channelWebhooks = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
 ): Promise<IncomingWebhookList> => {
   await mayConfigure(executor, context);
@@ -141,7 +141,7 @@ export const channelWebhooks = async (
  * second sees the first's, and the cap counts both.
  */
 export const createWebhook = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   context: ChannelContext,
   request: CreateIncomingWebhookRequest,
@@ -196,7 +196,7 @@ export const createWebhook = async (
 
 /** `DELETE /api/channels/:channelId/incoming-webhooks/:webhookId` — revoked: its address posts nothing again. */
 export const revokeWebhook = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   context: ChannelContext,
   webhookId: string,
@@ -222,7 +222,7 @@ export const revokeWebhook = async (
 };
 
 export interface IncomingPostDependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly bus: EventBus;
   readonly log: Logger;
@@ -249,7 +249,7 @@ interface LiveHook {
  * The hook, if it may post: in a channel not archived, of a workspace not deleted (`tenancy.ts`). Either
  * gone is the hook not there.
  */
-const liveHook = async (executor: Executor, webhookId: string): Promise<LiveHook | undefined> =>
+const liveHook = async (executor: ChatDb, webhookId: string): Promise<LiveHook | undefined> =>
   await executor
     .selectFrom('incoming_webhooks')
     .innerJoin('channels', 'channels.id', 'incoming_webhooks.channel_id')

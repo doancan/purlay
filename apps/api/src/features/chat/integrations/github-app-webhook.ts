@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { GitHubAppDeliveryAnswer } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
@@ -34,7 +34,7 @@ import type { EventBus } from '../../../platform/events';
 export type AppOutcome = GitHubAppDeliveryAnswer['outcome'];
 
 export interface AppDeliveryDependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly log: Logger;
   readonly bus: EventBus;
@@ -200,7 +200,7 @@ const changeOf = (event: string, body: unknown): Change | null => {
 
 /** A change applied, in the transaction that records its delivery; the threads that now have something to show. */
 const apply = async (
-  transaction: Executor,
+  transaction: ChatDb,
   clock: Clock,
   change: Change,
 ): Promise<readonly ThreadNotice[]> => {

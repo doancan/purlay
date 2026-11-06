@@ -20,7 +20,7 @@
  *   token. An installation removed on GitHub is let go everywhere it was connected; a suspended one is kept,
  *   said, and used for nothing.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import {
   GITHUB_APP_CALLBACK,
   type GitHubAppRedirect,
@@ -53,7 +53,7 @@ import type { ErasureServices } from '../../../modules/users/erasure';
 const HANDSHAKE_TTL_MS = 10 * 60 * 1000;
 
 export interface GitHubAppDependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly cipher: CredentialCipher;
   readonly log: Logger;
@@ -205,7 +205,7 @@ export const startAuthorization = async (
 
 /** A person's tokens kept, under their row's lock: one row per person, the seal bound to it. */
 export const keepAuthorization = async (
-  executor: Executor,
+  executor: ChatDb,
   { clock, cipher }: Pick<GitHubAppDependencies, 'clock' | 'cipher'>,
   userId: string,
   account: GitHubAccount,
@@ -394,7 +394,7 @@ export const completeCallback = async (
 };
 
 /** Where a trip returns to: the workspace's Integrations page, or the path the person came from. */
-const placeOf = async (database: Executor, trip: Handshake): Promise<string> => {
+const placeOf = async (database: ChatDb, trip: Handshake): Promise<string> => {
   if (trip.purpose === 'authorize') return trip.return_to ?? '/';
   const workspace =
     trip.workspace_id === null

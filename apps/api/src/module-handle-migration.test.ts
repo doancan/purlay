@@ -12,27 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import { shown, sourcesOf } from './testing/module-sources';
 import { wholeDatabaseImports } from './testing/module-tables';
 
-const NOT_YET_BEHIND_THE_HANDLE: readonly string[] = [
-  'features/chat/export.ts',
-  'features/chat/incidents/incidents.ts',
-  'features/chat/incidents/responders.ts',
-  'features/chat/integrations/feeds.ts',
-  'features/chat/integrations/github-app-webhook.ts',
-  'features/chat/integrations/github-app.ts',
-  'features/chat/integrations/github-issues.ts',
-  'features/chat/integrations/github-work-events.ts',
-  'features/chat/integrations/github-work.ts',
-  'features/chat/integrations/github.ts',
-  'features/chat/integrations/incoming-webhooks.ts',
-  'features/chat/integrations/unfurl.ts',
-  'features/chat/integrations/webhook.ts',
-  'features/chat/personal-export.ts',
-  'features/chat/reminders/delivery.ts',
-  'features/chat/reminders/reminders.ts',
-  'features/chat/scheduled/delivery.ts',
-  'features/chat/scheduled/scheduled.ts',
-  'features/chat/sweeps.ts',
-];
+const NOT_YET_BEHIND_THE_HANDLE: readonly string[] = [];
 
 const chatFiles = (): string[] =>
   sourcesOf('chat')

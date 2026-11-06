@@ -1,5 +1,6 @@
 import { notHiddenBy } from '../messages/hidden';
-import { sql, type Executor, type Transaction } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import {
   MESSAGE_REMINDERS_MAX,
   SCHEDULE_AHEAD_MAX_DAYS,
@@ -13,7 +14,7 @@ import type { WorkspaceContext } from '../../../platform/tenancy';
 import { buildMessages, MESSAGE_COLUMNS, readBuilt } from '../messages/reader';
 
 export const setReminder = async (
-  tx: Transaction,
+  tx: ChatTx,
   clock: Clock,
   userId: string,
   messageId: string,
@@ -82,7 +83,7 @@ export const setReminder = async (
 };
 
 export const cancelReminder = async (
-  tx: Transaction,
+  tx: ChatTx,
   userId: string,
   messageId: string,
 ): Promise<string> => {
@@ -96,7 +97,7 @@ export const cancelReminder = async (
 };
 
 export const reminderList = async (
-  db: Executor,
+  db: ChatDb,
   context: WorkspaceContext,
 ): Promise<MessageReminderList> => {
   const visible = await visibleChannelIds(db, context);

@@ -15,7 +15,7 @@
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { Value } from '@sinclair/typebox/value';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import {
   GitHubFeedEventName,
   Uuid,
@@ -35,7 +35,7 @@ import { readBuilt } from '../messages/reader';
 import { readDelivery, summaryOf } from './github-events';
 
 export interface WebhookDependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly cipher: CredentialCipher;
   readonly bus: EventBus;
@@ -89,7 +89,7 @@ interface FeedRow {
   readonly archived_at: Date | null;
 }
 
-const feedOf = async (executor: Executor, feedId: string): Promise<FeedRow | undefined> =>
+const feedOf = async (executor: ChatDb, feedId: string): Promise<FeedRow | undefined> =>
   await executor
     .selectFrom('github_repo_feeds')
     .innerJoin('channels', 'channels.id', 'github_repo_feeds.channel_id')
@@ -113,7 +113,7 @@ const feedOf = async (executor: Executor, feedId: string): Promise<FeedRow | und
  * Whether there is such a feed, asked before a delivery's body is read (D-134 §4): an address that
  * names none costs a lookup, never a read. Not an id at all is the same as no such feed.
  */
-export const requireFeed = async (executor: Executor, feedId: string): Promise<void> => {
+export const requireFeed = async (executor: ChatDb, feedId: string): Promise<void> => {
   if (!Value.Check(Uuid, feedId) || (await feedOf(executor, feedId)) === undefined) {
     throw notFound();
   }
@@ -121,7 +121,7 @@ export const requireFeed = async (executor: Executor, feedId: string): Promise<v
 
 /** Said where the feed was set up, in a statement of its own: it stands whatever the answer is. */
 const failed = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   feedId: string,
   reason: GitHubFeedFailure,
@@ -243,7 +243,7 @@ export const receiveDelivery = async (
   };
   // A renamed repository keeps its feed: its number is what is matched, and its new name is kept —
   // unless another feed of the channel holds that name, which keeps it, and this one its old one.
-  const renamed = async (executor: Executor): Promise<void> => {
+  const renamed = async (executor: ChatDb): Promise<void> => {
     if (envelope === null) return;
     const name = envelope.repository.full_name.toLowerCase();
     if (name === feed.repository_full_name) return;
