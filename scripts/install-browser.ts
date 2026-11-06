@@ -4,6 +4,8 @@
  * `scripts/install-browser-attempts.ts`; this only starts the process.
  */
 import {
+  APT_TIMEOUTS,
+  APT_TIMEOUTS_FILE,
   browserOf,
   installCommand,
   installWithRetries,
@@ -14,6 +16,16 @@ const browser = browserOf(process.argv[2]);
 if (browser === undefined) {
   console.error('usage: bun run scripts/install-browser.ts <chromium|webkit>');
   process.exit(2);
+}
+
+// On a CI runner, apt is told first not to hang on a mirror (see `APT_TIMEOUTS`).
+if (process.env['CI'] === 'true') {
+  const config = Bun.spawn(['sudo', 'tee', APT_TIMEOUTS_FILE], {
+    stdin: new Response(APT_TIMEOUTS),
+    stdout: 'ignore',
+    stderr: 'inherit',
+  });
+  await config.exited;
 }
 
 process.exit(

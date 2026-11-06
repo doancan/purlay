@@ -46,3 +46,19 @@ export type Browser = (typeof BROWSERS)[number];
 /** `undefined` for anything but a browser the suite installs. */
 export const browserOf = (argument: string | undefined): Browser | undefined =>
   BROWSERS.find((browser) => browser === argument);
+
+/**
+ * What the CI runner's apt is told before an install: give up on a mirror that stalls (the download is
+ * the part that hangs), and wait for the dpkg lock when an earlier try left its `apt-get` behind. A
+ * try stopped by the clock stops the playwright that started apt, not apt itself: the first CI run of
+ * this retry saw tries two and three refused by the lock the stopped try's `apt-get` still held.
+ */
+export const APT_TIMEOUTS = [
+  'Acquire::http::Timeout "20";',
+  'Acquire::https::Timeout "20";',
+  'Acquire::Retries "3";',
+  'DPkg::Lock::Timeout "120";',
+  '',
+].join('\n');
+
+export const APT_TIMEOUTS_FILE = '/etc/apt/apt.conf.d/99purlay-timeouts';
