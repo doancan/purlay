@@ -39,6 +39,14 @@ export const API_REALTIME: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
   },
   {
+    id: 'frame-budget-skipped',
+    why: 'a module’s frames cost its connection nothing against the frame budget, so the budget that bounds a flood does not bound this module’s (D-198)',
+    file: 'apps/api/src/realtime/router.ts',
+    find: '  if (!(await limiter.consume(identity.socketId))) {',
+    replace: '  if (false as boolean) {',
+    tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
+  },
+  {
     id: 'frame-burst-back-to-the-provisional-twenty',
     why: 'the burst is what a full outbox costs on a reconnect: at twenty, a person back from a gap has thirty of their messages refused, and the rest of the fifty are not sent either',
     file: 'apps/api/src/realtime/rate-limiter.ts',
@@ -53,6 +61,14 @@ export const API_REALTIME: readonly Mutation[] = [
     find: 'if (owner === undefined || ms === undefined)\n    return await serveFrame(dependencies, identity, frame);',
     replace: 'return await serveFrame(dependencies, identity, frame);',
     tests: ['apps/api/src/realtime/router.test.ts'],
+  },
+  {
+    id: 'frame-handler-never-asked',
+    why: 'a module’s operation is answered as one nobody has, though the module runs and has a handler for it: a module cannot add a frame (D-276)',
+    file: 'apps/api/src/realtime/router.ts',
+    find: '    if (handler !== undefined) {\n',
+    replace: '    if (false as boolean) {\n',
+    tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
   },
   {
     id: 'frame-meter-forgets-the-peak',
@@ -405,6 +421,7 @@ export const API_REALTIME: readonly Mutation[] = [
     find: 'if (dependencies.closedFrame?.(parsed.op) === true) {',
     replace: 'if (false as boolean) {',
     tests: [
+      'apps/api/src/realtime/frame-handlers.test.ts',
       'apps/api/src/realtime/router.test.ts',
       'apps/api/src/realtime/modules-off-socket.integration.test.ts',
     ],

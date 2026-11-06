@@ -555,6 +555,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     userWrites,
     metrics,
     closedFrame: modules.closedFrame,
+    frameHandlers: modules.frameHandlers,
     frameOwner: modules.owner.ofFrame,
     moduleOfFrame: (op) => {
       const owner = modules.owner.ofFrame(op);

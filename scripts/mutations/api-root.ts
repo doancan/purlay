@@ -111,6 +111,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/contract/bundle.test.ts'],
   },
   {
+    id: 'composition-accepts-a-frame-handler-the-manifest-does-not-name',
+    why: 'a module serves an operation its manifest does not list, so a process that does not run it cannot close it, and the operation is in nobody’s claims (D-276)',
+    file: 'apps/api/src/composition.ts',
+    find: '  return unowned.length === 0\n',
+    replace: '  return true\n',
+    tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
+  },
+  {
     id: 'composition-accepts-a-job-with-no-work',
     why: 'a job a manifest names with no work behind it is accepted, so the scheduler asks for one that the command answers as unknown (D-250)',
     file: 'apps/api/src/composition.ts',
@@ -181,6 +189,14 @@ export const API_ROOT: readonly Mutation[] = [
     find: '(module.manifest.events ?? []).includes(event)',
     replace: 'false',
     tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-frame-handlers-of-a-module-not-run-kept',
+    why: 'a module that is not run still serves its operations, so closing it closes nothing of the socket (D-276)',
+    file: 'apps/api/src/composition.ts',
+    find: '    frameHandlers: modules.reduce<',
+    replace: '    frameHandlers: bundled.reduce<',
+    tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
   },
   {
     id: 'composition-frames-of-a-module-never-closed',
