@@ -24,8 +24,15 @@ export interface TestUser {
 /** GitHub's limit, and the column's (`SCHEMA.md`). */
 const USERNAME_MAX = 39;
 
+/**
+ * Hex characters of the random suffix. Six (24 bits) let two users of one name in one database meet on
+ * the same email now and then (`users_email_key`, seen in CI); eight (32 bits) makes that 256 times
+ * less likely.
+ */
+const SUFFIX_LENGTH = 8;
+
 export const aUserRow = async (executor: Executor, name: string): Promise<TestUser> => {
-  const username = `${name}-${crypto.randomUUID().slice(0, 6)}`;
+  const username = `${name}-${crypto.randomUUID().slice(0, SUFFIX_LENGTH)}`;
   if (username.length > USERNAME_MAX) {
     throw new Error(`a test username must leave room for its suffix: "${name}" is too long`);
   }
@@ -39,4 +46,5 @@ export const aUserRow = async (executor: Executor, name: string): Promise<TestUs
 };
 
 /** A workspace slug no other test, and no developer's own workspace, will hold. */
-export const aUniqueSlug = (name: string): string => `${name}-${crypto.randomUUID().slice(0, 6)}`;
+export const aUniqueSlug = (name: string): string =>
+  `${name}-${crypto.randomUUID().slice(0, SUFFIX_LENGTH)}`;
