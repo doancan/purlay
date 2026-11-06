@@ -13,18 +13,19 @@
  * `attachments` is the core's table, bounded here by the messages the person wrote, because that is the link it
  * still has; it moves with the link when that becomes chat's (`MODULES.md` §10, step 8).
  */
-import { sql, tableExists, type Executor, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type RawBuilder } from '@purlay/db';
 import {
   personalTableExport,
   type PersonalContribution,
 } from '../../modules/export/personal-catalogue';
+import type { ChatDb } from './schema';
 
 /** The messages the person wrote that stand: every bound of their words goes through this. */
 const theirMessages = (userId: string): RawBuilder<unknown> =>
   sql`select id from messages where sender_id = ${userId} and deleted_at is null`;
 
 /** The files they sent with those messages; one uploaded and never sent is gone within a day (D-109 §5). */
-const theirFiles = async (userId: string, executor: Executor): Promise<RawBuilder<unknown>> =>
+const theirFiles = async (userId: string, executor: ChatDb): Promise<RawBuilder<unknown>> =>
   // The link is made by chat's own migration set: where it was never applied no message carried a file.
   (await tableExists(executor, 'message_attachments'))
     ? sql`uploader_id = ${userId} and id in (

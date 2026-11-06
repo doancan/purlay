@@ -1,4 +1,4 @@
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { messageId } from '@purlay/types';
 import { requireChannelById } from '../channels/guard';
 import { DAY_MS, type Clock } from '../../../platform/clock';
@@ -11,7 +11,7 @@ import { releaseReservations } from './scheduled';
 import type { PushSender } from '../../../modules/push/sender';
 
 interface Dependencies {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly bus: EventBus;
   readonly log: Logger;

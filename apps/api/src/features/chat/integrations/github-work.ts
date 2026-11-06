@@ -6,7 +6,7 @@
  * The address is built from the repository's name and the item's number, never taken from GitHub's words, as a
  * card's is (D-23): a link a person wrote or GitHub sent cannot name another place.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { GITHUB_WORK_PER_THREAD_MAX, type GitHubWorkLink } from '@purlay/types';
 
 interface WorkRow {
@@ -47,7 +47,7 @@ export const workLinkOf = (row: WorkRow): GitHubWorkLink => {
 
 /** The work of these roots, oldest first, at most `GITHUB_WORK_PER_THREAD_MAX` each; a root with none is not in the map. */
 export const githubWorkFor = async (
-  executor: Executor,
+  executor: ChatDb,
   rootIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly GitHubWorkLink[]>> => {
   const found = new Map<string, GitHubWorkLink[]>();

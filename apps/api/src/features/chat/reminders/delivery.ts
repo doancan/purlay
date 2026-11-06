@@ -1,4 +1,4 @@
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { requireMessageById } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
@@ -21,7 +21,7 @@ export const deliverReminders = async ({
   log,
   push,
 }: {
-  readonly database: Executor;
+  readonly database: ChatDb;
   readonly clock: Clock;
   readonly bus: EventBus;
   readonly log: Logger;

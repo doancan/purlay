@@ -10,9 +10,10 @@
  * `attachments` is the core's table, bounded here by the messages of the channels covered, because that is the
  * link it still has; it moves with the link when that becomes chat's (`MODULES.md` §10, step 8).
  */
-import { sql, tableExists, type Executor, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type RawBuilder } from '@purlay/db';
 import { visibleChannelIds } from './channels/guard';
 import { tableExport, type ExportContribution, type Scope } from '../../modules/export/catalogue';
+import type { ChatDb } from './schema';
 
 /** What `prepare` decided: the channels the export covers, and whether chat's link to the files is there to be read. */
 export interface Prepared {
@@ -39,7 +40,7 @@ const preparedFor = (scope: Scope): Prepared => {
 const coveredChannels = (scope: Scope): readonly string[] => preparedFor(scope).channels;
 
 /** The channels an operator's export covers: every channel of the workspace, archived ones too. */
-export const everyChannel = async (executor: Executor, workspaceId: string): Promise<string[]> =>
+export const everyChannel = async (executor: ChatDb, workspaceId: string): Promise<string[]> =>
   (
     await executor
       .selectFrom('channels')

@@ -1,10 +1,5 @@
-import {
-  sql,
-  type Executor,
-  type Transaction,
-  type Selectable,
-  type ScheduledMessages,
-} from '@purlay/db';
+import { sql, type Selectable, type ScheduledMessages } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import { Value } from '@sinclair/typebox/value';
 import {
   Uuid,
@@ -38,7 +33,7 @@ type ScheduledRow = Selectable<ScheduledMessages>;
  * gives each file's claim back as its row goes, so a file let go is an unsent upload again.
  */
 export const releaseReservations = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   scheduledId: string,
 ): Promise<readonly string[]> => {
   const released = await transaction
@@ -49,14 +44,11 @@ export const releaseReservations = async (
   // In the order they were uploaded (their ids are v7), as a send lists them.
   return released.map((row) => row.attachment_id).sort();
 };
-const rowById = async (db: Executor, id: string): Promise<ScheduledRow | undefined> =>
+const rowById = async (db: ChatDb, id: string): Promise<ScheduledRow | undefined> =>
   await db.selectFrom('scheduled_messages').selectAll().where('id', '=', id).executeTakeFirst();
 
 /** Attachments are loaded for the whole list, never one query per scheduled message. */
-const build = async (
-  db: Executor,
-  rows: readonly ScheduledRow[],
-): Promise<ScheduledMessageList> => {
+const build = async (db: ChatDb, rows: readonly ScheduledRow[]): Promise<ScheduledMessageList> => {
   if (rows.length === 0) return [];
   const attachments = await db
     .selectFrom('scheduled_message_attachments as reserved')
@@ -89,7 +81,7 @@ const build = async (
 
 /** Full replacement of an owned pending/failed draft. The id makes a retried create one draft. */
 export const scheduleMessage = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   userId: string,
   channelId: string,
@@ -231,7 +223,7 @@ export const scheduleMessage = async (
 };
 
 export const cancelScheduledMessage = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   userId: string,
   channelId: string,
   scheduledId: string,
@@ -251,7 +243,7 @@ export const cancelScheduledMessage = async (
 };
 
 export const scheduledMessages = async (
-  db: Executor,
+  db: ChatDb,
   context: WorkspaceContext,
 ): Promise<ScheduledMessageList> => {
   const visible = await visibleChannelIds(db, context);

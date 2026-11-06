@@ -12,7 +12,7 @@
  * (`token_invalid_at`, set by the unfurl, cleared by a replacement or a removal), and the scopes a
  * classic token had when it was saved (`token_scopes`), which say whether it is broader than a card needs.
  */
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { GitHubIntegration } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { SealBroken, type CredentialCipher } from '../../../platform/crypto';
@@ -42,7 +42,7 @@ export const broadScopes = (scopes: string | null): boolean =>
     .some((scope) => /^(repo|workflow|delete_repo|(admin|write):.+)$/.test(scope)) ?? false;
 
 export const githubIntegrationOf = async (
-  executor: Executor,
+  executor: ChatDb,
   context: WorkspaceContext,
 ): Promise<GitHubIntegration> => {
   mayConfigure(context);
@@ -68,7 +68,7 @@ export const githubIntegrationOf = async (
  * what was known of the one before it.
  */
 export const setGitHubToken = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   cipher: CredentialCipher,
   context: WorkspaceContext,
@@ -116,7 +116,7 @@ export const setGitHubToken = async (
 
 /** Removes the token, keeping the row; removing one that is not there records nothing. */
 export const removeGitHubToken = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   context: WorkspaceContext,
 ): Promise<void> => {
@@ -149,7 +149,7 @@ export const removeGitHubToken = async (
  * and is no token: the card is not drawn, and the operator is told why.
  */
 export const githubTokenOf = async (
-  executor: Executor,
+  executor: ChatDb,
   cipher: CredentialCipher,
   log: Logger,
   context: WorkspaceContext,
