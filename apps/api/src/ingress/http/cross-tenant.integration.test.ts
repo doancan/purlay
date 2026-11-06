@@ -33,7 +33,7 @@ import {
   requestInit,
   rowsIn,
 } from '../../testing/cross-tenant';
-import { NOW, testDependencies } from '../../testing/doubles';
+import { aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aGitHubStub } from '../../testing/github-stub';
 import { keepAuthorization } from '../../features/chat/integrations/github-app';
@@ -93,6 +93,7 @@ const call = async (
     testDependencies({
       database: db,
       clock,
+      mail: aRecordingOutbox(),
       storage: STORE,
       githubApp: () => GITHUB_APP_STUB,
       githubAppFetch: GITHUB.appFetch,
@@ -188,6 +189,32 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
   const invitation = await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie);
   expect(invitation.status).toBe(201);
   const { invitation: made } = (await invitation.json()) as { invitation: { id: string } };
+  await db
+    .insertInto('workspace_invitation_recipients')
+    .values({
+      id: made.id,
+      workspace_id: workspaceId,
+      email: 'crossing@example.test',
+      locale: 'en',
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_invitation_mail_attempts')
+    .values({
+      id: messageId(NOW),
+      workspace_id: workspaceId,
+      recipient_id: made.id,
+      invitation_id: made.id,
+      created_at: NOW,
+      result: 'accepted',
+      finished_at: NOW,
+    })
+    .execute();
+  // The mailed invitation above is excluded from the separate copy-link list. Seed one of those too.
+  expect(
+    (await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie)).status,
+  ).toBe(201);
   // An earlier version of the root, to remove: the root edited once.
   expect(
     (await call(db, 'PATCH', `/api/messages/${root}`, cookie, { content: 'an edited question' }))
@@ -292,6 +319,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     unsentAttachmentId,
     memberId: member.userId,
     invitationId: made.id,
+    recipientId: made.id,
     feedId: connected.id,
     versionId: version.id,
     incidentId,
@@ -310,6 +338,7 @@ const NEVER_EXISTED: Ids = {
   unsentAttachmentId: '00000000-0000-4000-8000-000000000000',
   memberId: '00000000-0000-4000-8000-000000000000',
   invitationId: '00000000-0000-4000-8000-000000000000',
+  recipientId: '00000000-0000-4000-8000-000000000000',
   feedId: '00000000-0000-4000-8000-000000000000',
   versionId: '00000000-0000-4000-8000-000000000000',
   incidentId: '00000000-0000-4000-8000-000000000000',
@@ -327,6 +356,7 @@ const NOT_A_UUID: Ids = {
   unsentAttachmentId: 'not-a-uuid',
   memberId: 'not-a-uuid',
   invitationId: 'not-a-uuid',
+  recipientId: 'not-a-uuid',
   feedId: 'not-a-uuid',
   versionId: 'not-a-uuid',
   incidentId: 'not-a-uuid',

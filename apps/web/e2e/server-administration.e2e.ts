@@ -122,7 +122,6 @@ test('administration is independent, responsive, keyboard accessible and backed 
     await page.getByRole('button', { name: 'Approve account' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Confirm change' }).click();
     await expect(page.getByText('Change saved')).toBeVisible();
-    await pending.getByRole('button', { name: 'Refresh', exact: true }).click();
     await expect(
       pending.getByRole('heading', { name: 'Your account is awaiting approval' }),
     ).toHaveCount(0);

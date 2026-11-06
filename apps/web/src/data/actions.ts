@@ -80,7 +80,7 @@ export interface Actions {
   /** Erases the person's own account (D-139 §5), and forgets them here as signing out does. */
   readonly eraseAccount: (confirm: string) => Promise<void>;
   /** In by a sign-in link (D-138 §4): whoever this page held before is forgotten, as on sign-out. */
-  readonly signInByLink: (token: string) => Promise<void>;
+  readonly signInByLink: (token: string, invitation?: string) => Promise<void>;
 }
 
 export const createActions = (
@@ -298,8 +298,8 @@ export const createActions = (
       client.clear();
       forgetPersonalData(storage);
     },
-    signInByLink: async (token): Promise<void> => {
-      await api.consumeEmailSignIn(token);
+    signInByLink: async (token, invitation): Promise<void> => {
+      await api.consumeEmailSignIn(token, invitation);
       // The person may not be who was signed in on this page a moment ago: what is cached and what
       // was kept are theirs, for the same reasons as on sign-out.
       client.clear();

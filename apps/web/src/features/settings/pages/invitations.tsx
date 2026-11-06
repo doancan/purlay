@@ -3,6 +3,7 @@
  * revoke the links still open. A link opens for seven days to anyone signed in who holds it, as a
  * member; the page says so, so nobody shares one thinking it is single-use.
  */
+import { InvitationRecipients } from '../invitation-recipients';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useAuthMethods } from '../../../data/queries';
 import { Button } from '../../../ui/button';
@@ -30,6 +31,7 @@ export const InvitationsPage = (): React.JSX.Element => {
         </div>
       </SettingsCard>
 
+      <InvitationRecipients />
       <SettingsCard title={t('invite.admin.open')}>
         {list.isError && list.data === undefined ? (
           <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">

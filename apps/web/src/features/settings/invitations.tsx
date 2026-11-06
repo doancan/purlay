@@ -77,7 +77,10 @@ export const useInvitations = (enabled: boolean): Invitations => {
     enabled,
   });
   const reread = async (): Promise<void> => {
-    await client.invalidateQueries({ queryKey: keys.invitations(workspace.id) });
+    await Promise.all([
+      client.invalidateQueries({ queryKey: keys.invitations(workspace.id) }),
+      client.invalidateQueries({ queryKey: keys.invitationRecipients(workspace.id) }),
+    ]);
   };
 
   const make = async (

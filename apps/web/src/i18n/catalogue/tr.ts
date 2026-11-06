@@ -355,6 +355,31 @@ export const tr = {
   'invite.admin.makeAnother': 'Yeni bağlantı oluştur',
   'invite.admin.previousOpen':
     'Önceki bağlantılar, süresi dolana veya iptal edene kadar açık kalır.',
+  'invite.delivery.title': 'E-posta davetleri',
+  'invite.delivery.note':
+    'Her alıcının ayrı bağlantısı vardır. Yeniden gönderme önceki bağlantısını değiştirir. Posta sunucusunun kabulü, gelen kutusuna teslim edildiğini doğrulamaz.',
+  'invite.delivery.queued': 'Gönderiliyor',
+  'invite.delivery.accepted': 'Posta sunucusu kabul etti',
+  'invite.delivery.failed': 'Gönderilemedi',
+  'invite.delivery.unknown': 'Gönderim sonucu doğrulanamadı; yeniden gönderebilirsin',
+  'invite.delivery.joined': 'Davet kabul edildi',
+  'invite.delivery.pending': 'Hesap onayı bekleniyor',
+  'invite.delivery.approved': 'Hesap onaylandı; davet henüz kabul edilmedi',
+  'invite.delivery.denied': 'Hesap onaylanmadı',
+  'invite.delivery.revoked': 'Bağlantı iptal edildi',
+  'invite.delivery.expired': 'Bağlantının süresi doldu',
+  'invite.delivery.expires': 'Bağlantının son geçerlilik tarihi: {until}',
+  'invite.delivery.resend': 'Yeniden gönder',
+  'invite.delivery.history': 'Gönderim geçmişi',
+  'invite.delivery.failedRead': 'Davet geçmişi yenilenemedi.',
+  'invite.delivery.empty': 'Henüz e-posta daveti yok.',
+  'invite.delivery.failure.connection': 'Posta sunucusuna ulaşılamadı.',
+  'invite.delivery.failure.authentication':
+    'Posta sunucusu kimlik doğrulamayı reddetti. Sunucu yöneticisinden e-posta ayarlarını kontrol etmesini iste.',
+  'invite.delivery.failure.recipient': 'Posta sunucusu alıcıyı reddetti.',
+  'invite.delivery.failure.message': 'Posta sunucusu iletiyi reddetti.',
+  'invite.delivery.failure.tls': 'Güvenli posta bağlantısı kurulamadı.',
+  'invite.delivery.failure.unknown': 'Posta sunucusu iletiyi kabul edemedi.',
   'invite.mail.checking': 'E-posta kullanılabilirliği kontrol ediliyor…',
   'invite.mail.checkFailed': 'E-posta kullanılabilirliği kontrol edilemedi.',
   'invite.mail.off':
@@ -372,7 +397,7 @@ export const tr = {
   'invite.admin.someone': 'biri',
   'invite.admin.revoke': 'İptal et',
   'invite.mail.description':
-    'Bağlantıyı e-postayla gönder ya da kopyalayıp kendin paylaş. Oturum açmış, bağlantıya sahip herkes yedi gün boyunca üye olarak katılır.',
+    'Her kişiye ayrı e-posta daveti gönder ya da kendin paylaşmak için bağlantı oluştur. Oturum açmış, bağlantıya sahip herkes yedi gün boyunca üye olarak katılabilir.',
   'invite.mail.label': 'E-posta adresleri',
   'invite.mail.placeholder': 'ayse@firma.com',
   'invite.mail.hint':
@@ -388,7 +413,7 @@ export const tr = {
     other: 'Posta sunucusundan daveti {count} kişiye göndermesi istendi.',
   },
   'invite.mail.queuedNote':
-    'Ulaştığı doğrulanmadı. Bir mesaj ulaşmazsa aşağıdaki bağlantı da çalışır.',
+    'Posta sunucusunun yanıtını E-posta davetleri bölümünden takip et. Aşağıdaki ayrı bağlantıyı da paylaşabilirsin.',
   'invite.mail.invalid': 'E-posta adresi olmadığı için gönderilmedi: {addresses}.',
   'invite.mail.inviterLimit':
     'Bugünkü {limit} davet e-postası sınırına ulaştın, bu yüzden şunlar gönderilmedi: {addresses}.',

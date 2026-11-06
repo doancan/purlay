@@ -69,6 +69,7 @@ export interface Ids {
   readonly memberId: string;
   /** A link of the workspace that still opens: what revoking acts on. */
   readonly invitationId: string;
+  readonly recipientId: string;
   /** A repository's feed into the channel: what disconnecting acts on. */
   readonly feedId: string;
   /** An earlier version of the message: what removing one acts on. */
@@ -104,6 +105,7 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
+    if (name === 'recipientId') return ids.recipientId;
     if (name === 'feedId') return ids.feedId;
     if (name === 'versionId') return ids.versionId;
     if (name === 'incidentId') return ids.incidentId;
@@ -766,6 +768,34 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: {
       kind: 'none',
       reason: 'only an upload nobody has sent can be discarded, and it is in no channel yet',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/invitation-recipients': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'private workspace invitation evidence, without channel content',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/invitation-recipients/:recipientId/attempts': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'private workspace invitation evidence, without channel content',
+    },
+  },
+  'POST /api/workspaces/:workspaceId/invitation-recipients/:recipientId/resend': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'private workspace invitation evidence, without channel content',
+    },
+  },
+  'DELETE /api/workspaces/:workspaceId/invitation-recipients/:recipientId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'private workspace invitation evidence, without channel content',
     },
   },
   'POST /api/workspaces/:workspaceId/invitations': {

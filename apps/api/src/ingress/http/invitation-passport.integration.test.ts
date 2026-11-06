@@ -554,6 +554,115 @@ describe('integration: email on an invite-only server', () => {
     return /#([0-9a-f]{64})/.exec(letter?.text ?? '')?.[1];
   };
 
+  test.each(['open', 'invite-only'] as const)(
+    'recipient evidence needs the exact invitation presented at sign-in, never an address-only passport (%s)',
+    async (signUp) => {
+      const server = aServer(aGitHubFor(aNewPerson()), { signUp });
+      const { owner, workspaceId } = await anInvitation(server, 'pp-proof');
+      const email = `receipt-${crypto.randomUUID().slice(0, 8)}@example.test`;
+      const mailInvite = async (): Promise<{
+        token: string;
+        recipientId: string;
+        invitationId: string;
+      }> => {
+        const response = await post(
+          server.app,
+          `/api/workspaces/${workspaceId}/invitations`,
+          { emails: [email] },
+          { cookie: owner.cookie },
+        );
+        expect(response.status).toBe(201);
+        await server.app.settled();
+        const letter = server.mail.posted
+          .filter((message) => message.to === email && message.text.includes('/invite#'))
+          .at(-1);
+        const token = /\/invite#([0-9a-f]{64})/.exec(letter?.text ?? '')?.[1];
+        if (token === undefined) throw new Error('mailed invitation missing');
+        const row = await cloned.db
+          .selectFrom('workspace_invitation_mail_attempts')
+          .innerJoin(
+            'workspace_invitations',
+            'workspace_invitations.id',
+            'workspace_invitation_mail_attempts.invitation_id',
+          )
+          .select(['recipient_id', 'invitation_id'])
+          .where('token_hash', '=', await tokenDigest(token))
+          .executeTakeFirstOrThrow();
+        return { token, recipientId: row.recipient_id, invitationId: row.invitation_id };
+      };
+      const applicant = async (id: string): Promise<string | null> =>
+        (
+          await cloned.db
+            .selectFrom('workspace_invitation_recipients')
+            .select('applicant_user_id')
+            .where('id', '=', id)
+            .executeTakeFirstOrThrow()
+        ).applicant_user_id;
+      const first = await mailInvite();
+      // An inviter can issue an address-scoped passport without controlling the recipient's browser.
+      expect(
+        (await post(server.app, '/api/invitations/passport', { token: first.token, email })).status,
+      ).toBe(204);
+      await askFor(server, email);
+      const ordinary = tokenIn(server, email);
+      expect(ordinary).toBeDefined();
+      expect(
+        (
+          await post(server.app, '/auth/email/consume', {
+            token: ordinary,
+            invitation: 'arbitrary text',
+          })
+        ).status,
+      ).toBe(400);
+      expect((await post(server.app, '/auth/email/consume', { token: ordinary })).status).toBe(204);
+      expect(await applicant(first.recipientId)).toBeNull();
+      const user = await cloned.db
+        .selectFrom('users')
+        .select(['id', 'email_verified'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+      expect(user.email_verified).toBe(true);
+      // The existing account has two outstanding invitations. Only the one the person presents is attested.
+      const second = await mailInvite();
+      expect(
+        (await post(server.app, '/api/invitations/passport', { token: first.token, email })).status,
+      ).toBe(204);
+      expect(
+        (await post(server.app, '/api/invitations/passport', { token: second.token, email }))
+          .status,
+      ).toBe(204);
+      await askFor(server, email);
+      expect(
+        (
+          await post(server.app, '/auth/email/consume', {
+            token: tokenIn(server, email),
+            invitation: second.token,
+          })
+        ).status,
+      ).toBe(204);
+      expect(await applicant(first.recipientId)).toBeNull();
+      expect(await applicant(second.recipientId)).toBe(user.id);
+      const revoked = await mailInvite();
+      const dropped = await server.app.handle(
+        new Request(`${ORIGIN}/api/workspaces/${workspaceId}/invitations/${revoked.invitationId}`, {
+          method: 'DELETE',
+          headers: { cookie: owner.cookie, origin: ORIGIN },
+        }),
+      );
+      expect(dropped.status).toBe(204);
+      await askFor(server, email);
+      expect(
+        (
+          await post(server.app, '/auth/email/consume', {
+            token: tokenIn(server, email),
+            invitation: revoked.token,
+          })
+        ).status,
+      ).toBe(204);
+      expect(await applicant(revoked.recipientId)).toBeNull();
+    },
+  );
+
   test('a passport for a@x lets a@x in by the mailed link and nobody else', async () => {
     const server = aServer(aGitHubFor(aNewPerson()));
     const { token } = await anInvitation(server, 'pp-mail');

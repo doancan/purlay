@@ -236,7 +236,7 @@ describe('invite people by email', () => {
     const view = await openMenu(withMail);
     const dialog = await invite(view);
     expect(await view.findByRole('textbox', { name: 'Email addresses' })).toBeDefined();
-    expect(dialog.textContent).toContain('Send the link by email');
+    expect(dialog.textContent).toContain('Send each person a separate invitation by email');
     const send = within(dialog).getByRole('button', { name: 'Send invitations' });
     expect((send as HTMLButtonElement).disabled).toBe(true);
     // The link is still there to make by hand.
@@ -324,7 +324,7 @@ describe('invite people by email', () => {
     expect(status.textContent).toContain(
       'Asked the mail server to send the invitation to 2 people.',
     );
-    expect(status.textContent).toContain('not confirmed that it arrived');
+    expect(status.textContent).toContain('Track the mail server’s response in Email invitations');
     expect(dialog.textContent).not.toMatch(/\b(sent to|delivered)\b/i);
     expect((view.getByRole('textbox', { name: 'Invitation link' }) as HTMLInputElement).value).toBe(
       `${window.location.origin}/invite#${TOKEN}`,
