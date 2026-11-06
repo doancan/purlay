@@ -102,9 +102,9 @@ export const AREAS = [
   },
   { name: 'web-realtime', prefixes: ['apps/web/src/realtime/'] },
   { name: 'web-features', prefixes: ['apps/web/src/features/'] },
-  { name: 'web-features-channel', prefixes: ['apps/web/src/features/channel/'] },
-  { name: 'web-features-composer', prefixes: ['apps/web/src/features/composer/'] },
-  { name: 'web-features-sidebar', prefixes: ['apps/web/src/features/sidebar/'] },
+  { name: 'web-features-channel', prefixes: ['apps/web/src/features/chat/channel/'] },
+  { name: 'web-features-composer', prefixes: ['apps/web/src/features/chat/composer/'] },
+  { name: 'web-features-sidebar', prefixes: ['apps/web/src/features/chat/sidebar/'] },
 ] as const satisfies readonly Area[];
 
 export type AreaName = (typeof AREAS)[number]['name'];

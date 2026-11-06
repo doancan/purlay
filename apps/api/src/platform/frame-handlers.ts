@@ -45,6 +45,8 @@ export interface FrameContext {
   readonly clock: Clock;
   readonly bus: EventBus;
   readonly log: Logger;
+  /** Keyed by user, and shared with HTTP's write budget: a person's sockets and requests are one person's writes (D-84). */
+  readonly userWrites: { readonly consume: (key: string, cost?: number) => Promise<boolean> };
   /** A frame of the contract as the router stamps it: the server clock, and the id it answers. */
   readonly reply: (body: FrameBody, refId?: string) => ServerFrame;
   /** The `ERROR` frame for a failure, as the router answers one: an `AppError` as it is, anything else by its kind. */

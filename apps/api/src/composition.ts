@@ -28,6 +28,7 @@ import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspace
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import type { FrameHandlers } from './platform/frame-handlers';
+import type { RouterFrameContext } from './realtime/router';
 import { hookList } from './platform/hooks';
 import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
@@ -79,11 +80,11 @@ export interface BundledModule {
    */
   readonly jobWork?: Readonly<Record<string, JobWork>>;
   /**
-   * What serves each client operation the manifest names under `frames`: the router asks the module that owns an operation
-   * and nobody else. A handler for an operation the manifest does not name stops the build (`compose`); an operation of the
-   * manifest with none is the router's own until it moves (D-276).
+   * What serves each client operation the manifest names under `frames`, and no other: the router dispatches an operation to
+   * the module that owns it and asks nobody else. An operation named with no handler, or a handler for one not named, stops
+   * the build (`compose`), as the work of a job does (D-276).
    */
-  readonly frameHandlers?: FrameHandlers;
+  readonly frameHandlers?: FrameHandlers<RouterFrameContext>;
 }
 
 /**
@@ -118,15 +119,20 @@ const jobWorkProblem = ({ manifest, jobWork = {} }: BundledModule): string | und
   return undefined;
 };
 
-/** What is wrong with the frame handlers a module supplies, or `undefined` when each is for an operation its manifest owns. */
+/** What is wrong with the frame handlers a module supplies and the operations its manifest names, or `undefined` when they are the same. */
 const frameHandlerProblem = ({
   manifest,
   frameHandlers = {},
 }: BundledModule): string | undefined => {
-  const unowned = Object.keys(frameHandlers).filter((op) => !(manifest.frames ?? []).includes(op));
-  return unowned.length === 0
+  const named = manifest.frames ?? [];
+  const unserved = named.filter((op) => !(op in frameHandlers));
+  const unnamed = Object.keys(frameHandlers).filter((op) => !named.includes(op));
+  if (unserved.length > 0) {
+    return `"${manifest.id}" names the frames ${unserved.join(', ')} in its manifest and supplies no handler for them`;
+  }
+  return unnamed.length === 0
     ? undefined
-    : `"${manifest.id}" supplies handlers for ${unowned.join(', ')}, which its manifest does not name under frames`;
+    : `"${manifest.id}" supplies handlers for ${unnamed.join(', ')}, which its manifest does not name under frames`;
 };
 
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
@@ -180,7 +186,7 @@ export interface Composition {
   /** Whether a job belongs to a module this build carries and this process does not run. */
   readonly closedJob: (name: string) => boolean;
   /** The handlers of the operations of the modules this process runs: a module that is not run serves none. */
-  readonly frameHandlers: FrameHandlers;
+  readonly frameHandlers: FrameHandlers<RouterFrameContext>;
   /** Whether a client frame's operation belongs to a module this build carries and this process does not run. */
   readonly closedFrame: (op: string) => boolean;
   /** Whether a server event belongs to a module this build carries and this process does not run. */
@@ -273,7 +279,7 @@ export const compose = (
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.jobs ?? []).includes(name),
       ),
-    frameHandlers: modules.reduce<FrameHandlers>(
+    frameHandlers: modules.reduce<FrameHandlers<RouterFrameContext>>(
       (handlers, module) => ({ ...handlers, ...module.frameHandlers }),
       {},
     ),

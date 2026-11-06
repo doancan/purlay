@@ -22,6 +22,7 @@ import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { createReplayGate, type ReplayGate } from './replay-gate';
 import { routeFrame } from './router';
+import { chatFrames } from '../features/chat/frames';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 afterAll(async () => {
@@ -71,13 +72,14 @@ const routerOver = (
   db: Executor,
   bus: Bus,
   open: ReadonlySet<string>,
-  overrides: { replayGate?: ReplayGate; readReplay?: typeof missedIn } = {},
+  { replayGate, readReplay }: { replayGate?: ReplayGate; readReplay?: typeof missedIn } = {},
 ): Parameters<typeof routeFrame>[0] => ({
   database: db,
   clock,
   bus,
   limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
   userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+  frameHandlers: chatFrames(readReplay),
   presence: inMemoryPresenceRegistry(clock),
   attention: nobodyActive,
   online: { active: () => undefined },
@@ -89,7 +91,7 @@ const routerOver = (
     isOpen: (socketId) => open.has(socketId),
     drop: () => undefined,
   },
-  ...overrides,
+  ...(replayGate === undefined ? {} : { replayGate }),
 });
 
 const subscribe = (channelId: string): unknown => ({

@@ -17,7 +17,7 @@ import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 import { inProcessEventBus } from './bus';
 import { inMemoryPresenceRegistry } from './presence';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET, type RateLimiter } from './rate-limiter';
-import { routeFrame } from './router';
+import { routeFrame, type RouterFrameContext } from './router';
 
 const clock = fixedClock(new Date('2026-11-06T12:00:00.000Z'));
 const FRAME_ID = '00000000-0000-7000-8000-0000000000a1';
@@ -27,7 +27,7 @@ const IDENTITY = { socketId: 's1', userId: 'u1', sessionId: 'not-read', expiresA
 /** The operation is one the contract has: a module's own operation is a name the contract opens to it (`MODULES.md` §4). */
 const OPERATION = 'TYPING';
 
-const notesWith = (frameHandlers: FrameHandlers): BundledModule => ({
+const notesWith = (frameHandlers: FrameHandlers<RouterFrameContext>): BundledModule => ({
   manifest: {
     id: 'notes',
     requires: [],
@@ -215,16 +215,26 @@ describe('a frame of a module that is not run', () => {
 
 describe('the handlers a composition takes', () => {
   test('are those of the modules that run, and of no other', () => {
-    const handler: FrameHandlers = { [OPERATION]: () => Promise.resolve([]) };
+    const handler: FrameHandlers<RouterFrameContext> = { [OPERATION]: () => Promise.resolve([]) };
     const notes = notesWith(handler);
     expect(Object.keys(compose([notes], [notes]).frameHandlers)).toEqual([OPERATION]);
     expect(Object.keys(compose([], [notes]).frameHandlers)).toEqual([]);
   });
 
   test('stop the build for an operation the module’s manifest does not name', () => {
-    const notes = notesWith({ MESSAGE_SEND: () => Promise.resolve([]) });
+    const notes = notesWith({
+      [OPERATION]: () => Promise.resolve([]),
+      MESSAGE_SEND: () => Promise.resolve([]),
+    });
     expect(() => compose([notes], [notes])).toThrow(
       '"notes" supplies handlers for MESSAGE_SEND, which its manifest does not name under frames',
+    );
+  });
+
+  test('stop the build for an operation the module names and has no handler for', () => {
+    const notes = notesWith({});
+    expect(() => compose([notes], [notes])).toThrow(
+      `"notes" names the frames ${OPERATION} in its manifest and supplies no handler for them`,
     );
   });
 });

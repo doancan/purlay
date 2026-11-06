@@ -29,7 +29,7 @@ import { Select } from '../../../ui/select';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { Icon } from '../../../components/icon';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
-import { fold } from '../../composer/mention-suggest';
+import { fold } from '../../chat/composer/mention-suggest';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage } from '../page';

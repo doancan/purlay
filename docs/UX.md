@@ -344,7 +344,7 @@ conversation.
 **A channel's name is typed as it is said** (D-123). In **New channel** and in the details, what is typed is turned
 into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes
 `istanbul`: lowercase, accents and Turkish letters folded to their plain letter, anything else one
-hyphen (`features/channel/channel-name.ts`). Somebody looking at a channel that is archived, or that
+hyphen (`features/chat/channel/channel-name.ts`). Somebody looking at a channel that is archived, or that
 they left on another screen, is told which, instead of *not found*.
 
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's

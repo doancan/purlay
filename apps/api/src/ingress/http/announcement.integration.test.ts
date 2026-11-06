@@ -22,6 +22,7 @@ import { inProcessBackplane, inProcessEventBus, type Backplane } from '../../rea
 import { inMemoryPresenceRegistry } from '../../realtime/presence';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { routeFrame } from '../../realtime/router';
+import { chatFrameHandlers } from '../../features/chat/frames';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 
@@ -430,6 +431,7 @@ describe('integration: writing in an announcement channel over the socket', () =
         bus: inProcessEventBus(() => undefined, log),
         limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
         userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+        frameHandlers: chatFrameHandlers,
         presence: inMemoryPresenceRegistry(clock),
         attention: inMemoryAttention(clock),
         online: { active: () => undefined },

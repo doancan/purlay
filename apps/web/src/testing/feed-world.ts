@@ -10,7 +10,7 @@
  * left to Playwright and said so in the tests that stop here.
  */
 import { fakeSchedule, type FakeSchedule } from './fakes';
-import type { FeedPorts } from '../features/channel/feed-ports';
+import type { FeedPorts } from '../features/chat/channel/feed-ports';
 
 export interface ScrollMetrics {
   scrollHeight: number;

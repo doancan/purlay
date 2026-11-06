@@ -291,8 +291,8 @@ describe("where each module's code is", () => {
     expect(
       problemsOf(
         aShell([
-          '../../src/features/sidebar/sidebar.tsx',
-          '../../src/features/channel/feed-ports.tsx',
+          '../../src/features/chat/sidebar/sidebar.tsx',
+          '../../src/features/chat/channel/feed-ports.tsx',
         ]),
       ),
     ).toEqual([]);
@@ -303,8 +303,8 @@ describe("where each module's code is", () => {
       webModules().map((module) => [module.id, screenSources(module)]),
     );
     expect(sources['chat']).toContain('features/chat/chat.ts');
-    expect(sources['chat']).toContain('features/channel/channel-screen.tsx');
-    expect(sources['chat']).toContain('features/unreads/unreads-screen.tsx');
+    expect(sources['chat']).toContain('features/chat/channel/channel-screen.tsx');
+    expect(sources['chat']).toContain('features/chat/unreads/unreads-screen.tsx');
     expect(sources['issues']).toEqual(['features/issues/issues-screen.tsx']);
     // A type-only import of the manifest is no screen, and a shared helper is not named.
     expect(sources['chat']?.some((file) => file.endsWith('manifest.ts'))).toBe(false);
@@ -316,15 +316,15 @@ describe("where each module's code is", () => {
   test('a chat screen or the composer in the shell is named, and the shared files are not', () => {
     const [problem, ...rest] = problemsOf(
       aShell([
-        '../../src/features/channel/channel-screen.tsx',
-        '../../src/features/composer/composer.tsx',
-        '../../src/features/channel/feed-ports.tsx',
+        '../../src/features/chat/channel/channel-screen.tsx',
+        '../../src/features/chat/composer/composer.tsx',
+        '../../src/features/chat/channel/feed-ports.tsx',
       ]),
     );
     expect(rest).toEqual([]);
     expect(problem).toContain("assets/index-aaa.js contains the chat module's screens");
     expect(problem).toContain(
-      'features/channel/channel-screen.tsx, features/composer/composer.tsx',
+      'features/chat/channel/channel-screen.tsx, features/chat/composer/composer.tsx',
     );
     expect(problem).not.toContain('feed-ports');
   });
@@ -434,10 +434,10 @@ describe('the command', () => {
   });
 
   test('fails when a chat screen is back in the shell, and says where it loads from', () => {
-    const dist = aBuild(aShell(['../../src/features/unreads/unreads-screen.tsx']));
+    const dist = aBuild(aShell(['../../src/features/chat/unreads/unreads-screen.tsx']));
     const result = main(dist);
     expect(result.code).toBe(1);
-    expect(result.err).toContain('features/unreads/unreads-screen.tsx');
+    expect(result.err).toContain('features/chat/unreads/unreads-screen.tsx');
     expect(result.err).toContain('features/chat/chat.ts');
   });
 });
