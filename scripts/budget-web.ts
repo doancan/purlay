@@ -24,7 +24,7 @@
  * **The shell holds no module's screen** (D-250, `docs/MODULES.md` §6): a module's screens are a chunk of their own,
  * which the shell asks for with `import()` and which is not initial — chat's `assets/chat-*.js`, issues'
  * `assets/issues-screen-*.js`. The modules and their entries are read from the manifests (`load: () => import('./x')`),
- * so a module added later is held without a line here, and one with no bound in `MODULE_BYTES` fails. The check reads
+ * so a module added later is held without a line here, and its files are derived from its folder (`screenSources`, D-277); one with no bound in `MODULE_BYTES` fails. The check reads
  * the source maps of the initial chunks, so it needs `bun run build:web:mapped`, and fails — rather than passing
  * unproven — when there is none. A bound goes with each chunk, and one with the shell's, set from the measured build
  * with a margin for a feature or two: the shell's 250 KB (2026-11-03: 242.04 KB gzipped, 3% above) so the 400 KB
@@ -32,8 +32,10 @@
  * (2026-11-06: 2.70 KB, 11% above). They move up in a commit that says why, as the backstop does.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { CORE_IMPORTS_OF_MODULES } from './web-fences.mjs';
+import { staticClosure, webImports } from './web-imports';
 
 export const BUDGET_BYTES = 400 * 1024;
 /** The shell's own bound: the initial JavaScript with chat's screens in their own chunk. */
@@ -45,21 +47,6 @@ export const SHELL_BYTES = 250 * 1024;
 export const MODULE_BYTES: Readonly<Record<string, number>> = {
   chat: 50 * 1024,
   issues: 3 * 1024,
-};
-
-/**
- * The heavy files only a module's screens reach, which the screens' own files do not name: a source map of an initial
- * chunk that lists one means a static import has put the module back into the shell. What is not listed (the sidebar's
- * links, the read caches and the panels the frame hosts) is shared with the shell and stays in it. A file named here that
- * is gone fails the check, so a move cannot leave it holding nothing.
- */
-export const HEAVY_SOURCES: Readonly<Record<string, readonly string[]>> = {
-  chat: [
-    'features/chat/composer/composer.tsx',
-    'features/chat/channel/message-feed.tsx',
-    'features/chat/messages/message-row.tsx',
-    'features/chat/threads/thread.tsx',
-  ],
 };
 
 export interface Chunk {
@@ -151,11 +138,12 @@ const MODULE_CHUNK = /^assets\/[^/]+\.js$/;
  * What a module's lazy screen carries that nothing else does, by the id in the module's manifest (`MODULES.md` §6,
  * D-254): found in an initial chunk, the module is no longer a chunk of its own. The word is not in the manifest, which
  * the shell does carry: it is in the screen's file, as `ISSUES_SCREEN` is, and a module with a manifest is
- * looked for without a line here. (A module's screens are also looked for by their sources, `screenSources`.)
+ * looked for without a line here. (Every file of a module is also looked for by its source, `screenSources`.)
  */
 const screenMarker = (moduleId: string): string => `screen-of-the-${moduleId}-module`;
 
-const FEATURES = join(import.meta.dirname, '..', 'apps', 'web', 'src', 'features');
+const SRC = join(import.meta.dirname, '..', 'apps', 'web', 'src');
+const FEATURES = join(SRC, 'features');
 
 /** A module of the client: the id its manifest declares, and the file its `load` imports, as a path under `features/`. */
 export interface WebModule {
@@ -181,36 +169,30 @@ export const webModules = (features = FEATURES): WebModule[] =>
 export const moduleIds = (features = FEATURES): string[] =>
   webModules(features).map((module) => module.id);
 
-const EXTENSIONS = ['.tsx', '.ts'];
-
-/** The file `specifier` names, relative to `from`, as a path under `features/` with its extension; none when it is no file. */
-const featureFile = (features: string, from: string, specifier: string): string | undefined => {
-  const base = join(features, dirname(from), specifier);
-  const found = EXTENSIONS.map((extension) => `${base}${extension}`).find((file) =>
-    existsSync(file),
-  );
-  return found === undefined ? undefined : relative(features, found);
-};
-
 /**
- * The files of a module that only it draws and that no initial chunk may hold, as paths under `src/`: the entry its
- * manifest loads, the screens that entry imports (`*-screen`, chat's `chat.ts` is nothing but their list), and the module's
- * heavy files (`HEAVY_SOURCES`). Read from the manifests and the entries, so a module added later is held with them.
+ * The files of a module that no initial chunk may hold, as paths under `src/` (D-277): everything in its folder but the
+ * manifest and the tests, less what the core is allowed to import (`CORE_IMPORTS_OF_MODULES`) and what those files import
+ * statically, which is in the shell for the reason listed there. Derived from the folder, so a file added to a module is
+ * held without a line here, and a file the core stops importing is held from then on.
  */
-export const screenSources = (module: WebModule, features = FEATURES): string[] => {
-  if (module.entry === undefined) return [];
-  const entry = featureFile(features, '.', module.entry);
-  if (entry === undefined) return [];
-  const imported = [
-    ...readFileSync(join(features, entry), 'utf8').matchAll(
-      /^import\s+(?!type\b)[^;]*?from\s+'(\.{1,2}\/[\w/-]+-screen)';$/gm,
-    ),
-  ].flatMap((found) => featureFile(features, entry, found[1] ?? '') ?? []);
-  return [
-    ...[entry, ...imported].map((file) => `features/${file}`),
-    ...(HEAVY_SOURCES[module.id] ?? []),
-  ];
+export const screenSources = (module: WebModule, src = SRC): string[] => {
+  const imports = webImports(src);
+  const resident = staticClosure(
+    imports,
+    CORE_IMPORTS_OF_MODULES.map(({ to }) => to),
+  );
+  const files = new Set(imports.flatMap(({ from, to }) => [from, to]));
+  return [...files]
+    .filter(
+      (file) =>
+        file.startsWith(`features/${module.folder}/`) &&
+        file !== `features/${module.folder}/manifest.ts` &&
+        !/\.test\.tsx?$/.test(file) &&
+        !resident.has(file),
+    )
+    .sort();
 };
+
 /** The push worker, an entry of its own that must stay one file (D-126). */
 const WORKER = 'push-worker.js';
 
@@ -296,13 +278,6 @@ export const moduleProblems = (dist: string, report: Report, features = FEATURES
       );
     }
   }
-  for (const heavy of Object.values(HEAVY_SOURCES).flat()) {
-    if (!existsSync(join(features, heavy.replace(/^features\//, '')))) {
-      problems.push(
-        `${heavy} is named in HEAVY_SOURCES and is not a file; a move left the check holding nothing`,
-      );
-    }
-  }
   if (report.totalGzip > SHELL_BYTES) {
     problems.push(
       `the shell is ${kb(report.totalGzip)} gzipped, over its ${kb(SHELL_BYTES)} bound; a screen that used to load later, or something new, loads first`,
@@ -319,13 +294,13 @@ export const moduleProblems = (dist: string, report: Report, features = FEATURES
       continue;
     }
     for (const module of modules) {
-      const own = screenSources(module, features);
+      const own = screenSources(module);
       const found = own.filter((only) =>
         sources.some(({ source }) => source.includes(`/src/${only}`)),
       );
       if (found.length > 0) {
         problems.push(
-          `${file} contains the ${module.id} module's screens (${found.join(', ')}); they load from ${own[0] ?? module.folder} on demand and nothing in the shell may import them (D-250)`,
+          `${file} contains the ${module.id} module's code (${found.slice(0, 4).join(', ')}${found.length > 4 ? `, and ${String(found.length - 4)} more` : ''}); it loads from the module's chunk, features/${module.entry ?? module.folder}, on demand and nothing in the shell may import it (D-250, D-277)`,
         );
       }
     }
