@@ -19,7 +19,7 @@ export const httpFolderFiles = (id: string): string[] => {
 };
 
 /** Every file a route of the application is registered in. */
-export const routeSourceFiles = (): string[] => [
+const routeSourceFiles = (): string[] => [
   join(API_SOURCE, 'ingress', 'http', 'app.ts'),
   ...readdirSync(join(API_SOURCE, 'features'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
