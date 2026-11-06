@@ -6,20 +6,42 @@
  * The unit test of the frame (`chatless-shell.test.tsx`) answers from a fake; this is a real browser, a real server
  * that 404s chat's routes, and the page's own requests.
  */
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { openNav, openNavigation, shellReady } from './support';
 
-/** The paths chat and issues serve (`/api/workspaces/:id/channels`, `/api/channels/:id/messages`, …): none is asked for here. */
-const CHAT_PATH =
-  /\/(channels|messages|presence|unresolved|saved|drafts|notifications|search|pins|bookmarks|threads|reminders|scheduled|issues)(\/|\?|$)/;
+/**
+ * Every route template of every module the build carries (`routes` of the manifests, read from `bundledModules` so a module
+ * added later is covered with no word added here), as the server reads one: `:name` is a segment, a trailing `**` the rest.
+ */
+const MODULE_ROUTES: readonly RegExp[] = (
+  JSON.parse(
+    execFileSync(
+      'bun',
+      [
+        '--no-env-file',
+        '-e',
+        "const { bundledModules } = await import('./apps/api/src/composition'); console.log(JSON.stringify(bundledModules.flatMap((module) => module.manifest.routes ?? [])));",
+      ],
+      { cwd: join(import.meta.dirname, '../../..'), encoding: 'utf8' },
+    ),
+  ) as string[]
+).map((template) => {
+  const segments = template.split('/').map((segment) => {
+    if (segment === '**') return '(?:.*)';
+    return segment.startsWith(':') ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  });
+  return new RegExp(`^${segments.join('/').replace(/\/\(\?:\.\*\)$/, '(?:/.*)?')}$`);
+});
 
-/** What a page of this test must not do: every request to a chat route, and every error the console or the page reported. */
+/** What a page of this test must not do: every request to a module's route, and every error the console or the page reported. */
 const watch = (page: Page): { chat: string[]; errors: string[] } => {
   const seen = { chat: [] as string[], errors: [] as string[] };
   page.on('request', (request) => {
     const { pathname } = new URL(request.url());
-    if (pathname.startsWith('/api/') && CHAT_PATH.test(pathname)) {
+    if (MODULE_ROUTES.some((route) => route.test(pathname))) {
       seen.chat.push(`${request.method()} ${pathname}`);
     }
   });
