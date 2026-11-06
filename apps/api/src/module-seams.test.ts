@@ -21,24 +21,7 @@ const FEATURES = join(SOURCE_ROOT, 'features');
 const COMPOSITION_ROOTS: readonly string[] = [join('ingress', 'http', 'app.ts')];
 
 /** The route handlers of chat, and the doors that still read it, by feature: `ingress/http/<file>.ts` and no other file. */
-const CHAT_HANDLERS = [
-  'channels',
-  'feeds',
-  'github-app',
-  'github-issues',
-  'incidents',
-  'incoming-webhooks',
-  'integrations',
-  'knowledge',
-  'messages',
-  'missed-mail',
-  'notifications',
-  'presence',
-  'reminders',
-  'scheduled',
-  'star',
-  'webhooks',
-].map((name) => join('ingress', 'http', `${name}.ts`));
+const CHAT_HANDLERS = ['missed-mail'].map((name) => join('ingress', 'http', `${name}.ts`));
 
 /**
  * What a door may import of a feature, with why. **Only shrinks**: an entry that no longer imports its feature fails the
@@ -57,10 +40,6 @@ const ALLOWED: Readonly<
       },
     ]),
   ),
-  [join('ingress', 'http', 'workspaces.ts')]: {
-    features: ['chat'],
-    why: 'the workspace routes still read chat’s GitHub client and unfurl check',
-  },
   [join('ingress', 'http', 'releases.ts')]: {
     features: ['chat'],
     why: 'the release route takes the type of chat’s release check',
@@ -80,7 +59,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 20;
+const MAX_ALLOWED = 4;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
@@ -169,7 +148,7 @@ describe('the doors name no module’s files outside its routes and the composit
  * every connection of the one database `createApp` hands the handlers, so what would get round it is another handle:
  * the raw one the application was given, used a second time, or a pool a module opened for itself. Neither exists today,
  * and this holds both to that. The rest, that a request of a module is noted as its own and held, is
- * `issues-budget.integration.test.ts` and `chat-budget.integration.test.ts`, and the mutation
+ * `features/issues/http/budget.integration.test.ts` and `ingress/http/chat-budget.integration.test.ts`, and the mutation
  * `application-database-not-leased`.
  */
 const APP_FILE = join('ingress', 'http', 'app.ts');

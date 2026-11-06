@@ -136,6 +136,7 @@ export const decideAdmission = async (
   admin: ServerAdminSession,
   userId: string,
   decision: 'approved' | 'denied',
+  pendingOnly = false,
 ): Promise<readonly string[]> => {
   await lockServerAdministrator(tx, admin);
   // Sessions before the account row, as content writers lock them (D-85).
@@ -156,6 +157,11 @@ export const decideAdmission = async (
   if (user === undefined)
     throw new AppError({ code: 'USER_NOT_FOUND', message: 'No such account.' });
   if (user.admission_state === decision) return [];
+  if (pendingOnly && user.admission_state !== 'pending')
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'The account is no longer awaiting approval.',
+    });
   if (user.is_server_admin || (user.admission_state === 'approved' && decision === 'denied'))
     throw new AppError({ code: 'FORBIDDEN', message: 'Suspend an admitted account instead.' });
   await tx

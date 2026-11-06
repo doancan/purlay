@@ -776,7 +776,9 @@ export const SetGitHubTokenRequest = FromClient({
 export type SetGitHubTokenRequest = Static<typeof SetGitHubTokenRequest>;
 
 /**
- * `GET …/integrations/github` — whether a token is set, and since when. Never the token.
+ * `GET …/integrations/github` — whether a token is set, and since when. PUT and DELETE return the
+ * same public status from their committed transaction, so a client can reconcile an accepted change
+ * even if a later GET fails (#1179). Never the token.
  *
  * `invalidSince` is when GitHub first refused the token (`401`: revoked or expired): no call is made
  * with it until it is replaced, and replacing or removing it clears this (D-23, amended; #884).
@@ -1132,8 +1134,30 @@ export const InvitationDelivery = Type.Object({
   ]),
 });
 export type InvitationDelivery = Static<typeof InvitationDelivery>;
+/** One lifecycle state, in precedence order: joining, attested admission, link validity, mail evidence. */
+export const InvitationRecipientStatus = Type.Union([
+  Type.Literal('joined'),
+  Type.Literal('pending'),
+  Type.Literal('approved'),
+  Type.Literal('denied'),
+  Type.Literal('revoked'),
+  Type.Literal('expired'),
+  Type.Literal('queued'),
+  Type.Literal('accepted'),
+  Type.Literal('failed'),
+  Type.Literal('unknown'),
+]);
+export type InvitationRecipientStatus = Static<typeof InvitationRecipientStatus>;
+export const INVITATION_RECIPIENT_SEARCH_MAX = 254;
+export const InvitationRecipientQuery = FromClient({
+  ...OlderPageQuery.properties,
+  q: Type.Optional(Type.String({ maxLength: INVITATION_RECIPIENT_SEARCH_MAX })),
+  status: Type.Optional(InvitationRecipientStatus),
+});
+export type InvitationRecipientQuery = Static<typeof InvitationRecipientQuery>;
 export const InvitationRecipient = Type.Object({
   id: Uuid,
+  status: InvitationRecipientStatus,
   address: Type.String(),
   createdAt: Timestamp,
   requestedAt: Type.Union([Timestamp, Type.Null()]),

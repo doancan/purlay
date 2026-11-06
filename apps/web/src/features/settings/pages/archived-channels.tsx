@@ -91,9 +91,12 @@ export const ArchivedChannelsCard = (): React.JSX.Element => {
           {list.data.map((channel) => (
             <li
               key={channel.id}
-              className="flex items-center gap-4 not-first:border-t-hairline border-border-subtle px-6 py-3 max-narrow:px-4"
+              className="flex items-center gap-4 not-first:border-t-hairline border-border-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4"
             >
-              <span id={`archived-${channel.id}`} className="min-w-0 flex-1 text-body text-ink">
+              <span
+                id={`archived-${channel.id}`}
+                className="min-w-0 flex-1 text-body text-ink break-words"
+              >
                 {t(
                   channel.type === 'private'
                     ? 'settings.archived.rowPrivate'
@@ -102,6 +105,7 @@ export const ArchivedChannelsCard = (): React.JSX.Element => {
                 )}
               </span>
               <Button
+                className="max-narrow:self-end"
                 aria-describedby={`archived-${channel.id}`}
                 busy={restoring === channel.id}
                 disabled={restoring !== null && restoring !== channel.id}

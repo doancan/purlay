@@ -1,5 +1,6 @@
 /** The standalone console, saved SMTP, account approval and quota changes against an isolated server. */
 import AxeBuilder from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import type { ServerOperations, ServerOverview, ServerUserPage } from '@purlay/types';
 import { letterWith, linkIn, portFor, startFresh, type FreshServer } from './fresh';
@@ -25,10 +26,12 @@ test('administration is independent, responsive, keyboard accessible and backed 
   const { origin, code, github, relay, mailbox } = fresh.manifest;
   const owner = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
   const applicant = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
+  const secondApplicant = await browser.newContext({ baseURL: origin, reducedMotion: 'reduce' });
   owner.setDefaultTimeout(10_000);
   applicant.setDefaultTimeout(10_000);
   await skipReleaseNotes(owner);
   await skipReleaseNotes(applicant);
+  await skipReleaseNotes(secondApplicant);
   const send = async (path: string, data?: unknown): Promise<void> => {
     const response = await owner.request.post(path, { data, headers: { origin } });
     expect(response.ok(), `${path}: ${String(response.status())} ${await response.text()}`).toBe(
@@ -216,20 +219,97 @@ test('administration is independent, responsive, keyboard accessible and backed 
       'mailto:help@example.test',
     );
     expect((await applicant.request.get('/api/workspaces')).status()).toBe(401);
+    expect(
+      (
+        await secondApplicant.request.post('/auth/email', {
+          data: { email: 'applicant-two@example.test', locale: 'en' },
+          headers: { origin },
+        })
+      ).status(),
+    ).toBe(202);
+    const secondLetter = await letterWith(mailbox, /sign.in/i, 1);
+    const secondToken = /#([0-9a-f]{64})/.exec(secondLetter.text)?.[1];
+    expect(secondToken).toBeDefined();
+    expect(
+      (
+        await secondApplicant.request.post('/auth/email/consume', {
+          data: { token: secondToken },
+          headers: { origin },
+        })
+      ).status(),
+    ).toBe(204);
+    const secondPending = await secondApplicant.newPage();
+    await secondPending.goto('/');
+    await expect(
+      secondPending.getByRole('heading', { name: 'Your account is awaiting approval' }),
+    ).toBeVisible();
     await page.goto('/server/users');
     await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('pending');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
-    await page.getByRole('button', { name: 'Approve account' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Confirm change' }).click();
-    await expect(page.getByText('Change saved')).toBeVisible();
+    await page.getByRole('button', { name: 'Select pending accounts on this page' }).click();
+    await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => {
+        document.documentElement.setAttribute('data-theme', value);
+      }, theme);
+      for (const width of [1360, 768, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        await page.getByRole('button', { name: 'Approve selected accounts', exact: true }).focus();
+        await page.keyboard.press('Enter');
+        const review = page.getByRole('dialog', { name: 'Approve selected accounts' });
+        await expect(review.getByText('applicant-two@example.test', { exact: true })).toBeVisible();
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        if (width === 320)
+          await page.screenshot({
+            path: info.outputPath(`batch-approval-${theme}-320.png`),
+            fullPage: true,
+          });
+        await page.keyboard.press('Escape');
+        await expect(review).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Approve selected accounts', exact: true }),
+        ).toBeFocused();
+      }
+    }
+    await page.getByRole('button', { name: 'Approve selected accounts', exact: true }).click();
+    const approvals = page.getByRole('dialog', { name: 'Approve selected accounts' });
+    await expect(approvals.getByText('applicant@example.test', { exact: true })).toBeVisible();
+    await expect(approvals.getByText('applicant-two@example.test', { exact: true })).toBeVisible();
+    await approvals.getByRole('button', { name: 'Confirm approvals' }).click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Approval results' })
+        .getByText('Approved: 2/2', { exact: true }),
+    ).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: info.outputPath('batch-approval-results-320.png'),
+      fullPage: true,
+    });
     await expect(
       pending.getByRole('heading', { name: 'Your account is awaiting approval' }),
     ).toHaveCount(0);
     expect((await applicant.request.get('/api/me')).status()).toBe(200);
+    await expect(
+      secondPending.getByRole('heading', { name: 'Your account is awaiting approval' }),
+    ).toHaveCount(0);
+    expect((await secondApplicant.request.get('/api/me')).status()).toBe(200);
     const users = (await (
       await owner.request.get('/api/server/users?status=active')
     ).json()) as ServerUserPage;
     expect(users.data.some((user) => user.email === 'applicant@example.test')).toBe(true);
+    expect(users.data.some((user) => user.email === 'applicant-two@example.test')).toBe(true);
     await page.goto('/server/workspaces');
     await page.getByRole('button', { name: 'Change quota' }).click();
     await page.getByRole('dialog').getByLabel('Quota in bytes').fill('1024');
@@ -306,10 +386,57 @@ test('administration is independent, responsive, keyboard accessible and backed 
       .selectOption('server.account_approved');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(
-      page.getByRole('listitem').getByText('server.account_approved', { exact: true }),
+      page.getByRole('listitem').getByText('Account approved', { exact: true }),
+    ).toHaveCount(2);
+    const personChoice = page.getByRole('button', { name: 'Person: Anyone', exact: true });
+    await personChoice.click();
+    const chooser = page.getByRole('dialog', { name: 'Choose a person' });
+    await chooser
+      .getByRole('textbox', { name: 'Search by name, username or email' })
+      .fill('operator');
+    await chooser.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(
+      chooser.getByRole('button', { name: 'Select Operator · operator@example.test' }),
     ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(chooser).toHaveCount(0);
+    await expect(personChoice).toBeFocused();
+    await personChoice.click();
+    await chooser.getByRole('button', { name: 'Select Operator · operator@example.test' }).click();
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    for (const [name, format] of [
+      ['Download CSV', 'csv'],
+      ['Download NDJSON', 'ndjson'],
+    ] as const) {
+      const result = page.waitForEvent('download');
+      await page.getByRole('link', { name, exact: true }).click();
+      const download = await result;
+      expect(download.suggestedFilename()).toMatch(new RegExp(`^server-audit-.*\\.${format}$`));
+      const output = info.outputPath(`server-audit.${format}`);
+      await download.saveAs(output);
+      const text = await readFile(output, 'utf8');
+      expect(text).toContain('server.account_approved');
+      expect(text).toContain('Operator');
+      expect(text.trim().split('\n')).toHaveLength(format === 'csv' ? 3 : 2);
+      expect(text).not.toContain('server.smtp_connected');
+      expect(text).not.toContain('smtp://');
+    }
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({
+      path: info.outputPath('server-audit-filtered-320.png'),
+      fullPage: true,
+    });
+    await page.evaluate(() => {
+      localStorage.setItem('purlay.locale', 'tr');
+    });
+    await page.reload();
+    await expect(
+      page.getByRole('listitem').getByText('Hesap onaylandı', { exact: true }),
+    ).toHaveCount(2);
+    await expect(page.getByRole('link', { name: 'CSV indir', exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   }
   await applicant.close();
+  await secondApplicant.close();
   await owner.close();
 });

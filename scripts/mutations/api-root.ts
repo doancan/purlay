@@ -353,6 +353,15 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'cross-tenant-excuses-another-list',
+    why: 'a list is added to those the seed may leave empty, so the one-member-two-workspaces check proves nothing about it and nothing has said the allow-list grew',
+    file: 'apps/api/src/testing/cross-tenant.ts',
+    find: "  'GET /api/workspaces/:workspaceId/presence':\n",
+    replace:
+      "  'GET /api/workspaces/:workspaceId/members': 'left empty',\n  'GET /api/workspaces/:workspaceId/presence':\n",
+    tests: ['apps/api/src/testing/cross-tenant.test.ts'],
+  },
+  {
     id: 'export-excluded-of-modules-not-read',
     why: 'the tables the modules leave out of an export are not read off the build’s modules, so the check that every table of the database is decided fails for them, or a new module’s are never counted (D-250)',
     file: 'apps/api/src/export-catalogue.ts',

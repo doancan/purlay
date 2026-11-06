@@ -14,10 +14,10 @@
  * §3), so all of it is already in hand.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import type { UserRole, WorkspaceMember } from '@purlay/types';
-import { useId, useState } from 'react';
+import type { MeResponse, UserRole, WorkspaceMember } from '@purlay/types';
+import { useId, useRef, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
-import { isApiError } from '../../../data/errors';
+import { isApiError, isUnconfirmedMutation } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useMembers } from '../../../data/queries';
@@ -27,6 +27,7 @@ import { buttonStyle, Button } from '../../../ui/button';
 import { Avatar } from '../../../ui/avatar';
 import { Select } from '../../../ui/select';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { useToast } from '../../../ui/toast';
 import { Icon } from '../../../components/icon';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { fold } from '../../chat/composer/mention-suggest';
@@ -66,6 +67,7 @@ export const MembersPage = (): React.JSX.Element => {
   const api = useApi();
   const client = useQueryClient();
   const describe = useDescribeFailure();
+  const { show } = useToast();
   const searchId = useId();
   const { workspace } = useWorkspace();
   const { user } = useSession();
@@ -76,6 +78,7 @@ export const MembersPage = (): React.JSX.Element => {
   // be able to change it back themself (D-111).
   const [stepping, setStepping] = useState<UserRole | null>(null);
   const [working, setWorking] = useState<ReadonlyMap<string, 'role' | 'remove'>>(new Map());
+  const pending = useRef(new Set<string>());
   const [problem, setProblem] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<UserRole | typeof ALL>(ALL);
@@ -96,25 +99,55 @@ export const MembersPage = (): React.JSX.Element => {
   const offered = ROLES.filter((option) => actor === 'owner' || option !== 'owner');
 
   const start = (userId: string, action: 'role' | 'remove'): boolean => {
-    if (working.has(userId)) return false;
+    if (pending.current.has(userId)) return false;
+    pending.current.add(userId);
     setWorking((now) => new Map([...now, [userId, action]]));
     return true;
   };
   const finish = (userId: string): void => {
+    pending.current.delete(userId);
     setWorking((now) => new Map([...now].filter(([id]) => id !== userId)));
   };
 
   const changeRole = async (member: WorkspaceMember, next: UserRole): Promise<void> => {
+    if (members.isError) return;
     if (!start(member.user.id, 'role')) return;
     setProblem(null);
     try {
       try {
-        await api.updateMemberRole(workspace.id, member.user.id, next);
+        const saved = await api.updateMemberRole(workspace.id, member.user.id, next);
+        await client.cancelQueries({ queryKey: keys.members(workspace.id), exact: true });
+        client.setQueryData<WorkspaceMember[]>(keys.members(workspace.id), (held) =>
+          held?.map((item) => (item.user.id === saved.user.id ? saved : item)),
+        );
+        if (saved.user.id === user.id) {
+          await client.cancelQueries({ queryKey: keys.me, exact: true });
+          client.setQueryData<MeResponse>(keys.me, (me) =>
+            me === undefined
+              ? undefined
+              : {
+                  ...me,
+                  memberships: me.memberships.map((membership) =>
+                    membership.workspace.id === workspace.id
+                      ? { ...membership, role: saved.role }
+                      : membership,
+                  ),
+                },
+          );
+        }
+        show({
+          message: t('members.roleChanged', {
+            name: saved.user.displayName,
+            role: t(`members.role.${saved.role}`),
+          }),
+        });
       } catch (failure) {
         setProblem(
-          isApiError(failure) && failure.code === 'LAST_OWNER'
-            ? t('members.lastOwner')
-            : `${t('members.roleFailed')} ${describe(failure)}`,
+          isUnconfirmedMutation(failure)
+            ? t('members.unconfirmed', { name: member.user.displayName })
+            : isApiError(failure) && failure.code === 'LAST_OWNER'
+              ? t('members.lastOwner')
+              : `${t('members.roleFailed')} ${describe(failure)}`,
         );
       }
       await reread();
@@ -125,17 +158,25 @@ export const MembersPage = (): React.JSX.Element => {
   };
 
   const remove = async (member: WorkspaceMember): Promise<void> => {
+    if (members.isError) return;
     if (!start(member.user.id, 'remove')) return;
     setProblem(null);
     setAsking(null);
     try {
       try {
         await api.removeMember(workspace.id, member.user.id);
+        await client.cancelQueries({ queryKey: keys.members(workspace.id), exact: true });
+        client.setQueryData<WorkspaceMember[]>(keys.members(workspace.id), (held) =>
+          held?.filter((item) => item.user.id !== member.user.id),
+        );
+        show({ message: t('members.removed', { name: member.user.displayName }) });
       } catch (failure) {
         setProblem(
-          isApiError(failure) && failure.code === 'LAST_OWNER'
-            ? t('members.lastOwner')
-            : `${t('members.removeFailed', { name: member.user.displayName })} ${describe(failure)}`,
+          isUnconfirmedMutation(failure)
+            ? t('members.unconfirmed', { name: member.user.displayName })
+            : isApiError(failure) && failure.code === 'LAST_OWNER'
+              ? t('members.lastOwner')
+              : `${t('members.removeFailed', { name: member.user.displayName })} ${describe(failure)}`,
         );
       }
       await reread();
@@ -240,10 +281,13 @@ export const MembersPage = (): React.JSX.Element => {
           </Select>
         </div>
 
-        {members.isError ? (
+        {members.isError && (
           <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
-            <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(members.error)}</p>
+            <p role="alert" className="min-w-0 flex-1 text-body text-ink-muted">
+              {members.data !== undefined && t('members.refreshFailed')} {describe(members.error)}
+            </p>
             <Button
+              busy={members.isFetching}
               onClick={() => {
                 void members.refetch();
               }}
@@ -251,12 +295,15 @@ export const MembersPage = (): React.JSX.Element => {
               {t('common.retry')}
             </Button>
           </div>
-        ) : members.data === undefined ? (
-          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
-            <Skeleton />
-            <Skeleton />
-            <Skeleton />
-          </LoadingStatus>
+        )}
+        {members.data === undefined ? (
+          !members.isError && (
+            <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
+              <Skeleton />
+              <Skeleton />
+              <Skeleton />
+            </LoadingStatus>
+          )
         ) : shown.length === 0 ? (
           <p className="px-6 py-8 text-center text-body text-ink-muted">
             {t('settings.members.noMatch')}
@@ -294,7 +341,7 @@ export const MembersPage = (): React.JSX.Element => {
                       {manage ? (
                         <Select
                           aria-label={t('members.roleOf', { name })}
-                          disabled={working.has(member.user.id)}
+                          disabled={working.has(member.user.id) || members.isError}
                           aria-busy={working.has(member.user.id) || undefined}
                           value={member.role}
                           className="w-full"
@@ -322,7 +369,7 @@ export const MembersPage = (): React.JSX.Element => {
                           <Button
                             variant="dangerQuiet"
                             aria-label={t('members.removeLabel', { name })}
-                            disabled={working.has(member.user.id)}
+                            disabled={working.has(member.user.id) || members.isError}
                             busy={working.get(member.user.id) === 'remove'}
                             onClick={() => {
                               setAsking(member.user.id);
@@ -350,6 +397,7 @@ export const MembersPage = (): React.JSX.Element => {
                         </Button>
                         <Button
                           variant="primary"
+                          disabled={members.isError || working.has(member.user.id)}
                           onClick={() => {
                             const next = stepping;
                             setStepping(null);
@@ -377,6 +425,7 @@ export const MembersPage = (): React.JSX.Element => {
                         </Button>
                         <Button
                           variant="danger"
+                          disabled={members.isError || working.has(member.user.id)}
                           onClick={() => {
                             void remove(member);
                           }}

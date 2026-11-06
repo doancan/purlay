@@ -9,12 +9,13 @@
  * workspace, and nobody else's words.
  *
  * The list is the caller's own exports, newest first, read again every few seconds while one is being
- * made. A ready one is a link that works once: following it marks it downloaded here at once, as the
- * server does, so the link is not offered twice. A failed one says why, by its code.
+ * made. A ready one is a link that works once: following it hides the link while a fresh server read
+ * confirms whether it was consumed. A failed read keeps that result unknown, with Retry; a failed
+ * export says why, by its code.
  */
 import { PERSONAL_EXPORTS_PER_DAY, type WorkspaceExport } from '@purlay/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
 import { codeOf, failureKey, useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
@@ -56,6 +57,16 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
   // A link followed: what the server holds is read again shortly, so the list says what happened —
   // downloaded, or still ready because the request never reached it, or expired meanwhile.
   const [followed, setFollowed] = useState(false);
+  const attempted = useRef(new Set<string>());
+  const [checking, setChecking] = useState<ReadonlySet<string>>(new Set());
+  const receiptRead = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return (): void => {
+      mounted.current = false;
+    };
+  }, []);
   const { queryKey, words } = source;
 
   const exports = useQuery({
@@ -65,21 +76,34 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
   const list = exports.data;
   const making = list?.some((made) => made.status === 'pending') === true;
   const { refetch, dataUpdatedAt } = exports;
+  const refresh = useCallback(async (): Promise<void> => {
+    const version = ++receiptRead.current;
+    const isCurrent = (): boolean => mounted.current && version === receiptRead.current;
+    const snapshot = [...attempted.current];
+    // A read begun before activation cannot attest whether this download reached the server.
+    await client.cancelQueries({ queryKey, exact: true });
+    if (!isCurrent()) return;
+    const result = await refetch();
+    if (isCurrent() && result.isSuccess) {
+      for (const id of snapshot) attempted.current.delete(id);
+      setChecking(new Set(attempted.current));
+    }
+  }, [client, queryKey, refetch]);
   // While one is being made, read again a while after each read — through the schedule the realtime
   // ports carry, so a test moves the time instead of waiting for it.
   useEffect(() => {
     if (!making) return undefined;
     return schedule(() => {
-      void refetch();
+      void refresh();
     }, EXPORT_POLL_MS);
-  }, [making, dataUpdatedAt, schedule, refetch]);
+  }, [making, dataUpdatedAt, schedule, refresh]);
   useEffect(() => {
     if (!followed) return undefined;
     return schedule(() => {
       setFollowed(false);
-      void refetch();
+      void refresh();
     }, EXPORT_POLL_MS);
-  }, [followed, schedule, refetch]);
+  }, [followed, schedule, refresh]);
 
   const ask = async (): Promise<void> => {
     setBusy(true);
@@ -106,16 +130,15 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
   };
 
   /**
-   * The link is spent the moment it is followed: shown so here at once, so it is not followed twice —
-   * and then read from the server, which says whether the download reached it.
+   * Hide a link while its activation is being checked, without inventing a downloaded receipt.
+   * A failed read retains the unknown result until an explicit retry confirms the server's state.
    */
-  const spent = (exportId: string): void => {
-    client.setQueryData<WorkspaceExport[]>(queryKey, (held) =>
-      held?.map((made) =>
-        made.id === exportId ? { ...made, status: 'downloaded' as const } : made,
-      ),
-    );
+  const follow = (exportId: string): boolean => {
+    if (attempted.current.has(exportId)) return false;
+    attempted.current.add(exportId);
+    setChecking(new Set(attempted.current));
     setFollowed(true);
+    return true;
   };
 
   /** The export's own reasons in its own words; a refusal the contract names, as everywhere else. */
@@ -127,6 +150,12 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
   };
 
   const stateOf = (made: WorkspaceExport): React.ReactNode => {
+    if (checking.has(made.id))
+      return (
+        <span role="status">
+          {t(exports.isError ? 'export.status.unconfirmed' : 'export.status.checking')}
+        </span>
+      );
     switch (made.status) {
       case 'pending':
         return <span role="status">{t('export.status.pending')}</span>;
@@ -135,11 +164,11 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
           <a
             href={source.downloadUrl(made.id)}
             download
-            onClick={() => {
-              spent(made.id);
+            onClick={(event) => {
+              if (!follow(made.id)) event.preventDefault();
             }}
-            onAuxClick={() => {
-              spent(made.id);
+            onAuxClick={(event) => {
+              if (event.button === 1 && !follow(made.id)) event.preventDefault();
             }}
             className="text-body text-accent-text underline"
           >
@@ -171,7 +200,7 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
             variant="primary"
             glyph="download"
             busy={busy}
-            disabled={list === undefined || making}
+            disabled={list === undefined || making || checking.size > 0 || exports.isError}
             onClick={() => {
               void ask();
             }}
@@ -181,21 +210,25 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
         </>
       }
     >
-      {exports.isError ? (
+      {exports.isError && (
         <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
           <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(exports.error)}</p>
           <Button
+            busy={exports.isFetching}
             onClick={() => {
-              void exports.refetch();
+              void refresh();
             }}
           >
             {t('common.retry')}
           </Button>
         </div>
-      ) : list === undefined ? (
-        <LoadingStatus label={t('common.loading')} className="px-6 py-5">
-          <Skeleton />
-        </LoadingStatus>
+      )}
+      {list === undefined ? (
+        !exports.isError && (
+          <LoadingStatus label={t('common.loading')} className="px-6 py-5">
+            <Skeleton />
+          </LoadingStatus>
+        )
       ) : list.length === 0 ? (
         <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{words.empty}</p>
       ) : (
@@ -225,6 +258,7 @@ export const ExportCard = (): React.JSX.Element => {
   const at = encodeURIComponent(workspace.id);
   return (
     <ExportsCard
+      key={workspace.id}
       source={{
         queryKey: keys.exports(workspace.id),
         list: async (signal) => await api.exports(workspace.id, signal),

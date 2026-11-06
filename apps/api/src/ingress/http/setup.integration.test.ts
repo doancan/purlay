@@ -754,23 +754,41 @@ describe('integration: only the browser holding the claim', () => {
       expect(comparableHeaders(answered)).toEqual(comparableHeaders(first));
     }
 
+    // A refusal that costs more for one kind of caller tells that kind apart, so the three are timed. What is measured is
+    // under a millisecond, where one stalled runner makes one batch of medians differ by a factor (7.8 in CI, from 1.8 and 14
+    // ms), so a difference is an oracle only if every batch shows it and it is large in milliseconds too. A path that does a
+    // read or a wait more than the others shows in all of them (the mutation `setup-refusal-slower-for-a-presented-cookie`
+    // adds 3 ms to two of the three).
+    const BATCHES = 5;
     const SAMPLES = 40;
-    const times = new Map<string, number[]>(askers.map(([name]) => [name, []]));
-    for (let n = 0; n < SAMPLES; n += 1) {
-      for (const [name, ask] of askers) {
-        const started = performance.now();
-        await ask();
-        times.get(name)?.push(performance.now() - started);
-      }
-    }
+    const ORACLE_RATIO = 2;
+    const ORACLE_GAP_MS = 0.5;
     const median = (values: readonly number[]): number =>
       [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0;
-    const medians = [...times.entries()].map(([name, values]) => [name, median(values)] as const);
-    console.info(
-      `setup refusal timing, ${String(SAMPLES)} samples each: ${medians.map(([name, ms]) => `${name} ${ms.toFixed(2)} ms`).join(', ')}`,
+    const skews: { readonly ratio: number; readonly gapMs: number }[] = [];
+    for (let batch = 0; batch < BATCHES; batch += 1) {
+      const times = new Map<string, number[]>(askers.map(([name]) => [name, []]));
+      for (let n = 0; n < SAMPLES; n += 1) {
+        for (const [name, ask] of askers) {
+          const started = performance.now();
+          await ask();
+          times.get(name)?.push(performance.now() - started);
+        }
+      }
+      const medians = [...times.entries()].map(([name, values]) => [name, median(values)] as const);
+      console.info(
+        `setup refusal timing, ${String(SAMPLES)} samples each: ${medians.map(([name, ms]) => `${name} ${ms.toFixed(2)} ms`).join(', ')}`,
+      );
+      const values = medians.map(([, ms]) => ms);
+      skews.push({
+        ratio: Math.max(...values) / Math.min(...values),
+        gapMs: Math.max(...values) - Math.min(...values),
+      });
+    }
+    const everyBatchTellsThemApart = skews.every(
+      ({ ratio, gapMs }) => ratio >= ORACLE_RATIO && gapMs >= ORACLE_GAP_MS,
     );
-    const values = medians.map(([, ms]) => ms);
-    expect(Math.max(...values) / Math.min(...values)).toBeLessThan(2);
+    expect(everyBatchTellsThemApart).toBe(false);
   });
 
   test('a relay out of turn is neither tried nor saved', async () => {

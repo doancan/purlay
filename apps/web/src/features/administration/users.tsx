@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ServerUser, ServerUsersQuery } from '@purlay/types';
+import { SERVER_APPROVAL_BATCH_MAX, type ServerUser, type ServerUsersQuery } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
 import { TextField } from '../../ui/text-field';
 import { Select } from '../../ui/select';
 import { Dialog } from '../../ui/dialog';
+import { Checkbox } from '../../ui/checkbox';
 import { SettingsCard } from '../settings/page';
 import { ChangeFailure } from '../settings/server-parts';
 import { useServerClient } from '../settings/server-context';
@@ -13,6 +14,7 @@ import { useSession } from '../session/session';
 import { keys } from '../../data/keys';
 import { useAdministrationClient } from './context';
 import { Empty, Facts, Pagination, QueryState, usePages } from './parts';
+import { BatchApprovals } from './batch-approvals';
 
 type AccountAction = 'grant' | 'revoke' | 'endSessions' | 'suspend' | 'approve' | 'deny';
 export const Users = (): React.JSX.Element => {
@@ -20,6 +22,7 @@ export const Users = (): React.JSX.Element => {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<ServerUsersQuery['status']>();
   const [filter, setFilter] = useState<ServerUsersQuery>({});
+  const [working, setWorking] = useState(false);
   return (
     <>
       <form
@@ -29,10 +32,11 @@ export const Users = (): React.JSX.Element => {
           setFilter({ q: q.trim(), ...(status === undefined ? {} : { status }) });
         }}
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 max-narrow:basis-full">
           <TextField
             label={t('admin.search')}
             value={q}
+            readOnly={working}
             maxLength={100}
             onChange={(event) => {
               setQ(event.target.value);
@@ -42,6 +46,7 @@ export const Users = (): React.JSX.Element => {
         <label className="flex flex-col gap-1 text-label text-ink">
           {t('admin.status')}
           <Select
+            disabled={working}
             value={status ?? ''}
             onChange={(event) => {
               const value = event.target.value;
@@ -64,14 +69,22 @@ export const Users = (): React.JSX.Element => {
             <option value="denied">{t('admin.denied')}</option>
           </Select>
         </label>
-        <Button type="submit">{t('admin.find')}</Button>
+        <Button type="submit" disabled={working}>
+          {t('admin.find')}
+        </Button>
       </form>
-      <UserList key={JSON.stringify(filter)} filter={filter} />
+      <UserList key={JSON.stringify(filter)} filter={filter} onBusy={setWorking} />
     </>
   );
 };
 
-const UserList = ({ filter }: { readonly filter: ServerUsersQuery }): React.JSX.Element => {
+const UserList = ({
+  filter,
+  onBusy,
+}: {
+  readonly filter: ServerUsersQuery;
+  readonly onBusy: (busy: boolean) => void;
+}): React.JSX.Element => {
   const client = useAdministrationClient();
   const { t } = useI18n();
   const pages = usePages();
@@ -92,13 +105,22 @@ const UserList = ({ filter }: { readonly filter: ServerUsersQuery }): React.JSX.
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const [outcome, setOutcome] = useState(false);
+  const [approvals, setApprovals] = useState<ReadonlyMap<string, ServerUser>>(new Map());
+  const working = (value: boolean): void => {
+    setBusy(value);
+    onBusy(value);
+    if (value) {
+      setFailure(null);
+      setOutcome(false);
+    }
+  };
   const refresh = async (): Promise<void> => {
     await queries.invalidateQueries({ queryKey: ['server'] });
     await queries.invalidateQueries({ queryKey: keys.me });
   };
   const change = async (user: ServerUser, action: AccountAction | 'restore'): Promise<void> => {
     if (busy) return;
-    setBusy(true);
+    working(true);
     setFailure(null);
     setOutcome(false);
     try {
@@ -115,11 +137,22 @@ const UserList = ({ filter }: { readonly filter: ServerUsersQuery }): React.JSX.
       setFailure(error);
     } finally {
       await refresh();
-      setBusy(false);
+      working(false);
     }
   };
   return (
     <>
+      <BatchApprovals
+        users={query.data?.data ?? []}
+        selected={[...approvals.values()]}
+        busy={busy}
+        loading={query.isFetching}
+        onBusy={working}
+        refresh={refresh}
+        onSelection={(users) => {
+          setApprovals(new Map(users.map((user) => [user.id, user])));
+        }}
+      />
       {failure !== null && asking === null && <ChangeFailure failure={failure} />}
       {outcome && (
         <p role="status" className="text-body text-ink-muted">
@@ -141,7 +174,10 @@ const UserList = ({ filter }: { readonly filter: ServerUsersQuery }): React.JSX.
                     >
                       <div className="min-w-0 flex-1">
                         <h2 className="text-label text-ink break-words">{user.displayName}</h2>
-                        <p className="text-caption text-ink-muted break-all">
+                        <p
+                          id={`account-${user.id}`}
+                          className="text-caption text-ink-muted break-all"
+                        >
                           @{user.username} · {user.email}
                         </p>
                         <p className="text-caption text-ink-muted">
@@ -156,6 +192,31 @@ const UserList = ({ filter }: { readonly filter: ServerUsersQuery }): React.JSX.
                         </p>
                       </div>
                       <div className="flex w-full flex-wrap gap-2">
+                        {user.admissionState === 'pending' && (
+                          <label className="flex min-h-touch cursor-pointer items-center gap-2 py-2 text-label text-ink">
+                            <Checkbox
+                              aria-label={t('admin.bulk.select', { name: user.displayName })}
+                              aria-describedby={`account-${user.id}`}
+                              checked={approvals.has(user.id)}
+                              disabled={
+                                busy ||
+                                query.isFetching ||
+                                (approvals.size >= SERVER_APPROVAL_BATCH_MAX &&
+                                  !approvals.has(user.id))
+                              }
+                              onChange={(event) => {
+                                const checked = event.target.checked;
+                                setApprovals((held) => {
+                                  const next = new Map(held);
+                                  if (checked) next.set(user.id, user);
+                                  else next.delete(user.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span>{t('admin.bulk.selectAccount')}</span>
+                          </label>
+                        )}
                         <Button
                           disabled={busy}
                           onClick={() => {

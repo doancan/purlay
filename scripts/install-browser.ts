@@ -5,6 +5,8 @@
  */
 import {
   AFTER_STALL_COMMANDS,
+  APT_MIRRORS,
+  APT_MIRRORS_FILE,
   APT_TIMEOUTS,
   APT_TIMEOUTS_FILE,
   browserOf,
@@ -27,6 +29,12 @@ if (process.env['CI'] === 'true') {
     stderr: 'inherit',
   });
   await config.exited;
+  const mirrors = Bun.spawn(['sudo', 'tee', APT_MIRRORS_FILE], {
+    stdin: new Response(APT_MIRRORS),
+    stdout: 'ignore',
+    stderr: 'inherit',
+  });
+  await mirrors.exited;
 }
 
 process.exit(

@@ -34,9 +34,9 @@ have it.
 
 ### Added
 
-- **Invitations** — Track each email recipient and mail-server response after reopening Settings, inspect send history, resend a separate link or revoke it. Approved accounts continue to their invitation automatically; mail-server acceptance is distinguished from inbox delivery (D-279).
+- **Invitations** — Track each email recipient and mail-server response after reopening Settings, search addresses and filter by invitation status across all pages, inspect send history that updates as sends finish, resend a separate link or revoke it. Approved accounts continue to their invitation automatically; mail-server acceptance is distinguished from inbox delivery (D-279).
 
-- **Server administration** — Administrators can open a console without a workspace, browse paginated accounts, workspaces and server audit entries, manage quotas and administrator access, end account sessions, review maintenance jobs, test saved mail configuration, configure server identity and account admission, and review backup evidence. The overview summarizes operational problems with links to their management pages and identifies incomplete checks (D-278).
+- **Server administration** — Administrators can open a console without a workspace, browse paginated accounts, workspaces and server audit entries, approve selected pending accounts with a separate result for each, manage quotas and administrator access, end account sessions, review maintenance jobs, test saved mail configuration, configure server identity and account admission, and review backup evidence. The overview summarizes operational problems with links to their management pages and identifies incomplete checks (D-278).
 
 - **Operations** — The contract a native client is generated from now lists the server's modules and says which module owns each endpoint, socket event and operation, and `GET /api/me` types its module list, so an app can follow the module structure and ignore a module it does not know (D-273)
 - **Operations** — A release's image is also tagged `release` and its version, so a Dockhand server can follow releases on its own; the Dockhand stack backs the database up every hour (D-262)
@@ -61,8 +61,10 @@ have it.
 
 ### Fixed
 
+- **Server audit** — Read actions in English or Turkish, find and select a person instead of copying account ids, and download the matching entries as CSV or NDJSON (D-278, D-222).
+
 - **Server settings** — Accepted provider and workspace-creator changes survive a failed refresh; cancelled forms forget credentials, disconnect confirmations start afresh, and connection-form actions wrap on narrow screens (D-179)
-- **Settings** — Saves hold their fields and related actions; quiet hours recover from failed reads and follow profile time-zone changes, policy refresh failures remain visible, and narrow screens keep long values and readable controls inside their cards (D-146, D-234)
+- **Settings** — Confirmed member and GitHub changes remain visible after a failed refresh; export links distinguish activation from a confirmed download and ignore context-menu clicks. General hides chat controls when chat is off, and long archived names remain readable on narrow screens. Saves hold their fields and related actions, quiet hours recover from failed reads and follow profile time-zone changes, and policy refresh failures remain visible (D-146, D-234)
 - **Invitations** — Send email invitations directly from Settings, load older open links, and make another link without leaving; revoking a link removes its copy field and shows progress (D-146, D-179)
 - **Sidebar** — The workspace menu, opened while a workspace is still loading, is no longer closed when the first channel opens (D-250)
 - **Channels** — A channel that was archived, left or taken from you while your connection was down now says so when the connection returns, instead of "not found"; somebody who was never in it is still told nothing (D-264)
