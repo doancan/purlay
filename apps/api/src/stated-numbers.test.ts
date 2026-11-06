@@ -85,4 +85,25 @@ describe('numbers the documents state', () => {
       `(all ${String(anonymised)}; the allow-list of unprobed tables is empty and capped at ${String(unseeded)})`,
     );
   });
+
+  test('MODULES.md names the files the core may still name a table in, and the cap holds exactly them', () => {
+    const source = readFileSync('apps/api/src/core-tables.test.ts', 'utf8');
+    const block = /const ALLOWED[^=]*= \{([^]*?)\n\};/.exec(source)?.[1] ?? '';
+    const allowed = [...block.matchAll(/^ {2}'([^']+)':/gm)].map((match) => match[1] ?? '');
+    expect(allowed.length).toBeGreaterThan(0);
+    expect(allowed.length).toBe(capIn('apps/api/src/core-tables.test.ts', 'MAX_ALLOWED'));
+    for (const file of allowed) {
+      expect({ file, named: modules.includes(`\`${file}\``) }).toEqual({ file, named: true });
+    }
+    const listed = [...modules.matchAll(/`(cli\/[\w-]+\.ts)`/g)].map((match) => match[1] ?? '');
+    const namedAsDemo = listed.filter((file) => /demo|budget-latency/.test(file));
+    expect(new Set(namedAsDemo)).toEqual(new Set(allowed));
+  });
+
+  test('MODULES.md §4 states how many writes of a core table chat has left', () => {
+    const writes = capIn('apps/api/src/module-tables.test.ts', 'MAX_CORE_WRITES');
+    expect(modules).toContain(
+      `${NUMBER_WORDS[writes] ?? '?'} writes of a core table (\`CORE_WRITES\` in`,
+    );
+  });
 });
