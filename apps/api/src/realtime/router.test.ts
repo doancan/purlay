@@ -19,6 +19,7 @@ import { inProcessEventBus } from './bus';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from './rate-limiter';
 import { inMemoryPresenceRegistry } from './presence';
 import { routeFrame } from './router';
+import { chatFrameHandlers } from '../features/chat/frames';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
@@ -43,6 +44,7 @@ const subscribeWith = async (
           bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
           limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
           userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+          frameHandlers: chatFrameHandlers,
           presence: inMemoryPresenceRegistry(clock),
           attention: nobodyActive,
           online: { active: () => undefined },
@@ -165,6 +167,7 @@ describe('a frame of a module this process does not run', () => {
             bus: inProcessEventBus(() => undefined, createLogger({ level: 'silent' })),
             limiter: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
             userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+            frameHandlers: chatFrameHandlers,
             presence: inMemoryPresenceRegistry(clock),
             attention: nobodyActive,
             online: { active: () => undefined },
@@ -243,6 +246,7 @@ describe('a frame of a module that runs past its deadline', () => {
               consume: () => new Promise<boolean>(() => undefined),
             },
             userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+            frameHandlers: chatFrameHandlers,
             presence: inMemoryPresenceRegistry(clock),
             attention: nobodyActive,
             online: { active: () => undefined },

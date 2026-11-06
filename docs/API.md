@@ -222,6 +222,46 @@ release-version policy. Native models regenerate from the deterministic contract
 carries both `ClientInfo` and `ClientCapabilities`; release versions remain the versions chosen for
 the releases themselves (D-185), not feature flags.
 
+### Modules: discovering them, ignoring the ones you do not know, and a module that is off (D-273)
+
+A server is a core and the modules its operator runs (`MODULES`, D-250): `chat` and `issues` today. A client that is not
+the browser's own learns the structure from two places and nothing else.
+
+- **Which modules exist, and what each owns: the contract bundle.** `contract.json` has `modules` (each known module's `id`,
+  `requires`, `optional`, the `routes` templates it owns, the socket `frames` and `events` it owns and the
+  `notificationTypes` of its notifications), a `module` on every entry of `endpoints`, and `eventOwners` and `frameOwners`
+  (every server event and client operation by name). An owner is `core` or a module id; `core` is never a module and its
+  parts exist on every server. All of it is read from the server's manifests, so a client generates its grouping from it and
+  keeps no list of its own. The bundle is of one server version: it says what that version knows.
+- **Which modules this server runs: `GET /api/me`.** `modules` is the ids the server runs, `[]` for the core alone; it is
+  `ModuleId[]`, the ids the bundle's server knew. `GET /api/client`, before sign-in, names none (D-255 §5) and has no `modules` field: a
+  signed-out screen needs none. Its `capabilities` flags `scheduledMessages`, `messageReminders` and `personalMessageDeletion`
+  are true only where chat runs, and are all it says before a session exists.
+
+**Ignore what you do not know.** A server may run a module this client was built before, so `modules` may hold an id that is not
+in the client's `ModuleId`, and the socket may send an event the client has no case for. Decode `modules` element by element and
+keep the ids you know; draw nothing of the rest and show no error. Do not fail a response, a frame or a launch for an unknown id,
+and do not disconnect for an unknown event: drop it with a log line. Never infer that a module is off from a failed request.
+
+**A module that is off answers as a path nobody has**, with one stable shape and nothing that says *disabled* (D-255 §2):
+
+```jsonc
+// every route of the module, whatever the method, before the rate limit and the session
+// 404
+{ "error": { "code": "ROUTE_NOT_FOUND", "message": "No such route.", "details": {} } }
+```
+
+On the socket, a `frames` operation of the module (`SUBSCRIBE`, `UNSUBSCRIBE`, `MESSAGE_SEND`, `TYPING` for chat) is answered as
+an operation nobody has: an `ERROR` frame `VALIDATION_FAILED` with `details.fields.op = "is not an operation this server
+accepts"`; `PING` and `ACTIVE` still work, and the module's `events` are never sent. A file attached to a message belongs to
+chat: with chat off, `GET /api/attachments/:id` for it is `ATTACHMENT_NOT_FOUND`, as for an id that never existed. Read all of
+this as "not here", never as a failure: no banner, no retry, no sign-out. It is the `404` of D-21 and D-34 for a thing that is
+not there, not a `403` about one that is. During a rolling deploy nodes may run different sets, so one request may be a `404`
+and the next succeed.
+
+To know whether a module is off, read `modules`; to know which requests to never make, read the module's `routes` and
+`frames` from the bundle. A client that asks nothing of a module that is off never sees the `404`.
+
 ### Sign-in through Better Auth, and the setup surface (D-179)
 
 Built: D-179 moved sign-in and sessions to Better Auth and added a browser setup, and every row below

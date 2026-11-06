@@ -16,6 +16,13 @@
  * swap depends on (D-7).
  */
 import { MESSAGE_GONE, goneMessageReference } from '../platform/gone-message';
+import {
+  handlerOf,
+  type FrameBody,
+  type FrameContext,
+  type FrameHandlers,
+  type FrameIdentity,
+} from '../platform/frame-handlers';
 import { Value } from '@sinclair/typebox/value';
 import {
   ActiveFrame,
@@ -23,11 +30,9 @@ import {
   MessageSendFrame,
   PingFrame,
   SubscribeFrame,
-  TYPING_TTL_MS,
   TypingFrame,
   UnsubscribeFrame,
   type ClientOp,
-  type RevokedReason,
   Uuid,
   type ServerFrame,
 } from '@purlay/types';
@@ -35,17 +40,9 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../platform/clock';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../platform/errors';
-import {
-  isChannelMember,
-  requireChannelById,
-  requireChannelsById,
-} from '../features/chat/channels/guard';
-import { departuresFrom } from '../features/chat/channels/departures';
-import { send, type missedIn } from '../features/chat/messages/messages';
 import type { PushSender } from '../modules/push/sender';
-import { replaySince } from '../features/chat/messages/replay';
 import type { ReplayGate } from './replay-gate';
-import { channelTopic, type EventBus } from '../platform/events';
+import type { EventBus } from '../platform/events';
 import type { Atomically } from '../platform/transactions';
 import { noteModule, type Logger } from '../platform/logging';
 import { timedOut, withDeadline } from '../platform/request-deadline';
@@ -59,7 +56,28 @@ import type { RateLimiter } from './rate-limiter';
 
 const unlimited: ReplayGate = async (work) => await work();
 
+/**
+ * What the router hands a handler: the context every module's is given, and what the socket carries besides, which the module
+ * declares the part of it uses in a context of its own (`platform/frame-handlers.ts`).
+ */
+export interface RouterFrameContext extends FrameContext {
+  /** Devices told of what a socket's send needs them for; absent where push is off (D-126). */
+  readonly push: PushSender | undefined;
+  /** Who is typing where, on this node (§6.1). */
+  readonly presence: PresenceRegistry;
+  /** What the router needs of the connection it is answering; the hub supplies it. */
+  readonly socket: SocketGate;
+  /** Holds how many replays run at once on this node: a handler that replays takes a turn (`replay-gate.ts`). */
+  readonly replayGate: ReplayGate;
+}
+
 export interface RouterDependencies {
+  /**
+   * The handlers of the modules this process runs, by operation (`composition.ts`, D-276): an operation with one is
+   * served by it, after the router has admitted the frame. Absent, there are none, and only the router's own operations
+   * are served.
+   */
+  readonly frameHandlers?: FrameHandlers<RouterFrameContext>;
   /**
    * Whether an operation is a module's that this process does not run; answered as an operation nobody has. Absent,
    * none is closed: the composition root passes it (`composition.ts`), a test of one operation need not.
@@ -100,11 +118,6 @@ export interface RouterDependencies {
   /** What the router needs of the connection it is answering; the hub supplies it. */
   readonly socket: SocketGate;
   /**
-   * The replay read. A seam so a test can commit a message between the read and
-   * what follows it, deterministically; production passes nothing.
-   */
-  readonly readReplay?: typeof missedIn;
-  /**
    * Holds how many replays run at once on this node (`replay-gate.ts`). Absent, there is no limit: the
    * composition root passes it, a test of one operation need not.
    */
@@ -120,20 +133,8 @@ interface SocketGate {
   readonly drop: (socketId: string, channelIds: readonly string[]) => void;
 }
 
-export interface SocketIdentity {
-  readonly socketId: string;
-  readonly userId: string;
-  /** The session the connection was opened with; its end ends the connection. */
-  readonly sessionId: string;
-  readonly expiresAt: Date;
-}
-
-/** A server frame without the fields every one carries: which kind it is, and its data. */
-type FrameBody = ServerFrame extends infer Member
-  ? Member extends ServerFrame
-    ? Omit<Member, 'ts' | 'refId'>
-    : never
-  : never;
+/** Who is speaking; the session is the one the connection was opened with, and its end ends the connection. */
+export type SocketIdentity = FrameIdentity;
 
 /**
  * Stamps a frame with the server clock and the id it answers. The body is one
@@ -237,36 +238,6 @@ const peek = (raw: unknown): { readonly frame: unknown; readonly op?: string } =
 };
 
 /**
- * The `ACCESS_REVOKED` a refused subscription's person would have been sent had their socket been open: for
- * the channels they were in and are not, each with why, and for no other (D-264). A channel they never were
- * in, or that does not exist, adds nothing, so their refusal is the same bytes as for a channel that was never
- * there (D-34).
- *
- * Not being able to say why is not a reason to fail the refusal: the person is told "not found", as they were
- * before there was a reason to tell, and the failure is written down.
- */
-const missedRevocations = async (
-  dependencies: RouterDependencies,
-  userId: string,
-  channelIds: readonly string[],
-): Promise<readonly ServerFrame[]> => {
-  let departures: ReadonlyMap<string, RevokedReason>;
-  try {
-    departures = await departuresFrom(dependencies.database, userId, channelIds);
-  } catch (error) {
-    dependencies.log.error('could not read why a refused channel is gone', { err: error });
-    return [];
-  }
-  const byReason = new Map<RevokedReason, string[]>();
-  for (const [channelId, reason] of departures) {
-    byReason.set(reason, [...(byReason.get(reason) ?? []), channelId]);
-  }
-  return [...byReason].map(([reason, ids]) =>
-    frame({ event: 'ACCESS_REVOKED', data: { channelIds: ids, reason } }, dependencies.clock),
-  );
-};
-
-/**
  * Handles one frame and returns what to send back on this connection, within its module's deadline: a frame that runs past
  * it is answered `REQUEST_TIMEOUT`, and what it had asked of the database is cancelled (D-270).
  *
@@ -346,187 +317,49 @@ const serveFrame = async (
     return [refuse('That frame did not match the contract.', fieldsOf(parsed), refIdOf(parsed))];
   }
 
-  if (dependencies.closedFrame?.(parsed.op) === true) {
-    return [
-      refuse(
-        'That frame did not match the contract.',
-        { op: 'is not an operation this server accepts' },
-        parsed.id,
-      ),
-    ];
-  }
+  // What a frame is answered when its operation is a module's that this process does not run, or has no handler here.
+  const nobodysOperation = (): ServerFrame =>
+    refuse(
+      'That frame did not match the contract.',
+      { op: 'is not an operation this server accepts' },
+      parsed.id,
+    );
+
+  if (dependencies.closedFrame?.(parsed.op) === true) return [nobodysOperation()];
 
   const owner = dependencies.moduleOfFrame?.(parsed.op);
   if (owner !== undefined) noteModule(owner);
 
   try {
+    // An operation a module owns is served by the module's handler, whatever it is (D-276); the rest are the core's.
+    const handler = handlerOf(dependencies.frameHandlers ?? {}, parsed.op);
+    if (handler !== undefined) {
+      return await handler(
+        {
+          identity,
+          database,
+          atomically: dependencies.atomically,
+          clock,
+          bus,
+          log: dependencies.log,
+          userWrites: dependencies.userWrites,
+          push: dependencies.push,
+          presence: dependencies.presence,
+          socket: dependencies.socket,
+          replayGate: dependencies.replayGate ?? unlimited,
+          reply: (body, refId) => frame(body, clock, refId),
+          fail: (error, refId) => errorFrame(error, clock, refId),
+        },
+        parsed,
+      );
+    }
+
+    // Not the router's own, and no module's handler in this process: an operation nobody has.
+    if (parsed.op !== 'PING' && parsed.op !== 'ACTIVE') return [nobodysOperation()];
+
     switch (parsed.op) {
       case 'PING':
         return [frame({ event: 'PONG', data: {} }, clock, parsed.id)];
-
-      case 'SUBSCRIBE': {
-        const wanted = parsed.payload.channels;
-        const channelIds = wanted.map((entry) => entry.channelId);
-        if (new Set(channelIds).size !== channelIds.length) {
-          return [
-            refuse(
-              'A channel is named twice.',
-              { 'payload/channels': 'names a channel more than once' },
-              parsed.id,
-            ),
-          ];
-        }
-
-        // Gone before it began: subscribe nothing for a connection whose cleanup has
-        // already run, or its id outlives it.
-        if (!dependencies.socket.isOpen(identity.socketId)) return [];
-
-        // **Subscribed before anything is read**, with live frames held until the
-        // acknowledgement and the replay are written. Read first, a message
-        // committed between the read and the subscription is in neither, and the
-        // client's cursor then moves past it for good (D-83). Subscribed before the
-        // channels are *authorised* too, so that a revocation published while the
-        // authorisation is being read finds the subscription and ends it; made after,
-        // it would find nothing and the stale authorisation would then subscribe (D-85).
-        dependencies.socket.hold(identity.socketId);
-        const fresh: string[] = [];
-        for (const channelId of channelIds) {
-          if (bus.subscribe(channelTopic(channelId), identity.socketId)) fresh.push(channelId);
-        }
-
-        try {
-          // Authorised together: one channel the caller cannot see refuses the frame,
-          // and what was subscribed above is undone. One query, however many channels
-          // (#196).
-          const contexts = await requireChannelsById(database, identity.userId, channelIds);
-          // Gone while its channels were being authorised: the close already forgot
-          // every subscription, and nothing below adds one.
-          if (!dependencies.socket.isOpen(identity.socketId)) return [];
-
-          const requests = contexts.map((context, index) => ({
-            context,
-            afterMessageId: wanted[index]?.afterMessageId ?? null,
-          }));
-          // Only a replay is held to a turn: a first subscription, with no cursor, has nothing to read, and
-          // making it wait behind a storm would only delay a page that is loading.
-          const turn = requests.some((request) => request.afterMessageId !== null)
-            ? (dependencies.replayGate ?? unlimited)
-            : unlimited;
-          const replay = await turn(async () =>
-            // Gone while it waited its turn: nothing is read for a connection nobody is on.
-            dependencies.socket.isOpen(identity.socketId)
-              ? await replaySince(database, clock, requests, dependencies.readReplay)
-              : null,
-          );
-          if (replay === null) return [];
-          const { states, frames } = replay;
-          return [frame({ event: 'ACK', data: { channels: states } }, clock, parsed.id), ...frames];
-        } catch (error) {
-          // Nothing is left half-done behind an error: what this frame subscribed
-          // is undone, and what was held for it is released with the error.
-          for (const channelId of fresh) {
-            bus.unsubscribe(channelTopic(channelId), identity.socketId);
-          }
-          // Frames that arrived for channels it was never allowed are not released
-          // with the error.
-          dependencies.socket.drop(identity.socketId, fresh);
-          if (error instanceof AppError && error.body.code === 'CHANNEL_NOT_FOUND') {
-            return [
-              errorFrame(error, clock, parsed.id),
-              ...(await missedRevocations(dependencies, identity.userId, channelIds)),
-            ];
-          }
-          throw error;
-        }
-      }
-
-      case 'UNSUBSCRIBE': {
-        for (const channelId of parsed.payload.channelIds) {
-          bus.unsubscribe(channelTopic(channelId), identity.socketId);
-        }
-        return [
-          frame(
-            { event: 'ACK', data: { channelIds: parsed.payload.channelIds } },
-            clock,
-            parsed.id,
-          ),
-        ];
-      }
-
-      case 'MESSAGE_SEND': {
-        if (!(await dependencies.userWrites.consume(identity.userId))) {
-          dependencies.log.info('send refused: over the user write budget', {
-            socketId: identity.socketId,
-          });
-          return [
-            errorFrame(
-              new AppError({
-                code: 'RATE_LIMITED',
-                message: 'Too many messages. Send it again shortly.',
-              }),
-              clock,
-              parsed.id,
-            ),
-          ];
-        }
-        const context = await requireChannelById(
-          database,
-          identity.userId,
-          parsed.payload.channelId,
-        );
-
-        // Written, committed and published by the one send path (D-35); the ACK
-        // comes after, so the sender is never ahead of the room.
-        const message = await send(
-          dependencies,
-          context,
-          {
-            id: parsed.id,
-            content: parsed.payload.content,
-            parentId: parsed.payload.parentId,
-            attachmentIds: parsed.payload.attachmentIds,
-          },
-          // The identity was cached at the upgrade; the write re-proves it (D-85).
-          identity.sessionId,
-        );
-        // What they were typing has arrived; the next keystroke is news again.
-        dependencies.presence.stopTyping(context.channelId, identity.userId);
-        return [frame({ event: 'ACK', data: { id: message.id } }, clock, parsed.id)];
-      }
-
-      case 'TYPING': {
-        // Authorised before the registry hears of it: a channel id the sender may not see must
-        // neither reach a room nor take a place in memory.
-        const context = await requireChannelById(
-          database,
-          identity.userId,
-          parsed.payload.channelId,
-        );
-        // Seeing a public channel is not being in it: what a non-member types could not be sent
-        // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement
-        // is not a request, and it takes no place in memory either.
-        if (!(await isChannelMember(database, context))) return [];
-        if (
-          await dependencies.presence.startTyping(context.channelId, identity.userId, TYPING_TTL_MS)
-        ) {
-          await bus.publish(
-            channelTopic(context.channelId),
-            frame(
-              {
-                event: 'TYPING',
-                data: {
-                  channelId: context.channelId,
-                  userId: identity.userId,
-                  ttlMs: TYPING_TTL_MS,
-                },
-              },
-              clock,
-            ),
-          );
-        }
-        // Nothing to answer: an announcement is not a request, and the room has heard it.
-        return [];
-      }
 
       case 'ACTIVE': {
         // A workspace the sender is not in neither holds anything nor takes a place in memory: the

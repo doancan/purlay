@@ -76,7 +76,7 @@ The endpoint returned `application/octet-stream`.
 Expected: a ready attachment is enough to make Send available. D-109 §7 explicitly permits
 attachment-only messages. Empty text without any file must remain unsendable.
 
-Code evidence: `apps/web/src/features/composer/composer.tsx` checks both text and upload items in
+Code evidence: `apps/web/src/features/chat/composer/composer.tsx` checks both text and upload items in
 `send()`, but the `empty` value used by the button's `aria-disabled` considers only text. The
 button's handler can therefore send something its accessibility state says it cannot send.
 This audit does not claim that a native mouse click is blocked: `aria-disabled` is not the native

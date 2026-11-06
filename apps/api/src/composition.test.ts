@@ -7,6 +7,7 @@ import {
   composeFor,
   moduleReport,
   registry,
+  runningModuleIds,
   startWhereRunning,
   type BundledModule,
 } from './composition';
@@ -386,6 +387,20 @@ describe('what the boot says about modules', () => {
         notRun: carried.filter((id) => !cell.ids.includes(id)),
       });
     }
+  });
+});
+
+describe('the ids a process tells a client it runs (D-273)', () => {
+  test('are the ones it runs, as the contract’s ModuleId spells them', () => {
+    expect(runningModuleIds(compositionFor(undefined))).toEqual(['chat', 'issues']);
+    expect(runningModuleIds(compositionFor('issues'))).toEqual(['issues']);
+    expect(runningModuleIds(compositionFor('none'))).toEqual([]);
+  });
+
+  test('stop a build that runs a module the contract has no id for, rather than tell a client an id it cannot decode', () => {
+    const unknown: BundledModule = { manifest: { ...moduleReading('notes', readerOf()).manifest } };
+    const running = compose([unknown], [...bundledModules, unknown]);
+    expect(() => runningModuleIds(running)).toThrow(/notes.*ModuleId/);
   });
 });
 

@@ -34,6 +34,7 @@ have it.
 
 ### Added
 
+- **Operations** — The contract a native client is generated from now lists the server's modules and says which module owns each endpoint, socket event and operation, and `GET /api/me` types its module list, so an app can follow the module structure and ignore a module it does not know (D-273)
 - **Operations** — A release's image is also tagged `release` and its version, so a Dockhand server can follow releases on its own; the Dockhand stack backs the database up every hour (D-262)
 - **Editor** — Markdown blocks and Markdown files have a Source and a Preview view, and a checklist button joins the formatting row (D-259)
 - **Editor** — A text of 500 lines or more, or a table of more than 200 rows, is offered as a file instead of being left too long to send (D-259)
@@ -41,6 +42,7 @@ have it.
 ### Changed
 
 - **Audit log** — The action filter offers only the actions of the modules the server runs, so a server without issues no longer lists issue actions (D-265)
+- **Operations** — a scheduled job of a module now runs in the module's share of the database and is stopped, and recorded as a failed run, when it runs past ten minutes (a module may declare another time), so one that hangs no longer holds the jobs behind it (D-274)
 - **Operations** — `bun run release` with no kind prepares a patch release (`0.3.0` → `0.3.1`); `minor`, `major` or an exact version are asked for by name (D-263)
 - **Operations** — `docker-compose.dockhand.yml` no longer runs Caddy: it publishes the API on `PURLAY_HTTP_PORT` for Nginx Proxy Manager to forward to, as purlay.app runs, and no longer needs `PROXY_NETWORK` (D-258)
 - **Operations** — a workspace export and a person's export now carry which message and channel a file was sent with in `message_attachments.ndjson`, and `attachments.ndjson` no longer has `message_id` and `channel_id` (D-250)

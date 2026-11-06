@@ -4,22 +4,35 @@
  * writes itself, so it never depends on what Vite happened to emit today.
  */
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   BUDGET_BYTES,
-  CHAT_BYTES,
+  HEAVY_SOURCES,
+  MODULE_BYTES,
   SHELL_BYTES,
-  chatProblems,
   describeReport,
   initialAssets,
   main,
   measure,
   moduleIds,
+  moduleProblems,
   overBudget,
+  screenSources,
   shapeProblems,
+  webModules,
 } from './budget-web';
+
+const FEATURES_DIRECTORY = join(import.meta.dirname, '..', 'apps', 'web', 'src', 'features');
 
 const made: string[] = [];
 afterEach(() => {
@@ -49,15 +62,17 @@ ${preload.map((href) => `<link rel="modulepreload" crossorigin href="/${href}">`
 const incompressible = (bytes: number): Buffer =>
   Buffer.from(crypto.getRandomValues(new Uint8Array(bytes)));
 
-/** The files of a build whose shell has a source map listing `sources`, and whose chat chunk is `chat`. */
+/** The files of a build whose shell has a source map listing `sources`, and whose chunks of chat and issues are these. */
 const aShell = (
   sources: string[],
   chat: Buffer | string | null = 'x',
+  issues: Buffer | string | null = 'x',
 ): Record<string, string | Buffer> => ({
   'assets/index-aaa.js': 'x',
   'assets/index-aaa.js.map': JSON.stringify({ sources, sourcesContent: sources.map(() => 'x') }),
   'theme-init.js': 'x',
   ...(chat === null ? {} : { 'assets/chat-ccc.js': chat }),
+  ...(issues === null ? {} : { 'assets/issues-screen-ddd.js': issues }),
 });
 
 describe('which files are initial', () => {
@@ -183,17 +198,22 @@ describe('the shape the budget protects', () => {
     const clean = aBuild({ 'assets/index-aaa.js': 'const shell = 1;', 'theme-init.js': 'x' });
     expect(shapeProblems(clean, measure(clean))).toEqual([]);
     // The word lives in the screen's file, not in a manifest the shell carries. Chat is found by its sources instead.
-    for (const id of moduleIds().filter((module) => module !== 'chat')) {
-      const screen = readFileSync(
-        join(import.meta.dirname, `../apps/web/src/features/${id}/${id}-screen.tsx`),
-        'utf8',
+    for (const module of webModules().filter(({ id }) => id !== 'chat')) {
+      const [screen] = screenSources(module);
+      expect(readFileSync(join(FEATURES_DIRECTORY, '..', screen ?? ''), 'utf8')).toContain(
+        `'screen-of-the-${module.id}-module'`,
       );
-      expect(screen).toContain(`'screen-of-the-${id}-module'`);
     }
   });
 
   test('the modules are the ids their manifests declare, found by the folder they sit in', () => {
-    expect(moduleIds().sort()).toEqual(['chat', 'issues']);
+    const declared = readdirSync(FEATURES_DIRECTORY).filter((folder) =>
+      existsSync(join(FEATURES_DIRECTORY, folder, 'manifest.ts')),
+    );
+    expect(moduleIds()).toHaveLength(declared.length);
+    expect(moduleIds().length).toBeGreaterThanOrEqual(2);
+    // A module added later needs its chunk's bound chosen, and a bound for no module is a module that went.
+    expect(Object.keys(MODULE_BYTES).sort()).toEqual(moduleIds().sort());
     const folders = mkdtempSync(join(tmpdir(), 'features-'));
     made.push(folders);
     for (const [name, text] of [
@@ -261,37 +281,58 @@ describe('the files the first page is cut into', () => {
   });
 });
 
-describe("where chat's code is", () => {
-  const problemsOf = (files: Record<string, string | Buffer>): string[] => {
+describe("where each module's code is", () => {
+  const problemsOf = (files: Record<string, string | Buffer>, features?: string): string[] => {
     const dist = aBuild(files);
-    return chatProblems(dist, measure(dist));
+    return moduleProblems(dist, measure(dist), features);
   };
 
-  test("a shell with the other features and a chunk of chat's own passes", () => {
+  test("a shell with the other features and a chunk of each module's own passes", () => {
     expect(
       problemsOf(
         aShell([
-          '../../src/features/sidebar/sidebar.tsx',
-          '../../src/features/channel/feed-ports.tsx',
+          '../../src/features/chat/sidebar/sidebar.tsx',
+          '../../src/features/chat/channel/feed-ports.tsx',
         ]),
       ),
     ).toEqual([]);
   });
 
+  test("the screens are read from the manifests' entries, and the heavy files are real files", () => {
+    const sources = Object.fromEntries(
+      webModules().map((module) => [module.id, screenSources(module)]),
+    );
+    expect(sources['chat']).toContain('features/chat/chat.ts');
+    expect(sources['chat']).toContain('features/chat/channel/channel-screen.tsx');
+    expect(sources['chat']).toContain('features/chat/unreads/unreads-screen.tsx');
+    expect(sources['issues']).toEqual(['features/issues/issues-screen.tsx']);
+    // A type-only import of the manifest is no screen, and a shared helper is not named.
+    expect(sources['chat']?.some((file) => file.endsWith('manifest.ts'))).toBe(false);
+    for (const file of Object.values(HEAVY_SOURCES).flat()) {
+      expect(existsSync(join(FEATURES_DIRECTORY, '..', file))).toBe(true);
+    }
+  });
+
   test('a chat screen or the composer in the shell is named, and the shared files are not', () => {
     const [problem, ...rest] = problemsOf(
       aShell([
-        '../../src/features/channel/channel-screen.tsx',
-        '../../src/features/composer/composer.tsx',
-        '../../src/features/channel/feed-ports.tsx',
+        '../../src/features/chat/channel/channel-screen.tsx',
+        '../../src/features/chat/composer/composer.tsx',
+        '../../src/features/chat/channel/feed-ports.tsx',
       ]),
     );
     expect(rest).toEqual([]);
-    expect(problem).toContain("assets/index-aaa.js contains chat's screens");
+    expect(problem).toContain("assets/index-aaa.js contains the chat module's screens");
     expect(problem).toContain(
-      'features/channel/channel-screen.tsx, features/composer/composer.tsx',
+      'features/chat/channel/channel-screen.tsx, features/chat/composer/composer.tsx',
     );
     expect(problem).not.toContain('feed-ports');
+  });
+
+  test("issues' screen in the shell is named", () => {
+    const [problem, ...rest] = problemsOf(aShell(['../../src/features/issues/issues-screen.tsx']));
+    expect(rest).toEqual([]);
+    expect(problem).toContain("assets/index-aaa.js contains the issues module's screens");
   });
 
   test('a shell with no source map is a failure that says how to build one, not a pass', () => {
@@ -299,26 +340,68 @@ describe("where chat's code is", () => {
       'assets/index-aaa.js': 'x',
       'theme-init.js': 'x',
       'assets/chat-ccc.js': 'x',
+      'assets/issues-screen-ddd.js': 'x',
     });
     expect(problem).toContain('no source map');
     expect(problem).toContain('bun run build:web:mapped');
   });
 
-  test("a build with no chunk of chat's own is named", () => {
-    const [problem] = problemsOf(aShell([], null));
-    expect(problem).toContain('no chunk of their own (assets/chat-*.js)');
+  test('a build with no chunk of a module’s own is named, for each module', () => {
+    const [chat] = problemsOf(aShell([], null));
+    expect(chat).toContain(
+      "the chat module's screens have no chunk of their own (assets/chat-*.js)",
+    );
+    const [issues] = problemsOf(aShell([], 'x', null));
+    expect(issues).toContain('no chunk of their own (assets/issues-screen-*.js)');
   });
 
-  test('a shell over its bound, and a chat chunk over its own, are named', () => {
+  test('a shell over its bound, and a chunk over its module’s, are named', () => {
     const shell = problemsOf({
       ...aShell([]),
       'assets/index-aaa.js': incompressible(SHELL_BYTES + 5_000),
     });
     expect(shell).toHaveLength(1);
     expect(shell[0]).toContain('the shell is');
-    const chat = problemsOf(aShell([], incompressible(CHAT_BYTES + 5_000)));
+    const chat = problemsOf(aShell([], incompressible((MODULE_BYTES['chat'] ?? 0) + 5_000)));
     expect(chat).toHaveLength(1);
-    expect(chat[0]).toContain("over chat's 50.00 KB bound");
+    expect(chat[0]).toContain("over the chat module's 50.00 KB bound");
+    const issues = problemsOf(
+      aShell([], 'x', incompressible((MODULE_BYTES['issues'] ?? 0) + 2_000)),
+    );
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain("over the issues module's 3.00 KB bound");
+  });
+
+  test('a module with no bound, and a manifest that loads no entry, are named', () => {
+    const features = mkdtempSync(join(tmpdir(), 'features-'));
+    made.push(features);
+    for (const [name, text] of [
+      [
+        'notes/manifest.ts',
+        "defineModule({\n  id: 'notes',\n  load: () => import('./notes-screen'),\n});",
+      ],
+      ['notes/notes-screen.tsx', 'export const x = 1;'],
+      ['odd/manifest.ts', "defineModule({\n  id: 'odd',\n  load: load,\n});"],
+    ] as const) {
+      mkdirSync(join(features, name.split('/')[0] ?? ''), { recursive: true });
+      writeFileSync(join(features, name), text);
+    }
+    const problems = problemsOf({ ...aShell([]), 'assets/notes-screen-eee.js': 'x' }, features);
+    expect(problems.some((problem) => problem.includes('the notes module has no bound'))).toBe(
+      true,
+    );
+    expect(
+      problems.some((problem) => problem.includes("the odd module's manifest does not load")),
+    ).toBe(true);
+  });
+
+  test('a heavy file that is gone is named, so a move cannot leave the check holding nothing', () => {
+    const features = mkdtempSync(join(tmpdir(), 'features-'));
+    made.push(features);
+    const problems = problemsOf(aShell([]), features);
+    expect(
+      problems.some((problem) => problem.includes('is named in HEAVY_SOURCES and is not a file')),
+    ).toBe(true);
   });
 
   test('the shell bound sits under the backstop', () => {
@@ -351,10 +434,10 @@ describe('the command', () => {
   });
 
   test('fails when a chat screen is back in the shell, and says where it loads from', () => {
-    const dist = aBuild(aShell(['../../src/features/unreads/unreads-screen.tsx']));
+    const dist = aBuild(aShell(['../../src/features/chat/unreads/unreads-screen.tsx']));
     const result = main(dist);
     expect(result.code).toBe(1);
-    expect(result.err).toContain('features/unreads/unreads-screen.tsx');
+    expect(result.err).toContain('features/chat/unreads/unreads-screen.tsx');
     expect(result.err).toContain('features/chat/chat.ts');
   });
 });

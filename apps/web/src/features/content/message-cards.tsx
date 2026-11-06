@@ -24,7 +24,7 @@ import { messageHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { useWorkspaceIfAny } from '../shell/workspace';
-import { authorOf } from '../messages/author';
+import { authorOf } from '../../lib/author';
 import { useMessageText } from './github-event';
 
 /** The most cards one message draws; past this the links are links. */

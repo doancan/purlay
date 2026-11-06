@@ -13,7 +13,7 @@
  * tier but the last, which is one pass: filtering two thousand names is a few
  * thousand character comparisons, not a search.
  */
-import { fold } from '../composer/mention-suggest';
+import { fold } from '../chat/composer/mention-suggest';
 
 export interface Match {
   /** Higher is better; comparable only between matches of the same query. */

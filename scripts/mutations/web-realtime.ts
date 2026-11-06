@@ -104,7 +104,7 @@ export const WEB_REALTIME: readonly Mutation[] = [
     file: 'apps/web/src/realtime/engine.ts',
     find: "if (isNewest('revision', frame.data.messageId, frame.version)) {",
     replace: 'if (true) {',
-    tests: ['apps/web/src/features/channel/message-feed.test.tsx'],
+    tests: ['apps/web/src/features/chat/channel/message-feed.test.tsx'],
   },
   {
     id: 'stale-id-never-reminted',
