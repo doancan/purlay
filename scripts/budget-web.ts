@@ -55,10 +55,10 @@ export const MODULE_BYTES: Readonly<Record<string, number>> = {
  */
 export const HEAVY_SOURCES: Readonly<Record<string, readonly string[]>> = {
   chat: [
-    'features/composer/composer.tsx',
-    'features/channel/message-feed.tsx',
-    'features/messages/message-row.tsx',
-    'features/threads/thread.tsx',
+    'features/chat/composer/composer.tsx',
+    'features/chat/channel/message-feed.tsx',
+    'features/chat/messages/message-row.tsx',
+    'features/chat/threads/thread.tsx',
   ],
 };
 
