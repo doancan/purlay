@@ -338,6 +338,22 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: [INVITE_MAIL_TESTS],
   },
   {
+    id: 'job-deadline-longer-than-an-hour-accepted',
+    why: 'a module declares a job deadline of a day, which is no limit on a scheduler that runs the jobs one after another (D-274)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: '    jobDeadline.ms <= JOB_DEADLINE_MS_MAX',
+    replace: '    jobDeadline.ms <= JOB_DEADLINE_MS_MAX * 100',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
+    id: 'job-deadline-none-without-a-reason-accepted',
+    why: 'a module exempts its jobs from the deadline and says nothing of why, which a reviewer cannot weigh (D-274)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: "    return jobDeadline.none.trim() === ''",
+    replace: '    return false',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
     id: 'lease-takes-a-connection-past-the-deadline',
     why: 'a request past its deadline is still given the connections it asks for next, and goes on working unseen (D-270)',
     file: 'apps/api/src/platform/module-budget.ts',
