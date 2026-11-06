@@ -1,5 +1,6 @@
 /** The standalone console, saved SMTP, account approval and quota changes against an isolated server. */
 import AxeBuilder from '@axe-core/playwright';
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import type { ServerUserPage } from '@purlay/types';
 import { letterWith, linkIn, portFor, startFresh, type FreshServer } from './fresh';
@@ -205,8 +206,53 @@ test('administration is independent, responsive, keyboard accessible and backed 
       .selectOption('server.account_approved');
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(
-      page.getByRole('listitem').getByText('server.account_approved', { exact: true }),
+      page.getByRole('listitem').getByText('Account approved', { exact: true }),
     ).toBeVisible();
+    const personChoice = page.getByRole('button', { name: 'Person: Anyone', exact: true });
+    await personChoice.click();
+    const chooser = page.getByRole('dialog', { name: 'Choose a person' });
+    await chooser
+      .getByRole('textbox', { name: 'Search by name, username or email' })
+      .fill('operator');
+    await chooser.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(
+      chooser.getByRole('button', { name: 'Select Operator · operator@example.test' }),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(chooser).toHaveCount(0);
+    await expect(personChoice).toBeFocused();
+    await personChoice.click();
+    await chooser.getByRole('button', { name: 'Select Operator · operator@example.test' }).click();
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    for (const [name, format] of [
+      ['Download CSV', 'csv'],
+      ['Download NDJSON', 'ndjson'],
+    ] as const) {
+      const result = page.waitForEvent('download');
+      await page.getByRole('link', { name, exact: true }).click();
+      const download = await result;
+      expect(download.suggestedFilename()).toMatch(new RegExp(`^server-audit-.*\\.${format}$`));
+      const output = info.outputPath(`server-audit.${format}`);
+      await download.saveAs(output);
+      const text = await readFile(output, 'utf8');
+      expect(text).toContain('server.account_approved');
+      expect(text).toContain('Operator');
+      expect(text).not.toContain('server.smtp_connected');
+      expect(text).not.toContain('smtp://');
+    }
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.screenshot({
+      path: info.outputPath('server-audit-filtered-320.png'),
+      fullPage: true,
+    });
+    await page.evaluate(() => {
+      localStorage.setItem('purlay.locale', 'tr');
+    });
+    await page.reload();
+    await expect(
+      page.getByRole('listitem').getByText('Hesap onaylandı', { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'CSV indir', exact: true })).toBeVisible();
     expect(errors).toEqual([]);
   }
   await applicant.close();

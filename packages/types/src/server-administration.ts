@@ -1,7 +1,7 @@
 /** Server-wide administration metadata. No message content or credentials cross this boundary. */
 import { Type, type Static } from '@sinclair/typebox';
 import { FromClient, Timestamp, Uuid, UserRole } from './models';
-import { Page } from './api';
+import { Page, AUDIT_EXPORT_FORMATS } from './api';
 
 export const ServerAuditAction = Type.Union([
   Type.Literal('server.github_connected'),
@@ -35,6 +35,7 @@ export const ServerAuditAction = Type.Union([
   Type.Literal('server.identity_changed'),
   Type.Literal('server.account_approved'),
   Type.Literal('server.account_denied'),
+  Type.Literal('server.audit_export_requested'),
 ]);
 export type ServerAuditAction = Static<typeof ServerAuditAction>;
 
@@ -70,16 +71,21 @@ export const ServerWorkspacesQuery = FromClient({
   ),
 });
 export type ServerWorkspacesQuery = Static<typeof ServerWorkspacesQuery>;
-export const ServerAuditQuery = FromClient({
-  ...pagination,
+const auditFilter = {
   action: Type.Optional(ServerAuditAction),
   actorUserId: Type.Optional(Uuid),
   targetUserId: Type.Optional(Uuid),
   targetWorkspaceId: Type.Optional(Uuid),
   from: Type.Optional(Timestamp),
   to: Type.Optional(Timestamp),
-});
+};
+export const ServerAuditQuery = FromClient({ ...pagination, ...auditFilter });
 export type ServerAuditQuery = Static<typeof ServerAuditQuery>;
+export const ServerAuditExportQuery = FromClient({
+  ...auditFilter,
+  format: Type.Union(AUDIT_EXPORT_FORMATS.map((format) => Type.Literal(format))),
+});
+export type ServerAuditExportQuery = Static<typeof ServerAuditExportQuery>;
 export const ServerQuotaRequest = FromClient({
   quotaBytes: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
 });
@@ -142,7 +148,17 @@ export const ServerAuditEntry = Type.Object({
   createdAt: Timestamp,
 });
 export const ServerAuditPage = Page(ServerAuditEntry);
+export type ServerAuditEntry = Static<typeof ServerAuditEntry>;
 export type ServerAuditPage = Static<typeof ServerAuditPage>;
+export const SERVER_AUDIT_EXPORT_COLUMNS = [
+  'id',
+  'createdAt',
+  'action',
+  'actorUserId',
+  'actorName',
+  'targetUserId',
+  'targetWorkspaceId',
+] as const satisfies readonly (keyof ServerAuditEntry)[];
 export const ServerJob = Type.Object({
   name: Type.String(),
   status: Type.Union([Type.Literal('never'), Type.Literal('ok'), Type.Literal('overdue')]),

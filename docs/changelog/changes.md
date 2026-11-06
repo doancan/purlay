@@ -61,6 +61,8 @@ have it.
 
 ### Fixed
 
+- **Server audit** — Read actions in English or Turkish, find and select a person instead of copying account ids, and download the matching entries as CSV or NDJSON (D-278, D-222).
+
 - **Server settings** — Accepted provider and workspace-creator changes survive a failed refresh; cancelled forms forget credentials, disconnect confirmations start afresh, and connection-form actions wrap on narrow screens (D-179)
 - **Settings** — Saves hold their fields and related actions; quiet hours recover from failed reads and follow profile time-zone changes, policy refresh failures remain visible, and narrow screens keep long values and readable controls inside their cards (D-146, D-234)
 - **Invitations** — Send email invitations directly from Settings, load older open links, and make another link without leaving; revoking a link removes its copy field and shows progress (D-146, D-179)

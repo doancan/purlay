@@ -10,6 +10,7 @@ import {
   readAdministrationUser,
   readAdministrationWorkspaces,
   readAdministrationAudit,
+  downloadAdministrationAudit,
   readAdministrationOverview,
   readAdministrationOperations,
   writeAdministrationRole,
@@ -1112,6 +1113,10 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get(
       '/api/server/audit',
       async ({ request }) => await readAdministrationAudit(administration, request),
+    )
+    .get(
+      '/api/server/audit/export',
+      async ({ request }) => await downloadAdministrationAudit(administration, request),
     )
     .post('/api/server/users/:userId/admin', async ({ request, params, body, set }) => {
       await writeAdministrationRole(administration, request, params.userId, body);
