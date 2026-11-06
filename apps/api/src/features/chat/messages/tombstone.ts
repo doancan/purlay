@@ -6,7 +6,8 @@
  * erasure (many). Kept here, set-based, so the purge and the erasure cannot drift from the delete —
  * a copy of `uncount` that missed the notifications would leave a mention counted for ever.
  */
-import { sql, type Executor, type Transaction } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import { NEEDS_YOU } from '@purlay/types';
 import type { ChannelStateUpdate } from './delivery';
 
@@ -32,7 +33,7 @@ export interface Tombstoned {
  * goes too, or the history would keep it readable (D-135 §4). Only messages not deleted already.
  */
 export const tombstoneRows = async (
-  executor: Executor,
+  executor: ChatDb,
   now: Date,
   messageIds: readonly string[],
 ): Promise<readonly Tombstoned[]> => {
@@ -83,7 +84,7 @@ export const tombstoneRows = async (
  * one order: reading a channel or the inbox takes them in that order too (D-106 §3).
  */
 export const takeBack = async (
-  executor: Executor,
+  executor: ChatDb,
   now: Date,
   channelId: string,
   messages: readonly Counted[],
@@ -193,7 +194,7 @@ export const REMOVED_COLUMNS = [
 
 /** Takes back what the live ones among these added, channel by channel. */
 export const takeBackLive = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   now: Date,
   rows: readonly RemovedRow[],
 ): Promise<void> => {
@@ -213,7 +214,7 @@ export const takeBackLive = async (
 
 /** The memberships of these channels, locked in one order: channel, then person (D-106 §3). */
 export const lockMemberships = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   channelIds: readonly string[],
 ): Promise<void> => {
   if (channelIds.length === 0) return;

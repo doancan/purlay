@@ -15,7 +15,7 @@
  * - **A conversation has pins too, and a reply can be one**: the list carries its thread's root.
  */
 import { notHiddenBy } from '../messages/hidden';
-import type { Executor, Transaction } from '@purlay/db';
+import type { ChatDb, ChatTx } from '../schema';
 import { PINS_MAX, type PinList } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import {
@@ -40,7 +40,7 @@ export interface PinChange {
  * visible non-member is refused without holding the row a send writes. Archived between the guard's
  * read and the lock, the message is gone with it, as the guard would now say.
  */
-const lockForMember = async (executor: Transaction, context: ChannelContext): Promise<void> => {
+const lockForMember = async (executor: ChatTx, context: ChannelContext): Promise<void> => {
   await requireChannelMember(executor, context, 'Join the channel to pin in it.');
   const row = await executor
     .selectFrom('channels')
@@ -55,7 +55,7 @@ const lockForMember = async (executor: Transaction, context: ChannelContext): Pr
 
 /** Pins the message for everyone in its channel; pinned already, it is left as it was. */
 export const pinMessage = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   clock: Clock,
   userId: string,
   messageId: string,
@@ -97,7 +97,7 @@ export const pinMessage = async (
 
 /** Lets the pin go, if there is one; a deleted message's pin can still be let go. */
 export const unpinMessage = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   userId: string,
   messageId: string,
 ): Promise<PinChange> => {
@@ -113,10 +113,7 @@ export const unpinMessage = async (
 };
 
 /** The channel's pins, newest first, of messages not deleted. Bounded by `PINS_MAX`: not paged. */
-export const channelPins = async (
-  executor: Executor,
-  context: ChannelContext,
-): Promise<PinList> => {
+export const channelPins = async (executor: ChatDb, context: ChannelContext): Promise<PinList> => {
   const rows = await executor
     .selectFrom('pinned_messages')
     .innerJoin('messages', 'messages.id', 'pinned_messages.message_id')

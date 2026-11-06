@@ -111,6 +111,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/contract/bundle.test.ts'],
   },
   {
+    id: 'chat-migration-list-not-held',
+    why: 'the scan of a chat file for the whole database’s executor finds nothing, so the ratchet of files still to move behind the handle holds no file and a moved file stays listed, or a new one goes in on the whole database, unseen (D-271)',
+    file: 'apps/api/src/testing/module-tables.ts',
+    find: "    .filter((name) => ['Executor', 'Transaction', 'Database', 'DB'].includes(name));",
+    replace: '    .filter(() => false);',
+    tests: ['apps/api/src/module-handle-migration.test.ts'],
+  },
+  {
     id: 'composition-accepts-a-job-with-no-work',
     why: 'a job a manifest names with no work behind it is accepted, so the scheduler asks for one that the command answers as unknown (D-250)',
     file: 'apps/api/src/composition.ts',

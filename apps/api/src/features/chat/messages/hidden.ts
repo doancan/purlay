@@ -1,4 +1,5 @@
-import { sql, type Executor, type RawBuilder } from '@purlay/db';
+import { sql, type RawBuilder } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { Message } from '@purlay/types';
 
 /** Personal lists omit hidden messages before pagination. Shared content remains available to others. */
@@ -22,7 +23,7 @@ const hiddenMessage = (message: Message, at: string): Message => ({
 
 /** A batch projection preserves keyset cursors and reply ancestry, while removing the hidden words. */
 export const hideForReader = async (
-  db: Executor,
+  db: ChatDb,
   userId: string | undefined,
   messages: Message[],
 ): Promise<Message[]> => {

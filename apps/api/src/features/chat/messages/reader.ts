@@ -15,7 +15,7 @@
  */
 import { hideForReader } from './hidden';
 import { Value } from '@sinclair/typebox/value';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { Type } from '@sinclair/typebox';
 import {
   GitHubEvent,
@@ -87,7 +87,7 @@ const atOrNull = (value: Date | string | null): string | null =>
 
 /** The people with these ids, as the contract's `User` — one query, none when there are no ids. */
 const usersByIds = async (
-  executor: Executor,
+  executor: ChatDb,
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, User>> => {
   const people = new Map<string, User>();
@@ -125,7 +125,7 @@ const summaryOf = (columns: ThreadColumns, people: ReadonlyMap<string, User>): T
 
 /** One thread's summary, for the frame that announces a change to it. */
 export const readSummary = async (
-  executor: Executor,
+  executor: ChatDb,
   columns: ThreadColumns,
   rootId: string,
 ): Promise<ThreadSummary> => {
@@ -145,7 +145,7 @@ export const readSummary = async (
 
 /** One message's row by id, with its sender; undefined when there is none. */
 export const readMessage = async (
-  executor: Executor,
+  executor: ChatDb,
   messageId: string,
 ): Promise<MessageRow | undefined> =>
   await executor
@@ -200,7 +200,7 @@ const authorship = (
 
 /** The contract's messages for these rows, in the order the rows came. */
 export const buildMessages = async (
-  executor: Executor,
+  executor: ChatDb,
   rows: readonly MessageRow[],
   userId?: string,
 ): Promise<Message[]> => {
@@ -251,7 +251,7 @@ export const buildMessages = async (
 
 /** One message, built, so the answer to a write reads like the page it will appear on. */
 export const readBuilt = async (
-  executor: Executor,
+  executor: ChatDb,
   messageId: string,
   userId?: string,
 ): Promise<Message | undefined> => {

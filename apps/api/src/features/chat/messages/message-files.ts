@@ -2,12 +2,12 @@
  * The files of messages, dropped with them (D-141, D-250). Which attachments a message carries is chat's to
  * know — `message_attachments` — and the core's `dropFilesById` deletes them without knowing why.
  */
-import type { Transaction } from '@purlay/db';
+import type { ChatTx } from '../schema';
 import { dropFilesById } from '../../../modules/attachments/deletions';
 
 /** The files of these messages: rows deleted, bytes off the workspace, keys queued and returned (see `dropFilesById`). */
 export const dropMessageFiles = async (
-  transaction: Transaction,
+  transaction: ChatTx,
   workspaceId: string,
   messageIds: readonly string[],
 ): Promise<{ readonly count: number; readonly keys: readonly string[] }> => {

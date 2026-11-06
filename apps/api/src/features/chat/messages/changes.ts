@@ -11,14 +11,15 @@
  * `CHANGES_OVERLAP_MS` behind the watermark: a write stamps its row before it commits, and a row stamped before a
  * watermark can be committed after the read that made it.
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import { CHANGES_OVERLAP_MS, PAGE_LIMIT, type ChangePage, type ChangesQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { ChannelContext } from '../channels/guard';
 import { buildMessages, MESSAGE_COLUMNS, type MessageRow } from './reader';
 
 /** The database's own clock, to the millisecond a stamp is kept to. */
-const serverNow = async (executor: Executor): Promise<Date> => {
+const serverNow = async (executor: ChatDb): Promise<Date> => {
   const { now } = await executor
     .selectNoFrom(sql<Date>`date_trunc('milliseconds', clock_timestamp())`.as('now'))
     .executeTakeFirstOrThrow();
@@ -89,7 +90,7 @@ export interface ChangeWindow {
  * overlap of the next walk, as a commit that lands after any read always has been.
  */
 const idsChangedFrom = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   from: Date,
 ): Promise<string[] | undefined> => {
@@ -116,7 +117,7 @@ const idsChangedFrom = async (
  * the test that holds the other to it: whatever one finds, the other finds, to the byte.
  */
 export const changedRows = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   window: ChangeWindow,
   strategy: 'auto' | 'scan' = 'auto',
@@ -157,7 +158,7 @@ export const changedRows = async (
 };
 
 export const changesIn = async (
-  executor: Executor,
+  executor: ChatDb,
   context: ChannelContext,
   query: ChangesQuery,
 ): Promise<ChangePage> => {

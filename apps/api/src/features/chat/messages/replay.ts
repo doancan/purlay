@@ -12,7 +12,7 @@ import {
   messageIdTime,
   type ServerFrame,
 } from '@purlay/types';
-import type { Executor } from '@purlay/db';
+import type { ChatDb } from '../schema';
 import type { Clock } from '../../../platform/clock';
 import type { ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
@@ -85,7 +85,7 @@ export interface ReplayResult {
  * what follows it; production passes nothing.
  */
 export const replaySince = async (
-  executor: Executor,
+  executor: ChatDb,
   clock: Clock,
   requests: readonly ReplayRequest[],
   read: typeof missedIn = missedIn,
