@@ -13422,3 +13422,56 @@ is data and one test.
 6. **Data lifecycle.** Migrations 0086–0087 are additive; 0087’s safety comment uses the existing D-86 comment-only checksum ledger because local validation had already applied its identical SQL; both tables are core-owned. Rows live with their workspace and are explicitly included in its purge. Erasure deletes received evidence by the pre-erasure verified address or attested account id; created-by references on other recipients name the anonymised creator. A personal export contains only the person's received recipient/attempt evidence (a verified address match or an attested account id; an unverified claim cannot read or erase another recipient's evidence), with workspace identity and no invitation credential. Workspace exports omit private recipient and delivery records. English/Turkish feedback distinguishes expiry, revocation, uncertainty, approval and joining.
 
 **Rejected:** one shared email link (cannot independently revoke/resend); raw SMTP diagnostics (leaks personal data and credentials); calling SMTP acceptance delivered (unprovable); looking up every typed address (account directory disclosure); a broker, saved plaintext tokens or automatic replay (new infrastructure/secret storage and duplicate-send risk without a measurement); polling the private identity endpoint (keeps idle sessions alive and violates the admission boundary).
+
+### D-280. A module's HTTP is its folder: `features/<id>/http/` holds its handlers and its routes as one plugin, and the application uses every bundled module's plugin in one place — builds on D-250, D-254, D-255, D-276; amends `MODULES.md` §2, §3, §8 and §9
+
+**Context.** Chat's frames, jobs, data hooks and web UI were in its folder, but its HTTP was not: twenty-two files of
+`ingress/http/` were its handlers, `app.ts` registered each of its routes by hand in one chain of two thousand lines, and
+`module-seams.test.ts` allowed each of those files to import chat (27 entries). Issues, the smaller module, did the same
+with one file. The audit called it the largest gap in the module structure: a module could not be read, or removed, as one
+folder, and a third module would have added its handlers to the core's door.
+
+**Decision.**
+
+1. **A module's HTTP is a folder of the module.** `features/<id>/http/` holds the handlers (functions of a context and a
+   `Request`, as the core's are) and `routes.ts`, one function from the module's context to an Elysia plugin that registers
+   the routes at the paths of its manifest's `routes`. The manifest stays the truth about who owns a path: it holds no HTTP
+   type and the plugin holds none of the ownership.
+2. **The plugin is a field of the module's slot in `bundledModules`, `routes`**, beside `jobWork` and `frameHandlers` (D-276),
+   for the same reason: the manifest is strings and types that `module-kit` carries without the framework. `createApp` makes
+   the plugin of every **bundled** module, whether or not it runs, and uses them in one call (`.use(moduleRoutes)`); it names
+   no module and registers none of a module's paths. A module that is not run is closed by its manifest at the edge, as
+   before (D-255 §2), so the route table is the same in every process.
+3. **The context is `ModuleRouteDependencies`** (`ingress/http/module-routes.ts`): what a module's routes use, named, and widened in
+   a line a reviewer reads when a module needs more. Not the application's whole `Dependencies`, the services bag D-276 rejected
+   for frames.
+4. **The one typed chain, and what it was for.** D-255 §2 said the route table is one typed chain because its type is what
+   the web client reads. Nothing reads it: `createApp` returns `HttpApplication`, which names `handle`, `listen`, `stop`,
+   `held`, `drain` and `settled` only, the web imports nothing from `apps/api`, and the client's types are the contract's
+   (`@purlay/types`, D-192). A plugin keeps the inference that matters, of a handler's `params` and `body` against its own
+   path, and the aggregate type nobody consumes is `AnyElysia` at the seam. The hooks of the application (`onRequest`,
+   `onBeforeHandle`, `onError`, `wrap`) are the chain's and apply to a plugin used after them: every suite that asserts an
+   envelope, a header, a status, a deadline or a closed path passes unchanged, and the contract bundle is byte-identical.
+5. **The fence.** `features/<id>/http/` may import Elysia and the door's helpers (`ingress/http/session`, `validate`), which the
+   rest of a feature may not (`NO_TRANSPORT_TYPES`); it may not import the socket door, `ingress/http/app` or the composition,
+   and, like the rest of the feature, no other feature. Its tests stand the application up and are kept from no transport.
+6. **The guard.** `route-ownership.test.ts` reads the paths of `app.ts` and of every module's `http/` folder, and fails when a
+   module that has routes supplies none and is not in `HTTP_IN_INGRESS` (a list that only shrinks, chat's name while its
+   handlers are in `ingress/`), when `app.ts` registers a path of a module that supplies them, when a plugin registers a
+   path its manifest does not own, and when the plugin and its folder's text disagree. `module-seams.test.ts`'s `ALLOWED`
+   shrinks by each handler file that moves, and its cap with it.
+
+**Built in steps.** The seam, the fence, the guard and issues' four routes first; then chat's handlers in batches, each a
+`git mv` and a rewrite of imports proved by script, after which `HTTP_IN_INGRESS` is empty and `ALLOWED` is what is left of
+the core's doors: the workspace routes that read chat's GitHub client and unfurl check, the release route, the socket's
+presence and `erase-content`. What is not done: a module's own error codes and wire types still go through `@purlay/types`.
+
+**Rejected.** *Each module's plugin hand-registered in `app.ts`* (`.use(issuesRoutes(...))`, `.use(chatRoutes(...))`): the
+application would name every module and a third would edit the core's door. *Handlers in the manifest*: it makes `module-kit`
+import the framework. *Registering routes only for the modules that run*: D-255 §2 chose the same table everywhere, and a
+route table that depends on the process is a second thing to test in every cell. *A route-registration function that takes
+the chain* (`(app) => app.get(...)`): Elysia's type is invariant in its routes, so the function cannot be typed without
+`any`. *Moving the handlers and leaving the registration in `app.ts`*: the module's paths would still be written in the core.
+
+**Cost of reversing.** Move a module's handlers back to `ingress/http/`, write its routes into the chain and delete the slot
+and the fence; no stored data and no wire change.

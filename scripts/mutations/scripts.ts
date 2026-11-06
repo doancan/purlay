@@ -339,6 +339,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/enforcement.test.ts'],
   },
   {
+    id: 'module-http-folder-keeps-the-transport-fence',
+    why: 'a module’s http folder is held to the fence of the rest of the module, so it cannot import the framework it registers its routes with (D-280)',
+    file: 'scripts/feature-fences.mjs',
+    find: 'fence([`${dir}/${id}/http/**/*.ts`], pathsFor(id), httpTransportTypes)',
+    replace: 'fence([`${dir}/${id}/http/**/*.ts`], pathsFor(id), noTransportTypes)',
+    tests: ['scripts/feature-fences.test.ts'],
+  },
+  {
     id: 'mutation-area-first-prefix-wins',
     why: 'an entry for a file of a split directory is filed with the rest of the directory, and no check says it is in the wrong place',
     file: 'scripts/mutations/areas.ts',
