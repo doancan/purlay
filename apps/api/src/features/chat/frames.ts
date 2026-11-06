@@ -77,6 +77,73 @@ const missedRevocations = async (
   );
 };
 
+const channelWrites: FrameHandlers<ChatFrameContext> = {
+  MESSAGE_SEND: async (context, frame) => {
+    const { identity, userWrites, log, presence } = context;
+    if (!(await userWrites.consume(identity.userId))) {
+      log.info('send refused: over the user write budget', { socketId: identity.socketId });
+      return [
+        context.fail(
+          new AppError({
+            code: 'RATE_LIMITED',
+            message: 'Too many messages. Send it again shortly.',
+          }),
+          frame.id,
+        ),
+      ];
+    }
+    const channel = await requireChannelById(
+      context.database,
+      identity.userId,
+      frame.payload.channelId,
+    );
+
+    // Written, committed and published by the one send path (D-35); the ACK
+    // comes after, so the sender is never ahead of the room.
+    const message = await send(
+      context,
+      channel,
+      {
+        id: frame.id,
+        content: frame.payload.content,
+        parentId: frame.payload.parentId,
+        attachmentIds: frame.payload.attachmentIds,
+      },
+      // The identity was cached at the upgrade; the write re-proves it (D-85).
+      identity.sessionId,
+    );
+    // What they were typing has arrived; the next keystroke is news again.
+    presence.stopTyping(channel.channelId, identity.userId);
+    return [context.reply({ event: 'ACK', data: { id: message.id } }, frame.id)];
+  },
+
+  TYPING: async (context, frame) => {
+    const { identity, presence } = context;
+    // Authorised before the registry hears of it: a channel id the sender may not see must
+    // neither reach a room nor take a place in memory.
+    const channel = await requireChannelById(
+      context.database,
+      identity.userId,
+      frame.payload.channelId,
+    );
+    // Seeing a public channel is not being in it: what a non-member types could not be sent
+    // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement
+    // is not a request, and it takes no place in memory either.
+    if (!(await isChannelMember(context.database, channel))) return [];
+    if (await presence.startTyping(channel.channelId, identity.userId, TYPING_TTL_MS)) {
+      await context.bus.publish(
+        channelTopic(channel.channelId),
+        context.reply({
+          event: 'TYPING',
+          data: { channelId: channel.channelId, userId: identity.userId, ttlMs: TYPING_TTL_MS },
+        }),
+      );
+    }
+    // Nothing to answer: an announcement is not a request, and the room has heard it.
+    return [];
+  },
+};
+
 /**
  * `readReplay` is a seam so a test can commit a message between the read and what follows it, deterministically;
  * production takes the default.
@@ -84,7 +151,7 @@ const missedRevocations = async (
 export const chatFrames = (
   readReplay: typeof missedIn = missedIn,
 ): FrameHandlers<ChatFrameContext> => {
-  const handlers: FrameHandlers<ChatFrameContext> = {
+  const subscriptions: FrameHandlers<ChatFrameContext> = {
     SUBSCRIBE: async (context, frame) => {
       const { identity, socket, bus, database, clock } = context;
       const wanted = frame.payload.channels;
@@ -170,73 +237,8 @@ export const chatFrames = (
         context.reply({ event: 'ACK', data: { channelIds: frame.payload.channelIds } }, frame.id),
       ]);
     },
-
-    MESSAGE_SEND: async (context, frame) => {
-      const { identity, userWrites, log, presence } = context;
-      if (!(await userWrites.consume(identity.userId))) {
-        log.info('send refused: over the user write budget', { socketId: identity.socketId });
-        return [
-          context.fail(
-            new AppError({
-              code: 'RATE_LIMITED',
-              message: 'Too many messages. Send it again shortly.',
-            }),
-            frame.id,
-          ),
-        ];
-      }
-      const channel = await requireChannelById(
-        context.database,
-        identity.userId,
-        frame.payload.channelId,
-      );
-
-      // Written, committed and published by the one send path (D-35); the ACK
-      // comes after, so the sender is never ahead of the room.
-      const message = await send(
-        context,
-        channel,
-        {
-          id: frame.id,
-          content: frame.payload.content,
-          parentId: frame.payload.parentId,
-          attachmentIds: frame.payload.attachmentIds,
-        },
-        // The identity was cached at the upgrade; the write re-proves it (D-85).
-        identity.sessionId,
-      );
-      // What they were typing has arrived; the next keystroke is news again.
-      presence.stopTyping(channel.channelId, identity.userId);
-      return [context.reply({ event: 'ACK', data: { id: message.id } }, frame.id)];
-    },
-
-    TYPING: async (context, frame) => {
-      const { identity, presence } = context;
-      // Authorised before the registry hears of it: a channel id the sender may not see must
-      // neither reach a room nor take a place in memory.
-      const channel = await requireChannelById(
-        context.database,
-        identity.userId,
-        frame.payload.channelId,
-      );
-      // Seeing a public channel is not being in it: what a non-member types could not be sent
-      // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement
-      // is not a request, and it takes no place in memory either.
-      if (!(await isChannelMember(context.database, channel))) return [];
-      if (await presence.startTyping(channel.channelId, identity.userId, TYPING_TTL_MS)) {
-        await context.bus.publish(
-          channelTopic(channel.channelId),
-          context.reply({
-            event: 'TYPING',
-            data: { channelId: channel.channelId, userId: identity.userId, ttlMs: TYPING_TTL_MS },
-          }),
-        );
-      }
-      // Nothing to answer: an announcement is not a request, and the room has heard it.
-      return [];
-    },
   };
-  return handlers;
+  return { ...subscriptions, ...channelWrites };
 };
 
 export const chatFrameHandlers: FrameHandlers<ChatFrameContext> = chatFrames();

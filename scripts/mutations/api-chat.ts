@@ -608,7 +608,7 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'typing-into-a-channel-unseen',
     why: 'anybody signed in can announce typing into any channel id, private ones included, and the room hears it',
     file: 'apps/api/src/features/chat/frames.ts',
-    find: '      const channel = await requireChannelById(\n        context.database,\n        identity.userId,\n        frame.payload.channelId,\n      );\n      // Seeing a public channel is not being in it: what a non-member types could not be sent\n      // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement\n      // is not a request, and it takes no place in memory either.\n      if (!(await isChannelMember(context.database, channel))) return [];\n',
+    find: '    const channel = await requireChannelById(\n      context.database,\n      identity.userId,\n      frame.payload.channelId,\n    );\n    // Seeing a public channel is not being in it: what a non-member types could not be sent\n    // (D-156), so the room is not told they are typing. Dropped, not refused — an announcement\n    // is not a request, and it takes no place in memory either.\n    if (!(await isChannelMember(context.database, channel))) return [];\n',
     replace: '    const channel = { channelId: frame.payload.channelId };\n',
     tests: ['apps/api/src/realtime/typing.integration.test.ts'],
   },
@@ -624,9 +624,9 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'typing-remembered-before-it-is-allowed',
     why: 'any channel id, seen or not, takes a place in the typing registry before it is refused',
     file: 'apps/api/src/features/chat/frames.ts',
-    find: '    TYPING: async (context, frame) => {\n      const { identity, presence } = context;\n',
+    find: '  TYPING: async (context, frame) => {\n    const { identity, presence } = context;\n',
     replace:
-      '    TYPING: async (context, frame) => {\n      const { identity, presence } = context;\n      void presence.startTyping(frame.payload.channelId, identity.userId, TYPING_TTL_MS);\n',
+      '  TYPING: async (context, frame) => {\n    const { identity, presence } = context;\n    void presence.startTyping(frame.payload.channelId, identity.userId, TYPING_TTL_MS);\n',
     tests: ['apps/api/src/realtime/typing.integration.test.ts'],
   },
   {
