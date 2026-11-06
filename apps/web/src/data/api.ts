@@ -184,7 +184,7 @@ export interface Api {
     workspaceId: string,
     signal?: AbortSignal,
   ) => Promise<GitHubIntegration>;
-  readonly setGitHubToken: (workspaceId: string, token: string) => Promise<void>;
+  readonly setGitHubToken: (workspaceId: string, token: string) => Promise<GitHubIntegration>;
   /** An owner's or an admin's: the repositories a channel hears from, never their secrets (D-134). */
   readonly githubFeeds: (channelId: string, signal?: AbortSignal) => Promise<GitHubFeedList>;
   /** Connects a repository: the feed, the address and the secret GitHub needs — once. */
@@ -209,7 +209,7 @@ export interface Api {
     channelId: string,
     feedId: string,
   ) => Promise<CreatedGitHubFeed>;
-  readonly removeGitHubToken: (workspaceId: string) => Promise<void>;
+  readonly removeGitHubToken: (workspaceId: string) => Promise<GitHubIntegration>;
   /** A pull request's or an issue's card, read with the workspace's token (D-23, D-112); null for none. */
   readonly unfurl: (
     workspaceId: string,
@@ -630,13 +630,19 @@ export const createApi = (http: Http): Api => {
         options({}, signal),
       ),
     setGitHubToken: (workspaceId, token) =>
-      http.send(
+      http.request(
         'PUT',
         `/api/workspaces/${at(workspaceId)}/integrations/github`,
+        GitHubIntegration,
         options({ body: { token } }),
       ),
     removeGitHubToken: (workspaceId) =>
-      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/integrations/github`, options()),
+      http.request(
+        'DELETE',
+        `/api/workspaces/${at(workspaceId)}/integrations/github`,
+        GitHubIntegration,
+        options(),
+      ),
     githubFeeds: (channelId, signal) =>
       http.request(
         'GET',

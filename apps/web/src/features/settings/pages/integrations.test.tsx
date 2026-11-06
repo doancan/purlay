@@ -8,8 +8,9 @@ import { act, within } from '@testing-library/react';
 import type { BoundFunctions, queries } from '@testing-library/react';
 import type { GitHubIntegration, UserRole } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
-import { ApiError } from '../../../data/errors';
+import { ApiError, type ApiErrorCode } from '../../../data/errors';
 import type { Api } from '../../../data/api';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import { IDS, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
@@ -78,6 +79,103 @@ const openPage = async (api: Partial<Api>, role: UserRole = 'owner'): Promise<Vi
 const main = (view: View): Scope => within(view.getByRole('main'));
 
 describe('the GitHub connection', () => {
+  test('a status read begun before saving cannot overwrite the accepted connection receipt', async () => {
+    let reads = 0;
+    let stale: (status: GitHubIntegration) => void = () => undefined;
+    const view = await openPage({
+      githubIntegration: () =>
+        ++reads === 1
+          ? Promise.resolve(NOT_CONNECTED)
+          : reads === 2
+            ? new Promise((resolve) => {
+                stale = resolve;
+              })
+            : Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
+      setGitHubToken: () => Promise.resolve(CONNECTED),
+    });
+    void view.world.client.invalidateQueries({ queryKey: keys.githubIntegration(IDS.workspace) });
+    await settle();
+    await person().type(view.getByLabelText('Token'), 'github_pat_delayed');
+    await person().click(view.getByRole('button', { name: 'Save token' }));
+    await settle();
+    await act(async () => {
+      stale(NOT_CONNECTED);
+      await Promise.resolve();
+    });
+    expect(main(view).getByText('Connected')).toBeDefined();
+    expect(main(view).getByRole('button', { name: 'Retry' })).toBeDefined();
+    expect(main(view).queryByText('Not connected')).toBeNull();
+    view.unmount();
+  });
+  test.each([
+    'NETWORK',
+    'MALFORMED',
+    'INTERNAL',
+    'DATABASE_UNAVAILABLE',
+    'REQUEST_TIMEOUT',
+  ] satisfies ApiErrorCode[])(
+    'a %s mutation reply is unconfirmed rather than claiming the token was not saved',
+    async (code) => {
+      const view = await openPage({
+        githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+        setGitHubToken: () => Promise.reject(new ApiError(504, code, 'lost receipt')),
+      });
+      await person().type(view.getByLabelText('Token'), 'github_pat_unknown');
+      await person().click(view.getByRole('button', { name: 'Save token' }));
+      expect(
+        await view.findByText(
+          'Could not confirm the connection change. Refresh its status before retrying.',
+        ),
+      ).toBeDefined();
+      expect(view.queryByText(/The token was not saved/)).toBeNull();
+      view.unmount();
+    },
+  );
+  test.each(['save', 'disconnect'] as const)(
+    'an accepted %s receipt survives a failed status read without retaining the token',
+    async (action) => {
+      let reads = 0;
+      let fail = true;
+      const saved = action === 'save' ? { ...CONNECTED, broadScopes: true } : NOT_CONNECTED;
+      const view = await openPage({
+        githubIntegration: () =>
+          ++reads === 1
+            ? Promise.resolve(action === 'save' ? NOT_CONNECTED : CONNECTED)
+            : fail
+              ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+              : Promise.resolve(saved),
+        setGitHubToken: () => Promise.resolve(saved),
+        removeGitHubToken: () => Promise.resolve(saved),
+      });
+      if (action === 'save') {
+        await person().type(view.getByLabelText('Token'), 'github_pat_secret_receipt');
+        await person().click(view.getByRole('button', { name: 'Save token' }));
+      } else await person().click(view.getByRole('button', { name: 'Disconnect' }));
+      expect(await main(view).findByRole('button', { name: 'Retry' })).toBeDefined();
+      expect(
+        main(view).getByText(action === 'save' ? /Connected since/ : /^Not connected: links/),
+      ).toBeDefined();
+      expect(
+        main(view).getByText(
+          /Could not refresh connection status\. The last confirmed status is shown\./,
+        ),
+      ).toBeDefined();
+      expect(view.getByLabelText('Token')).toHaveProperty('value', '');
+      expect(
+        JSON.stringify(
+          view.world.client
+            .getQueryCache()
+            .getAll()
+            .map((query) => query.state.data),
+        ),
+      ).not.toContain('github_pat_secret_receipt');
+      fail = false;
+      await person().click(main(view).getByRole('button', { name: 'Retry' }));
+      await settle();
+      expect(main(view).queryByRole('button', { name: 'Retry' })).toBeNull();
+      view.unmount();
+    },
+  );
   test('is an owner’s and an admin’s; a member is not offered it, and its address is not found', async () => {
     const member = await render('/w/acme/settings/integrations', {}, 'member');
     expect(await member.findByText('Nothing here')).toBeDefined();
@@ -100,7 +198,7 @@ describe('the GitHub connection', () => {
       setGitHubToken: (workspaceId, token) => {
         sent.push(`${workspaceId}:${token}`);
         status = CONNECTED;
-        return Promise.resolve();
+        return Promise.resolve(status);
       },
     });
     expect(view.getByText(/^Not connected: links/)).toBeDefined();
@@ -125,7 +223,7 @@ describe('the GitHub connection', () => {
       removeGitHubToken: () => {
         removed += 1;
         status = NOT_CONNECTED;
-        return Promise.resolve();
+        return Promise.resolve(status);
       },
     });
     expect(view.getByText(/Connected since/)).toBeDefined();
@@ -168,11 +266,15 @@ describe('the GitHub connection', () => {
     // Connected, saving a token replaces the one there is.
     await person().click(view.getByRole('button', { name: 'Replace token' }));
     await settle();
-    expect(view.getByRole('alert').textContent).toContain('The token was not saved.');
+    expect(view.getByRole('alert').textContent).toContain(
+      'Could not confirm the connection change.',
+    );
     expect((view.getByLabelText('Token') as HTMLInputElement).value).toBe('ghp_kept');
     await person().click(view.getByRole('button', { name: 'Disconnect' }));
     await settle();
-    expect(view.getByRole('alert').textContent).toContain('GitHub was not disconnected.');
+    expect(view.getByRole('alert').textContent).toContain(
+      'Could not confirm the connection change.',
+    );
   });
 
   test('a token GitHub refused is said to the admin, with when, and a replacement is offered (#884)', async () => {
@@ -181,7 +283,7 @@ describe('the GitHub connection', () => {
       githubIntegration: () => Promise.resolve(status),
       setGitHubToken: () => {
         status = CONNECTED;
-        return Promise.resolve();
+        return Promise.resolve(status);
       },
     });
     const alert = main(view).getByRole('alert');
