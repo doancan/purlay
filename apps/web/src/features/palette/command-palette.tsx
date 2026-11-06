@@ -34,7 +34,7 @@ import { Kbd, keyHintsClasses } from '../../ui/kbd';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { searchHref } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
-import { useSearchOperators } from '../search/use-operators';
+import { useSearchOperators } from '../chat/search/use-operators';
 import { useRuns } from '../session/session';
 import { useWorkspace } from '../shell/workspace';
 import { GROUPS, rank, type PaletteGroup, type PaletteItem, type Shown } from './rank';

@@ -196,7 +196,7 @@ export const useChannelMembers = (
  * TanStack's structural sharing compares a new list to the old one *by position* and builds
  * a fresh object for any element that differs there — so a message inserted at the head of
  * a feed shifts every later message to a new index and every one of them is copied. A row is
- * memoised on its message's identity (`features/messages/message-row.tsx`), so a copy is a
+ * memoised on its message's identity (`features/chat/messages/message-row.tsx`), so a copy is a
  * re-render: one new message would redraw the whole page. The cache (`cache.ts`) already
  * keeps untouched messages as they were; this stops the library undoing it.
  */
