@@ -198,18 +198,18 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   // Out of one channel, by their own hand: their sockets stop receiving it and are told they left.
   'apps/api/src/features/chat/channels/settings.ts#leaveChannel': {
     publishes: 'publishAccessRevoked',
-    calledFrom: 'apps/api/src/ingress/http/channels.ts',
+    calledFrom: 'apps/api/src/features/chat/http/channels.ts',
   },
   // Out of one channel by somebody else's hand (D-172): their sockets stop receiving it and are told
   // they were removed. Naming oneself is leaving, through `leaveChannel` above.
   'apps/api/src/features/chat/channels/settings.ts#removeChannelMember': {
     publishes: 'publishAccessRevoked',
-    calledFrom: 'apps/api/src/ingress/http/channels.ts',
+    calledFrom: 'apps/api/src/features/chat/http/channels.ts',
   },
   // Archived: everyone watching it stops receiving it, on the channel's topic (D-123).
   'apps/api/src/features/chat/channels/settings.ts#archiveChannel': {
     publishes: 'publishChannelRevoked',
-    calledFrom: 'apps/api/src/ingress/http/channels.ts',
+    calledFrom: 'apps/api/src/features/chat/http/channels.ts',
   },
   // Brought back (D-232): it gives access back and takes none away. Its members are told on their own
   // topics to read their channels again (`CHANNELS_UPDATED`), which no revocation rule covers.
