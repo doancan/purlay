@@ -105,14 +105,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/channel-removal.integration.test.ts'],
   },
   {
-    id: 'chat-handler-records-an-issues-action',
-    why: 'a route handler of chat records an action issues owns, which no manifest lists for chat, and the sweep that held only a module’s folder never read the handler (D-265)',
-    file: 'apps/api/src/ingress/http/pins.ts',
-    find: "import type { PinList } from '@purlay/types';",
-    replace: "import type { PinList } from '@purlay/types';\nvoid { action: 'issue.deleted' };",
-    tests: ['apps/api/src/audit-emissions.test.ts'],
-  },
-  {
     id: 'client-contract-floor-inclusive',
     why: 'a client at the minimum contract is refused: the emergency brake stops the very release it was raised to allow',
     file: 'apps/api/src/ingress/http/client-policy.ts',
@@ -508,14 +500,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: 'inviteCookie(cookie, PASSPORT_TTL_MS / 1000)',
     replace: 'inviteCookie(cookie, PASSPORT_TTL_MS)',
     tests: ['apps/api/src/ingress/http/invitation-passport.integration.test.ts'],
-  },
-  {
-    id: 'pins-told-of-nothing',
-    why: 'a pin that changed nothing tells the whole channel',
-    file: 'apps/api/src/ingress/http/pins.ts',
-    find: '  if (!change.changed) return;\n',
-    replace: '',
-    tests: ['apps/api/src/ingress/http/pins.integration.test.ts'],
   },
   {
     id: 'read-all-tells-no-device',

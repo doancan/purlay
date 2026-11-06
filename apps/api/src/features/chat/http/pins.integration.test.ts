@@ -5,14 +5,14 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { messageId, type PinList, type ServerFrame } from '@purlay/types';
-import { fixedClock } from '../../platform/clock';
-import { AppError } from '../../platform/errors';
-import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { aTestAuth, aSession } from '../../testing/signed-in';
-import { aRoom } from '../../testing/rooms';
-import { testDependencies } from '../../testing/doubles';
-import { createApp } from './app';
+import { fixedClock } from '../../../platform/clock';
+import { AppError } from '../../../platform/errors';
+import { channelTopic, NO_LOG, type EventBus } from '../../../platform/events';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { aTestAuth, aSession } from '../../../testing/signed-in';
+import { aRoom } from '../../../testing/rooms';
+import { testDependencies } from '../../../testing/doubles';
+import { createApp } from '../../../ingress/http/app';
 import { deletePin, putPin } from './pins';
 
 afterAll(async () => {
