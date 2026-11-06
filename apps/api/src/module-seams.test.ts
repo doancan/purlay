@@ -217,6 +217,11 @@ describe('the process entry starts the modules’ workers over the shares of the
     expect(entry).toMatch(/createApp\(\{[^}]*\bmoduleShares,/s);
   });
 
+  test('workers cannot start after shutdown began while boot was still waiting', () => {
+    expect(entry).toMatch(/workerLifecycle\.stopped = true;[\s\S]*await activeWorkers\?\.stop\(\)/);
+    expect(entry).toMatch(/if \(!workerLifecycle\.stopped\) \{\s*activeWorkers = startWorkers\(/);
+  });
+
   test('it stops them when the process is crashing and when it is shut down', () => {
     expect(entry.match(/\bworkers\.stop\(\)/g)).toHaveLength(2);
   });

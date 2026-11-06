@@ -13535,7 +13535,9 @@ it to naming no module's work. A delivery that hung on a lock held its loop for 
    not hold another.
 5. **The process entry is a door.** `module-seams.test.ts` reads `index.ts` as it reads `cli/`, `ingress/` and `realtime/`, with
    nothing listed for it, and holds it to the workers it starts, over the leased database and the application's shares, stopped
-   on a crash and on a shutdown.
+   on a crash and on a shutdown. The stop handle exists before boot awaits migrations or settings; an early stop
+   succeeds with no workers yet and prevents them from starting if boot later resumes. Real-process SIGTERM and SIGINT
+   cases in `migrate-on-start.integration.test.ts` hold the early shutdown to a clean exit.
 
 **Measured.** The delivery tests of scheduled messages and reminders are unchanged and pass, and a worker of chat delivers a
 due message through chat's share on a real database (`module-workers.integration.test.ts`). What the scheduler adds to an

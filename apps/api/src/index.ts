@@ -54,7 +54,7 @@ import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
 import { moduleConnections } from './platform/module-budget';
-import { startWorkers } from './modules/workers/module-workers';
+import { startWorkers, type Workers } from './modules/workers/module-workers';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -223,6 +223,16 @@ const servicesFor = (
   needsReentry: readonly SealedSetting[],
 ): RuntimeServices => runtimeServicesFrom(settings, runtimeBase, needsReentry, services.sends);
 
+// Shutdown can arrive while migrations or settings are still awaited, before any worker exists.
+let activeWorkers: Workers | undefined;
+const workerLifecycle = { stopped: false };
+const workers: Workers = {
+  stop: async (): Promise<void> => {
+    workerLifecycle.stopped = true;
+    await activeWorkers?.stop();
+  },
+};
+
 const app = createApp({
   composition: modules,
   moduleShares,
@@ -363,14 +373,16 @@ if (config.MIGRATE_ON_START === true) {
 }
 services.settle(runtime);
 // What the modules that run do on a timer, each iteration held to its module's share and deadline (`modules/workers`).
-const workers = startWorkers(modules.workers, {
-  database: leasingExecutor(database, moduleShares),
-  clock: systemClock,
-  log,
-  bus: runtimeBase.bus,
-  failures: metrics.workerFailures,
-  ...(push === undefined ? {} : { push }),
-});
+if (!workerLifecycle.stopped) {
+  activeWorkers = startWorkers(modules.workers, {
+    database: leasingExecutor(database, moduleShares),
+    clock: systemClock,
+    log,
+    bus: runtimeBase.bus,
+    failures: metrics.workerFailures,
+    ...(push === undefined ? {} : { push }),
+  });
+}
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.
 log.info(
   runtime.mail === undefined ? 'email sign-in is off: no mail relay is set' : 'email sign-in is on',

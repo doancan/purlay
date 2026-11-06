@@ -584,6 +584,33 @@ describe('integration: migrate on start', () => {
     }
   }, 60_000);
 
+  test.each(['SIGTERM', 'SIGINT'] as const)(
+    '%s before the migrations finish drains without workers having started',
+    async (signal) => {
+      const { name, db } = await freshDatabase(`early-${signal.toLowerCase()}`);
+      const port = freePort();
+      const node = aNode(
+        name,
+        port,
+        Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+      );
+      try {
+        expect(await until(port, '/health', 200)).toBe(200);
+        expect((await answer(port, '/health/ready'))[0]).toBe(503);
+        node.kill(signal);
+        const ended = await exitOf(node);
+        expect(ended.said).not.toContain('shutdown failed');
+        expect(ended.said).not.toContain('ReferenceError');
+        expect(ended.code).toBe(0);
+      } finally {
+        node.kill('SIGKILL');
+        await node.exited;
+        await db.destroy();
+      }
+    },
+    60_000,
+  );
+
   test('a node run with MODULES=none that does not migrate is ready on a database migrated core-alone', async () => {
     const { name, db } = await freshDatabase('wait-none');
     await migrateWith(name, []);

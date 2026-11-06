@@ -56,11 +56,19 @@ export const API_ROOT: readonly Mutation[] = [
     tests: [BOOT_TESTS],
   },
   {
+    id: 'boot-workers-ignores-an-early-stop',
+    why: 'workers start after a crash or shutdown that began while migrations or settings were still awaited',
+    file: 'apps/api/src/index.ts',
+    find: 'if (!workerLifecycle.stopped) {',
+    replace: 'if (true) {',
+    tests: ['apps/api/src/module-seams.test.ts'],
+  },
+  {
     id: 'boot-workers-not-started',
     why: 'no module’s timers run: scheduled messages and reminders are never delivered',
     file: 'apps/api/src/index.ts',
-    find: 'const workers = startWorkers(modules.workers, {',
-    replace: 'const workers = startWorkers([], {',
+    find: 'activeWorkers = startWorkers(modules.workers, {',
+    replace: 'activeWorkers = startWorkers([], {',
     tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
@@ -75,8 +83,8 @@ export const API_ROOT: readonly Mutation[] = [
     id: 'boot-workers-on-the-raw-database',
     why: 'the workers take the pool as it is, so a loop of a module holds no share and a hung statement of it is nobody’s to cancel',
     file: 'apps/api/src/index.ts',
-    find: '  database: leasingExecutor(database, moduleShares),',
-    replace: '  database,',
+    find: '    database: leasingExecutor(database, moduleShares),',
+    replace: '    database,',
     tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
