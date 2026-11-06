@@ -5,9 +5,9 @@
  * database — and without an App there is no address at all.
  */
 import { describe, expect, test } from 'bun:test';
-import { aRecordingLogger, testDependencies } from '../../testing/doubles';
-import { GITHUB_APP_STUB } from '../../testing/github-app-stub';
-import { githubAppApi, githubAppCaller } from '../../platform/github-app-api';
+import { aRecordingLogger, testDependencies } from '../../../testing/doubles';
+import { GITHUB_APP_STUB } from '../../../testing/github-app-stub';
+import { githubAppApi, githubAppCaller } from '../../../platform/github-app-api';
 import { DELIVERIES_AT_ONCE } from './webhooks';
 import { receiveAppWebhook } from './github-app';
 

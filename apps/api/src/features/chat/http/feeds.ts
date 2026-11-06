@@ -2,28 +2,25 @@
  * A channel's repository feeds through HTTP (#79, D-134): list, connect, regenerate the secret of, and disconnect, each an
  * owner's or an admin's in a channel they can see. Validate, call one service, answer.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import {
   CreateGitHubFeedRequest,
   type CreatedGitHubFeed,
   type GitHubFeedList,
 } from '@purlay/types';
-import { requireChannelById } from '../../features/chat/channels/guard';
-import type { CredentialCipher } from '../../platform/crypto';
-import { atomicallyOn } from '../../platform/transactions';
-import {
-  channelFeeds,
-  createFeed,
-  regenerateSecret,
-  removeFeed,
-} from '../../features/chat/integrations/feeds';
-import type { ChannelDependencies } from '../../features/chat/http/channels';
-import { requireSession } from './session';
-import { validated } from './validate';
+import { requireChannelById } from '../channels/guard';
+import type { CredentialCipher } from '../../../platform/crypto';
+import { atomicallyOn } from '../../../platform/transactions';
+import { channelFeeds, createFeed, regenerateSecret, removeFeed } from '../integrations/feeds';
+import type { ChannelDependencies } from './channels';
+import { requireSession } from '../../../ingress/http/session';
+import { validated } from '../../../ingress/http/validate';
 
 type FeedDependencies = ChannelDependencies & { readonly cipher: CredentialCipher };
 
 /** `GET /api/channels/:channelId/github-feeds` */
-export const listFeeds = async (
+const listFeeds = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -34,7 +31,7 @@ export const listFeeds = async (
 };
 
 /** `POST /api/channels/:channelId/github-feeds` — the feed, its address and its secret, once. */
-export const connectFeed = async (
+const connectFeed = async (
   { auth, database, clock, cipher }: FeedDependencies,
   request: Request,
   channelId: string,
@@ -49,7 +46,7 @@ export const connectFeed = async (
 };
 
 /** `POST /api/channels/:channelId/github-feeds/:feedId/secret` — the new secret, once. */
-export const regenerateFeedSecret = async (
+const regenerateFeedSecret = async (
   { auth, database, clock, cipher }: FeedDependencies,
   request: Request,
   channelId: string,
@@ -63,7 +60,7 @@ export const regenerateFeedSecret = async (
 };
 
 /** `DELETE /api/channels/:channelId/github-feeds/:feedId` */
-export const disconnectFeed = async (
+const disconnectFeed = async (
   { auth, database, clock }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -75,3 +72,26 @@ export const disconnectFeed = async (
     await removeFeed(transaction, clock, context, feedId);
   });
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const feedRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/channels/:channelId/github-feeds',
+      async ({ request, params }) => await listFeeds(context, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/github-feeds', async ({ request, params, body, set }) => {
+      const created = await connectFeed(context, request, params.channelId, body);
+      set.status = 201;
+      return created;
+    })
+    .post(
+      '/api/channels/:channelId/github-feeds/:feedId/secret',
+      async ({ request, params }) =>
+        await regenerateFeedSecret(context, request, params.channelId, params.feedId),
+    )
+    .delete('/api/channels/:channelId/github-feeds/:feedId', async ({ request, params, set }) => {
+      await disconnectFeed(context, request, params.channelId, params.feedId);
+      set.status = 204;
+      return null;
+    });

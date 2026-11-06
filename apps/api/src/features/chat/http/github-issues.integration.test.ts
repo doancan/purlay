@@ -28,7 +28,7 @@ import {
   rootOf,
   WEB,
   type World,
-} from '../../testing/github-world';
+} from '../../../testing/github-world';
 
 const clones: ClonedDatabase[] = [];
 afterAll(async () => {

@@ -8,14 +8,18 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { GitHubAppRedirect, GitHubAppStatus } from '@purlay/types';
-import { fixedClock, type Clock } from '../../platform/clock';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { aGitHubAppStub, GITHUB_APP_STUB, type GitHubAppStub } from '../../testing/github-app-stub';
-import { aGitHubStub } from '../../testing/github-stub';
-import { aRoom } from '../../testing/rooms';
-import { aSession } from '../../testing/signed-in';
-import { testDependencies } from '../../testing/doubles';
-import { createApp, type HttpApplication } from './app';
+import { fixedClock, type Clock } from '../../../platform/clock';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import {
+  aGitHubAppStub,
+  GITHUB_APP_STUB,
+  type GitHubAppStub,
+} from '../../../testing/github-app-stub';
+import { aGitHubStub } from '../../../testing/github-stub';
+import { aRoom } from '../../../testing/rooms';
+import { aSession } from '../../../testing/signed-in';
+import { testDependencies } from '../../../testing/doubles';
+import { createApp, type HttpApplication } from '../../../ingress/http/app';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

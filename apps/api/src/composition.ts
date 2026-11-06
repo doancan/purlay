@@ -90,10 +90,10 @@ export interface BundledModule {
   /**
    * The module's HTTP routes, as an Elysia plugin made from what they are handed, at the paths its manifest lists under
    * `routes` and no others (D-280). The application uses the plugin of every bundled module, whether or not it runs, and a
-   * module that is not run is closed by its manifest as before (D-255 §2). A module that has routes and supplies none is
-   * one whose handlers are still in `ingress/http/`, which `route-ownership.test.ts` lists and only lets shrink.
+   * module that is not run is closed by its manifest as before (D-255 §2). A module that has routes in its manifest
+   * and supplies none fails `route-ownership.test.ts`.
    */
-  readonly routes?: (context: ModuleRouteDependencies) => AnyElysia;
+  readonly routes?: (dependencies: ModuleRouteDependencies) => AnyElysia;
 }
 
 /**
