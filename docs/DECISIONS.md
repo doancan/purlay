@@ -13424,6 +13424,8 @@ is data and one test.
 
 **Operational evidence (D-278 continued).** Backup status is a bounded, validated file source mounted read-only, produced after the actual operator backup/restore scripts succeed. Dockhand publishes database-only evidence into a separate metadata volume, not the archives. Artifact SHA-256 and scope bind a restore check to the backup it checked; checksum/SQL/table-count verification is distinguished from application-level recovery. No source, no receipt, invalid evidence, stale evidence and no restore check remain explicit states. Database content is not changed to report backup completion, so a receipt cannot invalidate source-versus-restored database comparison.
 
+**Problem summary (D-278 continued).** The overview reuses the guarded overview, job and backup reports to identify failed exports, jobs that failed or never succeeded or are overdue, and every non-current backup evidence state. Freshness remains the server's existing policy: the job reporter's rule and each validated backup receipt's `maxAgeSeconds`, not a browser clock or a new threshold. Problems link to Data or Operations, and affected jobs expand by name. Each source retains its reported check time. Pending or failed reads prevent an all-clear, preserve available results, identify the unavailable source and offer an independent retry; Refresh asks all three sources again. A clean result is scoped to these reports and is not a claim of verified recovery or overall infrastructure health. This needs no optional module, new API, migration or operator secret.
+
 
 ### D-279. Keep private invitation recipients and mail receipts through approval and joining
 
