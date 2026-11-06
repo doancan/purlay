@@ -39,6 +39,32 @@ const NO_RAW_SQL = ['@purlay/db', 'kysely'].map((name) => ({
     'A module does not write raw SQL: it names a table only in its data hooks, and the typed query builder keeps it to its own tables. (D-250, MODULES.md §4)',
 }));
 
+// A table is also named by `sql.raw`, `sql.table`, `sql.id` and `sql.lit`, which build a name at run time and so are
+// invisible to the compiler and to `module-tables.test.ts`, which reads the text. `sql.ref` and `sql.join` name nothing
+// that is not in the text, and stay. (D-271)
+const NO_RUNTIME_TABLE_NAMES = [
+  {
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.object.name='sql'][callee.property.name=/^(raw|table|id|lit)$/]",
+    message:
+      'A table is not named at run time: `sql.raw`, `sql.table`, `sql.id` and `sql.lit` build a name that neither the compiler nor `module-tables.test.ts` can read. Write the statement with a name in the text, or use the builder. (D-271, MODULES.md §4)',
+  },
+];
+
+// A feature behind its typed handle (`features/<id>/schema.ts`, D-271) takes `<Id>Db` and `<Id>Tx`, not the whole
+// database's executor, or the handle holds nothing. The builder's types (`SelectQueryBuilder`, `Selectable`) stay.
+// Tests may: they build a room in a module and hand a service what the application would.
+const NO_WHOLE_DATABASE = {
+  name: '@purlay/db',
+  importNames: ['Executor', 'Transaction', 'Database', 'DB'],
+  message:
+    "Take the module's handle from ./schema (`<Id>Db`, `<Id>Tx`): the whole database's executor lets a query name another module's table. (D-271, MODULES.md §4)",
+};
+
+// The features whose functions still take the whole database's executor, being moved behind their handle in steps.
+// **This list only shrinks**: a feature leaves it when no file of it names `Executor`, `Transaction`, `Database` or `DB`.
+const NOT_YET_BEHIND_THEIR_HANDLE = ['chat'];
+
 const NO_CREATE_DATABASE = {
   name: '@purlay/db',
   importNames: ['createDatabase'],
@@ -642,11 +668,36 @@ export default defineConfig([
   // A feature: below the doors like a module, never importing another feature — its code or its tables'
   // owner — and, like a module, taking its executor as an argument. One block for each, because the
   // rule has to name the others. (D-250, MODULES.md §4)
-  // Chat predates the ban on raw SQL and writes it throughout; it is held to the rest and leaves this
-  // exemption when its queries are behind the typed handle (`MODULES.md` §10, step 9).
-  ...featureFences(FEATURES_DIR, FEATURE_IDS, NO_TRANSPORT_TYPES, (id) =>
-    id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL],
+  // Chat predates the ban on raw SQL and writes it throughout, almost all of it expression fragments; it is held to the
+  // rest, and what its SQL names is policed by `module-tables.test.ts`, not by a ban (D-271).
+  ...featureFences(
+    FEATURES_DIR,
+    FEATURE_IDS,
+    NO_TRANSPORT_TYPES,
+    (id) =>
+      id === 'chat'
+        ? [NO_CREATE_DATABASE]
+        : [
+            NO_CREATE_DATABASE,
+            ...NO_RAW_SQL,
+            ...(NOT_YET_BEHIND_THEIR_HANDLE.includes(id) ? [] : [NO_WHOLE_DATABASE]),
+          ],
+    (id) => (id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL]),
   ),
+  // Repeats the clock and brand selectors, since a `no-restricted-syntax` replaces the one before it; tests are left to
+  // the block below that gives them their own.
+  {
+    files: [`${FEATURES_DIR}/**/*.ts`],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...CLOCK_SELECTORS,
+        ...BRAND_SELECTORS,
+        ...NO_RUNTIME_TABLE_NAMES,
+      ],
+    },
+  },
 
   // The door that composes the other: realtime imports nothing from ingress. Its
   // tests may — they stand up a whole application to drive a real socket — and so

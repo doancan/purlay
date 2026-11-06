@@ -13070,16 +13070,22 @@ services take `Executor` by the hundred and a brand all of them had to be change
    an upgrade of kysely fails there by name.
 4. **What the handle is not.** It does not tell a read of a core table from a write; it does not see raw `sql`, and
    `sql.ref('issues.id')` type-checks anywhere; and a function that is still typed `Executor` or `Database` is not held, so the
-   wall is as strong as every public function of a module declaring the module's type. A wall for each is the next change's
-   (a text scan of the `sql` and string-named tables of every feature, an allow-list of chat's five core writes that only
-   shrinks, and a lint rule that bans `Executor`, `Transaction`, `Database` and `DB` from `@purlay/db` in a migrated feature),
-   and chat's raw-`sql` exemption is **policed by that scan, not ended**: wrapping 127 fragments in typed builders would be
+   wall is as strong as every public function of a module declaring the module's type. A wall for each: a text scan of the
+   `sql` templates and string-named tables of every feature (a table that is not the module's or one it reads fails; a write
+   of a core table is held to a list that only shrinks, chat's four), and a lint rule that bans `Executor`, `Transaction`,
+   `Database` and `DB` from `@purlay/db` in a feature that is behind its handle, and `sql.raw`, `sql.table`, `sql.id` and
+   `sql.lit` in every feature, which build a name at run time. A table named at run time by other means is not seen. Chat's
+   raw-`sql` exemption is **policed by that scan, not ended**: wrapping 127 fragments in typed builders would be
    a large change for no isolation gain, since none names a table that is not chat's, `users` or `attachments`.
 5. **Held how.** `module-db.test.ts` builds a program with the compiler's API, because `@ts-expect-error` is checked by `tsc`
    alone and `bun run mutate` runs tests alone: each case a module may not do is paired with the same statement over a table it
    holds, which must compile; mutations `module-schema-ignores-ownership`, `module-schema-forgets-core-reads`,
-   `module-handle-is-not-a-union` and `executor-is-not-a-union`. **Built:** the types and issues behind them. The text scan,
-   the lint and chat's functions come after, in that order.
+   `module-handle-is-not-a-union` and `executor-is-not-a-union`. **Built:** the types, issues behind them, the text scan
+   (`module-tables.test.ts`, with `CORE_WRITES`: chat's four, each with why) and the lint (`NO_WHOLE_DATABASE` for a feature not
+   in `NOT_YET_BEHIND_THEIR_HANDLE`, which is `chat` and only shrinks, and `NO_RUNTIME_TABLE_NAMES` for every feature, both
+   shown by `verify:enforcement`); mutations `module-tables-scan-ignores-sql-templates`, `module-tables-scan-allows-every-owner`
+   and `module-tables-core-writes-not-held-to-list`. Chat's functions come after, in steps, and the last takes chat out of the
+   lint's list.
 
 **Rejected.** *A generated `schema.ts` per module*: a second generated copy of what `TABLE_OWNERS` already says, with a
 generator to keep it true. *A runtime proxy that throws on a table that is not the module's*: a cost on every query, found
