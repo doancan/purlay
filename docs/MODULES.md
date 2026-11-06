@@ -124,8 +124,9 @@ of every **bundled** module and uses them in one `.use(moduleRoutes)`; it regist
 so a module is added by its slot and not by an edit of the core's door, and the table is the same whether or not a module runs.
 The application's hooks (the deadline's `wrap`, the edge, the closed-path check, the rate limit, the error handler) apply to a
 plugin's routes as to the chain's. The aggregate type of the table is read by nobody: `createApp` returns `HttpApplication`, and
-the web's types are the contract's (D-280 §4). **Where a module has not moved yet** (chat, while its handlers are in
-`ingress/http/`), it is named in `HTTP_IN_INGRESS` in the ownership test, a list that only shrinks. The effect is that a request for a closed path gets the plain
+the web's types are the contract's (D-280 §4). **Where a module has moved only some of its handlers** (chat, resource by resource), it supplies the plugin of the ones that
+have and is named in `HTTP_IN_INGRESS` in the ownership test while `ingress/http/app.ts` still registers a path of it; the list
+only shrinks, and its entry fails once the last path has left. The effect is that a request for a closed path gets the plain
 `404` of any unknown route, with the generic body and no code that says *disabled*, so what a closed route says is the
 same as what an unknown path says (its status, for a caller with no session, is not: see below). A closed job exits `0` (`closedJob`), a closed frame is answered as an
 operation nobody has (`closedFrame`), and a closed event is not delivered (`closedEvent`).

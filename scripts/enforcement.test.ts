@@ -613,9 +613,11 @@ describe('what API.md publishes for this phase is what the application serves', 
   // A route is a link of the chain, at the start of its line; `request.headers.get('…')`
   // inside a handler is not one.
   const routesIn = (source: string): string[] =>
-    [...source.matchAll(/^\s*\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm)].map(
-      (match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`,
-    );
+    [
+      ...source.matchAll(
+        /(?:^[ \t]*|\bnew Elysia\(\))\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm,
+      ),
+    ].map((match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`);
   const served = routesIn(applicationRoutes());
 
   test('the route reader sees a link of the chain and not a lookup inside a handler', () => {

@@ -2,21 +2,23 @@
  * A message's earlier versions through HTTP (#82, D-135): read by anybody who can read the message,
  * and one removed by its author. Validate, call one service, answer.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import { OlderPageQuery, type MessageVersionPage } from '@purlay/types';
-import { atomicallyOn } from '../../platform/transactions';
-import { messageVersions, removeVersion } from '../../features/chat/messages/versions';
+import { atomicallyOn } from '../../../platform/transactions';
+import { messageVersions, removeVersion } from '../messages/versions';
 import {
   NO_LOG,
   publication,
   publishAfterCommit,
   publishMessageVersionsUpdated,
-} from '../../platform/events';
-import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
-import { queryOf, validated } from './validate';
+} from '../../../platform/events';
+import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import { requireSession } from '../../../ingress/http/session';
+import { queryOf, validated } from '../../../ingress/http/validate';
 
 /** `GET /api/messages/:messageId/versions` */
-export const listVersions = async (
+const listVersions = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   messageId: string,
@@ -45,3 +47,16 @@ export const deleteVersion = async (
     ],
   ]);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const versionRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/messages/:messageId/versions',
+      async ({ request, params }) => await listVersions(context, request, params.messageId),
+    )
+    .delete('/api/messages/:messageId/versions/:versionId', async ({ request, params, set }) => {
+      await deleteVersion(context, request, params.messageId, params.versionId);
+      set.status = 204;
+      return null;
+    });

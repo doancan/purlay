@@ -2,25 +2,27 @@
  * A channel's bookmarks through HTTP (D-218): the list, add, remove. A change tells everyone watching
  * the channel (`BOOKMARKS_UPDATED`), after the commit, and only when it was one.
  */
+import { Elysia, type AnyElysia } from 'elysia';
+import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import type { BookmarkList, ChannelBookmark } from '@purlay/types';
 import { AddBookmarkRequest } from '@purlay/types';
-import { requireChannelById } from '../../features/chat/channels/guard';
+import { requireChannelById } from '../channels/guard';
 import {
   NO_LOG,
   publication,
   publishAfterCommit,
   publishBookmarksUpdated,
-} from '../../platform/events';
-import { atomicallyOn } from '../../platform/transactions';
+} from '../../../platform/events';
+import { atomicallyOn } from '../../../platform/transactions';
 import {
   addBookmark,
   channelBookmarks,
   removeBookmark,
   type BookmarkChange,
-} from '../../features/chat/bookmarks/bookmarks';
-import type { ChannelDependencies, ChannelWriteDependencies } from './channels';
-import { requireSession } from './session';
-import { validated } from './validate';
+} from '../bookmarks/bookmarks';
+import type { ChannelDependencies, ChannelWriteDependencies } from '../../../ingress/http/channels';
+import { requireSession } from '../../../ingress/http/session';
+import { validated } from '../../../ingress/http/validate';
 
 const told = async (
   { bus, clock, log = NO_LOG }: ChannelWriteDependencies,
@@ -33,7 +35,7 @@ const told = async (
 };
 
 /** `GET /api/channels/:channelId/bookmarks` — oldest first, bounded by `BOOKMARKS_MAX`. */
-export const listBookmarks = async (
+const listBookmarks = async (
   { auth, database }: ChannelDependencies,
   request: Request,
   channelId: string,
@@ -44,7 +46,7 @@ export const listBookmarks = async (
 };
 
 /** `POST /api/channels/:channelId/bookmarks` — `201` with the bookmark; the same address, the same one. */
-export const postBookmark = async (
+const postBookmark = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -62,7 +64,7 @@ export const postBookmark = async (
 };
 
 /** `DELETE /api/channels/:channelId/bookmarks/:bookmarkId` — `204`; not this channel's, the one 404. */
-export const deleteBookmark = async (
+const deleteBookmark = async (
   dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
@@ -76,3 +78,21 @@ export const deleteBookmark = async (
   );
   await told(dependencies, change);
 };
+
+/** The routes of this file, as the plugin chat's slot supplies (D-280). */
+export const bookmarkRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia()
+    .get(
+      '/api/channels/:channelId/bookmarks',
+      async ({ request, params }) => await listBookmarks(context, request, params.channelId),
+    )
+    .post('/api/channels/:channelId/bookmarks', async ({ request, params, body, set }) => {
+      const bookmark = await postBookmark(context, request, params.channelId, body);
+      set.status = 201;
+      return bookmark;
+    })
+    .delete('/api/channels/:channelId/bookmarks/:bookmarkId', async ({ request, params, set }) => {
+      await deleteBookmark(context, request, params.channelId, params.bookmarkId);
+      set.status = 204;
+      return null;
+    });

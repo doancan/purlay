@@ -5,13 +5,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
-import { fixedClock } from '../../platform/clock';
-import { channelTopic, NO_LOG, type EventBus } from '../../platform/events';
-import { SESSION_COOKIE } from '../../platform/cookies';
-import { aTestAuth, aSession } from '../../testing/signed-in';
-import { reviseMessage } from '../../features/chat/messages/edit';
-import { sendMessage } from '../../features/chat/messages/messages';
-import { aRoom } from '../../testing/rooms';
+import { fixedClock } from '../../../platform/clock';
+import { channelTopic, NO_LOG, type EventBus } from '../../../platform/events';
+import { SESSION_COOKIE } from '../../../platform/cookies';
+import { aTestAuth, aSession } from '../../../testing/signed-in';
+import { reviseMessage } from '../messages/edit';
+import { sendMessage } from '../messages/messages';
+import { aRoom } from '../../../testing/rooms';
 import { deleteVersion } from './versions';
 
 afterAll(async () => {
