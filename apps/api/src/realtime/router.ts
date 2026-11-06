@@ -16,6 +16,12 @@
  * swap depends on (D-7).
  */
 import { MESSAGE_GONE, goneMessageReference } from '../platform/gone-message';
+import {
+  handlerOf,
+  type FrameBody,
+  type FrameHandlers,
+  type FrameIdentity,
+} from '../platform/frame-handlers';
 import { Value } from '@sinclair/typebox/value';
 import {
   ActiveFrame,
@@ -60,6 +66,11 @@ import type { RateLimiter } from './rate-limiter';
 const unlimited: ReplayGate = async (work) => await work();
 
 export interface RouterDependencies {
+  /**
+   * The handlers of the modules this process runs, by operation (`composition.ts`, D-276): an operation with one is
+   * served by it, once the router has admitted the frame. Absent, there are none, and the router serves what it serves.
+   */
+  readonly frameHandlers?: FrameHandlers;
   /**
    * Whether an operation is a module's that this process does not run; answered as an operation nobody has. Absent,
    * none is closed: the composition root passes it (`composition.ts`), a test of one operation need not.
@@ -120,20 +131,8 @@ interface SocketGate {
   readonly drop: (socketId: string, channelIds: readonly string[]) => void;
 }
 
-export interface SocketIdentity {
-  readonly socketId: string;
-  readonly userId: string;
-  /** The session the connection was opened with; its end ends the connection. */
-  readonly sessionId: string;
-  readonly expiresAt: Date;
-}
-
-/** A server frame without the fields every one carries: which kind it is, and its data. */
-type FrameBody = ServerFrame extends infer Member
-  ? Member extends ServerFrame
-    ? Omit<Member, 'ts' | 'refId'>
-    : never
-  : never;
+/** Who is speaking; the session is the one the connection was opened with, and its end ends the connection. */
+export type SocketIdentity = FrameIdentity;
 
 /**
  * Stamps a frame with the server clock and the id it answers. The body is one
@@ -360,6 +359,24 @@ const serveFrame = async (
   if (owner !== undefined) noteModule(owner);
 
   try {
+    // An operation a module's handler serves is the module's, whatever it is (D-276); the rest are still the router's.
+    const handler = handlerOf(dependencies.frameHandlers ?? {}, parsed.op);
+    if (handler !== undefined) {
+      return await handler(
+        {
+          identity,
+          database,
+          atomically: dependencies.atomically,
+          clock,
+          bus,
+          log: dependencies.log,
+          reply: (body, refId) => frame(body, clock, refId),
+          fail: (error, refId) => errorFrame(error, clock, refId),
+        },
+        parsed,
+      );
+    }
+
     switch (parsed.op) {
       case 'PING':
         return [frame({ event: 'PONG', data: {} }, clock, parsed.id)];
