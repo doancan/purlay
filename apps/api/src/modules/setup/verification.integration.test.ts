@@ -11,6 +11,7 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   sql,
+  type DatabasePool,
   type Executor,
   DROP_HOOK_MS,
 } from '@purlay/db';
@@ -110,7 +111,11 @@ const recording = (): { log: Logger; lines: string[] } => {
  */
 const aServerWithItsAdmin = async (
   clock: Clock,
-): Promise<{ db: Executor; session: SetupSession; admin: { userId: string; email: string } }> => {
+): Promise<{
+  db: DatabasePool;
+  session: SetupSession;
+  admin: { userId: string; email: string };
+}> => {
   const clone = await cloneIntegrationDatabase();
   clones.push(clone.drop);
   const db = clone.db;

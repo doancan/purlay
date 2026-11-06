@@ -6,7 +6,7 @@
 > without either: `MODULES` is read at boot, a module's routes, frames, events and jobs are closed when it is not
 > run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them, §3),
 > and the migration sets, the composition, the cluster record and the table-ownership list exist. What is not
-> built: the typed query handle and the per-module generated `schema.ts`, workspace-level enablement, a module budget that any
+> built: chat's functions behind the typed query handle (issues' are, D-271), workspace-level enablement, a module budget that any
 > process takes (§7), and a CI matrix that runs every suite per cell (§8 says what runs: the suites that need no module, in every cell but the one with every module). §8 says what each rule
 > is held by, and §10 the order; a line marked **built** there is, and one not marked is intent. §9 is the
 > checklist for adding a module and §12 the glossary.
@@ -162,12 +162,16 @@ In this order:
 
 A module imports `module-kit`, `platform` and `@purlay/types` and nothing from another module's folder.
 
-**Reads are bounded the same way.** A module is handed a query handle typed with *its own tables and the
-core's* — never the combined schema — and a lint rule rejects a table name outside that set in a query. A
-read across modules goes through a port. Raw `sql` is the way round a typed handle, so a lint rule bans it in
-`features/` too; a table is named only in the manifest's `data` hooks, which receive an executor of the module's
-own. This is what makes "no foreign key between modules" mean more than
-the schema: without it a module could `select` another's table and every rule above would hold on paper.
+**Reads are bounded the same way.** A module's functions take a handle typed with *its own tables and the
+core's it names* — never the combined schema (`features/<id>/schema.ts`: `ModuleSchema`, derived from `TABLE_OWNERS`, so
+there is no second list of who owns what) — and a query over any other table does not compile. The handle is a type over
+the object every caller already passes, not a wrapper: nothing is checked at run time, and no caller changes (D-271). It
+holds the builder API only: it does not tell a read of a core table from a write, and it does not see raw `sql`. A read
+across modules goes through a port. Raw `sql` is the way round a typed handle, so a lint rule bans it in `features/`
+(chat is exempt for now: its templates are almost all expression fragments, `count(*)::int`, `state_version + 1`, and a
+scan of the text for a table another module owns is what polices them, D-271); a table is named only in the manifest's
+`data` hooks, which receive an executor of the module's own. This is what makes "no foreign key between modules" mean more
+than the schema: without it a module could `select` another's table and every rule above would hold on paper.
 
 **The wire unions** open up the same way. `Topic` keeps its core prefixes and takes module prefixes from a
 registry; `ServerFrame` splits into a core part and one per module; `NotificationType` is the core's kinds plus
@@ -218,11 +222,11 @@ moves into that module.
   An owner is `core` or the id of a registered migration set (`TableOwner` is derived from `PRODUCT_MIGRATION_SETS`, and the list
   covers every table of the generated schema or does not compile); `module-sets.test.ts` holds the sets to the bundled modules and
   to `migrations/<id>/`, so a directory with no registered set, or a set with no module, fails a test.
-- `schema.ts` is generated per module and combined only for the core's own use; `db:check` migrates the core
+- `schema.ts` is generated once, for the whole database, and the schema a module sees is **derived** from it and
+  `TABLE_OWNERS` (`ModuleSchema`, D-271); `db:check` migrates the core
   with each module alone as well as with all of them. **Built so far:** every cell migrates and adds only its own
   tables, and leaves every column of a core table, and every value of a core enum type, as it was except what
-  `CORE_COLUMNS_A_SET_CHANGES` and `CORE_ENUMS_A_SET_CHANGES` declare, the latter as `set:type` so that only the named set may alter the named type (`migration-cells.integration.test.ts`); the per-module generation of `schema.ts` is not, and waits for a
-  module whose tables a combined schema would hide.
+  `CORE_COLUMNS_A_SET_CHANGES` and `CORE_ENUMS_A_SET_CHANGES` declare, the latter as `set:type` so that only the named set may alter the named type (`migration-cells.integration.test.ts`); a generated `schema.ts` per module is not built, and D-271 declines it: what a module sees is derived.
 
 ## 6. Web
 
@@ -347,7 +351,7 @@ until then it is a stated intent and not a guarantee.
 | The core's modules import none of chat's | the lint that keeps `modules/` and `platform/` from importing a feature, now that chat is `features/chat`; the core's tests may — **built** | 9 |
 | The core names none of chat's tables | `core-tables.test.ts`, reading the tables from `TABLE_OWNERS`, with an empty allow-list that may only shrink, and the mutation `core-sweep-names-a-chat-table` — **built** | 10 |
 | No raw `sql` in a module | the lint, found per folder under `features/` and shown by `verify:enforcement` — **built** | 5 |
-| No read of another module's tables | the typed query handle, handed to a module with its own tables and the core's | 9 |
+| No read of another module's tables | the typed handle (`ModuleSchema`, `features/<id>/schema.ts`): a module's functions take it, and a query over a table that is neither the module's nor named in the schema does not compile; `module-db.test.ts` asks the compiler about it, in both directions of assignability — **built for issues** (D-271), chat's functions still take the whole database's executor; the mutations `module-schema-ignores-ownership` and `module-schema-forgets-core-reads` | 9 |
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher — **built** | 5 |
@@ -475,6 +479,7 @@ commit beside this list.
   the manifests.
   `table-ownership.integration.test.ts` holds the list to the database, and a key across owners fails it. A core
   migration never names the table (`core-tables.test.ts`). Regenerate `packages/db/src/schema.ts` (`bun run db:generate`).
+- **The table's schema** (D-271): `features/<id>/schema.ts` makes `<Id>Db` and `<Id>Tx` of `ModuleSchema<'<id>', CoreReads>`, naming the core tables the module reads; the module's functions take them in place of `Executor` and `Transaction`, and a core table added to the list is a line a reviewer reads. `module-db.test.ts` holds what the type refuses.
 - **The table's lifecycle**: every owned table needs its erasure and retention decision in `TABLE_LIFECYCLE`
   (`packages/db/src/table-lifecycle.ts`); a table with none does not compile, and `table-lifecycle.test.ts` holds the
   list to `TABLE_OWNERS`. The compiler does not check that a `deleted` or `window` decision is true (see the silent gaps).
@@ -650,10 +655,10 @@ Each step ships alone and can be reverted.
 | 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 12 | no |
 | 3 | *Obsolete: folded into 12 and 11, both built.* Reading `MODULES` waited until something could be turned off, as `CONFIG.md` requires; the list of modules the web reads is `GET /api/me`'s `modules` | — |
 | 4 | Wire unions opened, with aliases, **with the first module that has frames of its own** (5b); the web client already ignores unknown frames (D-82, tested) and a native client is checked first; the replay rule; `skipped` in the search response | no |
-| 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
+| 5 | The core ports, the domain bus with hint/fact and the sweeper, the typed query handle (**built for issues**, D-271) and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/` | no |
 | 5b | *Superseded by 13.* It planned a thin slice that opened an issue from a message and linked back; D-254 §1 decided that issues has no link and no frame, so that slice was not built | — |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
-| 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle so its exemption from the raw-SQL ban ends | no |
+| 9 | Chat moved under `features/chat` — **built**, 116 files and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle (D-271: issues' are; chat's raw-SQL exemption is policed by a text scan, not ended) | no |
 | 10 | Migrations split by module; `data` hooks — **built** (`tableExists`, §5); the ownership ratchet reaches zero — **built, ships in the release after the expand** (`chat/0005`); codegen and `db:check` per module are **not built** | no |
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; the product's module-independent suites in every cell in CI (`modules:suites`, §8); a share of the pool is built for each module and a starvation gate for chat with issues busy (§7) | **yes** |

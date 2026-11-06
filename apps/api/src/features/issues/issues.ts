@@ -9,7 +9,6 @@
  *   longer find.
  * - **Only its creator, or an owner or admin, deletes it.** Deleting is for real: nothing hangs off an issue.
  */
-import type { Executor, Transaction } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
   ISSUES_PER_WORKSPACE_MAX,
@@ -27,6 +26,7 @@ import { AppError } from '../../platform/errors';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 import { limitOf } from '../../platform/pagination';
 import type { WorkspaceContext } from '../../platform/tenancy';
+import type { IssuesDb, IssuesTx } from './schema';
 
 const issueNotFound = (): AppError =>
   new AppError({ code: 'ISSUE_NOT_FOUND', message: 'Issue not found.' });
@@ -80,7 +80,7 @@ const toIssue = (row: IssueRow): Issue => ({
 const titleOf = (title: string): string => title.trim();
 
 const requireAssignable = async (
-  transaction: Transaction,
+  transaction: IssuesTx,
   context: WorkspaceContext,
   assigneeId: string,
 ): Promise<void> => {
@@ -116,7 +116,7 @@ const audit = (
  * Whether the workspace may hold one more, counted under the workspace's row locked so that two makes at the cap
  * cannot both be the last. A count and not bytes: see `ISSUES_PER_WORKSPACE_MAX`.
  */
-const requireRoom = async (transaction: Transaction, context: WorkspaceContext): Promise<void> => {
+const requireRoom = async (transaction: IssuesTx, context: WorkspaceContext): Promise<void> => {
   await transaction
     .selectFrom('workspaces')
     .select('id')
@@ -137,7 +137,7 @@ const requireRoom = async (transaction: Transaction, context: WorkspaceContext):
 };
 
 export const createIssue = async (
-  transaction: Transaction,
+  transaction: IssuesTx,
   clock: Clock,
   context: WorkspaceContext,
   input: CreateIssueRequest,
@@ -167,7 +167,7 @@ export const createIssue = async (
 
 /** The workspace's issues, newest first, from the one before `query.before`, of one status if asked. */
 export const issuePage = async (
-  executor: Executor,
+  executor: IssuesDb,
   context: WorkspaceContext,
   query: IssueQuery,
 ): Promise<IssuePage> => {
@@ -189,7 +189,7 @@ export const issuePage = async (
 };
 
 export const updateIssue = async (
-  transaction: Transaction,
+  transaction: IssuesTx,
   clock: Clock,
   context: WorkspaceContext,
   issueId: string,
@@ -252,7 +252,7 @@ const mayDelete = (
 ): boolean => permissions.holds(context.role, ISSUES_DELETE_ANY) || createdBy === context.userId;
 
 export const deleteIssue = async (
-  transaction: Transaction,
+  transaction: IssuesTx,
   clock: Clock,
   context: WorkspaceContext,
   permissions: PermissionTable,

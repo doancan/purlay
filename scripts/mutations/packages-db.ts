@@ -110,6 +110,14 @@ export const PACKAGES_DB: readonly Mutation[] = [
     tests: ['packages/db/src/harness.integration.test.ts'],
   },
   {
+    id: 'executor-is-not-a-union',
+    why: 'the whole database’s executor is a `Kysely` alone, so a module’s transaction cannot be handed to the core’s helpers (`tableExists`, `recordAudit`) that take an executor, and the module would be given the whole schema to get round it (D-271)',
+    file: 'packages/db/src/client.ts',
+    find: 'export type Executor = Kysely<DB> | KyselyTransaction<DB>;',
+    replace: 'export type Executor = Kysely<DB>;',
+    tests: ['packages/db/src/module-db.test.ts'],
+  },
+  {
     id: 'harness-ignores-modules-for-the-schema',
     why: 'the integration harness migrates every module’s set whatever MODULES says, so a cell of the suite runs against a schema that no deployment of that setting has (D-250)',
     file: 'packages/db/src/testing.ts',
@@ -266,6 +274,14 @@ export const PACKAGES_DB: readonly Mutation[] = [
     ],
   },
   {
+    id: 'module-handle-is-not-a-union',
+    why: 'a module’s handle is a `Kysely` and not a `Kysely` or a transaction, so a whole-database transaction cannot be handed to a function of the module and kysely’s variance sends the churn into every test that does (D-271)',
+    file: 'packages/db/src/module-db.ts',
+    find: 'export type ModuleDb<Schema> = Kysely<Schema> | Transaction<Schema>;',
+    replace: 'export type ModuleDb<Schema> = Kysely<Schema>;',
+    tests: ['packages/db/src/module-db.test.ts'],
+  },
+  {
     id: 'module-ids-forget-the-sets',
     why: 'the module ids a MODULES setting may name are kept apart from the sets again, so a module with a set is refused by name in a setting the API accepts (D-250)',
     file: 'packages/db/src/migrator.ts',
@@ -302,6 +318,22 @@ export const PACKAGES_DB: readonly Mutation[] = [
       'apps/api/src/platform/module-kit/registry.test.ts',
       'packages/db/src/migration-sets.test.ts',
     ],
+  },
+  {
+    id: 'module-schema-forgets-core-reads',
+    why: 'a module’s schema leaves out the core tables it names, so issues could not join its own author and the first module to be handed the type would be given the whole schema to get round it (D-271)',
+    file: 'packages/db/src/module-db.ts',
+    find: '> = Pick<DB, TablesOf<Module> | CoreReads>;',
+    replace: '> = Pick<DB, TablesOf<Module>>;',
+    tests: ['packages/db/src/module-db.test.ts'],
+  },
+  {
+    id: 'module-schema-ignores-ownership',
+    why: 'a module’s schema holds every table of the database, so a query of one module over another’s tables compiles and nothing but a reviewer’s eye keeps the modules apart (D-271); the type is read by a test because `bun run mutate` runs no compiler',
+    file: 'packages/db/src/module-db.ts',
+    find: '> = Pick<DB, TablesOf<Module> | CoreReads>;',
+    replace: '> = Pick<DB, keyof DB>;',
+    tests: ['packages/db/src/module-db.test.ts'],
   },
   {
     id: 'module-set-not-registered',

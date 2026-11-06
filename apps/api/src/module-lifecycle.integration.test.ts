@@ -35,6 +35,7 @@ import {
   PRODUCT_MIGRATION_SETS,
   sql,
   TABLE_OWNERS,
+  type DatabasePool,
   type Executor,
   type MigrationSet,
   type Transaction,
@@ -125,7 +126,7 @@ const urlOf = (name: string): string => {
   return url.toString();
 };
 
-const administration = (): Executor =>
+const administration = (): DatabasePool =>
   createDatabase({ connectionString: urlOf('postgres'), poolSize: 1 });
 
 const created: string[] = [];
@@ -216,7 +217,7 @@ const upload = async (
  * keeps: messages, files sent with them, and each person's own reminders, drafts and hidden messages. Where they
  * are not, no message can have been written — chat never ran — so none is.
  */
-const seed = async (database: Executor, state: DatabaseState): Promise<World> =>
+const seed = async (database: DatabasePool, state: DatabaseState): Promise<World> =>
   await database.transaction().execute(async (tx) => {
     const store = aMemoryStore();
     let workspaceId: string;
@@ -479,7 +480,7 @@ const exportTarget = async (): Promise<string> =>
 describe('integration: the data lifecycle in every cell of the module matrix', () => {
   for (const state of DATABASE_STATES) {
     describe(`database ${state.name}`, () => {
-      let database: Executor;
+      let database: DatabasePool;
       let present: readonly string[];
       let coreTables: readonly string[];
 
