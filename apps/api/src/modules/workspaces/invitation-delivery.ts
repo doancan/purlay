@@ -1,9 +1,12 @@
 /** Private, bounded invitation evidence. No address is matched to an account until its verified owner uses the link. */
 import type { Database, Executor, Transaction, SelectQueryBuilder } from '@purlay/db';
+import { sql } from '@purlay/db';
 import type {
   InvitationDelivery,
   InvitationDeliveryPage,
   InvitationRecipientPage,
+  InvitationRecipientQuery,
+  InvitationRecipientStatus,
   OlderPageQuery,
 } from '@purlay/types';
 import { PAGE_LIMIT, messageId, messageIdTime, normalisedMailbox } from '@purlay/types';
@@ -12,6 +15,7 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import type { MailReceipt } from '../../platform/mail';
 import { AppError } from '../../platform/errors';
 import { requireInvitationManager } from './invitation-manager';
+import { literalPattern } from '../../platform/like-pattern';
 
 /** A process interrupted before its receipt committed leaves evidence of uncertainty, never invented success. */
 export const INVITATION_RECEIPT_WAIT_MS = 120_000;
@@ -136,9 +140,17 @@ export const listInvitationRecipients = async (
   db: Executor,
   clock: Clock,
   context: WorkspaceContext,
-  query: OlderPageQuery,
+  query: InvitationRecipientQuery,
 ): Promise<InvitationRecipientPage> => {
   requireInvitationManager(context);
+  const now = clock.now();
+  const status = sql<InvitationRecipientStatus>`case
+    when r.joined_at is not null then 'joined'
+    when applicant.deleted_at is null and applicant.admission_state is not null then applicant.admission_state
+    when last.revoked_at is not null then 'revoked'
+    when last.expires_at <= ${now} then 'expired'
+    when last.result = 'queued' and last.created_at <= ${new Date(now.getTime() - INVITATION_RECEIPT_WAIT_MS)} then 'unknown'
+    else last.result end`;
   const limit = query.limit ?? PAGE_LIMIT.default;
   let statement = db
     .selectFrom('workspace_invitation_recipients as r')
@@ -180,15 +192,20 @@ export const listInvitationRecipients = async (
       'last.expires_at',
       'last.revoked_at',
     ])
+    .select(status.as('status'))
     .where('r.workspace_id', '=', context.workspaceId)
     .orderBy('r.id', 'desc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('r.id', '<', query.before);
+  if (query.q?.trim())
+    statement = statement.where('r.email', 'ilike', literalPattern(query.q.trim()));
+  if (query.status !== undefined) statement = statement.where(status, '=', query.status);
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
   return {
     data: page.map((row) => ({
       id: row.recipient_id,
+      status: row.status,
       address: row.email,
       createdAt: new Date(row.recipient_created_at).toISOString(),
       requestedAt: iso(row.requested_at),
@@ -197,7 +214,7 @@ export const listInvitationRecipients = async (
         row.deleted_at === null
           ? (row.admission_state as 'pending' | 'approved' | 'denied' | null)
           : null,
-      latest: delivery(row, clock.now()),
+      latest: delivery(row, now),
     })),
     nextCursor: rows.length > limit ? (page.at(-1)?.recipient_id ?? null) : null,
   };

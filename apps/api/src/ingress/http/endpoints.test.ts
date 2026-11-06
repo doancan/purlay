@@ -17,11 +17,13 @@ import { routeSource } from '../../testing/route-sources';
 /** The application's, and each module's own folder's (D-280). */
 const appSource = routeSource();
 
-/** `METHOD /path` for every route the application registers, as a link of its chain. */
+/** `METHOD /path` for every route the application registers, as a link of its chain (or the first, on the line of `new Elysia()`). */
 const served = new Set(
-  [...appSource.matchAll(/^\s*\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm)].map(
-    (match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`,
-  ),
+  [
+    ...appSource.matchAll(
+      /(?:^[ \t]*|\bnew Elysia\(\))\.(get|post|put|patch|delete)\(\s*'([^']+)'/gm,
+    ),
+  ].map((match) => `${(match[1] ?? '').toUpperCase()} ${match[2] ?? ''}`),
 );
 
 /** `METHOD /path` for every row of `API.md`, as the document spells it. */

@@ -25,6 +25,13 @@ import { testDependencies } from './doubles';
 const SOME_ID = '00000000-0000-4000-8000-000000000000';
 
 /**
+ * The size `EMPTY_FOR_THE_SEED` may have, the list of lists the one-member-two-workspaces check cannot prove anything about. An
+ * entry is a list whose isolation is not shown, so one joins only with this raised in the same change, which is a line a
+ * reviewer reads and has to accept; a module's list is seeded in `aTenant` instead (`MODULES.md` §9 item 4).
+ */
+const MAX_EMPTY_FOR_THE_SEED = 1;
+
+/**
  * Whether the application has a route for this endpoint.
  *
  * Asked without a session and with a database that throws if touched, so the
@@ -168,6 +175,10 @@ describe('a list that holds nothing proves nothing', () => {
     expect(rowsIn({ data: [1], nextCursor: null })).toBe(1);
     expect(rowsIn({ usedBytes: 200 })).toBeUndefined();
     expect(rowsIn(null)).toBeUndefined();
+  });
+
+  test('the excused lists are no more than their cap, so the list is not a way round the check', () => {
+    expect(Object.keys(EMPTY_FOR_THE_SEED).length).toBeLessThanOrEqual(MAX_EMPTY_FOR_THE_SEED);
   });
 
   test('only a list the seed cannot fill is excused, and only a list is', () => {

@@ -2,6 +2,136 @@
 import { expect, test } from './fixtures';
 import { openNavigation, openSettings } from './support';
 
+test('accepted member removal keeps its corrected list after a failed refresh and Retry recovers', async ({
+  page,
+  signIn,
+  tenant,
+  expectNoAxe,
+}, info) => {
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await signIn();
+  let removed = false;
+  let fail = true;
+  const initial = (await (
+    await page.request.get(`/api/workspaces/${tenant.workspaceId}/members`)
+  ).json()) as { user: { id: string; displayName: string } }[];
+  const target = initial.find((member) => member.user.id === tenant.userIds.bob);
+  if (target === undefined) throw new Error('Bob must be in this workspace');
+  await page.route('**/api/workspaces/*/members', async (route) => {
+    if (removed && fail) await route.abort('failed');
+    else
+      await route.fulfill({
+        json: initial.filter((member) => !removed || member.user.id !== target.user.id),
+      });
+  });
+  await page.route(`**/api/workspaces/*/members/${target.user.id}`, async (route) => {
+    expect(route.request().method()).toBe('DELETE');
+    removed = true;
+    await route.fulfill({ status: 204 });
+  });
+  const main = await openSettings(page, tenant.slug, 'members', 'Members');
+  await main
+    .getByRole('button', { name: `Remove ${target.user.displayName}`, exact: true })
+    .click();
+  await main.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(main.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(
+    main
+      .getByRole('list', { name: 'Members', exact: true })
+      .getByText(target.user.displayName, { exact: true }),
+  ).toHaveCount(0);
+  await expect(main.getByText('Total', { exact: true }).locator('..')).toContainText(
+    String(initial.length - 1),
+  );
+  await expectNoAxe();
+  await main.screenshot({ path: info.outputPath('accepted-member-refresh-failure-320.png') });
+  fail = false;
+  await main.getByRole('button', { name: 'Retry' }).click();
+  await expect(main.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+});
+
+test('a connection receipt stays connected after a failed status read without exposing the token', async ({
+  page,
+  signIn,
+  tenant,
+  expectNoAxe,
+}, info) => {
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await signIn();
+  let saved = false;
+  let fail = true;
+  const receipt = {
+    configured: true,
+    updatedAt: '2026-11-01T12:00:00.000Z',
+    invalidSince: null,
+    broadScopes: false,
+  };
+  await page.route('**/api/workspaces/*/integrations/github', async (route) => {
+    if (route.request().method() === 'PUT') {
+      saved = true;
+      await route.fulfill({ json: receipt });
+    } else if (saved && fail) await route.abort('failed');
+    else
+      await route.fulfill({
+        json: saved ? receipt : { ...receipt, configured: false, updatedAt: null },
+      });
+  });
+  const main = await openSettings(page, tenant.slug, 'integrations', 'Integrations');
+  await main.getByLabel('Token', { exact: true }).fill('github_pat_e2e_dummy_secret');
+  await main.getByRole('button', { name: 'Save token' }).click();
+  await expect(main.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(main.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(main.getByText(/The last confirmed status is shown/)).toBeVisible();
+  await expect(main.getByLabel('Token', { exact: true })).toHaveValue('');
+  expect(await main.textContent()).not.toContain('github_pat_e2e_dummy_secret');
+  await expectNoAxe();
+  await main.screenshot({ path: info.outputPath('accepted-github-refresh-failure-320.png') });
+  fail = false;
+  await main.getByRole('button', { name: 'Retry' }).click();
+  await expect(main.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+});
+
+test('maximum-length archived channel names remain fully readable beside their restore actions', async ({
+  page,
+  signIn,
+  tenant,
+}, info) => {
+  await signIn();
+  const names = ['a', 'b'].map((last) => `release-${'x'.repeat(55)}${last}`);
+  await page.route('**/api/workspaces/*/archived-channels', async (route) => {
+    await route.fulfill({
+      json: names.map((name, index) => ({
+        id: `00000000-0000-4000-8000-0000000000a${String(index)}`,
+        name,
+        type: 'public',
+        archivedAt: '2026-11-01T12:00:00.000Z',
+      })),
+    });
+  });
+  for (const width of [1440, 768, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await openSettings(page, tenant.slug, 'general', 'General');
+    const card = page.getByRole('region', { name: 'Archived channels' });
+    await expect(card.getByRole('button', { name: 'Restore' })).toHaveCount(2);
+    for (const index of [0, 1]) {
+      const row = card.getByRole('listitem').nth(index);
+      expect(
+        await row.locator('[id^="archived-"]').evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const text = range.getBoundingClientRect();
+          const box = element.getBoundingClientRect();
+          return text.left >= box.left && text.right <= box.right + 1;
+        }),
+      ).toBe(true);
+      await row.getByRole('button', { name: 'Restore' }).focus();
+      await expect(row.getByRole('button', { name: 'Restore' })).toBeFocused();
+    }
+    if (width === 320)
+      await card.screenshot({ path: info.outputPath('archived-long-names-320.png') });
+  }
+});
+
 const SECTIONS = [
   ['profile', 'Profile'],
   ['preferences', 'Preferences'],

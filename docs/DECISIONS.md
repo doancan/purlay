@@ -519,6 +519,9 @@ personal access token on selected repositories, and the server now says what it 
    nothing and leaves the token that was there. The `X-OAuth-Scopes` header is kept
    (`github_integrations.token_scopes`), and a classic token with `repo` or a write scope is shown to admins
    as broader than cards need. A fine-grained token sends no header and is what is asked for.
+   The write then locks the workspace and checks the caller’s current membership and role again, so
+   revocation during the provider check takes effect. Both setting and removing return the existing
+   public `GitHubIntegration` status from that transaction; no credential is returned or cached (#1179).
 2. **A token GitHub refuses is shown, and not used.** A `401` on a card writes `token_invalid_at` on the
    row it was read from (not on a replacement that landed while the call was out); Settings → Integrations
    tells admins, `configured` stays true, no call is made with it and no card is served from the cache
@@ -6735,6 +6738,16 @@ clear, professional".
 6. **Not drawn: what Purlay does not have.** The screens also draw SSO, SCIM, two-factor, an IP
    allowlist, seats, guests, billing and an email digest. Each is outside Phase 1 or refused
    (`PRD.md` §4, §7); a navigation entry for it would promise what is not there.
+
+**Amended 2026-11-06 (#1179).** A confirmed member or integration change is applied to the
+settings cache before refreshing it; an older pending read is cancelled first. Failed refreshes
+retain the last confirmed rows/status, name that limitation and offer Retry. An uncertain write
+(network, server failure or malformed receipt) is not described as unchanged. Confirmed self-role
+changes also update the session’s workspace role before a refresh, so stale owner controls disappear.
+An export link activation hides the once-only link while a fresh server read confirms whether it
+was consumed. A context-menu right click changes nothing; a failed receipt read leaves the result
+unknown until Retry, which only reads status and never replays a download. General offers archived
+channels only when chat is enabled; long valid names wrap without hiding their distinguishing end.
 
 **Rejected.**
 
@@ -13418,7 +13431,7 @@ is data and one test.
 2. **Facts, not invented delivery.** The outbox optionally reports the relay result after sending. Only accepted/failed, the completion instant and allowlisted connection/authentication/recipient/message/TLS/unknown categories persist. No raw error, token, body or SMTP response is stored. Accepted means the relay took the message, not that an inbox received it. After 120 seconds a queued attempt without its receipt is shown as unconfirmed, including after process interruption; a later real receipt can still finish it. A failed receipt write is logged separately from a failed send. Shutdown waits for receipt writes within the existing flush bound.
 3. **Manual resend and revoke.** Resend uses the same durable daily limits, replaces only that recipient's old link, and adds an attempt. Other recipients and copy links are unaffected. An active queued attempt cannot be resent within 120 seconds; no automatic replay or duplicate mail queue is introduced. Attempt UUIDv7 ordering instants advance beyond the prior attempt, even within one millisecond or after a clock correction; real creation timestamps remain unchanged. Writers recheck the role and serialize on the previous invitation row before rechecking the latest attempt: a request that waited for a replacement refuses rather than revoking or replacing a link it never saw. This lock order agrees with acceptance, which locks the invitation before recording its receipt. Revocation retains the evidence and never removes a member.
 4. **Approval evidence requires proof.** Only an explicit invitation sign-in can attest the matching verified account as the recipient's applicant. Email consumption must present the exact bearer invitation carried by that sign-in page, checked still open; an address-scoped passport requested by somebody else never counts as evidence of invitation use. Provider callbacks use the passport cookie held by that browser. Invite-only account creation consumes its passport in the same transaction as before; open registration needs none. Existing accounts need none to sign in; observing one does not grant membership. The authenticated accept operation marks joined only when the account has the matching verified address. A forwarded bearer link may still join somebody else, but never falsely marks the named recipient joined. Admission state is read only through the attested account id, never an email lookup from a manager's arbitrary input.
-5. **Bounded private reads.** Recipient and attempt lists are separate keyset pages; all reads require workspace management rights, outsiders get 404, and writes recheck the current role. The visible invitation page periodically refreshes receipts. A pending account polls only its own restricted admission state every five seconds while visible/online, stopping when it changes; the existing gate then rereads the identity and continues the preserved invitation. Passive status reads never renew the idle session lifetime. Manual retry remains available during outages.
+5. **Bounded private reads.** Recipient and attempt lists are separate keyset pages; all reads require workspace management rights, outsiders get 404, and writes recheck the current role. Recipient search is a bounded literal case-insensitive address substring, combined with a lifecycle status before pagination. The response supplies the same status as the filter: joined, attested admission, revocation, expiry, then mail evidence, using one read-time clock. Filters survive reload and Back in the page address; a changed filter starts a new cursor chain and no matches differs from no invitations. The visible invitation page periodically refreshes receipts. A pending account polls only its own restricted admission state every five seconds while visible/online, stopping when it changes; the existing gate then rereads the identity and continues the preserved invitation. Passive status reads never renew the idle session lifetime. Manual retry remains available during outages.
 6. **Data lifecycle.** Migrations 0086–0087 are additive; 0087’s safety comment uses the existing D-86 comment-only checksum ledger because local validation had already applied its identical SQL; both tables are core-owned. Rows live with their workspace and are explicitly included in its purge. Erasure deletes received evidence by the pre-erasure verified address or attested account id; created-by references on other recipients name the anonymised creator. A personal export contains only the person's received recipient/attempt evidence (a verified address match or an attested account id; an unverified claim cannot read or erase another recipient's evidence), with workspace identity and no invitation credential. Workspace exports omit private recipient and delivery records. English/Turkish feedback distinguishes expiry, revocation, uncertainty, approval and joining.
 
 **Rejected:** one shared email link (cannot independently revoke/resend); raw SMTP diagnostics (leaks personal data and credentials); calling SMTP acceptance delivered (unprovable); looking up every typed address (account directory disclosure); a broker, saved plaintext tokens or automatic replay (new infrastructure/secret storage and duplicate-send risk without a measurement); polling the private identity endpoint (keeps idle sessions alive and violates the admission boundary).
@@ -13461,10 +13474,19 @@ folder, and a third module would have added its handlers to the core's door.
    path its manifest does not own, and when the plugin and its folder's text disagree. `module-seams.test.ts`'s `ALLOWED`
    shrinks by each handler file that moves, and its cap with it.
 
-**Built in steps.** The seam, the fence, the guard and issues' four routes first; then chat's handlers in batches, each a
-`git mv` and a rewrite of imports proved by script, after which `HTTP_IN_INGRESS` is empty and `ALLOWED` is what is left of
-the core's doors: the workspace routes that read chat's GitHub client and unfurl check, the release route, the socket's
-presence and `erase-content`. What is not done: a module's own error codes and wire types still go through `@purlay/types`.
+**Built.** The seam, the fence, the guard and issues' four routes first (#1159); then chat's handlers in batches, each a `git mv`
+and a rewrite of imports proved by a script that compares every moved file with its base once each import specifier is replaced
+by the file it resolves to (#1164 and the ones after it), until `app.ts` registered none of a module's paths. Chat's 97 routes are
+in `features/chat/http/`, one file per resource, joined in `routes.ts`; what its GitHub-facing resources share is made once in
+`wiring.ts` from the context, which gained the named fields they need (the application's configuration, the cipher, the limiter
+factory, the App's settings, API and addresses, the node's presence record). `module-seams.test.ts`'s `ALLOWED` went from 27 to 4,
+the real remainder of the core's doors: `missed-mail.ts` (`GET` and `PUT /api/me/missed-mail` are the core's routes, in
+`CORE_ROUTES`, over chat's service; handing them to chat would close them in a process without chat, a change of the wire that
+has its own decision), `releases.ts`, the socket's presence and `erase-content`. The ownership test's `HTTP_IN_INGRESS` list,
+which held chat while it moved, is gone: a module that has routes supplies a plugin, with no exception. The workspace's GitHub
+token (`/api/workspaces/:workspaceId/integrations/github`) was chat's by its manifest and served by a core file that imported chat;
+its handlers moved into chat's folder and `workspaces.ts` left `ALLOWED`. What is not done: a module's own error codes and wire
+types still go through `@purlay/types`.
 
 **Rejected.** *Each module's plugin hand-registered in `app.ts`* (`.use(issuesRoutes(...))`, `.use(chatRoutes(...))`): the
 application would name every module and a third would edit the core's door. *Handlers in the manifest*: it makes `module-kit`

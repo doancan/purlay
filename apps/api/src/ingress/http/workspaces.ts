@@ -16,8 +16,6 @@ import {
   AuditQuery,
   CreateWorkspaceRequest,
   DeleteWorkspaceRequest,
-  SetGitHubTokenRequest,
-  type GitHubIntegration,
   SetDeepWorkRequest,
   type AuditPage,
   UpdateMemberRoleRequest,
@@ -58,14 +56,6 @@ import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
 import { readStorage } from '../../modules/attachments/quota';
-import {
-  githubIntegrationOf,
-  mayConfigure,
-  removeGitHubToken,
-  setGitHubToken,
-} from '../../features/chat/integrations/github';
-import { verifiedToken, type GitHubApi } from '../../features/chat/integrations/unfurl';
-import type { CredentialCipher } from '../../platform/crypto';
 import {
   NO_LOG,
   publication,
@@ -452,49 +442,4 @@ export const updateRetentionSetting = async (
         dependencies.workspaceChannels,
       ),
   );
-};
-
-/** `GET /api/workspaces/:workspaceId/integrations/github` — whether a token is set. Never the token. */
-export const readGitHubIntegration = async (
-  dependencies: WorkspaceDependencies,
-  request: Request,
-  workspaceId: string,
-): Promise<GitHubIntegration> => {
-  const { database } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
-  const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await githubIntegrationOf(database, context);
-};
-
-/**
- * `PUT` sets the workspace's token, sealed; `DELETE` removes it (D-11, D-39 §6). A token is asked of
- * GitHub first, outside the transaction (no row is locked across a call to another server) and only
- * after the caller's role is known, so a member cannot spend a request of this server's on a stranger's
- * token.
- */
-export const changeGitHubToken = async (
-  dependencies: WorkspaceDependencies & {
-    readonly cipher: CredentialCipher;
-    readonly githubApi: GitHubApi;
-    readonly log: Logger;
-  },
-  request: Request,
-  workspaceId: string,
-  body: unknown,
-): Promise<void> => {
-  const { database, clock, cipher } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
-  const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  if (request.method === 'DELETE') {
-    await atomicallyOn(database)(async (transaction) => {
-      await removeGitHubToken(transaction, clock, context);
-    });
-    return;
-  }
-  const { token } = validated(SetGitHubTokenRequest, body);
-  mayConfigure(context);
-  const { scopes } = await verifiedToken(dependencies.githubApi, dependencies.log, token);
-  await atomicallyOn(database)(async (transaction) => {
-    await setGitHubToken(transaction, clock, cipher, context, token, scopes);
-  });
 };

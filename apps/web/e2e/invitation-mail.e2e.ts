@@ -64,7 +64,7 @@ test('an owner emails invitations from Settings and a newcomer joins through the
     const page = await owner.newPage();
     await page.goto('/w/invite-team/settings/invitations');
     const main = page.getByRole('main');
-    const field = main.getByRole('textbox', { name: 'Email addresses' });
+    const field = main.getByRole('textbox', { name: 'Email addresses', exact: true });
     await expect(field).toBeVisible();
     await field.fill('ann@example.test,bob@example.test,nope,');
     await field.press('Enter');
@@ -93,6 +93,40 @@ test('an owner emails invitations from Settings and a newcomer joins through the
       expect(linkIn(letter, /\/invite#[0-9a-f]{64}/)).not.toBe(`/invite#${token ?? ''}`);
     }
 
+    // A separate management tab keeps filters through reload/Back without disturbing the
+    // one-time copy link this original tab still holds.
+    const filteredTab = await owner.newPage();
+    try {
+      await filteredTab.goto('/w/invite-team/settings/invitations');
+      const card = filteredTab.getByRole('region', { name: 'Email invitations' });
+      await card.getByRole('textbox', { name: 'Search email addresses' }).fill('ANN@EXAMPLE');
+      await card.getByRole('combobox', { name: 'Invitation status' }).selectOption('accepted');
+      await card.getByRole('button', { name: 'Search recipients' }).click();
+      await expect(card.getByRole('listitem')).toHaveCount(1);
+      await expect(card.getByRole('listitem')).toContainText('ann@example.test');
+      await filteredTab.reload();
+      await expect(card.getByRole('textbox', { name: 'Search email addresses' })).toHaveValue(
+        'ANN@EXAMPLE',
+      );
+      await expect(card.getByRole('combobox', { name: 'Invitation status' })).toHaveValue(
+        'accepted',
+      );
+      await card.getByRole('textbox', { name: 'Search email addresses' }).fill('nobody-matches');
+      await card.getByRole('textbox', { name: 'Search email addresses' }).press('Enter');
+      await expect(card.getByText('No invitations match these filters.')).toBeVisible();
+      await expect(card.getByRole('button', { name: 'Resend', exact: true })).toHaveCount(0);
+      await filteredTab.goBack();
+      await expect(card.getByRole('textbox', { name: 'Search email addresses' })).toHaveValue(
+        'ANN@EXAMPLE',
+      );
+      await expect(card.getByRole('listitem')).toHaveCount(1);
+      await card.getByRole('button', { name: 'Clear filters' }).click();
+      await expect(card.getByRole('listitem')).toHaveCount(2);
+      await expect(filteredTab).toHaveURL(/\/settings\/invitations$/);
+    } finally {
+      await filteredTab.close();
+    }
+    await page.bringToFront();
     const emailed = main.getByRole('list', { name: 'Email invitations' });
     const bobRow = emailed.getByRole('listitem').filter({ hasText: 'bob@example.test' });
     await expect(bobRow.getByRole('status')).toHaveText('Accepted by mail server');
@@ -121,9 +155,30 @@ test('an owner emails invitations from Settings and a newcomer joins through the
     ).toBe(200);
     await bobRow.getByRole('button', { name: 'Send history', exact: true }).click();
     await expect(bobRow.getByText('Link revoked', { exact: true })).toBeVisible();
+    // Another tab changes the recipient while this tab keeps its history open. Its polling
+    // must update both the summary and the loaded history, without toggling the history.
+    const otherTab = await owner.newPage();
+    try {
+      await otherTab.goto('/w/invite-team/settings/invitations');
+      await otherTab
+        .getByRole('list', { name: 'Email invitations' })
+        .getByRole('listitem')
+        .filter({ hasText: 'bob@example.test' })
+        .getByRole('button', { name: 'Revoke', exact: true })
+        .click();
+      await expect(
+        otherTab
+          .getByRole('list', { name: 'Email invitations' })
+          .getByText('Link revoked', { exact: true }),
+      ).toHaveCount(2);
+    } finally {
+      await otherTab.close();
+    }
+    await page.bringToFront();
+    await expect(bobRow.getByRole('status')).toHaveText('Link revoked', { timeout: 15_000 });
+    // The summary, latest attempt, and both historical links are now revoked.
+    await expect(bobRow.getByText('Link revoked', { exact: true })).toHaveCount(4);
     await bobRow.getByRole('button', { name: 'Send history', exact: true }).click();
-    await bobRow.getByRole('button', { name: 'Revoke', exact: true }).click();
-    await expect(bobRow.getByRole('status')).toHaveText('Link revoked');
 
     // The form and its feedback reflow on a phone and at the 320 CSS px accessibility boundary.
     for (const width of [1440, 390, 320]) {
