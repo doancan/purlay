@@ -202,7 +202,7 @@ describe('settings request recovery', () => {
     await person().click(main.getByRole('button', { name: 'Replace token' }));
     expect(token.readOnly).toBe(true);
     expect(main.getByRole<HTMLButtonElement>('button', { name: 'Disconnect' }).disabled).toBe(true);
-    request.resolve();
+    request.resolve(connected);
     await settle();
     expect(token.readOnly).toBe(false);
   });

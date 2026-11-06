@@ -601,10 +601,16 @@ describe('the endpoints', () => {
     const status = { configured: true, updatedAt: WHEN, invalidSince: null, broadScopes: false };
     const read = harness(status);
     expect(await read.api.githubIntegration(ID)).toEqual(status);
-    const saved = harness(null);
-    await saved.api.setGitHubToken(ID, 'github_pat_x');
-    const removed = harness(null);
-    await removed.api.removeGitHubToken(ID);
+    const saved = harness(status);
+    expect(await saved.api.setGitHubToken(ID, 'github_pat_x')).toEqual(status);
+    const disconnected = {
+      configured: false,
+      updatedAt: null,
+      invalidSince: null,
+      broadScopes: false,
+    };
+    const removed = harness(disconnected);
+    expect(await removed.api.removeGitHubToken(ID)).toEqual(disconnected);
     expect([...read.calls, ...saved.calls, ...removed.calls]).toEqual([
       { method: 'GET', url: `/api/workspaces/${ID}/integrations/github`, body: undefined },
       {
