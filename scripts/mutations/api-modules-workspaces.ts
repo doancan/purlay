@@ -561,6 +561,17 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
   },
   {
+    id: 'workspace-purge-keeps-the-grants',
+    why: 'a purged workspace keeps the operator’s grants as rows that name it, since the tombstone’s cascade never fires (D-289, D-242)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: "  'workspace_modules',\n",
+    replace: '',
+    tests: [
+      'apps/api/src/module-lifecycle.integration.test.ts',
+      'apps/api/src/ingress/http/workspace-purge.integration.test.ts',
+    ],
+  },
+  {
     id: 'workspace-purge-recorded-twice',
     why: 'a second run, or one after a crash, writes the erasure on the server’s trail again (D-242)',
     file: 'apps/api/src/modules/workspaces/deletion-purge.ts',

@@ -41,7 +41,7 @@ import {
   type Transaction,
 } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS, isErased, messageId } from '@purlay/types';
-import { bundledModules, compose, type Composition } from './composition';
+import { bundledModules, compose, type BundledModule, type Composition } from './composition';
 import {
   EVERY_TABLE_DECIDED,
   EVERY_TABLE_DECIDED_FOR_PEOPLE,
@@ -259,6 +259,23 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
         .executeTakeFirstOrThrow()
     ).slug;
     const { sessionId } = await aSession(tx, clock, ada.userId);
+    // The operator withheld every module a workspace can be granted from this one. Nothing below depends on it, which is the point:
+    // erasure, the purge, both exports and the retention reach the data of a module the workspace may not use (D-289).
+    const carried: readonly BundledModule[] = bundledModules;
+    const withheld = carried.filter((module) => module.manifest.entitlement !== 'always');
+    await tx
+      .insertInto('workspace_modules')
+      .values(
+        withheld.map((module) => ({
+          workspace_id: workspaceId,
+          module: module.manifest.id,
+          state: 'off' as const,
+          source: 'operator',
+          changed_by: ada.userId,
+          changed_at: NOW,
+        })),
+      )
+      .execute();
     // What the core keeps of a person, whatever runs.
     await tx
       .insertInto('saved_searches')

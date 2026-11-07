@@ -227,6 +227,33 @@ describe('integration: the endpoints of a module a workspace can be granted', ()
   });
 });
 
+describe('integration: a downgrade and a grant again', () => {
+  test('hide what the workspace made and keep it whole, and the grant brings it back', async () => {
+    await withRollback(async (db) => {
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(db, owner);
+      await grant(db, workspaceId, 'issues', 'on');
+      const managed = caller(db, MANAGED);
+      const made = await managed('POST', `/api/workspaces/${workspaceId}/issues`, owner, {
+        title: 'Kept',
+      });
+      expect(made.status).toBe(201);
+
+      await db.deleteFrom('workspace_modules').where('workspace_id', '=', workspaceId).execute();
+      expect((await managed('GET', `/api/workspaces/${workspaceId}/issues`, owner)).status).toBe(
+        404,
+      );
+      // Nothing was deleted, here or by what the downgrade left running.
+      expect(await issuesIn(db, workspaceId)).toBe(1);
+
+      await grant(db, workspaceId, 'issues', 'on');
+      const back = await managed('GET', `/api/workspaces/${workspaceId}/issues`, owner);
+      expect(back.status).toBe(200);
+      expect(JSON.stringify(back.body)).toContain('Kept');
+    });
+  });
+});
+
 describe('integration: what a person is told they may use', () => {
   interface Listed {
     readonly workspace: { readonly id: string };
