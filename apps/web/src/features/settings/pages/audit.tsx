@@ -36,7 +36,7 @@ import { href } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { auditActionsOf } from '../../../modules/registry';
 import { AuthorPicker } from '../../../ui/author-picker';
-import { useSession } from '../../session/session';
+import { useModules, useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { SettingsCard, SettingsPage } from '../page';
 import {
@@ -59,7 +59,8 @@ export const AuditPage = (): React.JSX.Element => {
   const api = useApi();
   const describe = useDescribeFailure();
   const { workspace } = useWorkspace();
-  const { user: me, modules } = useSession();
+  const { user: me } = useSession();
+  const modules = useModules();
   const { search, navigate } = useRoute();
   const members = useMembers(workspace.id);
   const channels = useChannels(workspace.id);

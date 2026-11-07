@@ -52,6 +52,7 @@ import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspac
 import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
 import { auditTrail } from '../../modules/audit/audit';
 import type { AuditAccess } from '../../platform/module-kit/audit-access';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
@@ -77,6 +78,8 @@ export interface WorkspaceDependencies {
   readonly clock: Clock;
   /** The channels of a workspace, as chat answers for them (D-250). */
   readonly workspaceChannels: WorkspaceChannels;
+  /** Which modules a workspace may use, from its grants (D-289): what a membership tells the client. Left out, it tells nothing of them. */
+  readonly effectiveModules?: EntitlementPolicy['effective'];
 }
 
 /** What the trail's two routes need besides: who reads which audit actions, in a process that runs these modules. */
@@ -107,7 +110,13 @@ export const readMe = async (
 ): Promise<MeResponse> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
-  const me = await meOf(database, clock, userId, await dependencies.workspaceCreators(database));
+  const me = await meOf(
+    database,
+    clock,
+    userId,
+    await dependencies.workspaceCreators(database),
+    dependencies.effectiveModules,
+  );
   return {
     ...me,
     mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId),
@@ -121,7 +130,7 @@ export const listMyWorkspaces = async (
 ): Promise<readonly Membership[]> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
-  return await membershipsOf(database, clock, userId);
+  return await membershipsOf(database, clock, userId, undefined, dependencies.effectiveModules);
 };
 
 export const createMyWorkspace = async (

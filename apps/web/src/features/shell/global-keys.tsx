@@ -33,7 +33,7 @@ import { useRoute } from '../../router/router-provider';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { displayName, inSidebarOrder, stepUnread } from '../palette/channels';
 import { isMacPlatform, type PlatformSource } from '../shortcuts/platform';
-import { useRuns, useSession } from '../session/session';
+import { useModules, useRuns, useSession } from '../session/session';
 import { useOverlay } from './overlay';
 import { useMarkAllRead } from './read-all';
 import { useWorkspace } from './workspace';
@@ -49,7 +49,8 @@ interface GlobalKeysProps {
 export const GlobalKeys = ({ platform }: GlobalKeysProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { user, modules } = useSession();
+  const { user } = useSession();
+  const modules = useModules();
   const { match, navigate } = useRoute();
   const chat = useRuns('chat');
   const channels = useChannels(workspace.id, chat).data;

@@ -379,6 +379,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
   },
   {
+    id: 'inbox-lists-entries-of-modules-the-workspace-lacks',
+    why: 'a workspace that lost a module still lists, and counts, its notices (D-289)',
+    file: 'apps/api/src/ingress/http/inbox.ts',
+    find: 'const visible = running.filter((module) => entitledTo(context, module));\n    return await inboxPage',
+    replace: 'const visible = running;\n    return await inboxPage',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'inbox-query-key-repeated',
     why: 'the guard checks the first workspaceId and the schema the last, so the two disagree about which workspace is asked for',
     file: 'apps/api/src/ingress/http/validate.ts',
@@ -393,6 +401,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '  if (read === 0) return;\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
+  },
+  {
+    id: 'inbox-reads-entries-of-modules-the-workspace-lacks',
+    why: 'reading everything marks the notices of a module the workspace cannot see as read, and they are gone when it is granted again (D-289)',
+    file: 'apps/api/src/ingress/http/inbox.ts',
+    find: 'const visible = running.filter((module) => entitledTo(context, module));\n  const read',
+    replace: 'const visible = running;\n  const read',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {
     id: 'inbox-routes-count-modules-that-are-not-run',
@@ -442,6 +458,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: 'if (value !== null && /^-?\\d+$/.test(value)) query[key] = Number(value);',
     replace: 'if (value !== null) query[key] = Number(value);',
     tests: ['apps/api/src/features/chat/http/messages.integration.test.ts'],
+  },
+  {
+    id: 'me-forgets-the-grants',
+    why: 'the session tells a client every module is usable in every workspace (D-289)',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: '    await dependencies.workspaceCreators(database),\n    dependencies.effectiveModules,\n',
+    replace: '    await dependencies.workspaceCreators(database),\n',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {
     id: 'me-names-every-module-whatever-runs',
@@ -697,5 +721,13 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '} else if (isWebhookRequest(request) && !closedRoute(request)) {',
     replace: '} else if (isWebhookRequest(request)) {',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
+  },
+  {
+    id: 'workspace-list-forgets-the-grants',
+    why: 'the list of workspaces tells a client every module is usable in every workspace (D-289)',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: 'userId, undefined, dependencies.effectiveModules);',
+    replace: 'userId);',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
 ];

@@ -20,6 +20,7 @@ import { Type, type Static, type TObject, type TProperties } from '@sinclair/typ
 // Side effect: registers the string formats these schemas use. Without it
 // TypeBox rejects every value carrying a `format`, valid ones included.
 import './formats';
+import { ModuleId } from './modules';
 
 /** UUID, and for `messages` specifically a UUIDv7 the client generated (D-8). */
 export const Uuid = Type.String({ format: 'uuid' });
@@ -151,6 +152,12 @@ export const Membership = Type.Object({
    * itself at this instant: the server stops counting it then, and so does the client.
    */
   deepWorkUntil: Type.Union([Timestamp, Type.Null()]),
+  /**
+   * The modules this workspace may use (D-289): the ones the server runs less those the operator withheld from it. A client
+   * draws a workspace's screens, shortcuts and requests from this and not from `MeResponse.modules`, which is what the server
+   * runs. Left out by a server that predates it, which grants every workspace what it runs.
+   */
+  modules: Type.Optional(Type.Array(ModuleId)),
 });
 export type Membership = Static<typeof Membership>;
 
