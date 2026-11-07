@@ -9,7 +9,7 @@ import { PRODUCT_MODULE_IDS } from '@purlay/db';
 import { RESERVED_MODULE_IDS } from '../platform/module-kit/registry';
 import { main, parseArguments } from './module-new';
 import { editsFor } from './module-new/edits';
-import { applyEdit, idProblem, namesOf, templateFiles } from './module-new/plan';
+import { applyEdit, fill, idProblem, namesOf, templateFiles } from './module-new/plan';
 
 const ROOT = join(import.meta.dir, '../../../..');
 const OPTIONS = { requires: [], optional: ['issues'] };
@@ -73,19 +73,29 @@ describe('against the repository as it is', () => {
 
   test('every template is filled, in its path and its text, and none is a file that exists', () => {
     const files = templateFiles(names, OPTIONS);
-    expect(files.length).toBeGreaterThan(1);
+    expect(files.length).toBeGreaterThan(10);
     for (const file of files) {
       expect(`${file.path}\n${file.content}`).not.toMatch(/__[A-Z]+(_[A-Z]+)*__/);
       expect(() => readFileSync(join(ROOT, file.path))).toThrow();
     }
+    expect(files.map((file) => file.path)).toContain(
+      'apps/api/src/features/zz/degradation.testing.ts',
+    );
+    expect(
+      templateFiles(names, { ...OPTIONS, optional: [] }).map((file) => file.path),
+    ).not.toContain('apps/api/src/features/zz/degradation.testing.ts');
+  });
+
+  test('a manifest says what it does without each optional partner it lists', () => {
+    expect(fill('__DEGRADES__', names, OPTIONS)).toContain("issues: 'Works without issues");
   });
 
   test('a dry run says what it would do and writes nothing', () => {
     const said: string[] = [];
     expect(main(['zz', '--dry-run'], ROOT, (line) => said.push(line))).toBe(0);
-    expect(said).toContain('would make  packages/db/migrations/zz/0001_zz.sql');
-    expect(said).toContain('would edit  packages/db/src/migrator.ts');
-    expect(() => readFileSync(join(ROOT, 'packages/db/migrations/zz/0001_zz.sql'))).toThrow();
+    expect(said).toContain('would make  apps/api/src/features/zz/module.ts');
+    expect(said).toContain('would edit  apps/api/src/composition.ts');
+    expect(() => readFileSync(join(ROOT, 'apps/api/src/features/zz/module.ts'))).toThrow();
   });
 
   test('a module that exists is left alone, and a bad id or partner is refused', () => {

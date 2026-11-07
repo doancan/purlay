@@ -654,7 +654,9 @@ describe('every module’s hot path, with the others busy (D-250 rule 6)', () =>
  * The modules that declare no hot path, with why. A third module is either measured while the others are busy or is
  * a line here that a reviewer reads (D-250 rule 6): it cannot skip the gate by saying nothing.
  */
-const WITHOUT_A_HOT_PATH: Readonly<Record<string, string>> = {};
+const WITHOUT_A_HOT_PATH: Readonly<Record<string, string>> = {
+  // module:new:without-a-hot-path
+};
 
 describe('the table of hot paths', () => {
   test('has exactly the bundled modules, and a module without a hot path is listed here with its reason', () => {
