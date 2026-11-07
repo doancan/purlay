@@ -24,6 +24,7 @@ const channel = {
   state,
   notificationLevel: 'mentions',
   starred: false,
+  sidebarGroupId: null,
   incident: null,
   codeRepository: null,
   onlyAdminsPost: false,
@@ -68,6 +69,54 @@ const harness = (body: unknown): { api: Api; calls: Call[] } => {
 };
 
 describe('the endpoints', () => {
+  test('personal channel groups use bounded owner metadata, repeatable ids and the channel placement contract', async () => {
+    const group = { id: ID, name: 'Finance', collapsed: false };
+    const list = harness({ data: [group], nextCursor: null });
+    expect(await list.api.channelGroups(ID)).toEqual({ data: [group], nextCursor: null });
+    expect(list.calls[0]).toEqual({
+      method: 'GET',
+      url: `/api/workspaces/${ID}/channel-groups?limit=20`,
+      body: undefined,
+    });
+    const save = harness(group);
+    expect(await save.api.saveChannelGroup(ID, ID, 'Finance')).toEqual(group);
+    expect(save.calls[0]).toEqual({
+      method: 'PUT',
+      url: `/api/workspaces/${ID}/channel-groups/${ID}`,
+      body: { name: 'Finance' },
+    });
+    const fold = harness({ ...group, collapsed: true });
+    expect((await fold.api.foldChannelGroup(ID, ID, true)).collapsed).toBe(true);
+    expect(fold.calls[0]).toEqual({
+      method: 'PATCH',
+      url: `/api/workspaces/${ID}/channel-groups/${ID}`,
+      body: { collapsed: true },
+    });
+    const remove = harness(null);
+    await remove.api.removeChannelGroup(ID, ID);
+    expect(remove.calls[0]).toEqual({
+      method: 'DELETE',
+      url: `/api/workspaces/${ID}/channel-groups/${ID}`,
+      body: undefined,
+    });
+    for (const groupId of [ID, null]) {
+      const move = harness({ ...channel, sidebarGroupId: groupId });
+      expect((await move.api.moveChannelGroup(ID, groupId)).sidebarGroupId).toBe(groupId);
+      expect(move.calls[0]).toEqual({
+        method: 'PUT',
+        url: `/api/channels/${ID}/sidebar-group`,
+        body: { groupId },
+      });
+    }
+    for (const bad of [
+      harness({ data: [{ ...group, collapsed: 'true' }], nextCursor: null }),
+      harness({ data: Array.from({ length: 21 }, () => group), nextCursor: null }),
+    ]) {
+      expect(await bad.api.channelGroups(ID).catch((failure: unknown) => failure)).toBeInstanceOf(
+        ApiError,
+      );
+    }
+  });
   test('question metadata and personal searches use the shared contract at their own routes', async () => {
     const knowledge = {
       version: 0,

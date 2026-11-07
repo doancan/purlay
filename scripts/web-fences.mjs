@@ -30,17 +30,14 @@ export const webModuleIds = (features) =>
  */
 export const CORE_IMPORTS_OF_MODULES = [
   ...[
-    'channel/add-people',
-    'conversations/group-details',
-    'conversations/new-conversation',
-    'messages/image-viewer',
-    'sidebar/browse-channels-dialog',
-    'sidebar/invite-dialog',
-    'sidebar/new-channel-dialog',
-    'sidebar/row-menu-body',
+    'channel/add-people.tsx',
+    'conversations/group-details.tsx',
+    'conversations/new-conversation.tsx',
+    'messages/image-viewer.tsx',
+    'sidebar/deferred.ts',
   ].map((file) => ({
     from: 'app/deferred.ts',
-    to: `features/chat/${file}.tsx`,
+    to: `features/chat/${file}`,
     reason:
       'an overlay the shell opens on a key or a click, re-exported from the one lazy chunk the doors ask for (`deferred.ts`): it is in a chunk of its own, never in the shell. Ends with a manifest slot that lists a module\u2019s overlays.',
   })),
@@ -74,7 +71,6 @@ export const CORE_IMPORTS_OF_MODULES = [
     'sidebar/people-list',
     'sidebar/preferences-context',
     'sidebar/sidebar-options',
-    'sidebar/starred-list',
     'sidebar/workspace-menu',
     'unreads/unreads-row',
   ].map((file) => ({

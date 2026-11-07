@@ -49,7 +49,10 @@ export type FailureKey =
   | 'failure.incidentRespondersLimit'
   | 'failure.incidentPostmortemChanged'
   | 'failure.onlyAdminsPost'
+  | 'failure.channelGroupName'
+  | 'failure.channelGroupLimit'
   | 'failure.generic';
+// A personal heading's name and cap can be corrected in its form.
 
 /**
  * Why a send can fail without the server ever having it: no answer at all from the HTTP door — the
@@ -160,6 +163,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'THREAD_NOT_RESOLVABLE':
     case 'WORKSPACE_SLUG_TAKEN':
     case 'CHANNEL_NAME_TAKEN':
+    case 'CHANNEL_GROUP_NOT_FOUND':
     case 'KNOWLEDGE_CONFLICT':
     case 'SAVED_SEARCH_NOT_FOUND':
     case 'SAVED_SEARCH_LIMIT':
@@ -170,6 +174,10 @@ export const failureKey = (code: FailureCode): FailureKey => {
     // A lost race on the GitHub id's index, said by the callback as `failed` (D-179).
     case 'GITHUB_ACCOUNT_TAKEN':
       return 'failure.refused';
+    case 'CHANNEL_GROUP_NAME_TAKEN':
+      return 'failure.channelGroupName';
+    case 'CHANNEL_GROUP_LIMIT':
+      return 'failure.channelGroupLimit';
     case 'DATABASE_UNAVAILABLE':
     case 'REQUEST_TIMEOUT':
     case 'STORAGE_UNAVAILABLE':

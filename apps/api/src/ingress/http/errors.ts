@@ -79,6 +79,10 @@ const TAKEN_BY_INDEX: Readonly<Record<string, AppErrorBody>> = {
     code: 'CHANNEL_NAME_TAKEN',
     message: 'A channel with that name already exists here.',
   },
+  channel_groups_name_key: {
+    code: 'CHANNEL_GROUP_NAME_TAKEN',
+    message: 'A channel group with that name already exists.',
+  },
   users_email_key: {
     code: 'ACCOUNT_EMAIL_CONFLICT',
     message: 'That email address already belongs to another Purlay account.',

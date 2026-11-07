@@ -76,6 +76,8 @@ interface DialogProps {
   readonly focusFirst?: 'control' | 'dialog';
   /** `wide` for a surface with tabs (D-154); a dialog is the default width. */
   readonly size?: keyof typeof sizeClasses;
+  /** Explicit return target when a menu opener moves, disappears or was never focused by the browser. */
+  readonly returnFocus?: () => HTMLElement | null;
 }
 
 /**
@@ -85,7 +87,7 @@ interface DialogProps {
  * caught it, #506). Radix labels a menu by its trigger, so the button is found from the menu.
  */
 const openerOf = (active: Element | null): HTMLElement | null => {
-  if (!(active instanceof HTMLElement)) return null;
+  if (!(active instanceof HTMLElement) || active === document.body) return null;
   const trigger = active.closest('[role="menu"]')?.getAttribute('aria-labelledby');
   const button = trigger == null ? null : document.getElementById(trigger);
   // A trigger that is itself gone (a submenu's item) is no better than the item: nothing, then, and
@@ -116,6 +118,7 @@ export const Dialog = ({
   footer,
   focusFirst = 'control',
   size = 'default',
+  returnFocus,
 }: DialogProps): React.JSX.Element => {
   const returnTo = useRef<HTMLElement | null>(null);
   const close = useRef<HTMLButtonElement>(null);
@@ -152,9 +155,10 @@ export const Dialog = ({
             }}
             onCloseAutoFocus={(event) => {
               // Ours when we know where; Radix's own return otherwise, rather than nowhere.
-              if (returnTo.current?.isConnected !== true) return;
+              const opener = returnFocus?.() ?? returnTo.current;
+              if (opener?.isConnected !== true) return;
               event.preventDefault();
-              returnTo.current.focus();
+              opener.focus();
             }}
           >
             <div className="flex flex-col gap-1 pr-6">

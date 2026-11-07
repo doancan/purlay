@@ -248,6 +248,9 @@ const uploadRefusal = (
     // The page a letter's link opens, never an upload's (D-240).
     case 'MAIL_LINK_NOT_FOUND':
     case 'CHANNEL_NAME_TAKEN':
+    case 'CHANNEL_GROUP_NOT_FOUND':
+    case 'CHANNEL_GROUP_NAME_TAKEN':
+    case 'CHANNEL_GROUP_LIMIT':
     case 'CHANNEL_NOT_FOUND':
     case 'CLIENT_TOO_OLD':
     case 'EMAIL_SIGN_IN_UNAVAILABLE':

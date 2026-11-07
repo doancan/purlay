@@ -132,6 +132,24 @@ const footprint = async (
       }),
     )
     .execute();
+  const groupId = messageId(next());
+  await db
+    .insertInto('channel_groups')
+    .values({
+      id: groupId,
+      workspace_id: room.workspaceId,
+      user_id: who.userId,
+      name: `Department ${room.channelId}`,
+    })
+    .execute();
+  await db
+    .insertInto('channel_group_channels')
+    .values({
+      channel_id: room.channelId,
+      user_id: who.userId,
+      group_id: groupId,
+    })
+    .execute();
   // An issue they made, given to somebody else, and the issue somebody else made for them: only the first is theirs.
   await db
     .insertInto('issues')
@@ -662,6 +680,8 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'saved_searches',
     'channel_read_scopes',
     'thread_reads',
+    'channel_groups',
+    'channel_group_channels',
     'thread_follows',
     'channel_bookmarks',
     'issues',
@@ -670,6 +690,8 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'attachments.ndjson',
     'blobs',
     'channel_bookmarks.ndjson',
+    'channel_group_channels.ndjson',
+    'channel_groups.ndjson',
     'channel_members.ndjson',
     'channel_read_scopes.ndjson',
     'channels.ndjson',
@@ -849,6 +871,14 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     thread_reads: {
       rows: 2,
       columns: ['channel_id', 'last_read_message_id', 'read_at', 'root_id', 'user_id'],
+    },
+    channel_groups: {
+      rows: 2,
+      columns: ['collapsed', 'id', 'name', 'user_id', 'workspace_id'],
+    },
+    channel_group_channels: {
+      rows: 2,
+      columns: ['channel_id', 'group_id', 'user_id'],
     },
     thread_follows: {
       rows: 2,

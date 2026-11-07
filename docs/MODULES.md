@@ -263,6 +263,9 @@ a module is also adding its id to `ModuleId` (§9). The wire names are not names
 
 ## 5. Data
 
+Chat's personal channel headings and placements are in `channel_groups` and `channel_group_channels`, created by chat/0011 (D-284). Membership foreign keys clear private placement on leave, the user-erasure hook clears account state, and workspace purge removes headings. Workspace exports exclude both; personal exports include only the caller's rows, omitting the generated name key. The private tables are optional on older stopped-module schemas and do not change the module's original migration identity or export workspace context. No core column or table exception is added.
+
+
 A module's tables exist only while it is enabled, and **disabling drops nothing** — the tables stay, inert.
 Foreign keys run module → core, never between modules, and a table the core would point at a module's table
 moves into that module.
@@ -371,6 +374,10 @@ imports no module** except `modules/registry.ts` (the manifests, nothing else) a
 `CORE_IMPORTS_OF_MODULES`, each with its reason and capped by a number in the test, a list that only shrinks. Tests and
 `testing/` may import a module. `budget:web` derives the files a module's chunk alone may carry from the folder, less what the
 core is allowed to import and what that imports statically.
+
+Chat's sidebar keeps its channel sections together in `channel-list.tsx` (`ChannelSections`) and loads personal headings and exposes its overlays through
+`sidebar/deferred.ts`, still in the existing deferred chunk. Personal groups add no shell import: these entry points reduce the
+core-import list from 24 to 20, without moving chat code into the core or introducing another lazy chunk (D-284).
 
 `registry.test.tsx` holds every manifest to the router and to each other (and the audit actions of the core and the manifests to the wire's list, each once): a route the router does not know, a rail
 entry for another module's route, a palette place that is not the module's own, a settings page or shortcut row placed

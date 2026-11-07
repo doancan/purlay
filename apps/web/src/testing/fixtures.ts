@@ -81,6 +81,7 @@ export const aChannel = (
   memberCount: 1,
   notificationLevel: 'mentions',
   starred: false,
+  sidebarGroupId: null,
   ...over,
 });
 
@@ -126,6 +127,7 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
   anApi({
     me: () => Promise.resolve(aSession()),
     channels: () => Promise.resolve(someChannels()),
+    channelGroups: () => Promise.resolve({ data: [], nextCursor: null }),
     // What the sidebar asks for on every signed-in screen.
     members: () => Promise.resolve(someMembers()),
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),

@@ -15,6 +15,7 @@ import {
 import { setStarred } from '../channels/star';
 import type { ChannelWriteDependencies } from './channels';
 import { requireSession } from '../../../ingress/http/session';
+import { atomicallyOn } from '../../../platform/transactions';
 
 export const starChannel = async (
   dependencies: ChannelWriteDependencies,
@@ -25,7 +26,12 @@ export const starChannel = async (
   const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
-  if (!(await setStarred(database, clock, context, starred))) return;
+  if (
+    !(await atomicallyOn(database)(
+      async (transaction) => await setStarred(transaction, clock, context, starred),
+    ))
+  )
+    return;
   await publishAfterCommit(log, [
     [
       publication('CHANNELS_UPDATED', () =>

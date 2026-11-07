@@ -101,7 +101,8 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
     // A saved search's and a scheduled message's ids are the client's to choose: any fresh one will do.
-    if (name === 'messageId' || name === 'searchId' || name === 'scheduledId') return ids.messageId;
+    if (name === 'messageId' || name === 'searchId' || name === 'scheduledId' || name === 'groupId')
+      return ids.messageId;
     if (name === 'attachmentId') return ids.attachmentId;
     if (name === 'userId') return ids.memberId;
     if (name === 'invitationId') return ids.invitationId;
@@ -474,6 +475,35 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId/saved-searches': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'personal filters, never channel content' },
+  },
+  'GET /api/workspaces/:workspaceId/channel-groups': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'only the caller’s headings, with no channel content or ids',
+    },
+  },
+  'PUT /api/workspaces/:workspaceId/channel-groups/:groupId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'creates or renames the caller’s own heading only' },
+    body: () => ({ name: 'Crossing' }),
+  },
+  'PATCH /api/workspaces/:workspaceId/channel-groups/:groupId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: { kind: 'none', reason: 'folds the caller’s own heading only' },
+    body: () => ({ collapsed: true }),
+  },
+  'DELETE /api/workspaces/:workspaceId/channel-groups/:groupId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'deletes the caller’s own heading without changing channel membership',
+    },
+  },
+  'PUT /api/channels/:channelId/sidebar-group': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+    body: () => ({ groupId: null }),
   },
   'PUT /api/workspaces/:workspaceId/saved-searches/:searchId': {
     refusal: 'WORKSPACE_NOT_FOUND',

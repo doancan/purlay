@@ -517,6 +517,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     readAgain(client, families.notifications);
     readAgain(client, families.saved);
     readAgain(client, families.unreads);
+    readAgain(client, families.channelGroups);
   };
 
   /** Waits on the injected schedule; false when the page stopped meanwhile. */
@@ -743,6 +744,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       case 'CHANNELS_UPDATED':
         // No state in the frame (D-132): the person's channels here are read again.
         readAgain(client, keys.channels(frame.data.workspaceId));
+        readAgain(client, keys.channelGroups(frame.data.workspaceId));
         return;
       case 'REMINDERS_UPDATED':
         return;

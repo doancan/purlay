@@ -57,6 +57,7 @@ const channel: Channel = {
   state,
   notificationLevel: 'mentions',
   starred: false,
+  sidebarGroupId: null,
   peer: null,
   peers: [],
   memberCount: 1,

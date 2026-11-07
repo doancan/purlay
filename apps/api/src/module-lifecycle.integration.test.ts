@@ -85,6 +85,8 @@ const CHAT_PERSONAL_TABLES = [
   'thread_follows',
   'thread_reads',
   'channel_read_scopes',
+  'channel_groups',
+  'channel_group_channels',
   'notifications',
   'missed_mail_letters',
 ] as const;
@@ -372,6 +374,24 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
         .onConflict((conflict) =>
           conflict.columns(['channel_id', 'user_id']).doUpdateSet({ unread_since: NOW }),
         )
+        .execute();
+      const groupId = crypto.randomUUID();
+      await tx
+        .insertInto('channel_groups')
+        .values({
+          id: groupId,
+          workspace_id: workspaceId,
+          user_id: who.userId,
+          name: 'Operations',
+        })
+        .execute();
+      await tx
+        .insertInto('channel_group_channels')
+        .values({
+          channel_id: channel,
+          user_id: who.userId,
+          group_id: groupId,
+        })
         .execute();
       // ... and in the tables that chat's own set makes.
       await tx

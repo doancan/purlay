@@ -112,6 +112,21 @@ export interface ChannelDepartures {
   user_id: string;
 }
 
+export interface ChannelGroupChannels {
+  channel_id: string;
+  group_id: string;
+  user_id: string;
+}
+
+export interface ChannelGroups {
+  collapsed: Generated<boolean>;
+  id: string;
+  name: string;
+  name_key: Generated<string | null>;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface ChannelMembers {
   channel_id: string;
   id: Generated<string>;
@@ -775,6 +790,8 @@ export interface DB {
   audit_log: AuditLog;
   channel_bookmarks: ChannelBookmarks;
   channel_departures: ChannelDepartures;
+  channel_group_channels: ChannelGroupChannels;
+  channel_groups: ChannelGroups;
   channel_members: ChannelMembers;
   channel_read_scopes: ChannelReadScopes;
   channels: Channels;

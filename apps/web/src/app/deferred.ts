@@ -18,12 +18,18 @@ export { TwoFactorEnrolment } from '../features/session/two-factor-enrolment';
 export { ImageViewer } from '../features/chat/messages/image-viewer';
 export { CommandPalette } from '../features/palette/command-palette';
 export { ShortcutsDialog } from '../features/shortcuts/shortcuts-dialog';
-export { NewChannelDialog } from '../features/chat/sidebar/new-channel-dialog';
-export { BrowseChannelsDialog } from '../features/chat/sidebar/browse-channels-dialog';
-export { InviteDialog } from '../features/chat/sidebar/invite-dialog';
 export { NewConversationDialog } from '../features/chat/conversations/new-conversation';
 export { GroupDetailsDialog } from '../features/chat/conversations/group-details';
 export { AddPeopleDialog } from '../features/chat/channel/add-people';
-export { RowMenu } from '../features/chat/sidebar/row-menu-body';
+export {
+  NewChannelDialog,
+  BrowseChannelsDialog,
+  InviteDialog,
+  RowMenu,
+  ChannelGroupEditor,
+  DeleteChannelGroupDialog,
+  MoveChannelGroupDialog,
+  PersonalGroups,
+} from '../features/chat/sidebar/deferred';
 
 export { AdministrationScreen } from '../features/administration/screen';

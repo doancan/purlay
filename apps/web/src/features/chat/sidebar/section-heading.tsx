@@ -23,6 +23,8 @@ interface SectionHeadingProps {
   readonly onToggle: () => void;
   readonly children: React.ReactNode;
   readonly actions?: React.ReactNode;
+  /** Personal headings can be long; show their whole name instead of truncating the suffix. */
+  readonly wrap?: boolean;
 }
 
 export const SectionHeading = ({
@@ -32,6 +34,7 @@ export const SectionHeading = ({
   onToggle,
   children,
   actions,
+  wrap = false,
 }: SectionHeadingProps): React.JSX.Element => (
   <div className="flex items-center justify-between">
     <h2 {...(id === undefined ? {} : { id })} className="min-w-0 flex-1">
@@ -40,9 +43,14 @@ export const SectionHeading = ({
         aria-expanded={!collapsed}
         aria-controls={controls}
         onClick={onToggle}
-        className="group flex h-control max-narrow:h-touch w-full items-center gap-1 rounded-md px-2 text-left text-label text-nav-ink-muted transition-colors duration-hover ease-standard hover:text-nav-ink"
+        className={cn(
+          'group flex w-full items-center gap-1 rounded-md px-2 text-left text-label text-nav-ink-muted transition-colors duration-hover ease-standard hover:text-nav-ink',
+          wrap ? 'min-h-control max-narrow:min-h-touch py-2' : 'h-control max-narrow:h-touch',
+        )}
       >
-        <span className="min-w-0 truncate">{children}</span>
+        <span className={cn('min-w-0', wrap ? 'whitespace-normal break-words' : 'truncate')}>
+          {children}
+        </span>
         <span
           className={cn(
             'transition-opacity duration-hover ease-standard group-hover:opacity-100 group-focus-visible:opacity-100 max-narrow:opacity-100',

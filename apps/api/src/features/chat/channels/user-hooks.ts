@@ -23,6 +23,8 @@ export const forgetWhatChatKeeps = async (
     'channel_departures',
     'thread_reads',
     'channel_read_scopes',
+    'channel_group_channels',
+    'channel_groups',
   ] as const) {
     if (await tableExists(transaction, table)) {
       await transaction.deleteFrom(table).where('user_id', '=', userId).execute();

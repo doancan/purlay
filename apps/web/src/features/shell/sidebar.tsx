@@ -11,8 +11,7 @@
  */
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
-import { ChannelList } from '../chat/sidebar/channel-list';
-import { StarredList } from '../chat/sidebar/starred-list';
+import { ChannelSections } from '../chat/sidebar/channel-list';
 import { UnreadsRow } from '../chat/unreads/unreads-row';
 import { ConversationList } from '../chat/sidebar/conversation-list';
 import { JumpField } from '../chat/sidebar/jump-field';
@@ -72,8 +71,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
             <WhenRun module="chat">
               <div className="pt-1 pb-3">
                 <UnreadsRow />
-                <StarredList />
-                <ChannelList />
+                <ChannelSections />
               </div>
               <div className="border-t-hairline border-nav-border py-3">
                 <ConversationList />

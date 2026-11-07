@@ -43,6 +43,7 @@ import { useLeaveRefusal } from '../channel/leave';
 import { GroupDetailsDialog } from '../conversations/group-details';
 import { useWorkspace } from '../../shell/workspace';
 import { forgetChannel } from '../../../data/last-channel';
+import { useOpenGroupMove } from './placement-provider';
 
 /** The same chunk the header's name opens (D-49): fetched once, by whichever asks first. */
 const ChannelDetailsDialog = lazy(async () => ({
@@ -126,6 +127,7 @@ export const RowMenu = ({
   const { workspace } = useWorkspace();
   const { show } = useToast();
   const markRead = useMarkRead(channel);
+  const moveGroup = useOpenGroupMove();
   const kind = kindOf(channel);
   const name = kind === 'channel' ? `#${title}` : title;
   const level = channel.notificationLevel;
@@ -189,6 +191,17 @@ export const RowMenu = ({
         }}
       >
         {first}
+        {kind === 'channel' && channel.state !== null && moveGroup !== null && (
+          <MenuItem
+            onSelect={() => {
+              after(() => {
+                moveGroup(channel);
+              });
+            }}
+          >
+            {t('channelGroups.move')}
+          </MenuItem>
+        )}
         {level !== null && (
           <>
             {first.length > 0 && <MenuSeparator />}

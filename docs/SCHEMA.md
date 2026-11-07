@@ -771,6 +771,40 @@ legacy feed positions or the explicit workspace-wide mark-read action. A root's 
 These columns and receipts are private: omitted from workspace exports, included in the person's own export.
 Where chat’s set has never been applied, the personal export omits the absent private tables.
 
+**Personal channel headings (D-284).** The owner is a workspace member. The generated name key enforces case-insensitive uniqueness; the owner/id index pages metadata, the user indexes support erasure and personal export. Placement has one row per channel membership and a group of that same owner. The service also checks the group's workspace before writing. Group deletion removes placement, leaving the channel joined.
+
+```sql
+CREATE TABLE channel_groups (
+    id UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    name VARCHAR(64) NOT NULL CHECK (name = btrim(name) AND length(name) > 0),
+    name_key TEXT GENERATED ALWAYS AS (lower(name)) STORED,
+    collapsed BOOLEAN NOT NULL DEFAULT FALSE,
+    UNIQUE (id, user_id),
+    CONSTRAINT channel_groups_name_key UNIQUE (workspace_id, user_id, name_key),
+    FOREIGN KEY (workspace_id, user_id)
+        REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_channel_groups_owner_id ON channel_groups(workspace_id, user_id, id);
+CREATE INDEX idx_channel_groups_user ON channel_groups(user_id);
+
+CREATE TABLE channel_group_channels (
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    group_id UUID NOT NULL,
+    PRIMARY KEY (channel_id, user_id),
+    FOREIGN KEY (channel_id, user_id)
+        REFERENCES channel_members(channel_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id, user_id)
+        REFERENCES channel_groups(id, user_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_channel_group_channels_group ON channel_group_channels(group_id, user_id);
+CREATE INDEX idx_channel_group_channels_user ON channel_group_channels(user_id);
+```
+
+Both tables are private: own personal export only, omitted from workspace export, removed on account erasure. A membership removal cascades; rejoining starts without placement. The group cap is enforced under a membership lock by the service. A star and a move lock the same channel membership, then clear the other placement in the same transaction.
+
 ### 5.3. `channel_departures`
 
 How a person is no longer in a channel, kept for them alone (D-264). Leaving and being taken out delete the
@@ -2841,6 +2875,7 @@ chat/0007_read_scopes.sql         channel_members.unread_since; private thread_r
 chat/0008_unread_history_range.sql channel_members.unread_history_from: explicit historical range in union with the join floor (D-282)
 chat/0009_thread_read_baseline.sql channel_members.thread_read_baseline_id: independent lazy legacy reply baseline (D-282)
 chat/0010_membership_read_scopes.sql channel_read_scopes: moves the three prototype scope columns into chat's own table, preserving known scopes and restoring the core's shape (D-282)
+chat/0011_personal_channel_groups.sql channel_groups and channel_group_channels: private headings and one placement per membership (D-284)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 ```
 

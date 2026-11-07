@@ -1,4 +1,5 @@
 import { OwnAdmission, InstanceInfo, ChannelCatchUp, type CatchUpQuery } from '@purlay/types';
+import { ChannelGroup, ChannelGroupPage, CHANNEL_GROUP_LIMIT } from '@purlay/types';
 import {
   Issue,
   IssuePage,
@@ -237,6 +238,19 @@ export interface Api {
   ) => Promise<AuditPage>;
 
   readonly channels: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelList>;
+  readonly channelGroups: (workspaceId: string, signal?: AbortSignal) => Promise<ChannelGroupPage>;
+  readonly saveChannelGroup: (
+    workspaceId: string,
+    groupId: string,
+    name: string,
+  ) => Promise<ChannelGroup>;
+  readonly foldChannelGroup: (
+    workspaceId: string,
+    groupId: string,
+    collapsed: boolean,
+  ) => Promise<ChannelGroup>;
+  readonly removeChannelGroup: (workspaceId: string, groupId: string) => Promise<void>;
+  readonly moveChannelGroup: (channelId: string, groupId: string | null) => Promise<Channel>;
   readonly createChannel: (workspaceId: string, input: CreateChannelRequest) => Promise<Channel>;
   readonly joinChannel: (channelId: string) => Promise<Channel>;
   /** A member's: a new name or topic, answered with the channel as it now is (D-123). */
@@ -731,6 +745,33 @@ export const createApi = (http: Http): Api => {
         ChannelList,
         options({}, signal),
       ),
+    channelGroups: (workspaceId, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/channel-groups`,
+        ChannelGroupPage,
+        options({ query: { limit: CHANNEL_GROUP_LIMIT } }, signal),
+      ),
+    saveChannelGroup: (workspaceId, groupId, name) =>
+      http.request(
+        'PUT',
+        `/api/workspaces/${at(workspaceId)}/channel-groups/${at(groupId)}`,
+        ChannelGroup,
+        { body: { name } },
+      ),
+    foldChannelGroup: (workspaceId, groupId, collapsed) =>
+      http.request(
+        'PATCH',
+        `/api/workspaces/${at(workspaceId)}/channel-groups/${at(groupId)}`,
+        ChannelGroup,
+        { body: { collapsed } },
+      ),
+    removeChannelGroup: (workspaceId, groupId) =>
+      http.send('DELETE', `/api/workspaces/${at(workspaceId)}/channel-groups/${at(groupId)}`),
+    moveChannelGroup: (channelId, groupId) =>
+      http.request('PUT', `/api/channels/${at(channelId)}/sidebar-group`, Channel, {
+        body: { groupId },
+      }),
     createChannel: (workspaceId, input) =>
       http.request(
         'POST',

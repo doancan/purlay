@@ -118,6 +118,7 @@ describe('starring a channel', () => {
         ? {
             ...c,
             starred: true,
+            sidebarGroupId: null,
             incident: { severity: 2 as const, status: 'investigating' as const },
           }
         : c,

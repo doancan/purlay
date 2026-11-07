@@ -486,6 +486,17 @@ carries.
 
 ## 4. Channels
 
+Personal channel groups (D-284) are only the caller's. `Channel.sidebarGroupId` is projected with the channel list; null for ungrouped, starred, unjoined and DM channels. The group metadata and placement are never sent on a workspace broadcast. A real change announces only `CHANNELS_UPDATED { workspaceId }` on the caller's own topic; an identical retry announces nothing.
+
+| | Method | Path | Contract |
+|---|---|---|---|
+| ○ | `GET` | `/api/workspaces/:workspaceId/channel-groups` | Workspace member; `ChannelGroupQuery { before?, limit? }` → `ChannelGroupPage`; newest id first, bounded keyset pages; other people's groups never appear |
+| ○ | `PUT` | `/api/workspaces/:workspaceId/channel-groups/:groupId` | `SaveChannelGroupRequest { name }` → `200 ChannelGroup`; client-generated id, repeatable creation/rename; preserves folding. Same-owner names are unique without case. `CHANNEL_GROUP_LIMIT` / `CHANNEL_GROUP_NAME_TAKEN` are `409`; foreign id `404` |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/channel-groups/:groupId` | `FoldChannelGroupRequest { collapsed }` → `200 ChannelGroup`; own group only; missing or foreign `404 CHANNEL_GROUP_NOT_FOUND` |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/channel-groups/:groupId` | Own group removed, placements return to Channels; `204`, also for absent/foreign ids without any effect. Workspace outsider still `404` |
+| ○ | `PUT` | `/api/channels/:channelId/sidebar-group` | `MoveChannelGroupRequest { groupId }` → `200 Channel`; null means Channels. Only a joined public/private channel and own group in that workspace; public nonmember and DM `404`. Moving clears the star atomically; starring clears placement |
+
+
 | | Method | Path | Role |
 |:-:|---|---|---|
 | ○ | `GET` | `/api/workspaces/:workspaceId/channels` | member — channels you can see, each a `Channel` as the caller sees it; every one carries `memberCount`, its members whose account is not erased, joined or not, read in the list's one statement (D-167), and `codeRepository`, its one GitHub feed's repository or null with none or several, which its messages' code references link into (D-223) |
