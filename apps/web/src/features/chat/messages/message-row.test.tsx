@@ -49,6 +49,19 @@ const mount = async (
     options,
   );
 
+describe('message-bound public metadata', () => {
+  test.each(['sending', 'failed'] as const)(
+    'waits for server acceptance while delivery is %s',
+    async (delivery) => {
+      const message = aMessage(1, { sender: ME, content: 'https://docs.example/report' });
+      const pending = await mount(props({ message, delivery }));
+      expect(pending.container.querySelector('[data-web-link-cards]') === null).toBe(true);
+      const sent = await mount(props({ message, delivery: 'sent' }));
+      expect(sent.container.querySelector('[data-web-link-cards]') !== null).toBe(true);
+    },
+  );
+});
+
 describe("a resolved thread's root", () => {
   test('is quiet — its text in the muted ink — and is the same row otherwise', async () => {
     const view = await mount(props({ dimmed: true }));

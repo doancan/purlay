@@ -583,6 +583,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,
   },
+  'POST /api/messages/:messageId/link-preview': {
+    refusal: 'MESSAGE_NOT_FOUND',
+    body: () => ({ url: 'https://docs.example/report' }),
+    visibility: MESSAGE,
+  },
   'PUT /api/messages/:messageId/reactions/:emoji': {
     refusal: 'MESSAGE_NOT_FOUND',
     visibility: MESSAGE,

@@ -101,6 +101,7 @@ import { InboxPage, InboxQuery, MarkInboxReadRequest } from './inbox';
 import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';
 import { Attachment, Channel, Message, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
+import { WebLinkPreviewRequest, WebLinkPreviewResponse } from './web-link-previews';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -591,6 +592,14 @@ export const ENDPOINTS = [
     path: '/api/messages/:messageId/follow',
     auth: 'session',
     responses: { 200: ThreadFollow },
+  }),
+  read({
+    id: 'previewMessageLink',
+    method: 'POST',
+    path: '/api/messages/:messageId/link-preview',
+    auth: 'session',
+    body: WebLinkPreviewRequest,
+    responses: { 200: WebLinkPreviewResponse },
   }),
   read({
     id: 'setThreadFollow',

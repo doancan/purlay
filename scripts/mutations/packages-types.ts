@@ -448,4 +448,28 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
       "  invitation: Type.Optional(Type.String()),\n  /** The native application's challenge and state, carried in the link's fragment (D-191). */\n",
     tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
   },
+  {
+    id: 'web-preview-contract-allows-third-card',
+    why: 'A long message can fan out more than two metadata reads.',
+    file: 'packages/types/src/web-link-previews.ts',
+    find: 'WEB_LINKS_PER_MESSAGE_MAX = 2',
+    replace: 'WEB_LINKS_PER_MESSAGE_MAX = 3',
+    tests: ['packages/markdown/src/web-links.test.ts'],
+  },
+  {
+    id: 'web-preview-contract-unbounded-description',
+    why: 'A description past its response limit is accepted.',
+    file: 'packages/types/src/web-link-previews.ts',
+    find: 'WEB_LINK_DESCRIPTION_MAX = 400',
+    replace: 'WEB_LINK_DESCRIPTION_MAX = 401',
+    tests: ['packages/types/src/web-link-previews.test.ts'],
+  },
+  {
+    id: 'web-preview-contract-unbounded-title',
+    why: 'A response longer than the title boundary passes the shared contract.',
+    file: 'packages/types/src/web-link-previews.ts',
+    find: 'WEB_LINK_TITLE_MAX = 200',
+    replace: 'WEB_LINK_TITLE_MAX = 201',
+    tests: ['packages/types/src/web-link-previews.test.ts'],
+  },
 ];

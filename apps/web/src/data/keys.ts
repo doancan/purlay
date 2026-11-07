@@ -14,6 +14,9 @@ import type {
  * frame names a channel and not the workspace it is in.
  */
 export const keys = {
+  webLinkPreviews: (channelId: string) => ['web-link-preview', channelId] as const,
+  webLinkPreview: (channelId: string, messageId: string, url: string) =>
+    ['web-link-preview', channelId, messageId, url] as const,
   me: ['me'] as const,
   quietHours: ['me', 'quiet-hours'] as const,
   /** Whether the caller is emailed about what they missed (D-240). */
@@ -149,6 +152,7 @@ export const keys = {
 
 /** The families, for the code that addresses one of them whole. */
 export const families = {
+  webLinkPreviews: ['web-link-preview'] as const,
   followedThreads: ['followed-threads'] as const,
   unreads: ['unreads'] as const,
   search: ['search'] as const,

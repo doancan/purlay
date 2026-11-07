@@ -319,7 +319,8 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
 
     // A card or an external image costs the server a call on the reader's behalf (#110): charged, so
     // one person cannot spend the node on it — to its own bucket, so drawing never spends sending.
-    const costly = COSTLY_READS.has(pathname);
+    const costly =
+      COSTLY_READS.has(pathname) || /^\/api\/messages\/[^/]+\/link-preview$/.test(pathname);
     if (pathname.startsWith('/api/') && (STATE_CHANGING.has(method) || costly)) {
       // Whoever the session names. No valid session means the handler will say 401;
       // there is no user to charge, and no bucket is created for an unknown caller.

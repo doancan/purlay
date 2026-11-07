@@ -816,6 +816,21 @@ stored representation. (D-36)
 
 ### 8.3. GitHub unfurling
 
+Public web links receive optional metadata cards without an integration credential (D-293). The shared Markdown
+AST selects at most two distinct HTTPS documents per message, excluding code, supported GitHub item cards,
+picture links and the app's own origin. `POST /api/messages/:messageId/link-preview` checks the current reader's
+message authority and selected link before a workspace-specific cache or external connection is touched. A
+card lives five minutes; no card lives one. Four bounded HTML fetches run, eight wait, and same-key work is
+coalesced; an overflow returns JSON null without caching an untried origin. The existing checked-DNS transport
+pins a public address, follows no redirect, sends no reader credentials and bounds identity-encoded HTML to
+256 KiB and five seconds per fetch. Bun HTMLRewriter reads inert metadata, with `entities` decoding HTML
+references in their correct text/attribute context. Titles, descriptions and image addresses are bounded
+contract values, never rendered HTML. The original message link and fragment remain the destination;
+images go through the existing checked proxy. Only visible messages request metadata. Hidden, deleted and
+revoked content cancels and removes its client cache; socket reconnects do not refetch decorative metadata.
+
+GitHub pull requests and issues retain their integration-aware cards:
+
 ```
 Client detects a GitHub URL
       └─▶ POST /api/integrations/github/unfurl { url }

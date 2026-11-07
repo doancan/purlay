@@ -69,6 +69,25 @@ const harness = (body: unknown): { api: Api; calls: Call[] } => {
 };
 
 describe('the endpoints', () => {
+  test('a public link preview is bound to a message and validates its nullable answer', async () => {
+    const card = { title: 'Report', description: null, imageUrl: null };
+    const h = harness(card);
+    expect(await h.api.previewMessageLink(ID, 'https://docs.example/report')).toEqual(card);
+    expect(h.calls).toEqual([
+      {
+        method: 'POST',
+        url: `/api/messages/${ID}/link-preview`,
+        body: { url: 'https://docs.example/report' },
+      },
+    ]);
+    expect(
+      await harness(null).api.previewMessageLink(ID, 'https://docs.example/report'),
+    ).toBeNull();
+    const failure: unknown = await harness({ ...card, title: '\u202Ebad' })
+      .api.previewMessageLink(ID, 'https://docs.example/report')
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ApiError);
+  });
   test('personal channel groups use bounded owner metadata, repeatable ids and the channel placement contract', async () => {
     const group = { id: ID, name: 'Finance', collapsed: false };
     const list = harness({ data: [group], nextCursor: null });

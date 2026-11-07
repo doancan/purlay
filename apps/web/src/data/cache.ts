@@ -396,8 +396,18 @@ export const reactionsUpdated = (
  * with replies stays as its tombstone, with its thread. The open questions are asked again: the
  * server lists no deleted root there.
  */
+const forgetWebPreviews = (client: QueryClient, messageId: string): void => {
+  const previews = {
+    queryKey: families.webLinkPreviews,
+    predicate: (query: { queryKey: QueryKey }): boolean => query.queryKey[2] === messageId,
+  };
+  void client.cancelQueries(previews);
+  client.removeQueries(previews);
+};
+
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  if (revision.deletedAt !== null) forgetWebPreviews(client, id);
   const revise: (message: Message) => Message = (m) =>
     m.id === id
       ? {
@@ -642,6 +652,8 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
     );
   }
   for (const id of channelIds) {
+    void client.cancelQueries({ queryKey: keys.webLinkPreviews(id) });
+    client.removeQueries({ queryKey: keys.webLinkPreviews(id) });
     client.removeQueries({ queryKey: keys.messages(id) });
     client.removeQueries({ queryKey: keys.unreadsFor(id) });
     client.removeQueries({ queryKey: keys.channelMembers(id) });
@@ -689,6 +701,7 @@ export const messageHidden = (
   at: string,
   channelId?: string,
 ): void => {
+  forgetWebPreviews(client, messageId);
   editFollowed(client, (row) => (row.root.id === messageId ? null : row), true);
   readAgain(client, families.followedThreads);
   const hide: (message: Message) => Message = (message) =>
