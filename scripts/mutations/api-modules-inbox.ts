@@ -94,6 +94,14 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
   },
   {
+    id: 'sink-allows-a-deleted-workspace',
+    why: 'an earlier context writes notices after its workspace was deleted (D-286)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: "      .where('deleted_at', 'is', null)\n",
+    replace: '',
+    tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
     id: 'sink-announce-counts-nothing',
     why: 'the notices written never reach the metric, so the operator cannot tell a module has stopped notifying (D-286)',
     file: 'apps/api/src/modules/inbox/sink.ts',
@@ -108,6 +116,22 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     find: 'people.set(`${notice.workspaceId}:${notice.recipientId}`, notice)',
     replace: 'people.set(notice.entryId, notice)',
     tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
+    id: 'sink-ignores-the-workspace-guard',
+    why: 'a missing current workspace does not stop a notice from being written (D-286)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: '    if (workspace === undefined) return undefined;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
+    id: 'sink-locks-the-reader-before-the-workspace',
+    why: 'a notice and real account erasure take workspace/user locks in opposite orders and deadlock (D-286)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: "      .where('deleted_at', 'is', null)\n      .forKeyShare()\n",
+    replace: "      .where('deleted_at', 'is', null)\n",
+    tests: ['apps/api/src/modules/inbox/sink-concurrency.integration.test.ts'],
   },
   {
     id: 'sink-notifies-a-non-member',

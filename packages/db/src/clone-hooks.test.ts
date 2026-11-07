@@ -5,8 +5,9 @@
  * passed. A file added later is held to it here, not by somebody remembering.
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import { DROP_HOOK_MS } from './testing';
 
 const ROOT = join(import.meta.dir, '../../..');
@@ -39,11 +40,17 @@ const timedForDrops = (hook: string): boolean => {
   return bound === 'DROP_HOOK_MS' || Number(bound.replaceAll('_', '')) >= DROP_HOOK_MS;
 };
 
-const integrationFiles = (): readonly string[] =>
-  Bun.spawnSync(['git', 'ls-files', '*.integration.test.ts'], { cwd: ROOT })
-    .stdout.toString()
-    .split('\n')
-    .filter((line) => line !== '');
+/** Scan the same source roots as Bun, including new files before their first commit. */
+const integrationFiles = (root = ROOT): readonly string[] => {
+  const filesIn = (directory: string): readonly string[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.name === 'node_modules') return [];
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return filesIn(path);
+      return entry.isFile() && path.endsWith('.integration.test.ts') ? [relative(root, path)] : [];
+    });
+  return ['apps', 'packages', 'scripts'].flatMap((path) => filesIn(join(root, path))).toSorted();
+};
 
 describe('a hook that clones the template has the time a clone waits for', () => {
   test('the reader finds a hook and its closing, at its own indent', () => {
@@ -61,6 +68,24 @@ describe('a hook that clones the template has the time a clone waits for', () =>
       'beforeAll(async () => {\n  a = await cloneIntegrationDatabase();\n}, CLONE_HOOK_MS);',
       '  beforeAll(async () => {\n    b = 1;\n  });',
     ]);
+  });
+
+  test('includes a new integration file before it has been added to Git', () => {
+    const root = mkdtempSync(join(tmpdir(), 'purlay-clone-hooks-'));
+    try {
+      expect(Bun.spawnSync(['git', 'init', '--quiet', root]).exitCode).toBe(0);
+      for (const path of ['apps/api/src', 'packages/db/src', 'scripts/node_modules/vendor']) {
+        mkdirSync(join(root, path), { recursive: true });
+      }
+      writeFileSync(join(root, 'apps/api/src/new.integration.test.ts'), 'new fixture');
+      writeFileSync(
+        join(root, 'scripts/node_modules/vendor/ignored.integration.test.ts'),
+        'dependency',
+      );
+      expect(integrationFiles(root)).toEqual(['apps/api/src/new.integration.test.ts']);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test('in every integration test file', () => {

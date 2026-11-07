@@ -76,6 +76,15 @@ export const notificationSink = (dependencies: {
     const problem = problemWith(notice);
     if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);
     if (notice.recipientId === context.userId) return undefined;
+    // Erasure locks the workspace before its user; take the insert's foreign-key lock in that order.
+    const workspace = await transaction
+      .selectFrom('workspaces')
+      .select('id')
+      .where('id', '=', context.workspaceId)
+      .where('deleted_at', 'is', null)
+      .forKeyShare()
+      .executeTakeFirst();
+    if (workspace === undefined) return undefined;
     const member = await transaction
       .selectFrom('workspace_members')
       .innerJoin('users', 'users.id', 'workspace_members.user_id')
