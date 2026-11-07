@@ -9,7 +9,7 @@
  * convention (`ARCHITECTURE.md` §4).
  */
 import { exportQueue } from './modules/export/queue';
-import { compositionFor, moduleReport, type Composition } from './composition';
+import { compositionFor, moduleReport, workersOf, type Composition } from './composition';
 import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase, leasingExecutor } from '@purlay/db';
@@ -114,7 +114,7 @@ const metrics = serverMetrics(
   undefined,
   modules.bundled.map((module) => module.manifest.id),
   modules.bundled.flatMap((module) =>
-    (module.workers ?? []).map((worker) => ({ module: module.manifest.id, name: worker.name })),
+    workersOf(module).map((worker) => ({ module: module.manifest.id, name: worker.name })),
   ),
   modules.bundled.flatMap((module) =>
     (module.manifest.notifications ?? []).map((kind) => ({
