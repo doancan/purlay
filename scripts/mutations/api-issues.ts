@@ -59,6 +59,15 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
+    id: 'issues-assignment-not-announced',
+    why: 'an assignee is written a notice and their open tabs never read the inbox again (D-286)',
+    file: 'apps/api/src/features/issues/http/handlers.ts',
+    find: '    return await updateIssue(transaction, clock, context, issueId, input, inbox);\n  });\n  await inbox.announce(told);\n',
+    replace:
+      '    return await updateIssue(transaction, clock, context, issueId, input, inbox);\n  });\n  void told;\n',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
     id: 'issues-assignment-not-audited',
     why: 'an issue is given to somebody or taken back and the trail never says by whom (D-222, D-254)',
     file: 'apps/api/src/features/issues/issues.ts',
@@ -66,6 +75,7 @@ export const API_ISSUES: readonly Mutation[] = [
     replace: '  if (row.assignee_id !== row.assignee_id) {',
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
+
   {
     id: 'issues-cap-counts-every-workspace',
     why: 'one full workspace stops every other workspace on the server from making an issue (D-254)',
@@ -107,6 +117,15 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
+    id: 'issues-create-tells-no-assignee',
+    why: 'an issue made for somebody never reaches their inbox (D-286)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: '  if (issue.assignee_id === null) return [];\n',
+    replace:
+      '  if (issue.assignee_id !== null) return [];\n  if (issue.assignee_id === null) return [];\n',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
     id: 'issues-created-by-nobody',
     why: 'an issue records no maker, so nobody but an admin can ever delete it (D-254)',
     file: 'apps/api/src/features/issues/issues.ts',
@@ -129,6 +148,14 @@ export const API_ISSUES: readonly Mutation[] = [
     find: 'budget: { poolShare: issuesBudget },',
     replace: "budget: { none: 'issues is not held' },",
     tests: ['apps/api/src/module-budgets.test.ts'],
+  },
+  {
+    id: 'issues-declares-no-notification',
+    why: 'the manifest does not declare the kind issues writes, so the sink refuses every assignment and each is a 500 (D-286)',
+    file: 'apps/api/src/features/issues/module.ts',
+    find: '    notifications: ISSUES_NOTIFICATION_KINDS,\n',
+    replace: '',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
     id: 'issues-delete-crosses-workspaces',
@@ -350,6 +377,23 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .select(['status', 'assignee_id'])\n    .where('id', '=', issueId)\n    .where('workspace_id', '=', context.workspaceId)",
     replace: "    .select(['status', 'assignee_id'])\n    .where('id', '=', issueId)",
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
+    id: 'issues-update-tells-on-every-change',
+    why: 'a retitle or a status change tells the assignee again that the issue was assigned to them (D-286)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: '    row.assignee_id === before.assignee_id\n      ? []',
+    replace: '    false\n      ? []',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
+    id: 'issues-update-tells-the-old-assignee',
+    why: 'the person an issue was taken from is told it was assigned to them (D-286)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: '      : await tellAssignee(transaction, inbox, context, row);',
+    replace:
+      '      : await tellAssignee(transaction, inbox, context, { ...row, assignee_id: before.assignee_id });',
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {

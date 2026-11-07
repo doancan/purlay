@@ -601,7 +601,15 @@ describe('what a process that does not run a module offers of it', () => {
       'mention',
     );
     expect(compositionFor(undefined).searchSources).toEqual(['messages', 'issues']);
-    expect(compositionFor('issues').notificationKinds).toEqual([]);
+    expect(compositionFor('issues').notificationKinds.map((kind) => kind.type)).toEqual([
+      'issue_assigned',
+    ]);
+    expect(compositionFor('chat').notificationKinds.map((kind) => kind.type)).not.toContain(
+      'issue_assigned',
+    );
+    expect([...compositionFor('chat').noticeOwners.keys()]).not.toContain('issue_assigned');
+    expect(compositionFor('issues').noticeOwners.get('issue_assigned')).toBe('issues');
+    expect(compositionFor('none').noticeOwners.size).toBe(0);
     expect(compositionFor('issues').searchSources).toEqual(['issues']);
     expect(compositionFor('none').searchSources).toEqual([]);
   });

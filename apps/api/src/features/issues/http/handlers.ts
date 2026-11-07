@@ -37,7 +37,7 @@ export const listIssues = async (
 
 /** `POST /api/workspaces/:workspaceId/issues` — `201` with the issue, open. */
 export const postIssue = async (
-  { auth, database, clock }: ModuleRouteDependencies,
+  { auth, database, clock, inbox }: ModuleRouteDependencies,
   request: Request,
   workspaceId: string,
   body: unknown,
@@ -45,15 +45,17 @@ export const postIssue = async (
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(CreateIssueRequest, body);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await atomicallyOn(database)(async (transaction) => {
+  const { issue, told } = await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    return await createIssue(transaction, clock, context, input);
+    return await createIssue(transaction, clock, context, input, inbox);
   });
+  await inbox.announce(told);
+  return issue;
 };
 
 /** `PATCH /api/workspaces/:workspaceId/issues/:issueId` — the issue as it is now. */
 export const patchIssue = async (
-  { auth, database, clock }: ModuleRouteDependencies,
+  { auth, database, clock, inbox }: ModuleRouteDependencies,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -62,10 +64,12 @@ export const patchIssue = async (
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(UpdateIssueRequest, body);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await atomicallyOn(database)(async (transaction) => {
+  const { issue, told } = await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    return await updateIssue(transaction, clock, context, issueId, input);
+    return await updateIssue(transaction, clock, context, issueId, input, inbox);
   });
+  await inbox.announce(told);
+  return issue;
 };
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */

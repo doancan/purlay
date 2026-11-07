@@ -13922,6 +13922,14 @@ an assignee, which is written in the same transaction as the assignment.
 7. **Built in three steps, each alone:** the table, the port, the sink and the lifecycle above (14f); the routes that list and
    read, the `INBOX_UPDATED` frame and the metric (14g); and issues' assignment notice (14h). Push and the web's *Updates* section
    are later steps (14i, 14j) and are not decided here beyond D-283 §8.
+8. **Issues' assignment notice** (14h): `createIssue` and `updateIssue` call `notify` as their last write, in the route's
+   transaction, and the route calls `announce` once it has committed, so a notice that cannot be written takes the assignment
+   with it and a rolled-back assignment has told nobody. It is written when the assignee *changed* to somebody, never for a
+   retitle or a status change on an issue already theirs. The kind `issue_assigned` is declared in the manifest as not
+   `needsYou` and not `pushed` for now: those flags say what chat's badge counts and what a device is told, no inbox notice
+   reaches either until 14i and 14j, and a declaration that promises a push which does not happen is false; they are flipped in
+   the step that makes them true. `notification-kinds.test.ts` holds chat's kinds to the wire's `NotificationType`, `NEEDS_YOU`
+   and the database's enum, and another module's to a name of its own.
 
 **Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
 each module, and the first one that forgot would write a stranger a notice. *The module named by the caller*: a lie the type

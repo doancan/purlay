@@ -29,6 +29,7 @@ have it.
 
 ### Added
 
+- **Issues** — Assigning an issue to somebody else now tells them in the core's inbox, in the same step as the assignment (D-286)
 - **Messages** — Read PDF attachments inside the conversation, browse pages, zoom and select their text, with the original download available throughout (D-287)
 - **Channel groups** — Organize your channels under personal headings across devices, rename or fold groups, and move a channel from its menu; deleting a group preserves its channels and conversations (D-284)
 - **Search** — A workspace-wide find answers a group of hits for each source, the messages a person may read and the workspace's issues, and says which source it skipped and why (off, slow or failed), so a slow module cannot hold the others up; it works with chat turned off (D-285)
