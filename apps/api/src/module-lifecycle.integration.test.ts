@@ -68,6 +68,7 @@ import { readiness } from './platform/readiness';
 import { atomicallyOn } from './platform/transactions';
 import { requireWorkspaceMembership } from './platform/tenancy';
 import { aRecordingLogger } from './testing/doubles';
+import { moduleSeeders } from './testing/module-seeders';
 import { aRoom, type Room } from './testing/rooms';
 import { aSession } from './testing/signed-in';
 import { linkFile } from './testing/sent-files';
@@ -101,6 +102,9 @@ const hasSet = (state: DatabaseState, id: string): boolean =>
   state.sets.some((set) => set.id === id);
 
 const CELLS = moduleCells(bundledModules);
+
+/** A module that has a `testing.ts` is seeded by it, with no edit here (`testing/module-seeders.ts`). */
+const SEEDERS = await moduleSeeders();
 
 /** A database as each cell's `MODULES` value migrates it. */
 const DATABASE_STATES: readonly DatabaseState[] = CELLS.map((cell) => ({
@@ -314,6 +318,9 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
         bobsOnAda: await make(bob, ada, 'bob made, ada has it'),
         adas: await make(ada, bob, 'ada made, bob has it'),
       };
+    }
+    for (const [id, seedModule] of SEEDERS) {
+      if (hasSet(state, id)) await seedModule(tx, workspaceId);
     }
 
     if (room === undefined) {

@@ -129,7 +129,8 @@ jobs:
   # `modules` job, which starts the API and so reads the API, the packages and the dependencies, not the client.
   changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    # The module matrix needs the dependencies installed: a minute or two with the cache cold.
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
@@ -137,6 +138,7 @@ jobs:
       browser: ${{ steps.paths.outputs.browser }}
       modules: ${{ steps.paths.outputs.modules }}
       mutations: ${{ steps.paths.outputs.mutations }}
+      cells: ${{ steps.cells.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -151,6 +153,10 @@ jobs:
           NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
         run: bun run ci:changes
+      # The legs of `module-suites` come from the modules the build carries, so a module added lists itself there.
+      - run: bun install --frozen-lockfile
+      - id: cells
+        run: bun run modules:cells -- --github-output
 
   # A module's removal on a real process, once per cell of the matrix (D-250 rule 6, `MODULES.md` §8): for the core
   # alone, each module and everything, a database of its own is migrated with `bun run db:migrate` under that
@@ -192,15 +198,15 @@ jobs:
   # The integration suites that belong to no module, once per cell of the matrix but the one with every module (which
   # is `schema`'s own run): for each, a database of the cell's own sets with `MODULES` set — the harness reads it — and
   # the suites that need a module the cell lacks left out (`MODULES.md` §8). One job per cell, so the run takes as long as
-  # the longest cell (chat's, about the length of `schema`) and not the sum; `module-suites.test.ts` holds this list to
-  # the cells the build has, so a module added to the bundle fails there until its cells are added here.
+  # the longest cell (chat's, about the length of `schema`) and not the sum; the legs are
+  # `bun run modules:cells`, made from the modules the build carries, and `module-suites.test.ts` holds the workflow to that.
   module-suites:
     needs: changes
     if: needs.changes.outputs.modules == 'true'
     strategy:
       fail-fast: false
       matrix:
-        cell: ['none', 'chat', 'issues']
+        cell: ${{ fromJSON(needs.changes.outputs.cells) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:

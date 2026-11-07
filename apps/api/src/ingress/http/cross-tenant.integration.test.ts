@@ -41,6 +41,7 @@ import { credentialCipher } from '../../platform/crypto';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { fixedClock } from '../../platform/clock';
 import { workspacePrefix } from '../../platform/storage';
+import { moduleSeeders } from '../../testing/module-seeders';
 import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import { twoColourPng } from '../../testing/png';
@@ -274,6 +275,8 @@ const aTenant = async (
   });
   expect(issue.status).toBe(201);
   const { id: issueId } = (await issue.json()) as { id: string };
+  // What a module made by `module:new` keeps of the workspace: a row, so that its list is proved not to show another workspace's.
+  for (const seedModule of (await moduleSeeders()).values()) await seedModule(db, workspaceId);
   // An incoming webhook to revoke (D-245).
   const hook = await call(db, 'POST', `/api/channels/${channelId}/incoming-webhooks`, cookie, {
     name: 'CI',

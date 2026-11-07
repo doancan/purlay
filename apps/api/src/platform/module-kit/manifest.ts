@@ -70,6 +70,13 @@ export interface ModuleManifest {
   readonly requires: readonly string[];
   /** Modules this one uses when they are enabled; absent, it hides the feature or does nothing. */
   readonly optional: readonly string[];
+  /**
+   * What the module does without each of its `optional` partners, one sentence for each and none for another module: `{}` when it
+   * has none (D-291). The registry refuses a partner with no sentence and a sentence for a module not listed, and the cases the
+   * generator in `testing/degradation.ts` makes run the module with the partner left out of `MODULES`, so the sentence is a claim
+   * with a test (`MODULES.md` §4).
+   */
+  readonly degrades: Readonly<Record<string, string>>;
   /** Capabilities this module offers, asked for by name through the core (`MODULES.md` §4). */
   readonly provides: readonly string[];
   /**

@@ -5,6 +5,7 @@ import type { ModuleManifest } from './manifest';
 const manifest = (overrides: Partial<ModuleManifest> & { id: string }): ModuleManifest => ({
   requires: [],
   optional: [],
+  degrades: {},
   provides: [],
   budget: { none: 'a test module' },
   ...overrides,

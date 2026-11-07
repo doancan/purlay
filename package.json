@@ -66,6 +66,7 @@
     "release": "bun run scripts/release.ts",
     "schedule": "bun run apps/api/src/cli/schedule.ts",
     "test": "bun --no-env-file --env-file=.env.test test apps packages scripts --isolate --path-ignore-patterns '**/*.integration.test.ts'",
+    "modules:cells": "bun --no-env-file run apps/api/src/testing/module-cells-matrix.ts",
     "modules:smoke": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/module-smoke.ts",
     "modules:suites": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/module-suites.ts",
     "modules:upgrade": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/module-upgrade.ts",

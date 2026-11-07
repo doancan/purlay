@@ -32,6 +32,7 @@ const notesWith = (frameHandlers: FrameHandlers<RouterFrameContext>): BundledMod
     id: 'notes',
     requires: [],
     optional: [],
+    degrades: {},
     provides: [],
     budget: { none: 'a test module' },
     frames: [OPERATION],
