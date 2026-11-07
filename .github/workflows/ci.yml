@@ -363,7 +363,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.browser == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Main 2026-11-07: setup plus 271 passing tests exhausted 12 minutes (1.4 + 10.6).
+    # Match Chromium's total job envelope; test, assertion and performance limits stay unchanged.
+    timeout-minutes: 20
     env:
       DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
     steps:
