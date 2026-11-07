@@ -178,56 +178,6 @@ export const CORE_COLUMNS_FOR_A_MODULE: Readonly<Record<string, CoreColumnForAMo
       'modules/export/core-personal-export.ts',
     ],
   },
-  'users.quiet_days': {
-    module: 'chat',
-    why: 'the days of the week of the person’s quiet hours, which hold back chat’s push and mail',
-    coreFiles: [
-      'modules/users/quiet-hours.ts',
-      'modules/workspaces/deep-work.ts',
-      'modules/export/core-export.ts',
-      'modules/export/core-personal-export.ts',
-    ],
-  },
-  'users.quiet_from': {
-    module: 'chat',
-    why: 'the hour the person’s quiet hours begin, which hold back chat’s push and mail',
-    coreFiles: [
-      'modules/users/quiet-hours.ts',
-      'modules/workspaces/deep-work.ts',
-      'modules/export/core-export.ts',
-      'modules/export/core-personal-export.ts',
-    ],
-  },
-  'users.quiet_to': {
-    module: 'chat',
-    why: 'the hour the person’s quiet hours end, which hold back chat’s push and mail',
-    coreFiles: [
-      'modules/users/quiet-hours.ts',
-      'modules/workspaces/deep-work.ts',
-      'modules/export/core-export.ts',
-      'modules/export/core-personal-export.ts',
-    ],
-  },
-  'workspace_members.deep_work_until': {
-    module: 'chat',
-    why: 'when the person’s Deep Work ends, which chat’s notifications and reminders wait for',
-    coreFiles: [
-      'modules/workspaces/deep-work.ts',
-      'modules/workspaces/workspaces.ts',
-      'modules/export/core-export.ts',
-      'modules/export/core-personal-export.ts',
-    ],
-  },
-  'workspace_members.is_deep_work_active': {
-    module: 'chat',
-    why: 'whether the person is in Deep Work, which holds back chat’s notifications',
-    coreFiles: [
-      'modules/workspaces/deep-work.ts',
-      'modules/workspaces/workspaces.ts',
-      'modules/export/core-export.ts',
-      'modules/export/core-personal-export.ts',
-    ],
-  },
   'workspaces.retention_days': {
     module: 'chat',
     why: 'how many days of messages chat’s purge keeps, set from the core’s workspace settings',

@@ -21,6 +21,7 @@ import type { ModuleNotice, WrittenNotice } from '../../platform/ports/notificat
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { NOW } from '../../testing/doubles';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
+import type { PushSender } from '../push/sender';
 import { notificationSink, type KindOwners } from './sink';
 
 afterAll(async () => {
@@ -54,8 +55,17 @@ const metrics = serverMetrics(
 const sinkOn = (
   kinds: KindOwners = KINDS,
   bus: EventBus = recordingBus,
+  push?: Pick<PushSender, 'toldInbox'>,
 ): ReturnType<typeof notificationSink> =>
-  notificationSink({ clock: later(), kinds, bus, log: NO_LOG, written: metrics.inboxEntries });
+  notificationSink({
+    clock: later(),
+    kinds,
+    bus,
+    log: NO_LOG,
+    written: metrics.inboxEntries,
+    pushedKinds: new Set(['thing_assigned']),
+    ...(push === undefined ? {} : { push }),
+  });
 
 const anIssueId = (): string => crypto.randomUUID();
 
@@ -332,6 +342,24 @@ describe('integration: the notification sink', () => {
         expect(Value.Check(ServerFrame, frame)).toBe(true);
       }
       expect(seriesOf('thing_assigned') - before).toBe(3);
+    });
+
+    test('hands the push the notices of a pushed kind and no others, after counting them', async () => {
+      const workspaceId = crypto.randomUUID();
+      const pushed: WrittenNotice[][] = [];
+      const push = {
+        toldInbox: (notices: readonly WrittenNotice[]): void => void pushed.push([...notices]),
+      };
+      const pushedOne = written(workspaceId, crypto.randomUUID());
+      const listedOnly = { ...written(workspaceId, crypto.randomUUID()), kind: 'thing_listed' };
+      await sinkOn(KINDS, recordingBus, push).announce([pushedOne, listedOnly]);
+      expect(pushed).toEqual([[pushedOne]]);
+    });
+
+    test('pushes nothing where web push is off, and still tells the tabs', async () => {
+      told.splice(0);
+      await sinkOn().announce([written(crypto.randomUUID(), crypto.randomUUID())]);
+      expect(told).toHaveLength(1);
     });
 
     test('tells nothing of nothing', async () => {

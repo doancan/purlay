@@ -45,4 +45,16 @@ describe('the kinds of notification', () => {
   test('that need the person are pushed, so a push never tells less than the badge counts', () => {
     expect(declared.filter((kind) => kind.needsYou && !kind.pushed)).toEqual([]);
   });
+
+  test('that are pushed and not chat’s have words, in both languages, from the module that declares them', () => {
+    for (const module of carried.filter((one) => one.manifest.id !== 'chat')) {
+      for (const kind of (module.manifest.notifications ?? []).filter((one) => one.pushed)) {
+        for (const locale of ['en', 'tr'] as const) {
+          const saying = module.noticeWords?.(kind.type, locale, 'Ada');
+          expect(saying?.body, `${kind.type} in ${locale}`).toContain('Ada');
+          expect(saying?.path, kind.type).toMatch(/^[a-z][a-z-]*$/);
+        }
+      }
+    }
+  });
 });

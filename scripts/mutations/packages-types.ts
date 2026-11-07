@@ -130,6 +130,14 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {
+    id: 'issues-assignment-notice-not-pushed',
+    why: 'the manifest declares an assignment not pushed, so no device is told of it (D-286 §9)',
+    file: 'packages/types/src/issues.ts',
+    find: "{ type: 'issue_assigned', needsYou: false, pushed: true, mailed: false }",
+    replace: "{ type: 'issue_assigned', needsYou: false, pushed: false, mailed: false }",
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'issues-body-takes-a-nul',
     why: 'a NUL in a body is a 500 INTERNAL from the database instead of a 400 naming the field (D-254)',
     file: 'packages/types/src/issues.ts',

@@ -98,6 +98,7 @@ describe('integration: notification and account erasure lock ordering', () => {
           log: NO_LOG,
           written: serverMetrics().inboxEntries,
           kinds: new Map([['thing_assigned', 'things']]),
+          pushedKinds: new Set(),
         }).notify(tx.withPlugin(barrier), world.context, {
           kind: 'thing_assigned',
           recipientId: world.reader.userId,
