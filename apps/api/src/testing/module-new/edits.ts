@@ -4,6 +4,8 @@
  */
 import { fill, type Edit, type Names, type Options } from './plan';
 
+const ISSUES_MODULE_IMPORT = "import { issuesModule } from './features/issues/module';\n";
+const BUNDLE_END = '] as const satisfies readonly BundledModule[];';
 const ISSUES_ID = "Type.Literal('issues')";
 const ISSUES_EXPORT = "export * from './issues';\n";
 const ISSUES_SET = "  { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },\n";
@@ -12,9 +14,24 @@ const ISSUES_OWNER = "  issues: 'issues',\n";
 const ISSUES_LIFECYCLE = "  issues: decided('anonymised', 'until-removed'),\n";
 const ISSUES_ENDPOINT_IMPORT =
   "import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';\n";
+const ISSUES_HOT_PATH =
+  "  issues: { judged: 'baseline', prepare: timeIssuesList, makeBusy: issuesBusy },\n";
+const WITHOUT_A_HOT_PATH = '  // module:new:without-a-hot-path\n';
+const NO_HOT_PATH_YET =
+  'a scaffolded list has no measured path yet; give it one of the baseline shape before it carries traffic';
 const ENDPOINTS_END = '] as const satisfies readonly EndpointSpec[];';
 
 const EDITS: readonly Edit[] = [
+  {
+    file: 'apps/api/src/composition.ts',
+    anchor: ISSUES_MODULE_IMPORT,
+    text: `${ISSUES_MODULE_IMPORT}import { __CAMEL__Module } from './features/__ID__/module';\n`,
+  },
+  {
+    file: 'apps/api/src/composition.ts',
+    anchor: BUNDLE_END,
+    text: `  __CAMEL__Module,\n${BUNDLE_END}`,
+  },
   {
     file: 'packages/types/src/modules.ts',
     anchor: ISSUES_ID,
@@ -69,6 +86,16 @@ ${ENDPOINTS_END}`,
     file: 'packages/db/src/table-lifecycle.ts',
     anchor: ISSUES_LIFECYCLE,
     text: `${ISSUES_LIFECYCLE}\n  // __PASCAL__: rows that name nobody (its own set, \`migrations/__ID__/\`).\n  __SNAKE__: decided({ nobody: 'a row is a title and names no person' }, 'until-removed'),\n`,
+  },
+  {
+    file: 'apps/api/src/cli/budget-latency.ts',
+    anchor: ISSUES_HOT_PATH,
+    text: `${ISSUES_HOT_PATH}  '__ID__': { none: '${NO_HOT_PATH_YET}' },\n`,
+  },
+  {
+    file: 'apps/api/src/cli/budget-latency.test.ts',
+    anchor: WITHOUT_A_HOT_PATH,
+    text: `  '__ID__': '${NO_HOT_PATH_YET}',\n${WITHOUT_A_HOT_PATH}`,
   },
 ];
 
