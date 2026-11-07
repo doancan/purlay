@@ -2975,6 +2975,13 @@ export const tr = {
   'admin.used': 'Kullanılan depolama',
   'admin.quota': 'Depolama kotası',
   'admin.quotaEdit': 'Kotayı değiştir',
+  'admin.modulesEdit': 'Modüller',
+  'admin.modulesSave': 'Modülleri kaydet',
+  'admin.moduleInherit': 'Sunucunun varsayılanı',
+  'admin.moduleOn': 'Verildi',
+  'admin.moduleOff': 'Geri alındı',
+  'admin.modulesHint':
+    'Modülü verilmeyen çalışma alanı ona ulaşamaz; verileri eskisi gibi saklanır, dışa aktarılır ve silinir. Sohbet bir izin değildir.',
   'admin.quotaBytes': 'Bayt cinsinden kota',
   'admin.quotaHint':
     'Tam bayt. 1 GiB = 1.073.741.824 bayt. Mevcut kullanımın altındaki kota yeni yüklemeleri engeller, içerik silmez.',

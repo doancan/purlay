@@ -43,6 +43,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/threads/thread.test.tsx'],
   },
   {
+    id: 'console-sends-modules-that-did-not-change',
+    why: 'saving the modules of a workspace writes every row again, so the trail and the members are told of changes nobody made (D-292)',
+    file: 'apps/web/src/features/administration/workspaces.tsx',
+    find: '        if (state !== entry.state)',
+    replace: '        if (true as boolean)',
+    tests: ['apps/web/src/features/administration/workspaces.test.tsx'],
+  },
+  {
     id: 'deep-work-client-never-ends',
     why: 'the bar says Deep Work long after it ended on the server, and the badges stay hidden',
     file: 'apps/web/src/features/shell/deep-work.tsx',

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { act, within } from '@testing-library/react';
+import { act, fireEvent, within } from '@testing-library/react';
 import { installDom } from '../../testing/dom';
 import { person } from '../../testing/user';
 import {
@@ -80,6 +80,78 @@ describe('global workspace inventory', () => {
     await person().keyboard('{Enter}');
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
+    view.unmount();
+  });
+  test('the modules of a workspace are said one by one, only what changed is sent, and a refusal is shown', async () => {
+    const withModules = {
+      ...ADMIN_WORKSPACE,
+      modules: [
+        {
+          module: 'issues',
+          state: 'inherit',
+          effective: true,
+          validUntil: null,
+          source: null,
+          running: true,
+        },
+        {
+          module: 'tasks',
+          state: 'on',
+          effective: true,
+          validUntil: null,
+          source: 'operator',
+          running: true,
+        },
+      ],
+    };
+    let refuse = true;
+    const view = await renderAdministration('workspaces', (call) => {
+      if (call.method === 'GET' && call.path.startsWith('/api/server/workspaces'))
+        return adminJson({ data: [withModules], nextCursor: null });
+      if (call.path.endsWith('/modules') && refuse)
+        return adminJson(
+          { error: { code: 'MODULE_REQUIRES', message: 'The module requires issues.' } },
+          409,
+        );
+      return undefined;
+    });
+    await person().click(await view.findByRole('button', { name: 'Modules' }));
+    let dialog = within(view.getByRole('dialog'));
+    // Nothing changed: saving sends nothing and closes.
+    await person().click(dialog.getByRole('button', { name: 'Save modules' }));
+    await settle();
+    expect(view.calls.filter((call) => call.path.endsWith('/modules'))).toEqual([]);
+    expect(view.queryByRole('dialog')).toBeNull();
+
+    await person().click(view.getByRole('button', { name: 'Modules' }));
+    dialog = within(view.getByRole('dialog'));
+    await person().selectOptions(dialog.getByLabelText('issues'), 'off');
+    await person().click(dialog.getByRole('button', { name: 'Save modules' }));
+    expect(await dialog.findByRole('alert')).toBeDefined();
+    const sent = view.calls.filter((call) => call.path.endsWith('/modules'));
+    expect(sent.map((call) => call.path)).toEqual([
+      `/api/server/workspaces/${ADMIN_WORKSPACE.id}/modules`,
+    ]);
+    expect(sent[0]?.body).toEqual({ module: 'issues', state: 'off' });
+
+    // Escape leaves it as Cancel does; the form submitted by its own means says what the button says.
+    await person().keyboard('{Escape}');
+    expect(view.queryByRole('dialog')).toBeNull();
+    refuse = false;
+    await person().click(view.getByRole('button', { name: 'Modules' }));
+    dialog = within(view.getByRole('dialog'));
+    await person().selectOptions(dialog.getByLabelText('tasks'), 'inherit');
+    const form = view.getByRole('dialog').querySelector('form');
+    if (form === null) throw new Error('the dialog has no form');
+    fireEvent.submit(form);
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(
+      view.calls.filter((call) => call.path.endsWith('/modules')).map((call) => call.body),
+    ).toEqual([
+      { module: 'issues', state: 'off' },
+      { module: 'tasks', state: 'inherit' },
+    ]);
     view.unmount();
   });
 });

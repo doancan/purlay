@@ -81,6 +81,7 @@ const WorkspaceList = ({
     retry: false,
   });
   const [editing, setEditing] = useState<ServerWorkspace | null>(null);
+  const [granting, setGranting] = useState<ServerWorkspace | null>(null);
   return (
     <QueryState query={query}>
       {(data) => (
@@ -93,13 +94,22 @@ const WorkspaceList = ({
               description={`/${workspace.slug}`}
               actions={
                 workspace.deletedAt === null && !dataOnly ? (
-                  <Button
-                    onClick={() => {
-                      setEditing(workspace);
-                    }}
-                  >
-                    {t('admin.quotaEdit')}
-                  </Button>
+                  <>
+                    <Button
+                      onClick={() => {
+                        setGranting(workspace);
+                      }}
+                    >
+                      {t('admin.modulesEdit')}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setEditing(workspace);
+                      }}
+                    >
+                      {t('admin.quotaEdit')}
+                    </Button>
+                  </>
                 ) : undefined
               }
             >
@@ -143,6 +153,15 @@ const WorkspaceList = ({
             </SettingsCard>
           ))}
           <Pagination pages={pages} nextCursor={data.nextCursor} busy={query.isFetching} />
+          {granting !== null && (
+            <ModulesForm
+              key={granting.id}
+              workspace={granting}
+              onClose={() => {
+                setGranting(null);
+              }}
+            />
+          )}
           {editing !== null && (
             <QuotaForm
               key={editing.id}
@@ -231,6 +250,100 @@ const QuotaForm = ({
           }}
           {...(tried && !valid ? { error: t('admin.quotaError') } : {})}
         />
+        {failure !== null && <ChangeFailure failure={failure} />}
+      </form>
+    </Dialog>
+  );
+};
+
+type ModuleChoice = ServerWorkspace['modules'][number]['state'];
+
+/** What the operator says of each module a workspace can be granted (D-292); only what differs from the row is sent. */
+const ModulesForm = ({
+  workspace,
+  onClose,
+}: {
+  readonly workspace: ServerWorkspace;
+  readonly onClose: () => void;
+}): React.JSX.Element => {
+  const client = useAdministrationClient();
+  const { t } = useI18n();
+  const queries = useQueryClient();
+  const [chosen, setChosen] = useState<Readonly<Record<string, ModuleChoice>>>(() =>
+    Object.fromEntries(workspace.modules.map((entry) => [entry.module, entry.state])),
+  );
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<unknown>(null);
+  const save = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      for (const entry of workspace.modules) {
+        const state = chosen[entry.module] ?? entry.state;
+        if (state !== entry.state)
+          await client.workspaceModule(workspace.id, { module: entry.module, state });
+      }
+      onClose();
+    } catch (error) {
+      setFailure(error);
+    } finally {
+      await queries.invalidateQueries({ queryKey: ['server'] });
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+      title={t('admin.modulesEdit')}
+      description={workspace.name}
+      closeLabel={t('common.close')}
+      footer={
+        <>
+          <Button disabled={busy} onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            busy={busy}
+            onClick={() => {
+              void save();
+            }}
+          >
+            {t('admin.modulesSave')}
+          </Button>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        {workspace.modules.map((entry) => (
+          <label key={entry.module} className="flex flex-col gap-1 text-label text-ink">
+            {entry.module}
+            <Select
+              value={chosen[entry.module] ?? entry.state}
+              disabled={busy}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === 'on' || value === 'off' || value === 'inherit')
+                  setChosen({ ...chosen, [entry.module]: value });
+              }}
+            >
+              <option value="inherit">{t('admin.moduleInherit')}</option>
+              <option value="on">{t('admin.moduleOn')}</option>
+              <option value="off">{t('admin.moduleOff')}</option>
+            </Select>
+          </label>
+        ))}
+        <p className="text-caption text-ink-muted">{t('admin.modulesHint')}</p>
         {failure !== null && <ChangeFailure failure={failure} />}
       </form>
     </Dialog>

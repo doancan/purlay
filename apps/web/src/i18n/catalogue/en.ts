@@ -3008,6 +3008,13 @@ export const en = {
   'admin.used': 'Storage used',
   'admin.quota': 'Storage quota',
   'admin.quotaEdit': 'Change quota',
+  'admin.modulesEdit': 'Modules',
+  'admin.modulesSave': 'Save modules',
+  'admin.moduleInherit': 'The server’s default',
+  'admin.moduleOn': 'Granted',
+  'admin.moduleOff': 'Withheld',
+  'admin.modulesHint':
+    'A workspace that is not granted a module cannot reach it; its data is kept, exported and erased as before. Chat is not a grant.',
   'admin.quotaBytes': 'Quota in bytes',
   'admin.quotaHint':
     'Whole bytes. 1 GiB = 1,073,741,824 bytes. Below current usage prevents new uploads and deletes nothing.',

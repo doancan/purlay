@@ -13,6 +13,7 @@ import {
   ServerUserDetail,
   ServerUserPage,
   ServerWorkspacePage,
+  type ServerWorkspaceModuleRequest,
   type ServerAuditQuery,
   type ServerUsersQuery,
   type ServerWorkspacesQuery,
@@ -47,6 +48,7 @@ export const createAdministrationClient = (
   role: (id: string, isServerAdmin: boolean) => Promise<void>;
   revokeSessions: (id: string) => Promise<void>;
   quota: (id: string, quotaBytes: number) => Promise<void>;
+  workspaceModule: (id: string, body: ServerWorkspaceModuleRequest) => Promise<void>;
 } => {
   const call = jsonCaller(fetchFn);
   const read = async <S extends TSchema>(
@@ -103,6 +105,9 @@ export const createAdministrationClient = (
     },
     quota: async (id, quotaBytes): Promise<void> => {
       await write(`/api/server/workspaces/${encodeURIComponent(id)}/quota`, { quotaBytes });
+    },
+    workspaceModule: async (id, body): Promise<void> => {
+      await write(`/api/server/workspaces/${encodeURIComponent(id)}/modules`, body);
     },
   };
 };
