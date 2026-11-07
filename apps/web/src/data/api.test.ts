@@ -563,6 +563,41 @@ describe('the endpoints', () => {
     expect(refused).toBe(true);
   });
 
+  test('the core’s inbox (D-286): the workspace in the path, the page in the query, reading in the body, and the answer read against the contract', async () => {
+    const entry = {
+      id: ID,
+      module: 'issues',
+      kind: 'issue_assigned',
+      actorId: null,
+      subject: { type: 'issue', id: ID },
+      params: {},
+      readAt: null,
+      createdAt: WHEN,
+    };
+    const updates = harness({ data: [entry], nextCursor: null, unreadCount: 1 });
+    expect((await updates.api.inbox(ID)).unreadCount).toBe(1);
+    await updates.api.inbox(ID, { before: ID, limit: 10, unreadOnly: true });
+    await updates.api.readInbox(ID, { ids: [ID] });
+    await updates.api.readInbox(ID, { all: true });
+    expect(updates.calls).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/inbox`, body: undefined },
+      {
+        method: 'GET',
+        url: `/api/workspaces/${ID}/inbox?before=${ID}&limit=10&unreadOnly=true`,
+        body: undefined,
+      },
+      { method: 'POST', url: `/api/workspaces/${ID}/inbox/read`, body: { ids: [ID] } },
+      { method: 'POST', url: `/api/workspaces/${ID}/inbox/read`, body: { all: true } },
+    ]);
+    // An entry the contract does not describe is refused, not shown.
+    const wrong = harness({ data: [{ ...entry, id: 'nope' }], nextCursor: null, unreadCount: 0 });
+    let refused = false;
+    await wrong.api.inbox(ID).catch(() => {
+      refused = true;
+    });
+    expect(refused).toBe(true);
+  });
+
   test('Deep Work goes in the body, to the workspace it is for, and its answer is read', async () => {
     const set = harness({ until: null });
     expect(await set.api.setDeepWork(ID, { active: false })).toEqual({ until: null });

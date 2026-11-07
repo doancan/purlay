@@ -92,7 +92,8 @@ describe('the Updates section', () => {
     const categories = within(
       within(alone.getByRole('dialog', { name: 'Inbox' })).getByRole('group', { name: 'Category' }),
     );
-    expect(categories.queryByRole('button', { name: 'Updates' })).toBeNull();
+    // A count, not the element: a failed assertion on a node would print the whole page.
+    expect(categories.queryAllByRole('button', { name: 'Updates' }).length).toBe(0);
     expect(asked).toBe(0);
     alone.unmount();
 
@@ -158,7 +159,7 @@ describe('the Updates section', () => {
     await person().click(row);
     await settle();
     expect(reads).toEqual([{ ids: [id(1)] }]);
-    expect(view.queryByRole('dialog', { name: 'Inbox' })).toBeNull();
+    expect(view.queryAllByRole('dialog', { name: 'Inbox' }).length).toBe(0);
     expect(view.world.history.stack.at(-1)).toBe('/w/acme/issues');
     expect(inboxButton(view).textContent.trim()).toBe('Inbox');
     view.unmount();
@@ -183,7 +184,7 @@ describe('the Updates section', () => {
       inbox: () => Promise.resolve(page([entry(1, { readAt: '2026-09-09T08:01:00.000Z' })])),
     });
     const calm = await openUpdates(quiet);
-    expect(within(calm).queryByRole('button', { name: 'Mark all read' })).toBeNull();
+    expect(within(calm).queryAllByRole('button', { name: 'Mark all read' }).length).toBe(0);
     quiet.unmount();
   });
 
