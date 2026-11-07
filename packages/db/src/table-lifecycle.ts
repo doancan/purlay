@@ -109,6 +109,10 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   workspace_invitations: decided('anonymised', {
     kept: 'the record of what was offered, for the life of the workspace',
   }),
+  // The row names who wrote it, an administrator: the server's record of a commercial grant, which keeps naming the anonymised account (D-256).
+  workspace_modules: decided('anonymised', {
+    kept: 'the grant stays until the operator changes it, and past its end it is read as none; a purged workspace’s rows go with the purge (D-289)',
+  }),
   workspace_members: decided('anonymised', 'until-removed'),
   workspaces: decided('anonymised', {
     kept: 'the row stays, with its name, as what the trails refer to',

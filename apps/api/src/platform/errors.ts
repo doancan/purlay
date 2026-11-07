@@ -40,3 +40,10 @@ export class AppError extends Error {
 /** The one refusal for an attachment that is not there for the caller. */
 export const attachmentNotFound = (): AppError =>
   new AppError({ code: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found.' });
+
+/**
+ * The answer for a path nobody has, and so for a module's path that this process does not run and for one the workspace is not
+ * granted (D-255 §2, D-289): one value, so the three cannot come to differ in a word.
+ */
+export const routeNotFound = (): AppError =>
+  new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });

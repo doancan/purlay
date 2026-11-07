@@ -598,6 +598,7 @@ export interface ServerAuditLog {
   created_at: Generated<Timestamp>;
   id: string;
   session_id: string | null;
+  target_module: string | null;
   target_user_id: string | null;
   target_workspace_id: string | null;
 }
@@ -801,6 +802,16 @@ export interface WorkspaceMembers {
   workspace_id: string;
 }
 
+export interface WorkspaceModules {
+  changed_at: Timestamp;
+  changed_by: string | null;
+  module: string;
+  source: string;
+  state: string;
+  valid_until: Timestamp | null;
+  workspace_id: string;
+}
+
 export interface Workspaces {
   avatar_url: string | null;
   created_at: Generated<Timestamp>;
@@ -882,5 +893,6 @@ export interface DB {
   workspace_invitation_recipients: WorkspaceInvitationRecipients;
   workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;
+  workspace_modules: WorkspaceModules;
   workspaces: Workspaces;
 }

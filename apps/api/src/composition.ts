@@ -53,6 +53,11 @@ import type { AnyElysia } from 'elysia';
 import type { ModuleRouteDependencies } from './ingress/http/module-routes';
 import type { ModuleManifest, NotificationKindDeclaration } from './platform/module-kit/manifest';
 import type { CollatedColumn } from './platform/readiness';
+import {
+  effectiveModules,
+  type EntitlementMode,
+  type EntitlementRow,
+} from './platform/module-kit/entitlement';
 
 /**
  * What a module may contribute: each slot is the core's, and a module fills the ones it has.
@@ -282,6 +287,8 @@ export interface Composition {
   readonly findSourcesOff: readonly string[];
   /** The implementation of each capability the modules this process runs provide; one whose module is off is not a key, so a read of it is `undefined`. */
   readonly ports: Readonly<Record<string, object>>;
+  /** The modules a workspace may use, from the grants read for it: the modules this process runs less those it is not granted (D-289). */
+  readonly effectiveModules: (rows: readonly EntitlementRow[], now: Date) => ReadonlySet<string>;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -307,6 +314,7 @@ export interface Composition {
 export const compose = (
   modules: readonly BundledModule[],
   bundled: readonly BundledModule[] = bundledModules,
+  entitlementMode: EntitlementMode = 'open',
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
@@ -411,6 +419,13 @@ export const compose = (
       holding.flatMap((module) => module.personalExport ?? []),
     ),
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
+    effectiveModules: (rows, now) =>
+      effectiveModules({
+        running: modules.map((module) => module.manifest),
+        rows,
+        mode: entitlementMode,
+        now,
+      }),
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),
     ),
@@ -451,6 +466,7 @@ export const compose = (
 export const composeFor = (
   carried: readonly BundledModule[],
   setting: string | undefined,
+  entitlementMode: EntitlementMode = 'open',
 ): Composition => {
   const carriedRegistry = moduleRegistry(
     carried.map((module) => module.manifest),
@@ -461,11 +477,14 @@ export const composeFor = (
   return compose(
     inResolvedOrder(carriedRegistry.resolve(setting)),
     inResolvedOrder(carriedRegistry.resolve(undefined)),
+    entitlementMode,
   );
 };
 
-export const compositionFor = (setting: string | undefined): Composition =>
-  composeFor(bundledModules, setting);
+export const compositionFor = (
+  setting: string | undefined,
+  entitlementMode: EntitlementMode = 'open',
+): Composition => composeFor(bundledModules, setting, entitlementMode);
 
 /** What a process runs when nothing says otherwise: every module this build carries. */
 export const composition: Composition = compositionFor(undefined);
