@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
+  CLONE_HOOK_MS,
   closeIntegrationDatabase,
   DROP_HOOK_MS,
   sql,
@@ -28,7 +29,7 @@ describe('integration: notification and account erasure lock ordering', () => {
   let clone: Awaited<ReturnType<typeof cloneIntegrationDatabase>> | undefined;
   beforeAll(async () => {
     clone = await cloneIntegrationDatabase();
-  }, DROP_HOOK_MS);
+  }, CLONE_HOOK_MS);
   afterAll(async () => {
     await clone?.drop();
     await closeIntegrationDatabase();
