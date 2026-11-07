@@ -25,6 +25,8 @@ export const TABLE_OWNERS = {
   job_runs: 'core',
   native_authorizations: 'core',
   object_deletions: 'core',
+  // The facts one module tells another, a row for each consumer (D-287): only `platform/outbox*.ts` names it.
+  outbox: 'core',
   personal_exports: 'core',
   push_subscriptions: 'core',
   rate_limits: 'core',
