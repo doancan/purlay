@@ -587,6 +587,19 @@ const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
       targetId: world.workspaceId,
     });
   }),
+  workspace_modules: by('workspace_modules', 'changed_by', adas, async (db, world) => {
+    await db
+      .insertInto('workspace_modules')
+      .values({
+        workspace_id: world.workspaceId,
+        module: 'issues',
+        state: 'off',
+        source: 'operator',
+        changed_by: world.adaId,
+        changed_at: NOW,
+      })
+      .execute();
+  }),
   channel_bookmarks: by('channel_bookmarks', 'added_by', adas, async (db, world) => {
     await db
       .insertInto('channel_bookmarks')

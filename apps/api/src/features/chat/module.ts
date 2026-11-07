@@ -28,6 +28,9 @@ export const chatModule = {
     requires: [],
     optional: [],
     provides: [],
+    // Not a grant of the workspace in the first release of entitlements: chat's sockets and events are closed per process,
+    // not per workspace, so a downgrade could not close them (D-289).
+    entitlement: 'always' as const,
     // What the modules may take of the pool together, less a connection for the next: the core keeps its own reserve
     // (`budget.ts`, `MODULES.md` §7, `budget:latency` holds chat's p95 against a busy issues module).
     budget: { poolShare: chatBudget },

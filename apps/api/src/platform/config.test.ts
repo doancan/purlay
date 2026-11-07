@@ -92,6 +92,18 @@ describe('loading configuration', () => {
     ).toBe('https://k@errors.example.test/1');
   });
 
+  test('a workspace with no grant has every module unless the server is managed, and another word is refused', () => {
+    expect(loadConfig(valid).WORKSPACE_MODULES).toBe('open');
+    expect(loadConfig({ ...valid, WORKSPACE_MODULES: 'managed' }).WORKSPACE_MODULES).toBe(
+      'managed',
+    );
+    expect(() => loadConfig({ ...valid, WORKSPACE_MODULES: 'Managed' })).toThrow(
+      ConfigurationError,
+    );
+    // A blank variable is read as unset, as everywhere in the configuration.
+    expect(loadConfig({ ...valid, WORKSPACE_MODULES: '' }).WORKSPACE_MODULES).toBe('open');
+  });
+
   test('migrating on start is off unless asked for, and a bad value is refused', () => {
     expect(loadConfig(valid).MIGRATE_ON_START).toBeUndefined();
     expect(loadConfig({ ...valid, MIGRATE_ON_START: 'true' }).MIGRATE_ON_START).toBe(true);

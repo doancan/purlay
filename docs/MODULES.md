@@ -47,6 +47,9 @@ declares:
   D-280), so the manifest holds no HTTP type (`ARCHITECTURE.md` §4);
 - `frames`: the client operations on the socket it owns; `events`: the server events its services send; `jobs`: the
   scheduled jobs that act for its users. A process that does not run the module closes all four (§3);
+- `entitlement` (optional, D-289): `always` when no workspace's grant may take the module from it (chat, for now), `grant` (what a
+  module that says nothing says) when the operator grants it to each workspace; `platform/module-kit/entitlement.ts` decides, from the
+  process's modules, the workspace's `workspace_modules` rows and `WORKSPACE_MODULES`, which of them a workspace may use;
 - `budget` (**required**, D-260, D-266): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or
   `{ none: reason }`. A manifest without it does not compile, and the registry refuses one that has none at run time, a
   `none` with no reason and a share that leaves the module no connection or the others none (§7). Every bundled module
@@ -897,7 +900,7 @@ modules, entries and screens `budget:web` looks for.
 the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
 (#988), its non-vacuous form (#1010), the purge coverage (#1009), the set-keyed enum allowance (#1007) and the row-level
 lifecycle proof for `deleted` and `window` decisions (#1011) are merged, and every `anonymised` lifecycle decision is
-probed (all 29; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
+probed (all 30; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
 no index starts with is held too (`query-columns.integration.test.ts`, seven reasoned exceptions, capped at 7), but
 only as far as a source scan sees: a `where` or `orderBy` with a literal column on a chain it can follow to its table.
 For an upsert’s guard it also reads the unique target columns of that same `onConflict` callback: a
