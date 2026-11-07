@@ -10,7 +10,7 @@
  * `ownSet`, which asks `tableExists` for them). `module-lifecycle.integration.test.ts` runs every step in every database state and process.
  */
 import { tableExists } from '@purlay/db';
-import { ISSUES_AUDIT_ACTIONS } from '@purlay/types';
+import { ISSUES_AUDIT_ACTIONS, ISSUES_NOTIFICATION_KINDS } from '@purlay/types';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { issuesBudget } from './budget';
 import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
@@ -55,6 +55,8 @@ export const issuesModule = {
     auditActions: [{ read: 'audit.read', actions: ISSUES_AUDIT_ACTIONS }],
     // What the workspace-wide find reads of issues: a title or a body that holds the words.
     searchSources: ['issues'],
+    // An assignment tells the assignee, in the core's inbox and in the assignment's transaction (D-286).
+    notifications: ISSUES_NOTIFICATION_KINDS,
   },
   userErased: unassignErasedPerson,
   workspacePurge: issuesWorkspacePurge,

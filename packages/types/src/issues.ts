@@ -19,6 +19,15 @@ export const ISSUE_TITLE_MAX = 200;
 /** The longest body, in characters: markdown as long as a long message. */
 export const ISSUE_BODY_MAX = 10_000;
 
+/**
+ * The kinds of notice issues writes to a person's inbox (D-286), declared in its manifest. An assignment is the only one. It is
+ * not yet `needsYou` or `pushed`: those say what the badge counts and what a device is told, and neither reads an inbox notice
+ * until the steps that build them (`MODULES.md` §10, 14i and 14j), which flip them with the code that makes them true.
+ */
+export const ISSUES_NOTIFICATION_KINDS = [
+  { type: 'issue_assigned', needsYou: false, pushed: false, mailed: false },
+] as const;
+
 export const IssueStatus = Type.Union([Type.Literal('open'), Type.Literal('done')]);
 export type IssueStatus = Static<typeof IssueStatus>;
 
