@@ -47,6 +47,14 @@ export const API_REALTIME: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
   },
   {
+    id: 'entitlement-capability-keeps-expired-nodes',
+    why: 'a live node keeps refreshing the hash while crashed nodes leave expired fields behind, so the record grows with restarts',
+    file: 'apps/api/src/realtime/entitlement-peers.ts',
+    find: "  if tonumber(all[i + 1]) <= now then redis.call('HDEL', KEYS[1], all[i]) end",
+    replace: "  if false then redis.call('HDEL', KEYS[1], all[i]) end",
+    tests: ['apps/api/src/realtime/entitlement-peers.redis.integration.test.ts'],
+  },
+  {
     id: 'entitlement-peers-script-counts-nobody',
     why: 'the cluster is always ready for a restriction, because no node is ever found behind (D-292)',
     file: 'apps/api/src/realtime/entitlement-peers.ts',

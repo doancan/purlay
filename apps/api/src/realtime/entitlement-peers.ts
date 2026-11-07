@@ -4,7 +4,8 @@
  * be believed by the operator and ignored by that node.
  *
  * As the module set (`module-set.ts`), a shared hash keeps one field for each node that reads grants, renewed and lapsing by
- * itself; `peersBehind` asks how many live nodes of the module-set record have no live field here. No Redis is one node, and one
+ * itself; renewal removes expired fields left by crashed nodes, as the module-set record does. `peersBehind` asks how many live
+ * nodes of the module-set record have no live field here. No Redis is one node, and one
  * node reads its own table.
  */
 import type { Logger } from '../platform/logging';
@@ -20,6 +21,10 @@ local time = redis.call('TIME')
 local now = time[1] * 1000 + math.floor(time[2] / 1000)
 redis.call('HSET', KEYS[1], ARGV[1], now + tonumber(ARGV[2]))
 redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
+local all = redis.call('HGETALL', KEYS[1])
+for i = 1, #all, 2 do
+  if tonumber(all[i + 1]) <= now then redis.call('HDEL', KEYS[1], all[i]) end
+end
 return 1
 `;
 

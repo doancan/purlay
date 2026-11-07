@@ -59,4 +59,28 @@ describe('integration: the nodes that read workspace grants', () => {
     expect(await peersBehind(link)).toBe(0);
     await stray.stop();
   });
+
+  test('renewal removes expired records left by crashed nodes and preserves live peers', async () => {
+    // Redis's clock defines both the expired boundary and the peer that must survive pruning.
+    await link.script(
+      `local time = redis.call('TIME')
+local now = time[1] * 1000 + math.floor(time[2] / 1000)
+for i = 1, 64 do redis.call('HSET', KEYS[1], 'crashed-' .. i, now) end
+redis.call('HSET', KEYS[1], 'live-peer', now + 60000)
+return 1`,
+      [link.names.entitlementNodes],
+      [],
+    );
+    expect(await link.send('HLEN', [link.names.entitlementNodes])).toBe(65);
+    const replacement = advertiseEntitlements({ link, nodeId: 'replacement', log });
+    try {
+      await settle();
+      const retained = await link.send('HKEYS', [link.names.entitlementNodes]);
+      expect(retained).toEqual(expect.arrayContaining(['live-peer', 'replacement']));
+      expect(retained).toHaveLength(2);
+    } finally {
+      await replacement.stop();
+      await link.send('HDEL', [link.names.entitlementNodes, 'live-peer']);
+    }
+  });
 });
