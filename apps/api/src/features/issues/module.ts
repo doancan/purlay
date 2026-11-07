@@ -16,6 +16,7 @@ import { issuesBudget } from './budget';
 import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
 import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
+import { issuesNoticeWords } from './notice-words';
 import { issuesRoutes } from './http/routes';
 import { issuesPersonalExport } from './personal-export';
 import { issuesSearchSource } from './search';
@@ -58,6 +59,7 @@ export const issuesModule = {
     // An assignment tells the assignee, in the core's inbox and in the assignment's transaction (D-286).
     notifications: ISSUES_NOTIFICATION_KINDS,
   },
+  noticeWords: issuesNoticeWords,
   userErased: unassignErasedPerson,
   workspacePurge: issuesWorkspacePurge,
   export: issuesExport,

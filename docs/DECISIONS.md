@@ -13930,13 +13930,26 @@ an assignee, which is written in the same transaction as the assignment.
    reaches either until 14i and 14j, and a declaration that promises a push which does not happen is false; they are flipped in
    the step that makes them true. `notification-kinds.test.ts` holds chat's kinds to the wire's `NotificationType`, `NEEDS_YOU`
    and the database's enum, and another module's to a name of its own.
+9. **A module's notice is pushed, and the push waits for Deep Work and quiet hours** (14i, decided by the owner in D-283 §8.2). The
+   sink, after the commit, hands the notices of the kinds declared `pushed` to the push sender (`toldInbox`), which looks each
+   entry up again (still unread, person and workspace not erased or deleted), asks `inDeepWork` (Deep Work and the person's quiet
+   hours on their own clock), and tells the devices of those who are free and not in front of the workspace's page. Who is in Deep
+   Work is **held in memory, on the node that committed the notice**, asked again every minute, told once they are out of it, and
+   dropped and counted (`purlay_push_failures_total{reason="dropped"}`) after 24 hours, the time a push service keeps a message for
+   a device that is off. The words are the declaring module's (`BundledModule.noticeWords`, who and why, never the title or any
+   `params`) and the push lands on a path of that module. The columns of quiet hours and Deep Work (`users.quiet_days`,
+   `quiet_from`, `quiet_to`, `workspace_members.deep_work_until`, `is_deep_work_active`) now have a second reader, the core's
+   sender, so by `MODULES.md` §5 they leave `CORE_COLUMNS_FOR_A_MODULE` in this change and its cap falls from 14 to 9.
+   `issue_assigned` is declared `pushed`; `needsYou` follows with the badge (14j).
 
 **Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
 each module, and the first one that forgot would write a stranger a notice. *The module named by the caller*: a lie the type
 cannot catch; the manifest that declares the kind is the one place that says whose it is. *A unique key without the workspace*:
 D-283's sketch; it is correct only while every subject id is globally unique, which a module's id is not obliged to be.
 *Keeping the old row's id when raising it*: a list ordered by id would then leave a notice told again where it was. *A separate
-retention for each module*: a person's inbox is one list, and a rule per module is a rule nobody can state.
+retention for each module*: a person's inbox is one list, and a rule per module is a rule nobody can state. *A held push in a table, with a job that sends it when Deep Work
+ends* (§9): a column on every notice and a scheduled process that would need the push keys, to keep a hint that a restart may lose
+and whose notice is in the inbox in any case; a held push that is lost to a restart is one a person finds in the list.
 
 **Cost of reversing.** The table is new and additive, so a node of the release before ignores it; a rollback is the backup's
 (D-86). Dropping it loses only notices, which are short-lived by design.

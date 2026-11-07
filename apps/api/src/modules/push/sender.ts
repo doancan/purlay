@@ -15,21 +15,29 @@
  *   400, 401, 403 or 413 is this server's request refused — said loudly, and no device's fault; any
  *   other answer, a timeout or a network failure counts against the device, and `PUSH_FAILURES_MAX`
  *   in a row forgets it.
+ * - **A module's notice** (`toldInbox`, D-286 §9) is the same path with its own rows: only an entry still unread, of a person
+ *   not erased, in a workspace not deleted, worded by the module that declares its kind. A person in Deep Work or in their
+ *   quiet hours is not told now: the push waits **in memory, on the node that committed it**, and is asked again every
+ *   `HELD_CHECK_MS`; it goes once they are out of it, unless they read it meanwhile, and is dropped and counted after
+ *   `HELD_PUSH_MAX_MS`, which is how long the device would keep it anyway. A restart forgets what waits; the notice is in the
+ *   inbox. A person in front of the page is not told, now or later, as for a message.
  * - **Detached, bounded and fair:** the write's caller does not wait. At most `POSTS_AT_ONCE` are in
  *   flight on the node and `POSTS_PER_PERSON` for any one person, so one person's slow or hostile
  *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, a push is dropped and
  *   said. `flush` waits for them at shutdown, within its bound.
  */
 import type { Executor } from '@purlay/db';
-import { NEEDS_YOU, type PushPayload } from '@purlay/types';
+import { NEEDS_YOU, type PushLocale, type PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
 import type { Counter, PushFailure } from '../../platform/metrics';
 import { CORE_OWNER } from '../../platform/module-kit/ownership';
+import type { WrittenNotice } from '../../platform/ports/notification-sink';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
-import type { PushNotices } from './notices';
+import { inDeepWork } from '../workspaces/deep-work';
+import type { NoticeWords, PushNotices } from './notices';
 import { encryptPush, freshParts } from './encrypt';
 import { vapidAuthorization, vapidSigningKey, type VapidKeys } from './vapid';
 import { pushBody, saidOf } from './words';
@@ -48,6 +56,10 @@ export const PUSH_TIMEOUT_MS = 5_000;
 const PUSH_TTL_SECONDS = 24 * 60 * 60;
 /** How long a shutdown waits for pushes on their way. */
 const FLUSH_BOUND_MS = 3_000;
+/** How long a push held by Deep Work or quiet hours waits: as long as a push service keeps it for a device that is off. */
+export const HELD_PUSH_MAX_MS = PUSH_TTL_SECONDS * 1_000;
+/** How often what is held is asked again whether the person is still in Deep Work or their quiet hours. */
+const HELD_CHECK_MS = 60_000;
 
 export type PushPost = (
   url: URL,
@@ -58,6 +70,10 @@ export type PushPost = (
 export interface PushSender {
   /** The people `messageId` told for the first time; returns at once. */
   readonly told: (messageId: string, userIds: readonly string[]) => void;
+  /** The notices a module wrote to the inbox, once their transaction has committed; returns at once. */
+  readonly toldInbox: (notices: readonly WrittenNotice[]) => void;
+  /** Asks again, now, whether what waits for Deep Work or quiet hours may go: the timer's work, so a test need not wait for it. */
+  readonly releaseHeld: () => Promise<void>;
   /** Waits for every push on its way, `boundMs` at most, and says what it left. */
   readonly flush: (boundMs?: number) => Promise<void>;
 }
@@ -76,34 +92,39 @@ export interface PushSenderDependencies {
   readonly attention: Attention;
   /** What the write told, from whoever owns the writes: chat's notifications, where the server is composed (D-250). */
   readonly notices: PushNotices;
+  /** What a module's notice in the inbox is said as, from the modules that declare the kinds (D-286 §9). */
+  readonly noticeWords: NoticeWords;
   /** Where a push that did not reach its service is counted, by why (D-221); absent, it is not. */
   readonly failures?: Counter<'reason' | 'module'>;
   /** The module whose notices this sender delivers, for the failure counter's label; absent, the core's. */
   readonly owner?: string;
 }
 
-interface Device {
+interface Subscription {
   readonly id: string;
   readonly userId: string;
   readonly sessionId: string;
   readonly endpoint: string;
   readonly p256dh: string;
   readonly auth: string;
+  readonly locale: string;
+}
+
+interface Device extends Omit<Subscription, 'locale'> {
   readonly payload: PushPayload;
+  /** The module whose notice this is, for the failure counter's label; absent, the sender's owner (chat's messages). */
+  readonly module?: string;
 }
 
 /** The answers that are this server's request refused, not the device's absence. */
 const OUR_REQUEST_REFUSED = new Set([400, 401, 403, 413]);
 
-const devicesFor = async (
-  { database, clock, keys, attention, log, notices }: PushSenderDependencies,
-  messageId: string,
+/** The live devices of these people whose subscription was made with the server's current key, in the order they were made. */
+const subscriptionsOf = async (
+  { database, clock, keys }: PushSenderDependencies,
   userIds: readonly string[],
-): Promise<Device[]> => {
-  const told = await notices.of(database, messageId, userIds);
-  if (told.length === 0) return [];
-  const tellable = [...new Set(told.map((notice) => notice.userId))];
-  const subscriptions = await database
+): Promise<Subscription[]> =>
+  await database
     .selectFrom('push_subscriptions as s')
     .innerJoin('users as person', 'person.id', 's.user_id')
     .innerJoin('sessions as live', 'live.id', 's.session_id')
@@ -116,7 +137,7 @@ const devicesFor = async (
       's.auth',
       'person.locale',
     ])
-    .where('s.user_id', 'in', tellable)
+    .where('s.user_id', 'in', userIds)
     .where('person.deleted_at', 'is', null)
     .where('live.expires_at', '>', clock.now())
     .where('s.server_key', '=', keys.publicKey)
@@ -124,6 +145,20 @@ const devicesFor = async (
     .orderBy('s.created_at')
     .orderBy('s.id')
     .execute();
+
+const localeOf = (locale: string): PushLocale => (locale === 'tr' ? 'tr' : 'en');
+
+const devicesFor = async (
+  dependencies: PushSenderDependencies,
+  messageId: string,
+  userIds: readonly string[],
+): Promise<Device[]> => {
+  const { database, attention, log, notices } = dependencies;
+  const told = await notices.of(database, messageId, userIds);
+  if (told.length === 0) return [];
+  const subscriptions = await subscriptionsOf(dependencies, [
+    ...new Set(told.map((notice) => notice.userId)),
+  ]);
   const workspaces = await database
     .selectFrom('workspaces')
     .select(['id', 'slug'])
@@ -156,7 +191,7 @@ const devicesFor = async (
           title:
             row.channelName !== null ? `#${row.channelName}` : (row.groupNames ?? row.authorName),
           body: pushBody(
-            row.locale === 'tr' ? 'tr' : 'en',
+            localeOf(row.locale),
             saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
             row.authorName,
           ),
@@ -170,12 +205,95 @@ const devicesFor = async (
   return devices;
 };
 
+/** Where inbox entries stand for a push: the devices to tell now, and the entries that wait for Deep Work or quiet hours to end. */
+interface Routed {
+  readonly devices: Device[];
+  readonly waiting: ReadonlySet<string>;
+}
+
+const routeInbox = async (
+  dependencies: PushSenderDependencies,
+  entryIds: readonly string[],
+): Promise<Routed> => {
+  const { database, clock, attention, log, noticeWords } = dependencies;
+  const entries = await database
+    .selectFrom('inbox_entries as e')
+    .innerJoin('workspaces as w', 'w.id', 'e.workspace_id')
+    .innerJoin('users as person', 'person.id', 'e.user_id')
+    .innerJoin('users as actor', 'actor.id', 'e.actor_id')
+    .select([
+      'e.id',
+      'e.user_id as userId',
+      'e.workspace_id as workspaceId',
+      'e.kind',
+      'e.subject_id as subjectId',
+      'w.slug',
+      'w.name as workspaceName',
+      'actor.display_name as actorName',
+      'e.module',
+    ])
+    .where('e.id', 'in', entryIds)
+    // What was read meanwhile, or whose person or workspace is gone, is not worth a push.
+    .where('e.read_at', 'is', null)
+    .where('w.deleted_at', 'is', null)
+    .where('person.deleted_at', 'is', null)
+    .execute();
+  if (entries.length === 0) return { devices: [], waiting: new Set() };
+  const now = clock.now();
+  const quiet = new Map<string, ReadonlySet<string>>();
+  for (const workspaceId of new Set(entries.map((entry) => entry.workspaceId))) {
+    quiet.set(
+      workspaceId,
+      await inDeepWork(
+        database,
+        workspaceId,
+        [...new Set(entries.filter((e) => e.workspaceId === workspaceId).map((e) => e.userId))],
+        now,
+      ),
+    );
+  }
+  const waiting = new Set(
+    entries.filter((entry) => quiet.get(entry.workspaceId)?.has(entry.userId)).map((e) => e.id),
+  );
+  const ready = entries.filter(
+    (entry) => !waiting.has(entry.id) && !attention.active(entry.userId, entry.workspaceId),
+  );
+  if (ready.length === 0) return { devices: [], waiting };
+  const subscriptions = await subscriptionsOf(dependencies, [
+    ...new Set(ready.map((entry) => entry.userId)),
+  ]);
+  const devices = subscriptions.flatMap((subscription) =>
+    ready
+      .filter((entry) => entry.userId === subscription.userId)
+      .flatMap((entry) => {
+        const saying = noticeWords(entry.kind, localeOf(subscription.locale), entry.actorName);
+        if (saying === undefined) {
+          log.warn('push not sent: no words for the kind', { kind: entry.kind });
+          return [];
+        }
+        return [
+          {
+            ...subscription,
+            module: entry.module,
+            payload: {
+              title: entry.workspaceName,
+              body: saying.body,
+              url: `/w/${entry.slug}/${saying.path}`,
+              tag: `inbox:${entry.subjectId}`,
+            },
+          },
+        ];
+      }),
+  );
+  return { devices, waiting };
+};
+
 export const createPushSender = async (
   dependencies: PushSenderDependencies,
 ): Promise<PushSender> => {
   const { database, clock, log, keys, post } = dependencies;
-  const failed = (reason: PushFailure, by = 1): void => {
-    dependencies.failures?.inc({ reason, module: dependencies.owner ?? CORE_OWNER }, by);
+  const failed = (reason: PushFailure, by = 1, module?: string): void => {
+    dependencies.failures?.inc({ reason, module: module ?? dependencies.owner ?? CORE_OWNER }, by);
   };
   // Imported once, here, so a key that cannot sign stops the start rather than the first push.
   const signing = await vapidSigningKey(keys);
@@ -223,7 +341,7 @@ export const createPushSender = async (
       await forget(device);
       return;
     }
-    failed('not_taken');
+    failed('not_taken', 1, device.module);
     log.warn('push not taken', said);
   };
 
@@ -268,7 +386,7 @@ export const createPushSender = async (
     }
     if (status !== null && OUR_REQUEST_REFUSED.has(status)) {
       // The keys, the token or the body: this server's to fix, not the browser's to pay for.
-      failed('refused');
+      failed('refused', 1, device.module);
       log.error('push refused: this server’s request', { host: url.hostname, status });
       return;
     }
@@ -288,7 +406,7 @@ export const createPushSender = async (
       const task = deliver(device)
         .catch((error: unknown) => {
           // A device's failure is that device's; the rest still go. Said with nothing of the person.
-          failed('error');
+          failed('error', 1, device.module);
           log.error('push delivery failed', { err: error });
         })
         .finally(() => {
@@ -302,32 +420,92 @@ export const createPushSender = async (
     }
   };
 
+  /** Puts devices in line for a push, as many as the line has room for; the rest are dropped, and said. */
+  const enqueue = (devices: readonly Device[], about: Record<string, unknown>): void => {
+    const room = Math.max(QUEUE_MAX - waiting.length, 0);
+    if (devices.length > room) {
+      failed('dropped', devices.length - room);
+      log.warn('push dropped: too many waiting', { ...about, dropped: devices.length - room });
+    }
+    waiting.push(...devices.slice(0, room));
+    pump();
+  };
+
+  /** Follows a lookup until it ends, so `flush` waits for it; its failure is counted and said, never thrown at the caller. */
+  const follow = (lookup: Promise<void>, stage: string, about: Record<string, unknown>): void => {
+    const found = lookup
+      .catch((error: unknown) => {
+        failed('error');
+        log.error('push delivery failed', { ...about, stage, err: error });
+      })
+      .finally(() => {
+        fetching.delete(found);
+      });
+    fetching.add(found);
+  };
+
+  /** The entries of a module's notices waiting for Deep Work or quiet hours to end, and when each began to wait. */
+  const held = new Map<string, number>();
+
+  const route = async (entryIds: readonly string[]): Promise<void> => {
+    const { devices, waiting: stillWaiting } = await routeInbox(dependencies, entryIds);
+    const now = clock.now().getTime();
+    for (const id of entryIds) {
+      if (!stillWaiting.has(id)) held.delete(id);
+      else if (!held.has(id)) held.set(id, now);
+    }
+    // The map is bounded like the line: past it a push is dropped and said, and the notice is still in the inbox.
+    for (const id of [...held.keys()].slice(QUEUE_MAX)) {
+      held.delete(id);
+      failed('dropped');
+      log.warn('push dropped: too many held');
+    }
+    enqueue(devices, { entries: entryIds.length });
+  };
+
+  const releaseHeld = async (): Promise<void> => {
+    const now = clock.now().getTime();
+    const due: string[] = [];
+    for (const [id, since] of held) {
+      if (now - since > HELD_PUSH_MAX_MS) {
+        held.delete(id);
+        failed('dropped');
+        log.info('push dropped: held longer than a device keeps it');
+      } else {
+        due.push(id);
+      }
+    }
+    if (due.length === 0) return;
+    const asked = route(due);
+    follow(asked, 'releasing held pushes', { entries: due.length });
+    await asked.catch(() => undefined);
+  };
+  // Once a minute, the notices waiting for the end of Deep Work are asked again. Unreferenced: it never keeps a process alive.
+  const releasing = setInterval(() => {
+    void releaseHeld();
+  }, HELD_CHECK_MS);
+  releasing.unref();
+
   return {
     told: (messageId, userIds): void => {
       if (userIds.length === 0) return;
-      const found = devicesFor(dependencies, messageId, userIds)
-        .then((devices) => {
-          const room = QUEUE_MAX - waiting.length;
-          if (devices.length > room) {
-            failed('dropped', devices.length - Math.max(room, 0));
-            log.warn('push dropped: too many waiting', {
-              messageId,
-              dropped: devices.length - Math.max(room, 0),
-            });
-          }
-          waiting.push(...devices.slice(0, Math.max(room, 0)));
-          pump();
-        })
-        .catch((error: unknown) => {
-          failed('error');
-          log.error('push delivery failed', { messageId, stage: 'finding devices', err: error });
-        })
-        .finally(() => {
-          fetching.delete(found);
-        });
-      fetching.add(found);
+      follow(
+        devicesFor(dependencies, messageId, userIds).then((devices) => {
+          enqueue(devices, { messageId });
+        }),
+        'finding devices',
+        { messageId },
+      );
     },
+    toldInbox: (notices): void => {
+      if (notices.length === 0) return;
+      follow(route(notices.map((notice) => notice.entryId)), 'finding devices for inbox notices', {
+        entries: notices.length,
+      });
+    },
+    releaseHeld,
     flush: async (boundMs = FLUSH_BOUND_MS): Promise<void> => {
+      clearInterval(releasing);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const bound = new Promise<'bound'>((resolve) => {
         timer = setTimeout(() => {

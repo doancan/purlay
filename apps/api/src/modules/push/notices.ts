@@ -5,6 +5,7 @@
  * `noPushNotices` says so.
  */
 import type { Executor } from '@purlay/db';
+import type { PushLocale } from '@purlay/types';
 
 /** One notification still to be pushed: the person told, why, and the channel it happened in. */
 interface PushNotice {
@@ -32,3 +33,23 @@ export interface PushNotices {
 
 /** The notifications of a process that runs no chat: none. */
 export const noPushNotices: PushNotices = { of: () => Promise.resolve([]) };
+
+/** What a push says of a module's notice in the core's inbox, and where in the workspace it lands (`path`, without a slash). */
+interface NoticeSaying {
+  readonly body: string;
+  readonly path: string;
+}
+
+/**
+ * The words of a notice's kind, in the person's language, with the name of who acted: the module that declares the kind
+ * supplies them, since the core knows no module's words (D-286 §9). It answers `undefined` for a kind it does not word. They
+ * say who and why, never what the notice carries.
+ */
+export type NoticeWords = (
+  kind: string,
+  locale: PushLocale,
+  actor: string,
+) => NoticeSaying | undefined;
+
+/** The words of a process that runs no module with a notice a device is told of. */
+export const noNoticeWords: NoticeWords = () => undefined;

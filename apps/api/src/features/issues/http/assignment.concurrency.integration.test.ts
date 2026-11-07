@@ -35,6 +35,7 @@ afterAll(async () => {
 const sink: NotificationSink = notificationSink({
   clock: fixedClock(NOW),
   kinds: new Map([['issue_assigned', 'issues']]),
+  pushedKinds: new Set(),
   bus: {
     publish: () => Promise.resolve(),
     subscribe: () => true,
