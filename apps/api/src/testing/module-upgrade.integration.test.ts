@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { cpSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeIntegrationDatabase } from '@purlay/db';
+import { closeIntegrationDatabase, onDatabase } from '@purlay/db';
 import { bundledModules } from '../composition';
 import { moduleCells } from './module-cells';
 import { upgradeFrom } from './module-upgrade';
@@ -57,9 +57,16 @@ const olderRelease = (): string => {
 describe('integration: every set on the database the last release left', () => {
   // `bun run modules:upgrade` (CI's `modules` job) does the same from the last release tag, extracted with `git archive`;
   // a test cannot rely on a tag being there, so the release here is this tree less its newest migrations.
-  test('a database the older release made, with its own migrator, is migrated to head in every cell', async () => {
+  test('a long source name supports the older release and every upgrade cell', async () => {
     const cells = moduleCells(bundledModules);
-    const result = await upgradeFrom(olderRelease(), 'an older release', base, cells);
+    const longName =
+      `purlay_upgrade_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}_`.padEnd(63, 'x');
+    const result = await upgradeFrom(
+      olderRelease(),
+      'an older release',
+      onDatabase(base, longName),
+      cells,
+    );
     expect(result.problems).toEqual([]);
     expect(result.notes).toEqual([]);
     expect(result.migrated).toBeGreaterThanOrEqual(cells.length);

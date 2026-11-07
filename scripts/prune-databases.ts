@@ -39,7 +39,12 @@ const server: DatabaseServer = {
   },
 };
 try {
-  await prune(server, new URL(url).pathname.slice(1), process.argv.includes('--drop'), console.log);
+  await prune(
+    server,
+    decodeURIComponent(new URL(url).pathname.slice(1)),
+    process.argv.includes('--drop'),
+    console.log,
+  );
 } finally {
   await connection.close();
 }

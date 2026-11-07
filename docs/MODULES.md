@@ -608,6 +608,14 @@ cell with every module is not run twice; a suite that needs *both* modules (the 
 cross-tenant matrix, the permission table, which each walk every module's rows) runs only in the cell with everything, so what those say
 about one module with the other off is not proven; the Redis suites run in each cell as the others do. The cost is the sum of the cells' runner time (measured at about ten minutes for three cells when it was built, a laptop and a CI leg alike); in CI each cell is a leg of its own job beside `schema`, so a pull request waits for the longest (chat's, about as long as `schema`). `module-suites.test.ts` holds the workflow's legs to the cells the build has.
 
+Scratch databases, their templates and nested fixtures use `packages/db/src/scratch-databases.ts` for their final
+identifier and connection URL. Short names stay unchanged; long names keep a UTF-8-safe prefix and a digest of the
+whole logical name, so PostgreSQL cannot truncate away a run's unique suffix. Creation, connection and cleanup use
+that same actual name. Clones of sources outside the throwaway CLI's existing ASCII alphabet use an opaque ASCII
+identity; its cleanup guard is not widened. An allocation is recorded for cleanup only after `CREATE DATABASE` succeeds. The configured
+source and any database already present are never claimed by a failed allocation (`scratch-databases.integration.test.ts`,
+`scratch-ownership.integration.test.ts`).
+
 ## 9. Adding a module — the checklist
 
 Written from what building issues (D-254) needed, in the order a change is made. Each item names the file or test

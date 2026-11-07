@@ -158,6 +158,28 @@ describe('the command', () => {
   };
   const DATABASE_URL = 'postgres://u:p@localhost:5432/x';
 
+  test('long source names yield a separate bounded database for every smoke cell', async () => {
+    for (const root of ['purlay_'.padEnd(63, 'x'), 'ğ'.repeat(31) + 'a']) {
+      const databases: string[] = [];
+      const code = await main(
+        { DATABASE_URL: `postgres://nobody@127.0.0.1:1/${encodeURIComponent(root)}` },
+        (cell, _base, database) => {
+          databases.push(database);
+          return Promise.resolve(
+            observed((module) => (cell.ids.includes(module) ? ASKS_WHO : NOT_FOUND)),
+          );
+        },
+        { out: () => undefined, err: () => undefined },
+      );
+      expect(code).toBe(0);
+      expect(new Set(databases).size).toBe(2 ** CARRIED.length);
+      for (const database of databases) {
+        expect(Buffer.byteLength(database)).toBeLessThanOrEqual(63);
+        expect(database === root).toBe(false);
+      }
+    }
+  });
+
   test('refuses to report a pass when it has no database to run a cell on', async () => {
     expect(await main({}, undefined, say)).toBe(1);
     expect(heard.err.join('\n')).toContain('DATABASE_URL is not set');

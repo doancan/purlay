@@ -587,6 +587,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
+    id: 'scratch-prune-compares-encoded-source',
+    why: 'A valid percent-encoded source URL lets the prune command list its configured database as disposable.',
+    file: 'scripts/prune-databases.ts',
+    find: 'decodeURIComponent(new URL(url).pathname.slice(1))',
+    replace: 'new URL(url).pathname.slice(1)',
+    tests: ['apps/api/src/testing/prune-databases.integration.test.ts'],
+  },
+  {
     id: 'smoke-waits-on-the-temporary-database',
     why: 'the wait ends on the server the image starts first for its init scripts, which is shut down a moment later, and a deploy is refused for a database that was about to be ready',
     file: 'scripts/image-smoke.sh',

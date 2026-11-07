@@ -26,8 +26,11 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
   createDatabase,
+  databaseNameFromUrl,
   dropDatabases,
+  onDatabase as urlOn,
   readMigrationFiles,
+  scratchDatabaseName,
   sql,
   type MigrationSet,
 } from '@purlay/db';
@@ -70,12 +73,6 @@ export const releaseSettingFor = (
   if (releaseIds.length === 0) return undefined;
   const carried = ids.filter((id) => releaseIds.includes(id));
   return carried.length === 0 ? 'none' : carried.join(',');
-};
-
-const urlOn = (base: string, name: string): string => {
-  const url = new URL(base);
-  url.pathname = `/${name}`;
-  return url.toString();
 };
 
 interface Ran {
@@ -179,16 +176,16 @@ export const upgradeFrom = async (
   symlinkSync(join(ROOT, 'packages/db/node_modules'), join(directory, 'packages/db/node_modules'));
   const problems: string[] = [];
   const notes: string[] = [];
-  const prefix = `${new URL(base).pathname.slice(1)}_upg_${randomBytes(4).toString('hex')}`;
+  const prefix = `${databaseNameFromUrl(base)}_upg_${randomBytes(4).toString('hex')}`;
   const created: string[] = [];
   const admin = createDatabase({ connectionString: urlOn(base, 'postgres'), poolSize: 1 });
   const make = async (name: string, template?: string): Promise<void> => {
-    created.push(name);
     await (
       template === undefined
         ? sql`create database ${sql.id(name)}`
         : sql`create database ${sql.id(name)} template ${sql.id(template)}`
     ).execute(admin);
+    created.push(name);
   };
   let migrated = 0;
   try {
@@ -201,7 +198,7 @@ export const upgradeFrom = async (
     const leftBy = async (setting: string | undefined): Promise<string | null> => {
       const known = left.get(setting);
       if (known !== undefined) return known;
-      const name = `${prefix}_r${String(left.size)}`;
+      const name = scratchDatabaseName(`${prefix}_r${String(left.size)}`);
       await make(name);
       const ran = migrateIn(directory, urlOn(base, name), setting);
       let outcome: string | null = name;
@@ -223,7 +220,7 @@ export const upgradeFrom = async (
       for (const setting of settings) {
         const source = await leftBy(setting);
         if (source === null) continue;
-        const clone = `${prefix}_c${String(migrated)}`;
+        const clone = scratchDatabaseName(`${prefix}_c${String(migrated)}`);
         await make(clone, source);
         const url = urlOn(base, clone);
         const before = await namesRecorded(url);

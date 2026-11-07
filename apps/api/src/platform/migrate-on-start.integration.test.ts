@@ -5,12 +5,15 @@ import { join } from 'node:path';
 import {
   createDatabase,
   createMigrationDatabase,
+  databaseNameFromUrl,
   dropDatabases,
   migrateToLatest,
   migrationHistoryProblem,
   pendingMigrations,
+  onDatabase,
   PRODUCT_MIGRATION_SETS,
   readMigrationFiles,
+  scratchDatabaseName,
   sql,
 } from '@purlay/db';
 import type { DatabasePool, Executor, MigrationSet } from '@purlay/db';
@@ -33,17 +36,13 @@ if (source === undefined || source === '') {
   throw new Error('DATABASE_URL is not set, so these tests would silently prove nothing.');
 }
 
-const urlFor = (name: string): string => {
-  const url = new URL(source);
-  url.pathname = `/${name}`;
-  return url.toString();
-};
+const urlFor = (name: string): string => onDatabase(source, name);
 
-const BASE = `${new URL(source).pathname.slice(1)}_mos_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+const BASE = `${databaseNameFromUrl(source)}_mos_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
 const admin = createDatabase({ connectionString: urlFor('postgres'), poolSize: 1 });
 const created: string[] = [];
 const freshDatabase = async (suffix: string): Promise<{ name: string; db: DatabasePool }> => {
-  const name = `${BASE}_${suffix}`;
+  const name = scratchDatabaseName(`${BASE}_${suffix}`);
   await sql`create database ${sql.id(name)}`.execute(admin);
   created.push(name);
   return { name, db: createDatabase({ connectionString: urlFor(name), poolSize: 4 }) };

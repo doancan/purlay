@@ -102,6 +102,28 @@ describe('the command', () => {
     return { say: { out: (line) => out.push(line), err: (line) => err.push(line) }, out, err };
   };
 
+  test('long source names yield separate bounded databases for every selected cell', async () => {
+    for (const root of ['purlay_'.padEnd(63, 'x'), 'ğ'.repeat(31) + 'a']) {
+      const databases: string[] = [];
+      const { say } = recorded();
+      expect(
+        await main(
+          { DATABASE_URL: `postgres://nobody@127.0.0.1:1/${encodeURIComponent(root)}` },
+          say,
+          (_cell, _suites, _base, database) => {
+            databases.push(database);
+            return Promise.resolve(0);
+          },
+        ),
+      ).toBe(0);
+      expect(new Set(databases).size).toBe(2 ** CARRIED.length - 1);
+      for (const database of databases) {
+        expect(Buffer.byteLength(database)).toBeLessThanOrEqual(63);
+        expect(database === root).toBe(false);
+      }
+    }
+  });
+
   test('runs each cell with the suites it keeps, and passes when every cell does', async () => {
     const { say, out } = recorded();
     const ran: string[] = [];
