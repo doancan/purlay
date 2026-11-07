@@ -1,0 +1,105 @@
+/**
+ * `bun run entitlements:apply --file <editions.json> [--dry-run] [--cluster-ready]` — an operator applies an edition file (D-292): each workspace it
+ * lists is given the modules of its edition and none of the others, in one transaction, through the one writer the console uses.
+ * `--dry-run` says what would change and changes nothing. Run again it changes nothing. Prints counts by module and state, and
+ * workspace addresses; never anybody's words. Exits 2 on a file or a workspace it cannot use, 1 when the file takes grants away on a clustered server (`REDIS_URL`) and
+ * `--cluster-ready` does not say that every node reads grants: the command cannot see the cluster, the serving process can. Open pages of the workspaces it changed correct themselves at their next request for a module they no longer have.
+ */
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
+import { createDatabase } from '@purlay/db';
+import { compositionFor } from '../composition';
+import { applyEdition, planEdition, readEditionFile } from '../modules/entitlements/edition';
+import { restricts } from '../modules/entitlements/peers';
+import { systemClock } from '../platform/clock';
+import { loadConfig } from '../platform/config';
+import { databaseConnection } from '../platform/database';
+import { createLogger } from '../platform/logging';
+import { sendAuditLinesTo } from '../modules/audit/lines';
+import { AppError } from '../platform/errors';
+
+const config = loadConfig(process.env);
+const log = createLogger({ level: config.LOG_LEVEL });
+const composition = compositionFor(config.MODULES, config.WORKSPACE_MODULES);
+const catalogue = {
+  carried: composition.bundled.map((module) => module.manifest),
+  mode: composition.entitlementMode,
+};
+const fail = (message: string, code = 2): void => {
+  process.stderr.write(`${message}\n`);
+  process.exitCode = code;
+};
+
+const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run');
+const at = args.indexOf('--file');
+const path = at === -1 ? undefined : args[at + 1];
+// A dry run writes no entry, so it says none: the line of the trail is written as the entry is made, and a transaction undone has no entry.
+if (!dryRun) sendAuditLinesTo(log);
+
+if (
+  path === undefined ||
+  args.filter((arg) => arg !== '--dry-run' && arg !== '--cluster-ready').length !== 2
+) {
+  fail('usage: bun run entitlements:apply --file <editions.json> [--dry-run] [--cluster-ready]');
+} else {
+  const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
+  try {
+    const { file, problems } = readEditionFile(readFileSync(path, 'utf8'));
+    if (file === undefined) {
+      fail(problems.map((problem) => `${path}: ${problem}`).join('\n'));
+    } else {
+      const found = await database
+        .selectFrom('workspaces')
+        .select(['id', 'slug'])
+        .where('slug', 'in', Object.keys(file.workspaces))
+        .where('deleted_at', 'is', null)
+        .execute();
+      const plan = planEdition(
+        file,
+        catalogue,
+        new Map(found.map((workspace) => [workspace.slug, workspace.id])),
+        systemClock.now(),
+      );
+      // The command cannot see the cluster (only the process that serves holds its link to Redis), so where there is a Redis it
+      // asks the operator to say that every node reads grants before it takes anything away.
+      const needsWord =
+        config.REDIS_URL !== undefined &&
+        !args.includes('--cluster-ready') &&
+        plan.writes.some((write) => restricts(write, catalogue.mode));
+      if (plan.problems.length > 0) {
+        fail(plan.problems.join('\n'));
+      } else if (needsWord) {
+        fail(
+          'this server is clustered (REDIS_URL) and the file takes grants away: once every node runs a release that reads workspace grants, say so with --cluster-ready',
+          1,
+        );
+      } else {
+        const changes = await applyEdition(
+          database,
+          systemClock,
+          catalogue,
+          `file:${basename(path)}`,
+          plan.writes,
+          dryRun,
+        );
+        const counts = new Map<string, number>();
+        for (const change of changes)
+          counts.set(
+            `${change.module} ${change.state}`,
+            (counts.get(`${change.module} ${change.state}`) ?? 0) + 1,
+          );
+        process.stdout.write(
+          `${dryRun ? 'would change' : 'changed'} ${String(changes.length)} of ${String(plan.writes.length)} grants\n`,
+        );
+        for (const [what, count] of [...counts].sort())
+          process.stdout.write(`  ${what}: ${String(count)}\n`);
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof AppError)) throw error;
+    fail(error.body.message, 2);
+  } finally {
+    await database.destroy();
+  }
+}

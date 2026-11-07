@@ -55,6 +55,7 @@
     "job": "bun run apps/api/src/cli/jobs.ts",
     "export:workspace": "bun run apps/api/src/cli/export-workspace.ts",
     "erase:content": "bun run apps/api/src/cli/erase-content.ts",
+    "entitlements:apply": "bun run apps/api/src/cli/entitlements-apply.ts",
     "admin:reset-password": "bun run apps/api/src/cli/admin-reset-password.ts",
     "storage:quota": "bun run apps/api/src/cli/storage-quota.ts",
     "knip": "knip",

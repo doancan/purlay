@@ -118,6 +118,22 @@ export const API_CLI: readonly Mutation[] = [
     tests: ['apps/api/src/cli/demo-seed.integration.test.ts'],
   },
   {
+    id: 'entitlements-apply-applies-a-file-with-a-problem',
+    why: 'a typo in an edition file is applied for the workspaces that were spelled right, and the operator believes the rest done (D-292)',
+    file: 'apps/api/src/cli/entitlements-apply.ts',
+    find: '      if (plan.problems.length > 0) {',
+    replace: '      if (false as boolean) {',
+    tests: ['apps/api/src/cli/entitlements-apply.integration.test.ts'],
+  },
+  {
+    id: 'entitlements-apply-source-is-not-the-file',
+    why: 'the row does not say which file wrote it, so an edition file’s work cannot be told from an operator’s by hand (D-292)',
+    file: 'apps/api/src/cli/entitlements-apply.ts',
+    find: '          `file:${basename(path)}`,',
+    replace: "          'operator',",
+    tests: ['apps/api/src/cli/entitlements-apply.integration.test.ts'],
+  },
+  {
     id: 'hidden-input-empty-ctrl-d-submits',
     why: 'Ctrl-D at an empty prompt submits an empty password instead of ending the input',
     file: 'apps/api/src/cli/hidden-input.ts',

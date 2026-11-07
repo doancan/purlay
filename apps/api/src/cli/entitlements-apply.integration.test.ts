@@ -1,0 +1,153 @@
+/**
+ * `bun run entitlements:apply` (D-292) as a process against a database of the test's own: an edition file is applied to the workspaces
+ * it lists in one transaction, a dry run changes nothing, running it again changes nothing, and a file that cannot be applied, or a
+ * workspace that is not there, applies none of it.
+ */
+import { afterAll, describe, expect, test } from 'bun:test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { cloneIntegrationDatabase, closeIntegrationDatabase, DROP_HOOK_MS } from '@purlay/db';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../platform/config';
+import { aUniqueSlug } from '../testing/users';
+
+const SCRIPT = `${import.meta.dir}/entitlements-apply.ts`;
+const clones: (() => Promise<void>)[] = [];
+afterAll(async () => {
+  await Promise.all(
+    clones.map(async (drop) => {
+      await drop();
+    }),
+  );
+  await closeIntegrationDatabase();
+}, DROP_HOOK_MS);
+
+interface Ran {
+  readonly code: number;
+  readonly out: string;
+  readonly err: string;
+}
+
+const run = (url: string, args: readonly string[], env: Record<string, string> = {}): Ran => {
+  const rest = { ...process.env };
+  delete rest['DATABASE_URL'];
+  delete rest['REDIS_URL'];
+  const done = Bun.spawnSync(['bun', '--no-env-file', 'run', SCRIPT, ...args], {
+    env: {
+      ...rest,
+      APP_URL: 'https://purlay.test',
+      ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
+      DATABASE_URL: url,
+      ...env,
+    },
+  });
+  return { code: done.exitCode, out: done.stdout.toString(), err: done.stderr.toString() };
+};
+
+const aFile = (content: unknown): string => {
+  const path = join(mkdtempSync(join(tmpdir(), 'editions-')), 'editions.json');
+  writeFileSync(path, typeof content === 'string' ? content : JSON.stringify(content));
+  return path;
+};
+
+const aServer = async (): Promise<{ url: string; slug: string; rows: () => Promise<string[]> }> => {
+  const cloned = await cloneIntegrationDatabase();
+  clones.push(cloned.drop);
+  const slug = aUniqueSlug('edition');
+  await cloned.db.insertInto('workspaces').values({ name: 'Edition', slug }).execute();
+  return {
+    url: cloned.connectionString,
+    slug,
+    rows: async () =>
+      (
+        await cloned.db
+          .selectFrom('workspace_modules')
+          .select(['module', 'state', 'source'])
+          .where('source', 'like', 'file:%')
+          .orderBy('module')
+          .execute()
+      ).map((row) => `${row.module}:${row.state}:${row.source}`),
+  };
+};
+
+describe('integration: bun run entitlements:apply', () => {
+  test('applies an edition, says what changed by module, and again changes nothing', async () => {
+    const server = await aServer();
+    const path = aFile({
+      editions: { free: ['chat'], team: ['chat', 'issues'] },
+      workspaces: { [server.slug]: { edition: 'free' } },
+    });
+    const first = run(server.url, ['--file', path]);
+    expect(first.code).toBe(0);
+    expect(first.err).toBe('');
+    expect(first.out).toEndWith('changed 1 of 1 grants\n  issues off: 1\n');
+    // The trail's line is written, by id (D-222), with nobody as the actor.
+    expect(first.out).toContain('"action":"server.module_withdrawn"');
+    expect(await server.rows()).toEqual(['issues:off:file:editions.json']);
+    const again = run(server.url, ['--file', path]);
+    expect(again.out).toBe('changed 0 of 1 grants\n');
+    // Another edition for the same workspace is a change, and the trail has all of them.
+    const upgraded = aFile({
+      editions: { team: ['chat', 'issues'] },
+      workspaces: { [server.slug]: { edition: 'team' } },
+    });
+    expect(run(server.url, ['--file', upgraded]).out).toEndWith(
+      'changed 1 of 1 grants\n  issues on: 1\n',
+    );
+    expect(await server.rows()).toEqual(['issues:on:file:editions.json']);
+  });
+
+  test('a dry run says what would change and changes nothing', async () => {
+    const server = await aServer();
+    const path = aFile({
+      editions: { free: ['chat'] },
+      workspaces: { [server.slug]: { edition: 'free' } },
+    });
+    expect(run(server.url, ['--file', path, '--dry-run']).out).toBe(
+      'would change 1 of 1 grants\n  issues off: 1\n',
+    );
+    expect(await server.rows()).toEqual([]);
+  });
+
+  test('on a clustered server a file that takes grants away needs the operator to say every node reads them, and one that only grants does not', async () => {
+    const server = await aServer();
+    const clustered = { REDIS_URL: 'redis://127.0.0.1:1' };
+    const takes = aFile({
+      editions: { free: ['chat'] },
+      workspaces: { [server.slug]: { edition: 'free' } },
+    });
+    const refused = run(server.url, ['--file', takes], clustered);
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain('--cluster-ready');
+    expect(await server.rows()).toEqual([]);
+    // Granting needs no word; saying it lets the withdrawal through.
+    const gives = aFile({
+      editions: { team: ['chat', 'issues'] },
+      workspaces: { [server.slug]: { edition: 'team' } },
+    });
+    expect(run(server.url, ['--file', gives], clustered).code).toBe(0);
+    expect(run(server.url, ['--file', takes, '--cluster-ready'], clustered).code).toBe(0);
+    expect(await server.rows()).toEqual(['issues:off:file:editions.json']);
+  });
+
+  test('a file or a workspace it cannot use applies none of it, and exits 2 saying why', async () => {
+    const server = await aServer();
+    const bad = run(server.url, [
+      '--file',
+      aFile({
+        editions: { free: ['chat', 'mail'] },
+        workspaces: {
+          [server.slug]: { edition: 'free' },
+          'no-such-workspace': { edition: 'free' },
+        },
+      }),
+    ]);
+    expect(bad.code).toBe(2);
+    expect(bad.err).toContain('edition "free" lists "mail", which this build does not carry');
+    expect(bad.err).toContain('there is no workspace "no-such-workspace"');
+    expect(await server.rows()).toEqual([]);
+    expect(run(server.url, ['--file', aFile('{')]).code).toBe(2);
+    expect(run(server.url, []).code).toBe(2);
+    expect(run(server.url, ['--file', join(tmpdir(), 'does-not-exist.json')]).code).not.toBe(0);
+  });
+});

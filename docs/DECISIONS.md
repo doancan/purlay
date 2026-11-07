@@ -14298,7 +14298,7 @@ pays for, so the writer is a commercial authority and its rules are decided here
    rail follows; a page that misses it is corrected by its first `404` as for a module a rolling deploy stopped (D-255).
 6. **A restrictive write waits for the cluster.** Withdrawing a module, or running a server `managed`, is refused
    `409 PEERS_BEHIND` while a live peer does not advertise that it reads grants, because that peer would serve the module to every
-   workspace. Granting is never refused for it. The roll finishes first and the restriction follows; `DEPLOY.md` says so.
+   workspace. Granting is never refused for it. The roll finishes first and the restriction follows; `DEPLOY.md` says so. The edition command cannot see the cluster (only the serving process holds the link to Redis), so on a server with `REDIS_URL` it asks the operator to say `--cluster-ready` before it takes anything away.
 
 **Rejected.** *A workspace owner who can switch their own modules:* the gate would be a button in the customer's hands. *A row per
 edition:* the edition is a name in a file and nothing in the table (D-289); the table says modules. *Writing the trail after the
