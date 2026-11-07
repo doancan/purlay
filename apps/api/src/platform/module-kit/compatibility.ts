@@ -12,7 +12,7 @@ export interface ReleasedManifest {
   readonly routes: readonly string[];
   readonly jobs: readonly string[];
   readonly frames: readonly string[];
-  /** Absent from a snapshot written before facts existed (D-287): such a release promised none. */
+  /** Absent from a snapshot written before facts existed (D-288): such a release promised none. */
   readonly publishes?: readonly string[];
   readonly consumes?: readonly string[];
 }

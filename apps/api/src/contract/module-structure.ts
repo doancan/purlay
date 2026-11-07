@@ -23,7 +23,7 @@ export interface ModuleJson {
   readonly events: readonly string[];
   /** The `NotificationType` values the module's notifications have. */
   readonly notificationTypes: readonly string[];
-  /** The fact types the module tells the others, and the ones it takes from them (D-287): what a second implementation must handle. */
+  /** The fact types the module tells the others, and the ones it takes from them (D-288): what a second implementation must handle. */
   readonly publishes: readonly string[];
   readonly consumes: readonly string[];
   /** The capabilities it asks another module for, which are `undefined` for it where that module is off. */

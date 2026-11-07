@@ -137,7 +137,7 @@ export const API_ROOT: readonly Mutation[] = [
   },
   {
     id: 'bundle-hides-what-a-module-consumes',
-    why: 'the contract bundle lists a module without the facts it consumes, so a client that is not this code does not know what the module takes from them (D-287)',
+    why: 'the contract bundle lists a module without the facts it consumes, so a client that is not this code does not know what the module takes from them (D-288)',
     file: 'apps/api/src/contract/module-structure.ts',
     find: '        consumes: sorted(manifest.consumes),\n',
     replace: '        consumes: [],\n',
@@ -145,7 +145,7 @@ export const API_ROOT: readonly Mutation[] = [
   },
   {
     id: 'bundle-hides-what-a-module-publishes',
-    why: 'the contract bundle lists a module without the facts it publishes, so a client that is not this code does not know what the module tells the others (D-287)',
+    why: 'the contract bundle lists a module without the facts it publishes, so a client that is not this code does not know what the module tells the others (D-288)',
     file: 'apps/api/src/contract/module-structure.ts',
     find: '        publishes: sorted(manifest.publishes),\n',
     replace: '        publishes: [],\n',
@@ -153,7 +153,7 @@ export const API_ROOT: readonly Mutation[] = [
   },
   {
     id: 'bundle-hides-what-a-module-uses',
-    why: 'the contract bundle lists a module without the facts it uses, so a client that is not this code does not know what the module asks of its partners (D-287)',
+    why: 'the contract bundle lists a module without the facts it uses, so a client that is not this code does not know what the module asks of its partners (D-288)',
     file: 'apps/api/src/contract/module-structure.ts',
     find: '        uses: sorted(manifest.uses),\n',
     replace: '        uses: [],\n',

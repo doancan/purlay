@@ -187,7 +187,7 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   workspace_invitations: 'a workspace’s links and their digests: the workspace’s, and credentials',
   job_runs: 'the scheduler’s own record',
   object_deletions: 'storage keys waiting to be deleted: keys never leave',
-  outbox: 'facts in flight between modules, short-lived infrastructure (D-287)',
+  outbox: 'facts in flight between modules, short-lived infrastructure (D-288)',
   workspace_exports: 'an owner’s export of a workspace: the workspace’s record',
   personal_exports:
     'the record of this very export and the ones before it: its archive is the export',

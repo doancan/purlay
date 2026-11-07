@@ -229,7 +229,7 @@ the browser's own learns the structure from two places and nothing else.
 
 - **Which modules exist, and what each owns: the contract bundle.** `contract.json` has `modules` (each known module's `id`,
   `requires`, `optional`, the `routes` templates it owns, the socket `frames` and `events` it owns and the
-  `notificationTypes` of its notifications, and the fact types it `publishes` and `consumes` and the capabilities it `uses`, D-287), a `module` on every entry of `endpoints`, and `eventOwners` and `frameOwners`
+  `notificationTypes` of its notifications, and the fact types it `publishes` and `consumes` and the capabilities it `uses`, D-288), a `module` on every entry of `endpoints`, and `eventOwners` and `frameOwners`
   (every server event and client operation by name). An owner is `core` or a module id; `core` is never a module and its
   parts exist on every server. All of it is read from the server's manifests, so a client generates its grouping from it and
   keeps no list of its own. The bundle is of one server version: it says what that version knows.

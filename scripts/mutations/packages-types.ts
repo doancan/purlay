@@ -63,7 +63,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'fact-hold-days-unbounded',
-    why: 'a fact may be held for any number of days, so the outbox keeps rows for a module nobody will turn on (D-287)',
+    why: 'a fact may be held for any number of days, so the outbox keeps rows for a module nobody will turn on (D-288)',
     file: 'packages/types/src/facts.ts',
     find: 'Number.isInteger(days) && days >= 1 && days <= FACT_HOLD_DAYS_MAX',
     replace: 'Number.isInteger(days) && days >= 1',

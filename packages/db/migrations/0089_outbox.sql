@@ -1,6 +1,6 @@
 -- 0089_outbox
 --
--- The outbox of facts one module tells another (D-287, D-283 §2): a row is one delivery of one fact to one consumer, written in
+-- The outbox of facts one module tells another (D-288, D-283 §2): a row is one delivery of one fact to one consumer, written in
 -- the publisher's transaction, so a fact exists exactly when the thing it reports does.
 --
 --   * `fact_id` is the same on every consumer's row of one fact: the consumer's idempotency key for an effect outside the database.

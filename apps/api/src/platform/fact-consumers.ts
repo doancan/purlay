@@ -2,7 +2,7 @@
  * A module's handlers of the facts it consumes (`MODULES.md` §4, D-283 §3), one for each type named in its manifest's
  * `consumes` and keyed by it, as frame handlers are keyed by the operation they serve (`frame-handlers.ts`).
  *
- * What delivers a fact (D-287, step 14d): a handler runs in the consumer's own transaction, which the delivery's mark is
+ * What delivers a fact (D-288, step 14d): a handler runs in the consumer's own transaction, which the delivery's mark is
  * committed with, under the module's share and its `workerDeadline`.
  */
 import type { Transaction } from '@purlay/db';

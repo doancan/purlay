@@ -1,5 +1,5 @@
 /**
- * A fact between two modules that are not chat or issues, for the tests of the outbox (D-287): `notes` publishes `notes.created`
+ * A fact between two modules that are not chat or issues, for the tests of the outbox (D-288): `notes` publishes `notes.created`
  * and `wiki` consumes it, each as a manifest and nothing more, since what is tested is the table, the claim and the delivery.
  */
 import type { Executor } from '@purlay/db';

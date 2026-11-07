@@ -1,5 +1,5 @@
 /**
- * A fact is told in the transaction that made it true (D-287, D-283 §2): one row for each module that consumes it, none when the
+ * A fact is told in the transaction that made it true (D-288, D-283 §2): one row for each module that consumes it, none when the
  * publisher's transaction ends without committing, and none that the table, the declaration or the caller's name would refuse.
  * Real PostgreSQL; the rows are read back by what the table holds, not by what `publishFact` says it did.
  */

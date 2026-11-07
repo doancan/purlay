@@ -10,7 +10,7 @@ import type { TSchema } from '@sinclair/typebox';
 
 /**
  * The most days a fact is held for a consumer that is not run: the outbox keeps a row no longer than it would have a person wait
- * for a module to be turned back on (D-287).
+ * for a module to be turned back on (D-288).
  */
 export const FACT_HOLD_DAYS_MAX = 14;
 

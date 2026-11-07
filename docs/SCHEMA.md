@@ -2310,7 +2310,7 @@ CREATE TABLE object_deletions (
 
 ### 9.4a. `outbox`
 
-The facts one module tells another (D-287, D-283 §2): a row is one delivery of one fact to one consumer, written in the publisher's
+The facts one module tells another (D-288, D-283 §2): a row is one delivery of one fact to one consumer, written in the publisher's
 transaction (`publishFact`) and run by the consumer, in a transaction of its own, which marks it delivered in the same commit as its
 effect. `fact_id` is shared by every consumer's row of one fact and is the key of an effect outside the database; `attempts` counts
 at the claim, so a fact that hangs its node still reaches the ceiling; `next_attempt_at` is the backoff and the lease at once. Only
@@ -2944,7 +2944,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0086_invitation_recipients.sql  workspace_invitation_recipients, workspace_invitation_mail_attempts: private recipient and safe SMTP receipt evidence (D-279)
 0087_invitation_recipient_foreign_keys.sql  usable child indexes for recipient attribution and cascading deletion (D-279)
 0088_inbox_entries.sql  inbox_entries: what modules told a person, written by the notification sink (D-286)
-0089_outbox.sql  outbox: the facts one module tells another, a row for each consumer  (D-287)
+0089_outbox.sql  outbox: the facts one module tells another, a row for each consumer  (D-288)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

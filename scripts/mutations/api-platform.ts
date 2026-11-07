@@ -481,7 +481,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'module-compat-ignores-a-fact-no-longer-consumed',
-    why: 'a module stops consuming a fact the last release consumed and the release goes out, so rows an older node writes for it wait for a handler that is gone (D-287)',
+    why: 'a module stops consuming a fact the last release consumed and the release goes out, so rows an older node writes for it wait for a handler that is gone (D-288)',
     file: 'apps/api/src/platform/module-kit/compatibility.ts',
     find: '      ...missing(before.consumes ?? [], after.consumes ?? []).map(\n',
     replace: '      ...missing([], []).map(\n',
@@ -489,7 +489,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'module-compat-ignores-a-fact-no-longer-published',
-    why: 'a module stops publishing a fact the last release published and the release goes out, so the consumers of an older node’s rows wait for a fact that no longer comes (D-287)',
+    why: 'a module stops publishing a fact the last release published and the release goes out, so the consumers of an older node’s rows wait for a fact that no longer comes (D-288)',
     file: 'apps/api/src/platform/module-kit/compatibility.ts',
     find: '      ...missing(before.publishes ?? [], after.publishes ?? []).map(\n',
     replace: '      ...missing([], []).map(\n',
@@ -577,7 +577,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-accepts-the-pool',
-    why: 'a fact is written through the pool, outside the publisher’s transaction, and outlives the thing it reports (D-287)',
+    why: 'a fact is written through the pool, outside the publisher’s transaction, and outlives the thing it reports (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: "  if (!isTransaction(transaction))\n    throw new FactPublishError(fact.type, 'it is not in a transaction');\n",
     replace: '',
@@ -593,7 +593,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-hold-days-ignored',
-    why: 'a fact held for days expires after a day, so a module off over a weekend misses what it was told to wait for (D-287)',
+    why: 'a fact held for days expires after a day, so a module off over a weekend misses what it was told to wait for (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: '(holdDays ?? DROPPING_FACT_PENDING_DAYS) * DAY_MS',
     replace: 'DROPPING_FACT_PENDING_DAYS * DAY_MS',
@@ -601,7 +601,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-holds-a-dropped-fact',
-    why: 'a fact that says drop is written for a consumer that is off, so a notice waits for a module that is turned on days later (D-287)',
+    why: 'a fact that says drop is written for a consumer that is off, so a notice waits for a module that is turned on days later (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: 'routing.runs(consumer) || holdDays !== undefined',
     replace: 'true',
@@ -609,7 +609,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-ignores-the-fact-owner',
-    why: 'a module publishes a fact another module owns, so the owner of a shape is whoever wrote last (D-287)',
+    why: 'a module publishes a fact another module owns, so the owner of a shape is whoever wrote last (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: '  if (fact.owner !== producer || !routing.mayPublish(producer, fact.type)) {',
     replace: '  if (!routing.mayPublish(producer, fact.type)) {',
@@ -617,7 +617,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-ignores-the-publishes-list',
-    why: 'a module publishes a fact its manifest does not list, so the manifest and the contract bundle say less than the module does (D-287)',
+    why: 'a module publishes a fact its manifest does not list, so the manifest and the contract bundle say less than the module does (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: '  if (fact.owner !== producer || !routing.mayPublish(producer, fact.type)) {',
     replace: '  if (fact.owner !== producer) {',
@@ -625,7 +625,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-ignores-the-request-module',
-    why: 'a module’s request publishes in the name of another module, so the share and the labels that hold the request do not name the publisher (D-287)',
+    why: 'a module’s request publishes in the name of another module, so the share and the labels that hold the request do not name the publisher (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: '  if (requestModule !== undefined && requestModule !== producer) {',
     replace: '  if (false as boolean) {',
@@ -633,7 +633,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-skips-schema-check',
-    why: 'a payload that does not fit its declaration is written, and the consumer finds out at delivery, far from the publisher that caused it (D-287)',
+    why: 'a payload that does not fit its declaration is written, and the consumer finds out at delivery, far from the publisher that caused it (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: '  if (!Value.Check(fact.schema, payload)) {',
     replace: '  if (false as boolean) {',
@@ -641,7 +641,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-skips-size-check',
-    why: 'a payload past eight KiB is written, so the table grows by whatever a publisher puts in it (D-287)',
+    why: 'a payload past eight KiB is written, so the table grows by whatever a publisher puts in it (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
     find: '    ? `its payload is ${String(bytes)} bytes, past ${String(OUTBOX_PAYLOAD_BYTES_MAX)}`',
     replace:

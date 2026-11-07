@@ -118,7 +118,7 @@ const exportBatch = async (transaction: Transaction, workspaceId: string): Promi
   return { rows: gone.length, files: keys.length, keys };
 };
 
-/** The facts in flight between modules for the workspace: ids and short labels of what is being erased (D-287). */
+/** The facts in flight between modules for the workspace: ids and short labels of what is being erased (D-288). */
 const factBatch = async (transaction: Transaction, workspaceId: string): Promise<Batch> => ({
   rows: await purgeWorkspaceFacts(transaction, workspaceId, WORKSPACE_PURGE_BATCH),
   files: 0,

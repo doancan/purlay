@@ -184,7 +184,7 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
   object_deletions:
     'storage keys waiting to be deleted: the store’s housekeeping, and keys never leave',
   outbox:
-    'facts in flight between modules, gone within days of being delivered: infrastructure, not a record of the workspace (D-287)',
+    'facts in flight between modules, gone within days of being delivered: infrastructure, not a record of the workspace (D-288)',
   server_operational_status: 'the operator’s bounded checks, not personal or workspace data',
   server_settings:
     'the operator’s settings for the whole server, not a workspace’s; the GitHub secret and the relay’s address are credentials, which never leave (D-179)',

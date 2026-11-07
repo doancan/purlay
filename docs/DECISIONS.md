@@ -14006,3 +14006,76 @@ conversion service, editing, annotations, OCR, password storage and purchasing w
 download URLs and the previous client remain valid; no schema or public protocol rollback is needed. Exact historical
 Safari/iOS and Firefox releases were not available in the initial spike; current WebKit is not presented as those
 releases. The browser floor is unchanged and the compatibility tests exercise the missing required API explicitly.
+
+### D-288. The outbox is a table of deliveries, published in the publisher's transaction and claimed and delivered in two steps — builds on D-35, D-250, D-274, D-281, D-283; amends D-283 §2 and §3
+
+**Context.** D-283 decided that a fact between modules is an outbox row and left the details to the step that builds it: what the
+row is, what `publishFact` refuses, what a claim and a delivery do when two nodes run at once, a node dies, a handler throws or a
+payload no longer fits. Step 14c of `MODULES.md` §10 builds the table and the publishing (§1 to §3, §6 and §7 below); the claim
+and the delivery (§4 and §5) are step 14d with the worker that runs them for a module (§8); the sweep, the metrics and the overview
+line (§9) are 14e. All of it is decided here so that each step is held to one text. Nothing in the product publishes yet, on the
+owner's decision (D-283 §2): a fake third module's tests are the consumer, and the first production publisher, a system message in
+a chat channel, waits for the feature that wants it. The outbox is for facts of human scale, an assignment or a link, and never a
+fact for each message (D-35).
+
+**Decision.**
+1. **A row is one delivery.** `outbox` (`0089_outbox.sql`, the core's, a new table with its indexes made with it): `id` and `fact_id`
+   (UUIDv7, the application's, as a message's id is), `workspace_id` on every row with a key to `workspaces`, `type`, `producer`,
+   `consumer`, the `payload`, `state` (`pending`, `delivered`, `dead`, `skipped`), `attempts`, `next_attempt_at`, `last_error`
+   (a class of error, at most 300 characters, never the payload), and `created_at`, `finished_at` and `expires_at`. One row for each
+   (fact, consumer), `UNIQUE (fact_id, consumer)`. Times are the application's clock's, as in the core's other tables, so a test moves
+   them. `finished_at` is set exactly when `state` is not `pending`, by a `CHECK`. The table is never exported. Its erasure decision is
+   `nobody`, since no column names a person and an id in a payload names the anonymised account after an erasure (D-256); its
+   retention is `kept` until the sweep of step 14e makes it `swept` (§9), which that step's change decides in the same commit as it probes.
+   A deleted workspace's rows are taken by the purge, since its tombstone's key never cascades (D-242).
+2. **`publishFact(transaction, context, fact, payload)`** writes a row for each module of the build that consumes the type, in the
+   caller's transaction. It takes `Transaction` and not an executor, and checks at run time that it is one, since a cast could unsay
+   the type. It refuses, with an error that ends the publisher's transaction and so leaves nothing of the fact: a publisher that is
+   not the fact's owner or does not list the type under `publishes`; a request of another module than the publisher's (`currentRequest`);
+   a payload that does not fit the declaration, saying where and never what; a payload past 8192 bytes of compact JSON. The table's own
+   check is 16384, since `jsonb` writes a space after each separator, and is the backstop and not the rule. A fact nobody consumes writes
+   nothing.
+3. **`absent` is in the declaration.** `'drop'` writes no row for a consumer the publishing process does not run and counts it
+   (`purlay_outbox_dropped_total`); `{ holdDays: n }`, `n` a whole number from 1 to 14 (`FACT_HOLD_DAYS_MAX`, held by
+   `factOwnerProblems`), writes it and expires it after `n` days. A row for a consumer that is run and whose fact is `drop` expires after
+   a day, because a notice delivered later than that is wrong, and the module may be turned off in the meantime.
+4. **The claim** takes up to a batch of a consumer's due rows with `FOR UPDATE SKIP LOCKED`, oldest due first, adds one to `attempts`
+   and sets `next_attempt_at` to now plus `min(5 s * 2^(n-1), 1 h)` within 20% either way, and commits. The backoff is the lease: a
+   row is not given to a second node before it. A row that has already used eight attempts without ending is made `dead` there,
+   `AttemptsExhausted`, and its handler is not asked again: a fact that hangs or kills the node that runs it reaches the ceiling by
+   that and is not the node's last words for ever.
+5. **The delivery** locks the claimed row in the consumer's own transaction (`FOR UPDATE SKIP LOCKED`, `state = 'pending'`) and leaves it,
+   as `gone`, if it is delivered or held. It checks the payload against the declaration again, and a payload that no longer fits is `dead`
+   at once, `PayloadRefused`. The handler runs under a savepoint with the transaction, the fact's id and its **workspace as the row
+   has it**, and a throw rolls the savepoint back, records the class of the error and leaves the row pending for its backoff, or
+   makes it `dead` when it was the eighth attempt (the ceiling is `OUTBOX_ATTEMPTS_MAX`). A handler that returns `'skipped'` ends the row
+   as `skipped`. Otherwise the row is marked `delivered` in the same transaction, outside the savepoint, so a failure of the mark
+   is a failure of the transaction and takes the handler's effect with it. A dead row is logged at `error` with the module, the fact
+   type and the fact id, and never the payload.
+6. **Only the outbox's own files name the table.** `platform/outbox.ts` and, from step 14d, `platform/outbox-drain.ts`; `core-tables.test.ts`
+   reads every other file of the core for it, and a module's typed handle does not hold it (D-271).
+7. **What the release holds (amends D-283 §3).** The release snapshot holds `publishes` and `consumes`: a type a module no longer
+   publishes or no longer consumes is a break that needs a dated exception, since a row an older node writes waits for a handler that
+   is gone. `uses` is not held: asking a question less breaks nobody. A snapshot written before facts existed promised none. The contract
+   bundle's module structure gains `publishes`, `consumes` and `uses`, from the manifests; `CONTRACT_VERSION` does not move.
+
+8. **A consumer runs as a worker of its module (step 14d).** For each module that runs and consumes a type, `compose` adds one worker,
+   `outbox:consume`, to the workers the module already has (D-281): the module's share of the pool, its `workerDeadline`, the error
+   boundary and `purlay_worker_failures_total{module,worker}` come with it, and no scheduler is new. It claims a batch of at most 20
+   of its module's rows and delivers them one after another, every two seconds. The wait of a fact is therefore two seconds and the
+   time of the work; it is measured, and a local nudge from the publisher is added only if the measure asks for it.
+9. **The sweep and the metrics (step 14e).** `sweep:outbox`, a core job of every process: rows delivered or skipped after a day, dead
+   after thirty, and pending rows past `expires_at`, which it counts as expired, in batches of at most 5000 rows. Gauges for depth, age
+   of the oldest and dead rows by module, and counters for deliveries, failures and drops by module and fact, whose labels are the
+   closed sets of the manifests. The overview of the server lists a module with dead rows or a pending row older than fifteen minutes.
+   `DEPLOY.md` names the volume at which the table should be partitioned: more than a million rows a day, or vacuum that falls behind.
+
+**Rejected.** *Counting the attempt when the handler fails*: a handler that hangs or kills its node is never counted and the fact is
+tried for ever. *A lease column apart from `next_attempt_at`*: the backoff is a lease already, and a second clock would have to agree
+with it. *Running the handler outside the delivery's transaction and marking after*: an effect with no mark is run twice, and a mark
+with no effect loses the fact. *Writing `dead` for every first failure of a payload that does not fit*: that one is not going to
+get better, and a retry only delays the line in the log. *Holding `uses` in the snapshot*: nobody is hurt by a question asked less.
+*A global ceiling per producer now*: not measured (D-283 §2). *`LISTEN`/`NOTIFY` or Redis to wake a drain*: the poll is bounded and the correctness never rested on a wake-up.
+
+**Cost of reversing.** One table of transient rows, which may be dropped once no fact is published, and a guard in `module-compat`,
+which a dated exception lifts for a fact that is removed on purpose. The facts in flight at the moment of a drop are lost.
