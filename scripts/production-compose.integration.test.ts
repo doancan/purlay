@@ -20,6 +20,14 @@ const config = readFileSync(join(repo, 'docs/CONFIG.md'), 'utf8');
 /** The proxy image the compose file pins, read from it so the test and the file cannot disagree. */
 const PROXY_IMAGE = /image:\s*(caddy:\S+)/.exec(composeText)?.[1] ?? '';
 
+/**
+ * What a test that runs `docker run … caddy adapt` is given, not bun's 5 s default. The process is
+ * outside ours: the first run on a runner may still have to create the container and start the
+ * image, and one took 5.2 s on CI (#1247). A minute is that cold start with room. `docker compose
+ * config` below reads files and starts no container, so it keeps the default.
+ */
+const CONTAINER_START_TIMEOUT_MS = 60_000;
+
 const ENVIRONMENT: Record<string, string> = {
   PURLAY_IMAGE: 'ghcr.io/example/purlay-api@sha256:' + 'a'.repeat(64),
   APP_URL: 'https://chat.example.test',
@@ -157,38 +165,47 @@ describe('integration: the production compose file', () => {
     expect(published.filter(([host]) => host === 80 || host === 443)).toEqual([]);
   });
 
-  test('the proxy does not write the query string of a request to its log', () => {
-    // An OAuth callback carries a one-time `code` and the `state` in its query, and a
-    // search carries what was searched for. The access log is not a place for either.
-    const caddy = Bun.spawnSync(
-      [
-        'docker',
-        'run',
-        '--rm',
-        '-e',
-        'APP_URL=https://localhost',
-        '-v',
-        `${join(repo, 'docker/Caddyfile')}:/etc/caddy/Caddyfile:ro`,
-        PROXY_IMAGE,
-        'caddy',
-        'adapt',
-        '--config',
-        '/etc/caddy/Caddyfile',
-      ],
-      { stdout: 'pipe', stderr: 'pipe' },
-    );
-    expect(caddy.exitCode).toBe(0);
-    const adapted = JSON.parse(caddy.stdout.toString()) as {
-      logging?: {
-        logs?: Record<string, { encoder?: { format?: string; fields?: Record<string, unknown> } }>;
+  test(
+    'the proxy does not write the query string of a request to its log',
+    () => {
+      // An OAuth callback carries a one-time `code` and the `state` in its query, and a
+      // search carries what was searched for. The access log is not a place for either.
+      const caddy = Bun.spawnSync(
+        [
+          'docker',
+          'run',
+          '--rm',
+          '-e',
+          'APP_URL=https://localhost',
+          '-v',
+          `${join(repo, 'docker/Caddyfile')}:/etc/caddy/Caddyfile:ro`,
+          PROXY_IMAGE,
+          'caddy',
+          'adapt',
+          '--config',
+          '/etc/caddy/Caddyfile',
+        ],
+        { stdout: 'pipe', stderr: 'pipe' },
+      );
+      expect(caddy.exitCode).toBe(0);
+      const adapted = JSON.parse(caddy.stdout.toString()) as {
+        logging?: {
+          logs?: Record<
+            string,
+            { encoder?: { format?: string; fields?: Record<string, unknown> } }
+          >;
+        };
       };
-    };
-    const encoders = Object.values(adapted.logging?.logs ?? {}).flatMap((log) => log.encoder ?? []);
-    const filtering = encoders.find((encoder) => encoder.format === 'filter');
-    expect(filtering).toBeDefined();
-    // Everything from the `?` on is removed from the logged URI.
-    expect(filtering?.fields?.['request>uri']).toEqual({ filter: 'regexp', regexp: '\\?.*' });
-  });
+      const encoders = Object.values(adapted.logging?.logs ?? {}).flatMap(
+        (log) => log.encoder ?? [],
+      );
+      const filtering = encoders.find((encoder) => encoder.format === 'filter');
+      expect(filtering).toBeDefined();
+      // Everything from the `?` on is removed from the logged URI.
+      expect(filtering?.fields?.['request>uri']).toEqual({ filter: 'regexp', regexp: '\\?.*' });
+    },
+    CONTAINER_START_TIMEOUT_MS,
+  );
 
   /** The proxy's configuration as Caddy itself reads it: what is asserted is what it will do. */
   const adaptedProxy = (): unknown => {
@@ -226,46 +243,54 @@ describe('integration: the production compose file', () => {
    * it at all, so a token that leaked is still no use from the internet. Measured against Caddy itself
    * when this was written — `/METRICS`, `/%6Detrics` and `//metrics` were refused as well.
    */
-  test('the proxy answers /metrics and anything under it 404 itself, before the API is asked', () => {
-    const routes = objectsIn(adaptedProxy()).filter((route) => Array.isArray(route['match']));
-    const refusing = routes.find((route) =>
-      objectsIn(route['match']).some(
-        (match) =>
-          Array.isArray(match['path']) &&
-          (match['path'] as unknown[]).includes('/metrics') &&
-          (match['path'] as unknown[]).includes('/metrics/*'),
-      ),
-    );
-    expect(refusing).toBeDefined();
-    const handlers = objectsIn(refusing?.['handle']);
-    expect(handlers.map((handler) => handler['handler'])).toEqual(['static_response']);
-    expect(handlers[0]?.['status_code']).toBe(404);
-    // Matched before the route that proxies: Caddy runs the first route whose matcher holds.
-    const order = objectsIn(adaptedProxy())
-      .filter((route) => Array.isArray(route['handle']))
-      .flatMap((route) =>
-        objectsIn(route['handle']).flatMap((handler) =>
-          handler['handler'] === 'static_response' || handler['handler'] === 'reverse_proxy'
-            ? [handler['handler']]
-            : [],
+  test(
+    'the proxy answers /metrics and anything under it 404 itself, before the API is asked',
+    () => {
+      const routes = objectsIn(adaptedProxy()).filter((route) => Array.isArray(route['match']));
+      const refusing = routes.find((route) =>
+        objectsIn(route['match']).some(
+          (match) =>
+            Array.isArray(match['path']) &&
+            (match['path'] as unknown[]).includes('/metrics') &&
+            (match['path'] as unknown[]).includes('/metrics/*'),
         ),
       );
-    expect(order.indexOf('static_response')).toBeLessThan(order.indexOf('reverse_proxy'));
-  });
+      expect(refusing).toBeDefined();
+      const handlers = objectsIn(refusing?.['handle']);
+      expect(handlers.map((handler) => handler['handler'])).toEqual(['static_response']);
+      expect(handlers[0]?.['status_code']).toBe(404);
+      // Matched before the route that proxies: Caddy runs the first route whose matcher holds.
+      const order = objectsIn(adaptedProxy())
+        .filter((route) => Array.isArray(route['handle']))
+        .flatMap((route) =>
+          objectsIn(route['handle']).flatMap((handler) =>
+            handler['handler'] === 'static_response' || handler['handler'] === 'reverse_proxy'
+              ? [handler['handler']]
+              : [],
+          ),
+        );
+      expect(order.indexOf('static_response')).toBeLessThan(order.indexOf('reverse_proxy'));
+    },
+    CONTAINER_START_TIMEOUT_MS,
+  );
 
-  test('a request that arrives while the API restarts waits for it, rather than failing 502 (#636)', () => {
-    const proxies = objectsIn(adaptedProxy()).filter(
-      (handler) => handler['handler'] === 'reverse_proxy',
-    );
-    expect(proxies).toHaveLength(1);
-    const balancing = proxies[0]?.['load_balancing'] as Record<string, unknown> | undefined;
-    // Caddy's durations are nanoseconds in its JSON: 30 s, long enough for a drained restart.
-    expect(balancing?.['try_duration']).toBe(30_000_000_000);
-    // And only a request it never handed over is tried again (#666). Caddy's default also retries a
-    // GET whose exchange failed after it was sent — the OAuth callback's one-time code among them —
-    // so the retry condition matches nothing; a request that never reached the API needs none.
-    expect(balancing?.['retry_match']).toEqual([{ expression: 'false' }]);
-  });
+  test(
+    'a request that arrives while the API restarts waits for it, rather than failing 502 (#636)',
+    () => {
+      const proxies = objectsIn(adaptedProxy()).filter(
+        (handler) => handler['handler'] === 'reverse_proxy',
+      );
+      expect(proxies).toHaveLength(1);
+      const balancing = proxies[0]?.['load_balancing'] as Record<string, unknown> | undefined;
+      // Caddy's durations are nanoseconds in its JSON: 30 s, long enough for a drained restart.
+      expect(balancing?.['try_duration']).toBe(30_000_000_000);
+      // And only a request it never handed over is tried again (#666). Caddy's default also retries a
+      // GET whose exchange failed after it was sent — the OAuth callback's one-time code among them —
+      // so the retry condition matches nothing; a request that never reached the API needs none.
+      expect(balancing?.['retry_match']).toEqual([{ expression: 'false' }]);
+    },
+    CONTAINER_START_TIMEOUT_MS,
+  );
 
   test('every long-running service is bounded in memory and processes, from a measurement (#639)', () => {
     // A runaway takes its own container down, not the host. The numbers are the spike's
