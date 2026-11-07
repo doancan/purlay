@@ -421,19 +421,19 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     ],
   },
   {
-    id: 'purge-leaves-the-inbox',
-    why: 'a deleted workspace keeps every notice of its people, because the tombstone means no cascade fires (D-286)',
-    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
-    find: "export const CORE_REMAINING_TABLES = [\n  'inbox_entries',\n",
-    replace: 'export const CORE_REMAINING_TABLES = [\n',
-    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
-  },
-  {
     id: 'purge-leaves-the-facts-of-a-deleted-workspace',
     why: 'the purge of a workspace does not take its facts, and a tombstone’s cascade never fires, so ids and labels of an erased workspace stay for ever (D-288)',
     file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
     find: '    { batch: factBatch, size: WORKSPACE_PURGE_BATCH, messages: false },\n',
     replace: '',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
+  {
+    id: 'purge-leaves-the-inbox',
+    why: 'a deleted workspace keeps every notice of its people, because the tombstone means no cascade fires (D-286)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: "export const CORE_REMAINING_TABLES = [\n  'inbox_entries',\n",
+    replace: 'export const CORE_REMAINING_TABLES = [\n',
     tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
   },
   {

@@ -600,6 +600,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/publish-failure.integration.test.ts'],
   },
   {
+    id: 'publish-forgets-the-shape',
+    why: 'the row does not say which shape it was written with, so an older node cannot tell a row it cannot read from one it can and kills it in a rolling deploy (D-288)',
+    file: 'apps/api/src/platform/outbox.ts',
+    find: '        shape: fact.shape ?? FACT_SHAPE_FIRST,\n',
+    replace: '',
+    tests: ['apps/api/src/platform/outbox.integration.test.ts'],
+  },
+  {
     id: 'publish-gives-each-consumer-its-own-fact-id',
     why: 'the rows of one fact carry different fact ids, so a consumer cannot tell the fact it was told from another and its idempotency key means nothing (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
@@ -653,14 +661,6 @@ export const API_PLATFORM: readonly Mutation[] = [
     file: 'apps/api/src/platform/outbox.ts',
     find: '  if (requestModule !== undefined && requestModule !== producer) {',
     replace: '  if (false as boolean) {',
-    tests: ['apps/api/src/platform/outbox.integration.test.ts'],
-  },
-  {
-    id: 'publish-forgets-the-shape',
-    why: 'the row does not say which shape it was written with, so an older node cannot tell a row it cannot read from one it can and kills it in a rolling deploy (D-288)',
-    file: 'apps/api/src/platform/outbox.ts',
-    find: '        shape: fact.shape ?? FACT_SHAPE_FIRST,\n',
-    replace: '',
     tests: ['apps/api/src/platform/outbox.integration.test.ts'],
   },
   {

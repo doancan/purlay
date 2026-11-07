@@ -2322,23 +2322,64 @@ CREATE TABLE outbox (
     id              UUID PRIMARY KEY,
     fact_id         UUID NOT NULL,
     workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    type            TEXT NOT NULL,   -- `<owner>.<what>`, declared in @purlay/types
+    type            TEXT NOT NULL,
     producer        TEXT NOT NULL,
     consumer        TEXT NOT NULL,
-    payload         JSONB NOT NULL,  -- at most 8192 bytes of compact JSON, checked against the fact's schema
-    state           TEXT NOT NULL DEFAULT 'pending',  -- pending | delivered | dead | skipped
+    payload         JSONB NOT NULL,
+    state           TEXT NOT NULL DEFAULT 'pending',
     attempts        INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMPTZ NOT NULL,
-    last_error      TEXT,            -- a class of error, at most 300 characters, never the payload
+    last_error      TEXT,
     created_at      TIMESTAMPTZ NOT NULL,
-    finished_at     TIMESTAMPTZ,     -- set exactly when the row is no longer pending
+    finished_at     TIMESTAMPTZ,
     expires_at      TIMESTAMPTZ NOT NULL,
-    shape           INTEGER NOT NULL DEFAULT 1,  -- the version of the fact's declaration that wrote it; a node claims the shapes it knows
-    correlation_id  TEXT,            -- the request that published it, at most 64 characters
-    caused_by       UUID,            -- the fact whose delivery published it
-    UNIQUE (fact_id, consumer)
+    shape           INTEGER NOT NULL DEFAULT 1,
+    correlation_id  TEXT,
+    caused_by       UUID,
+
+    CONSTRAINT outbox_id_is_uuidv7
+        CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT outbox_fact_is_uuidv7
+        CHECK (fact_id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+    CONSTRAINT outbox_type_is_named
+        CHECK (char_length(type) <= 80 AND type ~ '^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$'),
+    CONSTRAINT outbox_producer_is_a_module
+        CHECK (producer ~ '^[a-z][a-z0-9-]{0,31}$'),
+    CONSTRAINT outbox_consumer_is_a_module
+        CHECK (consumer ~ '^[a-z][a-z0-9-]{0,31}$'),
+    CONSTRAINT outbox_payload_is_small
+        CHECK (octet_length(payload::text) <= 16384),
+    CONSTRAINT outbox_state
+        CHECK (state IN ('pending', 'delivered', 'dead', 'skipped')),
+    CONSTRAINT outbox_attempts_count
+        CHECK (attempts >= 0),
+    CONSTRAINT outbox_shape_is_counted
+        CHECK (shape >= 1),
+    CONSTRAINT outbox_correlation_is_short
+        CHECK (char_length(correlation_id) <= 64),
+    CONSTRAINT outbox_error_is_short
+        CHECK (char_length(last_error) <= 300),
+    -- A row that is no longer pending says when it stopped, and one that is pending does not.
+    CONSTRAINT outbox_finished
+        CHECK ((state = 'pending') = (finished_at IS NULL)),
+    CONSTRAINT outbox_one_delivery_a_consumer
+        UNIQUE (fact_id, consumer)
 );
--- Then ALTER TABLE outbox SET (fillfactor = 80, autovacuum_vacuum_scale_factor = 0.02): the table is mostly churn.
+
+-- Rows are updated twice in their short life (claimed, then finished): room on the page for the update to stay on it, and a vacuum that
+-- keeps up with a table that is mostly churn.
+ALTER TABLE outbox SET (fillfactor = 80, autovacuum_vacuum_scale_factor = 0.02);
+
+-- What a drain takes: a consumer's rows that are due.
+CREATE INDEX idx_outbox_due ON outbox (consumer, next_attempt_at) WHERE state = 'pending';
+-- What the sweep takes: the rows that stopped, oldest first.
+CREATE INDEX idx_outbox_finished ON outbox (finished_at) WHERE state <> 'pending';
+-- What the sweep gives up on: a row that waited past its time.
+CREATE INDEX idx_outbox_expires ON outbox (expires_at) WHERE state = 'pending';
+-- What an operator is told of: the dead rows of each consumer.
+CREATE INDEX idx_outbox_dead ON outbox (consumer) WHERE state = 'dead';
+-- The key's own check when a workspace's row goes.
+CREATE INDEX idx_outbox_workspace ON outbox (workspace_id);
 ```
 
 ### 9.5. `server_settings`
