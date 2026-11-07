@@ -34,6 +34,8 @@ have it.
 
 ### Added
 
+- **Operations** — A module's timers (chat's delivery of scheduled messages and reminders) now run within that module's share of the database with a time limit per run; a run that fails or overruns is logged with the module and counted in `purlay_worker_failures_total` (D-281).
+
 - **Invitations** — Track each email recipient and mail-server response after reopening Settings, search addresses and filter by invitation status across all pages, inspect send history that updates as sends finish, resend a separate link or revoke it. Approved accounts continue to their invitation automatically; mail-server acceptance is distinguished from inbox delivery (D-279).
 
 - **Server administration** — Administrators can open a console without a workspace, browse paginated accounts, workspaces and server audit entries, approve selected pending accounts with a separate result for each, manage quotas and administrator access, end account sessions, review maintenance jobs, test saved mail configuration, configure server identity and account admission, and review backup evidence. The overview summarizes operational problems with links to their management pages and identifies incomplete checks (D-278).

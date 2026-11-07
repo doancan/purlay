@@ -17,6 +17,7 @@ import { chatWorkspaceChannels } from './channels/workspace-channels';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
 import { chatRoutes } from './http/routes';
 import { chatJobWork } from './jobs';
+import { chatWorkers } from './workers';
 import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 
@@ -106,6 +107,8 @@ export const chatModule = {
   collatedColumns: CHAT_COLLATED_COLUMNS,
   // The work of `jobs` and `retention` above.
   jobWork: chatJobWork,
+  // Scheduled messages and reminders are delivered by the process that runs chat, and by no other (D-250).
+  workers: chatWorkers,
   // What the router asks of chat for the operations of `frames` above that it has moved here (`MODULES.md` §9).
   frameHandlers: chatFrameHandlers,
   // All of chat's routes (D-280): `features/chat/http/routes.ts`.

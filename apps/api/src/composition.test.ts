@@ -8,13 +8,14 @@ import {
   moduleReport,
   registry,
   runningModuleIds,
-  startWhereRunning,
   type BundledModule,
+  type Composition,
 } from './composition';
 import { PRODUCT_MIGRATION_SETS } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
 import type { JobWork } from './modules/jobs/jobs';
+import { DEFAULT_WORKER_DEADLINE_MS, type ModuleWorker } from './modules/workers/module-workers';
 import type { AttachmentReader } from './modules/attachments/readable';
 import { noPushNotices, type PushNotices } from './modules/push/notices';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
@@ -404,18 +405,67 @@ describe('the ids a process tells a client it runs (D-273)', () => {
   });
 });
 
-describe('what the boot starts for a module', () => {
-  test('is started where the module runs, once, and not where it is carried and off or not carried at all', () => {
-    const started: string[] = [];
-    const start = (): void => {
-      started.push('started');
+describe('the workers of the modules a process runs', () => {
+  const carried = [chatModule, issuesModule];
+  const namesOf = (running: readonly BundledModule[]): string[] =>
+    compose(running, carried).workers.map(({ module, name }) => `${module}/${name}`);
+
+  test('are chat’s two delivery loops where chat runs, and nothing where it is carried and off or not carried at all', () => {
+    expect(namesOf([chatModule])).toEqual(['chat/deliver:scheduled', 'chat/deliver:reminders']);
+    expect(namesOf([chatModule, issuesModule])).toEqual([
+      'chat/deliver:scheduled',
+      'chat/deliver:reminders',
+    ]);
+    expect(namesOf([issuesModule])).toEqual([]);
+    expect(namesOf([])).toEqual([]);
+    expect(compose([], []).workers).toEqual([]);
+  });
+
+  test('carry the deadline of their module’s manifest: the default for chat, none for a module that declared none', () => {
+    expect(compose([chatModule], carried).workers.map(({ deadlineMs }) => deadlineMs)).toEqual([
+      DEFAULT_WORKER_DEADLINE_MS,
+      DEFAULT_WORKER_DEADLINE_MS,
+    ]);
+    const patient: BundledModule = {
+      ...another,
+      manifest: { ...another.manifest, workerDeadline: { none: 'it waits on a person' } },
+      workers: [
+        {
+          name: 'wait:person',
+          intervalMs: 5_000,
+          work: async (): Promise<void> => {
+            await Promise.resolve();
+          },
+        },
+      ],
     };
-    startWhereRunning(compose([chatModule], [chatModule, issuesModule]), 'chat', start);
-    expect(started).toEqual(['started']);
-    startWhereRunning(compose([issuesModule], [chatModule, issuesModule]), 'chat', start);
-    startWhereRunning(compose([], [chatModule, issuesModule]), 'chat', start);
-    startWhereRunning(compose([], []), 'chat', start);
-    expect(started).toEqual(['started']);
+    expect(compose([patient], [patient]).workers.map(({ deadlineMs }) => deadlineMs)).toEqual([
+      undefined,
+    ]);
+    const quick: BundledModule = {
+      ...patient,
+      manifest: { ...another.manifest, workerDeadline: { ms: 2_000 } },
+    };
+    expect(compose([quick], [quick]).workers.map(({ deadlineMs }) => deadlineMs)).toEqual([2_000]);
+  });
+
+  test('stop the build when two share a name, a name is not one, or an interval is not a whole number of milliseconds a loop could have', () => {
+    const work = async (): Promise<void> => {
+      await Promise.resolve();
+    };
+    const build = (...workers: ModuleWorker[]): Composition => {
+      const module: BundledModule = { manifest: another.manifest, workers };
+      return compose([module], [module]);
+    };
+    const named = (name: string, intervalMs = 5_000): ModuleWorker => ({ name, intervalMs, work });
+    expect(() => build(named('a:b'), named('a:b'))).toThrow('"other" has two workers called "a:b"');
+    expect(() => build(named('Deliver now'))).toThrow('"other" has a worker called "Deliver now"');
+    for (const intervalMs of [0, 999, 3_600_001, 1.5, Number.NaN]) {
+      expect(() => build(named('a:b', intervalMs))).toThrow(
+        `"other" has the worker "a:b" run every ${String(intervalMs)} ms`,
+      );
+    }
+    expect(() => build(named('a:b', 3_600_000), named('c', 1_000))).not.toThrow();
   });
 });
 

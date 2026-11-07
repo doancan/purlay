@@ -83,6 +83,7 @@ export const AREAS = [
   { name: 'api-modules-setup-settings', prefixes: ['apps/api/src/modules/setup/settings.ts'] },
   { name: 'api-modules-setup-setup', prefixes: ['apps/api/src/modules/setup/setup.ts'] },
   { name: 'api-modules-users', prefixes: ['apps/api/src/modules/users/'] },
+  { name: 'api-modules-workers', prefixes: ['apps/api/src/modules/workers/'] },
   { name: 'api-modules-workspaces', prefixes: ['apps/api/src/modules/workspaces/'] },
   { name: 'api-platform', prefixes: ['apps/api/src/platform/'] },
   { name: 'api-realtime', prefixes: ['apps/api/src/realtime/'] },

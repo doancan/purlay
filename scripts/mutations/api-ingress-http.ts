@@ -39,6 +39,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
+    id: 'application-ignores-the-shares-it-is-given',
+    why: 'a module’s workers and its requests are held by two sets of slots, so together they may take twice the module’s share',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '      given.moduleShares ??\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/chat-budget.integration.test.ts'],
+  },
+  {
     id: 'application-leaves-out-the-modules-routes',
     why: 'the application uses no module’s own routes, so every path a module serves from its folder is the 404 of an unknown one (D-280)',
     file: APP,
