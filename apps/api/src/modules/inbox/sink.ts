@@ -1,0 +1,119 @@
+/**
+ * The core's notification sink (D-286): the one place a module's notice becomes a row of `inbox_entries`, written in the
+ * caller's transaction (`platform/ports/notification-sink.ts`).
+ *
+ * What it refuses and what it passes over:
+ * - **A kind no running module declares** is a mistake of the module and throws, so the caller's transaction rolls back and
+ *   the mistake is seen, not swallowed. The module a row belongs to is the module that declares its kind (a kind is
+ *   declared once across the build, `registry.ts`), never a word the caller passes.
+ * - **A person who is not a current member** of the workspace, or is the one acting, is told nothing: nobody is owed a notice
+ *   of what they did themselves or of a workspace they have left. The membership is read under a share lock, so a member
+ *   removed at that moment is not told.
+ * - **Another notice of the same subject**, while the first is unread, is raised to the top and takes the newer words, not added
+ *   (`uq_inbox_unread_subject`): a retried request leaves one row.
+ */
+import { Type } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
+import { messageId, Uuid } from '@purlay/types';
+import type { Clock } from '../../platform/clock';
+import type {
+  ModuleNotice,
+  NotificationSink,
+  WrittenNotice,
+} from '../../platform/ports/notification-sink';
+
+/** What the table's CHECK holds as well, so a mistake is named here and not as a database error. */
+const PARAMS_MAX_BYTES = 1024;
+const PARAMS_MAX_ENTRIES = 8;
+const SUBJECT_TYPE_MAX = 32;
+
+/** A key is a name of at most 24 characters, checked apart: TypeBox reads no pattern or length off a record's key. */
+const PARAM_KEY = /^[A-Za-z][A-Za-z0-9_]{0,23}$/;
+const Params = Type.Record(
+  Type.String(),
+  Type.Union([Type.String({ maxLength: 200 }), Type.Number(), Type.Boolean(), Type.Null()]),
+  { maxProperties: PARAMS_MAX_ENTRIES },
+);
+
+/** Who declares each kind of notice a process may write: the kind, and the module whose manifest names it. */
+export type KindOwners = ReadonlyMap<string, string>;
+
+/** What is wrong with a notice a module sent, or `undefined` when it is well formed. */
+const problemWith = (notice: ModuleNotice): string | undefined => {
+  if (!Value.Check(Uuid, notice.recipientId)) return 'the recipient is not an id';
+  if (!Value.Check(Uuid, notice.subject.id)) return 'the subject is not an id';
+  if (notice.subject.type.length === 0 || notice.subject.type.length > SUBJECT_TYPE_MAX) {
+    return `the subject's type is not 1 to ${String(SUBJECT_TYPE_MAX)} characters`;
+  }
+  if (
+    !Value.Check(Params, notice.params) ||
+    !Object.keys(notice.params).every((key) => PARAM_KEY.test(key))
+  ) {
+    return 'the params are not short plain values under names';
+  }
+  if (new TextEncoder().encode(JSON.stringify(notice.params)).length > PARAMS_MAX_BYTES) {
+    return `the params are over ${String(PARAMS_MAX_BYTES)} bytes`;
+  }
+  return undefined;
+};
+
+export const notificationSink = (dependencies: {
+  readonly clock: Clock;
+  readonly kinds: KindOwners;
+}): NotificationSink => ({
+  notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
+    const module = dependencies.kinds.get(notice.kind);
+    if (module === undefined) {
+      throw new Error(`no running module declares the notification kind "${notice.kind}"`);
+    }
+    const problem = problemWith(notice);
+    if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);
+    if (notice.recipientId === context.userId) return undefined;
+    const member = await transaction
+      .selectFrom('workspace_members')
+      .innerJoin('users', 'users.id', 'workspace_members.user_id')
+      .select('workspace_members.user_id')
+      .where('workspace_members.workspace_id', '=', context.workspaceId)
+      .where('workspace_members.user_id', '=', notice.recipientId)
+      .where('users.deleted_at', 'is', null)
+      .forKeyShare()
+      .executeTakeFirst();
+    if (member === undefined) return undefined;
+    const now = dependencies.clock.now();
+    const written = await transaction
+      .insertInto('inbox_entries')
+      .values({
+        id: messageId(now),
+        workspace_id: context.workspaceId,
+        user_id: notice.recipientId,
+        module,
+        kind: notice.kind,
+        actor_id: context.userId,
+        subject_type: notice.subject.type,
+        subject_id: notice.subject.id,
+        params: JSON.stringify(notice.params),
+        created_at: now,
+      })
+      .onConflict((conflict) =>
+        conflict
+          .columns(['user_id', 'workspace_id', 'module', 'kind', 'subject_id'])
+          .where('read_at', 'is', null)
+          // A new id puts the row first in a list ordered by id, which is what raising it means.
+          .doUpdateSet((builder) => ({
+            id: builder.ref('excluded.id'),
+            actor_id: builder.ref('excluded.actor_id'),
+            params: builder.ref('excluded.params'),
+            created_at: builder.ref('excluded.created_at'),
+          })),
+      )
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return {
+      entryId: written.id,
+      workspaceId: context.workspaceId,
+      recipientId: notice.recipientId,
+      module,
+      kind: notice.kind,
+    };
+  },
+});

@@ -132,3 +132,28 @@ describe('the core names no table a module owns', () => {
     }
   });
 });
+
+/**
+ * The core's inbox is written through the `NotificationSink` and nowhere else a module can reach (D-286): a module's
+ * files name `inbox_entries` neither in a query nor in a type, so a notice is never one a module wrote around the sink's
+ * checks of the kind, the recipient and the size. The module's own handle does not hold the table either (`CORE_READS`).
+ */
+describe('no module names the core’s inbox', () => {
+  const featureSources = (): string[] =>
+    readdirSync(join(SOURCE_ROOT, 'features'), { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => join('features', file))
+      .sort();
+
+  test('the files looked at are the modules’', () => {
+    expect(featureSources()).toContain(join('features', 'issues', 'issues.ts'));
+  });
+
+  for (const file of featureSources()) {
+    test(`${file} does not`, () => {
+      expect(withoutComments(readFileSync(join(SOURCE_ROOT, file), 'utf8'))).not.toContain(
+        'inbox_entries',
+      );
+    });
+  }
+});

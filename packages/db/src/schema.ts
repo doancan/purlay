@@ -283,6 +283,20 @@ export interface HiddenMessages {
   workspace_id: string;
 }
 
+export interface InboxEntries {
+  actor_id: string | null;
+  created_at: Timestamp;
+  id: string;
+  kind: string;
+  module: string;
+  params: Generated<Json>;
+  read_at: Timestamp | null;
+  subject_id: string;
+  subject_type: string;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface IncidentResponders {
   added_at: Timestamp;
   added_by: string | null;
@@ -805,6 +819,7 @@ export interface DB {
   github_repo_feeds: GithubRepoFeeds;
   github_user_authorizations: GithubUserAuthorizations;
   hidden_messages: HiddenMessages;
+  inbox_entries: InboxEntries;
   incident_responders: IncidentResponders;
   incident_updates: IncidentUpdates;
   incidents: Incidents;

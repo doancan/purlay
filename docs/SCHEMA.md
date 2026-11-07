@@ -2682,6 +2682,50 @@ CREATE INDEX idx_missed_mail_letters_user ON missed_mail_letters (user_id, sent_
 
 ---
 
+### 9.11. `inbox_entries`
+
+What modules told a person, in the core's own table (D-286), beside chat's `notifications`, which stays bound to a message
+and a channel. Written only by the notification sink (`modules/inbox/sink.ts`) in the transaction of the module that
+notifies, so a notice is committed with the thing it is about or not at all.
+
+- **A person's, in a workspace**: `user_id` and `workspace_id`, both `ON DELETE CASCADE`. The sink writes for a current
+  member who is not the actor.
+- **The kind is text**, checked against the writing module's `notifications` manifest by the sink, not a database enum:
+  `module` is the module that declares the kind. `subject_type` and `subject_id` say what it is about, by the module's own word
+  and its id, with no key: a module's rows are not the core's to point at.
+- **`params`** is at most 1 KiB of short plain values (`jsonb`, an object): ids and a label, never a body.
+- **One unread notice for a person about a subject**: `uq_inbox_unread_subject`; telling them again raises that row (a new id,
+  the newer actor and words). A read row is history, and a new notice is a new row.
+- **Thirty days and a hundred and eighty**: `sweep:inbox` deletes what was read over 30 days ago and everything over 180
+  days old; an erasure deletes the person's rows (the actor of another's keeps naming the anonymised account).
+
+In a person's own export; never in a workspace's.
+
+```sql
+CREATE TABLE inbox_entries (
+    id           UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    module       TEXT NOT NULL CHECK (module ~ '^[a-z][a-z0-9-]{0,31}$'),
+    kind         TEXT NOT NULL CHECK (char_length(kind) BETWEEN 1 AND 48),
+    actor_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    subject_type TEXT NOT NULL CHECK (char_length(subject_type) BETWEEN 1 AND 32),
+    subject_id   UUID NOT NULL,
+    params       JSONB NOT NULL DEFAULT '{}'
+        CHECK (jsonb_typeof(params) = 'object' AND octet_length(params::text) <= 1024),
+    read_at      TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_inbox_list ON inbox_entries (user_id, workspace_id, id DESC);
+CREATE UNIQUE INDEX uq_inbox_unread_subject
+    ON inbox_entries (user_id, workspace_id, module, kind, subject_id) WHERE read_at IS NULL;
+CREATE INDEX idx_inbox_workspace ON inbox_entries (workspace_id);
+CREATE INDEX idx_inbox_actor ON inbox_entries (actor_id) WHERE actor_id IS NOT NULL;
+CREATE INDEX idx_inbox_created ON inbox_entries (created_at);
+CREATE INDEX idx_inbox_read ON inbox_entries (read_at) WHERE read_at IS NOT NULL;
+```
+
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
 **Generated** by `kysely-codegen` from a database with every migration applied, and committed so
@@ -2865,6 +2909,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0085_administration_counts.sql  covering account-status and export-status indexes for the admin overview (D-278)
 0086_invitation_recipients.sql  workspace_invitation_recipients, workspace_invitation_mail_attempts: private recipient and safe SMTP receipt evidence (D-279)
 0087_invitation_recipient_foreign_keys.sql  usable child indexes for recipient attribution and cascading deletion (D-279)
+0088_inbox_entries.sql  inbox_entries: what modules told a person, written by the notification sink (D-286)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

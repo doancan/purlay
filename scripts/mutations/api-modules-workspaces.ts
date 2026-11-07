@@ -412,6 +412,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     ],
   },
   {
+    id: 'purge-leaves-the-inbox',
+    why: 'a deleted workspace keeps every notice of its people, because the tombstone means no cascade fires (D-286)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: "export const CORE_REMAINING_TABLES = [\n  'inbox_entries',\n",
+    replace: 'export const CORE_REMAINING_TABLES = [\n',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
+  {
     id: 'quiet-hours-never-hold-back',
     why: 'a person in their quiet hours is woken by a push all the same (D-234)',
     file: 'apps/api/src/modules/workspaces/deep-work.ts',

@@ -36,6 +36,7 @@ import { storeUpload } from './modules/attachments/uploads';
 import { recordAudit } from './modules/audit/audit';
 import { addressCounterKey } from './modules/auth/magic-link';
 import { sweepEmailSignIns } from './modules/jobs/jobs';
+import { sweepInbox } from './modules/inbox/sweep';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
 import { makeAndMailInvitation } from './modules/workspaces/invitation-mail';
@@ -177,6 +178,29 @@ const aWorld = async (db: Transaction): Promise<World> => {
   };
 };
 
+/** A notice for ada from bob, about a subject of its own, made at `at` and read or not. */
+const anInboxEntry = async (
+  db: Transaction,
+  world: World,
+  entry: { readonly read: boolean; readonly at: Date; readonly subjectId?: string },
+): Promise<void> => {
+  await db
+    .insertInto('inbox_entries')
+    .values({
+      id: anId(entry.at),
+      workspace_id: world.workspaceId,
+      user_id: world.adaId,
+      module: 'issues',
+      kind: 'issue_assigned',
+      actor_id: world.bobId,
+      subject_type: 'issue',
+      subject_id: entry.subjectId ?? anId(),
+      read_at: entry.read ? entry.at : null,
+      created_at: entry.at,
+    })
+    .execute();
+};
+
 /** The cheapest rows of one table that a test can name, and how to count them afterwards. */
 interface Probe {
   readonly seed: (db: Transaction, world: World) => Promise<void>;
@@ -272,6 +296,9 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
         await tokenDigest(world.adaEmail),
       ),
   },
+  inbox_entries: ofAda('inbox_entries', async (db, world) => {
+    await anInboxEntry(db, world, { read: false, at: NOW });
+  }),
   native_authorizations: ofAda('native_authorizations', async (db, world) => {
     await db
       .insertInto('native_authorizations')
@@ -833,6 +860,9 @@ const SWEEPS = {
   'sweep:email-sign-ins': async (db: Transaction) => {
     await sweepEmailSignIns({ database: db, clock });
   },
+  'sweep:inbox': async (db: Transaction) => {
+    await sweepInbox({ database: db, clock });
+  },
   'sweep:sessions': async (db: Transaction) => {
     await purgeDeadSessions(db, NOW, 1_000);
   },
@@ -947,6 +977,14 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
       });
     },
     rows: async (db, row) => await countWhere(db, 'attachments', 'id', row.id),
+  },
+  // Read 90 days ago, past the 30 days a read notice is kept, against one read an hour ago (`modules/inbox/sweep.ts`).
+  inbox_entries: {
+    job: 'sweep:inbox',
+    seed: async (db, world, row) => {
+      await anInboxEntry(db, world, { read: true, at: row.at, subjectId: row.id });
+    },
+    rows: async (db, row) => await countWhere(db, 'inbox_entries', 'subject_id', row.id),
   },
   // The setup's one address link: one row, which is why the kept row is seeded in a world of its own.
   admin_email_verification: marked(

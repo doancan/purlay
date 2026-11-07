@@ -9,6 +9,7 @@
  *   purge:retention    each workspace's history past the days it keeps (D-27, D-139)
  *   purge:workspaces   the content of each workspace whose deletion's grace period is over (D-242)
  *   sweep:exports      exports nobody downloaded in time, and any whose making was cut off (D-140)
+ *   sweep:inbox        notices read for 30 days, and every notice past 180 (D-286)
  *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)
  *   mail:missed        one letter to each person who asked, about what waited unread for them (D-240)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
@@ -21,6 +22,7 @@
  * the same environment. A job's failure is recorded, logged and exits non-zero.
  */
 import type { CoreJobName } from '../platform/module-kit/core-claims';
+import { sweepInbox } from '../modules/inbox/sweep';
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { compositionFor } from '../composition';
@@ -126,6 +128,7 @@ const coreJobs: Readonly<Record<CoreJobName, Work>> = {
       { database, clock, log, storage: storeFor(config) },
       composition.workspacePurge,
     ),
+  'sweep:inbox': async () => await sweepInbox({ database, clock }),
   'sweep:deletions': async () =>
     await sweepObjectDeletions({
       database,

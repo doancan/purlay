@@ -275,6 +275,8 @@ export const eraseAccount = async (
     .execute();
 
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
+  // What modules told them, in the core's inbox: theirs alone (D-286).
+  await executor.deleteFrom('inbox_entries').where('user_id', '=', person.id).execute();
   // What the modules keep for a person — chat's saved searches and messages, followed threads, inbox and
   // missed-mail letters — forgotten by the hooks, here, in this transaction (D-250).
   const afterCommit: AfterErasure[] = [];
