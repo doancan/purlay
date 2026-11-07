@@ -361,6 +361,15 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
   },
   {
+    id: 'http-drain-keeps-the-original-listener-running',
+    why: 'A drain reports completion while its own HTTP listener still handles new requests; the ownership probe must catch that even if the port is already occupied.',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: 'await Promise.all([app.stop(false), sockets.settled()]);',
+    replace:
+      'await Promise.all([\n        (async (): Promise<void> => {\n          while ((app.server?.pendingRequests ?? 0) > 0) await Bun.sleep(1);\n        })(),\n        sockets.settled(),\n      ]);',
+    tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
+  },
+  {
     id: 'inbox-list-skips-the-membership',
     why: 'a stranger is answered the inbox of a workspace they are not in instead of the stranger’s 404 (D-286)',
     file: 'apps/api/src/ingress/http/inbox.ts',

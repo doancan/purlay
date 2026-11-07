@@ -41,7 +41,8 @@ import { redisPresenceDirectory } from './redis-presence';
 import { sharedRealtime } from './shared';
 import { testNeeding } from '../testing/needs';
 
-const names = redisNames();
+const namespace = `nodes-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+const names = redisNames(namespace);
 
 const origin = 'https://purlay.test';
 const NOW = new Date('2026-09-09T12:00:00.000Z');
@@ -91,9 +92,9 @@ const startNode = (link: RedisLink): Node => {
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   proxy = await aDroppableProxy(redisUrlForTests());
-  const linkA = await aRealLink();
+  const linkA = await aRealLink(undefined, undefined, namespace);
   // Node B reaches Redis through a proxy that can cut it, as a restart of Redis would.
-  const linkB = connectRedis({ create: () => bunRedisClient(proxy.url), log: silent });
+  const linkB = connectRedis({ create: () => bunRedisClient(proxy.url), log: silent, namespace });
   while (!linkB.connected()) await Bun.sleep(10);
   a = startNode(linkA);
   b = startNode(linkB);
