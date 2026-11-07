@@ -315,6 +315,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/members.integration.test.ts'],
   },
   {
+    id: 'membership-list-omits-the-workspaces-modules',
+    why: 'a person’s list of workspaces says nothing of what each may use, and the client draws every module the server runs (D-289)',
+    file: 'apps/api/src/modules/workspaces/workspaces.ts',
+    find: '...(effective === undefined ? {}',
+    replace: '...(true ? {}',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'module-writes-the-outbox-directly',
     why: 'the purge writes the outbox itself instead of through platform/outbox.ts, which skips the checks the table’s own files make (D-288)',
     file: 'apps/api/src/modules/workspaces/deletion-purge.ts',

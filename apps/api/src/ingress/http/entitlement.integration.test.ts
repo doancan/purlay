@@ -226,6 +226,71 @@ describe('integration: the endpoints of a module a workspace can be granted', ()
   });
 });
 
+describe('integration: what a person is told they may use', () => {
+  interface Listed {
+    readonly workspace: { readonly id: string };
+    readonly modules?: readonly string[];
+  }
+  const modulesOf = (memberships: readonly Listed[], workspaceId: string): unknown =>
+    memberships.find(({ workspace }) => workspace.id === workspaceId)?.modules;
+
+  test('is each workspace’s own set in the person’s session, their list of workspaces and an accepted invitation', async () => {
+    await withRollback(async (db) => {
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const withIssues = await aWorkspaceOf(db, owner);
+      const without = await aWorkspaceOf(db, owner);
+      await grant(db, withIssues, 'issues', 'on');
+      const managed = caller(db, MANAGED);
+
+      const me = await managed('GET', '/api/me', owner);
+      const { memberships, modules } = me.body as { memberships: Listed[]; modules: string[] };
+      expect(modulesOf(memberships, withIssues)).toEqual(['chat', 'issues']);
+      expect(modulesOf(memberships, without)).toEqual(['chat']);
+      // What the server runs is the server's, whatever a workspace may use.
+      expect(modules).toEqual(['chat', 'issues']);
+
+      const listed = (await managed('GET', '/api/workspaces', owner)).body as Listed[];
+      expect(modulesOf(listed, withIssues)).toEqual(['chat', 'issues']);
+      expect(modulesOf(listed, without)).toEqual(['chat']);
+
+      // Joining answers the membership with the same set, so a client does not draw a module the workspace lacks.
+      const newcomer = await aSignedInUser(db, clock, 'Newcomer');
+      const link = await managed('POST', `/api/workspaces/${without}/invitations`, owner);
+      const { token } = link.body as { token: string };
+      const joined = await managed('POST', '/api/invitations/accept', newcomer, { token });
+      expect(joined.status).toBe(200);
+      expect((joined.body as Listed).modules).toEqual(['chat']);
+    });
+  });
+
+  test('is every module the server runs on an open server, and not what another workspace’s row says', async () => {
+    await withRollback(async (db) => {
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const closed = await aWorkspaceOf(db, owner);
+      const untouched = await aWorkspaceOf(db, owner);
+      await grant(db, closed, 'issues', 'off');
+      const { memberships } = (await caller(db, OPEN)('GET', '/api/me', owner)).body as {
+        memberships: Listed[];
+      };
+      expect(modulesOf(memberships, closed)).toEqual(['chat']);
+      expect(modulesOf(memberships, untouched)).toEqual(['chat', 'issues']);
+    });
+  });
+
+  test('leaves out a module the server does not run, whatever a row says', async () => {
+    await withRollback(async (db) => {
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(db, owner);
+      await grant(db, workspaceId, 'issues', 'on');
+      await grant(db, workspaceId, 'tasks', 'on');
+      const { memberships } = (await caller(db, WITHOUT_ISSUES)('GET', '/api/me', owner)).body as {
+        memberships: Listed[];
+      };
+      expect(modulesOf(memberships, workspaceId)).toEqual(['chat']);
+    });
+  });
+});
+
 describe('integration: a route that finds its workspace without a membership', () => {
   test('is none of a module that is a grant: the guard is not what would turn it away', () => {
     // A signed webhook resolves its workspace from a token and mints no context, so the guard never sees it. When a module

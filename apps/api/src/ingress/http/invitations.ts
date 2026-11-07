@@ -151,14 +151,14 @@ export const lookAtInvitation = async (
 
 /** `POST /api/invitations/accept` — in, by the link in the body; answers the membership. */
 export const joinByInvitation = async (
-  { auth, database, clock, bus, log = NO_LOG }: MemberWriteDependencies,
+  { auth, database, clock, bus, log = NO_LOG, effectiveModules }: MemberWriteDependencies,
   request: Request,
   body: unknown,
 ): Promise<Membership> => {
   const { userId } = await requireSession(auth, request);
   const { token } = validated(InvitationTokenRequest, body);
   const { membership, memberIds } = await atomicallyOn(database)(
-    async (transaction) => await acceptInvitation(transaction, clock, userId, token),
+    async (transaction) => await acceptInvitation(transaction, clock, userId, token, effectiveModules),
   );
   await publishAfterCommit(log, [
     [

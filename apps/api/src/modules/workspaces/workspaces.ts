@@ -21,11 +21,15 @@
  */
 import type { Executor, Transaction } from '@purlay/db';
 import {
+  MODULE_IDS,
   type MeResponse,
   type Membership,
+  type ModuleId,
   type Workspace,
   type WorkspaceMember,
 } from '@purlay/types';
+import { asGrants, grantColumns } from '../../platform/grants';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
@@ -114,6 +118,10 @@ export const createWorkspace = async (
   return asWorkspace(row);
 };
 
+/** The ids the contract names, in its order: a module a client has no word for is not sent (D-273). */
+const moduleIdsIn = (effective: ReadonlySet<string>): ModuleId[] =>
+  MODULE_IDS.filter((id) => effective.has(id));
+
 /**
  * The workspaces this user belongs to.
  *
@@ -127,6 +135,8 @@ export const membershipsOf = async (
   userId: string,
   /** Only this one, when given: what joining by an invitation answers (D-115). */
   workspaceId?: string,
+  /** The modules each workspace may use (D-289); left out, a membership says nothing of them and a client takes the server's. */
+  effective?: EntitlementPolicy['effective'],
 ): Promise<readonly Membership[]> => {
   const now = clock.now();
   let statement = executor
@@ -141,6 +151,7 @@ export const membershipsOf = async (
       'workspace_members.joined_at',
       'workspace_members.is_deep_work_active',
       'workspace_members.deep_work_until',
+      ...grantColumns,
     ])
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
@@ -157,6 +168,7 @@ export const membershipsOf = async (
       row.is_deep_work_active && row.deep_work_until !== null && new Date(row.deep_work_until) > now
         ? new Date(row.deep_work_until).toISOString()
         : null,
+    ...(effective === undefined ? {} : { modules: moduleIdsIn(effective(asGrants(row.grants), row.read_at)) }),
   }));
 };
 
@@ -169,6 +181,7 @@ export const meOf = async (
   clock: Clock,
   userId: string,
   creators: WorkspaceCreators,
+  effective?: EntitlementPolicy['effective'],
   // Whether the person owes two-step verification is the sign-in policy's to say (D-239), not this module's.
 ): Promise<Omit<MeResponse, 'mustEnrolTwoFactor' | 'modules'>> => {
   const user = await executor
@@ -200,7 +213,7 @@ export const meOf = async (
       email: user.email,
     },
     profile: asProfile(user),
-    memberships: [...(await membershipsOf(executor, clock, userId))],
+    memberships: [...(await membershipsOf(executor, clock, userId, undefined, effective))],
     mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
     isServerAdmin: user.is_server_admin,
     nameFromGitHub: isNameGitHubs(user),

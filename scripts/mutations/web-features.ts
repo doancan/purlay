@@ -1107,6 +1107,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/shell/chatless-shell.test.tsx'],
   },
   {
+    id: 'web-draws-the-modules-the-server-runs-in-every-workspace',
+    why: 'a workspace that is not granted a module still shows its rail place and its screen (D-289)',
+    file: 'apps/web/src/features/shell/workspace.tsx',
+    find: 'value={membership.modules ?? null}',
+    replace: 'value={null}',
+    tests: ['apps/web/src/features/shell/rail.test.tsx'],
+  },
+  {
     id: 'web-email-alone-keeps-its-rule',
     why: 'the email form, when it is the only way in, hangs from a rule with nothing above it and wears the secondary button',
     file: 'apps/web/src/features/sign-in/sign-in-screen.tsx',

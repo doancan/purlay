@@ -35,9 +35,24 @@ export const useSession = (): MeResponse => {
   return session;
 };
 
-/** Whether the server runs this module (D-250): a screen, a request or a shortcut of one that is not run is not drawn. */
-export const useRuns = (module: string): boolean =>
-  useSession().modules.some((id) => id === module);
+/**
+ * The modules of the workspace the part is drawn in, when it is drawn in one (`WorkspaceScopeProvider`, D-289); null outside.
+ */
+const WorkspaceModulesContext = createContext<readonly string[] | null>(null);
+
+export const WorkspaceModulesProvider = WorkspaceModulesContext.Provider;
+
+/**
+ * The modules a part may draw (D-250, D-289): in a workspace, those the workspace is granted; outside one, those the server runs. A
+ * server that predates grants says nothing per workspace, and a workspace then has what the server runs.
+ */
+export const useModules = (): readonly string[] => {
+  const server = useSession().modules;
+  return useContext(WorkspaceModulesContext) ?? server;
+};
+
+/** Whether this module is run for what is drawn (D-250): a screen, a request or a shortcut of one that is not is not drawn. */
+export const useRuns = (module: string): boolean => useModules().some((id) => id === module);
 
 export const SessionGate = ({
   children,

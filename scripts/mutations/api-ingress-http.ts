@@ -420,6 +420,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
+    id: 'invitation-accept-forgets-the-workspaces-modules',
+    why: 'a person who joins is told the workspace has every module the server runs until they reload (D-289)',
+    file: 'apps/api/src/modules/workspaces/invitations.ts',
+    find: 'workspace.id, effective);',
+    replace: 'workspace.id);',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'invite-mail-letters-posted-inside-the-answer',
     why: 'the letters are handed to the mail server before the answer is made: a throw there is a 500 and the link is lost',
     file: 'apps/api/src/ingress/http/invitations.ts',
@@ -442,6 +450,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: 'if (value !== null && /^-?\\d+$/.test(value)) query[key] = Number(value);',
     replace: 'if (value !== null) query[key] = Number(value);',
     tests: ['apps/api/src/features/chat/http/messages.integration.test.ts'],
+  },
+  {
+    id: 'me-forgets-the-grants',
+    why: 'the session tells a client every module is usable in every workspace (D-289)',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: '    await dependencies.workspaceCreators(database),\n    dependencies.effectiveModules,\n',
+    replace: '    await dependencies.workspaceCreators(database),\n',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {
     id: 'me-names-every-module-whatever-runs',
@@ -697,5 +713,13 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '} else if (isWebhookRequest(request) && !closedRoute(request)) {',
     replace: '} else if (isWebhookRequest(request)) {',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
+  },
+  {
+    id: 'workspace-list-forgets-the-grants',
+    why: 'the list of workspaces tells a client every module is usable in every workspace (D-289)',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: 'userId, undefined, dependencies.effectiveModules);',
+    replace: 'userId);',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
 ];

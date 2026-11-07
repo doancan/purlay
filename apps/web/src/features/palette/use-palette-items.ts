@@ -16,7 +16,7 @@ import { useRoute } from '../../router/router-provider';
 import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
 import { LOCALES } from '../../i18n/types';
-import { useSession } from '../session/session';
+import { useModules, useSession } from '../session/session';
 import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
 import { sectionsFor } from '../settings/sections';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
@@ -28,7 +28,8 @@ import type { PaletteItem } from './rank';
 export const usePaletteItems = (): readonly PaletteItem[] => {
   const { t, setLocale } = useI18n();
   const { workspace } = useWorkspace();
-  const { user, modules } = useSession();
+  const { user } = useSession();
+  const modules = useModules();
   // Channels, conversations and what is read are chat's: a server without it offers only the core's.
   const chat = modules.includes('chat');
   const { match, navigate } = useRoute();
