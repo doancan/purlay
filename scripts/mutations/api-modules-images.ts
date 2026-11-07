@@ -50,4 +50,20 @@ export const API_MODULES_IMAGES: readonly Mutation[] = [
     replace: 'await readImage(fetched.bytes, open)',
     tests: ['apps/api/src/modules/images/proxy.test.ts'],
   },
+  {
+    id: 'web-preview-transport-accepts-opaque-encoding',
+    why: 'Opaque compressed bytes reach the HTML parser without an encoding boundary.',
+    file: 'apps/api/src/modules/images/fetch-external.ts',
+    find: "encoding !== 'identity' && encoding !== ''",
+    replace: 'false',
+    tests: ['apps/api/src/modules/images/fetch-external.integration.test.ts'],
+  },
+  {
+    id: 'web-preview-transport-accepts-wrong-mime',
+    why: 'JSON and images can be parsed as a public HTML page.',
+    file: 'apps/api/src/modules/images/fetch-external.ts',
+    find: "mime !== 'text/html' && mime !== 'application/xhtml+xml'",
+    replace: 'false',
+    tests: ['apps/api/src/modules/images/fetch-external.integration.test.ts'],
+  },
 ];

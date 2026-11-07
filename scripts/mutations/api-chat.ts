@@ -869,6 +869,14 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/typing.integration.test.ts'],
   },
   {
+    id: 'web-preview-http-empty-null',
+    why: 'A missing preview becomes an empty body where the client requires JSON null.',
+    file: 'apps/api/src/features/chat/http/web-previews.ts',
+    find: 'return Response.json(await read(found, input.url));',
+    replace: 'return await read(found, input.url);',
+    tests: ['apps/api/src/features/chat/http/web-previews.integration.test.ts'],
+  },
+  {
     id: 'workspace-export-reads-link-unasked',
     why: "the workspace export bounds its files by a table chat's set makes, without asking whether the database has it (D-250)",
     file: 'apps/api/src/features/chat/export.ts',

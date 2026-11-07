@@ -163,6 +163,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   threadFollow: () => Promise.resolve({ following: false }),
   setThreadFollow: unexpected('setThreadFollow'),
   followedThreads: unexpected('followedThreads'),
+  previewMessageLink: unexpected('previewMessageLink'),
   react: unexpected('react'),
   unreact: unexpected('unreact'),
   editMessage: unexpected('editMessage'),

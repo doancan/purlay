@@ -15,7 +15,7 @@ const GITHUB_ITEM =
 const GITHUB_HOSTS: ReadonlySet<string> = new Set(['github.com', 'www.github.com']);
 
 /** The canonical address of a GitHub item, or null for any other link. */
-const githubItemOf = (url: string): string | null => {
+export const githubItemOf = (url: string): string | null => {
   if (!URL.canParse(url)) return null;
   const parsed = new URL(url);
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
