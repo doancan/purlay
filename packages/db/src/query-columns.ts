@@ -53,6 +53,18 @@ export interface ResolvedColumn {
   readonly column: string;
 }
 
+/** A query through a module table that this schema has never installed cannot run in this cell.
+ * Unknown tables and missing core tables still belong to the unresolved-reference guard. */
+export const relevantToSchema = (
+  reference: ColumnReference,
+  present: ReadonlyMap<string, ReadonlySet<string>>,
+  owners: Readonly<Record<string, string>>,
+): boolean =>
+  !reference.scope.some(({ table }) => {
+    const owner = owners[table];
+    return owner !== undefined && owner !== 'core' && !present.has(table);
+  });
+
 const ROOT_METHODS = new Set(['selectFrom', 'updateTable', 'deleteFrom', 'insertInto', 'from']);
 const JOIN_METHODS = new Set([
   'innerJoin',

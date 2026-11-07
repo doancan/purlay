@@ -15,7 +15,8 @@ import { Glob } from 'bun';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'kysely';
-import { resolveReference, scanSource } from './query-columns';
+import { relevantToSchema, resolveReference, scanSource } from './query-columns';
+import { TABLE_OWNERS } from './table-owners';
 import { closeIntegrationDatabase, integrationDatabase } from './testing';
 
 afterAll(async () => {
@@ -89,6 +90,7 @@ describe('integration: the columns the source queries by', () => {
     for (const file of await sourceFiles()) {
       const scan = scanSource(file, readFileSync(join(REPOSITORY, file), 'utf8'));
       for (const reference of scan.references) {
+        if (!relevantToSchema(reference, columns, TABLE_OWNERS)) continue;
         references += 1;
         const resolved = resolveReference(reference, columns);
         if (resolved === undefined) {

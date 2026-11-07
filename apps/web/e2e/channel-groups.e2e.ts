@@ -30,8 +30,12 @@ test('a delayed group view keeps grouped channels reachable until their heading 
         response.status() === 200,
     );
     await page.goto(made.path, { waitUntil: 'domcontentloaded' });
-    await metadata;
+    await expect(
+      page.getByRole('heading', { level: 1, name: made.name, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No messages yet', exact: true })).toBeVisible();
     await openNavigation(page);
+    await metadata;
     await expect.poll(() => requested).toBe(true);
     const ordinary = page.getByRole('navigation', { name: 'Channels', exact: true });
     await expect(ordinary.getByRole('link', { name: made.name, exact: true })).toBeVisible();
@@ -62,8 +66,16 @@ test('personal headings can be created, moved, renamed and deleted, with the oth
   const renamed = `Finans ve satın alma ${made.id.slice(-8)}`;
   const other = await asPerson('dogancan');
   await other.goto(made.path);
+  await expect(
+    other.getByRole('heading', { level: 1, name: made.name, exact: true }),
+  ).toBeVisible();
+  await expect(other.getByRole('heading', { name: 'No messages yet', exact: true })).toBeVisible();
+  await openNavigation(other);
   await signIn();
   await page.goto(made.path);
+  await expect(page.getByRole('heading', { level: 1, name: made.name, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No messages yet', exact: true })).toBeVisible();
+  await openNavigation(page);
   const options = page.getByRole('button', { name: /^Sidebar options/ });
   await options.click();
   await page.getByRole('menuitem', { name: 'New channel group' }).click();

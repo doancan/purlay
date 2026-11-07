@@ -1,6 +1,6 @@
 /** A complete personal-group flow, including field/form failures and retry over the same id. */
 import { expect, test } from 'bun:test';
-import { act, fireEvent, within } from '@testing-library/react';
+import { act, fireEvent, waitFor, within } from '@testing-library/react';
 import type { Channel, ChannelGroup } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import { ApiError } from '../../../data/errors';
@@ -36,7 +36,11 @@ test('create and retry, fold, move, rename, cancel deletion and delete preserve 
         collapsed: groups.find((entry) => entry.id === id)?.collapsed ?? false,
       };
       groups = [...groups.filter((entry) => entry.id !== id), group];
-      return Promise.resolve(group);
+      return new Promise<ChannelGroup>((resolve) => {
+        setTimeout(() => {
+          resolve(group);
+        }, 25);
+      });
     },
     foldChannelGroup: (_workspace, id, collapsed) => {
       const before = groups.find((entry) => entry.id === id);
@@ -64,7 +68,7 @@ test('create and retry, fold, move, rename, cancel deletion and delete preserve 
   await person().click(view.getByRole('button', { name: /^Sidebar options/ }));
   await person().click(view.getByRole('menuitem', { name: 'New channel group' }));
   await settle();
-  let dialog = within(view.getByRole('dialog', { name: 'New channel group' }));
+  let dialog = within(await view.findByRole('dialog', { name: 'New channel group' }));
   await person().type(dialog.getByRole('textbox', { name: 'Group name' }), '   ');
   await person().click(dialog.getByRole('button', { name: 'Create group' }));
   expect(dialog.getByRole('alert').textContent).toContain('Enter a group name');
@@ -74,15 +78,19 @@ test('create and retry, fold, move, rename, cancel deletion and delete preserve 
   await person().type(name, 'Operasyon');
   await person().click(dialog.getByRole('button', { name: 'Create group' }));
   await settle();
-  expect(dialog.getByRole('alert').textContent).toContain('connection');
+  await waitFor(() => {
+    expect(dialog.getByRole('alert').textContent).toContain('connection');
+  });
   expect(name.getAttribute('aria-invalid')).not.toBe('true');
   expect((name as HTMLInputElement).value).toBe('Operasyon');
   refuseSave = false;
   await person().click(dialog.getByRole('button', { name: 'Create group' }));
   await settle();
   expect(new Set(ids).size).toBe(1);
-  expect(view.queryByRole('dialog')).toBeNull();
-  let group = within(view.getByRole('navigation', { name: 'Channel group: Operasyon' }));
+  await waitFor(() => {
+    expect(view.queryByRole('dialog') !== null).toBe(false);
+  });
+  let group = within(await view.findByRole('navigation', { name: 'Channel group: Operasyon' }));
   await person().click(group.getByRole('button', { name: 'Operasyon' }));
   await settle();
   expect(group.getByRole('button', { name: 'Operasyon' }).getAttribute('aria-expanded')).toBe(
@@ -100,11 +108,11 @@ test('create and retry, fold, move, rename, cancel deletion and delete preserve 
   await settle();
   await person().click(view.getByRole('menuitem', { name: 'Move to group…' }));
   await settle();
-  dialog = within(view.getByRole('dialog', { name: 'Move api' }));
+  dialog = within(await view.findByRole('dialog', { name: 'Move api' }));
   await person().selectOptions(dialog.getByLabelText('Group name'), ids[0] ?? '');
   await person().click(dialog.getByRole('button', { name: 'Move channel' }));
   await settle();
-  group = within(view.getByRole('navigation', { name: 'Channel group: Operasyon' }));
+  group = within(await view.findByRole('navigation', { name: 'Channel group: Operasyon' }));
   expect(group.getByRole('link', { name: 'api' })).toBeTruthy();
   expect(
     within(view.getByRole('navigation', { name: 'Channels' })).queryByRole('link', { name: 'api' }),
@@ -112,33 +120,38 @@ test('create and retry, fold, move, rename, cancel deletion and delete preserve 
   await person().click(group.getByRole('button', { name: 'Options for Operasyon' }));
   await person().click(view.getByRole('menuitem', { name: 'Rename group' }));
   await settle();
-  dialog = within(view.getByRole('dialog', { name: 'Rename group' }));
+  dialog = within(await view.findByRole('dialog', { name: 'Rename group' }));
   await person().clear(dialog.getByRole('textbox', { name: 'Group name' }));
   await person().type(dialog.getByRole('textbox', { name: 'Group name' }), 'Finans');
   await person().click(dialog.getByRole('button', { name: 'Save group' }));
   await settle();
-  group = within(view.getByRole('navigation', { name: 'Channel group: Finans' }));
+  group = within(await view.findByRole('navigation', { name: 'Channel group: Finans' }));
   await person().click(group.getByRole('button', { name: 'Options for Finans' }));
   await person().click(view.getByRole('menuitem', { name: 'Delete group' }));
   await settle();
-  dialog = within(view.getByRole('dialog', { name: 'Delete Finans?' }));
+  dialog = within(await view.findByRole('dialog', { name: 'Delete Finans?' }));
   await person().click(dialog.getByRole('button', { name: 'Cancel' }));
   await settle();
-  expect(view.getByRole('navigation', { name: 'Channel group: Finans' })).toBeTruthy();
+  expect(await view.findByRole('navigation', { name: 'Channel group: Finans' })).toBeTruthy();
   await person().click(group.getByRole('button', { name: 'Options for Finans' }));
   await person().click(view.getByRole('menuitem', { name: 'Delete group' }));
   await settle();
-  dialog = within(view.getByRole('dialog', { name: 'Delete Finans?' }));
+  dialog = within(await view.findByRole('dialog', { name: 'Delete Finans?' }));
   await person().click(dialog.getByRole('button', { name: 'Delete group' }));
   await settle();
-  expect(dialog.getByRole('alert')).toBeTruthy();
+  expect(await dialog.findByRole('alert')).toBeTruthy();
   // The modal makes its background inert; the restored heading remains in that background.
   expect(view.container.querySelector('nav[aria-label="Channel group: Finans"]')).not.toBeNull();
   refuseDelete = false;
   await person().click(dialog.getByRole('button', { name: 'Delete group' }));
   await settle();
+  await waitFor(() => {
+    expect(view.queryByRole('dialog') !== null).toBe(false);
+  });
   expect(view.queryByRole('navigation', { name: 'Channel group: Finans' })).toBeNull();
   expect(
-    within(view.getByRole('navigation', { name: 'Channels' })).getByRole('link', { name: 'api' }),
+    await within(view.getByRole('navigation', { name: 'Channels' })).findByRole('link', {
+      name: 'api',
+    }),
   ).toBeTruthy();
 });

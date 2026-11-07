@@ -885,6 +885,9 @@ no index starts with is held too (`query-columns.integration.test.ts`, seven rea
 only as far as a source scan sees: a `where` or `orderBy` with a literal column on a chain it can follow to its table.
 For an upsert’s guard it also reads the unique target columns of that same `onConflict` callback: a
 receipt’s cursor comparison probes its declared primary key, not the whole receipt table by cursor.
+Each matrix cell checks queries against the tables its own migration sets installed: a query through a known
+module-owned table absent from that schema cannot run there and is excluded using `TABLE_OWNERS`. Unknown tables,
+missing core tables and misspelled columns still count against the same unresolved-reference limit; no allowance grows.
 It does not see a column named inside a `where((eb) => ...)` callback, in a `sql` template, or in a variable, a chain
 that starts from a parameter or a helper's return value, a CTE or select alias (each is common; they were counted once
 and the counts went stale, so none is stated), or whether a partial index's predicate serves the statement. And the rule is per statement and table, not per column:
