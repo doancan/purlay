@@ -234,12 +234,12 @@ In this order:
 |---|---|---|---|
 | A read whose answer shapes the caller's request (search sources, is this person in that channel) | a port call with a deadline and an abort signal; `undefined` where the provider is not run | 14b the contract, 14k the search | the contract skeleton and the search built (`SearchSource`, D-285); a port the module `uses` has none yet |
 | A fact written to a row the core keeps, to a receiver that is always there (an assignment notice) | a port call inside the caller's transaction, announced after commit | 14f, 14h | the sink and its table built (14f); no module calls it yet (14h) |
-| An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | the table and `publishFact` (14c), the claim, the delivery and the worker (14d) built (D-288); the sweep and the metrics (14e) not built |
+| An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | the table and `publishFact` (14c), the claim, the delivery and the worker (14d), the sweep, the metrics and the overview line (14e) built (D-288) |
 | A hint: a cache nudge, presence, "read again" | the domain bus or the socket's `EventBus`, which exist | — | built, with no module using it |
 
 **Not built (decided, D-283).** The outbox is built ahead of a production consumer on the owner's decision: its first real
 publisher is a product feature that is not decided (issues' link to a channel, D-254 §1), so it ships proven by a fake third module's
-test and not by a consumer in the product. Each row below is a step of §10 step 14; **14b, 14c, 14d, 14f, 14g, 14k and 14l have landed beyond the decision**.
+test and not by a consumer in the product. Each row below is a step of §10 step 14; **14b, 14c, 14d, 14e, 14f, 14g, 14k and 14l have landed beyond the decision**.
 
 - *The contract surface* — **built** (14b) as far as the names go: `FactDeclaration`, `defineFact` and the lists `CORE_FACTS` and
   `FACTS` in `@purlay/types` (a module's `<ID>_FACTS` joins `FACTS` when it has a fact), `platform/ports/` with `Port<T>`,
@@ -253,7 +253,8 @@ test and not by a consumer in the product. Each row below is a step of §10 step
   policy (`platform/outbox.ts`), and **built** (14d, D-288) the claim, the delivery (`platform/outbox-drain.ts`, which with the first
   are the only files that name the table) and the drain as a worker of the consuming module (`outbox:consume`, made by `compose` for a
   module with handlers, in its share and under its `workerDeadline`; a node claims only the (consumer, type, shape) it has a handler
-  for, so a rolling deploy kills no fact). **Not built:** the sweep, the metrics and the overview line (14e). At least once, no
+  for, so a rolling deploy kills no fact). **Built** (14e): `sweep:outbox`, the gauges `purlay_outbox_pending`, `purlay_outbox_oldest_age_seconds` and `purlay_outbox_dead`, the counters
+  `purlay_outbox_delivered_total`, `purlay_outbox_failures_total` and `purlay_outbox_dropped_total`, and the line of the server's overview. At least once, no
   order, a delivery's database effects atomic with its mark.
 - *The inbox* (D-286). **Built:** 14f, `inbox_entries`, the `NotificationSink` port, the sink, `sweep:inbox` and the table's
   erasure, purge and export; 14g, the routes `inbox` and `inbox/read`, the sink's `announce` and the frame `INBOX_UPDATED`; 14h,
@@ -1003,7 +1004,7 @@ Each step ships alone and can be reverted.
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; the product's module-independent suites in every cell in CI (`modules:suites`, §8); a share of the pool is built for each module and a starvation gate for chat with issues busy (§7) | **yes** |
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
-| 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table, `publishFact` and the `absent` policy, with the release snapshot's hold on `publishes` and `consumes` and the bundle's module structure — **built** (D-288); **(d)** the claim, the delivery and the drain worker — **built** (D-288); **(e)** the outbox sweep, metrics and the overview line — not built; **(f)** `inbox_entries`, the `NotificationSink` port, its sink and `sweep:inbox` (D-286) — **built**; **(g)** the inbox routes, `INBOX_UPDATED` and the sink's `announce` (D-286) — **built**; **(h)** issues' assignment notice (D-286) — **built**; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` (D-286 §9) — **built**; **(j)** the web's *Updates* section and badge (D-286 §10) — **built**; **(k)** `find` and chat's source — **built** (D-285); **(l)** issues' source and its index — **built** (D-285); **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built, a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
+| 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table, `publishFact` and the `absent` policy, with the release snapshot's hold on `publishes` and `consumes` and the bundle's module structure — **built** (D-288); **(d)** the claim, the delivery and the drain worker — **built** (D-288); **(e)** the outbox sweep, metrics and the overview line — **built** (D-288); **(f)** `inbox_entries`, the `NotificationSink` port, its sink and `sweep:inbox` (D-286) — **built**; **(g)** the inbox routes, `INBOX_UPDATED` and the sink's `announce` (D-286) — **built**; **(h)** issues' assignment notice (D-286) — **built**; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` (D-286 §9) — **built**; **(j)** the web's *Updates* section and badge (D-286 §10) — **built**; **(k)** `find` and chat's source — **built** (D-285); **(l)** issues' source and its index — **built** (D-285); **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built, a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
@@ -1297,7 +1298,7 @@ table, so that §11's listing test reads only the modules.
   declaration and the manifest's `publishes` and `consumes` are **built** (D-283 §3, step 14b, D-288); nothing publishes one yet.
 - **Outbox** — a core table of deliveries, one row for each (fact, consumer), written in the producer's transaction and run in
   the consumer's own by a worker of its module: at least once, unordered, for facts of human scale. The table, `publishFact`, the claim, the
-  delivery and the worker are **built** (D-288); the sweep and the metrics are *not built* (D-283 §2).
+  delivery, the worker, the sweep and the metrics are **built** (D-288), with no publisher in the product.
 - **Port** — an interface the core defines and a module implements, handed to the module that `uses` it as `Port<T>`, the
   implementation or `undefined` where the provider is not run (`platform/ports/`, `Composition.ports`, built in step 14b with no
   port yet). Built before it: `WorkspaceChannels`, `PushNotices`, `SearchSource` (D-285), `NotificationSink` (D-286).
