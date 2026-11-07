@@ -19,12 +19,14 @@ import {
 import { messageId, messageIdTime } from '@purlay/types';
 import { aMovableClock, NOW } from '../testing/doubles';
 import {
+  aGrant,
   aPublishWorld,
   aWorkspaceRow,
   NOTE_CREATED,
   NOTE_CREATED_V2,
   NOTE_PINNED,
   NOTES,
+  theGrants,
   WIKI,
 } from '../testing/facts';
 import { DAY_MS } from './clock';
@@ -122,18 +124,57 @@ describe('integration: publishing a fact', () => {
     }, cloned.db);
   });
 
-  test('writes no row for a consumer the workspace is not entitled to, and a row for the others', async () => {
+  test('writes no row for a consumer the workspace is not granted, and a row for the others', async () => {
+    await withRollback(async (tx) => {
+      const barred = await aWorkspaceRow(tx);
+      const granted = await aWorkspaceRow(tx);
+      const lapsed = await aWorkspaceRow(tx);
+      await aGrant(tx, barred, 'wiki', 'off');
+      // A grant that ran out is read as no row, which on an open server is the module.
+      await aGrant(tx, lapsed, 'wiki', 'off', new Date(NOW.getTime() - 1000));
+      for (const workspaceId of [barred, granted, lapsed]) {
+        const { context } = aPublishWorld(workspaceId, clock);
+        await publishFact(tx, { ...context, effective: theGrants() }, NOTE_CREATED, {
+          noteId: 'n',
+          title: 't',
+        });
+      }
+      const consumers = async (workspaceId: string): Promise<string[]> =>
+        (await rowsOf(tx, workspaceId)).map((row) => row.consumer).sort();
+      expect(await consumers(barred)).toEqual(['shelf']);
+      expect(await consumers(granted)).toEqual(['shelf', 'wiki']);
+      expect(await consumers(lapsed)).toEqual(['shelf', 'wiki']);
+    }, cloned.db);
+  });
+
+  test('on a managed server a workspace with no grant gets no row, and one with a grant does', async () => {
+    await withRollback(async (tx) => {
+      const bare = await aWorkspaceRow(tx);
+      const given = await aWorkspaceRow(tx);
+      await aGrant(tx, given, 'wiki', 'on');
+      for (const workspaceId of [bare, given]) {
+        const { context } = aPublishWorld(workspaceId, clock);
+        await publishFact(
+          tx,
+          { ...context, effective: theGrants(undefined, 'managed') },
+          NOTE_CREATED,
+          { noteId: 'n', title: 't' },
+        );
+      }
+      expect(await rowsOf(tx, bare)).toEqual([]);
+      expect((await rowsOf(tx, given)).map((row) => row.consumer)).toEqual(['wiki']);
+    }, cloned.db);
+  });
+
+  test('leaves a consumer this process does not run to be judged where it is run', async () => {
     await withRollback(async (tx) => {
       const workspaceId = await aWorkspaceRow(tx);
-      const { context } = aPublishWorld(workspaceId, clock);
-      const asked: string[] = [];
-      const entitled = (workspace: string, module: string): boolean => {
-        asked.push(`${workspace}:${module}`);
-        return module !== 'wiki';
-      };
-      await publishFact(tx, { ...context, entitled }, NOTE_CREATED, { noteId: 'n', title: 't' });
-      expect((await rowsOf(tx, workspaceId)).map((row) => row.consumer)).toEqual(['shelf']);
-      expect(asked.sort()).toEqual([`${workspaceId}:shelf`, `${workspaceId}:wiki`]);
+      await aGrant(tx, workspaceId, 'wiki', 'off');
+      const { context } = aPublishWorld(workspaceId, clock, [NOTES]);
+      await publishFact(tx, { ...context, effective: theGrants([NOTES]) }, NOTE_PINNED, {
+        noteId: 'n',
+      });
+      expect((await rowsOf(tx, workspaceId)).map((row) => row.consumer)).toEqual(['wiki']);
     }, cloned.db);
   });
 

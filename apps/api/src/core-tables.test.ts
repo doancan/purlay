@@ -172,7 +172,7 @@ describe('no module names the core’s inbox', () => {
  * module's facts. The tables a module may name are typed (`IssuesSchema`), which keeps a module out; this keeps the rest of the core.
  */
 describe('only the outbox’s own files name the outbox', () => {
-  const OUTBOX_FILES = [join('platform', 'outbox.ts')];
+  const OUTBOX_FILES = [join('platform', 'outbox.ts'), join('platform', 'outbox-drain.ts')];
 
   test('it sees the table in each place a query puts one, and nothing in a word', () => {
     for (const named of [

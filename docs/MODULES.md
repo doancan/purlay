@@ -181,7 +181,7 @@ the rest (`ingress/http/inbox.ts`); `GET /api/me`, `GET /api/workspaces` and the
 `memberships[].modules`, which the web draws a workspace from (`useModules`, `WorkspaceScopeProvider`), falling back to the
 server's list for a server that does not send it. A module that is a grant and declares `jobs` or `workers` stops the build
 (`unguardedWorkProblem`, `composition.ts`): their work is not yet given the workspace's grant, so the first such module brings
-the SQL form of the function with it, or says `always`. No module has ports, `ports.of`, or an outbox consumer to ask it yet.
+the SQL form of the function with it, or says `always`. No module has ports or `ports.of` to ask it yet; the outbox asks it when it publishes and when it claims (D-288).
 
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
@@ -218,7 +218,7 @@ In this order:
    commit* (D-35), nobody listening is not an error, a failing handler is logged with its module and cannot fail the
    publisher. It is a new in-process bus, distinct from the socket `EventBus` that fans frames out to connections. It is
    built and tested and **no module publishes or subscribes on it yet**. It carries hints, which may be lost; a fact that
-   must not be is an outbox delivery, decided and **not built**, below (D-283 §1, §2).
+   must not be is an outbox delivery, decided and **built** without a production publisher, below (D-283 §1, §2).
 2. **A port the core defines**, only where two modules use it or a test needs the boundary. Built: `WorkspaceChannels` and
    `PushNotices`, each with a null object where the module is absent, and the slots of `BundledModule` (§2) that the core
    runs in its own transactions. Built: `SearchSource` (D-285) and `NotificationSink` (D-286, step 14f), interfaces in `platform/ports/` that the core
@@ -234,12 +234,12 @@ In this order:
 |---|---|---|---|
 | A read whose answer shapes the caller's request (search sources, is this person in that channel) | a port call with a deadline and an abort signal; `undefined` where the provider is not run | 14b the contract, 14k the search | the contract skeleton and the search built (`SearchSource`, D-285); a port the module `uses` has none yet |
 | A fact written to a row the core keeps, to a receiver that is always there (an assignment notice) | a port call inside the caller's transaction, announced after commit | 14f, 14h | the sink and its table built (14f); no module calls it yet (14h) |
-| An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | the table and `publishFact` built (14c, D-288); the claim, the delivery and the worker (14d), the sweep and the metrics (14e) not built |
+| An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | the table and `publishFact` (14c), the claim, the delivery and the worker (14d) built (D-288); the sweep and the metrics (14e) not built |
 | A hint: a cache nudge, presence, "read again" | the domain bus or the socket's `EventBus`, which exist | — | built, with no module using it |
 
 **Not built (decided, D-283).** The outbox is built ahead of a production consumer on the owner's decision: its first real
 publisher is a product feature that is not decided (issues' link to a channel, D-254 §1), so it ships proven by a fake third module's
-test and not by a consumer in the product. Each row below is a step of §10 step 14; **14b, 14c, 14f, 14g, 14k and 14l have landed beyond the decision**.
+test and not by a consumer in the product. Each row below is a step of §10 step 14; **14b, 14c, 14d, 14f, 14g, 14k and 14l have landed beyond the decision**.
 
 - *The contract surface* — **built** (14b) as far as the names go: `FactDeclaration`, `defineFact` and the lists `CORE_FACTS` and
   `FACTS` in `@purlay/types` (a module's `<ID>_FACTS` joins `FACTS` when it has a fact), `platform/ports/` with `Port<T>`,
@@ -250,9 +250,11 @@ test and not by a consumer in the product. Each row below is a step of §10 step
   snapshot's hold on `publishes` and `consumes`, with the three fields in the contract bundle's module structure, are **built** in
   14c (D-288); what runs a delivery is 14d.
 - *The outbox* (14c to 14e): **built** (14c, D-288): the table `outbox`, `publishFact` in the publisher's transaction and the `absent`
-  policy (`platform/outbox.ts`, which with the delivery of 14d are the only files that name the table). **Not built:** the claim,
-  the delivery and the drain as a worker of the consuming module (14d), the sweep, the metrics and the overview line (14e). At least
-  once, no order, a delivery's database effects atomic with its mark.
+  policy (`platform/outbox.ts`), and **built** (14d, D-288) the claim, the delivery (`platform/outbox-drain.ts`, which with the first
+  are the only files that name the table) and the drain as a worker of the consuming module (`outbox:consume`, made by `compose` for a
+  module with handlers, in its share and under its `workerDeadline`; a node claims only the (consumer, type, shape) it has a handler
+  for, so a rolling deploy kills no fact). **Not built:** the sweep, the metrics and the overview line (14e). At least once, no
+  order, a delivery's database effects atomic with its mark.
 - *The inbox* (D-286). **Built:** 14f, `inbox_entries`, the `NotificationSink` port, the sink, `sweep:inbox` and the table's
   erasure, purge and export; 14g, the routes `inbox` and `inbox/read`, the sink's `announce` and the frame `INBOX_UPDATED`; 14h,
   issues' assignment notice; 14i, the push of a notice of a `pushed` kind, held while the person is in Deep Work or their quiet
@@ -507,6 +509,7 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   the seams test read. **A module now declares `workers` on its slot** (`BundledModule.workers`: a `name`, an
   `intervalMs` from 1 000 to 3 600 000 and the `work`, as `jobWork` is the work of a name in the manifest), and `compose`
   lists the workers of the modules this process runs, and of no other (`Composition.workers`), for `startWorkers` to start.
+  A module that consumes facts is given one more it did not write, `outbox:consume` (`workersOf`, D-288 §8), so it has no loop of its own for them.
   **Each iteration runs as the module's own**: in a request scope that names the module and carries an abort signal, over the
   leased database as the work's only handle, and over **the same slots the application's requests take** (`index.ts` makes one
   `moduleConnections` and hands it to `createApp` as `moduleShares` and, leased, to the workers), so a module's loop and its
@@ -590,7 +593,7 @@ requires every selected entry to be caught, even if it declares equivalence.
 | Every table has one owner; no foreign key across owners | the ownership list and its test, a ratchet that only shrinks | 2 |
 | Chat's pagination and message reader are not the core's helpers | moved to `platform/`; a count of cross-imports that only falls | 5 |
 | Modules tell one another what happened without importing each other | `platform/domain-bus.ts`: typed events, at most once, a failing handler logged with its module and unable to fail the publisher, `domain-bus.test.ts` — **built**, with no module publishing on it yet | 5 |
-| A fact is not lost between commit and publish | **decided** (D-283 §2, D-288), the first half **built** (14c): an outbox row written in the publisher's transaction, rolled back with it, refused when its payload does not fit, its publisher is not the fact's owner or it is not given a transaction; the claim and the delivery, with a test of two nodes on two pools, a node that fails between the handler and the mark, and attempts counted at the claim, are step 14d and **not built** | 14c |
+| A fact is not lost between commit and publish | **decided** (D-283 §2, D-288), **built** (14c, 14d): an outbox row written in the publisher's transaction, rolled back with it, refused when its payload does not fit, its publisher is not the fact's owner or it is not given a transaction (`outbox.integration.test.ts`); claimed with `FOR UPDATE SKIP LOCKED` and delivered in the consumer's own transaction with its mark (`outbox-drain.integration.test.ts`: two drainers on two pools run each fact once, a node that fails between the handler and the mark leaves no effect, attempts counted at the claim reach the ceiling, an older node leaves the type and the shape it does not know); mutations `outbox-claim-without-skip-locked`, `outbox-attempts-not-counted-at-claim`, `outbox-claim-ignores-the-type`, `outbox-claim-ignores-the-shape`, `outbox-failure-effect-survives` and the rest of `outbox-*` and `publish-*` | 14c, 14d |
 | A module publishes only a fact type named for it that no other owner has, consumes only a type the build publishes and has its handler, and uses only a capability a partner it requires or lists as optional provides | **built** (D-283 §3, step 14b), with nothing yet publishing: the registry refuses a type two modules publish or the core owns, a name without its owner's prefix, a consumed type nothing publishes and a `uses` that nothing provides or that a module neither required nor optional provides (`communication.test.ts`); `compose` refuses a consumed type with no handler, a handler for an unnamed type, a `provides` with no implementation and an implementation with no `provides` (`module-communication.test.ts`), and offers a module's ports only while it runs; `fact-owners.test.ts` and `facts.test.ts` hold the declarations to their owners and to the manifests; mutations `registry-accepts-a-fact-two-modules-publish`, `registry-accepts-a-fact-without-its-owners-prefix`, `registry-accepts-a-consumer-of-an-unpublished-fact`, `registry-accepts-a-use-of-a-capability-nothing-provides`, `registry-accepts-a-use-of-a-capability-no-partner-provides`, `composition-accepts-a-consumed-fact-with-no-handler`, `composition-accepts-a-handler-for-an-unnamed-fact`, `composition-accepts-a-provided-capability-with-no-port`, `composition-accepts-a-port-nothing-provides`, `composition-offers-the-ports-of-modules-that-are-off`, `fact-owners-accepts-a-fact-declared-twice`, `fact-owners-accepts-a-fact-without-its-owners-prefix` and `fact-owners-accepts-an-owner-nobody-is`. **Not built:** a module's reading only the ports its `uses` names, and the hold of the release snapshot on `publishes` (see §4) | 14b |
 | A module reads no port it does not use | **decided** (D-283 §3), **not built**: a scan of a module's source, as `module-emissions.test.ts` reads events, when the first module reads a port | — |
 | A module writes no `outbox` row but through the core's files | **built** (D-288, step 14c): `core-tables.test.ts` reads every file of the core but the table's own for the name, a module's typed handle does not hold the table, and publishing takes a transaction and not the pool, which `publishFact` checks at run time; mutation `module-writes-the-outbox-directly` | 14c |
@@ -1000,7 +1003,7 @@ Each step ships alone and can be reverted.
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; the product's module-independent suites in every cell in CI (`modules:suites`, §8); a share of the pool is built for each module and a starvation gate for chat with issues busy (§7) | **yes** |
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
-| 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table, `publishFact` and the `absent` policy, with the release snapshot's hold on `publishes` and `consumes` and the bundle's module structure — **built** (D-288); **(d)** the claim, the delivery and the drain worker — not built; **(e)** the outbox sweep, metrics and the overview line — not built; **(f)** `inbox_entries`, the `NotificationSink` port, its sink and `sweep:inbox` (D-286) — **built**; **(g)** the inbox routes, `INBOX_UPDATED` and the sink's `announce` (D-286) — **built**; **(h)** issues' assignment notice (D-286) — **built**; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` (D-286 §9) — **built**; **(j)** the web's *Updates* section and badge (D-286 §10) — **built**; **(k)** `find` and chat's source — **built** (D-285); **(l)** issues' source and its index — **built** (D-285); **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built, a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
+| 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table, `publishFact` and the `absent` policy, with the release snapshot's hold on `publishes` and `consumes` and the bundle's module structure — **built** (D-288); **(d)** the claim, the delivery and the drain worker — **built** (D-288); **(e)** the outbox sweep, metrics and the overview line — not built; **(f)** `inbox_entries`, the `NotificationSink` port, its sink and `sweep:inbox` (D-286) — **built**; **(g)** the inbox routes, `INBOX_UPDATED` and the sink's `announce` (D-286) — **built**; **(h)** issues' assignment notice (D-286) — **built**; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` (D-286 §9) — **built**; **(j)** the web's *Updates* section and badge (D-286 §10) — **built**; **(k)** `find` and chat's source — **built** (D-285); **(l)** issues' source and its index — **built** (D-285); **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built, a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
@@ -1293,8 +1296,8 @@ table, so that §11's listing test reads only the modules.
   and what happens when its consumer is off (`absent`: `'drop'` or `{ holdDays }`). Carries ids and a short label, not state. The
   declaration and the manifest's `publishes` and `consumes` are **built** (D-283 §3, step 14b, D-288); nothing publishes one yet.
 - **Outbox** — a core table of deliveries, one row for each (fact, consumer), written in the producer's transaction and run in
-  the consumer's own by a worker of its module: at least once, unordered, for facts of human scale. The table and `publishFact` are
-  **built** (D-288); the claim, the delivery, the worker, the sweep and the metrics are *not built* (D-283 §2).
+  the consumer's own by a worker of its module: at least once, unordered, for facts of human scale. The table, `publishFact`, the claim, the
+  delivery and the worker are **built** (D-288); the sweep and the metrics are *not built* (D-283 §2).
 - **Port** — an interface the core defines and a module implements, handed to the module that `uses` it as `Port<T>`, the
   implementation or `undefined` where the provider is not run (`platform/ports/`, `Composition.ports`, built in step 14b with no
   port yet). Built before it: `WorkspaceChannels`, `PushNotices`, `SearchSource` (D-285), `NotificationSink` (D-286).

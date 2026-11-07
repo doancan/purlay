@@ -9,7 +9,7 @@
  * tables, the exports hold the core's.
  */
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
-import { isModuleId, type ModuleId } from '@purlay/types';
+import { FACTS, isModuleId, type FactDeclaration, type ModuleId } from '@purlay/types';
 import { chatModule } from './features/chat/module';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
 import { AppError, attachmentNotFound } from './platform/errors';
@@ -35,6 +35,7 @@ import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import type { KindOwners } from './modules/inbox/sink';
 import type { FactConsumers } from './platform/fact-consumers';
+import { outboxConsumerWorkers } from './modules/workers/outbox-consumer';
 import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
 import type { FrameHandlers } from './platform/frame-handlers';
 import type { RouterFrameContext } from './realtime/router';
@@ -56,6 +57,7 @@ import type { CollatedColumn } from './platform/readiness';
 import {
   effectiveModules,
   type EntitlementMode,
+  type EntitlementPolicy,
   type EntitlementRow,
 } from './platform/module-kit/entitlement';
 
@@ -198,6 +200,19 @@ const factConsumerProblem = ({
   return undefined;
 };
 
+/**
+ * The workers a module runs: the ones it declares and, when it consumes facts, the one that delivers them (D-288 §8). Every
+ * carried module's, run or not, is what the failure counter has a series for.
+ */
+export const workersOf = (
+  module: BundledModule,
+  facts: readonly FactDeclaration[] = FACTS,
+  effective?: EntitlementPolicy['effective'],
+): readonly ModuleWorker[] => [
+  ...(module.workers ?? []),
+  ...outboxConsumerWorkers(module.manifest.id, module.factConsumers, facts, effective),
+];
+
 /** What is wrong with the ports a module supplies and the capabilities its manifest provides, or `undefined` when they are the same. */
 const portProblem = ({ manifest, ports = {} }: BundledModule): string | undefined => {
   const unimplemented = manifest.provides.filter((capability) => !(capability in ports));
@@ -327,6 +342,7 @@ export const compose = (
   modules: readonly BundledModule[],
   bundled: readonly BundledModule[] = bundledModules,
   entitlementMode: EntitlementMode = 'open',
+  facts: readonly FactDeclaration[] = FACTS,
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
@@ -353,13 +369,20 @@ export const compose = (
       portProblem(module) ??
       searchSourceProblem(module) ??
       unguardedWorkProblem(module) ??
-      workerProblem(module.manifest.id, module.workers ?? []);
+      workerProblem(module.manifest.id, workersOf(module, facts));
     if (problem !== undefined) throw new Error(problem);
   }
   const permissions = permissionTable([
     ...CORE_PERMISSIONS,
     ...modules.flatMap((module) => module.manifest.permissions ?? []),
   ]);
+  const effectiveOfThisProcess: EntitlementPolicy['effective'] = (rows, now) =>
+    effectiveModules({
+      running: modules.map((module) => module.manifest),
+      rows,
+      mode: entitlementMode,
+      now,
+    });
   const deadlineOf = workerDeadlinesOf(holding.map((module) => module.manifest));
   const noticing = modules.find((module) => module.pushNotices !== undefined);
   return {
@@ -403,7 +426,7 @@ export const compose = (
     ports: Object.fromEntries(modules.flatMap((module) => Object.entries(module.ports ?? {}))),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     workers: modules.flatMap((module) =>
-      (module.workers ?? []).map((worker) => ({
+      workersOf(module, facts, effectiveOfThisProcess).map((worker) => ({
         ...worker,
         module: module.manifest.id,
         deadlineMs: deadlineOf(module.manifest.id),
@@ -433,13 +456,7 @@ export const compose = (
     ),
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
     entitlementMode,
-    effectiveModules: (rows, now) =>
-      effectiveModules({
-        running: modules.map((module) => module.manifest),
-        rows,
-        mode: entitlementMode,
-        now,
-      }),
+    effectiveModules: effectiveOfThisProcess,
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),
     ),
