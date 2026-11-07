@@ -10,11 +10,9 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { CLOSE_CODES, SIGN_IN_CALLBACK, messageId } from '@purlay/types';
-import { Type } from '@sinclair/typebox';
-import { Value } from '@sinclair/typebox/value';
 import type { GithubFetch } from '../modules/auth/better-auth';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
+import { testConfig, testDependencies } from '../testing/doubles';
 import {
   aGitHubAuth,
   aGitHubFor,
@@ -27,7 +25,6 @@ import { fixedClock } from '../platform/clock';
 
 const origin = 'https://purlay.test';
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
-const PortInUse = Type.Object({ code: Type.Literal('EADDRINUSE') });
 let cloned: ClonedDatabase;
 
 beforeAll(async () => {
@@ -84,12 +81,10 @@ describe('integration: draining for shutdown', () => {
   test('finishes what is in flight, tells sockets to reconnect, and takes nothing new', async () => {
     const github = aGate();
     const slow = aSlowGitHub(github);
-    const recorded = aRecordingLogger();
     const app: HttpApplication = createApp(
       testDependencies({
         database: cloned.db,
         clock,
-        log: recorded.log,
         auth: aGitHubAuth(cloned.db, slow.fetch, { baseUrl: origin }),
         config: testConfig({ APP_URL: origin }),
       }),
@@ -99,8 +94,9 @@ describe('integration: draining for shutdown', () => {
     const beforeId = crypto.randomUUID();
     const before = await fetch(`${server}/health`, { headers: { 'x-request-id': beforeId } });
     expect(before.status).toBe(200);
+    // The listener answers with the id it was given: the mark of this app's own listener.
+    expect(before.headers.get('x-request-id')).toBe(beforeId);
     await before.text();
-    expect(recorded.lines.some((line) => line['requestId'] === beforeId)).toBe(true);
 
     const user = await aSignedInUser(cloned.db, clock, 'drain');
     const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
@@ -140,36 +136,18 @@ describe('integration: draining for shutdown', () => {
 
     const readiness = await app.handle(new Request(`${origin}/health/ready`));
     expect(readiness.status).toBe(503);
-    // Another test can acquire a released port. Make that case real instead of mistaking its
-    // successful response for work accepted by this drained listener.
-    let replacement: Pick<ReturnType<typeof Bun.serve>, 'stop'> | undefined;
-    try {
-      replacement = Bun.serve({
-        port,
-        fetch: () =>
-          new Response('replacement listener', { headers: { 'x-test-listener': 'replacement' } }),
-      });
-    } catch (error) {
-      // A concurrent listener, or a broken drain leaving this one alive, can already own it.
-      // The per-listener request record below still distinguishes those cases.
-      if (!Value.Check(PortInUse, error)) throw error;
-    }
-    try {
-      const afterId = crypto.randomUUID();
-      const response = await fetch(`${server}/health`, {
-        headers: { 'x-request-id': afterId },
-      }).catch(() => null);
-      if (response !== null) await response.text();
-      const ownHandled = recorded.lines.some((line) => line['requestId'] === afterId);
-      if (ownHandled) await app.stop(true);
-      expect(ownHandled).toBe(false);
-      if (replacement !== undefined) {
-        expect(response?.status).toBe(200);
-        expect(response?.headers.get('x-test-listener')).toBe('replacement');
-      }
-    } finally {
-      await replacement?.stop(true);
-    }
+    // Nothing else is bound to the port, so a request that reaches a listener there reaches this
+    // app's own: a replacement listener on the same port could share it with a listener the drain
+    // left running, and the request would be answered by either. The answer is what tells them
+    // apart — only this app echoes the id it was given — and not its log line, which is written
+    // after the answer is sent and may not be there yet when the client has read it.
+    const afterId = crypto.randomUUID();
+    const response = await fetch(`${server}/health`, {
+      headers: { 'x-request-id': afterId },
+    }).catch(() => null);
+    const ownHandled = response?.headers.get('x-request-id') === afterId;
+    if (ownHandled) await app.stop(true);
+    expect(ownHandled).toBe(false);
   });
 
   /**
