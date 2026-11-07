@@ -4,6 +4,9 @@
  * build's own tests and not an operator's boot. Every case is a fake module, since the two real ones declare none of it.
  */
 import { describe, expect, test } from 'bun:test';
+import { Type } from '@sinclair/typebox';
+import { defineFact } from '@purlay/types';
+import { factTypes } from './core-claims';
 import type { ModuleManifest } from './manifest';
 import { ModuleConfigError, moduleRegistry } from './registry';
 
@@ -126,5 +129,16 @@ describe('the capabilities a module uses', () => {
         module('wiki', { consumes: ['gone.x'], uses: ['gone.y'] }),
       ]),
     ).toHaveLength(3);
+  });
+});
+
+describe('the facts the core claims', () => {
+  test('are the types of its declarations, so a module cannot take one', () => {
+    const declared = [
+      defineFact({ type: 'core.moved', owner: 'core', schema: Type.Object({}) }),
+      defineFact({ type: 'core.renamed', owner: 'core', schema: Type.Object({}) }),
+    ];
+    expect(factTypes(declared)).toEqual(['core.moved', 'core.renamed']);
+    expect(factTypes([])).toEqual([]);
   });
 });
