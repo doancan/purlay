@@ -13862,9 +13862,6 @@ word, in anything this workspace keeps.
 source; the cross-tenant and channel-visibility matrices; `compose` refusing a source and a manifest that disagree; and the mutations
 that remove each guard (`MODULES.md` §8).
 
-**Built in steps.** The port, the route, the fan-out and chat's source land first (`MODULES.md` §10 step 14k); issues' source and its
-indexes follow (14l), so the first change answers one group and the second adds the other.
-
 **Not built here.** The web's groups of results and the line for a skipped source (`MODULES.md` §10 step 14m), a metric of how long
 each source took and how many were skipped, and a source's own cursor: a person who wants more of a source goes to its screen.
 
