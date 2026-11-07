@@ -40,6 +40,7 @@ import { waitingChannels } from './waiting';
 import { Attachments } from '../messages/attachments';
 import { GitHubEventCard } from '../../content/github-event';
 import { GitHubCards } from '../../content/github-cards';
+import { WebLinkCards } from '../../content/web-link-cards';
 import { MessageCards } from '../../content/message-cards';
 
 /** How many new messages a channel shows at once: enough to catch up, few enough to scan. */
@@ -93,6 +94,13 @@ const Line = ({
               })
             )}
             {message.githubEvent === null && <GitHubCards content={message.content} />}
+            {message.githubEvent === null && (
+              <WebLinkCards
+                channelId={message.channelId}
+                messageId={message.id}
+                content={message.content}
+              />
+            )}
             {message.githubEvent === null && <MessageCards content={message.content} />}
             <Attachments
               attachments={message.attachments}

@@ -60,6 +60,90 @@ const options = (
   maxBytes: 64,
 });
 
+describe('integration: fetching a public HTML preview', () => {
+  test('uses the checked connection and asks for HTML without reader headers or a fragment', async () => {
+    respond = (_path, res): void => {
+      res.writeHead(200, { 'content-type': 'Text/HTML; charset=utf-8' });
+      res.end('<title>Report</title>');
+    };
+    const fetched = await fetchExternal(new URL('https://docs.example/report?edition=2#part'), {
+      ...options(),
+      kind: 'html',
+    });
+    expect(fetched.kind === 'bytes' ? new TextDecoder().decode(fetched.bytes) : fetched).toBe(
+      '<title>Report</title>',
+    );
+    expect(served.at(-1)).toBe('/report?edition=2');
+    expect(received?.headers.accept).toContain('text/html');
+    expect(received?.headers['accept-encoding']).toBe('identity');
+    expect(received?.headers['user-agent']).toBe('Purlay link preview');
+    expect(received?.headers.cookie).toBeUndefined();
+    expect(received?.headers.authorization).toBeUndefined();
+    expect(received?.headers.referer).toBeUndefined();
+  });
+
+  test.each(['application/json', 'image/png', 'text/plain', ''])(
+    'refuses %s even if its bytes look like HTML',
+    async (type) => {
+      respond = (_path, res): void => {
+        if (type !== '') res.setHeader('content-type', type);
+        res.end('<title>Not an HTML document</title>');
+      };
+      expect(
+        (
+          await fetchExternal(new URL('https://docs.example/report'), {
+            ...options(),
+            kind: 'html',
+          })
+        ).kind,
+      ).toBe('failed');
+    },
+  );
+
+  test.each(['gzip', 'br'])(
+    'does not parse an opaque %s representation as HTML',
+    async (encoding) => {
+      respond = (_path, res): void => {
+        res.writeHead(200, { 'content-type': 'text/html', 'content-encoding': encoding });
+        res.end('<title>Opaque representation</title>');
+      };
+      expect(
+        (
+          await fetchExternal(new URL('https://docs.example/report'), {
+            ...options(),
+            kind: 'html',
+          })
+        ).kind,
+      ).toBe('failed');
+    },
+  );
+
+  test('keeps the body limit for HTML and does not follow a redirect to another address', async () => {
+    respond = (_path, res): void => {
+      res.writeHead(200, { 'content-type': 'application/xhtml+xml' });
+      res.end('a'.repeat(65));
+    };
+    expect(
+      (await fetchExternal(new URL('https://docs.example/large'), { ...options(), kind: 'html' }))
+        .kind,
+    ).toBe('failed');
+    const before = served.length;
+    respond = (_path, res): void => {
+      res.writeHead(302, { location: 'http://169.254.169.254/' });
+      res.end();
+    };
+    expect(
+      (
+        await fetchExternal(new URL('https://docs.example/redirect'), {
+          ...options(),
+          kind: 'html',
+        })
+      ).kind,
+    ).toBe('failed');
+    expect(served.slice(before)).toEqual(['/redirect']);
+  });
+});
+
 describe('integration: fetching an external image', () => {
   test('connects where the lookup said, and answers the body', async () => {
     respond = (_path, res): void => {

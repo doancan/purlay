@@ -110,6 +110,7 @@ export const AREAS = [
   { name: 'web-features', prefixes: ['apps/web/src/features/'] },
   { name: 'web-features-channel', prefixes: ['apps/web/src/features/chat/channel/'] },
   { name: 'web-features-composer', prefixes: ['apps/web/src/features/chat/composer/'] },
+  { name: 'web-features-content', prefixes: ['apps/web/src/features/content/'] },
   {
     name: 'web-features-followed',
     prefixes: [

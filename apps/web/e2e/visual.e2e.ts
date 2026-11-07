@@ -12,6 +12,14 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { shellReady } from './support';
 
+// This fixture photographs rich message text. Metadata availability must not depend on a live website;
+// web-link-previews.e2e.ts owns the positive card, origin failure, scrolling and keyboard states.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/messages/*/link-preview', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+  });
+});
+
 const RICH = [
   'Plain words with a **bold** claim, then a link: https://example.com/a/path.',
   'Inline `code`, a mention of @alice and @bob, and a token: ' + 'x'.repeat(90),

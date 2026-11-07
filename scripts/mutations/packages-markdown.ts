@@ -161,4 +161,28 @@ export const PACKAGES_MARKDOWN: readonly Mutation[] = [
       "        case 'inlineCode':\n          return OPAQUE;\n        case 'link':\n          return spell(node.children);\n",
     tests: ['packages/markdown/src/prose.test.ts'],
   },
+  {
+    id: 'web-preview-candidates-duplicate-fragments',
+    why: 'Two fragments of one document consume both preview slots.',
+    file: 'packages/markdown/src/web-links.ts',
+    find: '    if (documents.has(url.href)) return;\n',
+    replace: '',
+    tests: ['packages/markdown/src/web-links.test.ts'],
+  },
+  {
+    id: 'web-preview-candidates-duplicate-github',
+    why: 'A GitHub pull request or issue receives a second generic card.',
+    file: 'packages/markdown/src/web-links.ts',
+    find: '      githubItemOf(href) !== null ||\n',
+    replace: '',
+    tests: ['packages/markdown/src/web-links.test.ts'],
+  },
+  {
+    id: 'web-preview-candidates-fetch-own-instance',
+    why: 'Own message links gain duplicate external metadata requests.',
+    file: 'packages/markdown/src/web-links.ts',
+    find: '      url.origin === origin ||\n',
+    replace: '',
+    tests: ['packages/markdown/src/web-links.test.ts'],
+  },
 ];

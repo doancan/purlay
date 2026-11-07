@@ -13,6 +13,7 @@ export * from './formats';
 export * from './contract-version';
 export * from './errors';
 export * from './models';
+export * from './web-link-previews';
 export * from './modules';
 export * from './facts';
 export * from './events';

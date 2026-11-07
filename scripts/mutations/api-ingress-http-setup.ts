@@ -19,7 +19,7 @@ export const API_INGRESS_HTTP_SETUP: readonly Mutation[] = [
     id: 'image-proxy-unthrottled',
     why: 'any signed-in person can make the node fetch and decode external images without limit',
     file: 'apps/api/src/ingress/http/rate-limit.ts',
-    find: '    const costly = COSTLY_READS.has(pathname);\n',
+    find: '    const costly =\n      COSTLY_READS.has(pathname) || /^\\/api\\/messages\\/[^/]+\\/link-preview$/.test(pathname);\n',
     replace: '    const costly = false;\n',
     tests: ['apps/api/src/ingress/http/images.integration.test.ts'],
   },
@@ -237,5 +237,13 @@ export const API_INGRESS_HTTP_SETUP: readonly Mutation[] = [
     find: "  ['GET /setup/status', 'auth'],\n",
     replace: '',
     tests: [SETUP_HTTP_TESTS],
+  },
+  {
+    id: 'web-preview-cost-spends-send-budget',
+    why: 'Metadata requests drain the write bucket and prevent sending a message.',
+    file: 'apps/api/src/ingress/http/rate-limit.ts',
+    find: 'COSTLY_READS.has(pathname) || /^\\/api\\/messages\\/[^/]+\\/link-preview$/.test(pathname)',
+    replace: 'COSTLY_READS.has(pathname)',
+    tests: ['apps/api/src/features/chat/http/web-previews.integration.test.ts'],
   },
 ];

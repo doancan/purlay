@@ -33,6 +33,7 @@ import { cn } from '../../../ui/cn';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { renderContent } from '../../content/render-content';
 import { GitHubCards } from '../../content/github-cards';
+import { WebLinkCards } from '../../content/web-link-cards';
 import { MessageCards } from '../../content/message-cards';
 import { GitHubEventCard } from '../../content/github-event';
 import { ImageLinks } from '../../content/image-links';
@@ -239,6 +240,13 @@ const MessageRowView = ({
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
         {/* An event's words are its own summary: nothing in them to unfurl (D-134 §6). */}
         {!deleted && event === null && <GitHubCards content={message.content} />}
+        {delivery === 'sent' && !deleted && event === null && (
+          <WebLinkCards
+            channelId={message.channelId}
+            messageId={message.id}
+            content={message.content}
+          />
+        )}
         {!deleted && event === null && <MessageCards content={message.content} />}
         {!deleted && event === null && <ImageLinks content={message.content} />}
         {!deleted && (

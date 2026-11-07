@@ -2,6 +2,7 @@ import { InboxPage, type InboxQuery, type MarkInboxReadRequest } from '@purlay/t
 import { OwnAdmission, InstanceInfo, ChannelCatchUp, type CatchUpQuery } from '@purlay/types';
 import { ChannelGroup, ChannelGroupPage, CHANNEL_GROUP_LIMIT } from '@purlay/types';
 import { FollowedThreadsPage, type FollowedThreadsQuery } from '@purlay/types';
+import { WebLinkPreviewResponse } from '@purlay/types';
 import {
   Issue,
   IssuePage,
@@ -220,6 +221,11 @@ export interface Api {
     url: string,
     signal?: AbortSignal,
   ) => Promise<UnfurlResponse>;
+  readonly previewMessageLink: (
+    messageId: string,
+    url: string,
+    signal?: AbortSignal,
+  ) => Promise<WebLinkPreviewResponse>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
   /** An owner's or an admin's (`ARCHITECTURE.md` §7.4): a member's new role. */
   readonly updateMemberRole: (
@@ -663,6 +669,13 @@ export const createApi = (http: Http): Api => {
         '/api/integrations/github/unfurl',
         UnfurlResponse,
         options({ body: { workspaceId, url } }, signal),
+      ),
+    previewMessageLink: (messageId, url, signal) =>
+      http.request(
+        'POST',
+        `/api/messages/${at(messageId)}/link-preview`,
+        WebLinkPreviewResponse,
+        options({ body: { url } }, signal),
       ),
     githubIntegration: (workspaceId, signal) =>
       http.request(
