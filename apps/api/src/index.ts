@@ -122,6 +122,9 @@ const metrics = serverMetrics(
       kind: kind.type,
     })),
   ),
+  modules.bundled.flatMap((module) =>
+    (module.manifest.consumes ?? []).map((fact) => ({ module: module.manifest.id, fact })),
+  ),
 );
 log.info(
   config.METRICS_TOKEN === undefined
@@ -401,6 +404,7 @@ if (!workerLifecycle.stopped) {
     log,
     bus: runtimeBase.bus,
     failures: metrics.workerFailures,
+    outbox: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
     ...(push === undefined ? {} : { push }),
   });
 }

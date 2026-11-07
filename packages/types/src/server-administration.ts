@@ -225,6 +225,12 @@ export const ServerOverview = Type.Object({
   pushConfigured: Type.Boolean(),
   sharedStateConfigured: Type.Boolean(),
   exportFailures: Type.Integer({ minimum: 0 }),
+  /** Facts between modules given up on after their tries, over every module that consumes one (D-288). */
+  outboxDeadFacts: Type.Integer({ minimum: 0 }),
+  /** Seconds the longest-waiting fact between modules has waited, 0 where none waits. */
+  outboxOldestPendingSeconds: Type.Integer({ minimum: 0 }),
+  /** How long a waiting fact may wait before the overview calls it a problem, as the server judges it. */
+  outboxStaleAfterSeconds: Type.Integer({ minimum: 1 }),
 });
 export type ServerOverview = Static<typeof ServerOverview>;
 

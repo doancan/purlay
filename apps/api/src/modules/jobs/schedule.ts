@@ -37,6 +37,8 @@ export const PLAN: readonly Slot[] = [
   { job: 'sweep:deletions', every: 'hour', minute: 50 },
   // Daily, once the night's purges are done: what people were told and never read, or read long ago (D-286).
   { job: 'sweep:inbox', every: 'day', hour: 5, minute: 0 },
+  // Hourly: a fact between modules is transient, and the table is to stay the size of what is in flight (D-288).
+  { job: 'sweep:outbox', every: 'hour', minute: 5 },
   // Every quarter hour, at :07, :22, :37 and :52 — clear of every other slot — so a letter about what waited
   // unread leaves within a quarter hour of its delay (D-240).
   { job: 'mail:missed', every: 'quarter-hour', minute: 7 },

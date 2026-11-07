@@ -16,6 +16,7 @@ import { withinRequest, type Logger } from '../../platform/logging';
 import type { ModuleManifest } from '../../platform/module-kit/manifest';
 import type { Counter } from '../../platform/metrics';
 import { withDeadline } from '../../platform/request-deadline';
+import type { OutboxCounters } from '../../platform/outbox-drain';
 import type { PushSender } from '../push/sender';
 
 /**
@@ -38,6 +39,8 @@ interface WorkerContext {
   readonly bus: EventBus;
   /** Where the process has Web Push on. */
   readonly push?: PushSender;
+  /** What the outbox worker of a module counts into, where the process records metrics. */
+  readonly outbox?: OutboxCounters;
 }
 
 /** One iteration of a worker. A throw is the iteration's failure and nothing more. */
@@ -128,6 +131,7 @@ export interface WorkersDependencies {
   readonly log: Logger;
   readonly bus: EventBus;
   readonly push?: PushSender;
+  readonly outbox?: OutboxCounters;
   /** `purlay_worker_failures_total`: one series for each worker the build carries, made at zero by `serverMetrics`. */
   readonly failures: Counter<'module' | 'worker'>;
   readonly later?: Later;
@@ -146,7 +150,7 @@ export const startWorkers = (
   workers: readonly RunningWorker[],
   dependencies: WorkersDependencies,
 ): Workers => {
-  const { database, clock, bus, push, failures, later = timeoutLater } = dependencies;
+  const { database, clock, bus, push, outbox, failures, later = timeoutLater } = dependencies;
   let stopped = false;
   const loops = workers.map((worker) => {
     const { module, name, work, deadlineMs } = worker;
@@ -161,7 +165,14 @@ export const startWorkers = (
             ...(signal === undefined ? {} : { signal }),
           },
           async () => {
-            await work({ database, clock, log, bus, ...(push === undefined ? {} : { push }) });
+            await work({
+              database,
+              clock,
+              log,
+              bus,
+              ...(push === undefined ? {} : { push }),
+              ...(outbox === undefined ? {} : { outbox }),
+            });
           },
         );
       };

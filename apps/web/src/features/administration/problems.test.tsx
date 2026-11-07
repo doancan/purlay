@@ -73,6 +73,32 @@ describe('server overview problem summary', () => {
     view.unmount();
   });
 
+  test('names the facts between modules that were given up on or wait too long, and says nothing when none do', async () => {
+    const view = await renderAdministration('overview', (call) =>
+      call.path === '/api/server/overview'
+        ? adminJson({ ...ADMIN_OVERVIEW, outboxDeadFacts: 2, outboxOldestPendingSeconds: 1200 })
+        : call.path === '/api/server/backups'
+          ? adminJson(backup)
+          : undefined,
+    );
+    const card = within(await view.findByRole('region', { name: 'Server problems' }));
+    expect(await card.findByText('Given up on after their tries: 2')).toBeDefined();
+    expect(card.getByText('The oldest has waited 20 minutes')).toBeDefined();
+    expect(card.getByText('Reported problems: 3')).toBeDefined();
+    view.unmount();
+
+    const quiet = await renderAdministration('overview', (call) =>
+      call.path === '/api/server/overview'
+        ? adminJson({ ...ADMIN_OVERVIEW, outboxOldestPendingSeconds: 900 })
+        : call.path === '/api/server/backups'
+          ? adminJson(backup)
+          : undefined,
+    );
+    const clean = within(await quiet.findByRole('region', { name: 'Server problems' }));
+    expect(await clean.findByText('No problems reported by these checks.')).toBeDefined();
+    quiet.unmount();
+  });
+
   test.each(['unconfigured', 'unreported', 'invalid', 'stale'] as const)(
     'backup evidence state %s remains actionable',
     async (state) => {
