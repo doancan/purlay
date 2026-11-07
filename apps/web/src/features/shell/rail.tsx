@@ -15,7 +15,7 @@ import { Tooltip } from '../../ui/tooltip';
 import { InboxLink } from '../chat/inbox/inbox-link';
 import { OpenQuestionsLink } from '../chat/sidebar/open-questions-link';
 import { RailItemContent, railItemClasses } from './rail-item';
-import { useSession } from '../session/session';
+import { useModules } from '../session/session';
 import { useWorkspace } from './workspace';
 
 /** The conversations: the workspace's front door, which opens the channel you were last in. */
@@ -104,7 +104,7 @@ interface RailProps {
 
 export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
   const { t } = useI18n();
-  const { modules } = useSession();
+  const modules = useModules();
   return (
     <nav
       aria-label={t('rail.label')}

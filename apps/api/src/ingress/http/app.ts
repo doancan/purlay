@@ -555,6 +555,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     ...dependencies,
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
     modules: moduleIds,
+    effectiveModules: modules.effectiveModules,
   };
   // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
   const githubUrls = {
@@ -1221,7 +1222,14 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
-    .get('/api/workspaces', async ({ request }) => await listMyWorkspaces(dependencies, request))
+    .get(
+      '/api/workspaces',
+      async ({ request }) =>
+        await listMyWorkspaces(
+          { ...dependencies, effectiveModules: modules.effectiveModules },
+          request,
+        ),
+    )
     .post('/api/workspaces', async ({ request, body, set }) => {
       set.status = 201;
       return await createMyWorkspace(creating, request, body);
@@ -1299,7 +1307,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .post(
       '/api/invitations/accept',
       async ({ request, body }) =>
-        await joinByInvitation({ ...dependencies, bus: sockets.bus }, request, body),
+        await joinByInvitation(
+          { ...dependencies, bus: sockets.bus, effectiveModules: modules.effectiveModules },
+          request,
+          body,
+        ),
     )
     .post('/api/workspaces/:workspaceId/exports', async ({ request, params, set }) => {
       const asked = await askForExport(dependencies, request, params.workspaceId);

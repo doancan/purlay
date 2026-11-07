@@ -16,7 +16,7 @@ import type { Logger } from '../../platform/logging';
 import { currentRequest, withinRequest } from '../../platform/logging';
 import type { ModuleSearchSource } from '../../platform/ports/search-source';
 import { withDeadline } from '../../platform/request-deadline';
-import type { WorkspaceContext } from '../../platform/tenancy';
+import { entitledTo, type WorkspaceContext } from '../../platform/tenancy';
 
 /** Past a source's own query on its index, well under what a person waits at a search box. */
 const SEARCH_SOURCE_DEADLINE_MS = 1_500;
@@ -82,10 +82,11 @@ export const findAcross = async (
   query: string,
   limit: number,
 ): Promise<FindResponse> => {
+  // A module the workspace is not granted is not asked, and is said to be off as one the process does not run (D-289).
+  const granted = dependencies.sources.filter(({ module }) => entitledTo(context, module));
+  const withheld = dependencies.sources.filter(({ module }) => !entitledTo(context, module));
   const answers = await Promise.all(
-    dependencies.sources.map(
-      async (source) => await askOne(dependencies, source, context, query, limit),
-    ),
+    granted.map(async (source) => await askOne(dependencies, source, context, query, limit)),
   );
   const groups: FindGroup[] = [];
   const skipped: SkippedSource[] = [];
@@ -93,6 +94,8 @@ export const findAcross = async (
     if ('hits' in answer) groups.push(answer);
     else skipped.push(answer);
   }
-  for (const source of dependencies.off) skipped.push({ source, reason: 'off' });
+  for (const source of [...withheld.map(({ source }) => source.id), ...dependencies.off]) {
+    skipped.push({ source, reason: 'off' });
+  }
   return { groups, skipped };
 };

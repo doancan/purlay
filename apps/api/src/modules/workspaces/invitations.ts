@@ -40,6 +40,7 @@ import {
 } from '@purlay/types';
 import { DAY_MS, type Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { requireInvitationManager, requireInvitationManagerNow } from './invitation-manager';
 import { randomToken, tokenDigest } from '../../platform/tokens';
@@ -322,6 +323,7 @@ export const acceptInvitation = async (
   clock: Clock,
   userId: string,
   token: string,
+  effective?: EntitlementPolicy['effective'],
 ): Promise<AcceptedInvitation> => {
   const now = clock.now();
   const { workspace, invitationId } = await opened(transaction, now, userId, token, true);
@@ -342,7 +344,7 @@ export const acceptInvitation = async (
     });
   }
   await recordInvitationApplicant(transaction, clock, userId, invitationId, true);
-  const [membership] = await membershipsOf(transaction, clock, userId, workspace.id);
+  const [membership] = await membershipsOf(transaction, clock, userId, workspace.id, effective);
   // Inserted or already there, in this transaction: a membership that is not found is a bug.
   if (membership === undefined) throw new Error('a membership just made is missing');
   const members =

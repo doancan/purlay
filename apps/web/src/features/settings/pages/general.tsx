@@ -19,7 +19,7 @@ import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
-import { useSession } from '../../session/session';
+import { useModules, useSession } from '../../session/session';
 import { CreateWorkspace } from '../../shell/home';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
@@ -32,7 +32,8 @@ export const GeneralPage = (): React.JSX.Element => {
   const { show } = useToast();
   const { copy } = useContentPorts();
   const { workspace, role } = useWorkspace();
-  const { mayCreateWorkspace, modules } = useSession();
+  const { mayCreateWorkspace } = useSession();
+  const modules = useModules();
   const { renameWorkspace } = useActions();
   // What was typed; until something is, the field shows the name as it is now, so a rename in
   // another tab appears here.

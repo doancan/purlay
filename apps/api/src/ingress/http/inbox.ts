@@ -11,7 +11,7 @@ import { inboxPage, markInboxRead } from '../../modules/inbox/inbox';
 import type { Clock } from '../../platform/clock';
 import { inboxUpdatedPublications, publishAfterCommit, type EventBus } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { entitledTo, requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn, snapshotOn } from '../../platform/transactions';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
@@ -38,9 +38,11 @@ export const listInbox = async (
     queryOf(new URL(request.url), { numbers: ['limit'], booleans: ['unreadOnly'] }),
   );
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await snapshotOn(database)(
-    async (transaction) => await inboxPage(transaction, context, running, query),
-  );
+  return await snapshotOn(database)(async (transaction) => {
+    // The notices of a module the workspace is not granted are kept and not shown, as those of a module that is not run (D-289).
+    const visible = running.filter((module) => entitledTo(context, module));
+    return await inboxPage(transaction, context, visible, query);
+  });
 };
 
 /** `POST /api/workspaces/:workspaceId/inbox/read` — `204`; the caller's other tabs are told to read the inbox again. */
@@ -53,9 +55,10 @@ export const readInbox = async (
   const { userId, sessionId } = await requireSession(auth, request);
   const input = validated(MarkInboxReadRequest, body);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const visible = running.filter((module) => entitledTo(context, module));
   const read = await atomicallyOn(database)(async (transaction) => {
     await requireLiveSession(transaction, clock, sessionId);
-    return await markInboxRead(transaction, clock, context, running, input);
+    return await markInboxRead(transaction, clock, context, visible, input);
   });
   if (read === 0) return;
   await publishAfterCommit(log, [inboxUpdatedPublications(bus, clock, workspaceId, [userId])]);

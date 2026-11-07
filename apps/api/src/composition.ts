@@ -231,6 +231,16 @@ const searchSourceProblem = ({
   return undefined;
 };
 
+/**
+ * What is wrong with a module a workspace is granted that runs work of its own, or `undefined`. A scheduled job or a background
+ * loop acts for workspaces without a request to carry the guard (`tenancy.ts`), so until their work is given the workspace's grant
+ * a grant would go on being served to a workspace that lost it (D-289): the module is `always`, or has neither.
+ */
+const unguardedWorkProblem = ({ manifest, workers = [] }: BundledModule): string | undefined =>
+  manifest.entitlement === 'always' || ((manifest.jobs ?? []).length === 0 && workers.length === 0)
+    ? undefined
+    : `"${manifest.id}" is a grant of the workspace and declares jobs or workers, whose work is not given the workspace's grant: it must say entitlement: 'always'`;
+
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
 export const bundledModules = [
   chatModule,
@@ -340,6 +350,7 @@ export const compose = (
       factConsumerProblem(module) ??
       portProblem(module) ??
       searchSourceProblem(module) ??
+      unguardedWorkProblem(module) ??
       workerProblem(module.manifest.id, module.workers ?? []);
     if (problem !== undefined) throw new Error(problem);
   }

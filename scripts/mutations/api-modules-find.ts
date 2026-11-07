@@ -11,6 +11,14 @@ export const API_MODULES_FIND: readonly Mutation[] = [
     tests: ['apps/api/src/modules/find/find.integration.test.ts'],
   },
   {
+    id: 'find-asks-sources-of-modules-the-workspace-lacks',
+    why: 'a workspace that lost a module still finds its things through the search (D-289)',
+    file: 'apps/api/src/modules/find/find.ts',
+    find: 'filter(({ module }) => entitledTo(context, module));\n  const withheld',
+    replace: 'filter(({ module }) => true);\n  const withheld',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'find-error-aborts-the-find',
     why: 'a source that throws takes the whole find down with it, so one module’s failure is every module’s (D-285)',
     file: 'apps/api/src/modules/find/find.ts',

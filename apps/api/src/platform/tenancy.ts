@@ -49,6 +49,14 @@ export interface WorkspaceContext {
 }
 
 /**
+ * Whether the workspace of a context may use a module (D-289): what a service asks when the module it serves is not the
+ * request's own, as the workspace-wide find and the inbox are the core's and speak for several. True when nothing judged the
+ * grants (`modules` is `null`).
+ */
+export const entitledTo = (context: WorkspaceContext, module: string): boolean =>
+  context.modules === null || context.modules.has(module);
+
+/**
  * **404, never 403.** A 403 confirms the resource exists, which is itself a
  * disclosure (D-21).
  *

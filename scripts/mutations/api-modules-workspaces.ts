@@ -69,6 +69,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {
+    id: 'invitation-accept-forgets-the-workspaces-modules',
+    why: 'a person who joins is told the workspace has every module the server runs until they reload (D-289)',
+    file: 'apps/api/src/modules/workspaces/invitations.ts',
+    find: 'workspace.id, effective);',
+    replace: 'workspace.id);',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'invitation-brings-back-the-removed',
     why: 'a member an admin removed comes straight back through a link handed out before',
     file: 'apps/api/src/modules/workspaces/invitations.ts',
@@ -315,6 +323,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/members.integration.test.ts'],
   },
   {
+    id: 'membership-list-omits-the-workspaces-modules',
+    why: 'a person’s list of workspaces says nothing of what each may use, and the client draws every module the server runs (D-289)',
+    file: 'apps/api/src/modules/workspaces/workspaces.ts',
+    find: '...(effective === undefined\n      ? {}',
+    replace: '...(true\n      ? {}',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'module-writes-the-outbox-directly',
     why: 'the purge writes the outbox itself instead of through platform/outbox.ts, which skips the checks the table’s own files make (D-288)',
     file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
@@ -543,6 +559,17 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     find: '    const absent = await absentTables(transaction, named);\n',
     replace: '    const absent: typeof named = [];\n',
     tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
+  },
+  {
+    id: 'workspace-purge-keeps-the-grants',
+    why: 'a purged workspace keeps the operator’s grants as rows that name it, since the tombstone’s cascade never fires (D-289, D-242)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: "  'workspace_modules',\n",
+    replace: '',
+    tests: [
+      'apps/api/src/module-lifecycle.integration.test.ts',
+      'apps/api/src/ingress/http/workspace-purge.integration.test.ts',
+    ],
   },
   {
     id: 'workspace-purge-recorded-twice',
