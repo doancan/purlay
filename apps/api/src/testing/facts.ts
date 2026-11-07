@@ -42,7 +42,7 @@ export const WIKI: ModuleManifest = {
   consumes: ['notes.created', 'notes.pinned'],
 };
 
-export const SHELF: ModuleManifest = {
+const SHELF: ModuleManifest = {
   ...base,
   id: 'shelf',
   optional: ['notes'],
