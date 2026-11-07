@@ -36,6 +36,9 @@ export const ServerAuditAction = Type.Union([
   Type.Literal('server.account_approved'),
   Type.Literal('server.account_denied'),
   Type.Literal('server.audit_export_requested'),
+  Type.Literal('server.module_granted'),
+  Type.Literal('server.module_withdrawn'),
+  Type.Literal('server.module_reset'),
 ]);
 export type ServerAuditAction = Static<typeof ServerAuditAction>;
 
@@ -90,6 +93,16 @@ export const ServerQuotaRequest = FromClient({
   quotaBytes: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
 });
 export type ServerQuotaRequest = Static<typeof ServerQuotaRequest>;
+/**
+ * Grants a workspace one module, withholds it, or lets it have what the server's mode gives it (`inherit`, D-289): the one
+ * write of the table `workspace_modules`. `validUntil` ends a grant or a refusal at that instant, when the row is read as none.
+ */
+export const ServerWorkspaceModuleRequest = FromClient({
+  module: Type.String({ pattern: '^[a-z][a-z0-9-]{0,31}$' }),
+  state: Type.Union([Type.Literal('on'), Type.Literal('off'), Type.Literal('inherit')]),
+  validUntil: Type.Optional(Timestamp),
+});
+export type ServerWorkspaceModuleRequest = Static<typeof ServerWorkspaceModuleRequest>;
 export const ServerAdminRequest = FromClient({ isServerAdmin: Type.Boolean() });
 export type ServerAdminRequest = Static<typeof ServerAdminRequest>;
 export const ServerUser = Type.Object({
@@ -145,6 +158,8 @@ export const ServerAuditEntry = Type.Object({
   actorName: Type.Union([Type.String(), Type.Null()]),
   targetUserId: Type.Union([Uuid, Type.Null()]),
   targetWorkspaceId: Type.Union([Uuid, Type.Null()]),
+  /** The module an entry about a grant is about (D-289); null for every other entry. */
+  targetModule: Type.Union([Type.String(), Type.Null()]),
   createdAt: Timestamp,
 });
 export const ServerAuditPage = Page(ServerAuditEntry);
@@ -158,6 +173,7 @@ export const SERVER_AUDIT_EXPORT_COLUMNS = [
   'actorName',
   'targetUserId',
   'targetWorkspaceId',
+  'targetModule',
 ] as const satisfies readonly (keyof ServerAuditEntry)[];
 export const ServerJob = Type.Object({
   name: Type.String(),

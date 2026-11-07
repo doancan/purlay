@@ -86,6 +86,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('INCIDENT_NOT_FOUND'),
   /** An issue that is not there, or not this workspace's (D-254, D-21). */
   Type.Literal('ISSUE_NOT_FOUND'),
+  /** A module granted to a workspace that is not granted one it requires (D-289): grant that one first. */
+  Type.Literal('MODULE_REQUIRES'),
   /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
   Type.Literal('USER_NOT_FOUND'),
   // Conflict
@@ -304,6 +306,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   MESSAGE_VERSION_NOT_FOUND: 404,
   INCIDENT_NOT_FOUND: 404,
   ISSUE_NOT_FOUND: 404,
+  MODULE_REQUIRES: 409,
   USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,
