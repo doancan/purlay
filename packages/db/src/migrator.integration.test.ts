@@ -440,13 +440,60 @@ describe('integration: a migration that is the victim of a deadlock', () => {
       'ALTER TABLE a ADD CONSTRAINT a_b_fkey FOREIGN KEY (b_id) REFERENCES b (id);',
   } as const;
 
-  const waiters = async (): Promise<number> => {
+  const waiters = async (pid: number, relation: string): Promise<number> => {
     const { rows } = await sql<{ n: string }>`
-      select count(*) as n from pg_locks where locktype = 'relation' and not granted`.execute(
-      integrationDatabase(),
-    );
+      select count(*) as n from pg_locks
+      where locktype = 'relation' and not granted
+        and pid = ${pid}
+        and relation = ${relation}::regclass
+        and database = (select oid from pg_database where datname = current_database())
+    `.execute(integrationDatabase());
     return Number(rows[0]?.n);
   };
+
+  test('an unrelated waiting backend or relation does not satisfy the migration barrier', async () => {
+    const schema = await freshSchema();
+    const holder = open(schema);
+    const waiter = open(schema);
+    const idle = open(schema);
+    try {
+      await sql`create table noise (id int)`.execute(holder);
+      await sql`create table target (id int)`.execute(holder);
+      const idlePid = (await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(idle))
+        .rows[0]?.pid;
+      expect(idlePid).toBeDefined();
+      await holder.connection().execute(async (locked) => {
+        await sql`begin`.execute(locked);
+        await sql`lock table noise in access exclusive mode`.execute(locked);
+        await waiter.connection().execute(async (waiting) => {
+          const pid = (await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(waiting))
+            .rows[0]?.pid;
+          expect(pid).toBeDefined();
+          if (pid === undefined || idlePid === undefined) throw new Error('missing test backend');
+          const pending = sql`select * from noise`.execute(waiting);
+          try {
+            for (
+              let waited = 0;
+              (await waiters(pid, `${schema}.noise`)) === 0 && waited < 5000;
+              waited += 10
+            ) {
+              await Bun.sleep(10);
+            }
+            expect(await waiters(pid, `${schema}.noise`)).toBeGreaterThan(0);
+            expect(await waiters(idlePid, `${schema}.noise`)).toBe(0);
+            expect(await waiters(pid, `${schema}.target`)).toBe(0);
+          } finally {
+            await sql`rollback`.execute(locked);
+            await pending;
+          }
+        });
+      });
+    } finally {
+      await holder.destroy();
+      await waiter.destroy();
+      await idle.destroy();
+    }
+  });
 
   for (const [kind, migration] of Object.entries(FILES)) {
     test(`${kind}: the migrator retries and succeeds, saying so`, async () => {
@@ -463,21 +510,32 @@ describe('integration: a migration that is the victim of a deadlock', () => {
 
         const retried: string[] = [];
         let outcome: Awaited<ReturnType<typeof migrateToLatest>> | undefined;
-        await session.connection().execute(async (conn) => {
-          await sql`begin`.execute(conn);
-          await sql`lock table b in access exclusive mode`.execute(conn);
-          const running = migrateToLatest(migrating, directory, {
-            onRetry: (retry) => retried.push(`${retry.migration} #${String(retry.attempt)}`),
+        // Hold this connection through the run: a pool recycling a backend cannot change its pid.
+        await migrating.connection().execute(async (migrationConnection) => {
+          const pid = (
+            await sql<{ pid: number }>`select pg_backend_pid() as pid`.execute(migrationConnection)
+          ).rows[0]?.pid;
+          if (pid === undefined) throw new Error('missing migrating backend');
+          await session.connection().execute(async (conn) => {
+            await sql`begin`.execute(conn);
+            await sql`lock table b in access exclusive mode`.execute(conn);
+            const running = migrateToLatest(migrationConnection, directory, {
+              onRetry: (retry) => retried.push(`${retry.migration} #${String(retry.attempt)}`),
+            });
+            // Wait for this migration on this schema's `b`, never another test's lock waiter.
+            for (
+              let waited = 0;
+              (await waiters(pid, `${schema}.b`)) === 0 && waited < 5000;
+              waited += 10
+            ) {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+            expect(await waiters(pid, `${schema}.b`)).toBeGreaterThan(0);
+            // Closes the cycle. Held until the migrator has been ended, then released.
+            await sql`lock table a in access exclusive mode`.execute(conn);
+            await sql`commit`.execute(conn);
+            outcome = await running;
           });
-          // Wait for the positive condition: the migration is waiting for `b`.
-          for (let waited = 0; (await waiters()) === 0 && waited < 5000; waited += 10) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-          expect(await waiters()).toBeGreaterThan(0);
-          // Closes the cycle. Held until the migrator has been ended, then released.
-          await sql`lock table a in access exclusive mode`.execute(conn);
-          await sql`commit`.execute(conn);
-          outcome = await running;
         });
 
         expect(outcome?.error).toBeUndefined();
