@@ -2300,6 +2300,202 @@ describe('integration — server administration inventory', () => {
     expect(entries.data[0]?.targetWorkspaceId).toBe(workspace.id);
   });
 
+  describe('the modules a workspace is granted (D-289)', () => {
+    const granting = async (): Promise<{
+      server: Server;
+      workspaceId: string;
+      path: string;
+      rows: () => Promise<
+        { module: string; state: string; source: string; changed_by: string | null }[]
+      >;
+    }> => {
+      const server = await aServer();
+      const listed = (await (
+        await call(server, 'GET', '/api/server/workspaces', { cookie: server.admin.cookie })
+      ).json()) as ServerWorkspacePage;
+      const workspaceId = listed.data[0]?.id ?? '';
+      expect(workspaceId).not.toBe('');
+      return {
+        server,
+        workspaceId,
+        path: `/api/server/workspaces/${workspaceId}/modules`,
+        rows: async () =>
+          await server.db
+            .selectFrom('workspace_modules')
+            .select(['module', 'state', 'source', 'changed_by'])
+            .where('workspace_id', '=', workspaceId)
+            .execute(),
+      };
+    };
+    const moduleTrail = async (
+      server: Server,
+    ): Promise<{ action: string; target_module: string | null }[]> =>
+      await server.db
+        .selectFrom('server_audit_log')
+        .select(['action', 'target_module'])
+        .where('action', 'like', 'server.module_%')
+        .orderBy('id')
+        .execute();
+
+    test('only the server administrator writes: the workspace’s owner, a member and nobody get one answer and nothing is written', async () => {
+      const { server, path, rows } = await granting();
+      const answers: string[] = [];
+      for (const cookie of [server.owner.cookie, server.member.cookie, undefined]) {
+        const response = await call(server, 'POST', path, {
+          ...(cookie === undefined ? {} : { cookie }),
+          body: { module: 'issues', state: 'on' },
+        });
+        const { error } = (await response.json()) as { error: { code: string; message: string } };
+        answers.push(`${String(response.status)} ${error.code} ${error.message}`);
+      }
+      expect(new Set(answers).size).toBe(1);
+      expect(answers[0]).toStartWith('404 ');
+      expect(await rows()).toEqual([]);
+      expect(await moduleTrail(server)).toEqual([]);
+    });
+
+    test('a grant is written with who and how, recorded on the trail by id, and again is the same', async () => {
+      const { server, workspaceId, path, rows } = await granting();
+      const cookie = server.admin.cookie;
+
+      for (let again = 0; again < 2; again++)
+        expect(
+          (await call(server, 'POST', path, { cookie, body: { module: 'issues', state: 'off' } }))
+            .status,
+        ).toBe(204);
+      expect(await rows()).toEqual([
+        { module: 'issues', state: 'off', source: 'operator', changed_by: server.admin.userId },
+      ]);
+      // The trail has one entry for two identical requests, by module id and without a word of the value.
+      expect(await moduleTrail(server)).toEqual([
+        { action: 'server.module_withdrawn', target_module: 'issues' },
+      ]);
+      const entries = (await (
+        await call(server, 'GET', `/api/server/audit?targetWorkspaceId=${workspaceId}`, { cookie })
+      ).json()) as ServerAuditPage;
+      expect(entries.data[0]).toMatchObject({
+        targetModule: 'issues',
+        targetWorkspaceId: workspaceId,
+      });
+
+      // The member is refused the module's routes until the row is taken away.
+      expect(
+        (
+          await call(server, 'GET', `/api/workspaces/${workspaceId}/issues`, {
+            cookie: server.owner.cookie,
+          })
+        ).status,
+      ).toBe(404);
+      expect(
+        (await call(server, 'POST', path, { cookie, body: { module: 'issues', state: 'inherit' } }))
+          .status,
+      ).toBe(204);
+      expect(await rows()).toEqual([]);
+      expect(
+        (
+          await call(server, 'GET', `/api/workspaces/${workspaceId}/issues`, {
+            cookie: server.owner.cookie,
+          })
+        ).status,
+      ).toBe(200);
+      expect((await moduleTrail(server)).map(({ action }) => action)).toEqual([
+        'server.module_withdrawn',
+        'server.module_reset',
+      ]);
+      // Taking away what is not there records nothing.
+      await call(server, 'POST', path, { cookie, body: { module: 'issues', state: 'inherit' } });
+      expect(await moduleTrail(server)).toHaveLength(2);
+    });
+
+    test('refuses a module the build does not carry, one no workspace is granted, an end that has passed, a workspace that is not there and a body that is not one', async () => {
+      const { server, workspaceId, path, rows } = await granting();
+      const cookie = server.admin.cookie;
+      const field = async (body: unknown): Promise<[number, string[]]> => {
+        const response = await call(server, 'POST', path, { cookie, body });
+        const { error } = (await response.json()) as {
+          error: { details?: { fields?: Record<string, string> } };
+        };
+        return [response.status, Object.keys(error.details?.fields ?? {})];
+      };
+      expect(await field({ module: 'tasks', state: 'on' })).toEqual([400, ['module']]);
+      expect(await field({ module: 'chat', state: 'off' })).toEqual([400, ['module']]);
+      expect(await field({ module: 'Issues', state: 'on' })).toEqual([400, ['module']]);
+      expect(await field({ module: 'issues', state: 'maybe' })).toEqual([400, ['state']]);
+      expect(
+        await field({ module: 'issues', state: 'on', validUntil: '2000-01-01T00:00:00Z' }),
+      ).toEqual([400, ['validUntil']]);
+      expect(
+        await field({ module: 'issues', state: 'inherit', validUntil: '2999-01-01T00:00:00Z' }),
+      ).toEqual([400, ['validUntil']]);
+      expect((await field({ module: 'issues', state: 'on', extra: true }))[0]).toBe(400);
+      expect((await field({}))[0]).toBe(400);
+      const unknown = await call(
+        server,
+        'POST',
+        `/api/server/workspaces/${crypto.randomUUID()}/modules`,
+        {
+          cookie,
+          body: { module: 'issues', state: 'on' },
+        },
+      );
+      expect(unknown.status).toBe(404);
+      expect(
+        (
+          await call(server, 'POST', '/api/server/workspaces/not-a-uuid/modules', {
+            cookie,
+            body: { module: 'issues', state: 'on' },
+          })
+        ).status,
+      ).toBe(400);
+      expect(await rows()).toEqual([]);
+      expect(await moduleTrail(server)).toEqual([]);
+      // A grant with an end in the future is kept with it and shown.
+      const until = new Date(Date.now() + 3_600_000).toISOString();
+      expect(
+        (
+          await call(server, 'POST', path, {
+            cookie,
+            body: { module: 'issues', state: 'on', validUntil: until },
+          })
+        ).status,
+      ).toBe(204);
+      const kept = await server.db
+        .selectFrom('workspace_modules')
+        .select('valid_until')
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirstOrThrow();
+      expect(kept.valid_until?.toISOString()).toBe(until);
+    });
+
+    test('two administrators writing at once leave the row the trail ends on, and every change is on the trail', async () => {
+      const { server, path, rows } = await granting();
+      await server.db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', server.member.userId)
+        .execute();
+      await call(server, 'POST', `/api/server/users/${server.member.userId}/admin`, {
+        cookie: server.admin.cookie,
+        body: { isServerAdmin: true },
+      });
+      const states = ['on', 'off'] as const;
+      const answers = await Promise.all(
+        [server.admin.cookie, server.member.cookie].map(
+          async (cookie, at) =>
+            await call(server, 'POST', path, {
+              cookie,
+              body: { module: 'issues', state: states[at] },
+            }),
+        ),
+      );
+      expect(answers.map((answer) => answer.status)).toEqual([204, 204]);
+      const trailed = await moduleTrail(server);
+      expect(trailed).toHaveLength(2);
+      const last = trailed.at(-1)?.action === 'server.module_granted' ? 'on' : 'off';
+      expect((await rows()).map(({ state }) => state)).toEqual([last]);
+    });
+  });
+
   test('concurrent administrators cannot remove every administrator; a demotion loses authority immediately', async () => {
     const server = await aServer();
     await server.db

@@ -53,6 +53,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/server/users/:userId/revoke-sessions',
   '/api/server/workspaces',
   '/api/server/workspaces/:workspaceId/quota',
+  '/api/server/workspaces/:workspaceId/modules',
   '/api/server/audit',
   '/api/server/audit/export',
   '/api/server/accounts',

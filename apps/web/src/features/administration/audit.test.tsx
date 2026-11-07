@@ -31,6 +31,7 @@ describe('server audit browsing', () => {
                 actorName: null,
                 targetUserId: null,
                 targetWorkspaceId: null,
+                targetModule: null,
                 createdAt: ADMIN_STAMP,
               },
             ],
@@ -60,6 +61,7 @@ describe('server audit browsing', () => {
       actorName: ADMIN_USER.displayName,
       targetUserId: null,
       targetWorkspaceId: null,
+      targetModule: null,
       createdAt: ADMIN_STAMP,
     };
     const view = await renderAdministration('audit', (call) =>
@@ -156,6 +158,7 @@ describe('server audit browsing', () => {
       actorName: 'Ada Lovelace',
       targetUserId: ADMIN_USER.id,
       targetWorkspaceId: null,
+      targetModule: null,
       createdAt: ADMIN_STAMP,
     };
     const view = await renderAdministration('audit', (call) =>
@@ -212,6 +215,7 @@ describe('server audit browsing', () => {
                     actorName: null,
                     targetUserId: null,
                     targetWorkspaceId: ADMIN_USER.id,
+                    targetModule: null,
                     createdAt: ADMIN_STAMP,
                   },
                 ],

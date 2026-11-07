@@ -272,6 +272,7 @@ const uploadRefusal = (
     case 'INVALID_MESSAGE_ID':
     case 'INVITATION_NOT_FOUND':
     case 'SCHEDULED_MESSAGE_SENT':
+    case 'MODULE_REQUIRES':
     case 'SCHEDULED_MESSAGE_LIMIT':
     case 'LAST_CHANNEL_MEMBER':
     case 'RETENTION_TOO_SHORT':

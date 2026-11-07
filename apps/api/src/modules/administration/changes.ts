@@ -6,6 +6,11 @@ import { recordServerAudit } from '../audit/server-audit';
 import { revokeAllSessions } from '../auth/sessions';
 import { operateQuota } from '../attachments/quota';
 import type { ServerAdminSession } from '../setup/setup';
+import {
+  applyEntitlements,
+  type EntitlementCatalogue,
+  type EntitlementWrite,
+} from '../entitlements/apply';
 
 /** All authority changes use this lock first, then recheck the actor, before locking a target. */
 export const serializeServerAdministrators = async (tx: Transaction): Promise<void> => {
@@ -143,4 +148,32 @@ export const changeServerQuota = async (
     action: 'server.quota_changed',
     targetWorkspaceId: workspaceId,
   });
+};
+
+/**
+ * The server administrator's grant of one module to one workspace, or its withdrawal (D-289), and the people to tell when it
+ * changed something: nobody when it said what the table already said.
+ */
+export const changeWorkspaceModule = async (
+  tx: Transaction,
+  clock: Clock,
+  admin: ServerAdminSession,
+  catalogue: EntitlementCatalogue,
+  write: EntitlementWrite,
+): Promise<readonly string[]> => {
+  await lockServerAdministrator(tx, admin);
+  const changes = await applyEntitlements(
+    tx,
+    clock,
+    catalogue,
+    { source: 'operator', userId: admin.userId },
+    [write],
+  );
+  if (changes.length === 0) return [];
+  const members = await tx
+    .selectFrom('workspace_members')
+    .select('user_id')
+    .where('workspace_id', '=', write.workspaceId)
+    .execute();
+  return members.map((member) => member.user_id);
 };

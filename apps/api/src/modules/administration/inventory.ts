@@ -248,6 +248,7 @@ export const listServerAudit = async (
       'a.actor_user_id',
       'a.target_user_id',
       'a.target_workspace_id',
+      'a.target_module',
       'a.created_at',
       'u.display_name',
     ])
@@ -272,6 +273,7 @@ export const listServerAudit = async (
     actorName: row.display_name,
     targetUserId: row.target_user_id,
     targetWorkspaceId: row.target_workspace_id,
+    targetModule: row.target_module,
     createdAt: row.created_at.toISOString(),
   }));
   return { data, nextCursor: rows.length > limit ? (data.at(-1)?.id ?? null) : null };
