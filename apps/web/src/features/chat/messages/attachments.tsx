@@ -29,8 +29,9 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState } from '../../../ui/states';
 import { CodeBlock } from '../../content/code-block';
 import { renderContent } from '../../content/render-content';
-import { previewMarkdown, previewOf, type PreviewKind } from './attachment-preview';
+import { previewMarkdown, previewOf, type TextPreviewKind } from './attachment-preview';
 import { isPlainClick, useImageViewer, type ViewedImage } from './image-viewer-door';
+import { PdfAttachment } from './pdf-preview-door';
 
 const at = (attachment: Attachment): string => `/api/attachments/${attachment.id}`;
 
@@ -121,7 +122,7 @@ const FilePreview = ({
 }: {
   readonly id: string;
   readonly attachment: Attachment;
-  readonly preview: PreviewKind;
+  readonly preview: TextPreviewKind;
 }): React.JSX.Element => {
   const { t } = useI18n();
   const api = useApi();
@@ -209,6 +210,7 @@ const FileAttachment = ({ attachment }: { readonly attachment: Attachment }): Re
     </a>
   );
   if (preview === null) return card;
+  if (preview.kind === 'pdf') return <PdfAttachment attachment={attachment} card={card} />;
   const name = attachment.fileName;
   return (
     <div className="flex w-full flex-col gap-2">
@@ -256,9 +258,27 @@ export const Attachments = ({
     .filter(isPicture)
     .map((attachment) => ({ attachment, sharedBy, sharedAt }));
   return (
-    <ul aria-label={t('attachment.list')} className="mt-1 flex flex-wrap items-start gap-2">
+    <ul
+      aria-label={t('attachment.list')}
+      // A zoomed PDF scrolls inside a viewport whose width is fixed by the conversation, never
+      // measured from the document it just enlarged (which otherwise fed ResizeObserver a loop).
+      className={
+        attachments.some(
+          (attachment) => previewOf(attachment.fileName, attachment.sizeBytes)?.kind === 'pdf',
+        )
+          ? 'mt-1 flex w-full flex-wrap items-start gap-2'
+          : 'mt-1 flex flex-wrap items-start gap-2'
+      }
+    >
       {attachments.map((attachment) => (
-        <li key={attachment.id} className="min-w-0 max-w-full">
+        <li
+          key={attachment.id}
+          className={
+            previewOf(attachment.fileName, attachment.sizeBytes)?.kind === 'pdf'
+              ? 'w-full min-w-0 max-w-full'
+              : 'min-w-0 max-w-full'
+          }
+        >
           {isPicture(attachment) ? (
             <ImageAttachment
               attachment={attachment}

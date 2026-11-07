@@ -73,6 +73,16 @@ describe('the Dockerfile', () => {
     expect(dockerignore.split('\n')).toContain('!docs/changelog');
     expect(dockerignore.split('\n')).not.toContain('!docs');
   });
+
+  test('the client build carries its Vite helpers without adding them to the runtime image', () => {
+    const stages = dockerfile.split(/^FROM\s/gm);
+    const client = stages.find((stage) => /\sAS client\b/.test(stage.split('\n')[0] ?? ''));
+    expect(client).toContain('COPY apps/web/scripts ./apps/web/scripts\n');
+    expect(client?.indexOf('COPY apps/web/scripts')).toBeLessThan(
+      client?.indexOf('RUN bun run --cwd apps/web build') ?? -1,
+    );
+    expect(stages.at(-1)).not.toContain('apps/web/scripts');
+  });
 });
 
 /** Every workspace in the repository: each directory under `apps/` and `packages/` with a manifest. */

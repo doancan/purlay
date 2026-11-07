@@ -93,7 +93,9 @@ export const AREAS = [
     name: 'web-core',
     prefixes: [
       'apps/web/playwright.config.ts',
+      'apps/web/vite.config.ts',
       'apps/web/public/',
+      'apps/web/scripts/',
       'apps/web/src/app/',
       'apps/web/src/data/',
       'apps/web/src/i18n/',

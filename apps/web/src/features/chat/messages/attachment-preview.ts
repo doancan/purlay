@@ -5,6 +5,7 @@
  */
 import { asCodeBlock } from '../composer/composer-text';
 import { tablePreview } from '../composer/paste';
+import { PDF_LIMITS } from './pdf-limits';
 
 /** The largest file read to be previewed; anything bigger is a download only. */
 export const PREVIEW_BYTES_MAX = 512 * 1024;
@@ -55,13 +56,16 @@ const CODE: Readonly<Record<string, string | null>> = {
   log: null,
 };
 
-export type PreviewKind =
+export type TextPreviewKind =
   | { readonly kind: 'table' }
   | { readonly kind: 'markdown' }
   | { readonly kind: 'code'; readonly language: string | null };
 
+export type PreviewKind = TextPreviewKind | { readonly kind: 'pdf' };
+
 /** How a file can be previewed, by its name and size, or `null` when it cannot. */
 export const previewOf = (fileName: string, sizeBytes: number): PreviewKind | null => {
+  if (/\.pdf$/i.test(fileName)) return sizeBytes <= PDF_LIMITS.bytes ? { kind: 'pdf' } : null;
   if (sizeBytes > PREVIEW_BYTES_MAX) return null;
   const extension = /\.([a-z0-9]+)$/i.exec(fileName)?.[1]?.toLowerCase();
   if (extension === undefined) return null;
@@ -85,7 +89,7 @@ const head = (text: string): { readonly text: string; readonly cut: boolean } =>
 };
 
 /** A file's words as the markdown its preview draws. */
-export const previewMarkdown = (preview: PreviewKind, text: string): Preview => {
+export const previewMarkdown = (preview: TextPreviewKind, text: string): Preview => {
   if (preview.kind === 'table') {
     const table = tablePreview(text, PREVIEW_ROWS);
     if (table !== null) {

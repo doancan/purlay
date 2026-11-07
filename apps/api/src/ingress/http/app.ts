@@ -108,6 +108,7 @@ import {
   unsupportedMediaTypeResponse,
   responseHeaders,
   DOCUMENT_HEADERS,
+  WORKER_HEADERS,
   clientTooOldResponse,
   pathWithoutSecret,
 } from './edge';
@@ -1464,6 +1465,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.headers['cache-control'] = file.cacheControl;
       set.headers.etag = file.etag;
       if (file.document) Object.assign(set.headers, DOCUMENT_HEADERS);
+      if (file.worker) Object.assign(set.headers, WORKER_HEADERS);
       // The browser already has this version: nothing to send (RFC 9110 §13.1.2).
       if (isUnchanged(request.headers.get('if-none-match'), file.etag)) {
         set.status = 304;

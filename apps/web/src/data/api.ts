@@ -426,6 +426,12 @@ export interface Api {
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
   /** An attachment's bytes as text, read with the session, to be previewed (D-210). */
   readonly attachmentText: (attachmentId: string, signal?: AbortSignal) => Promise<string>;
+  /** Counted binary bytes for an on-demand reader; every open revalidates the session. */
+  readonly attachmentBytes: (
+    attachmentId: string,
+    maxBytes: number,
+    signal?: AbortSignal,
+  ) => Promise<Uint8Array<ArrayBuffer>>;
   /** Reads a thread up to and including a reply: its notifications for the caller (D-147). */
   readonly readThread: (rootId: string, lastReadMessageId: string) => Promise<void>;
   /** Whether the caller is told of new replies in this root's thread (D-161). */
@@ -1089,6 +1095,8 @@ export const createApi = (http: Http): Api => {
       ),
     attachmentText: (attachmentId, signal) =>
       http.text(`/api/attachments/${at(attachmentId)}`, options({}, signal)),
+    attachmentBytes: (attachmentId, maxBytes, signal) =>
+      http.bytes(`/api/attachments/${at(attachmentId)}`, maxBytes, options({}, signal)),
     readNotifications: (input) =>
       http.send('PUT', '/api/notifications/read', options({ body: input })),
     readThread: (rootId, lastReadMessageId) =>

@@ -430,3 +430,44 @@
     }
   }
 }
+
+/* PDF text geometry follows the source document, not application typography. Adapted from
+ * PDF.js TextLayer (Apache-2.0): no annotation/editor styles or executable document content. */
+@layer components {
+  [data-pdf-text-layer] {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    text-align: initial;
+    letter-spacing: normal;
+    word-spacing: normal;
+    transform-origin: 0 0;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+    --min-font-size: 1;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+  }
+  [data-pdf-text-layer] :is(span, br) {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0 0;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  [data-pdf-text-layer] > :not(.markedContent),
+  [data-pdf-text-layer] .markedContent span:not(.markedContent) {
+    --font-height: 0;
+    --scale-x: 1;
+    --rotate: 0deg;
+    --pdf-text-height: calc(var(--text-scale-factor) * var(--font-height));
+    font-size: var(--pdf-text-height);
+    line-height: var(--pdf-text-height);
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+  }
+  [data-pdf-text-layer] .markedContent {
+    display: contents;
+  }
+}

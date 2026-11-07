@@ -83,6 +83,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/browser-measurement.test.ts'],
   },
   {
+    id: 'client-image-omits-vite-helpers',
+    why: 'The production image cannot build the lazy reader because its Vite helper was left out of the client stage.',
+    file: 'Dockerfile',
+    find: 'COPY apps/web/scripts ./apps/web/scripts\n',
+    replace: '',
+    tests: ['scripts/dockerfile.test.ts'],
+  },
+  {
     id: 'compose-requires-the-github-app-again',
     why: 'the production stack refuses to start without a GitHub app, and a fresh server cannot reach its own setup',
     file: 'docker-compose.production.yml',

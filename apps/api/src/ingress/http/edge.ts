@@ -256,6 +256,12 @@ export const DOCUMENT_HEADERS: Readonly<Record<string, string>> = {
   'permissions-policy': DOCUMENT_PERMISSIONS,
 };
 
+/** Built worker entries need their own same-origin code/data, not the document's DOM allowances. */
+export const WORKER_HEADERS: Readonly<Record<string, string>> = {
+  'content-security-policy':
+    "default-src 'none'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+};
+
 /** Bounded in length and in alphabet: it is written into logs and echoed in a header. */
 const REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 

@@ -105,6 +105,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
+    id: 'built-worker-keeps-data-only-csp',
+    why: 'A real worker inherits default-src none and cannot load its same-origin decoders or font data.',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '      if (file.worker) Object.assign(set.headers, WORKER_HEADERS);\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/serving-the-client.test.ts'],
+  },
+  {
     id: 'chat-budget-test-stops-naming-its-module',
     why: 'chat’s pool-share test no longer says it needs chat, so it would run in a cell without the module and the convention that holds a share to a test is met by a file that tests nothing of it (D-266)',
     file: 'apps/api/src/ingress/http/chat-budget.integration.test.ts',
@@ -484,6 +492,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
       'apps/api/src/features/issues/http/budget.integration.test.ts',
       'scripts/budget-latency.integration.test.ts',
     ],
+  },
+  {
+    id: 'ordinary-assets-get-worker-csp',
+    why: 'Ordinary static files receive script and fetch permissions reserved for explicitly built workers.',
+    file: 'apps/api/src/ingress/http/client.ts',
+    find: "worker: !document && path.endsWith('.worker.js'),",
+    replace: 'worker: !document,',
+    tests: ['apps/api/src/ingress/http/serving-the-client.test.ts'],
   },
   {
     id: 'passport-cookie-outlives-its-hour',

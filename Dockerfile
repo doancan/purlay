@@ -58,6 +58,7 @@ COPY packages/tokens/src ./packages/tokens/src
 COPY packages/types/tsconfig.json ./packages/types/tsconfig.json
 COPY packages/types/src ./packages/types/src
 COPY apps/web/index.html apps/web/vite.config.ts apps/web/tsconfig.json ./apps/web/
+COPY apps/web/scripts ./apps/web/scripts
 COPY apps/web/public ./apps/web/public
 COPY apps/web/src ./apps/web/src
 # The release notes the client bundles, one lazy chunk each (D-248): the files each release was cut with.

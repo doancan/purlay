@@ -16,6 +16,7 @@ import packageJson from './package.json' with { type: 'json' };
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { pdfAssets } from './scripts/pdf-assets';
 
 /** `browserslist`'s `name >= version` entries, as esbuild names its targets (`safari17.2`). */
 const buildTarget = (queries: readonly string[]): string[] =>
@@ -35,7 +36,11 @@ const workerDirectory = fileURLToPath(new URL('./worker/', import.meta.url));
 const SETUP_API_READS: ReadonlySet<string> = new Set(['/setup/status', '/setup/state']);
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), pdfAssets()],
+  worker: {
+    format: 'es',
+    rolldownOptions: { output: { entryFileNames: 'assets/[name]-[hash].worker.js' } },
+  },
   server: {
     // Overridable for the same reason the compose ports are: a busy port is the
     // friction that turns "runs from the README" into a support ticket.

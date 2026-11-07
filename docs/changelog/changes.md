@@ -29,6 +29,7 @@ have it.
 
 ### Added
 
+- **Messages** — Read PDF attachments inside the conversation, browse pages, zoom and select their text, with the original download available throughout (D-287)
 - **Channel groups** — Organize your channels under personal headings across devices, rename or fold groups, and move a channel from its menu; deleting a group preserves its channels and conversations (D-284)
 - **Search** — A workspace-wide find answers a group of hits for each source, the messages a person may read and the workspace's issues, and says which source it skipped and why (off, slow or failed), so a slow module cannot hold the others up; it works with chat turned off (D-285)
 - **Inbox** — A new `GET` and `POST` of `/api/workspaces/:workspaceId/inbox` list and read the notices modules write to a person, from the modules the server runs, and their other tabs are told with `INBOX_UPDATED`; `purlay_inbox_entries_total` counts them by module and kind (D-286)

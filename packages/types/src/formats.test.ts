@@ -51,7 +51,7 @@ describe('string formats', () => {
 });
 
 /**
- * Every string format mentioned anywhere in the repository is registered.
+ * Every TypeBox string format mentioned anywhere in the repository is registered.
  *
  * This trap caught two schemas in two different packages, weeks apart, so it
  * gets a check rather than a comment. Deliberately static: reading the source
@@ -59,7 +59,31 @@ describe('string formats', () => {
  * a registration performed in another is precisely how it happened the second
  * time.
  */
+const schemaFormats = (source: string): readonly string[] => {
+  // Other tools also have a `format`: Vite's worker format 'es' is not a schema validator.
+  // Keep scanning every format literal in a file that imports TypeBox, including shared options.
+  if (!/from\s+['"]@sinclair\/typebox(?:\/[^'"]+)?['"]/.test(source)) return [];
+  return [...source.matchAll(/format:\s*['"]([a-z0-9-]+)['"]/g)].flatMap((match) => match[1] ?? []);
+};
+
 describe('formats used across the repository', () => {
+  test('tool output formats are separate from schema formats, while unknown schema options remain visible', () => {
+    expect(schemaFormats("export default { worker: { format: 'es' } }; ")).toEqual([]);
+    expect(
+      schemaFormats(
+        `import { Type as Schema } from '@sinclair/typebox';
+         const options = { format: 'unregistered-schema-format' };
+         const Text = Schema.String(options);`,
+      ),
+    ).toEqual(['unregistered-schema-format']);
+    expect(
+      schemaFormats(
+        `import { Type } from "@sinclair/typebox";
+         const Text = Type.String({ format: "uuid" });`,
+      ),
+    ).toEqual(['uuid']);
+  });
+
   test('no source mentions a format the registry does not know', () => {
     const root = new URL('../../../', import.meta.url).pathname;
     const sources = new Bun.Glob('{apps,packages,scripts}/**/*.ts');
@@ -67,12 +91,8 @@ describe('formats used across the repository', () => {
 
     for (const file of sources.scanSync({ cwd: root, onlyFiles: true })) {
       if (file.includes('node_modules') || file.endsWith('.test.ts')) continue;
-      for (const match of readFileSync(`${root}${file}`, 'utf8').matchAll(
-        /format:\s*'([a-z0-9-]+)'/g,
-      )) {
-        const format = match[1];
-        if (format !== undefined) used.set(format, file);
-      }
+      for (const format of schemaFormats(readFileSync(`${root}${file}`, 'utf8')))
+        used.set(format, file);
     }
 
     expect(used.size).toBeGreaterThan(0);
