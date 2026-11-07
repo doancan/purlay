@@ -41,6 +41,7 @@ export const ADMIN_WORKSPACE: ServerWorkspace = {
   usedBytes: '2048',
   quotaBytes: '4096',
   retentionDays: 30,
+  modules: [],
 };
 export const ADMIN_PREFERENCES: InstanceInfo = {
   displayName: 'Purlay',

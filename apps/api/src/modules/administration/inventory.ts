@@ -7,9 +7,13 @@ import type {
   ServerUserPage,
   ServerUsersQuery,
   ServerUserDetail,
+  ServerWorkspaceModule,
   ServerWorkspacePage,
   ServerWorkspacesQuery,
 } from '@purlay/types';
+import { asGrants } from '../../platform/grants';
+import { effectiveModules } from '../../platform/module-kit/entitlement';
+import type { EntitlementCatalogue } from '../entitlements/apply';
 import type { ServerAdminSession } from '../setup/setup';
 import { literalPattern } from '../../platform/like-pattern';
 import { AppError } from '../../platform/errors';
@@ -149,10 +153,61 @@ export const serverUserDetail = async (
   };
 };
 
+/** For each workspace, what the operator has said of each module it can be granted, and what that comes to (D-289). */
+const grantsOf = async (
+  tx: Executor,
+  catalogue: EntitlementCatalogue,
+  running: readonly string[],
+  workspaceIds: readonly string[],
+): Promise<Map<string, ServerWorkspaceModule[]>> => {
+  const grantable = catalogue.carried.filter(({ entitlement }) => entitlement !== 'always');
+  const result = new Map<string, ServerWorkspaceModule[]>();
+  if (workspaceIds.length === 0 || grantable.length === 0) return result;
+  const stored = await tx
+    .selectFrom('workspace_modules')
+    .select(['workspace_id', 'module', 'state', 'valid_until', 'source'])
+    .where('workspace_id', 'in', workspaceIds)
+    .execute();
+  // The database's clock, as the guard judges a grant's end by (`platform/grants.ts`).
+  const clock = (await sql<{ now: Date }>`select now() as now`.execute(tx)).rows[0];
+  if (clock === undefined) throw new Error('the database did not tell the time');
+  const { now } = clock;
+  for (const workspaceId of workspaceIds) {
+    const own = stored.filter((row) => row.workspace_id === workspaceId);
+    // Past its end a row is no row: the console shows what the server would do, not what was once said.
+    const live = own.filter((row) => row.valid_until === null || new Date(row.valid_until) > now);
+    const effective = effectiveModules({
+      running: catalogue.carried,
+      rows: asGrants(live),
+      mode: catalogue.mode,
+      now,
+    });
+    result.set(
+      workspaceId,
+      grantable.map(({ id }) => {
+        const row = live.find((candidate) => candidate.module === id);
+        return {
+          module: id,
+          state: row === undefined ? 'inherit' : row.state === 'on' ? 'on' : 'off',
+          effective: effective.has(id),
+          validUntil: row?.valid_until == null ? null : new Date(row.valid_until).toISOString(),
+          source: row?.source ?? null,
+          running: running.includes(id),
+        };
+      }),
+    );
+  }
+  return result;
+};
+
 export const listServerWorkspaces = async (
   db: Executor,
   admin: ServerAdminSession,
   query: ServerWorkspacesQuery,
+  /** What the build carries and the server's mode, for the modules each workspace may use (D-289). */
+  catalogue: EntitlementCatalogue,
+  /** The modules this process runs. */
+  running: readonly string[],
 ): Promise<ServerWorkspacePage> =>
   await snapshotOn(db)(async (tx) => {
     const limit = query.limit ?? 50;
@@ -205,6 +260,12 @@ export const listServerWorkspaces = async (
       admin,
       visible.map((row) => row.id),
     );
+    const grants = await grantsOf(
+      tx,
+      catalogue,
+      running,
+      visible.map((row) => row.id),
+    );
     const data = visible.map((row) => ({
       id: row.id,
       name: row.name,
@@ -218,6 +279,7 @@ export const listServerWorkspaces = async (
       usedBytes: row.used,
       quotaBytes: row.storage_quota_bytes,
       retentionDays: retention.get(row.id) ?? null,
+      modules: grants.get(row.id) ?? [],
     }));
     return { data, nextCursor: rows.length > limit ? (data.at(-1)?.id ?? null) : null };
   });

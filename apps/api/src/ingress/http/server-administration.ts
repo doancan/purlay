@@ -49,6 +49,7 @@ import {
   revokeServerUserSessions,
 } from '../../modules/administration/changes';
 import type { EntitlementCatalogue } from '../../modules/entitlements/apply';
+import { requirePeersReady, type PeersBehind } from '../../modules/entitlements/peers';
 import {
   serverMailStatus,
   serverOperations,
@@ -107,10 +108,13 @@ export const readAdministrationUser = async (
 /** What a grant needs to know of the build: the modules it carries and the server's mode (D-289). */
 export interface ModuleGrantDependencies extends AccountDependencies {
   readonly entitlements: EntitlementCatalogue;
+  readonly peersBehind?: PeersBehind | undefined;
+  /** The modules this process runs. */
+  readonly modules: readonly string[];
 }
 
 export const readAdministrationWorkspaces = async (
-  deps: AccountDependencies,
+  deps: ModuleGrantDependencies,
   request: Request,
 ): Promise<ServerWorkspacePage> => {
   const admin = await guard(deps, request);
@@ -118,7 +122,7 @@ export const readAdministrationWorkspaces = async (
     ServerWorkspacesQuery,
     queryOf(new URL(request.url), { numbers: ['limit'] }),
   );
-  return await listServerWorkspaces(deps.database, admin, query);
+  return await listServerWorkspaces(deps.database, admin, query, deps.entitlements, deps.modules);
 };
 export const readAdministrationAudit = async (
   deps: AccountDependencies,
@@ -210,14 +214,15 @@ export const writeAdministrationModule = async (
   const admin = await guard(deps, request);
   const id = validated(Uuid, workspaceId);
   const input = validated(ServerWorkspaceModuleRequest, body);
+  const write = {
+    workspaceId: id,
+    module: input.module,
+    state: input.state,
+    ...(input.validUntil === undefined ? {} : { validUntil: new Date(input.validUntil) }),
+  };
+  await requirePeersReady(deps.peersBehind, deps.entitlements, [write]);
   const told = await atomicallyOn(deps.database)(
-    async (tx) =>
-      await changeWorkspaceModule(tx, deps.clock, admin, deps.entitlements, {
-        workspaceId: id,
-        module: input.module,
-        state: input.state,
-        ...(input.validUntil === undefined ? {} : { validUntil: new Date(input.validUntil) }),
-      }),
+    async (tx) => await changeWorkspaceModule(tx, deps.clock, admin, deps.entitlements, write),
   );
   if (told.length === 0) return;
   await publishAfterCommit(deps.log, [

@@ -344,6 +344,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
+    id: 'entitlement-restriction-ignores-the-cluster',
+    why: 'a module is withdrawn from a workspace while a node that has never heard of the table serves it to everyone, and the operator believes it gone (D-292)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  await requirePeersReady(deps.peersBehind, deps.entitlements, [write]);\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'export-archive-kept-after-download',
     why: 'a downloaded archive stays in the store, a copy of the whole workspace nobody is watching',
     file: 'apps/api/src/ingress/http/exports.ts',

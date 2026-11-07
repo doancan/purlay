@@ -148,6 +148,8 @@ const aServer = async (
     readonly noWorkspace?: boolean;
     /** A GitHub app sealed under another key before the start: read as unset, needing entry again. */
     readonly unreadableGitHub?: boolean;
+    /** How many nodes of the cluster do not read workspace grants (D-292); left out, there is one node. */
+    readonly peersBehind?: () => Promise<number>;
   } = {},
 ): Promise<Server> => {
   const clock = options.clock ?? systemClock;
@@ -229,6 +231,7 @@ const aServer = async (
       }),
       clock: clock,
       log,
+      ...(options.peersBehind === undefined ? {} : { peersBehind: options.peersBehind }),
       googleIssuer: google.issuer(),
       auth: holder.auth,
       services: holder,
@@ -2466,6 +2469,90 @@ describe('integration — server administration inventory', () => {
         .where('workspace_id', '=', workspaceId)
         .executeTakeFirstOrThrow();
       expect(kept.valid_until?.toISOString()).toBe(until);
+    });
+
+    test('the workspace list says what each workspace has been told of each module, what that comes to, and who said it', async () => {
+      const { server, workspaceId, path } = await granting();
+      const cookie = server.admin.cookie;
+      const modulesOf = async (): Promise<ServerWorkspacePage['data'][number]['modules']> =>
+        (
+          (await (
+            await call(server, 'GET', '/api/server/workspaces', { cookie })
+          ).json()) as ServerWorkspacePage
+        ).data.find(({ id }) => id === workspaceId)?.modules ?? [];
+      // Nothing said: an open server gives it, and chat, which is not a grant, is not listed.
+      expect(await modulesOf()).toEqual([
+        {
+          module: 'issues',
+          state: 'inherit',
+          effective: true,
+          validUntil: null,
+          source: null,
+          running: true,
+        },
+      ]);
+      await call(server, 'POST', path, { cookie, body: { module: 'issues', state: 'off' } });
+      expect(await modulesOf()).toEqual([
+        {
+          module: 'issues',
+          state: 'off',
+          effective: false,
+          validUntil: null,
+          source: 'operator',
+          running: true,
+        },
+      ]);
+      const until = new Date(Date.now() + 3_600_000).toISOString();
+      await call(server, 'POST', path, {
+        cookie,
+        body: { module: 'issues', state: 'on', validUntil: until },
+      });
+      expect((await modulesOf())[0]).toMatchObject({
+        state: 'on',
+        effective: true,
+        validUntil: until,
+      });
+      // A row that has run out is no row: the list shows what the server would do.
+      await server.db
+        .updateTable('workspace_modules')
+        .set({ valid_until: new Date(Date.now() - 1_000) })
+        .where('workspace_id', '=', workspaceId)
+        .execute();
+      expect((await modulesOf())[0]).toMatchObject({
+        state: 'inherit',
+        source: null,
+        validUntil: null,
+      });
+    });
+
+    test('a restriction waits for every node of the cluster to read grants, and a grant does not', async () => {
+      const server = await aServer({ peersBehind: () => Promise.resolve(1) });
+      const workspaceId = (
+        (await (
+          await call(server, 'GET', '/api/server/workspaces', { cookie: server.admin.cookie })
+        ).json()) as ServerWorkspacePage
+      ).data[0]?.id;
+      const path = `/api/server/workspaces/${workspaceId ?? ''}/modules`;
+      const cookie = server.admin.cookie;
+      const refused = await call(server, 'POST', path, {
+        cookie,
+        body: { module: 'issues', state: 'off' },
+      });
+      expect(refused.status).toBe(409);
+      expect(((await refused.json()) as { error: { code: string } }).error.code).toBe(
+        'PEERS_BEHIND',
+      );
+      expect(
+        await server.db
+          .selectFrom('workspace_modules')
+          .selectAll()
+          .where('module', '=', 'issues')
+          .execute(),
+      ).toEqual([]);
+      expect(
+        (await call(server, 'POST', path, { cookie, body: { module: 'issues', state: 'on' } }))
+          .status,
+      ).toBe(204);
     });
 
     test('two administrators writing at once leave the row the trail ends on, and every change is on the trail', async () => {

@@ -88,6 +88,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('ISSUE_NOT_FOUND'),
   /** A module granted to a workspace that is not granted one it requires (D-289): grant that one first. */
   Type.Literal('MODULE_REQUIRES'),
+  /** A restriction of a workspace's modules while a node of the cluster does not yet read them (D-292): finish the rollout first. */
+  Type.Literal('PEERS_BEHIND'),
   /** A person who is not in the workspace — a direct message to a stranger, or to an erased account. */
   Type.Literal('USER_NOT_FOUND'),
   // Conflict
@@ -307,6 +309,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   INCIDENT_NOT_FOUND: 404,
   ISSUE_NOT_FOUND: 404,
   MODULE_REQUIRES: 409,
+  PEERS_BEHIND: 409,
   USER_NOT_FOUND: 404,
 
   WORKSPACE_SLUG_TAKEN: 409,

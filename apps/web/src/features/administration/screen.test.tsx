@@ -230,6 +230,7 @@ describe('server administration outside a workspace', () => {
       memberCount: 4,
       ownerCount: 1,
       owners: [{ id: user.id, displayName: user.displayName }],
+      modules: [],
       usedBytes: '2048',
       quotaBytes: '1024',
       retentionDays: null,

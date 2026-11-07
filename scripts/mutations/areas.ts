@@ -59,6 +59,7 @@ export const AREAS = [
     prefixes: ['apps/api/src/ingress/http/rate-limit.ts', 'apps/api/src/ingress/http/setup.ts'],
   },
   { name: 'api-ingress-ws', prefixes: ['apps/api/src/ingress/ws/'] },
+  { name: 'api-modules-administration', prefixes: ['apps/api/src/modules/administration/'] },
   { name: 'api-modules-attachments', prefixes: ['apps/api/src/modules/attachments/'] },
   { name: 'api-modules-audit', prefixes: ['apps/api/src/modules/audit/'] },
   { name: 'api-modules-auth', prefixes: ['apps/api/src/modules/auth/'] },
