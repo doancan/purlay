@@ -61,6 +61,8 @@ export interface Options {
   readonly env?: Readonly<Record<string, string | undefined>>;
   /** Longest a run may take. A mutation that hangs the tests is caught by them. */
   readonly timeoutMs?: number;
+  /** Longest the unmutated run may take: it runs every file the mutations name, not the few of one. */
+  readonly baselineTimeoutMs?: number;
 }
 
 /** A copy of the repository that mutations may be written to. */
@@ -113,6 +115,7 @@ export const runMutations = (options: Options): Verdict[] => {
     '--isolate',
   ];
   const timeoutMs = options.timeoutMs ?? 180_000;
+  const baselineTimeoutMs = options.baselineTimeoutMs ?? 900_000;
   const root = resolve(options.root);
   const copy = copyTree(root);
   try {
@@ -121,7 +124,7 @@ export const runMutations = (options: Options): Verdict[] => {
       command,
       [...new Set(options.mutations.flatMap((m) => m.tests))],
       options.env,
-      timeoutMs,
+      baselineTimeoutMs,
     );
     if (!baseline.passed) {
       throw new Error(

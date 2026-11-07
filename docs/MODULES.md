@@ -478,6 +478,16 @@ Modules share a process, an event loop and a connection pool, so they are kept a
 A rule with nothing watching it is a wish (`CONTRIBUTING.md` §6.2). Each line is *built* by the step shown;
 until then it is a stated intent and not a guarantee.
 
+**What "mutation" means in the column below.** A mutation is *applied* — the guard removed, the tests run, a failure
+required — at two times, and only then is a claim that it holds a rule more than a claim. Every pull request that adds or
+changes an entry of `scripts/mutations/` runs exactly those entries (`ci.yml`'s `mutations-changed`, part of `verify`), so
+an entry that no test fails on cannot merge. Every other entry is applied by the weekly run of the whole list
+(`mutations.yml`, not a required check), which turns red and opens one tracking issue on a survivor or a stale entry. Between
+the two, a test weakened by a pull request that touches no entry is seen at the next weekly run, not on the pull
+request; `mutations.test.ts` on every `verify` only proves each entry still applies once and names tests that exist.
+The full or weekly run retains an existing declared equivalent with its recorded reason; the changed-entry job
+requires every selected entry to be caught, even if it declares equivalence.
+
 | Rule | Held by | Built in |
 |---|---|---|
 | No import between modules | lint, found per folder under `features/` and shown by `verify:enforcement` | 1 |

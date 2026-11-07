@@ -223,6 +223,15 @@ What belongs here is the discipline around them:
   never at the end of a file: that is what keeps two pull requests from editing the same lines, and
   `scripts/mutations.test.ts` refuses an entry in the wrong file, out of order, or in a file
   `scripts/mutations/index.ts` does not import.
+  **What runs when.** Every pull request that adds or changes an entry runs exactly those entries, in CI's
+  `mutations-changed` job (part of `verify`: the ids are what differs in `scripts/mutations/` from the merge-base,
+  and each must be caught, so an equivalent or broken mutant fails the change that adds it); a pull request that
+  touches no mutation file skips the job, and the gate accepts only that skip. The whole list is applied weekly by
+  `mutations.yml`, sharded by area file (`bun run mutate --shard=2/12`), which is not a required check: a survivor or a
+  stale entry turns the run red and opens one tracking issue. In between, a test weakened by a change that
+  touches no entry is seen at the next weekly run. `bun run mutate --changed=origin/main` runs the pull request's job
+  locally. Declared equivalents already in the list remain accepted by a full or weekly run, with their recorded
+  reason; a new or edited equivalent cannot satisfy the changed-entry job.
 - **A violation is fixed, never waived.** An accessibility failure, an isolation failure or a
   budget regression is a defect, not a threshold to adjust.
 - **See it, and test it, the way it is deployed.** `bun run demo` builds the client, recreates a

@@ -9,7 +9,7 @@
  * passes on nothing having run (`CONTRIBUTING.md` §6.4).
  *
  * The browser jobs are judged too (D-226), and so are `modules`, the job that starts the API once per `MODULES`
- * value, and `module-suites`, the suites run once per cell: a change they cannot see skips them, and only then is their skip a pass — when `changes` succeeded
+ * value, and `module-suites`, the suites run once per cell, and `mutations-changed`, the mutations a pull request adds or changes: a change they cannot see skips them, and only then is their skip a pass — when `changes` succeeded
  * and said so. Anything else, a skip included, is a refusal.
  *
  *   bun run ci:gate        in CI: reads `NEEDS`, the job's `toJSON(needs)`
@@ -23,16 +23,19 @@ export const GATED = [
   'browser',
   'modules',
   'module-suites',
+  'mutations-changed',
 ] as const;
 
 /**
  * The jobs a change can rightly skip, each with the output of `changes` that says so: the browser jobs by `browser`, and the
- * two that start the API (the matrix on a started process, and the suites per cell) by `modules`.
+ * two that start the API (the matrix on a started process, and the suites per cell) by `modules`, and the mutations a pull request
+ * adds or changes by `mutations`.
  */
 const SKIPPABLE: Readonly<Record<string, string>> = {
   browser: 'browser',
   modules: 'modules',
   'module-suites': 'modules',
+  'mutations-changed': 'mutations',
 };
 
 /** Whether `changes` succeeded and said `output` is `false`: this change cannot move what that job sees. */

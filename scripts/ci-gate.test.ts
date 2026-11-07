@@ -13,17 +13,19 @@ const results = (
   over: Partial<Record<Job, string>> = {},
   touched = 'true',
   touchedModules = 'true',
+  touchedMutations = 'true',
 ): string =>
   JSON.stringify({
     static: { result: over.static ?? 'success', outputs: {} },
     schema: { result: over.schema ?? 'success', outputs: {} },
     changes: {
       result: over.changes ?? 'success',
-      outputs: { browser: touched, modules: touchedModules },
+      outputs: { browser: touched, modules: touchedModules, mutations: touchedMutations },
     },
     browser: { result: over.browser ?? 'success', outputs: {} },
     modules: { result: over.modules ?? 'success', outputs: {} },
     'module-suites': { result: over['module-suites'] ?? 'success', outputs: {} },
+    'mutations-changed': { result: over['mutations-changed'] ?? 'success', outputs: {} },
   });
 
 describe('the gate', () => {
@@ -72,6 +74,28 @@ describe('the gate', () => {
     ]);
     expect(judge(results({ 'module-suites': 'failure' }, 'true', 'false'))).toEqual([
       'module-suites ended failure',
+    ]);
+  });
+
+  test('passes a change that touches no mutation file, whose mutations job was skipped for it, and refuses the skip for one that does', () => {
+    expect(judge(results({ 'mutations-changed': 'skipped' }, 'true', 'true', 'false'))).toEqual([]);
+    expect(judge(results({ 'mutations-changed': 'skipped' }, 'true', 'true', 'true'))).toEqual([
+      'mutations-changed ended skipped',
+    ]);
+  });
+
+  test('refuses a skipped mutations job when only another job’s reason says it is not needed, or when it cannot tell', () => {
+    expect(judge(results({ 'mutations-changed': 'skipped' }, 'false', 'false', 'true'))).toEqual([
+      'mutations-changed ended skipped',
+    ]);
+    expect(
+      judge(results({ changes: 'failure', 'mutations-changed': 'skipped' }, '', '', '')),
+    ).toEqual(['changes ended failure', 'mutations-changed ended skipped']);
+  });
+
+  test('refuses a failed mutations job, even for a change that touches no mutation file', () => {
+    expect(judge(results({ 'mutations-changed': 'failure' }, 'true', 'true', 'false'))).toEqual([
+      'mutations-changed ended failure',
     ]);
   });
 
@@ -181,6 +205,14 @@ describe('the verify job in ci.yml', () => {
       expect(block).not.toContain('continue-on-error');
     }
     expect(job.match(/^\s+if:/gm)).toHaveLength(1);
+  });
+
+  test('the mutations job is skipped by the output of `changes` the gate reads, and by nothing else', () => {
+    const mutations =
+      /^ {2}mutations-changed:\n([\s\S]*?)(?=^ {2}[\w-]+:\n|(?![\s\S]))/m.exec(workflow)?.[1] ?? '';
+    expect(mutations).toMatch(/^ {4}needs: changes$/m);
+    expect(mutations).toMatch(/^ {4}if: needs\.changes\.outputs\.mutations == 'true'$/m);
+    expect(workflow).toContain('mutations: ${{ steps.paths.outputs.mutations }}');
   });
 
   test('hands the gate the results of what it needs', () => {
