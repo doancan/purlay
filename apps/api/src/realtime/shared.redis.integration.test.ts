@@ -18,12 +18,13 @@ import { redisBackplane } from './redis-bus';
 import { redisRateLimiter } from './redis-limiter';
 import { redisPresenceDirectory, redisPresenceRegistry } from './redis-presence';
 
-const names = redisNames();
+const namespace = `adapters-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+const names = redisNames(namespace);
 
 const silent = createLogger({ level: 'silent' });
 const links: RedisLink[] = [];
 const node = async (url?: string, keepaliveMs?: number): Promise<RedisLink> => {
-  const link = await aRealLink(url, keepaliveMs);
+  const link = await aRealLink(url, keepaliveMs, namespace);
   links.push(link);
   return link;
 };
@@ -93,7 +94,7 @@ describe('integration: the rate limiter across nodes', () => {
     const link = await node();
     const name = unique('expiry');
     await limiterOn(link, name, { perSecond: 1000, burst: 2 }).consume('k');
-    const ttl = await link.send('PTTL', [`purlay:rl:${name}:k`]);
+    const ttl = await link.send('PTTL', [`${names.bucketPrefix}${name}:k`]);
     expect(typeof ttl === 'number' && ttl > 0 && ttl <= 1_100).toBe(true);
   });
 
@@ -259,7 +260,7 @@ describe('integration: people nobody told of (D-201)', () => {
 
 describe('integration: who is idle across nodes (D-257)', () => {
   type Directory = ReturnType<typeof redisPresenceDirectory>;
-  /** Sweeps until it has heard of these people: the indexes are shared with every other test's. */
+  /** Collects the named people from bounded batches in this fixture's own shared indexes. */
   const sweptOf = async (
     directory: Directory,
     users: readonly string[],
@@ -312,6 +313,15 @@ describe('integration: who is idle across nodes (D-257)', () => {
 
   test('a sweep tells a held person idle once their quiet time has come, once, and a word ends it at a later version', async () => {
     const link = await node();
+    const foreignLink = await aRealLink(
+      undefined,
+      undefined,
+      `other-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
+    );
+    links.push(foreignLink);
+    const foreign = redisPresenceDirectory(foreignLink, 'another-deployment');
+    const foreignUser = unique('outside-user');
+    await foreign.join(foreignUser, 20);
     const a = redisPresenceDirectory(link, 'node-a');
     const b = redisPresenceDirectory(await node(), 'node-b');
     const user = unique('user');
@@ -323,6 +333,9 @@ describe('integration: who is idle across nodes (D-257)', () => {
       { userId: user, online: true, away: false, version: joined },
     ]);
     await Bun.sleep(30);
+    expect(await sweptOf(foreign, [foreignUser])).toMatchObject([
+      { userId: foreignUser, online: true, away: true },
+    ]);
     const idle = await sweptOf(b, [user, quiet]);
     expect(idle).toHaveLength(1);
     expect(idle[0]).toMatchObject({ userId: user, online: true, away: true });
@@ -574,7 +587,11 @@ describe('integration: the bus across nodes', () => {
 
 describe('integration: a Redis that is away, or comes and goes', () => {
   test('a link to nothing answers no command, never throws outside its promise, and closes cleanly', async () => {
-    const link = connectRedis({ create: () => bunRedisClient('redis://127.0.0.1:1'), log: silent });
+    const link = connectRedis({
+      create: () => bunRedisClient('redis://127.0.0.1:1'),
+      log: silent,
+      namespace,
+    });
     await Bun.sleep(100);
     expect(link.connected()).toBe(false);
     expect(link.problem()).toBeDefined();
@@ -586,7 +603,11 @@ describe('integration: a Redis that is away, or comes and goes', () => {
   });
 
   test('a bus on it still serves its own sockets', async () => {
-    const link = connectRedis({ create: () => bunRedisClient('redis://127.0.0.1:1'), log: silent });
+    const link = connectRedis({
+      create: () => bunRedisClient('redis://127.0.0.1:1'),
+      log: silent,
+      namespace,
+    });
     const heard: ServerFrame[] = [];
     const bus = redisBackplane(link, silent).node((_id, f) => heard.push(f), silent);
     bus.subscribe('channel:t', 's');
@@ -629,7 +650,7 @@ describe('integration: a Redis that is away, or comes and goes', () => {
 
   test('closing a link that is mid-reconnect leaves nothing running', async () => {
     const proxy = await aDroppableProxy(redisUrlForTests());
-    const link = await aRealLink(proxy.url);
+    const link = await aRealLink(proxy.url, undefined, namespace);
     proxy.stop();
     await until(() => !link.connected(), 'the loss to be noticed');
     link.close();

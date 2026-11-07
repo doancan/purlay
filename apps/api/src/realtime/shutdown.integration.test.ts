@@ -10,9 +10,11 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { CLOSE_CODES, SIGN_IN_CALLBACK, messageId } from '@purlay/types';
+import { Type } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 import type { GithubFetch } from '../modules/auth/better-auth';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { testConfig, testDependencies } from '../testing/doubles';
+import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
 import {
   aGitHubAuth,
   aGitHubFor,
@@ -25,6 +27,7 @@ import { fixedClock } from '../platform/clock';
 
 const origin = 'https://purlay.test';
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
+const PortInUse = Type.Object({ code: Type.Literal('EADDRINUSE') });
 let cloned: ClonedDatabase;
 
 beforeAll(async () => {
@@ -81,15 +84,23 @@ describe('integration: draining for shutdown', () => {
   test('finishes what is in flight, tells sockets to reconnect, and takes nothing new', async () => {
     const github = aGate();
     const slow = aSlowGitHub(github);
+    const recorded = aRecordingLogger();
     const app: HttpApplication = createApp(
       testDependencies({
         database: cloned.db,
         clock,
+        log: recorded.log,
         auth: aGitHubAuth(cloned.db, slow.fetch, { baseUrl: origin }),
         config: testConfig({ APP_URL: origin }),
       }),
     );
-    const server = `http://localhost:${String(app.listen(0))}`;
+    const port = app.listen(0);
+    const server = `http://localhost:${String(port)}`;
+    const beforeId = crypto.randomUUID();
+    const before = await fetch(`${server}/health`, { headers: { 'x-request-id': beforeId } });
+    expect(before.status).toBe(200);
+    await before.text();
+    expect(recorded.lines.some((line) => line['requestId'] === beforeId)).toBe(true);
 
     const user = await aSignedInUser(cloned.db, clock, 'drain');
     const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
@@ -129,12 +140,36 @@ describe('integration: draining for shutdown', () => {
 
     const readiness = await app.handle(new Request(`${origin}/health/ready`));
     expect(readiness.status).toBe(503);
-    expect(
-      await fetch(`${server}/health`).then(
-        () => 'accepted',
-        () => 'refused',
-      ),
-    ).toBe('refused');
+    // Another test can acquire a released port. Make that case real instead of mistaking its
+    // successful response for work accepted by this drained listener.
+    let replacement: Pick<ReturnType<typeof Bun.serve>, 'stop'> | undefined;
+    try {
+      replacement = Bun.serve({
+        port,
+        fetch: () =>
+          new Response('replacement listener', { headers: { 'x-test-listener': 'replacement' } }),
+      });
+    } catch (error) {
+      // A concurrent listener, or a broken drain leaving this one alive, can already own it.
+      // The per-listener request record below still distinguishes those cases.
+      if (!Value.Check(PortInUse, error)) throw error;
+    }
+    try {
+      const afterId = crypto.randomUUID();
+      const response = await fetch(`${server}/health`, {
+        headers: { 'x-request-id': afterId },
+      }).catch(() => null);
+      if (response !== null) await response.text();
+      const ownHandled = recorded.lines.some((line) => line['requestId'] === afterId);
+      if (ownHandled) await app.stop(true);
+      expect(ownHandled).toBe(false);
+      if (replacement !== undefined) {
+        expect(response?.status).toBe(200);
+        expect(response?.headers.get('x-test-listener')).toBe('replacement');
+      }
+    } finally {
+      await replacement?.stop(true);
+    }
   });
 
   /**

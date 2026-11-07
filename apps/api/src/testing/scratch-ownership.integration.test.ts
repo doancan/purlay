@@ -89,17 +89,20 @@ describe('integration: scratch database ownership', () => {
     });
   }, 60_000);
 
-  test('a module-set fixture refused at creation does not drop the existing database in teardown', async () => {
-    const seed = crypto.randomUUID();
-    const name = scratchDatabaseName(
-      `${databaseNameFromUrl(source)}_mset_${seed.replaceAll('-', '').slice(0, 8)}`,
-    );
-    const directory = mkdtempSync(join(tmpdir(), 'purlay-module-set-ownership-'));
-    directories.push(directory);
-    const preload = join(directory, 'seed.ts');
-    writeFileSync(
-      preload,
-      `
+  test.each(['first', 'second'] as const)(
+    'a module-set fixture refused at its %s allocation preserves the existing database',
+    async (allocation) => {
+      const seed = crypto.randomUUID();
+      const first = scratchDatabaseName(
+        `${databaseNameFromUrl(source)}_mset_${seed.replaceAll('-', '').slice(0, 8)}`,
+      );
+      const name = allocation === 'first' ? first : scratchDatabaseName(`${first}_outside`);
+      const directory = mkdtempSync(join(tmpdir(), 'purlay-module-set-ownership-'));
+      directories.push(directory);
+      const preload = join(directory, 'seed.ts');
+      writeFileSync(
+        preload,
+        `
     import { mock } from 'bun:test';
     Object.defineProperty(globalThis.crypto, 'randomUUID', { value: () => ${JSON.stringify(seed)}, configurable: true });
     // Only the SQL ownership lifecycle is under test; no real Redis service is contacted.
@@ -108,29 +111,40 @@ describe('integration: scratch database ownership', () => {
       bunRedisClient: () => undefined,
     }));
   `,
-    );
-    await existingDatabaseSurvives(name, () => {
-      const child = Bun.spawnSync(
-        [
-          process.execPath,
-          '--no-env-file',
-          'test',
-          '--isolate',
-          '--preload',
-          preload,
-          new URL('../realtime/module-set.redis.integration.test.ts', import.meta.url).pathname,
-        ],
-        {
-          cwd: root,
-          env: { ...process.env, DATABASE_URL: source, REDIS_URL: 'redis://127.0.0.1:1' },
-          stdout: 'pipe',
-          stderr: 'pipe',
-          timeout: 30_000,
-        },
       );
-      expect(child.exitCode).toBe(1);
-      expect(child.stderr.toString()).toContain('already exists');
-      expect(child.exitedDueToTimeout).toBe(false);
-    });
-  }, 60_000);
+      await existingDatabaseSurvives(name, () => {
+        const child = Bun.spawnSync(
+          [
+            process.execPath,
+            '--no-env-file',
+            'test',
+            '--isolate',
+            '--preload',
+            preload,
+            new URL('../realtime/module-set.redis.integration.test.ts', import.meta.url).pathname,
+          ],
+          {
+            cwd: root,
+            env: { ...process.env, DATABASE_URL: source, REDIS_URL: 'redis://127.0.0.1:1' },
+            stdout: 'pipe',
+            stderr: 'pipe',
+            timeout: 30_000,
+          },
+        );
+        expect(child.exitCode).toBe(1);
+        expect(child.stderr.toString()).toContain('already exists');
+        expect(child.exitedDueToTimeout).toBe(false);
+      });
+      if (allocation === 'second') {
+        expect(
+          (
+            await sql`select datname from pg_database where datname = ${first}`.execute(
+              integrationDatabase(),
+            )
+          ).rows,
+        ).toHaveLength(0);
+      }
+    },
+    60_000,
+  );
 });
