@@ -593,6 +593,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/module-cells.test.ts'],
   },
   {
+    id: 'module-new-ignores-a-missing-anchor',
+    why: 'an anchor that is not found exactly once is edited anyway, so a moved line is changed wrongly and quietly (CONTRIBUTING.md §6.3)',
+    file: 'apps/api/src/testing/module-new/plan.ts',
+    find: '  if (parts.length !== 2) {\n',
+    replace: '  if (parts.length < 2) {\n',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
     id: 'module-smoke-ignores-a-module-left-out-that-answers',
     why: 'a module a cell does not run still answers its paths and the matrix job says it is closed, so removal is claimed and not proven (D-250)',
     file: 'apps/api/src/testing/module-smoke.ts',
