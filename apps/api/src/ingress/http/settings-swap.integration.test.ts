@@ -80,6 +80,7 @@ interface Server {
 const aServer = async (
   githubUrl = 'https://github.com',
   wrap: (built: RuntimeServices) => RuntimeServices = (built) => built,
+  checkSchema = true,
 ): Promise<Server> => {
   const holder = runtimeServicesHolder(silent);
   const build: Build = (settings, needsReentry) =>
@@ -95,6 +96,7 @@ const aServer = async (
           sessionTtlDays: 30,
           bus: inProcessEventBus(() => undefined, NO_LOG),
           clock: systemClock,
+          checkSchema,
         },
         needsReentry,
         holder.sends,
@@ -571,7 +573,10 @@ describe('integration: a change of the settings, served without a restart', () =
     const { setInterval: realSetInterval } = globalThis;
     const retired: WeakRef<object>[] = [];
     try {
-      const server = await aServer();
+      // The library's schema check is a second whole instance and its introspection queries on every
+      // swap: nearly all of the run's time (~4.6 ms of ~6 ms a swap), and not what is counted here. The
+      // swaps that refuse a change the check finds are tested above, with the check on.
+      const server = await aServer(undefined, undefined, false);
       const heapBefore = process.memoryUsage().heapUsed;
       globalThis.setTimeout = ((handler: () => void, ms?: number) => {
         const timer = realSetTimeout(() => {
@@ -610,12 +615,18 @@ describe('integration: a change of the settings, served without a restart', () =
             );
         }
       }
+      await server.holder.sends.flush();
+      // The relay sees each connection end a moment after it accepted the letter on it, and the transport
+      // clears the timer it set as it said goodbye when its own side closes, a moment after that. The
+      // timers are watched until both have happened; one that never clears outlasts the wait and is failed
+      // below.
+      const sayingGoodbye = (): boolean =>
+        [...pending].some((timer) => stacks.get(timer)?.includes('nodemailer') === true);
+      for (let tries = 0; (relay.openSockets() > 0 || sayingGoodbye()) && tries < 200; tries += 1)
+        await Bun.sleep(10);
       globalThis.setTimeout = realSetTimeout;
       globalThis.clearTimeout = realClearTimeout;
       globalThis.setInterval = realSetInterval;
-      await server.holder.sends.flush();
-      // The relay sees each connection end a moment after it accepted the letter on it.
-      for (let tries = 0; relay.openSockets() > 0 && tries < 200; tries += 1) await Bun.sleep(10);
 
       Bun.gc(true);
       await Bun.sleep(50);
