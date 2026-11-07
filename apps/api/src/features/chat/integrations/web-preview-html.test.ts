@@ -35,6 +35,9 @@ test('text and attribute entity contexts differ, and an encoded entity is not de
     description: 'B &amp=two',
     imageUrl: null,
   });
+  expect((await read('<meta property="og:title" content="&amp;lt;tag&amp;gt;">'))?.title).toBe(
+    '&lt;tag&gt;',
+  );
 });
 
 test('keeps the first usable metadata, while an empty OpenGraph value leaves the title fallback available', async () => {
@@ -107,6 +110,12 @@ test('scripts, empty/invisible titles, malformed bytes and oversized bodies prod
   ).toBeNull();
   expect(await read('<meta name="description" content="Only a description">')).toBeNull();
   expect(await read('<meta property="og:title" content="\u200D">')).toBeNull();
-  expect(await previewHtml(new Uint8Array([255]), page)).toBeNull();
-  expect(await previewHtml(new Uint8Array(WEB_PREVIEW_BYTES_MAX + 1), page)).toBeNull();
+  // Both controls contain a usable title: removing either refusal must actually produce a card.
+  const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
+  expect(
+    await previewHtml(new Uint8Array([...encode('<title>A'), 255, ...encode('</title>')]), page),
+  ).toBeNull();
+  expect(
+    await previewHtml(encode(`<title>Report</title>${' '.repeat(WEB_PREVIEW_BYTES_MAX)}`), page),
+  ).toBeNull();
 });

@@ -240,7 +240,7 @@ const MessageRowView = ({
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}
         {/* An event's words are its own summary: nothing in them to unfurl (D-134 §6). */}
         {!deleted && event === null && <GitHubCards content={message.content} />}
-        {!deleted && event === null && (
+        {delivery === 'sent' && !deleted && event === null && (
           <WebLinkCards
             channelId={message.channelId}
             messageId={message.id}

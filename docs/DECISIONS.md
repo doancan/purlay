@@ -14252,8 +14252,9 @@ networks, spend unbounded resources and tell a website who was reading.
    pending entries are released on failure. Each fetch has its own deadline; a queued RPC may span three
    batches. Hold no database transaction over origin work. Use the costly-read bucket, independently of sends.
    Logs contain the host and workspace, never arbitrary transport reasons or a full secret-bearing address.
-4. **A quiet chat decoration.** Lazy-load cards only for eligible content. Fetch only while the message is
-   visible, keep mounted results when it leaves the viewport, and use five-minute/one-minute client freshness.
+4. **A quiet chat decoration.** Lazy-load cards only for eligible content. Fetch only after the server has
+   accepted the message and while it is visible, keep mounted results when it leaves the viewport, and use
+   five-minute/one-minute client freshness.
    Display the actual destination hostname and retain the original link and fragment; ignore site identity,
    base and canonical claims. Render plain React text, optional description and a decorative image through
    the existing checked/re-encoding image proxy. Failure leaves the source link usable without an error card.

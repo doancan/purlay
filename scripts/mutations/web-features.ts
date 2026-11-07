@@ -1057,6 +1057,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/sign-in/sign-in-screen.test.tsx'],
   },
   {
+    id: 'web-preview-ui-reads-an-uncommitted-send',
+    why: 'The message-bound metadata request races ahead of its sending message and caches a refusal before server acceptance.',
+    file: 'apps/web/src/features/chat/messages/message-row.tsx',
+    find: "{delivery === 'sent' && !deleted && event === null && (",
+    replace: '{!deleted && event === null && (',
+    tests: ['apps/web/src/features/chat/messages/message-row.test.tsx'],
+  },
+  {
     id: 'web-settings-page-before-its-anchor',
     why: 'a module’s settings page lands before the page its manifest says it follows, so the navigation is in another order than the manifest says',
     file: 'apps/web/src/features/settings/sections.ts',

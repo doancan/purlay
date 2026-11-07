@@ -13,6 +13,37 @@ const PNG = Buffer.from(
   'base64',
 );
 
+test('a freshly sent message gets its preview after the server has accepted it', async ({
+  page,
+  room,
+  tenant,
+  signIn,
+}) => {
+  const made = await room({ members: ['dogancan', 'bob'] });
+  const reader = apiAs(tenant, 'dogancan');
+  let checked = 0;
+  await page.route('**/api/messages/*/link-preview', async (route) => {
+    const id = new globalThis.URL(route.request().url()).pathname.split('/').at(-2);
+    if (id === undefined) throw new Error('Missing message id');
+    // A route bound to a message must never race ahead of the send that creates that message.
+    const stored = await reader.get<{ content: string }>(`/api/messages/${id}`);
+    expect(stored.content).toBe(URL);
+    checked += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...card, imageUrl: null }),
+    });
+  });
+  await signIn('dogancan');
+  await page.goto(made.path);
+  const composer = page.getByRole('textbox', { name: `Message ${made.name}` });
+  await composer.fill(URL);
+  await composer.press('Enter');
+  await expect(page.locator('[data-web-link-card]')).toBeVisible();
+  expect(checked).toBe(1);
+});
+
 test('a compact card keeps the real destination, proxy privacy and keyboard focus at 320px', async ({
   page,
   room,
