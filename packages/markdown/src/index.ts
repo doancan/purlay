@@ -3,6 +3,7 @@ export * from './href';
 export * from './scan';
 export * from './parse';
 export * from './metadata';
+export * from './web-links';
 export * from './mentions';
 export * from './prose';
 export * from './plain';

@@ -68,6 +68,8 @@ export type Fetched =
   | { readonly kind: 'failed'; readonly reason: string };
 
 export interface FetchOptions {
+  /** Images by default; HTML additionally requires an HTML MIME type and identity encoding. */
+  readonly kind?: 'image' | 'html';
   readonly lookup: LookupFunction;
   /** `https` in production; a test's local server speaks `http`. */
   readonly transport?: Pick<typeof https, 'request'> | Pick<typeof http, 'request'>;
@@ -95,12 +97,33 @@ export const fetchExternal = async (url: URL, options: FetchOptions): Promise<Fe
         method: 'GET',
         lookup: options.lookup,
         agent: false,
-        headers: { accept: 'image/*', 'user-agent': 'Purlay image proxy' },
+        headers:
+          options.kind === 'html'
+            ? {
+                accept: 'text/html, application/xhtml+xml',
+                'accept-encoding': 'identity',
+                'user-agent': 'Purlay link preview',
+              }
+            : { accept: 'image/*', 'user-agent': 'Purlay image proxy' },
       },
       (response) => {
         if (response.statusCode !== 200) {
           finish({ kind: 'failed', reason: `answered ${String(response.statusCode)}` });
           return;
+        }
+        if (options.kind === 'html') {
+          const mime = response.headers['content-type']?.split(';')[0]?.trim().toLowerCase();
+          if (mime !== 'text/html' && mime !== 'application/xhtml+xml') {
+            finish({ kind: 'failed', reason: 'not an HTML document' });
+            return;
+          }
+          const encoding = (response.headers['content-encoding'] ?? 'identity')
+            .trim()
+            .toLowerCase();
+          if (encoding !== 'identity' && encoding !== '') {
+            finish({ kind: 'failed', reason: 'not an identity representation' });
+            return;
+          }
         }
         const chunks: Uint8Array[] = [];
         let size = 0;
@@ -144,7 +167,7 @@ export const postExternal = async (
   url: URL,
   headers: Readonly<Record<string, string>>,
   body: Uint8Array,
-  options: Omit<FetchOptions, 'maxBytes'>,
+  options: Pick<FetchOptions, 'lookup' | 'transport' | 'port' | 'timeoutMs'>,
 ): Promise<Posted> =>
   await new Promise<Posted>((resolve) => {
     let settled = false;

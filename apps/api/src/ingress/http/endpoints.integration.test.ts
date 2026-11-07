@@ -61,6 +61,11 @@ afterAll(async () => {
 const HELD_ELSEWHERE: Readonly<
   Record<string, { readonly why: string; readonly file: string; readonly schema: string }>
 > = {
+  previewMessageLink: {
+    why: 'requires a bounded public-page origin; the chat preview door injects its own and validates the nullable answer',
+    file: 'apps/api/src/features/chat/http/web-previews.integration.test.ts',
+    schema: 'WebLinkPreviewResponse',
+  },
   channelUnreads: {
     why: 'needs independently waiting threads and pre-join history; the private catch-up door tests own those fixtures',
     file: 'apps/api/src/features/chat/http/catch-up.integration.test.ts',

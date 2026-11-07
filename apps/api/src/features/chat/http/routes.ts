@@ -4,7 +4,6 @@
  * `route-ownership.test.ts` fails for a path of chat's that `app.ts` registers.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
 import { bookmarkRoutes } from './bookmarks';
 import { channelRoutes } from './channels';
 import { hiddenRoutes } from './hidden';
@@ -31,13 +30,15 @@ import { starRoutes } from './star';
 import { channelGroupRoutes } from './channel-groups';
 import { versionRoutes } from './versions';
 import { githubWiring } from './wiring';
+import { webPreviewRoutes, type PreviewRouteDependencies } from './web-previews';
 
-export const chatRoutes = (context: ModuleRouteDependencies): AnyElysia => {
+export const chatRoutes = (context: PreviewRouteDependencies): AnyElysia => {
   const wiring = githubWiring(context);
   return new Elysia()
     .use(bookmarkRoutes(context))
     .use(channelRoutes(context))
     .use(messageRoutes(context))
+    .use(webPreviewRoutes(context))
     .use(missedMailRoutes(context))
     .use(hiddenRoutes(context))
     .use(pinRoutes(context))

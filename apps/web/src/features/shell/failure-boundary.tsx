@@ -1,12 +1,13 @@
 /**
  * What the page shows when something in it throws while drawing, instead of nothing at all.
  *
- * Two places, two reaches. `ScreenBoundary` is around the routed screen inside the shell, so the
+ * Two page boundaries, two reaches. `ScreenBoundary` is around the routed screen inside the shell, so the
  * rail and the sidebar outlive a screen that fails, and going anywhere else draws afresh: it is
  * keyed by the address. `AppBoundary` is under the words (`app/providers.tsx`) and catches
  * everything else that can still be said in the person's language; above it there is nothing to
  * say it in. Each says what happened and offers Reload and Go home — a full load, the one way out
  * that does not trust the state that just failed.
+ * `RenderBoundary` also confines optional decorations to their own fallback, preserving the conversation.
  *
  * **The report is React's.** A boundary that catches an error has React report it to the console
  * (`onCaughtError`'s default), which is the client's only report: the server's tracker (D-96)
@@ -21,7 +22,7 @@ import { Button, buttonStyle } from '../../ui/button';
 import { Main } from '../../ui/main';
 import { Notice } from './notice';
 
-class Boundary extends Component<
+export class RenderBoundary extends Component<
   { readonly fallback: React.ReactNode; readonly children: React.ReactNode },
   { readonly failed: boolean }
 > {
@@ -71,9 +72,9 @@ export const ScreenBoundary = ({
 }): React.JSX.Element => {
   const { pathname } = useRoute();
   return (
-    <Boundary key={pathname} fallback={<Failed reach="screen" />}>
+    <RenderBoundary key={pathname} fallback={<Failed reach="screen" />}>
       {children}
-    </Boundary>
+    </RenderBoundary>
   );
 };
 
@@ -83,7 +84,7 @@ export const AppBoundary = ({
 }: {
   readonly children: React.ReactNode;
 }): React.JSX.Element => (
-  <Boundary
+  <RenderBoundary
     fallback={
       <Main className="flex min-h-screen flex-col bg-surface-100 text-ink">
         <Failed reach="app" />
@@ -91,5 +92,5 @@ export const AppBoundary = ({
     }
   >
     {children}
-  </Boundary>
+  </RenderBoundary>
 );
