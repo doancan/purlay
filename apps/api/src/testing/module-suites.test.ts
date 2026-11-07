@@ -12,6 +12,7 @@ import {
   SUITE_ROOTS,
   type Say,
 } from './module-suites';
+import { matrixSettings } from './module-cells-matrix';
 import { needsReader } from './module-needs';
 
 const CARRIED = bundledModules.map((module) => module.manifest.id);
@@ -195,12 +196,29 @@ describe('the command', () => {
 });
 
 describe('the workflow', () => {
-  test('has a leg of the suites-per-cell job for each cell the build has, so a new module cannot be left out of CI', () => {
-    const workflow = Bun.YAML.parse(
-      readFileSync(join(import.meta.dir, '../../../../.github/workflows/ci.yml'), 'utf8'),
-    ) as { jobs: Record<string, { strategy?: { matrix?: { cell?: string[] } } }> };
-    const legs = workflow.jobs['module-suites']?.strategy?.matrix?.cell ?? [];
+  const workflow = Bun.YAML.parse(
+    readFileSync(join(import.meta.dir, '../../../../.github/workflows/ci.yml'), 'utf8'),
+  ) as {
+    jobs: Record<
+      string,
+      {
+        strategy?: { matrix?: { cell?: string } };
+        steps?: { id?: string; run?: string }[];
+      }
+    >;
+  };
+
+  test('takes the legs of the suites-per-cell job from the build, so a new module cannot be left out of CI', () => {
+    expect(workflow.jobs['module-suites']?.strategy?.matrix?.cell).toBe(
+      '${{ fromJSON(needs.changes.outputs.cells) }}',
+    );
+    const step = workflow.jobs['changes']?.steps?.find((candidate) => candidate.id === 'cells');
+    expect(step?.run).toContain('bun run modules:cells');
+  });
+
+  test('the command names a leg for each cell the build has but the one with every module', () => {
     const cells = cellsToRun(CARRIED, moduleCells(bundledModules)).map((cell) => cell.setting);
-    expect([...legs].sort()).toEqual(cells.flatMap((setting) => setting ?? []).sort());
+    expect(matrixSettings()).toEqual(cells.flatMap((setting) => setting ?? []));
+    expect(matrixSettings()).toContain('none');
   });
 });

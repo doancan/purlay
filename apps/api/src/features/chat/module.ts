@@ -27,6 +27,7 @@ export const chatModule = {
     id: 'chat',
     requires: [],
     optional: [],
+    degrades: {},
     provides: [],
     // Not a grant of the workspace in the first release of entitlements: chat's sockets and events are closed per process,
     // not per workspace, so a downgrade could not close them (D-289).

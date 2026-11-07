@@ -29,7 +29,7 @@ have it.
 
 ### Added
 
-- **Messages** — Shared public web links show a compact title, destination and optional image beside the conversation, while unavailable previews leave the original link usable (D-291)
+- **Messages** — Shared public web links show a compact title, destination and optional image beside the conversation, while unavailable previews leave the original link usable (D-292)
 - **Conversations** — Return to conversations you started, answered or followed, filter waiting replies and choose which threads to keep following (D-290)
 - **Issues** — Assigning an issue to somebody else now tells them in the core's inbox, in the same step as the assignment (D-286)
 - **Inbox** — A new Updates section beside Mentions, Direct and Threads lists what the workspace's other parts, issues for now, told you, and the inbox's dot lights while one waits unread (D-286)

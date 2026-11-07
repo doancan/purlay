@@ -41,7 +41,13 @@ export const NOTE_CREATED_V2 = defineFact({
   }),
 });
 
-const base = { requires: [], optional: [], provides: [], budget: { none: 'a test module' } };
+const base = {
+  requires: [],
+  optional: [],
+  degrades: {},
+  provides: [],
+  budget: { none: 'a test module' },
+};
 
 export const NOTES: ModuleManifest = {
   ...base,
@@ -52,6 +58,7 @@ export const WIKI: ModuleManifest = {
   ...base,
   id: 'wiki',
   optional: ['notes'],
+  degrades: { notes: 'it shows nothing of the notes' },
   consumes: ['notes.created', 'notes.pinned'],
 };
 
@@ -59,6 +66,7 @@ const SHELF: ModuleManifest = {
   ...base,
   id: 'shelf',
   optional: ['notes'],
+  degrades: { notes: 'it shelves nothing of the notes' },
   consumes: ['notes.created'],
 };
 

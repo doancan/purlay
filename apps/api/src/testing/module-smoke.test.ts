@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { bundledModules } from '../composition';
+import { moduleCells } from './module-cells';
 import {
   CORE_PATHS,
   concretePath,
@@ -16,7 +17,14 @@ import {
 const NOT_FOUND: Answer = { status: 404, body: '{"error":{"code":"ROUTE_NOT_FOUND"}}' };
 const ASKS_WHO: Answer = { status: 401, body: '{"error":{"code":"UNAUTHENTICATED"}}' };
 
+/** The two modules the hand-built observations below are about; the commands are run over the whole bundle. */
 const CARRIED = ['chat', 'issues'];
+const BUNDLE = bundledModules.map(({ manifest }) => manifest.id);
+/** A path each module owns, as the real ones are asked; a module made later is asked for the one its id names. */
+const PATH_OF: Readonly<Record<string, string>> = {
+  chat: '/api/notifications',
+  issues: '/api/workspaces/w/issues',
+};
 const probe = (module: string, path: string, method: Probe['method'] = 'GET'): Probe => ({
   module,
   method,
@@ -24,11 +32,15 @@ const probe = (module: string, path: string, method: Probe['method'] = 'GET'): P
 });
 
 /** A process that answers each module's probes as `answerOf` says, the core up, an unknown path not found. */
-const observed = (answerOf: (module: string) => Answer, core = 200): Observation => ({
+const observed = (
+  answerOf: (module: string) => Answer,
+  core = 200,
+  modules: readonly string[] = CARRIED,
+): Observation => ({
   unknown: NOT_FOUND,
-  answers: [probe('chat', '/api/notifications'), probe('issues', '/api/workspaces/w/issues')].map(
-    (each) => ({ probe: each, answer: answerOf(each.module) }),
-  ),
+  answers: modules
+    .map((module) => probe(module, PATH_OF[module] ?? `/api/workspaces/w/${module}`))
+    .map((each) => ({ probe: each, answer: answerOf(each.module) })),
   core: CORE_PATHS.map((path) => ({ path, status: core })),
 });
 
@@ -166,13 +178,13 @@ describe('the command', () => {
         (cell, _base, database) => {
           databases.push(database);
           return Promise.resolve(
-            observed((module) => (cell.ids.includes(module) ? ASKS_WHO : NOT_FOUND)),
+            observed((module) => (cell.ids.includes(module) ? ASKS_WHO : NOT_FOUND), 200, BUNDLE),
           );
         },
         { out: () => undefined, err: () => undefined },
       );
       expect(code).toBe(0);
-      expect(new Set(databases).size).toBe(2 ** CARRIED.length);
+      expect(new Set(databases).size).toBe(2 ** BUNDLE.length);
       for (const database of databases) {
         expect(Buffer.byteLength(database)).toBeLessThanOrEqual(63);
         expect(database === root).toBe(false);
@@ -190,24 +202,23 @@ describe('the command', () => {
     const matching = (cell: { ids: readonly string[]; label: string }): Promise<Observation> => {
       cells.push(cell.label);
       return Promise.resolve(
-        observed((module) => (cell.ids.includes(module) ? ASKS_WHO : NOT_FOUND)),
+        observed((module) => (cell.ids.includes(module) ? ASKS_WHO : NOT_FOUND), 200, BUNDLE),
       );
     };
     return main({ DATABASE_URL }, matching, say).then((code) => {
       expect(code).toBe(0);
-      expect(cells).toEqual(['the core alone', 'chat', 'issues', 'every module (chat, issues)']);
-      expect(heard.out.map((line) => line.split(':')[0])).toEqual([
-        'ok   the core alone',
-        'ok   chat',
-        'ok   issues',
-        'ok   every module (chat, issues)',
-      ]);
+      const labels = moduleCells(bundledModules).map((cell) => cell.label);
+      expect(cells).toEqual(labels);
+      expect(heard.out.map((line) => line.split(':')[0])).toEqual(
+        labels.map((label) => `ok   ${label}`),
+      );
     });
   });
 
   test('fails when a cell is wrong, and says which and why', async () => {
     heard.err.length = 0;
-    const leaking = (): Promise<Observation> => Promise.resolve(observed(() => ASKS_WHO));
+    const leaking = (): Promise<Observation> =>
+      Promise.resolve(observed(() => ASKS_WHO, 200, BUNDLE));
     expect(await main({ DATABASE_URL }, leaking, say)).toBe(1);
     expect(heard.err[0]).toBe('FAIL the core alone: MODULES=none');
     expect(heard.err[1]).toContain('chat does not run');

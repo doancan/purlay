@@ -250,10 +250,10 @@ describe('migration safety on a growing table', () => {
     expect(listed.filter(isNew)).toEqual([]);
   });
 
-  test('the baseline names every set, and stops inside it', () => {
+  test('the baseline stops inside every set it names; a set it does not name is held from its first file', () => {
     for (const set of new Set(ALL_FILES.map((file) => file.set))) {
       const count = ALL_FILES.filter((file) => file.set === set).length;
-      expect(LAST_GRANDFATHERED[set]).toBeLessThanOrEqual(count);
+      expect(LAST_GRANDFATHERED[set] ?? 0).toBeLessThanOrEqual(count);
     }
   });
 });

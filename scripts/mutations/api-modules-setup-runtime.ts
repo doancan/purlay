@@ -417,6 +417,15 @@ export const API_MODULES_SETUP_RUNTIME: readonly Mutation[] = [
     tests: [RUNTIME_UNIT_TESTS],
   },
   {
+    id: 'swap-retired-pair-kept',
+    why: 'the holder keeps every pair it replaced: each change of the settings leaves a whole sign-in instance in memory for the life of the process',
+    file: RUNTIME,
+    find: '      settled = next;\n      await retire(old, next);\n',
+    replace:
+      '      (globalThis as { kept?: unknown[] }).kept = [...((globalThis as { kept?: unknown[] }).kept ?? []), old];\n      settled = next;\n      await retire(old, next);\n',
+    tests: [SWAP_TESTS],
+  },
+  {
     id: 'swap-save-outside-its-transaction',
     why: 'the settings are saved before the new pair is built and checked, so a change that fails stays in the database while the old pair serves — the next start serves something nobody saw work',
     file: RUNTIME,

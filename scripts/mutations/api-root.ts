@@ -537,6 +537,22 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/cross-tenant.test.ts'],
   },
   {
+    id: 'degradation-gaps-ignore-an-edge-without-a-scenario',
+    why: 'an optional edge with no scenario passes the coverage test, so a partner can be added with nothing proving the module works without it (D-291)',
+    file: 'apps/api/src/testing/degradation.ts',
+    find: '.filter(({ module, partner }) => scenarios[module]?.[partner] === undefined)',
+    replace: '.filter(() => false)',
+    tests: ['apps/api/src/testing/degradation.test.ts'],
+  },
+  {
+    id: 'degradation-setting-keeps-what-requires-the-partner',
+    why: 'the world without a partner still runs the modules that require it, so the build is refused or the case runs a world no operator can start (D-291)',
+    file: 'apps/api/src/testing/degradation.ts',
+    find: 'manifest.requires.some((required) => gone.has(required))',
+    replace: 'false',
+    tests: ['apps/api/src/testing/degradation.test.ts'],
+  },
+  {
     id: 'export-excluded-of-modules-not-read',
     why: 'the tables the modules leave out of an export are not read off the build’s modules, so the check that every table of the database is decided fails for them, or a new module’s are never counted (D-250)',
     file: 'apps/api/src/export-catalogue.ts',
@@ -575,6 +591,14 @@ export const API_ROOT: readonly Mutation[] = [
     find: 'Array.from({ length: 2 ** ids.length }',
     replace: 'Array.from({ length: 2 ** ids.length - 1 }',
     tests: ['apps/api/src/testing/module-cells.test.ts'],
+  },
+  {
+    id: 'module-new-ignores-a-missing-anchor',
+    why: 'an anchor that is not found exactly once is edited anyway, so a moved line is changed wrongly and quietly (CONTRIBUTING.md §6.3)',
+    file: 'apps/api/src/testing/module-new/plan.ts',
+    find: '  if (parts.length !== 2) {\n',
+    replace: '  if (parts.length < 2) {\n',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
   },
   {
     id: 'module-smoke-ignores-a-module-left-out-that-answers',

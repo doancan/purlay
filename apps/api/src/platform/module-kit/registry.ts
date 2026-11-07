@@ -200,6 +200,39 @@ const entitlementProblems = ({ id, entitlement, frames, events }: ModuleManifest
         `"${id}" is a grant of the workspace and declares frames or events, which are closed per process and not per workspace: it must say entitlement: 'always'`,
       ];
 
+/**
+ * What a manifest's `degrades` must be (D-291): a sentence for each `optional` partner and for no other module, so the
+ * claim of what the module does without a partner cannot be forgotten when an edge is added, nor outlive the edge.
+ */
+const degradesProblems = ({ id, optional, degrades }: ModuleManifest): string[] => {
+  // The type forbids it; a manifest that is data, or written without the compiler's help, may not.
+  const listed = degrades as ModuleManifest['degrades'] | undefined;
+  if (listed === undefined) {
+    return [
+      `"${id}" does not declare \`degrades\`: give it \`{}\` when it has no optional partner`,
+    ];
+  }
+  const problems: string[] = [];
+  for (const partner of optional) {
+    const sentence = listed[partner];
+    if (sentence === undefined) {
+      problems.push(
+        `"${id}" does not say what it does without "${partner}": give \`degrades\` a sentence for each optional partner`,
+      );
+    } else if (sentence.trim() === '') {
+      problems.push(`"${id}" says nothing in \`degrades\` for "${partner}": the sentence is empty`);
+    }
+  }
+  for (const partner of Object.keys(listed)) {
+    if (!optional.includes(partner)) {
+      problems.push(
+        `"${id}" has a \`degrades\` sentence for "${partner}", which it does not list as optional`,
+      );
+    }
+  }
+  return problems;
+};
+
 /** The longest a deadline may be: past it a proxy in front of the process has given up, and a client with it. */
 const DEADLINE_MS_MAX = 120_000;
 
@@ -279,6 +312,7 @@ const bundleProblems = (
       ...vocabularyProblems(manifest),
       ...deadlineProblems(manifest),
       ...entitlementProblems(manifest),
+      ...degradesProblems(manifest),
     );
 
     for (const capability of manifest.provides) {

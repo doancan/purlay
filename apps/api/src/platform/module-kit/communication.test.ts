@@ -14,6 +14,9 @@ const module = (id: string, rest: Partial<ModuleManifest> = {}): ModuleManifest 
   id,
   requires: [],
   optional: [],
+  degrades: Object.fromEntries(
+    (rest.optional ?? []).map((partner) => [partner, `it does without ${partner}`]),
+  ),
   provides: [],
   budget: { none: 'a test module with no queries of its own' },
   ...rest,
