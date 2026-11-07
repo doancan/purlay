@@ -109,14 +109,14 @@ describe('what a module requires of another', () => {
 });
 
 describe('the reading of a MODULES setting', () => {
-  const known = ['chat', 'issues'];
+  const known = PRODUCT_MODULE_IDS;
 
   test('says what each refusal is, every one at once', () => {
     expect(problemsOf('none,chat')).toEqual([
       'MODULES has "none" with other items: none must stand alone',
     ]);
     expect(problemsOf('chat,calendar,chat,,CHAT')).toEqual([
-      'MODULES names "calendar", which this build does not have (it has: chat, issues)',
+      `MODULES names "calendar", which this build does not have (it has: ${known.join(', ')})`,
       'MODULES names "chat" twice',
       'MODULES has an empty item: a doubled or trailing comma',
       'MODULES names "CHAT", which is not a module id: lowercase letters, digits and hyphens, starting with a letter',

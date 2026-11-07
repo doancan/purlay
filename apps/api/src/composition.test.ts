@@ -316,7 +316,11 @@ describe('the application as its modules make it', () => {
       expect(compositionFor('none').modules).toEqual([]);
       expect(compositionFor('chat').modules).toEqual([chatModule]);
       expect(compositionFor('issues').modules).toEqual([issuesModule]);
-      expect(compositionFor('issues, chat').modules).toEqual(bundledModules);
+      const everyModule = bundledModules
+        .map(({ manifest }) => manifest.id)
+        .reverse()
+        .join(', ');
+      expect(compositionFor(everyModule).modules).toEqual(bundledModules);
     });
 
     test('in every cell of the matrix a module left out has no migration set and its routes, jobs, frames and events are closed', () => {
@@ -412,7 +416,8 @@ describe('what the boot says about modules', () => {
 
 describe('the ids a process tells a client it runs (D-273)', () => {
   test('are the ones it runs, as the contract’s ModuleId spells them', () => {
-    expect(runningModuleIds(compositionFor(undefined))).toEqual(['chat', 'issues']);
+    const running: string[] = runningModuleIds(compositionFor(undefined));
+    expect(running).toEqual(bundledModules.map(({ manifest }) => manifest.id));
     expect(runningModuleIds(compositionFor('issues'))).toEqual(['issues']);
     expect(runningModuleIds(compositionFor('none'))).toEqual([]);
   });

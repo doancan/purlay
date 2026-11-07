@@ -262,8 +262,8 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     id: 'module-id-lacks-a-module',
     why: 'the type of a module id does not name issues, which the build carries: a client built from the bundle cannot decode it',
     file: 'packages/types/src/modules.ts',
-    find: "Type.Union([Type.Literal('chat'), Type.Literal('issues')])",
-    replace: "Type.Union([Type.Literal('chat'), Type.Literal('chat')])",
+    find: "Type.Literal('issues')",
+    replace: "Type.Literal('chat')",
     tests: ['apps/api/src/contract/bundle.test.ts'],
   },
   {

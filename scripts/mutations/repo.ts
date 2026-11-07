@@ -83,6 +83,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/browser-measurement.test.ts'],
   },
   {
+    id: 'ci-lists-its-module-cells-by-hand',
+    why: 'the suites-per-cell matrix is a list in the workflow again, so a module added to the bundle is left out of CI until somebody remembers to add its cells',
+    file: '.github/workflows/ci.yml',
+    find: 'cell: ${{ fromJSON(needs.changes.outputs.cells) }}',
+    replace: "cell: ['none', 'chat', 'issues']",
+    tests: ['apps/api/src/testing/module-suites.test.ts'],
+  },
+  {
     id: 'client-image-omits-vite-helpers',
     why: 'The production image cannot build the lazy reader because its Vite helper was left out of the client stage.',
     file: 'Dockerfile',

@@ -867,12 +867,12 @@ commit beside this list.
   reader with the module's set as a database state and the module alone as a process.
 - A **real process** per cell in `platform/migrate-on-start.integration.test.ts`: nothing to edit, its cases are made from the bundle.
 - **Its suites declare what they need** (§8, *The suites per cell*): a suite under `features/<id>/` needs the module by where it is, a suite or helper that imports its files by the import, and one that reaches the module by its routes or its tables says `// @needs-modules <id>` in its header (or `testNeeding('<id>')(…)` for one test) — or it fails in `modules:suites` in every cell without the module. A suite about the core that uses a module's fixture (`aRoom` makes a channel) needs the module; to keep a core suite in every cell, build its world from the core's tables.
-- **CI's `module-suites` leg**: `.github/workflows/ci.yml` lists the cells of the `module-suites` matrix by hand
-  (`cell: ['none', 'chat', 'issues']`); a module added adds its cell (every subset of the modules but the one with all of
-  them), and `module-suites.test.ts` fails for a leg the build does not have and for a cell with no leg.
+- **CI's `module-suites` leg**: nothing to edit. The matrix is `bun run modules:cells` (every subset of the modules but the one with
+  all of them), which the `changes` job runs and the matrix reads with `fromJSON`; `module-suites.test.ts` holds the workflow to that.
 - **The lifecycle seed**: `module-lifecycle.integration.test.ts` seeds a row for each module's data so that erasure, purge
-  and export are proven on something; add the module's rows to `seed` (as issues' are, behind `hasSet(state, '<id>')`), or
-  the test fails for each table the module owns that the seed leaves empty, unless it is in `UNSEEDED` with a reason (capped,
+  and export are proven on something; a module with a `features/<id>/testing.ts` exporting `seedLifecycle` is seeded by it, found by the folder
+  (`testing/module-seeders.ts`, which the cross-tenant crossing uses for its list check too); chat's and issues' are written out in
+  `seed`, behind `hasSet(state, '<id>')`. Or the test fails for each table the module owns that the seed leaves empty, unless it is in `UNSEEDED` with a reason (capped,
   `MAX_UNSEEDED`, and only shrinking).
 - The **smoke cell**: nothing to edit — `modules:smoke` makes its cells from the bundle and its paths from the manifest's `routes`, so a
   module with routes is asked for in every cell. A module whose manifest claims no path fails it (nothing would show it runs).
@@ -917,7 +917,6 @@ audit action edits.
 | `apps/api/src` | `modules/jobs/schedule.ts` (a job of the module gets its slot in `PLAN`) | only for a module with `jobs` or `retention`: `core-claims.test.ts` fails for a job the plan has and nothing claims, and the other way |
 | `apps/api/src` | `index.ts` (the process's own loops and workers) | _filled in with the change that moves chat's timed delivery loop into its module_ |
 | `packages/types/src` | `modules.ts` (the id in `ModuleId`) | the contract bundle lists the module from its manifest, and `contract/bundle.test.ts` fails until the type names it (D-273) |
-| `.github/workflows` | `ci.yml` (the module's cell in the `module-suites` matrix, item 6) | the cells are listed by hand there; `module-suites.test.ts` fails for a cell with no leg |
 | `packages/db` | `src/migrator.ts` (set registration and `PRODUCT_MODULE_REQUIRES`), `src/table-owners.ts`, `src/table-lifecycle.ts`, `src/schema.ts` (`bun run db:generate`) | the set, its owner, its erasure and retention decision, the generated schema |
 | `packages/types/src` | `index.ts` (re-export), `<id>.ts` (its own) | the wire |
 | `apps/web/src` | nothing for a module without UI: **no web manifest is needed** | the registry lists a module only when its manifest exists |
@@ -926,9 +925,10 @@ audit action edits.
 A module with UI adds its manifest, one `registry.ts` line and the per-module web files listed in item 5. No count of
 these files is stated: the table is the list, and a number beside it was stale each time a row was added.
 
-**The tests a new module edits.** Item 6's cells are not all automatic. These hard-code the module list or need a
-fixture, and are edited (`module-seams.test.ts` is not one, the handlers being in the module's folder):
-`testing/module-smoke.test.ts`, `migration-sets.test.ts`, `scripts/check-docs.test.ts` (it uses `notesModule` as its
+**The tests a new module edits.** Item 6's cells are automatic now: the smoke and migration-set tests, the CI matrix and the lifecycle
+seed read the bundle or the module's folder. What is left hard-codes the module list or needs a fixture
+(`module-seams.test.ts` is not one, the handlers being in the module's folder):
+`scripts/check-docs.test.ts` (it uses `notesModule` as its
 unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
 integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`
 (the `Ids` field, item 4), the seed in `cross-tenant.integration.test.ts`, and the `channel-visibility.integration` and
