@@ -13897,8 +13897,9 @@ an assignee, which is written in the same transaction as the assignment.
    writes nothing, loudly), an id that is not an id, a subject type of the wrong length, and `params` that are not at most eight
    named plain values of at most 1 KiB; the caller's transaction rolls back. It **writes nothing and says so by answering
    nothing** for the one who is acting and for a person who is not a current member of the workspace or whose account is erased,
-   read under a share lock so that a member removed at that moment is not told. A notice of a workspace never reaches a person of
-   another.
+   read under a share lock so that a member removed at that moment is not told. The current workspace is locked before the
+   recipient, matching account erasure and the insert’s foreign-key lock order; a deleted workspace is skipped even through
+   an earlier context. A notice of a workspace never reaches a person of another.
 4. **Only the sink writes it** (`core-tables.test.ts`): no file of a module names `inbox_entries`, and a module's typed handle
    does not hold the table (`CORE_READS`), so a module cannot write around the sink's checks.
 5. **A notice outlives neither its reader's interest nor the person.** `sweep:inbox`, a core job in every process (the rows are
