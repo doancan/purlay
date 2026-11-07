@@ -20,6 +20,7 @@ import { chatJobWork } from './jobs';
 import { chatWorkers } from './workers';
 import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
+import { chatMessagesSource } from './search/source';
 
 export const chatModule = {
   manifest: {
@@ -113,6 +114,8 @@ export const chatModule = {
   workers: chatWorkers,
   // What the router asks of chat for the operations of `frames` above that it has moved here (`MODULES.md` §9).
   frameHandlers: chatFrameHandlers,
+  // What the workspace-wide find asks of chat, under the id `searchSources` lists (D-285).
+  searchSources: [chatMessagesSource],
   // All of chat's routes (D-280): `features/chat/http/routes.ts`.
   routes: chatRoutes,
 };

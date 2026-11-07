@@ -30,6 +30,7 @@ have it.
 ### Added
 
 - **Channel groups** — Organize your channels under personal headings across devices, rename or fold groups, and move a channel from its menu; deleting a group preserves its channels and conversations (D-284)
+- **Search** — A workspace-wide find answers a group of hits for each source, starting with the messages a person may read, and says which source it skipped and why (off, slow or failed), so a slow module cannot hold the others up; it works with chat turned off (D-285)
 
 ### Fixed
 
