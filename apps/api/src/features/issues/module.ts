@@ -18,6 +18,7 @@ import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
 import { issuesRoutes } from './http/routes';
 import { issuesPersonalExport } from './personal-export';
+import { issuesSearchSource } from './search';
 import type { IssuesTx } from './schema';
 
 /**
@@ -52,10 +53,13 @@ export const issuesModule = {
       { name: ISSUES_DELETE_ANY, minimumRole: 'admin' },
     ] satisfies readonly PermissionDeclaration[],
     auditActions: [{ read: 'audit.read', actions: ISSUES_AUDIT_ACTIONS }],
+    // What the workspace-wide find reads of issues: a title or a body that holds the words.
+    searchSources: ['issues'],
   },
   userErased: unassignErasedPerson,
   workspacePurge: issuesWorkspacePurge,
   export: issuesExport,
   personalExport: issuesPersonalExport,
+  searchSources: [issuesSearchSource],
   routes: issuesRoutes,
 };

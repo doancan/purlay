@@ -5,7 +5,7 @@
  * at its deadline while the others' groups come back without waiting for it and its database work is cancelled, one that throws
  * is answered `error` with nothing of its message in the answer, and one that answers too many has its answer cut.
  *
- * @needs-modules chat
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
@@ -67,6 +67,10 @@ const dependenciesFor = (
 const asAlice = async (db: Executor): Promise<Parameters<typeof findAcross>[1]> => {
   const room = await aRoom(db, ['alice']);
   const userId = room.members['alice']?.userId ?? '';
+  await db
+    .insertInto('issues')
+    .values({ id: messageId(NOW), workspace_id: room.workspaceId, title: 'Deploy checklist' })
+    .execute();
   return await requireWorkspaceMembership(db, userId, room.workspaceId);
 };
 
@@ -86,7 +90,7 @@ describe('integration: find fan-out', () => {
         },
       });
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 7);
-      expect(sourcesOf(found)).toEqual(['messages', 'notes']);
+      expect(sourcesOf(found)).toEqual(['messages', 'issues', 'notes']);
       expect(seen).toEqual([['notes', 'deploy', 7, context]]);
       expect(found.skipped).toEqual([]);
     });
@@ -105,7 +109,7 @@ describe('integration: find fan-out', () => {
       });
       const running = bundledModules;
       const found = await findAcross(dependenciesFor(db, notes, running), context, 'deploy', 10);
-      expect(sourcesOf(found)).toEqual(['messages']);
+      expect(sourcesOf(found)).toEqual(['messages', 'issues']);
       expect(found.skipped).toEqual([{ source: 'notes', reason: 'off' }]);
       expect(asked).toBe(0);
     });
@@ -126,7 +130,8 @@ describe('integration: find fan-out', () => {
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 10);
       const took = performance.now() - started;
       expect(found.skipped).toEqual([{ source: 'notes', reason: 'slow' }]);
-      expect(sourcesOf(found)).toEqual(['messages']);
+      expect(sourcesOf(found)).toEqual(['messages', 'issues']);
+      expect(found.groups[1]?.hits.map((hit) => hit.title)).toEqual(['Deploy checklist']);
       expect(took).toBeGreaterThanOrEqual(DEADLINE_MS - 20);
       expect(took).toBeLessThan(DEADLINE_MS * 4);
       expect(cancelled).toBe(true);
@@ -171,7 +176,7 @@ describe('integration: find fan-out', () => {
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 10);
       expect(found.skipped).toEqual([{ source: 'notes', reason: 'error' }]);
       expect(JSON.stringify(found)).not.toContain('on fire');
-      expect(sourcesOf(found)).toEqual(['messages']);
+      expect(sourcesOf(found)).toEqual(['messages', 'issues']);
     });
   });
 
@@ -183,7 +188,7 @@ describe('integration: find fan-out', () => {
         search: () => Promise.resolve([aHit('one'), aHit('two'), aHit('three')]),
       });
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 2);
-      expect(found.groups[1]?.hits.map((hit) => hit.title)).toEqual(['one', 'two']);
+      expect(found.groups[2]?.hits.map((hit) => hit.title)).toEqual(['one', 'two']);
     });
   });
 });

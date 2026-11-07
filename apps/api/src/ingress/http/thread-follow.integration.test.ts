@@ -5,7 +5,7 @@
  * `channel-visibility.integration.test.ts`, from the table the build checks against `API.md`.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
 import { messageId, type NotificationPage, type ThreadFollow } from '@purlay/types';
 import { createApp } from './app';
 import { THREAD_PARTICIPANTS_MAX } from '../../features/chat/messages/delivery';
@@ -265,25 +265,61 @@ describe('integration: following a thread (D-161)', () => {
       const question = await say(db, room, room.bob, 1, 'why is the backoff four seconds?');
       await say(db, room, room.carol, 2, 'an early answer', question);
       // As many people as a reply tells, each answering after Carol.
+      // Seed the past replies in batches; unfollowing and the new reply below still use real HTTP.
       const later: SignedInUser[] = [];
       for (let n = 0; n < THREAD_PARTICIPANTS_MAX; n += 1) {
-        const person = await aSignedInUser(db, clock, `tf-${String(n)}`);
-        await db
-          .insertInto('workspace_members')
-          .values({
+        later.push(await aSignedInUser(db, clock, `tf-${String(n)}`));
+      }
+      await db
+        .insertInto('workspace_members')
+        .values(
+          later.map((person) => ({
             workspace_id: room.workspaceId,
             user_id: person.userId,
-            role: 'member',
+            role: 'member' as const,
             joined_at: NOW,
-          })
-          .execute();
-        const joined = await call(db, 'POST', `/api/channels/${room.channelId}/join`, {
-          cookie: person.cookie,
-        });
-        expect(joined.ok).toBe(true);
-        await say(db, room, person, 10 + n, `answer ${String(n)}`, question);
-        later.push(person);
-      }
+          })),
+        )
+        .execute();
+      await db
+        .insertInto('channel_members')
+        .values(
+          later.map((person) => ({
+            channel_id: room.channelId,
+            user_id: person.userId,
+            joined_at: NOW,
+          })),
+        )
+        .execute();
+      await db
+        .insertInto('messages')
+        .values(
+          later.map((person, n) => ({
+            id: messageId(new Date(NOW.getTime() + 10 + n)),
+            workspace_id: room.workspaceId,
+            channel_id: room.channelId,
+            sender_id: person.userId,
+            parent_id: question,
+            content: `answer ${String(n)}`,
+            created_at: NOW,
+          })),
+        )
+        .execute();
+      await db
+        .updateTable('messages')
+        .set({
+          thread_reply_count: THREAD_PARTICIPANTS_MAX + 1,
+          thread_last_reply_at: NOW,
+          state_version: sql<number>`state_version + ${THREAD_PARTICIPANTS_MAX}`,
+        })
+        .where('id', '=', question)
+        .execute();
+      const history = await db
+        .selectFrom('messages')
+        .select(sql<number>`count(distinct sender_id)::integer`.as('participants'))
+        .where('parent_id', '=', question)
+        .executeTakeFirstOrThrow();
+      expect(history.participants).toBe(THREAD_PARTICIPANTS_MAX + 1);
       const leaving = later[THREAD_PARTICIPANTS_MAX - 1];
       if (leaving === undefined) throw new Error('nobody to let the thread go');
       expect((await follow(db, leaving, question, false)).status).toBe(200);

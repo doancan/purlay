@@ -230,7 +230,7 @@ beforeAll(async () => {
     const { core, sets } = expandRelease();
     const expanded = await migrateToLatest(db, core, { modules: sets });
     expect(expanded.error).toBeUndefined();
-    expect(expanded.results?.at(-1)?.migrationName).toBe('issues/0001_issues');
+    expect(expanded.results?.at(-1)?.migrationName).toBe('issues/0002_issues_search');
     expandedTemplate = { name, world: await writeLikeTheExpandRelease(db), sets };
   } finally {
     await db.destroy();
@@ -326,6 +326,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0010_membership_read_scopes',
         'chat/0011_personal_channel_groups',
         'issues/0001_issues',
+        'issues/0002_issues_search',
       ]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
       expect(await columnsOfAttachments(db)).not.toContain('channel_id');
