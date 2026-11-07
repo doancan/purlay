@@ -262,7 +262,7 @@ use of it, by `POST /api/server/workspaces/:workspaceId/modules`. `WORKSPACE_MOD
 gets: `open` (the default; a server you run yourself has every module it runs) or `managed` (only what is granted, for a server that
 sells modules). A workspace that may not use a module answers its paths as a module that is not run, shows no rail place, search
 result or inbox line for it, and keeps every row, which is still exported, erased and purged. Granting it back brings everything
-back. Chat is not a grant yet. Turn on `managed`, or withdraw a module, only after every node runs a release that has the table: a
+back. A file of editions (`{ "editions": { "team": ["chat", "issues"] }, "workspaces": { "acme": { "edition": "team" } } }`, `validUntil` optional) is applied by `bun run entitlements:apply --file editions.json`, `--dry-run` first (on a server with `REDIS_URL`, a file that takes grants away also needs `--cluster-ready`, said once every node runs a release that reads grants). Chat is not a grant yet. Turn on `managed`, or withdraw a module, only after every node runs a release that has the table: a
 node that predates it serves the module to every workspace, and rolling back lifts every restriction (data is not lost).
 
 **Not supported.** Third-party modules: a module is first-party code in this repository, and loading one from elsewhere is not supported.

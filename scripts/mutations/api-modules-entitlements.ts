@@ -3,6 +3,30 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_ENTITLEMENTS: readonly Mutation[] = [
   {
+    id: 'entitlement-dry-run-writes',
+    why: 'a dry run changes the grants it was asked only to describe (D-292)',
+    file: 'apps/api/src/modules/entitlements/edition.ts',
+    find: '    if (dryRun) throw new DryRun(changes);\n',
+    replace: '',
+    tests: ['apps/api/src/cli/entitlements-apply.integration.test.ts'],
+  },
+  {
+    id: 'entitlement-edition-grants-chat',
+    why: 'an edition file writes a row for chat, which no workspace is granted, and the whole file is refused for it (D-292)',
+    file: 'apps/api/src/modules/entitlements/edition.ts',
+    find: "({ entitlement }) => entitlement !== 'always'",
+    replace: '() => true',
+    tests: ['apps/api/src/modules/entitlements/edition.test.ts'],
+  },
+  {
+    id: 'entitlement-edition-leaves-a-module-out-unsaid',
+    why: 'a module an edition does not list is left to the server’s mode, so on an open server the workspace has it all the same (D-292)',
+    file: 'apps/api/src/modules/entitlements/edition.ts',
+    find: ": { workspaceId, module: id, state: 'off' },",
+    replace: ": { workspaceId, module: id, state: 'inherit' },",
+    tests: ['apps/api/src/modules/entitlements/edition.test.ts'],
+  },
+  {
     id: 'entitlement-restriction-allowed-while-a-peer-is-behind',
     why: 'withdrawing a module is allowed whatever the cluster reads (D-292)',
     file: 'apps/api/src/modules/entitlements/peers.ts',

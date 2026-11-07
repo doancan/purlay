@@ -9,7 +9,8 @@ import type { EntitlementCatalogue, EntitlementWrite } from './apply';
 /** How many live nodes do not read grants; rejects when that cannot be told. Absent where there is one node. */
 export type PeersBehind = () => Promise<number>;
 
-const restricts = (write: EntitlementWrite, mode: EntitlementCatalogue['mode']): boolean =>
+/** Whether a write takes something away from a workspace: a withdrawal, or the removal of a grant on a server that gives nothing by default. */
+export const restricts = (write: EntitlementWrite, mode: EntitlementCatalogue['mode']): boolean =>
   write.state === 'off' || (write.state === 'inherit' && mode === 'managed');
 
 export const requirePeersReady = async (
