@@ -72,6 +72,7 @@ import {
   type OidcBehaviour,
   type OidcStub,
 } from '../../testing/oidc-stub';
+import { describeNeeding } from '../../testing/needs';
 import { aScriptedRelay, type ScriptedRelay } from '../../testing/smtp-relay';
 import { aUniqueSlug } from '../../testing/users';
 import {
@@ -2300,7 +2301,7 @@ describe('integration — server administration inventory', () => {
     expect(entries.data[0]?.targetWorkspaceId).toBe(workspace.id);
   });
 
-  describe('the modules a workspace is granted (D-289)', () => {
+  describeNeeding('issues')('the modules a workspace is granted (D-289)', () => {
     const granting = async (): Promise<{
       server: Server;
       workspaceId: string;
