@@ -592,6 +592,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/publish-failure.integration.test.ts'],
   },
   {
+    id: 'publish-gives-each-consumer-its-own-fact-id',
+    why: 'the rows of one fact carry different fact ids, so a consumer cannot tell the fact it was told from another and its idempotency key means nothing (D-288)',
+    file: 'apps/api/src/platform/outbox.ts',
+    find: '        fact_id: factId,\n',
+    replace: '        fact_id: messageId(now),\n',
+    tests: ['apps/api/src/platform/outbox.integration.test.ts'],
+  },
+  {
     id: 'publish-hold-days-ignored',
     why: 'a fact held for days expires after a day, so a module off over a weekend misses what it was told to wait for (D-288)',
     file: 'apps/api/src/platform/outbox.ts',

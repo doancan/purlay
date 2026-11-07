@@ -1,6 +1,6 @@
 /**
- * A fact between two modules that are not chat or issues, for the tests of the outbox (D-288): `notes` publishes `notes.created`
- * and `wiki` consumes it, each as a manifest and nothing more, since what is tested is the table, the claim and the delivery.
+ * A fact between modules that are not chat or issues, for the tests of the outbox (D-288): `notes` publishes `notes.created`
+ * and `notes.pinned`, `wiki` consumes both and `shelf` consumes the first, each as a manifest and nothing more, since what is tested is the table, the claim and the delivery.
  */
 import type { Executor } from '@purlay/db';
 import { Type } from '@sinclair/typebox';
@@ -42,6 +42,13 @@ export const WIKI: ModuleManifest = {
   consumes: ['notes.created', 'notes.pinned'],
 };
 
+export const SHELF: ModuleManifest = {
+  ...base,
+  id: 'shelf',
+  optional: ['notes'],
+  consumes: ['notes.created'],
+};
+
 /**
  * What a publish is given: the build carries both modules, `running` says which this process runs, and `droppedCount` reads the
  * counter of the facts that were not written because their consumer is off.
@@ -49,7 +56,7 @@ export const WIKI: ModuleManifest = {
 export const aPublishWorld = (
   workspaceId: string,
   clock: Clock,
-  running: readonly ModuleManifest[] = [NOTES, WIKI],
+  running: readonly ModuleManifest[] = [NOTES, WIKI, SHELF],
   producer = 'notes',
 ): { readonly context: FactPublishContext; readonly droppedCount: (module: string) => number } => {
   const registry = createMetricsRegistry();
@@ -59,7 +66,7 @@ export const aPublishWorld = (
       workspaceId,
       clock,
       producer,
-      routing: factRoutingOf([NOTES, WIKI], running),
+      routing: factRoutingOf([NOTES, WIKI, SHELF], running),
       dropped,
     },
     droppedCount: (module) =>

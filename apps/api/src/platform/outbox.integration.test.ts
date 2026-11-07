@@ -63,17 +63,26 @@ describe('integration: publishing a fact', () => {
       const { context } = aPublishWorld(workspaceId, clock);
       await publishFact(tx, context, NOTE_CREATED, { noteId: 'n1', title: 'Plan' });
       const rows = await rowsOf(tx, workspaceId);
-      expect(rows.map((row) => [row.consumer, row.type, row.producer, row.state])).toEqual([
+      expect(
+        rows
+          .map((row) => [row.consumer, row.type, row.producer, row.state])
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+      ).toEqual([
+        ['shelf', 'notes.created', 'notes', 'pending'],
         ['wiki', 'notes.created', 'notes', 'pending'],
       ]);
-      expect(rows[0]).toMatchObject({
-        payload: { noteId: 'n1', title: 'Plan' },
-        attempts: 0,
-        workspace_id: workspaceId,
-        finished_at: null,
-      });
-      expect(rows[0]?.next_attempt_at).toEqual(NOW);
+      for (const row of rows) {
+        expect(row).toMatchObject({
+          payload: { noteId: 'n1', title: 'Plan' },
+          attempts: 0,
+          workspace_id: workspaceId,
+          finished_at: null,
+        });
+        expect(row.next_attempt_at).toEqual(NOW);
+      }
       expect(messageIdTime(rows[0]?.fact_id ?? '')).toBe(NOW.getTime());
+      expect(new Set(rows.map((row) => row.fact_id)).size).toBe(1);
+      expect(new Set(rows.map((row) => row.id)).size).toBe(2);
     }, cloned.db);
   });
 
@@ -92,7 +101,7 @@ describe('integration: publishing a fact', () => {
     await cloned.db.transaction().execute(async (tx) => {
       await publishFact(tx, context, NOTE_CREATED, { noteId: 'n2', title: 'Plan' });
     });
-    expect(await rowsOf(cloned.db, workspaceId)).toHaveLength(1);
+    expect(await rowsOf(cloned.db, workspaceId)).toHaveLength(2);
   });
 
   test('is never written through the pool: a handle that is no transaction is refused before anything is', async () => {
@@ -257,9 +266,8 @@ describe('integration: a deleted workspace’s facts', () => {
       const mine = await aWorkspaceRow(tx);
       const theirs = await aWorkspaceRow(tx);
       for (const workspaceId of [mine, mine, mine, theirs]) {
-        await publishFact(tx, aPublishWorld(workspaceId, clock).context, NOTE_CREATED, {
+        await publishFact(tx, aPublishWorld(workspaceId, clock).context, NOTE_PINNED, {
           noteId: 'n',
-          title: 't',
         });
       }
       expect(await purgeWorkspaceFacts(tx, mine, 2)).toBe(2);
