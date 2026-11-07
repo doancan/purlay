@@ -20,6 +20,8 @@ import { FACT_SHAPE_FIRST, type FactDeclaration } from '@purlay/types';
 import type { Clock } from './clock';
 import type { FactConsumer } from './fact-consumers';
 import { currentRequest, withinRequest, type Logger } from './logging';
+import { readGrants } from './grants';
+import type { EntitlementPolicy } from './module-kit/entitlement';
 import { atomicallyOn } from './transactions';
 
 /** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about two hours (`backoffMs`). */
@@ -60,12 +62,10 @@ export interface Claim {
   readonly exhausted: readonly ClaimedFact[];
 }
 
-const ALWAYS_ENTITLED = (): boolean => true;
-
 /**
  * Takes up to `batch` of the due rows this node can read for one delivery each. Two nodes calling at once take different rows.
- * `entitled` is the seam of workspace-level enablement (D-250 rule 9, not built): a row of a workspace that may not use the
- * consumer stays as it is.
+ * `effective` is the composition's function of workspace grants (D-289): a row of a workspace that is not granted the consumer
+ * stays as it is, untouched, for when it is, and the work of a module a workspace lost is not done for it.
  */
 export const claimDue = async (
   database: Executor,
@@ -74,11 +74,10 @@ export const claimDue = async (
     readonly batch: number;
     readonly clock: Clock;
     readonly random?: () => number;
-    readonly entitled?: (workspaceId: string, module: string) => boolean;
+    readonly effective?: EntitlementPolicy['effective'];
   },
 ): Promise<Claim> => {
-  const { handles, batch, clock, random } = input;
-  const entitled = input.entitled ?? ALWAYS_ENTITLED;
+  const { handles, batch, clock, random, effective } = input;
   if (handles.length === 0) return { claimed: [], exhausted: [] };
   return await atomicallyOn(database)(async (transaction) => {
     const now = clock.now();
@@ -104,10 +103,24 @@ export const claimDue = async (
       .forUpdate()
       .skipLocked()
       .execute();
+    const grants =
+      effective === undefined
+        ? undefined
+        : await readGrants(transaction, [...new Set(due.map((row) => row.workspace_id))]);
+    const granted = new Map<string, ReadonlySet<string>>();
+    const mayUse = (workspaceId: string, consumer: string): boolean => {
+      if (effective === undefined || grants === undefined) return true;
+      let modules = granted.get(workspaceId);
+      if (modules === undefined) {
+        modules = effective(grants.get(workspaceId) ?? [], now);
+        granted.set(workspaceId, modules);
+      }
+      return modules.has(consumer);
+    };
     const claimed: ClaimedFact[] = [];
     const exhausted: ClaimedFact[] = [];
     for (const row of due) {
-      if (!entitled(row.workspace_id, row.consumer)) continue;
+      if (!mayUse(row.workspace_id, row.consumer)) continue;
       const fact = { id: row.id, factId: row.fact_id, type: row.type, consumer: row.consumer };
       const spent = row.attempts >= OUTBOX_ATTEMPTS_MAX;
       await transaction
@@ -248,16 +261,16 @@ export const drainOnce = async (
     readonly batch: number;
     readonly clock: Clock;
     readonly log: Logger;
-    readonly entitled?: (workspaceId: string, module: string) => boolean;
+    readonly effective?: EntitlementPolicy['effective'];
   },
 ): Promise<Record<Delivery | 'exhausted', number>> => {
-  const { handlers, batch, clock, log, entitled } = input;
+  const { handlers, batch, clock, log, effective } = input;
   const tally = { delivered: 0, skipped: 0, failed: 0, dead: 0, gone: 0, exhausted: 0 };
   const { claimed, exhausted } = await claimDue(database, {
     handles: handlers,
     batch,
     clock,
-    ...(entitled === undefined ? {} : { entitled }),
+    ...(effective === undefined ? {} : { effective }),
   });
   tally.exhausted = exhausted.length;
   for (const one of exhausted) {

@@ -181,7 +181,7 @@ the rest (`ingress/http/inbox.ts`); `GET /api/me`, `GET /api/workspaces` and the
 `memberships[].modules`, which the web draws a workspace from (`useModules`, `WorkspaceScopeProvider`), falling back to the
 server's list for a server that does not send it. A module that is a grant and declares `jobs` or `workers` stops the build
 (`unguardedWorkProblem`, `composition.ts`): their work is not yet given the workspace's grant, so the first such module brings
-the SQL form of the function with it, or says `always`. No module has ports, `ports.of`, or an outbox consumer to ask it yet.
+the SQL form of the function with it, or says `always`. No module has ports or `ports.of` to ask it yet; the outbox asks it when it publishes and when it claims (D-288).
 
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`

@@ -21,11 +21,13 @@ import {
 import { defineFact } from '@purlay/types';
 import { aMovableClock, aRecordingLogger, NOW } from '../testing/doubles';
 import {
+  aGrant,
   aPublishWorld,
   aWorkspaceRow,
   NOTE_CREATED,
   NOTE_CREATED_V2,
   NOTE_PINNED,
+  theGrants,
 } from '../testing/facts';
 import { currentRequest, withinRequest } from './logging';
 import type { FactConsumer } from './fact-consumers';
@@ -564,26 +566,32 @@ describe('integration: two nodes on two versions share one table (a rolling depl
 });
 
 describe('integration: what a claim leaves', () => {
-  test('a row of a workspace that may not use the consumer stays as it was, and the others are taken', async () => {
+  test('a row of a workspace that is not granted the consumer stays as it was, and the others are taken', async () => {
     const clock = aMovableClock(NOW);
     const barred = await aWorkspaceRow(cloned.db);
     const allowed = await aWorkspaceRow(cloned.db);
+    await aGrant(cloned.db, barred, 'wiki', 'off');
     await publish(barred, clock);
     await publish(allowed, clock);
-    const asked: string[] = [];
     const { claimed } = await claimDue(cloned.db, {
       handles: wiki,
       batch: BATCH,
       clock,
-      entitled: (workspaceId, module) => {
-        asked.push(module);
-        return workspaceId !== barred;
-      },
+      effective: theGrants(),
     });
     expect(claimed).toHaveLength(1);
     expect((await rowOf(barred))[0]).toMatchObject({ attempts: 0, state: 'pending' });
     expect((await rowOf(allowed))[0]).toMatchObject({ attempts: 1 });
-    expect(asked).toEqual(['wiki', 'wiki']);
+    // Granted again, it is delivered: the fact waited and was not lost.
+    await sql`delete from workspace_modules where workspace_id = ${barred}`.execute(cloned.db);
+    const again = await claimDue(cloned.db, {
+      handles: wiki,
+      batch: BATCH,
+      clock,
+      effective: theGrants(),
+    });
+    expect(again.claimed.map((one) => one.type)).toEqual(['notes.created']);
+    expect((await rowOf(barred))[0]).toMatchObject({ attempts: 1 });
   });
 
   test('a row past its expiry is not claimed', async () => {

@@ -14,8 +14,10 @@ import { type Static } from '@sinclair/typebox';
 import { FACT_SHAPE_FIRST, messageId, type FactDeclaration } from '@purlay/types';
 import { isTransaction, type Transaction } from '@purlay/db';
 import { DAY_MS, type Clock } from './clock';
+import { readGrants } from './grants';
 import { currentRequest } from './logging';
 import type { Counter } from './metrics';
+import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { ModuleManifest } from './module-kit/manifest';
 
 /** Of compact JSON: the table's own check is the backstop, since `jsonb` writes a space after each separator. */
@@ -26,8 +28,6 @@ const DROPPING_FACT_PENDING_DAYS = 1;
 
 /** The table's own limit: a request id may come from a header. */
 const CORRELATION_ID_MAX = 64;
-
-const ALWAYS_ENTITLED = (): boolean => true;
 
 /** Who consumes what, for the modules a build carries, and which of them this process runs. Built from the manifests, once. */
 export interface FactRouting {
@@ -61,10 +61,10 @@ export interface FactPublishContext {
   /** The fact whose delivery is publishing this one, when one is: the chain from a fact to the facts it caused. */
   readonly causedBy?: string;
   /**
-   * Whether the workspace may use the module (D-250 rule 9, which is not built): a consumer it may not use gets no row. Always
-   * true until workspace-level enablement exists, and a seam for it and not a policy.
+   * The composition's function of workspace grants (D-289): a consumer the workspace is not granted gets no row, since nobody
+   * would deliver it and a grant given later is not a reason to act on what was said before it.
    */
-  readonly entitled?: (workspaceId: string, module: string) => boolean;
+  readonly effective?: EntitlementPolicy['effective'];
 }
 
 /** A fact that could not be published: a programming error, which ends the publisher's transaction and so leaves nothing of the fact. */
@@ -100,8 +100,7 @@ export const publishFact = async <Fact extends FactDeclaration>(
   fact: Fact,
   payload: Static<Fact['schema']>,
 ): Promise<void> => {
-  const { workspaceId, clock, producer, routing, dropped, causedBy } = context;
-  const entitled = context.entitled ?? ALWAYS_ENTITLED;
+  const { workspaceId, clock, producer, routing, dropped, causedBy, effective } = context;
   // The type says it, and a cast could unsay it: a fact written with nothing to roll back with outlives the thing it reports.
   if (!isTransaction(transaction))
     throw new FactPublishError(fact.type, 'it is not in a transaction');
@@ -123,9 +122,14 @@ export const publishFact = async <Fact extends FactDeclaration>(
   const factId = messageId(now);
   const holdDays = typeof fact.absent === 'object' ? fact.absent.holdDays : undefined;
   const expiresAt = new Date(now.getTime() + (holdDays ?? DROPPING_FACT_PENDING_DAYS) * DAY_MS);
-  const consumers = routing
-    .consumersOf(fact.type)
-    .filter((consumer) => entitled(workspaceId, consumer));
+  const granted =
+    effective === undefined
+      ? undefined
+      : effective((await readGrants(transaction, [workspaceId])).get(workspaceId) ?? [], now);
+  const consumers = routing.consumersOf(fact.type).filter(
+    // A consumer this process does not run is judged where it is run, at its delivery: the set holds the modules run here.
+    (consumer) => granted === undefined || !routing.runs(consumer) || granted.has(consumer),
+  );
   const written = consumers.filter((consumer) => routing.runs(consumer) || holdDays !== undefined);
   for (const consumer of consumers.filter((one) => !written.includes(one))) {
     dropped.inc({ module: consumer, fact: fact.type });

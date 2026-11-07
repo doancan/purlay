@@ -7,6 +7,7 @@
  */
 import { FACT_SHAPE_FIRST, type FactDeclaration } from '@purlay/types';
 import type { FactConsumers } from '../../platform/fact-consumers';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { drainOnce, type Handled, type FactHandling } from '../../platform/outbox-drain';
 import type { ModuleWorker } from './module-workers';
 
@@ -23,6 +24,7 @@ export const outboxConsumerWorkers = (
   module: string,
   factConsumers: FactConsumers | undefined,
   facts: readonly FactDeclaration[],
+  effective?: EntitlementPolicy['effective'],
 ): readonly ModuleWorker[] => {
   const types = Object.keys(factConsumers ?? {});
   if (factConsumers === undefined || types.length === 0) return [];
@@ -47,7 +49,13 @@ export const outboxConsumerWorkers = (
       name: OUTBOX_CONSUME_WORKER,
       intervalMs: OUTBOX_CONSUME_INTERVAL_MS,
       work: async ({ database, clock, log }): Promise<void> => {
-        await drainOnce(database, { handlers, batch: OUTBOX_CONSUME_BATCH, clock, log });
+        await drainOnce(database, {
+          handlers,
+          batch: OUTBOX_CONSUME_BATCH,
+          clock,
+          log,
+          ...(effective === undefined ? {} : { effective }),
+        });
       },
     },
   ];

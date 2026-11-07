@@ -57,6 +57,7 @@ import type { CollatedColumn } from './platform/readiness';
 import {
   effectiveModules,
   type EntitlementMode,
+  type EntitlementPolicy,
   type EntitlementRow,
 } from './platform/module-kit/entitlement';
 
@@ -206,9 +207,10 @@ const factConsumerProblem = ({
 export const workersOf = (
   module: BundledModule,
   facts: readonly FactDeclaration[] = FACTS,
+  effective?: EntitlementPolicy['effective'],
 ): readonly ModuleWorker[] => [
   ...(module.workers ?? []),
-  ...outboxConsumerWorkers(module.manifest.id, module.factConsumers, facts),
+  ...outboxConsumerWorkers(module.manifest.id, module.factConsumers, facts, effective),
 ];
 
 /** What is wrong with the ports a module supplies and the capabilities its manifest provides, or `undefined` when they are the same. */
@@ -374,6 +376,13 @@ export const compose = (
     ...CORE_PERMISSIONS,
     ...modules.flatMap((module) => module.manifest.permissions ?? []),
   ]);
+  const effectiveOfThisProcess: EntitlementPolicy['effective'] = (rows, now) =>
+    effectiveModules({
+      running: modules.map((module) => module.manifest),
+      rows,
+      mode: entitlementMode,
+      now,
+    });
   const deadlineOf = workerDeadlinesOf(holding.map((module) => module.manifest));
   const noticing = modules.find((module) => module.pushNotices !== undefined);
   return {
@@ -417,7 +426,7 @@ export const compose = (
     ports: Object.fromEntries(modules.flatMap((module) => Object.entries(module.ports ?? {}))),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     workers: modules.flatMap((module) =>
-      workersOf(module, facts).map((worker) => ({
+      workersOf(module, facts, effectiveOfThisProcess).map((worker) => ({
         ...worker,
         module: module.manifest.id,
         deadlineMs: deadlineOf(module.manifest.id),
@@ -447,13 +456,7 @@ export const compose = (
     ),
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
     entitlementMode,
-    effectiveModules: (rows, now) =>
-      effectiveModules({
-        running: modules.map((module) => module.manifest),
-        rows,
-        mode: entitlementMode,
-        now,
-      }),
+    effectiveModules: effectiveOfThisProcess,
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),
     ),

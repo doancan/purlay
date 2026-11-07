@@ -19,6 +19,7 @@ import { fixedClock } from '../../platform/clock';
 import { publishFact } from '../../platform/outbox';
 import { aRecordingLogger, NOW } from '../../testing/doubles';
 import {
+  aGrant,
   aPublishWorld,
   aWorkspaceRow,
   NOTE_CREATED,
@@ -95,7 +96,9 @@ describe('integration: a fact between two modules', () => {
       seen.push([fact.type, fact.workspaceId, fact.payload, currentRequest()?.module]);
       return Promise.resolve('done');
     };
-    const { failures } = await runWorkers(compose([notes, wikiWith(handle)], undefined, FACTS));
+    const { failures } = await runWorkers(
+      compose([notes, wikiWith(handle)], undefined, 'open', FACTS),
+    );
     expect(seen).toEqual([['notes.created', workspaceId, { noteId: 'n1', title: 'Plan' }, 'wiki']]);
     expect((await rowsOf(workspaceId))[0]).toMatchObject({ state: 'delivered', attempts: 1 });
     expect(failures).toEqual([]);
@@ -109,7 +112,7 @@ describe('integration: a fact between two modules', () => {
     });
     const handle: FactConsumer = () => Promise.reject(new Error('the channel is unreachable'));
     const { failures, lines } = await runWorkers(
-      compose([notes, wikiWith(handle)], undefined, FACTS),
+      compose([notes, wikiWith(handle)], undefined, 'open', FACTS),
     );
     expect((await rowsOf(workspaceId))[0]).toMatchObject({
       state: 'pending',
@@ -118,6 +121,32 @@ describe('integration: a fact between two modules', () => {
     });
     expect(failures).toEqual([]);
     expect(JSON.stringify(lines)).not.toContain('unreachable');
+  });
+
+  test('of a workspace that is not granted the consumer waits, and is delivered when the grant is given', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await aGrant(cloned.db, workspaceId, 'wiki', 'off');
+    const { context } = aPublishWorld(workspaceId, clock);
+    await cloned.db.transaction().execute(async (tx) => {
+      await publishFact(tx, context, NOTE_CREATED, { noteId: 'n4', title: 'Plan' });
+    });
+    const handled: string[] = [];
+    const handle: FactConsumer = (fact) => {
+      handled.push(fact.workspaceId);
+      return Promise.resolve('done');
+    };
+    const composition = compose([notes, wikiWith(handle)], undefined, 'open', FACTS);
+    await runWorkers(composition);
+    expect(handled).toEqual([]);
+    expect((await rowsOf(workspaceId))[0]).toMatchObject({ state: 'pending', attempts: 0 });
+
+    await cloned.db
+      .deleteFrom('workspace_modules')
+      .where('workspace_id', '=', workspaceId)
+      .execute();
+    await runWorkers(composition);
+    expect(handled).toEqual([workspaceId]);
+    expect((await rowsOf(workspaceId))[0]).toMatchObject({ state: 'delivered' });
   });
 
   test('that was published while its consumer was off and is held waits, and is delivered when the consumer runs', async () => {
@@ -131,13 +160,13 @@ describe('integration: a fact between two modules', () => {
       handled.push(fact.type);
       return Promise.resolve('done');
     };
-    const off = compose([notes], [notes, wikiWith(handle)], FACTS);
+    const off = compose([notes], [notes, wikiWith(handle)], 'open', FACTS);
     expect(off.workers).toEqual([]);
     await runWorkers(off);
     expect((await rowsOf(workspaceId))[0]).toMatchObject({ state: 'pending', attempts: 0 });
     expect(handled).toEqual([]);
 
-    await runWorkers(compose([notes, wikiWith(handle)], undefined, FACTS));
+    await runWorkers(compose([notes, wikiWith(handle)], undefined, 'open', FACTS));
     expect(handled).toEqual(['notes.pinned']);
     expect((await rowsOf(workspaceId))[0]).toMatchObject({ state: 'delivered' });
   });

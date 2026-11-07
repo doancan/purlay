@@ -5,6 +5,11 @@
 import type { Executor } from '@purlay/db';
 import { Type } from '@sinclair/typebox';
 import { defineFact } from '@purlay/types';
+import {
+  effectiveModules,
+  type EntitlementMode,
+  type EntitlementPolicy,
+} from '../platform/module-kit/entitlement';
 import type { ModuleManifest } from '../platform/module-kit/manifest';
 import { createMetricsRegistry } from '../platform/metrics';
 import { factRoutingOf, type FactPublishContext } from '../platform/outbox';
@@ -106,4 +111,34 @@ export const aWorkspaceRow = async (executor: Executor): Promise<string> => {
     .returning('id')
     .executeTakeFirstOrThrow();
   return row.id;
+};
+
+/** The composition's function of workspace grants over the modules a process runs, with the server's mode (D-289). */
+export const theGrants =
+  (
+    running: readonly ModuleManifest[] = [NOTES, WIKI, SHELF],
+    mode: EntitlementMode = 'open',
+  ): EntitlementPolicy['effective'] =>
+  (rows, now) =>
+    effectiveModules({ running, rows, mode, now });
+
+/** The operator's word for one workspace and one module, as a row of `workspace_modules`. */
+export const aGrant = async (
+  executor: Executor,
+  workspaceId: string,
+  module: string,
+  state: 'on' | 'off',
+  validUntil: Date | null = null,
+): Promise<void> => {
+  await executor
+    .insertInto('workspace_modules')
+    .values({
+      workspace_id: workspaceId,
+      module,
+      state,
+      valid_until: validUntil,
+      source: 'test',
+      changed_at: new Date(0),
+    })
+    .execute();
 };

@@ -660,9 +660,9 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'outbox-claim-ignores-entitlement',
-    why: 'a row of a workspace that may not use the consumer is claimed and delivered all the same, so the entitlement seam decides nothing (D-288)',
+    why: 'a row of a workspace that is not granted the consumer is claimed and delivered all the same, so a module a workspace lost keeps acting for it (D-289)',
     file: 'apps/api/src/platform/outbox-drain.ts',
-    find: '      if (!entitled(row.workspace_id, row.consumer)) continue;\n',
+    find: '      if (!mayUse(row.workspace_id, row.consumer)) continue;\n',
     replace: '',
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
@@ -707,31 +707,12 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
-    id: 'outbox-consumer-gets-no-worker',
-    why: 'a module with handlers has nothing that runs them, so its facts wait until they expire (D-288)',
-    file: 'apps/api/src/modules/workers/outbox-consumer.ts',
-    find: '  if (factConsumers === undefined || types.length === 0) return [];',
-    replace: '  if (true as boolean) return [];',
-    tests: [
-      'apps/api/src/modules/workers/outbox-consumer.integration.test.ts',
-      'apps/api/src/module-communication.test.ts',
-    ],
-  },
-  {
     id: 'outbox-consumer-not-noted-as-its-module',
     why: 'a delivery runs as no module, so the pool it takes is not its module’s share and a slow consumer can starve the others (D-288)',
     file: 'apps/api/src/platform/outbox-drain.ts',
     find: '          module: claimed.consumer,\n',
     replace: '',
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
-  },
-  {
-    id: 'outbox-consumer-worker-ignores-the-shape',
-    why: 'the worker claims every shape of a type, whatever its declaration, so an older node kills a newer one’s facts (D-288)',
-    file: 'apps/api/src/modules/workers/outbox-consumer.ts',
-    find: '      shape: declaration.shape ?? FACT_SHAPE_FIRST,\n',
-    replace: '      shape: Number.MAX_SAFE_INTEGER,\n',
-    tests: ['apps/api/src/modules/workers/outbox-consumer.integration.test.ts'],
   },
   {
     id: 'outbox-delivery-loses-the-correlation',
@@ -879,10 +860,10 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'publish-ignores-entitlement',
-    why: 'a consumer a workspace may not use is written a row all the same, so the entitlement seam decides nothing (D-288)',
+    why: 'a consumer a workspace is not granted is written a row all the same, so a fact is told to a module the workspace does not have (D-289)',
     file: 'apps/api/src/platform/outbox.ts',
-    find: '.filter((consumer) => entitled(workspaceId, consumer))',
-    replace: '',
+    find: 'granted === undefined || !routing.runs(consumer) || granted.has(consumer)',
+    replace: 'true',
     tests: ['apps/api/src/platform/outbox.integration.test.ts'],
   },
   {

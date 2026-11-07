@@ -3,6 +3,25 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_WORKERS: readonly Mutation[] = [
   {
+    id: 'outbox-consumer-gets-no-worker',
+    why: 'a module with handlers has nothing that runs them, so its facts wait until they expire (D-288)',
+    file: 'apps/api/src/modules/workers/outbox-consumer.ts',
+    find: '  if (factConsumers === undefined || types.length === 0) return [];',
+    replace: '  if (true as boolean) return [];',
+    tests: [
+      'apps/api/src/modules/workers/outbox-consumer.integration.test.ts',
+      'apps/api/src/module-communication.test.ts',
+    ],
+  },
+  {
+    id: 'outbox-consumer-worker-ignores-the-shape',
+    why: 'the worker claims every shape of a type, whatever its declaration, so an older node kills a newer one’s facts (D-288)',
+    file: 'apps/api/src/modules/workers/outbox-consumer.ts',
+    find: '      shape: declaration.shape ?? FACT_SHAPE_FIRST,\n',
+    replace: '      shape: Number.MAX_SAFE_INTEGER,\n',
+    tests: ['apps/api/src/modules/workers/outbox-consumer.integration.test.ts'],
+  },
+  {
     id: 'worker-deadline-default-dropped',
     why: 'a module that says nothing of its workers’ deadline has none, so a loop that hangs is never tried again',
     file: 'apps/api/src/modules/workers/module-workers.ts',
