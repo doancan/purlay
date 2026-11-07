@@ -6,7 +6,7 @@
  * third module's source, a slow one and one that throws, is `modules/find/find.integration.test.ts`; the crossing of workspaces
  * is in `cross-tenant.integration.test.ts`.
  *
- * @needs-modules chat
+ * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
@@ -59,6 +59,20 @@ const send = async (
   expect(response.status).toBe(201);
 };
 
+const anIssue = async (
+  db: Executor,
+  workspaceId: string,
+  title: string,
+  body = '',
+): Promise<string> =>
+  (
+    await db
+      .insertInto('issues')
+      .values({ id: messageId(NOW), workspace_id: workspaceId, title, body })
+      .returning('id')
+      .executeTakeFirstOrThrow()
+  ).id;
+
 interface World {
   readonly room: Room;
   readonly alice: string;
@@ -96,10 +110,12 @@ describe('integration: find', () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       await send(db, world.room.channelId, world.alice, 'the deploy is at noon');
+      await anIssue(db, world.room.workspaceId, 'Deploy checklist', 'run the script at noon');
       const found = await answer(await call(db, find(world, '  DEPLOY '), world.bob));
-      expect(found.groups.map((group) => group.source)).toEqual(['messages']);
+      expect(found.groups.map((group) => group.source)).toEqual(['messages', 'issues']);
       expect(found.skipped).toEqual([]);
       expect(titlesOf(found, 'messages')).toEqual(['the deploy is at noon']);
+      expect(titlesOf(found, 'issues')).toEqual(['Deploy checklist']);
       const [message] = found.groups[0]?.hits ?? [];
       expect(message?.target).toEqual({
         type: 'message',
@@ -113,7 +129,10 @@ describe('integration: find', () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       const found = await answer(await call(db, find(world, 'nothing like it'), world.alice));
-      expect(found.groups).toEqual([{ source: 'messages', hits: [] }]);
+      expect(found.groups).toEqual([
+        { source: 'messages', hits: [] },
+        { source: 'issues', hits: [] },
+      ]);
       expect(found.skipped).toEqual([]);
     });
   });
@@ -143,30 +162,37 @@ describe('integration: find', () => {
     });
   });
 
-  test('never finds another workspace’s words, with the same words in both', async () => {
+  test('never finds another workspace’s words or issues, with the same words in both', async () => {
     await withRollback(async (db) => {
       const mine = await aWorld(db);
       const theirs = await aWorld(db);
       await send(db, theirs.room.channelId, theirs.alice, 'their deploy is at dawn');
+      await anIssue(db, theirs.room.workspaceId, 'Their deploy checklist');
       await send(db, mine.room.channelId, mine.alice, 'our deploy is at noon');
+      await anIssue(db, mine.room.workspaceId, 'Our deploy checklist');
       const found = await answer(await call(db, find(mine, 'deploy'), mine.alice));
       expect(titlesOf(found, 'messages')).toEqual(['our deploy is at noon']);
+      expect(titlesOf(found, 'issues')).toEqual(['Our deploy checklist']);
       const other = await call(db, find(theirs, 'deploy'), mine.alice);
       expect(other.status).toBe(404);
     });
   });
 
-  test('a module that is off is answered off, and the others answer', async () => {
+  test('a module that is off is answered off and its source is never asked', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       await send(db, world.room.channelId, world.alice, 'the deploy is at noon');
+      await anIssue(db, world.room.workspaceId, 'Deploy checklist');
       const chatOff = await answer(
         await call(db, find(world, 'deploy'), world.alice, composeFor(bundledModules, 'issues')),
       );
-      expect(chatOff.groups).toEqual([]);
+      expect(chatOff.groups.map((group) => group.source)).toEqual(['issues']);
       expect(chatOff.skipped).toEqual([{ source: 'messages', reason: 'off' }]);
-      const chatOn = await answer(await call(db, find(world, 'deploy'), world.alice));
-      expect(chatOn.skipped).toEqual([]);
+      const issuesOff = await answer(
+        await call(db, find(world, 'deploy'), world.alice, composeFor(bundledModules, 'chat')),
+      );
+      expect(issuesOff.groups.map((group) => group.source)).toEqual(['messages']);
+      expect(issuesOff.skipped).toEqual([{ source: 'issues', reason: 'off' }]);
     });
   });
 });

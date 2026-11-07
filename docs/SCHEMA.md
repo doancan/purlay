@@ -1710,6 +1710,10 @@ CREATE TABLE issues (
 CREATE INDEX idx_issues_workspace  ON issues (workspace_id, id DESC);
 CREATE INDEX idx_issues_assignee   ON issues (assignee_id) WHERE assignee_id IS NOT NULL;
 CREATE INDEX idx_issues_created_by ON issues (created_by) WHERE created_by IS NOT NULL;
+-- issues/0002, for the workspace-wide find (D-285): the trigram index of the folded text, in a workspace, as messages have
+-- (`purlay_fold`, §7); built CONCURRENTLY, outside the migrator's transaction
+CREATE INDEX idx_issues_search_title ON issues USING gin (workspace_id, purlay_fold(title) gin_trgm_ops);
+CREATE INDEX idx_issues_search_body  ON issues USING gin (workspace_id, purlay_fold(body) gin_trgm_ops);
 ```
 
 ## 8. GitHub Integration
@@ -2922,6 +2926,7 @@ chat/0009_thread_read_baseline.sql channel_members.thread_read_baseline_id: inde
 chat/0010_membership_read_scopes.sql channel_read_scopes: moves the three prototype scope columns into chat's own table, preserving known scopes and restoring the core's shape (D-282)
 chat/0011_personal_channel_groups.sql channel_groups and channel_group_channels: private headings and one placement per membership (D-284)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
+issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```
 
 Unapplied numbers have moved several times: up by one when the administration migration was inserted,

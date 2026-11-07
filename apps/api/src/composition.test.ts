@@ -600,9 +600,9 @@ describe('what a process that does not run a module offers of it', () => {
     expect(compositionFor(undefined).notificationKinds.map((kind) => kind.type)).toContain(
       'mention',
     );
-    expect(compositionFor(undefined).searchSources).toEqual(['messages']);
+    expect(compositionFor(undefined).searchSources).toEqual(['messages', 'issues']);
     expect(compositionFor('issues').notificationKinds).toEqual([]);
-    expect(compositionFor('issues').searchSources).toEqual([]);
+    expect(compositionFor('issues').searchSources).toEqual(['issues']);
     expect(compositionFor('none').searchSources).toEqual([]);
   });
 });
