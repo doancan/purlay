@@ -35,11 +35,27 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
   },
   {
+    id: 'followed-older-page-retry-starts-over',
+    why: 'Retrying a failed later page restarts the list instead of recovering the exact waiting cursor. (D-289)',
+    file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
+    find: '              if (query.isFetchNextPageError) void query.fetchNextPage();\n              else void query.refetch();',
+    replace: '              void query.refetch();',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
     id: 'followed-removal-loses-keyboard-focus',
     why: 'Unfollowing a row loses focus instead of moving to the next conversation. (D-289)',
     file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
     find: '            moveFocus();\n',
     replace: '',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
+    id: 'followed-unknown-receipt-claims-read',
+    why: 'A public channel without a membership receipt falsely says every reply has been read. (D-289)',
+    file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
+    find: "? t('followed.unknown')",
+    replace: "? t('followed.read')",
     tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
   },
   {

@@ -28,13 +28,17 @@ const item = (n: number): FollowedThread => ({
   unread: { count: 0, firstUnreadMessageId: null },
 });
 const page = (...data: FollowedThread[]): FollowedThreadsPage => ({ data, nextCursor: null });
-const visit = async (api: Partial<Api>, path = '/w/acme/followed'): ReturnType<typeof renderApp> =>
+const visit = async (
+  api: Partial<Api>,
+  path = '/w/acme/followed',
+  locale: 'en' | 'tr' = 'en',
+): ReturnType<typeof renderApp> =>
   await renderApp(
     <>
       <Outlet />
       <Toaster dismissLabel="Close" />
     </>,
-    { path, api: aSignedInApi(api) },
+    { path, locale, api: aSignedInApi(api) },
   );
 const settle = async (): Promise<void> => {
   await act(async () => {
@@ -57,6 +61,91 @@ const FollowFromThread = (): React.JSX.Element => {
 };
 
 describe('followed conversations', () => {
+  test('announces a pending first read, then explains an empty list without acknowledging anything', async () => {
+    const pending = Promise.withResolvers<FollowedThreadsPage>();
+    const view = await visit({ followedThreads: () => pending.promise });
+    const loading = await view.findByText('Loading followed conversations…');
+    expect(loading.closest('[role="status"]')?.getAttribute('aria-busy')).toBe('true');
+    expect(view.queryByRole('heading', { name: 'No followed conversations yet' })).toBeNull();
+    await act(async () => {
+      pending.resolve(page());
+      await pending.promise;
+    });
+    await view.findByRole('heading', { name: 'No followed conversations yet' });
+    expect(view.queryByText('Loading followed conversations…')).toBeNull();
+    await expectNoAxeViolations(view.container);
+    view.unmount();
+  });
+
+  test.each([
+    [
+      'en',
+      'No unread replies in your followed conversations',
+      'All',
+      'No followed conversations yet',
+    ],
+    [
+      'tr',
+      'Takip ettiğin konuşmalarda okunmamış yanıt yok',
+      'Tümü',
+      'Henüz takip edilen konuşma yok',
+    ],
+  ] as const)(
+    'distinguishes an empty unread filter from no follows in %s',
+    async (locale, unreadTitle, all, emptyTitle) => {
+      const calls: FollowedThreadsQuery[] = [];
+      const view = await visit(
+        {
+          followedThreads: (_workspace, query = {}) => {
+            calls.push(query);
+            return Promise.resolve(page());
+          },
+        },
+        '/w/acme/followed?filter=unread',
+        locale,
+      );
+      await view.findByRole('heading', { name: unreadTitle });
+      await person().click(view.getByRole('button', { name: all }));
+      await view.findByRole('heading', { name: emptyTitle });
+      expect(calls.map((query) => query.unreadOnly)).toEqual([true, false]);
+      view.unmount();
+    },
+  );
+
+  test('retries an initial error and keeps focus on the heading when the last conversation is unfollowed', async () => {
+    let reads = 0;
+    let following = true;
+    const view = await visit({
+      followedThreads: () => {
+        reads += 1;
+        if (reads === 1) return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        return Promise.resolve(following ? page(item(1)) : page());
+      },
+      setThreadFollow: () => {
+        following = false;
+        return Promise.resolve({ following });
+      },
+    });
+    await view.findByRole('heading', { name: 'Conversations could not be loaded' });
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await view.findByRole('link', { name: /Shift handover 1/ });
+    expect(reads).toBe(2);
+    await person().click(view.getByRole('button', { name: 'Unfollow' }));
+    expectFocusOn(view.getByRole('heading', { level: 1, name: 'Followed conversations' }));
+    await view.findByRole('heading', { name: 'No followed conversations yet' });
+    view.unmount();
+  });
+
+  test('an unknown receipt asks to join and a tombstone never shows the deleted words', async () => {
+    const row = { ...item(1), root: { ...item(1).root, deletedAt: WHEN }, unread: null };
+    const view = await visit({ followedThreads: () => Promise.resolve(page(row)) });
+    await view.findByText('Join the channel to track unread replies');
+    expect(view.queryByText('No unread replies')).toBeNull();
+    expect(view.queryByText('Shift handover 1')).toBeNull();
+    expect(view.getByText('This message was deleted.')).toBeDefined();
+    view.unmount();
+  });
+
   test('links read conversations to the thread and waiting ones to their first unread reply, without acknowledging either', async () => {
     const waiting = { ...item(2), unread: { count: 1, firstUnreadMessageId: aMessage(3).id } };
     const view = await visit({ followedThreads: () => Promise.resolve(page(item(1), waiting)) });
@@ -71,11 +160,16 @@ describe('followed conversations', () => {
 
   test('pages with the exact composite cursor and keeps earlier rows when a later page fails', async () => {
     const calls: FollowedThreadsQuery[] = [];
+    let failed = false;
     const cursor = { activityAt: '2026-11-07T12:00:00.000001Z', rootId: item(1).root.id };
     const view = await visit({
       followedThreads: (_workspace, query = {}) => {
         calls.push(query);
-        if ('beforeRootId' in query) return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        if ('beforeRootId' in query) {
+          if (failed) return Promise.resolve(page(item(2)));
+          failed = true;
+          return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        }
         return Promise.resolve({ ...page(item(1)), nextCursor: cursor });
       },
     });
@@ -88,6 +182,11 @@ describe('followed conversations', () => {
       beforeActivityAt: cursor.activityAt,
       beforeRootId: cursor.rootId,
     });
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await view.findByRole('link', { name: /Shift handover 2/ });
+    expect(view.getByRole('link', { name: /Shift handover 1/ })).toBeDefined();
+    expect(calls).toHaveLength(3);
+    expect(calls.at(-1)).toEqual(calls[1]);
     view.unmount();
   });
 
