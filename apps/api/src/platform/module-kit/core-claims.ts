@@ -4,7 +4,7 @@
  * Each list is held to the code by a test (`route-ownership.test.ts`, `core-claims.test.ts`), so a new core claim that is
  * not added here fails there rather than waiting for a module to collide with it.
  */
-import { CORE_AUDIT_ACTIONS } from '@purlay/types';
+import { CORE_AUDIT_ACTIONS, CORE_FACTS } from '@purlay/types';
 import { CORE_PERMISSIONS } from './permissions';
 
 /**
@@ -151,7 +151,8 @@ export type CoreClaims = Readonly<
     | 'permissions'
     | 'auditActions'
     | 'notifications'
-    | 'searchSources',
+    | 'searchSources'
+    | 'facts',
     readonly string[]
   >
 >;
@@ -165,4 +166,5 @@ export const CORE_CLAIMS: CoreClaims = {
   auditActions: CORE_AUDIT_ACTIONS,
   notifications: [],
   searchSources: [],
+  facts: CORE_FACTS.map((fact) => fact.type),
 };

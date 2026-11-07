@@ -58,6 +58,7 @@ export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
 
 const MODULES_SUBJECT = 'MODULES cannot start this process';
 const CAPABILITY = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
+const FACT_TYPE = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
 
 /** A setting or a bundle that cannot start. `problems` is every reason, one sentence each. */
 export class ModuleConfigError extends Error {
@@ -301,7 +302,7 @@ const bundleProblems = (
     }
   }
 
-  problems.push(...overlapProblems(manifests, core));
+  problems.push(...overlapProblems(manifests, core), ...communicationProblems(manifests, core));
 
   // The order only means something when the graph is sound, so a cycle is looked for last.
   if (problems.length === 0) {
@@ -315,6 +316,57 @@ const bundleProblems = (
   return problems;
 };
 
+/**
+ * What a module's facts and capabilities must be (D-283 §3): a type it publishes is named for it, a type it consumes is
+ * published by the build or the core, and a capability it uses is provided by a partner it requires or lists as optional.
+ * Whether two modules publish one type is the claims' (`overlapProblems`).
+ */
+const communicationProblems = (
+  manifests: readonly ModuleManifest[],
+  core: Partial<CoreClaims>,
+): string[] => {
+  const published = new Set([
+    ...(core.facts ?? []),
+    ...manifests.flatMap((manifest) => manifest.publishes ?? []),
+  ]);
+  const providers = new Map(
+    manifests.flatMap((manifest) =>
+      manifest.provides.map((capability) => [capability, manifest.id] as const),
+    ),
+  );
+  return manifests.flatMap(
+    ({ id, requires, optional, publishes = [], consumes = [], uses = [] }) => [
+      ...publishes
+        .filter((type) => !FACT_TYPE.test(type) || !type.startsWith(`${id}.`))
+        .map((type) => `"${id}" publishes "${type}", which is not named "${id}.<what>"`),
+      ...consumes.flatMap((type) => {
+        if (!FACT_TYPE.test(type)) {
+          return [`"${id}" consumes "${type}", which is not a fact type like "notes.created"`];
+        }
+        return published.has(type)
+          ? []
+          : [`"${id}" consumes "${type}", which nothing in this build publishes`];
+      }),
+      ...uses.flatMap((capability) => {
+        if (!CAPABILITY.test(capability)) {
+          return [
+            `"${id}" uses "${capability}", which is not a capability name like "chat.post-system-message"`,
+          ];
+        }
+        const provider = providers.get(capability);
+        if (provider === undefined) {
+          return [`"${id}" uses "${capability}", which nothing in this build provides`];
+        }
+        return provider === id || requires.includes(provider) || optional.includes(provider)
+          ? []
+          : [
+              `"${id}" uses "${capability}", provided by "${provider}", which it neither requires nor lists as optional`,
+            ];
+      }),
+    ],
+  );
+};
+
 /** The words for each kind of claim, in the order they are reported. */
 const CLAIM_KINDS = [
   ['routes', 'route'],
@@ -325,6 +377,7 @@ const CLAIM_KINDS = [
   ['auditActions', 'audit action'],
   ['notifications', 'notification kind'],
   ['searchSources', 'search source'],
+  ['facts', 'fact'],
 ] as const;
 
 /** Two claims of one kind clash: the same name, or for a route a template with a path in common. */
@@ -344,6 +397,8 @@ const claimsOf = (manifest: ModuleManifest, kind: keyof CoreClaims): readonly st
       return (manifest.notifications ?? []).map((kind) => kind.type);
     case 'searchSources':
       return manifest.searchSources ?? [];
+    case 'facts':
+      return manifest.publishes ?? [];
     case 'routes':
     case 'frames':
     case 'events':
