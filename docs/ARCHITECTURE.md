@@ -816,7 +816,7 @@ stored representation. (D-36)
 
 ### 8.3. GitHub unfurling
 
-Public web links receive optional metadata cards without an integration credential (D-292). The shared Markdown
+Public web links receive optional metadata cards without an integration credential (D-293). The shared Markdown
 AST selects at most two distinct HTTPS documents per message, excluding code, supported GitHub item cards,
 picture links and the app's own origin. `POST /api/messages/:messageId/link-preview` checks the current reader's
 message authority and selected link before a workspace-specific cache or external connection is touched. A

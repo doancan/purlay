@@ -21,6 +21,7 @@ import {
   ServerAuditQuery,
   ServerAuditExportQuery,
   ServerQuotaRequest,
+  ServerWorkspaceModuleRequest,
   ServerUsersQuery,
   ServerWorkspacesQuery,
   ServerEmptyRequest,
@@ -44,15 +45,22 @@ import {
 import {
   changeServerAdministrator,
   changeServerQuota,
+  changeWorkspaceModule,
   revokeServerUserSessions,
 } from '../../modules/administration/changes';
+import type { EntitlementCatalogue } from '../../modules/entitlements/apply';
 import {
   serverMailStatus,
   serverOperations,
   serverOverview,
 } from '../../modules/administration/status';
 import { atomicallyOn } from '../../platform/transactions';
-import { publication, publishAfterCommit, publishSessionsEnded } from '../../platform/events';
+import {
+  publication,
+  publishAfterCommit,
+  publishSessionsEnded,
+  publishWorkspaceUpdated,
+} from '../../platform/events';
 import type { Readiness } from '../../platform/readiness';
 import type { AccountDependencies } from './accounts';
 import type { Config } from '../../platform/config';
@@ -96,6 +104,11 @@ export const readAdministrationUser = async (
     deps.auth.sessionLifetime,
   );
 };
+/** What a grant needs to know of the build: the modules it carries and the server's mode (D-289). */
+export interface ModuleGrantDependencies extends AccountDependencies {
+  readonly entitlements: EntitlementCatalogue;
+}
+
 export const readAdministrationWorkspaces = async (
   deps: AccountDependencies,
   request: Request,
@@ -186,6 +199,34 @@ export const writeAdministrationQuota = async (
   await atomicallyOn(deps.database)(async (tx) => {
     await changeServerQuota(tx, deps.clock, admin, id, input.quotaBytes);
   });
+};
+/** `POST /api/server/workspaces/:workspaceId/modules` — only the server's administrator grants a workspace a module (D-289). */
+export const writeAdministrationModule = async (
+  deps: ModuleGrantDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<void> => {
+  const admin = await guard(deps, request);
+  const id = validated(Uuid, workspaceId);
+  const input = validated(ServerWorkspaceModuleRequest, body);
+  const told = await atomicallyOn(deps.database)(
+    async (tx) =>
+      await changeWorkspaceModule(tx, deps.clock, admin, deps.entitlements, {
+        workspaceId: id,
+        module: input.module,
+        state: input.state,
+        ...(input.validUntil === undefined ? {} : { validUntil: new Date(input.validUntil) }),
+      }),
+  );
+  if (told.length === 0) return;
+  await publishAfterCommit(deps.log, [
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(deps.bus, deps.clock, told, id),
+      ),
+    ],
+  ]);
 };
 export const writeAdministrationSessions = async (
   deps: AccountDependencies,

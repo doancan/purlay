@@ -208,8 +208,8 @@ first channel for a workspace that was made while chat was off: a member sees "C
 first", and the new-channel button makes it.
 
 **Adding issues later.** Set `MODULES` to include `issues` (or unset it, if it already named everything) and restart; the
-set `issues/0001_issues` applies and the screen appears for every workspace on the instance. There is no per-workspace
-switch yet.
+set `issues/0001_issues` applies and the screen appears for every workspace on the instance, unless the server administrator
+withholds it from a workspace (below, *Workspaces and modules*).
 
 **A fresh install under `MODULES=none`, then adding chat.** The install works with the core alone. The core's own
 migrations also create chat's original tables, which stay empty and inert; chat's own set (`chat/0001` to `chat/0004`) is
@@ -257,9 +257,15 @@ there, and a module that is off leaves them inert.
 and with every module was about the same. Turning a module off is for what is served and kept, not for the size of the
 process.
 
-**Not supported.** Different packages for different workspaces on one instance (a module is on for the whole process;
-per-workspace enablement is a precondition of selling a package, D-250 rule 9), and third-party modules: a module is
-first-party code in this repository, and loading one from elsewhere is not supported.
+**Workspaces and modules (D-289, D-292).** `MODULES` says what a node runs; the server administrator says what each workspace may
+use of it, by `POST /api/server/workspaces/:workspaceId/modules`. `WORKSPACE_MODULES` is what a workspace with no word of its own
+gets: `open` (the default; a server you run yourself has every module it runs) or `managed` (only what is granted, for a server that
+sells modules). A workspace that may not use a module answers its paths as a module that is not run, shows no rail place, search
+result or inbox line for it, and keeps every row, which is still exported, erased and purged. Granting it back brings everything
+back. Chat is not a grant yet. Turn on `managed`, or withdraw a module, only after every node runs a release that has the table: a
+node that predates it serves the module to every workspace, and rolling back lifts every restriction (data is not lost).
+
+**Not supported.** Third-party modules: a module is first-party code in this repository, and loading one from elsewhere is not supported.
 
 ## Sizing an upgrade that backfills
 

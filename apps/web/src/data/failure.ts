@@ -162,6 +162,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'UNSUPPORTED_MEDIA_TYPE':
     case 'THREAD_NOT_RESOLVABLE':
     case 'WORKSPACE_SLUG_TAKEN':
+    // A server administrator's grant (D-289): said by the console in words of its own, refused anywhere else.
+    case 'MODULE_REQUIRES':
     case 'CHANNEL_NAME_TAKEN':
     case 'CHANNEL_GROUP_NOT_FOUND':
     case 'KNOWLEDGE_CONFLICT':

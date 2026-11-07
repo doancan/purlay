@@ -29,8 +29,9 @@ have it.
 
 ### Added
 
-- **Messages** — Shared public web links show a compact title, destination and optional image beside the conversation, while unavailable previews leave the original link usable (D-292)
+- **Messages** — Shared public web links show a compact title, destination and optional image beside the conversation, while unavailable previews leave the original link usable (D-293)
 - **Conversations** — Return to conversations you started, answered or followed, filter waiting replies and choose which threads to keep following (D-290)
+- **Operations** — A server administrator can grant a workspace a module or withhold it (`POST /api/server/workspaces/:workspaceId/modules`), for good or until a time, and take the word back; a workspace that is not granted a module answers its paths as a module that is not run, loses its rail place, search results and inbox lines for it, and keeps all of its data, exported, erased and purged as before. `WORKSPACE_MODULES` says what a workspace with no word of its own has: `open` (every module the server runs, the default) or `managed` (only what is granted). Every change is on the server's trail (D-289, D-292)
 - **Issues** — Assigning an issue to somebody else now tells them in the core's inbox, in the same step as the assignment (D-286)
 - **Inbox** — A new Updates section beside Mentions, Direct and Threads lists what the workspace's other parts, issues for now, told you, and the inbox's dot lights while one waits unread (D-286)
 - **Notifications** — Being assigned an issue also sends a push to your devices, held while you are in Deep Work or your quiet hours and sent when they end, and never saying the issue's title (D-286)
