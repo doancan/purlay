@@ -187,12 +187,13 @@ test('revoking channel membership closes an open move and does not reopen it whe
     await Promise.resolve();
   });
   await settle();
-  expect(view.queryByRole('dialog')).toBeNull();
+  // Keep the failing mutation's report scalar: Bun can recursively inspect the mounted React tree.
+  expect(view.queryByRole('dialog') === null).toBe(true);
   channels = [aChannel(IDS.api, 'api')];
   await act(async () => {
     view.world.client.setQueryData(key, channels);
     await Promise.resolve();
   });
   await settle();
-  expect(view.queryByRole('dialog')).toBeNull();
+  expect(view.queryByRole('dialog') === null).toBe(true);
 });
