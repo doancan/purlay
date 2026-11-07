@@ -13,12 +13,19 @@ import {
 } from '@purlay/db';
 import { ISSUES_PER_WORKSPACE_MAX } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
+import type { NotificationSink } from '../../../platform/ports/notification-sink';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';
 import { NOW } from '../../../testing/doubles';
 import { aUniqueSlug, aUserRow } from '../../../testing/users';
 import { createIssue } from '../issues';
+
+/** Nobody is assigned here, so nobody is told: a sink that is never asked. */
+const noInbox: NotificationSink = {
+  notify: () => Promise.reject(new Error('nobody is assigned in this test')),
+  announce: () => Promise.resolve(),
+};
 
 let cloned: ClonedDatabase;
 
@@ -51,7 +58,7 @@ describe('integration: making issues at the cap, together', () => {
     const make = async (title: string): Promise<string> =>
       await atomicallyOn(cloned.db)(async (transaction) => {
         const context = await requireWorkspaceMembership(transaction, user.userId, workspace.id);
-        await createIssue(transaction, fixedClock(NOW), context, { title });
+        await createIssue(transaction, fixedClock(NOW), context, { title }, noInbox);
         // Held a moment, so that the other has looked before this commits.
         await new Promise((resolve) => setTimeout(resolve, 150));
         return 'made';

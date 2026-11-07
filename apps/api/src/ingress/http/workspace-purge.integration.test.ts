@@ -342,6 +342,7 @@ describe('integration: the workspace purge', () => {
           'channel_groups',
           'channels',
           'github_integrations',
+          'inbox_entries',
           'incidents',
           'issues',
           'mentions',

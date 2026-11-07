@@ -11,16 +11,20 @@ import {
   ISSUES_PER_WORKSPACE_MAX,
   ISSUE_BODY_MAX,
   ISSUE_TITLE_MAX,
+  type InboxPage,
+  type ServerFrame,
+  type Topic,
   Issue,
   IssuePage,
   type UserRole,
 } from '@purlay/types';
-import { composition } from '../../../composition';
+import { composition, compositionFor } from '../../../composition';
 import { fixedClock } from '../../../platform/clock';
 import { NOW, testDependencies } from '../../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
 import { aUniqueSlug } from '../../../testing/users';
 import { createApp } from '../../../ingress/http/app';
+import { inProcessBackplane, type Backplane } from '../../../realtime/bus';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -652,6 +656,227 @@ describe('integration: what issues does for the core’s open places', () => {
         { id: mine.id, assignee_id: ada.userId, created_by: bob.userId },
         { id: given.id, assignee_id: null, created_by: ada.userId },
       ]);
+    });
+  });
+});
+
+describe('integration: an assignment tells the assignee, in the core’s inbox (D-286)', () => {
+  const inboxOf = async (
+    call: ReturnType<typeof caller>,
+    w: Workspace,
+    who: SignedInUser,
+  ): Promise<InboxPage> =>
+    (await call('GET', `/api/workspaces/${w.id}/inbox`, who)).body as InboxPage;
+
+  test('making an issue for somebody, and assigning one later, each write the assignee one notice about it', async () => {
+    await withRollback(async (db) => {
+      const w = await aWorkspace(db, { ada: 'owner', bob: 'member' });
+      const [ada, bob] = [person(w, 'ada'), person(w, 'bob')];
+      const call = caller(db);
+      const made = (await call('POST', w.path, bob, { title: 'Ship it', assigneeId: ada.userId }))
+        .body as Issue;
+      const later = (await call('POST', w.path, bob, { title: 'Later' })).body as Issue;
+      await call('PATCH', `${w.path}/${later.id}`, bob, { assigneeId: ada.userId });
+      const page = await inboxOf(call, w, ada);
+      expect(page.unreadCount).toBe(2);
+      expect(page.data).toMatchObject([
+        {
+          module: 'issues',
+          kind: 'issue_assigned',
+          actorId: bob.userId,
+          subject: { type: 'issue', id: later.id },
+          params: { title: 'Later' },
+          readAt: null,
+        },
+        {
+          module: 'issues',
+          kind: 'issue_assigned',
+          actorId: bob.userId,
+          subject: { type: 'issue', id: made.id },
+          params: { title: 'Ship it' },
+        },
+      ]);
+      expect((await inboxOf(call, w, bob)).data).toEqual([]);
+    });
+  });
+
+  test('tells nobody of what is not an assignment to somebody else: a retitle, a status, an unassignment, oneself, nobody', async () => {
+    await withRollback(async (db) => {
+      const w = await aWorkspace(db, { ada: 'owner', bob: 'member' });
+      const [ada, bob] = [person(w, 'ada'), person(w, 'bob')];
+      const call = caller(db);
+      const mine = (await call('POST', w.path, ada, { title: 'Mine', assigneeId: ada.userId }))
+        .body as Issue;
+      const unowned = (await call('POST', w.path, ada, { title: 'Nobody' })).body as Issue;
+      const given = (await call('POST', w.path, ada, { title: 'Bob’s', assigneeId: bob.userId }))
+        .body as Issue;
+      const told = await inboxOf(call, w, bob);
+      expect(told.unreadCount).toBe(1);
+      await call('PATCH', `${w.path}/${given.id}`, ada, { title: 'Bob’s, renamed' });
+      await call('PATCH', `${w.path}/${given.id}`, ada, { status: 'done' });
+      await call('PATCH', `${w.path}/${given.id}`, ada, { assigneeId: bob.userId });
+      // The same entry, as it was: not raised, not rewritten, by what was no assignment.
+      expect(await inboxOf(call, w, bob)).toEqual(told);
+      await call('PATCH', `${w.path}/${given.id}`, ada, { assigneeId: null });
+      await call('PATCH', `${w.path}/${unowned.id}`, ada, { assigneeId: null });
+      expect(await inboxOf(call, w, bob)).toEqual(told);
+      expect((await inboxOf(call, w, ada)).data).toEqual([]);
+      expect(mine.assigneeId).toBe(ada.userId);
+    });
+  });
+
+  test('assigning one issue to the same person again raises their unread notice and adds none; after it is read, a new one', async () => {
+    await withRollback(async (db) => {
+      const w = await aWorkspace(db, { ada: 'owner', bob: 'member', cy: 'member' });
+      const [ada, bob, cy] = [person(w, 'ada'), person(w, 'bob'), person(w, 'cy')];
+      const call = caller(db);
+      const issue = (
+        await call('POST', w.path, ada, { title: 'Passed around', assigneeId: bob.userId })
+      ).body as Issue;
+      await call('PATCH', `${w.path}/${issue.id}`, ada, { assigneeId: cy.userId });
+      await call('PATCH', `${w.path}/${issue.id}`, ada, { assigneeId: bob.userId });
+      const page = await inboxOf(call, w, bob);
+      expect(page.data).toHaveLength(1);
+      expect(page.unreadCount).toBe(1);
+      await call('POST', `/api/workspaces/${w.id}/inbox/read`, bob, { all: true });
+      await call('PATCH', `${w.path}/${issue.id}`, ada, { assigneeId: cy.userId });
+      await call('PATCH', `${w.path}/${issue.id}`, ada, { assigneeId: bob.userId });
+      const after = await inboxOf(call, w, bob);
+      expect(after.data).toHaveLength(2);
+      expect(after.unreadCount).toBe(1);
+    });
+  });
+
+  test('tells the assignee’s own tabs after the commit, once, and nobody when nothing was written or the request is refused', async () => {
+    await withRollback(async (db) => {
+      const w = await aWorkspace(db, { ada: 'owner', bob: 'member' });
+      const [ada, bob] = [person(w, 'ada'), person(w, 'bob')];
+      const published: [Topic, ServerFrame][] = [];
+      const inner = inProcessBackplane();
+      const backplane: Backplane = {
+        node: (deliver, log) => {
+          const real = inner.node(deliver, log);
+          return {
+            ...real,
+            publish: async (topic, frame): Promise<void> => {
+              published.push([topic, frame]);
+              await real.publish(topic, frame);
+            },
+          };
+        },
+      };
+      const app = createApp(
+        testDependencies({ database: db, clock: nextClock(), composition, backplane }),
+      );
+      const send = async (who: SignedInUser, body: unknown): Promise<number> =>
+        (
+          await app.handle(
+            new Request(`${ORIGIN}${w.path}`, {
+              method: 'POST',
+              headers: { cookie: who.cookie, 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            }),
+          )
+        ).status;
+      published.splice(0);
+      expect(await send(bob, { title: 'For ada', assigneeId: ada.userId })).toBe(201);
+      expect(published.map(([topic, frame]) => [topic, frame.event])).toEqual([
+        [`user:${ada.userId}`, 'INBOX_UPDATED'],
+      ]);
+      const [{ id: issueId }] = (await db
+        .selectFrom('issues')
+        .select('id')
+        .where('workspace_id', '=', w.id)
+        .execute()) as [{ id: string }];
+      published.splice(0);
+      const patch = async (who: SignedInUser, body: unknown): Promise<number> =>
+        (
+          await app.handle(
+            new Request(`${ORIGIN}${w.path}/${issueId}`, {
+              method: 'PATCH',
+              headers: { cookie: who.cookie, 'content-type': 'application/json' },
+              body: JSON.stringify(body),
+            }),
+          )
+        ).status;
+      expect(await patch(bob, { assigneeId: bob.userId })).toBe(200);
+      expect(published).toEqual([]);
+      expect(await patch(bob, { assigneeId: ada.userId })).toBe(200);
+      expect(published.map(([topic, frame]) => [topic, frame.event])).toEqual([
+        [`user:${ada.userId}`, 'INBOX_UPDATED'],
+      ]);
+      published.splice(0);
+      expect(await send(bob, { title: 'For me', assigneeId: bob.userId })).toBe(201);
+      expect(await send(bob, { title: 'For nobody' })).toBe(201);
+      expect(await send(bob, { title: 'For a stranger', assigneeId: crypto.randomUUID() })).toBe(
+        400,
+      );
+      expect(published).toEqual([]);
+    });
+  });
+
+  test('a person of another workspace cannot be assigned, and is told nothing, in any workspace', async () => {
+    await withRollback(async (db) => {
+      const here = await aWorkspace(db, { ada: 'owner' });
+      const there = await aWorkspace(db, { eve: 'owner' });
+      const [ada, eve] = [person(here, 'ada'), person(there, 'eve')];
+      const call = caller(db);
+      const made = await call('POST', here.path, ada, {
+        title: 'Not yours',
+        assigneeId: eve.userId,
+      });
+      expect([made.status, code(made)]).toEqual([400, 'VALIDATION_FAILED']);
+      const own = (await call('POST', here.path, ada, { title: 'Mine' })).body as Issue;
+      const patched = await call('PATCH', `${here.path}/${own.id}`, ada, {
+        assigneeId: eve.userId,
+      });
+      expect([patched.status, code(patched)]).toEqual([400, 'VALIDATION_FAILED']);
+      const held = await db
+        .selectFrom('inbox_entries')
+        .select('id')
+        .where('user_id', '=', eve.userId)
+        .execute();
+      expect(held).toEqual([]);
+      expect((await inboxOf(call, there, eve)).unreadCount).toBe(0);
+      expect(
+        (
+          await db
+            .selectFrom('issues')
+            .select('assignee_id')
+            .where('id', '=', own.id)
+            .executeTakeFirst()
+        )?.assignee_id,
+      ).toBeNull();
+    });
+  });
+
+  test('a module that is off writes nothing: with issues not run there is no route, and no notice from an earlier run is shown', async () => {
+    await withRollback(async (db) => {
+      const w = await aWorkspace(db, { ada: 'owner', bob: 'member' });
+      const [ada, bob] = [person(w, 'ada'), person(w, 'bob')];
+      const call = caller(db);
+      await call('POST', w.path, bob, { title: 'Ship it', assigneeId: ada.userId });
+      const withoutIssues = createApp(
+        testDependencies({ database: db, clock: nextClock(), composition: compositionFor('chat') }),
+      );
+      const closed = await withoutIssues.handle(
+        new Request(`${ORIGIN}${w.path}`, {
+          method: 'POST',
+          headers: { cookie: bob.cookie, 'content-type': 'application/json' },
+          body: JSON.stringify({ title: 'Nope', assigneeId: ada.userId }),
+        }),
+      );
+      expect(closed.status).toBe(404);
+      const listed = await withoutIssues.handle(
+        new Request(`${ORIGIN}/api/workspaces/${w.id}/inbox`, { headers: { cookie: ada.cookie } }),
+      );
+      expect(((await listed.json()) as InboxPage).unreadCount).toBe(0);
+      const rows = await db
+        .selectFrom('inbox_entries')
+        .select('id')
+        .where('user_id', '=', ada.userId)
+        .execute();
+      expect(rows).toHaveLength(1);
     });
   });
 });
