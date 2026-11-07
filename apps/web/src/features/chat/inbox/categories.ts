@@ -9,27 +9,35 @@
  */
 import type { NotificationType, NotificationTypesFilter } from '@purlay/types';
 
-export const INBOX_CATEGORIES = ['all', 'mentions', 'direct', 'threads'] as const;
+const INBOX_CATEGORIES = ['all', 'mentions', 'direct', 'threads', 'updates'] as const;
 export type InboxCategory = (typeof INBOX_CATEGORIES)[number];
+
+/** Updates are not notifications: the core's inbox is its own list (D-286), so no `types` ask for it. */
+export type ConversationCategory = Exclude<InboxCategory, 'updates'>;
+type NotificationCategory = Exclude<ConversationCategory, 'all'>;
 
 const TYPES = {
   mentions: ['mention'],
   direct: ['direct_message'],
   // A reply and the resolution of a question both happen in a thread the person is part of (D-29).
   threads: ['thread_reply', 'thread_resolved'],
-} as const satisfies Record<Exclude<InboxCategory, 'all'>, readonly NotificationType[]>;
+} as const satisfies Record<NotificationCategory, readonly NotificationType[]>;
 
 /** The `types` the server is asked for; none for All, which is every type. */
 export const typesOf = (category: InboxCategory): NotificationTypesFilter | undefined =>
-  category === 'all' ? undefined : TYPES[category].join(',');
+  category === 'all' || category === 'updates' ? undefined : TYPES[category].join(',');
+
+/** The categories a person is offered: Updates only where a running module writes some (D-286). */
+export const categoriesOffered = (updates: boolean): readonly InboxCategory[] =>
+  INBOX_CATEGORIES.filter((category) => category !== 'updates' || updates);
 
 /** `?category=` on the inbox's address, so "See all" lands on the same view, and Back keeps it. */
 const CATEGORY_PARAM = 'category';
 
 /** The category an address names; anything else — absent, misspelt, old — is All. */
-export const categoryIn = (search: string): InboxCategory => {
+export const categoryIn = (search: string, updates: boolean): InboxCategory => {
   const value = new URLSearchParams(search).get(CATEGORY_PARAM);
-  return INBOX_CATEGORIES.find((category) => category === value) ?? 'all';
+  return categoriesOffered(updates).find((category) => category === value) ?? 'all';
 };
 
 /** The query for a category's inbox, without its `?`: none for All, the bare address it always was. */

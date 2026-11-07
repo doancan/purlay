@@ -21,11 +21,10 @@ export const ISSUE_BODY_MAX = 10_000;
 
 /**
  * The kinds of notice issues writes to a person's inbox (D-286), declared in its manifest. An assignment is the only one. It is
- * `pushed`, since a device is told of it (14i, D-286 §9); it is not yet `needsYou`, which is what the badge counts and which the
- * web's Updates section flips with the badge (14j).
+ * `pushed`, since a device is told of it (14i, D-286 §9), and `needsYou`, since the inbox's dot counts it (14j).
  */
 export const ISSUES_NOTIFICATION_KINDS = [
-  { type: 'issue_assigned', needsYou: false, pushed: true, mailed: false },
+  { type: 'issue_assigned', needsYou: true, pushed: true, mailed: false },
 ] as const;
 
 export const IssueStatus = Type.Union([Type.Literal('open'), Type.Literal('done')]);

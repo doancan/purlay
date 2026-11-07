@@ -57,4 +57,9 @@ describe('the kinds of notification', () => {
       }
     }
   });
+
+  test('of another module that the person is told of are counted by the inbox’s dot and pushed (D-286)', () => {
+    const assigned = declared.find((kind) => kind.type === 'issue_assigned');
+    expect(assigned).toMatchObject({ needsYou: true, pushed: true, mailed: false });
+  });
 });

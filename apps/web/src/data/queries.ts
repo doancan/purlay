@@ -380,6 +380,7 @@ export const useNotifications = (
   workspaceId: string,
   unreadOnly = false,
   view?: NotificationView,
+  enabled = true,
 ): UseInfiniteQueryResult<InfiniteData<NotificationPage>> => {
   const api = useApi();
   const types = view?.types;
@@ -402,7 +403,22 @@ export const useNotifications = (
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled,
   });
+};
+
+/**
+ * How many updates the caller has not read in a workspace (D-286): the server's own count, from a page of one row, asked only
+ * where a running module writes notices (`enabled`) and read again whenever `INBOX_UPDATED` says the inbox moved.
+ */
+export const useUpdatesUnread = (workspaceId: string, enabled: boolean): number => {
+  const api = useApi();
+  const { data } = useQuery({
+    queryKey: [...keys.inbox(workspaceId), 'unread'],
+    queryFn: ({ signal }) => api.inbox(workspaceId, { limit: 1, unreadOnly: true }, signal),
+    enabled,
+  });
+  return data?.unreadCount ?? 0;
 };
 
 /** How many the inbox panel asks for (D-208): enough to triage, few enough to take in at a glance. */

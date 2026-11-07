@@ -20,4 +20,5 @@ export const issues = defineModule({
   shortcuts: [],
   settings: [],
   auditActions: ISSUES_AUDIT_ACTIONS,
+  notices: { issue_assigned: { words: 'issues.notice.assigned', path: 'issues' } },
 });

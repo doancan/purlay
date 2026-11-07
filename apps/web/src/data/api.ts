@@ -1,3 +1,4 @@
+import { InboxPage, type InboxQuery, type MarkInboxReadRequest } from '@purlay/types';
 import { OwnAdmission, InstanceInfo, ChannelCatchUp, type CatchUpQuery } from '@purlay/types';
 import { ChannelGroup, ChannelGroupPage, CHANNEL_GROUP_LIMIT } from '@purlay/types';
 import { FollowedThreadsPage, type FollowedThreadsQuery } from '@purlay/types';
@@ -423,6 +424,14 @@ export interface Api {
     },
     signal?: AbortSignal,
   ) => Promise<NotificationPage>;
+  /** What the workspace's modules told the caller, newest first: the Updates section (D-286). */
+  readonly inbox: (
+    workspaceId: string,
+    page?: Pick<InboxQuery, 'before' | 'limit' | 'unreadOnly'>,
+    signal?: AbortSignal,
+  ) => Promise<InboxPage>;
+  /** Reads these updates, or every one the caller has in the workspace (D-286). */
+  readonly readInbox: (workspaceId: string, input: MarkInboxReadRequest) => Promise<void>;
   /** Marks the caller's notifications read: these, or a workspace's up to `before` (D-106). */
   readonly readNotifications: (input: ReadNotificationsRequest) => Promise<void>;
   /** An attachment's bytes as text, read with the session, to be previewed (D-210). */
@@ -1100,6 +1109,24 @@ export const createApi = (http: Http): Api => {
           signal,
         ),
       ),
+    inbox: (workspaceId, page = {}, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/inbox`,
+        InboxPage,
+        options(
+          {
+            query: {
+              before: page.before,
+              limit: page.limit,
+              ...(page.unreadOnly === true ? { unreadOnly: 'true' } : {}),
+            },
+          },
+          signal,
+        ),
+      ),
+    readInbox: (workspaceId, input) =>
+      http.send('POST', `/api/workspaces/${at(workspaceId)}/inbox/read`, options({ body: input })),
     attachmentText: (attachmentId, signal) =>
       http.text(`/api/attachments/${at(attachmentId)}`, options({}, signal)),
     attachmentBytes: (attachmentId, maxBytes, signal) =>
