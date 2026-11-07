@@ -22,7 +22,7 @@ import { bundledModules } from './composition';
 import { coreSources, shown, sourcesOf } from './testing/module-sources';
 
 /** How many columns may be listed. Lower it with the entry that goes; raising it is a decision (D-275). */
-const CAP = 14;
+const CAP = 9;
 
 const DB_ROOT = join(import.meta.dir, '../../../packages/db');
 const moduleIds = bundledModules.map(({ manifest }) => manifest.id);

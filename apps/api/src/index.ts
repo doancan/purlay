@@ -143,6 +143,7 @@ const push =
         log,
         attention,
         notices: modules.pushNotices,
+        noticeWords: modules.noticeWords,
         failures: metrics.pushFailures,
         owner: modules.pushOwner,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).

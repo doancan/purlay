@@ -110,6 +110,22 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
   },
   {
+    id: 'sink-announce-pushes-every-kind',
+    why: 'a kind that is only listed is pushed to devices as if it needed the person (D-286 §9)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: 'written.filter((notice) => dependencies.pushedKinds.has(notice.kind)),',
+    replace: 'written,',
+    tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
+    id: 'sink-announce-pushes-nothing',
+    why: 'a notice of a pushed kind is written and announced to the tabs and no device is ever told (D-286 §9)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: '    dependencies.push?.toldInbox(',
+    replace: '    void ((_: unknown) => undefined)(',
+    tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
     id: 'sink-announce-tells-a-person-once-for-each-notice',
     why: 'a person assigned five issues at once has their inbox read again five times (D-286)',
     file: 'apps/api/src/modules/inbox/sink.ts',

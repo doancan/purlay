@@ -95,6 +95,8 @@ describe('one cipher (#113)', () => {
       // a push service carries (RFC 8291, D-126). Nothing Purlay keeps is sealed there.
       'apps/api/src/modules/push/encrypt.ts',
       'apps/api/src/platform/crypto.ts',
+      // A browser as the tests of the push sender play it: it reads, with its own key, what the sender encrypted to it.
+      'apps/api/src/testing/push-service.ts',
     ]);
   });
 });

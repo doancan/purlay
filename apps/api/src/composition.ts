@@ -28,7 +28,7 @@ import {
   assemblePersonalCatalogue,
   type PersonalContribution,
 } from './modules/export/personal-catalogue';
-import { noPushNotices, type PushNotices } from './modules/push/notices';
+import { noPushNotices, type NoticeWords, type PushNotices } from './modules/push/notices';
 import type { UserErased } from './modules/users/erasure';
 import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspaces/channels-port';
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
@@ -79,6 +79,8 @@ export interface BundledModule {
   readonly readAttachment?: AttachmentReader;
   /** What a write told, for the push sender: asked only while the module runs. */
   readonly pushNotices?: PushNotices;
+  /** What a push says of each kind of notice the manifest declares `pushed`, in the person's language (D-286 §9). */
+  readonly noticeWords?: NoticeWords;
   /** Run inside the transaction of a new workspace, once its owner is a member. */
   readonly workspaceCreated?: (...args: Parameters<WorkspaceCreated['run']>) => Promise<void>;
   /** Run inside the transaction of an erased account. */
@@ -273,6 +275,10 @@ export interface Composition {
   readonly notificationKinds: readonly NotificationKindDeclaration[];
   /** Which running module declares each kind of notification: whose notice a kind written to the inbox is (D-286). */
   readonly noticeOwners: KindOwners;
+  /** The kinds the modules this process runs declare `pushed`: what the inbox's sink tells devices of. */
+  readonly pushedKinds: ReadonlySet<string>;
+  /** What a push says of a kind of notice: the words of the module that declares it, and none for a module that is off. */
+  readonly noticeWords: NoticeWords;
   /** The ids of the search sources of the modules this process runs: a module that is off is not queried. */
   readonly searchSources: readonly string[];
   /** The sources `find` asks, each with the module it is asked as: the modules this process runs, and none that is off. */
@@ -360,6 +366,20 @@ export const compose = (
         ]),
       ),
     ),
+    pushedKinds: new Set(
+      modules.flatMap((module) =>
+        (module.manifest.notifications ?? [])
+          .filter((kind) => kind.pushed)
+          .map((kind) => kind.type),
+      ),
+    ),
+    noticeWords: (kind, locale, actor): ReturnType<NoticeWords> => {
+      for (const module of modules) {
+        const saying = module.noticeWords?.(kind, locale, actor);
+        if (saying !== undefined) return saying;
+      }
+      return undefined;
+    },
     searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
     findSources: modules.flatMap((module) =>
       (module.searchSources ?? []).map((source) => ({ module: module.manifest.id, source })),

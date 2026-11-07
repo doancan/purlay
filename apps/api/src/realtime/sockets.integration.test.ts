@@ -74,6 +74,8 @@ const push: PushSender = {
   told: (messageId, userIds): void => {
     toldOf.push({ messageId, userIds });
   },
+  toldInbox: () => undefined,
+  releaseHeld: () => Promise.resolve(),
   flush: () => Promise.resolve(),
 };
 

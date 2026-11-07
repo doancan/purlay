@@ -610,6 +610,17 @@ describe('what a process that does not run a module offers of it', () => {
     expect([...compositionFor('chat').noticeOwners.keys()]).not.toContain('issue_assigned');
     expect(compositionFor('issues').noticeOwners.get('issue_assigned')).toBe('issues');
     expect(compositionFor('none').noticeOwners.size).toBe(0);
+    expect([...compositionFor('issues').pushedKinds]).toEqual(['issue_assigned']);
+    expect(compositionFor('issues').noticeWords('issue_assigned', 'en', 'Ada')?.body).toBe(
+      'Ada assigned an issue to you',
+    );
+    expect(compositionFor('issues').noticeWords('issue_assigned', 'tr', 'Ada')?.body).toBe(
+      'Ada sana bir sorun atadı',
+    );
+    // A kind it does not word is none: the sender then says so, and tells nobody.
+    expect(compositionFor('issues').noticeWords('issue_closed', 'en', 'Ada')).toBeUndefined();
+    expect(compositionFor('chat').noticeWords('issue_assigned', 'en', 'Ada')).toBeUndefined();
+    expect(compositionFor('none').pushedKinds.size).toBe(0);
     expect(compositionFor('issues').searchSources).toEqual(['issues']);
     expect(compositionFor('none').searchSources).toEqual([]);
   });
