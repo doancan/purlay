@@ -27,6 +27,7 @@ import { API_MODULES_ATTACHMENTS } from './api-modules-attachments';
 import { API_MODULES_AUDIT } from './api-modules-audit';
 import { API_MODULES_AUTH } from './api-modules-auth';
 import { API_MODULES_AUTH_BETTER_AUTH } from './api-modules-auth-better-auth';
+import { API_MODULES_ENTITLEMENTS } from './api-modules-entitlements';
 import { API_MODULES_EXPORT } from './api-modules-export';
 import { API_MODULES_FIND } from './api-modules-find';
 import { API_MODULES_IMAGES } from './api-modules-images';
@@ -81,6 +82,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-modules-audit': API_MODULES_AUDIT,
   'api-modules-auth': API_MODULES_AUTH,
   'api-modules-auth-better-auth': API_MODULES_AUTH_BETTER_AUTH,
+  'api-modules-entitlements': API_MODULES_ENTITLEMENTS,
   'api-modules-export': API_MODULES_EXPORT,
   'api-modules-find': API_MODULES_FIND,
   'api-modules-images': API_MODULES_IMAGES,

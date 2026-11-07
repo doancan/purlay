@@ -297,6 +297,8 @@ export interface Composition {
   readonly findSourcesOff: readonly string[];
   /** The implementation of each capability the modules this process runs provide; one whose module is off is not a key, so a read of it is `undefined`. */
   readonly ports: Readonly<Record<string, object>>;
+  /** What a workspace with no grant of its own is given (D-289): the server's `WORKSPACE_MODULES`. */
+  readonly entitlementMode: EntitlementMode;
   /** The modules a workspace may use, from the grants read for it: the modules this process runs less those it is not granted (D-289). */
   readonly effectiveModules: (rows: readonly EntitlementRow[], now: Date) => ReadonlySet<string>;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
@@ -430,6 +432,7 @@ export const compose = (
       holding.flatMap((module) => module.personalExport ?? []),
     ),
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
+    entitlementMode,
     effectiveModules: (rows, now) =>
       effectiveModules({
         running: modules.map((module) => module.manifest),

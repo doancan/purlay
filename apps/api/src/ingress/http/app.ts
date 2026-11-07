@@ -15,6 +15,7 @@ import {
   readAdministrationOverview,
   readAdministrationOperations,
   writeAdministrationRole,
+  writeAdministrationModule,
   writeAdministrationQuota,
   writeAdministrationSessions,
 } from './server-administration';
@@ -632,6 +633,10 @@ export const createApp = (given: Dependencies): HttpApplication => {
     ...dependencies,
     bus: sockets.bus,
     modules: moduleIds,
+    entitlements: {
+      carried: modules.bundled.map((module) => module.manifest),
+      mode: modules.entitlementMode,
+    },
     jobs: [
       ...CORE_JOBS,
       ...Object.keys(modules.jobWork).filter((name) => !modules.closedJob(name)),
@@ -1060,6 +1065,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
     })
     .post('/api/server/workspaces/:workspaceId/quota', async ({ request, params, body, set }) => {
       await writeAdministrationQuota(administration, request, params.workspaceId, body);
+      set.status = 204;
+      return '';
+    })
+    .post('/api/server/workspaces/:workspaceId/modules', async ({ request, params, body, set }) => {
+      await writeAdministrationModule(administration, request, params.workspaceId, body);
       set.status = 204;
       return '';
     })
