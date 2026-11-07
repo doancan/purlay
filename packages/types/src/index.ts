@@ -32,6 +32,7 @@ export * from './missed-mail';
 export * from './github-app';
 export * from './github-issues';
 export * from './issues';
+export * from './find';
 export * from './releases';
 export * from './server-administration';
 export * from './channel-groups';

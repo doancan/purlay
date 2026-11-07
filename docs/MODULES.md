@@ -20,9 +20,9 @@ A unit of product — chat, issues, notes, mail — that registers with the core
 **core** (identity, workspaces and tenancy, permissions, audit, the domain event bus, attachments, the erasure and
 export catalogues, the registry) knows no module by name. Chat's own notifications and its search of messages are
 chat's: the `notifications` table is bound to a message and a channel, and stays chat's. What the core holds is the kinds
-and sources a manifest declares (§2, `notifications` and `searchSources`) and, decided in D-283 §4 and **not built yet**
-(§10 step 14), a store for the notices of any module and a search that asks every running module's source, which is the
-core's mechanism and not chat's.
+and sources a manifest declares (§2, `notifications` and `searchSources`), a search that asks every running module's source,
+which is the core's mechanism and not chat's (**built**, D-285, §10 step 14k), and, decided in D-283 §4 and **not built yet**
+(§10 step 14), a store for the notices of any module.
 One process and one PostgreSQL stay (D-7): a module is a folder, a set of migrations and a web feature, not
 a service. Modules are first-party code in this repository; the manifest is not a trust boundary, and
 loading a module from elsewhere is not supported (D-250 rule 2).
@@ -70,9 +70,12 @@ declares:
   pushed, and is mailed when it waits unread. `NotificationType`, `NEEDS_YOU` and the database's `notification_type` are held
   to the declarations by `notification-kinds.test.ts`, and the missed-mail letter takes its kinds from `mailed`;
 - `searchSources` (D-265): the ids of the sources the module adds to a workspace search (chat's is `messages`). A process
-  that does not run the module lists none of them (`composition.searchSources`). **There is no fan-out yet:** a search
-  answers messages, one source. The fan-out is decided (D-283 §4: a core route `find`, answering groups by source, with a
-  deadline for each source and a `skipped` list) and **not built** (§10 step 14k); chat's own search stays as it is.
+  that does not run the module lists none of them (`composition.searchSources`), and the slot supplies each one under the same id
+  (`searchSources` of `BundledModule`, a `SearchSource` of `platform/ports/search-source.ts`; `compose` stops a build where the ids
+  differ). **Built** (D-285, step 14k; issues' source is step 14l, not built): the core's route `GET /api/workspaces/:workspaceId/find` asks the source of every
+  module that runs, at once, each as its own module (its share of the pool, an abort signal) under a deadline of 1.5 s or the
+  module's own if shorter, and answers a group for each source and a `skipped` list (`off`, `slow`, `error`); chat's own search
+  stays as it is.
 
 That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. **Built in step 14b
 (D-283 §3), with nothing yet publishing, consuming or using:** `publishes` (the fact types the module owns, each named
@@ -188,8 +191,7 @@ In this order:
    must not be is an outbox delivery, decided and **not built**, below (D-283 §1, §2).
 2. **A port the core defines**, only where two modules use it or a test needs the boundary. Built: `WorkspaceChannels` and
    `PushNotices`, each with a null object where the module is absent, and the slots of `BundledModule` (§2) that the core
-   runs in its own transactions. Decided and *not built*, below: `NotificationSink` and `SearchSource` (D-283), as
-   interfaces in `platform/ports/`. `AttachmentOwner` is *not built and not decided*.
+   runs in its own transactions. Built: `SearchSource` (D-285), an interface in `platform/ports/`. Decided and *not built*, below: `NotificationSink` (D-283). `AttachmentOwner` is *not built and not decided*.
 3. **Asking whether a capability exists** is a typed port that is `undefined` where the provider is not run, not a
    `capabilities.has` call (D-283 §3): `Composition.ports` holds the implementations of the modules that run and `Port<T>`
    (`platform/ports/ports.ts`) makes a caller say what absence means. **Built** (step 14b) as that skeleton, held by a fake module;
@@ -199,7 +201,7 @@ In this order:
 
 | The interaction | The mechanism | Built in step (§10) | State |
 |---|---|---|---|
-| A read whose answer shapes the caller's request (search sources, is this person in that channel) | a port call with a deadline and an abort signal; `undefined` where the provider is not run | 14b the contract, 14k the search | the contract skeleton built, with no port; the search not built |
+| A read whose answer shapes the caller's request (search sources, is this person in that channel) | a port call with a deadline and an abort signal; `undefined` where the provider is not run | 14b the contract, 14k the search | the contract skeleton and the search built (`SearchSource`, D-285); a port the module `uses` has none yet |
 | A fact written to a row the core keeps, to a receiver that is always there (an assignment notice) | a port call inside the caller's transaction, announced after commit | 14f, 14h | not built |
 | An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | not built |
 | A hint: a cache nudge, presence, "read again" | the domain bus or the socket's `EventBus`, which exist | — | built, with no module using it |
@@ -222,8 +224,9 @@ test and not by a consumer in the product. Each row below is a step of §10 step
 - *The inbox* (14f, 14g, 14i, 14j): `inbox_entries`, the `NotificationSink` port, the routes `inbox` and `inbox/read`, the frame
   `INBOX_UPDATED`, push held by Deep Work and quiet hours, and an *Updates* section beside chat's list. Chat's `notifications`
   stays chat's and unmoved.
-- *The search fan-out* (14k to 14m): the `SearchSource` port, the route `find`, a deadline and a `skipped` list (`off`, `timeout`,
-  `error`) and the sources of chat and issues.
+- *The search fan-out* (14k to 14m): **built** in 14k (D-285): the `SearchSource` port, the route `find`, a deadline and a
+  `skipped` list (`off`, `slow`, `error`) and chat's source. **Not built:** issues' source and its index (14l), the web's groups (14m), and a metric
+  of how long each source took and how many were skipped.
 
 **Not built and not decided here, each with what would start it.** *`AttachmentOwner`*: the first module that is not chat to
 attach a file. *Mail for a module's notice*: a kind declared `mailed: true`. *A system message from a module into a chat channel*
@@ -469,8 +472,8 @@ Modules share a process, an event loop and a connection pool, so they are kept a
   closed after the iterations in flight, which their deadlines bound. Idle, a worker costs a timer and the two statements it
   always did; the scheduler adds an abort controller, one timer cleared at the iteration's end and a slot taken and given back
   per iteration (D-281 has the numbers);
-- *Decided, not built:* a deadline and an abort signal per search source, each run as its own module, with the response saying
-  which was skipped and why (D-283 §4, §10 step 14k): there is one source and no fan-out (§2, §4);
+- *Built* (D-285, §10 step 14k): each search source of `find` runs as its own module, so in its share, under the abort signal of a
+  deadline of 1.5 s or the module's own if shorter, and the response says which was skipped and why; there is no metric of it yet;
 - the CI latency gate refuses **starvation**, and only that (`budget:latency`): after the quiet trials it runs
   two more with twelve people reading issues' list, one request at a time with a pause between, while the issues
   table is locked in turns, so that the readers hold their share of connections and there are more of them than
@@ -543,7 +546,8 @@ requires every selected entry to be caught, even if it declares equivalence.
 | A module publishes only a fact type named for it that no other owner has, consumes only a type the build publishes and has its handler, and uses only a capability a partner it requires or lists as optional provides | **built** (D-283 §3, step 14b), with nothing yet publishing: the registry refuses a type two modules publish or the core owns, a name without its owner's prefix, a consumed type nothing publishes and a `uses` that nothing provides or that a module neither required nor optional provides (`communication.test.ts`); `compose` refuses a consumed type with no handler, a handler for an unnamed type, a `provides` with no implementation and an implementation with no `provides` (`module-communication.test.ts`), and offers a module's ports only while it runs; `fact-owners.test.ts` and `facts.test.ts` hold the declarations to their owners and to the manifests; mutations `registry-accepts-a-fact-two-modules-publish`, `registry-accepts-a-fact-without-its-owners-prefix`, `registry-accepts-a-consumer-of-an-unpublished-fact`, `registry-accepts-a-use-of-a-capability-nothing-provides`, `registry-accepts-a-use-of-a-capability-no-partner-provides`, `composition-accepts-a-consumed-fact-with-no-handler`, `composition-accepts-a-handler-for-an-unnamed-fact`, `composition-accepts-a-provided-capability-with-no-port`, `composition-accepts-a-port-nothing-provides`, `composition-offers-the-ports-of-modules-that-are-off`, `fact-owners-accepts-a-fact-declared-twice`, `fact-owners-accepts-a-fact-without-its-owners-prefix` and `fact-owners-accepts-an-owner-nobody-is`. **Not built:** a module's reading only the ports its `uses` names, and the hold of the release snapshot on `publishes` (see §4) | 14b |
 | A module reads no port it does not use | **decided** (D-283 §3), **not built**: a scan of a module's source, as `module-emissions.test.ts` reads events, when the first module reads a port | — |
 | A module writes no `outbox` or `inbox_entries` row but through the core's files | **decided** (D-283 §7), **not built**: `core-tables.test.ts` reads both names as it reads a module's tables; publishing takes a transaction and not the pool (steps 14c, 14f) | — |
-| A notice is for a member and of a declared kind; a search asks only the sources of modules that run, each under a deadline | **decided** (D-283 §4, §7), **not built**: the sink's checks and `notification-kinds.test.ts`, `composition.searchSources` and an integration test of `find` with a slow source (steps 14f, 14k) | — |
+| A notice is for a member and of a declared kind | **decided** (D-283 §4, §7), **not built**: the sink's checks and `notification-kinds.test.ts` (step 14f) | — |
+| A search asks only the sources of modules that run, each as its own module and under a deadline, and shows only what the caller may read of the workspace | **built** (D-285, step 14k): `compose` stops a build whose manifests and slots disagree on a source (`module-communication.test.ts`); `find.integration.test.ts` of the route, of the fan-out with a fake third module's source (off and never asked, slow and cancelled while the others answer, a throw, a limit); the cross-tenant and channel-visibility matrices drive the route as a read that spans channels; mutations `composition-accepts-a-listed-search-source-with-nothing-behind-it`, `composition-accepts-a-search-source-its-manifest-does-not-list`, `composition-asks-the-find-of-sources-that-are-off`, `composition-reports-the-sources-that-run-as-off`, `find-answers-more-than-the-limit`, `find-error-aborts-the-find`, `find-module-deadline-ignored`, `find-source-deadline-ignored`, `find-source-not-noted-as-its-module`, `find-source-signal-not-passed` and `chat-find-reads-the-channels-the-caller-cannot-see` | 14k |
 | A module cannot starve the others of connections | the application's one database is leased (`leasingExecutor`, `@purlay/db`) by the share of the module a request belongs to (`moduleConnections`, `platform/module-budget.ts`): a cap on the requests holding a connection, a queue timeout and a `statement_timeout` per module, the modules together held to the pool less the core's reserve — **built, applied from each manifest's `budget`** (issues a third of the pool, chat seven of ten); `features/issues/http/budget.integration.test.ts` and `ingress/http/chat-budget.integration.test.ts` (§9 item 4) fill a share on a pool of their own and find the other module and the core answered, `module-budget.integration.test.ts` and `leasing.integration.test.ts` hold the lease, and the mutations `module-routes-not-noted-as-their-module`, `frames-not-noted-as-their-module`, `application-database-not-leased`, `module-share-ignores-core-reserve`, `membership-read-inside-a-module-share` and `module-budget-declaration-ignored` hold the wiring | 5 |
 | A module's handler cannot take the pool without its module's share | there is no other handle: `app.ts` uses the database it was given once, to lease it, and no feature or door opens a pool (`module-seams.test.ts`); the mutation `application-hands-handlers-a-raw-database` — **built** (D-266) | 12 |
 | A module's request or frame that runs past its deadline is answered and its database work cancelled; a throw in one handler is that request's | `deadline` in the manifest (`request-deadline.ts`): the framework's `wrap` around a module's request, `routeFrame` around its frames, the lease's signal cancelling the statement — **built** (D-270); `deadline.integration.test.ts` (a request waiting on a lock, over `handle` and a started server, the statement gone from `pg_stat_activity`; a handler that throws, the share of one connection still whole), `router.test.ts`, `leasing.integration.test.ts`, `module-deadlines.test.ts`, `registry.test.ts`; mutations `module-requests-have-no-deadline`, `deadline-signal-not-on-the-request`, `deadline-does-not-cancel-the-statement`, `lease-takes-a-connection-past-the-deadline`, `frame-deadline-ignored`, `registry-accepts-any-deadline` and `registry-accepts-a-deadline-none-without-a-reason` | 12 |
@@ -920,8 +924,8 @@ Each step ships alone and can be reverted.
 | 1 | `module-kit`: the manifest type, the registry and `MODULES` resolution, as pure code; the import lint | no |
 | 2 | Migrator learns sets (legacy rows stay the core's); the table-ownership list and its ratchet test; the export's schema stamp reads core rows only — **built**; the `MODULES`-driven call waits for step 12 | no |
 | 3 | *Obsolete: folded into 12 and 11, both built.* Reading `MODULES` waited until something could be turned off, as `CONFIG.md` requires; the list of modules the web reads is `GET /api/me`'s `modules` | — |
-| 4 | *Not built (D-272):* wire unions opened, with aliases, **with the first module that has frames of its own** (5b); the web client already ignores unknown frames (D-82, tested) and a native client is checked first; the replay rule; `skipped` in the search response (the last decided in D-283 §4, step 14k) | no |
-| 5 | The domain bus, the typed query handle (**built**, D-271: issues and chat) and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/`. **Not built (D-272):** `AttachmentOwner`; the hint and fact with its sweeper and the ports `NotificationSink` and `SearchSource` are decided in D-283 and are step 14 | no |
+| 4 | *Not built (D-272):* wire unions opened, with aliases, **with the first module that has frames of its own** (5b); the web client already ignores unknown frames (D-82, tested) and a native client is checked first; the replay rule; `skipped` in the search response (built in D-285, step 14k) | no |
+| 5 | The domain bus, the typed query handle (**built**, D-271: issues and chat) and the raw-`sql` ban, the per-module pool cap and `statement_timeout`; chat's pagination and reader move to `platform/`. **Not built (D-272):** `AttachmentOwner`; the hint and fact with its sweeper and the port `NotificationSink` are decided in D-283 and are step 14; `SearchSource` is built (D-285) | no |
 | 5b | *Superseded by 13.* It planned a thin slice that opened an issue from a message and linked back; D-254 §1 decided that issues has no link and no frame, so that slice was not built | — |
 | 6–8 | The three cycles broken: `workspaces`, `integrations`, `channels` with `messages` | no |
 | 9 | Chat moved under `features/chat` — **built**, every file and every import that named them; still to come in this step: channel visibility and the export entries leave `platform/` and `export`, and chat's queries go behind the typed handle — **built** (D-271; chat's raw-SQL exemption is policed by a text scan, not ended) | no |
@@ -929,7 +933,7 @@ Each step ships alone and can be reverted.
 | 11 | Chat's web screens a lazy chunk; budgets split — **built** (below) | no |
 | 12 | `MODULES` turns modules off — **built**, with the cluster record (said, never acted on) and the cells of §8; the product's module-independent suites in every cell in CI (`modules:suites`, §8); a share of the pool is built for each module and a starvation gate for chat with issues busy (§7) | **yes** |
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
-| 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table and `publishFact`, with the release snapshot's hold on `publishes` and the bundle's module structure — not built; **(d)** the drain worker and the `absent` policy — not built; **(e)** the outbox sweep, metrics and the overview line — not built; **(f)** `inbox_entries` and the `NotificationSink` port — not built; **(g)** the inbox routes and `INBOX_UPDATED` — not built; **(h)** issues' assignment notice — not built; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` — not built; **(j)** the web's *Updates* section and badge — not built; **(k)** `find` and chat's source — not built; **(l)** issues' source and its index — not built; **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built, a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
+| 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table and `publishFact`, with the release snapshot's hold on `publishes` and the bundle's module structure — not built; **(d)** the drain worker and the `absent` policy — not built; **(e)** the outbox sweep, metrics and the overview line — not built; **(f)** `inbox_entries` and the `NotificationSink` port — not built; **(g)** the inbox routes and `INBOX_UPDATED` — not built; **(h)** issues' assignment notice — not built; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` — not built; **(j)** the web's *Updates* section and badge — not built; **(k)** `find` and chat's source — **built** (D-285); **(l)** issues' source and its index — not built; **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built, a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
 
 **Before a package is sold:** workspace-level enablement (D-250 rule 9), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
@@ -1211,7 +1215,7 @@ table, so that §11's listing test reads only the modules.
   the consumer's own by a worker of its module: at least once, unordered, for facts of human scale. *Not built* (D-283 §2).
 - **Port** — an interface the core defines and a module implements, handed to the module that `uses` it as `Port<T>`, the
   implementation or `undefined` where the provider is not run (`platform/ports/`, `Composition.ports`, built in step 14b with no
-  port yet). Built before it: `WorkspaceChannels`, `PushNotices`; decided: `NotificationSink`, `SearchSource` (D-283).
+  port yet). Built before it: `WorkspaceChannels`, `PushNotices`, `SearchSource` (D-285); decided: `NotificationSink` (D-283).
 - **Capability** — a name a module lists under `provides`: held to no repeat by the registry and to the last release's by
   `module-compat.test.ts`. A module that `uses` one is handed its implementation or `undefined` (`Composition.ports`, built, with no
   module yet using one), and there is no `capabilities.has` (§4, D-283 §3).

@@ -13709,7 +13709,8 @@ the second writer that §10 step 5 said a generic inbox waits for.
    route `GET /api/workspaces/:workspaceId/find` that asks each running module's `SearchSource` at once, each as its own
    module (its share, an abort signal, 1.5 s; 3 s for the route), and answers **groups by source**, never one ranked list, since
    a score does not compare across sources and a cursor across several is a promise nobody keeps. A source that is slow or throws is
-   `skipped` with `timeout` or `error`, and the others still answer. Chat's `GET …/search` stays as it is: it is the message
+   `skipped` with `timeout` or `error`, and the others still answer. *(Amended 2026-11-07, D-285: the reason is `slow` and not
+   `timeout`, and the route has no deadline of its own beyond the sources'.)* Chat's `GET …/search` stays as it is: it is the message
    screen's, with its filters and saved searches.
 
 5. **The wire is not opened.** `Topic`, `ServerFrame` and `ClientFrame` keep their closed unions (D-250 open question b stands:
@@ -13819,3 +13820,57 @@ operator as any module's tables are (D-250 rule 5). Chat's `notifications` is un
 **Rejected.** Shared groups or permission changes: a different product capability. Drag-only placement or per-group sort/filter controls: the existing menu and global controls complete the job with a keyboard and on touch. A channel in several groups: it breaks D-132's one-row rule. Remembering a hidden group behind Starred: unstarring would move a row to a place the person did not choose. Keeping these new names and channel ids in browser storage: it would not follow the person to their other devices.
 
 **Cost of reversing.** Two private chat-owned tables and additive contracts. Their rows can be removed without changing channels, messages or membership; the core continues to run with chat absent.
+
+### D-285. The workspace find asks each running module's search source at once, as that module and under a deadline, and answers a group for each source — builds on D-34, D-265, D-266, D-270, D-283; amends D-283 §4
+
+**Context.** D-283 §4 decided a core route `GET /api/workspaces/:workspaceId/find` that asks every running module's
+`SearchSource`, and left four things to the step that builds it: what a source is handed, what holds its deadline, what the
+answer says of a source that was not asked, and how issues is searched. The search of messages (`GET …/search`, chat's) answers
+one source and has filters, saved searches and a cursor; it stays as it is. The find is the other question: where is this
+word, in anything this workspace keeps.
+
+**Decision.**
+
+1. **A source is a port.** `SearchSource` (`platform/ports/search-source.ts`) is an id and one function from the application's
+   database, the caller's `WorkspaceContext`, the words and a limit to at most that many hits, newest first. A module supplies its
+   sources in the `searchSources` of its slot under the ids of its manifest's `searchSources`, and `compose` stops the build for an id
+   with nothing behind it and for a source nobody listed. The source narrows by the caller and the workspace in its own query and
+   never filters what it read (D-34): chat's is `searchIn` over the channels the caller can see, issues' is the workspace.
+2. **Each source is asked as its own module.** `find` runs it inside that module's request scope, so its statements take the
+   module's share of the pool (D-266) and none of the core's, and under the abort signal of its deadline, which cancels what it
+   asked of the database when the deadline passes (D-270). The deadline is 1.5 seconds, or the module's own when that is shorter,
+   and is a field of the application for a test to shorten. All the sources are asked at once and the answer waits for the slowest
+   of them only up to that bound. There is **no deadline on the route as a whole**, which D-283 §4 put at three seconds: the
+   sources run together, so the route is bounded by the deadline of one, and a second number would be one more thing to explain.
+3. **The answer is a group for each source and a list of the sources it skipped.** `groups` are the sources that answered, each with
+   its `source` id and up to ten `hits`, in the order of the composition; one that found nothing is a group with no hits.
+   `skipped` is each source that did not, with the reason: `off`, its module is not run in this process and it was **not asked**
+   (the owner's decision, D-283 §8.5: the signed-in session already says which modules run through `GET /api/me`); `slow`, it passed its
+   deadline (D-283 §4 called this `timeout`; the owner chose `slow`); `error`, it threw, which is written to the log with its module
+   and source and never to the caller. A source that is skipped never holds up the others' groups, and there is no one ranked list
+   and no cursor, because a score does not compare across sources.
+4. **The route is the core's.** It is in `CORE_ROUTES`, checks the workspace's membership outside every module's share, and answers
+   with chat not run, which is the point of a search that is not chat's. The contract's types are additive (`FindQuery`,
+   `FindResponse`) and `CONTRACT_VERSION` does not move; the bundle lists the endpoint under `core`. A person who is not in the
+   workspace is told `WORKSPACE_NOT_FOUND`, as everywhere (`CONTRIBUTING.md` §1.2), and the cross-tenant matrix drives it as a read that spans channels.
+5. **Issues is searched in two queries.** A title and a body, each on its own trigram index of `purlay_fold` of the column in a
+   workspace (`issues/0002_issues_search.sql`, built `CONCURRENTLY` outside the migrator's transaction, as chat's are), merged under
+   one order and cut to the limit, each issue once. Not one `OR`, which neither index serves (#1019). The words are at least three
+   characters (`SEARCH_QUERY_MIN`) for the same reason.
+
+**What holds it.** `find.integration.test.ts` of the route, of the fan-out with a fake third module's source and of issues'
+source; the cross-tenant and channel-visibility matrices; `compose` refusing a source and a manifest that disagree; and the mutations
+that remove each guard (`MODULES.md` §8).
+
+**Built in steps.** The port, the route, the fan-out and chat's source land first (`MODULES.md` §10 step 14k); issues' source and its
+indexes follow (14l), so the first change answers one group and the second adds the other.
+
+**Not built here.** The web's groups of results and the line for a skipped source (`MODULES.md` §10 step 14m), a metric of how long
+each source took and how many were skipped, and a source's own cursor: a person who wants more of a source goes to its screen.
+
+**Rejected.** *A deadline on the route as well*: see 2. *One ranked list*: D-283. *Asking the source of a module that is off and
+hiding the answer*: a read of a table that is not there, or of data the operator turned off. *A signal passed to the source as an
+argument*: it is in the request scope the share is already read from, and a second way to carry it could disagree with the first.
+
+**Cost of reversing.** The route and its types are additive and may be removed with the web's use of them; the two indexes drop
+with the module's set and cost nothing to the rest.

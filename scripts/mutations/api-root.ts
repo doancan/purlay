@@ -216,6 +216,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts'],
   },
   {
+    id: 'composition-accepts-a-listed-search-source-with-nothing-behind-it',
+    why: 'a manifest lists a search source and the slot supplies nothing for it, so the find answers a group nobody can fill and the build does not notice (D-285)',
+    file: 'apps/api/src/composition.ts',
+    find: '  if (unanswered.length > 0) {\n',
+    replace: '  if (false as boolean) {\n',
+    tests: ['apps/api/src/module-communication.test.ts'],
+  },
+  {
     id: 'composition-accepts-a-port-nothing-provides',
     why: 'a module supplies an implementation of a capability its manifest does not list, so a port is offered that the registry never checked a user of (D-283)',
     file: 'apps/api/src/composition.ts',
@@ -228,6 +236,14 @@ export const API_ROOT: readonly Mutation[] = [
     why: 'a module lists a capability it provides and supplies nothing for it, so a module that uses it is handed nothing where the partner runs (D-283)',
     file: 'apps/api/src/composition.ts',
     find: '  if (unimplemented.length > 0) {\n',
+    replace: '  if (false as boolean) {\n',
+    tests: ['apps/api/src/module-communication.test.ts'],
+  },
+  {
+    id: 'composition-accepts-a-search-source-its-manifest-does-not-list',
+    why: 'a module supplies a search source its manifest does not list, so the find asks a source that no registry check, off report or contract bundle ever saw (D-285)',
+    file: 'apps/api/src/composition.ts',
+    find: '  if (notListed.length > 0) {\n',
     replace: '  if (false as boolean) {\n',
     tests: ['apps/api/src/module-communication.test.ts'],
   },
@@ -246,6 +262,17 @@ export const API_ROOT: readonly Mutation[] = [
     find: 'migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>\n      modules.some((module) => module.manifest.id === set.id),\n    ),',
     replace: 'migrationSets: PRODUCT_MIGRATION_SETS,',
     tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-asks-the-find-of-sources-that-are-off',
+    why: 'a process without a module still asks its sources, so the find reads the tables of a module that is not run and answers its words to a caller who was told it is off (D-285, D-255)',
+    file: 'apps/api/src/composition.ts',
+    find: '    findSources: modules.flatMap((module) =>',
+    replace: '    findSources: bundled.flatMap((module) =>',
+    tests: [
+      'apps/api/src/module-communication.test.ts',
+      'apps/api/src/modules/find/find.integration.test.ts',
+    ],
   },
   {
     id: 'composition-attachment-any-apperror-is-a-no',
@@ -374,6 +401,17 @@ export const API_ROOT: readonly Mutation[] = [
     find: '    carried.map((module) => module.manifest),\n    CORE_CLAIMS,\n',
     replace: '    carried.map((module) => module.manifest),\n',
     tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-reports-the-sources-that-run-as-off',
+    why: 'the find answers a source of a module that runs as skipped `off` as well, so a person is told a module is not run where it is (D-285)',
+    file: 'apps/api/src/composition.ts',
+    find: '    findSourcesOff: bundled\n      .filter((module) => !modules.includes(module))\n      .flatMap(',
+    replace: '    findSourcesOff: bundled\n      .flatMap(',
+    tests: [
+      'apps/api/src/module-communication.test.ts',
+      'apps/api/src/ingress/http/find.integration.test.ts',
+    ],
   },
   {
     id: 'composition-retention-closed-with-its-module',

@@ -96,6 +96,7 @@ import {
   UploadQuery,
   WorkspaceMemberList,
 } from './api';
+import { FindQuery, FindResponse } from './find';
 import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';
 import { Attachment, Channel, Message, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
@@ -708,6 +709,14 @@ export const ENDPOINTS = [
     auth: 'session',
     query: SearchQuery,
     responses: { 200: SearchPage },
+  }),
+  read({
+    id: 'findAcrossSources',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/find',
+    auth: 'session',
+    query: FindQuery,
+    responses: { 200: FindResponse },
   }),
   read({
     id: 'listNotifications',

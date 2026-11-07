@@ -73,6 +73,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/workspaces/:workspaceId/deletion',
   '/api/workspaces/:workspaceId/exports',
   '/api/workspaces/:workspaceId/exports/:exportId/download',
+  '/api/workspaces/:workspaceId/find',
   '/api/workspaces/:workspaceId/invitation-recipients',
   '/api/workspaces/:workspaceId/invitation-recipients/:recipientId',
   '/api/workspaces/:workspaceId/invitation-recipients/:recipientId/attempts',

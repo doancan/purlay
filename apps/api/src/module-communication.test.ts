@@ -98,3 +98,42 @@ describe('what a module that uses a capability is handed', () => {
     expect(unguarded).toBeInstanceOf(Function);
   });
 });
+
+describe('the search sources of a module, asked by the find (D-285)', () => {
+  const source = { id: 'notes', search: (): Promise<[]> => Promise.resolve([]) };
+  const searching = (overrides: Partial<BundledModule> = {}): BundledModule => ({
+    manifest: { ...base, id: 'notes', searchSources: ['notes'] },
+    searchSources: [source],
+    ...overrides,
+  });
+
+  test('are supplied for the ids the manifest lists, and for no other', () => {
+    expect(() => compose([searching()])).not.toThrow();
+  });
+
+  test('stop the build when a listed source has nothing behind it', () => {
+    expect(() => compose([searching({ searchSources: [] })])).toThrow(
+      '"notes" lists the search sources notes in its manifest and supplies nothing behind them',
+    );
+  });
+
+  test('stop the build when a supplied source is not listed', () => {
+    const unlisted = { manifest: { ...base, id: 'notes' }, searchSources: [source] };
+    expect(() => compose([unlisted])).toThrow(
+      '"notes" supplies the search sources notes, which its manifest does not list under searchSources',
+    );
+  });
+
+  test('are asked only of a module that runs, and the others’ ids are the ones answered off', () => {
+    const wikiSearching: BundledModule = {
+      manifest: { ...base, id: 'wiki', searchSources: ['pages'] },
+      searchSources: [{ id: 'pages', search: source.search }],
+    };
+    const own = searching();
+    const composition = compose([own], [own, wikiSearching]);
+    expect(composition.findSources.map(({ module, source: asked }) => [module, asked.id])).toEqual([
+      ['notes', 'notes'],
+    ]);
+    expect(composition.findSourcesOff).toEqual(['pages']);
+  });
+});
