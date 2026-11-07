@@ -27,6 +27,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
       requireAccountApproval: false,
     }),
   attachmentText: unexpected('attachmentText'),
+  attachmentBytes: unexpected('attachmentBytes'),
   markUnread: unexpected('markUnread'),
   markAllRead: unexpected('markAllRead'),
   message: unexpected('message'),

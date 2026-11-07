@@ -143,6 +143,8 @@ them out (D-104, D-172) · per-channel notification level
 Paste-to-upload for images · file size capped by the `attachment_size_limit` constraint
 (`SCHEMA.md` §7.2, currently 25 MiB) · image thumbnails · per-workspace storage quota, shown
 to owners and set by the operator (D-173)
+· PDFs read on request inside the conversation, with page navigation, zoom, selectable text where
+available and the original download; the reader's bounds and lifecycle are D-287.
 
 **4.5 · Noise control** (D-12, D-15, D-29)
 `@username` mentions · **thread participation** — a reply notifies the root author and everyone

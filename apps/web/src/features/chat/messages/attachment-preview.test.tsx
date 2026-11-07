@@ -44,9 +44,16 @@ describe('which files are read in place', () => {
   });
 
   test('a file of no text kind, with no extension, or too large to read at once is a download only', () => {
-    expect(previewOf('report.pdf', 2048)).toBeNull();
+    expect(previewOf('archive.zip', 2048)).toBeNull();
     expect(previewOf('Makefile', 2048)).toBeNull();
     expect(previewOf('big.csv', PREVIEW_BYTES_MAX + 1)).toBeNull();
+  });
+
+  test('PDFs have their own binary bound, including a scanned file larger than the text bound', () => {
+    expect(previewOf('invoice.PDF', 2048)).toEqual({ kind: 'pdf' });
+    expect(previewOf('scan.pdf', 1024 * 1024)).toEqual({ kind: 'pdf' });
+    expect(previewOf('quote.pdf', 10 * 1024 * 1024)).toEqual({ kind: 'pdf' });
+    expect(previewOf('large.pdf', 10 * 1024 * 1024 + 1)).toBeNull();
   });
 });
 
@@ -166,7 +173,7 @@ describe('the preview in a message', () => {
   });
 
   test('a file it cannot read in place has no Preview', async () => {
-    const view = await visit(file('report.pdf'), () => Promise.reject(new Error('not asked')));
+    const view = await visit(file('archive.zip'), () => Promise.reject(new Error('not asked')));
     expect(view.queryByRole('button', { name: /Preview/ })).toBeNull();
   });
 });

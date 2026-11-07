@@ -300,6 +300,14 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     tests: ['packages/types/src/releases.test.ts'],
   },
   {
+    id: 'schema-format-scan-treats-tool-output-as-validation',
+    why: 'A build-tool output format such as es is incorrectly required to be a registered TypeBox string validator.',
+    file: 'packages/types/src/formats.test.ts',
+    find: '  if (!/from\\s+[\'"]@sinclair\\/typebox(?:\\/[^\'"]+)?[\'"]/.test(source)) return [];\n',
+    replace: '',
+    tests: ['packages/types/src/formats.test.ts'],
+  },
+  {
     id: 'search-words-may-hold-a-nul',
     why: 'a NUL in q reaches ILIKE, which PostgreSQL refuses: a 500 and an error report for a malformed search',
     file: 'packages/types/src/api.ts',

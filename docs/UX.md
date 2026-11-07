@@ -571,6 +571,19 @@ page of the same name.
   header. Copy is the source in both. A Markdown **file's** preview (the eye beside it) opens on *Preview* with
   *Source* one press away, in the block's own box — and neither ever lets what it draws stretch the feed: a
   preview that scrolls the page away from the button that opened it is a defect.
+- **A PDF is read inside the conversation** (D-287). Its existing Preview action expands a named
+  reader below the file card; opening another PDF closes the first. The toolbar offers previous/next,
+  direct page selection, Fit width and zoom, Download and Close. Its viewport uses the shared
+  attachment-preview height and the conversation's width: enlarged pages scroll inside it, while the
+  controls remain outside that scroll. Text can be selected when the document has it; an image-only
+  page says so and retains its download. The view fits narrow screens and both themes; the document
+  keeps its own colours. Escape from the reading region closes it and returns focus to Preview;
+  a child control or tooltip retains its own Escape behavior.
+  Every open, reconnect and return from a hidden tab reads the authenticated bytes again. Going
+  offline, hiding, closing or losing the containing message/channel disposes the worker and page;
+  late work cannot restore them. Loading, paused, retryable failure, password-protected and over-limit
+  states stay explicit and keep the original download. The numeric bounds have one owner,
+  `features/chat/messages/pdf-limits.ts`.
 - **One edge, no bubbles** (D-187, which reverses D-119 and returns to D-100's flat rows). Every message — yours included — hangs from the left of
   the feed, with an avatar in a fixed column and the author's name over the first message of a group, the way
   Slack draws it. There is no bubble and no tint: the words sit on the page, so a code block, a table or a quote

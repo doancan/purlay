@@ -1387,6 +1387,24 @@ describe('the endpoints', () => {
     expect(calls).toEqual([`/api/attachments/${ID}`]);
   });
 
+  test('binary attachment previews use the authenticated download with their byte bound and signal', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const signal = new AbortController().signal;
+    const api = createApi(
+      createHttp((url, init) => {
+        calls.push({ url, init });
+        return Promise.resolve(new Response(new Uint8Array([0, 255, 4])));
+      }),
+    );
+    expect(await api.attachmentBytes(ID, 3, signal)).toEqual(new Uint8Array([0, 255, 4]));
+    expect(calls[0]).toMatchObject({
+      url: `/api/attachments/${ID}`,
+      init: { signal, cache: 'no-cache' },
+    });
+    const failure = await api.attachmentBytes(ID, 2).catch((error: unknown) => error);
+    expect(failure).toMatchObject({ name: 'BinaryLimitError' });
+  });
+
   test('whether the server is still waiting to be set up, and where it lives', async () => {
     const status = harness({ open: true, appUrl: 'https://purlay.example.test' });
     expect(await status.api.setupStatus()).toEqual({

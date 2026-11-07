@@ -98,6 +98,8 @@ export interface ClientFile {
   readonly path: string;
   /** An HTML document: it carries the document's security policy (D-102). */
   readonly document: boolean;
+  /** A trusted build worker entry, named by the bundler; not a request for an API/upload. */
+  readonly worker: boolean;
   readonly cacheControl: string;
   /**
    * The file's version, from its size and modification time. The runtime sends neither an
@@ -114,6 +116,7 @@ const answer = (path: string, document: boolean, cacheControl: string): ClientFi
   return {
     path,
     document,
+    worker: !document && path.endsWith('.worker.js'),
     cacheControl,
     etag: `W/"${size.toString(36)}-${Math.trunc(mtimeMs).toString(36)}"`,
   };

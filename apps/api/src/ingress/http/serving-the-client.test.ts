@@ -15,6 +15,7 @@ const dist = mkdtempSync(join(tmpdir(), 'served-dist-'));
 mkdirSync(join(dist, 'assets'));
 writeFileSync(join(dist, 'index.html'), '<!doctype html><div id="root"></div>');
 writeFileSync(join(dist, 'assets', 'app-abc123.js'), 'console.log(1)');
+writeFileSync(join(dist, 'assets', 'decode-abc123.worker.js'), 'postMessage("ready")');
 // Beside the build, so a path that climbs out has something real to find: without the
 // guard it would be served, which is what makes the refusal below mean something.
 const secret = `${dist}-secret`;
@@ -97,6 +98,36 @@ describe('a file of the build', () => {
     expect(response.headers.get('content-security-policy')).toBe(
       "default-src 'none'; frame-ancestors 'none'",
     );
+  });
+
+  test('an explicitly built worker can import and fetch only same-origin resources', async () => {
+    const response = await send('/assets/decode-abc123.worker.js');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('javascript');
+    expect(Object.fromEntries(directives(response.headers.get('content-security-policy')))).toEqual(
+      {
+        'default-src': ["'none'"],
+        'script-src': ["'self'"],
+        'connect-src': ["'self'"],
+        'object-src': ["'none'"],
+        'base-uri': ["'none'"],
+        'frame-ancestors': ["'none'"],
+      },
+    );
+    expect(response.headers.get('cache-control')).toBe(IMMUTABLE);
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    const tag = response.headers.get('etag');
+    if (tag === null) throw new Error('the worker is missing its actual validator');
+    const again = await served.handle(
+      new Request(`${testConfig().APP_URL}/assets/decode-abc123.worker.js`, {
+        headers: { 'if-none-match': tag },
+      }),
+    );
+    expect(again.status).toBe(304);
+    expect(again.headers.get('content-security-policy')).toBe(
+      response.headers.get('content-security-policy'),
+    );
+    expect(await again.text()).toBe('');
   });
 });
 

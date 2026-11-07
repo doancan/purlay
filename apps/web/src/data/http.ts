@@ -53,6 +53,12 @@ export interface Http {
   readonly send: (method: Method, path: string, options?: RequestOptions) => Promise<void>;
   /** A GET whose answer is text, not JSON: a file's words, read to be shown (D-210). */
   readonly text: (path: string, options?: RequestOptions) => Promise<string>;
+  /** A revalidated binary read, counted as it streams; its caller owns cancellation and its deadline. */
+  readonly bytes: (
+    path: string,
+    maxBytes: number,
+    options?: Pick<RequestOptions, 'signal'>,
+  ) => Promise<Uint8Array<ArrayBuffer>>;
   /**
    * A file's bytes, posted, with its progress told as it goes (#388) — `fetch` reports nothing of a
    * request body until the answer, so an upload takes the transport that does. Its answer and its
@@ -293,6 +299,10 @@ export const createHttp = (
     },
     text: async (path: string, options: RequestOptions = {}): Promise<string> =>
       (await call('GET', path, options)).text,
+    bytes: async (path, maxBytes, options = {}): Promise<Uint8Array<ArrayBuffer>> => {
+      const { readBinary } = await import('./http-binary');
+      return await readBinary(fetchFn, path, maxBytes, options.signal, failureOf);
+    },
     upload: async <S extends TSchema>(
       path: string,
       schema: S,
