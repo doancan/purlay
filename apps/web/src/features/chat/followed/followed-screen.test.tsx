@@ -12,7 +12,7 @@ import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
 import { installDom } from '../../../testing/dom';
 import { expectNoAxeViolations } from '../../../testing/axe';
-import { aMessage, aSignedInApi, IDS, WHEN } from '../../../testing/fixtures';
+import { aMessage, aSession, aSignedInApi, IDS, WHEN } from '../../../testing/fixtures';
 import { expectFocusOn } from '../../../testing/focus';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
@@ -61,6 +61,26 @@ const FollowFromThread = (): React.JSX.Element => {
 };
 
 describe('followed conversations', () => {
+  test('a workspace without chat shows no followed view or navigation and makes no list request', async () => {
+    const session = aSession();
+    let reads = 0;
+    const view = await visit({
+      me: () =>
+        Promise.resolve({
+          ...session,
+          memberships: session.memberships.map((membership) => ({ ...membership, modules: [] })),
+        }),
+      followedThreads: () => {
+        reads += 1;
+        return Promise.resolve(page(item(1)));
+      },
+    });
+    await view.findByRole('heading', { level: 1, name: 'Nothing here' });
+    expect(view.queryByRole('link', { name: 'Followed conversations' })).toBeNull();
+    expect(reads).toBe(0);
+    view.unmount();
+  });
+
   test('announces a pending first read, then explains an empty list without acknowledging anything', async () => {
     const pending = Promise.withResolvers<FollowedThreadsPage>();
     const view = await visit({ followedThreads: () => pending.promise });
