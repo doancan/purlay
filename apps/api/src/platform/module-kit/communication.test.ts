@@ -14,6 +14,7 @@ const module = (id: string, rest: Partial<ModuleManifest> = {}): ModuleManifest 
   id,
   requires: [],
   optional: [],
+  degrades: {},
   provides: [],
   budget: { none: 'a test module with no queries of its own' },
   ...rest,

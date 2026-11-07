@@ -15,6 +15,9 @@ const module = (id: string, rest: Partial<ModuleManifest> = {}): ModuleManifest 
   // The test modules speak on the socket, which only a module no workspace is granted may (D-289).
   entitlement: 'always',
   budget: { none: 'a test module with no queries of its own' },
+  degrades: Object.fromEntries(
+    (rest.optional ?? []).map((partner) => [partner, `it does without ${partner}`]),
+  ),
   ...rest,
 });
 
@@ -55,6 +58,7 @@ describe('a module a workspace is granted', () => {
         id: 'notes',
         requires: [],
         optional: [],
+        degrades: {},
         provides: [],
         budget: { none: 'a test module with no queries of its own' },
         ...rest,
@@ -204,6 +208,44 @@ describe('a bundle that cannot be trusted', () => {
   });
 });
 
+describe('what a module says it does without an optional partner (D-291)', () => {
+  test('is a sentence for each optional partner and for no other', () => {
+    expect(
+      moduleRegistry([
+        module('wiki'),
+        module('notes', {
+          optional: ['wiki'],
+          degrades: { wiki: 'Links show their saved title as text.' },
+        }),
+      ]).bundled,
+    ).toHaveLength(2);
+  });
+
+  test('refuses an optional partner with no sentence, a sentence for a module not listed optional, and an empty one', () => {
+    expect(
+      problemsOf(() =>
+        moduleRegistry([
+          module('wiki'),
+          module('mail'),
+          module('notes', { optional: ['wiki', 'mail'], degrades: { mail: '  ', chat: 'x' } }),
+        ]),
+      ),
+    ).toEqual([
+      '"notes" does not say what it does without "wiki": give `degrades` a sentence for each optional partner',
+      '"notes" says nothing in `degrades` for "mail": the sentence is empty',
+      '"notes" has a `degrades` sentence for "chat", which it does not list as optional',
+    ]);
+  });
+
+  test('refuses a manifest that leaves degrades out, which the type forbids and a snapshot may do', () => {
+    const { degrades, ...without } = module('notes');
+    expect(degrades).toEqual({});
+    expect(problemsOf(() => moduleRegistry([without as ModuleManifest]))).toEqual([
+      '"notes" does not declare `degrades`: give it `{}` when it has no optional partner',
+    ]);
+  });
+});
+
 describe('the ids the core owns', () => {
   const documented = (): Set<string> => {
     // Every route row of API.md names its path in backticks, `/api/<segment>…`, or the unprefixed
@@ -323,7 +365,13 @@ describe('what two modules, or a module and the core, both claim', () => {
 describe('a module’s share of the database (D-250 rule 7)', () => {
   test('a manifest that does not say it does not compile, and the registry refuses it by id', () => {
     // @ts-expect-error a manifest without `budget` is not a ModuleManifest
-    const incomplete: ModuleManifest = { id: 'issues', requires: [], optional: [], provides: [] };
+    const incomplete: ModuleManifest = {
+      id: 'issues',
+      requires: [],
+      optional: [],
+      degrades: {},
+      provides: [],
+    };
     expect(problemsOf(() => moduleRegistry([incomplete]))).toEqual([
       '"issues" does not say what it may take of the database: give it a `budget`, a share of the pool or `none` with the reason',
     ]);

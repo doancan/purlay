@@ -948,6 +948,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
   },
   {
+    id: 'registry-accepts-an-optional-edge-without-degrades',
+    why: 'a module lists an optional partner and says nothing of what it does without it, so the claim the generated case tests is never made (D-291)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: '    if (sentence === undefined) {\n',
+    replace: '    if (false as boolean) {\n',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
+  },
+  {
     id: 'registry-accepts-any-deadline',
     why: 'a module declares a deadline of zero or of a day, which is no deadline or one a proxy gave up on long before (D-270)',
     file: 'apps/api/src/platform/module-kit/registry.ts',

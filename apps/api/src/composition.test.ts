@@ -33,6 +33,7 @@ const another: BundledModule = {
     id: 'other',
     requires: [],
     optional: [],
+    degrades: {},
     provides: [],
     // Its tests give it jobs and workers, which only a module no workspace is granted may have (D-289).
     entitlement: 'always',
@@ -66,7 +67,14 @@ const outcomeOf = async (reading: Promise<{ readonly id: string }>): Promise<str
 };
 
 const moduleReading = (id: string, reader: AttachmentReader): BundledModule => ({
-  manifest: { id, requires: [], optional: [], provides: [], budget: { none: 'a test module' } },
+  manifest: {
+    id,
+    requires: [],
+    optional: [],
+    degrades: {},
+    provides: [],
+    budget: { none: 'a test module' },
+  },
   readAttachment: reader,
 });
 
@@ -191,6 +199,7 @@ describe('the application as its modules make it', () => {
         id: 'noticing',
         requires: [],
         optional: [],
+        degrades: {},
         provides: [],
         budget: { none: 'a test module' },
       },
@@ -215,7 +224,14 @@ describe('the application as its modules make it', () => {
       requires: readonly string[],
       table: 'issues' | 'mentions' | 'channels',
     ): BundledModule => ({
-      manifest: { id, requires, optional: [], provides: [], budget: { none: 'a test module' } },
+      manifest: {
+        id,
+        requires,
+        optional: [],
+        degrades: {},
+        provides: [],
+        budget: { none: 'a test module' },
+      },
       userErased: (): Promise<void> => {
         calls.push(id);
         return Promise.resolve();
@@ -264,6 +280,7 @@ describe('the application as its modules make it', () => {
           id,
           requires: [],
           optional: [],
+          degrades: {},
           provides: [],
           budget: { none: 'a test module' },
           routes,
@@ -503,7 +520,7 @@ describe('the share of the database each module declares (D-250 rule 7, D-266)',
     expect(() =>
       composeFor(
         // @ts-expect-error a module without a `budget` is not a BundledModule
-        [{ manifest: { id: 'other', requires: [], optional: [], provides: [] } }],
+        [{ manifest: { id: 'other', requires: [], optional: [], degrades: {}, provides: [] } }],
         undefined,
       ),
     ).toThrow(/"other" does not say what it may take of the database/);

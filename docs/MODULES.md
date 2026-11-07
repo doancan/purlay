@@ -50,6 +50,11 @@ declares:
 - `entitlement` (optional, D-289): `always` when no workspace's grant may take the module from it (chat, for now), `grant` (what a
   module that says nothing says) when the operator grants it to each workspace; `platform/module-kit/entitlement.ts` decides, from the
   process's modules, the workspace's `workspace_modules` rows and `WORKSPACE_MODULES`, which of them a workspace may use;
+- `degrades` (**required**, D-291): for each `optional` partner, one sentence saying what the module does when that partner is
+  not run, and for no other module; `{}` when it has no optional partner. The registry refuses a partner with no sentence, an
+  empty one, a sentence for a module not listed `optional`, and a manifest that leaves the field out. The sentence has a case
+  behind it: `testing/degradation.ts` runs the module's scenario (`features/<id>/degradation.testing.ts`, a `Degradation<typeof manifest>`
+  with a key for each optional partner) on the build composed without the partner and without what requires it (§4);
 - `budget` (**required**, D-260, D-266): its share of the connection pool, `{ poolShare: (poolMax) => limits }`, or
   `{ none: reason }`. A manifest without it does not compile, and the registry refuses one that has none at run time, a
   `none` with no reason and a share that leaves the module no connection or the others none (§7). Every bundled module
@@ -266,6 +271,19 @@ with an operation of its own or live data, and a native client checked first. Wh
 (`core-claims.test.ts`). *`register`*: not wanted; nothing registers at run time (D-283 §3).
 
 A module imports `module-kit`, `platform` and `@purlay/types` and nothing from another module's folder.
+
+**What a module does without an optional partner is a case, not a sentence (D-291).** `degrades` says it, and
+`degradation.test.ts` makes a case, `<module> without <partner>`, for every optional edge of the build: the build composed
+without the partner (and what requires it), the module's scenario run on it, a missing scenario or a scenario for no edge a
+failure. The real build has no optional edge today, so the cases appear with the first one; the generator is proved on a fake
+`notes` and `wiki` in `testing/degradation.test.ts`.
+
+**A reference to another module's record is opaque and carries its label (D-291).** The referring module stores, in its own table,
+`(module, type, id)` and the label the record had when it was linked; there is no foreign key to the other module (a key between
+modules is already held by `module-foreign-keys.integration.test.ts`, and a read of the other's table does not compile, above). The
+target being off, not entitled, deleted or hidden from the viewer is a view, "not available here", shown as the saved label in
+plain text and never an error, and deleting the target never cascades. The resolver port and the wire type come with the first
+module that links; the rule binds the table it writes.
 
 **Reads are bounded the same way.** A module's functions take a handle typed with *its own tables and the
 core's it names* — never the combined schema (`features/<id>/schema.ts`: `ModuleSchema`, derived from `TABLE_OWNERS`, so
@@ -667,7 +685,7 @@ commit beside this list.
   registry refuses it, and a test holds the list to `API.md`).
 - `requires` (will not start without), `optional` (used when present; mutual optional partners are a cycle, one must be
   the one that knows the other), `provides` (capability names like `chat.post-system-message`). Say what a user sees for
-  each absent partner. Promoting an `optional` to `requires` is a breaking change.
+  each absent partner in `degrades` (D-291), and write its scenario in `features/<id>/degradation.testing.ts`: `degradation.test.ts` fails for an edge without one. Promoting an `optional` to `requires` is a breaking change.
 - `routes`: every path template the module owns, as the paths the contract gives (`:name` is a segment, a trailing `**`
   the rest). `route-ownership.test.ts` fails for a registered route no manifest claims or two claim.
 - `frames`, `events`, `jobs`: the socket operations, the server events its services send, and the scheduled jobs that act

@@ -13,7 +13,13 @@ interface ChannelAccess {
   readonly canPost: (channelId: string) => boolean;
 }
 
-const base = { requires: [], optional: [], provides: [], budget: { none: 'a test module' } };
+const base = {
+  requires: [],
+  optional: [],
+  degrades: {},
+  provides: [],
+  budget: { none: 'a test module' },
+};
 const consumer: FactConsumer = () => Promise.resolve('done');
 const access: ChannelAccess = { canPost: () => true };
 

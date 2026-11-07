@@ -43,6 +43,7 @@ export const issuesModule = {
     id: 'issues',
     requires: [],
     optional: [],
+    degrades: {},
     provides: [],
     // A third of the pool, so that a module whose queries are slow cannot make chat's sends queue (`budget.ts`).
     budget: { poolShare: issuesBudget },

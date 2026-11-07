@@ -77,6 +77,7 @@ describe('what the core claims', () => {
         id: 'notes',
         requires: [],
         optional: [],
+        degrades: {},
         provides: [],
         budget: { none: 'a test module' },
         routes: [route],
