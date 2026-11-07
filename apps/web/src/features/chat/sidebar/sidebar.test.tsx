@@ -1301,12 +1301,15 @@ describe('browsing channels', () => {
 });
 
 describe('the keyboard', () => {
-  test('Tab reaches the jump field, the channels’ heading and buttons, in that order — the places are on the rail', async () => {
+  test('Tab reaches the jump field, followed conversations, then the channels’ heading and buttons', async () => {
     const view = await open();
     act(() => {
       view.getByRole('button', { name: /^Jump to…/ }).focus();
     });
     expect(document.activeElement?.textContent).toMatch(/^Jump to…(⌘|Ctrl)K$/);
+    await person().tab();
+    expect(document.activeElement?.textContent.trim()).toBe('Followed conversations');
+    expect(document.activeElement?.getAttribute('href')).toBe('/w/acme/followed');
     await person().tab();
     // The heading is a button that folds the section, and the first stop in it (D-195).
     expect(document.activeElement?.textContent.trim()).toBe('Channels');

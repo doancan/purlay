@@ -22,6 +22,7 @@ const OWNERS: Readonly<Record<RouteName, string | null>> = {
   saved: 'chat',
   drafts: 'chat',
   unreads: 'chat',
+  followed: 'chat',
   issues: 'issues',
   welcome: null,
   settingsHome: null,

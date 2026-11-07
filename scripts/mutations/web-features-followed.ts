@@ -1,0 +1,69 @@
+// Area web-features-followed: personal follow choices and the conversation list.
+import type { Mutation } from '../mutate';
+const FOLLOW_PANEL_TESTS = 'apps/web/src/features/chat/threads/thread.test.tsx';
+export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
+  {
+    id: 'followed-choice-refusal-hides-row',
+    why: 'A refused unfollow loses the row when the recovery read also fails. (D-289)',
+    file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
+    find: '          undo?.();\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
+    id: 'followed-foreground-keeps-old-choices',
+    why: 'Choices made elsewhere remain stale when the reader returns to the page. (D-289)',
+    file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
+    find: '      if (visible && !wasVisible) readAgain(client, families.followedThreads);\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
+    id: 'followed-hidden-page-still-reads',
+    why: 'Visibility and focus events start reads while hidden or repeatedly while already visible. (D-289)',
+    file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
+    find: 'if (visible && !wasVisible) readAgain(client, families.followedThreads);',
+    replace: 'readAgain(client, families.followedThreads);',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
+    id: 'followed-new-follow-leaves-old-list',
+    why: 'Following from the thread header leaves a previously cached list stale. (D-289)',
+    file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
+    find: '          readAgain(client, families.followedThreads);\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
+    id: 'followed-removal-loses-keyboard-focus',
+    why: 'Unfollowing a row loses focus instead of moving to the next conversation. (D-289)',
+    file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
+    find: '            moveFocus();\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/followed/followed-screen.test.tsx'],
+  },
+  {
+    id: 'thread-follow-own-reply-ignored',
+    why: 'after answering a thread the panel still says Follow is off, though the reply followed it (D-29, D-161)',
+    file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
+    find: '    if (repliedByMe > replied.current) {\n',
+    replace: '    if (false) {\n',
+    tests: [FOLLOW_PANEL_TESTS],
+  },
+  {
+    id: 'thread-follow-refusal-kept',
+    why: 'a refused follow stays painted, so the panel says the person is not told of replies when they are',
+    file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
+    find: '          if (before !== undefined) client.setQueryData<ThreadFollow>(key, before);\n',
+    replace: '',
+    tests: [FOLLOW_PANEL_TESTS],
+  },
+  {
+    id: 'thread-follow-waits-for-the-server',
+    why: 'Follow changes only when the server answers, so the panel says the old state for a round trip (CONTRIBUTING §1.9)',
+    file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
+    find: '    client.setQueryData<ThreadFollow>(key, { following });\n',
+    replace: '',
+    tests: [FOLLOW_PANEL_TESTS],
+  },
+];

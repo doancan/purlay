@@ -91,6 +91,18 @@ const EMOJI =
 
 FormatRegistry.Set('uuid', (value) => UUID.test(value));
 FormatRegistry.Set('date-time', (value) => DATE_TIME.test(value));
+/** A server-issued UTC cursor keeps database microseconds and rejects impossible calendar dates. */
+const CURSOR_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z$/;
+const isCursorTime = (value: string): boolean => {
+  if (!CURSOR_TIME.test(value)) return false;
+  const instant = Date.parse(value);
+  if (!Number.isFinite(instant)) return false;
+  const parsed = new Date(instant);
+  return (
+    parsed.toISOString() === value.replace(/(\.\d{3})\d{3}Z$/, '$1Z') && parsed.getUTCFullYear() > 0
+  );
+};
+FormatRegistry.Set('cursor-time', isCursorTime);
 FormatRegistry.Set('email', (value) => EMAIL.test(value));
 FormatRegistry.Set('uri', (value) => URI.test(value));
 FormatRegistry.Set('message-content', isMessageContent);
@@ -113,6 +125,7 @@ FormatRegistry.Set('emoji', (value) => EMOJI.test(value));
 export const REGISTERED_FORMATS = [
   'uuid',
   'date-time',
+  'cursor-time',
   'email',
   'uri',
   'message-content',

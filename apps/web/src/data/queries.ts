@@ -32,6 +32,8 @@ import type {
   WorkspaceMember,
   ChannelMember,
   ThreadFollow,
+  FollowedThreadsPage,
+  FollowedThreadsCursor,
 } from '@purlay/types';
 import { SEARCH_QUERY_MIN } from '@purlay/types';
 import { useApi } from './api-provider';
@@ -294,6 +296,32 @@ export const useThreadFollow = (rootId: string, enabled = true): UseQueryResult<
     queryKey: keys.threadFollow(rootId),
     queryFn: ({ signal }) => api.threadFollow(rootId, signal),
     enabled,
+  });
+};
+
+export const useFollowedThreads = (
+  workspaceId: string,
+  unreadOnly = false,
+): UseInfiniteQueryResult<InfiniteData<FollowedThreadsPage>> => {
+  const api = useApi();
+  return useInfiniteQuery({
+    queryKey: keys.followedThreads(workspaceId, unreadOnly),
+    queryFn: ({ pageParam, signal }) =>
+      api.followedThreads(
+        workspaceId,
+        {
+          unreadOnly,
+          ...(pageParam === undefined
+            ? {}
+            : {
+                beforeActivityAt: pageParam.activityAt,
+                beforeRootId: pageParam.rootId,
+              }),
+        },
+        signal,
+      ),
+    initialPageParam: undefined as FollowedThreadsCursor | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 };
 

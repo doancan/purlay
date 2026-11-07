@@ -1,5 +1,6 @@
 import { OwnAdmission, InstanceInfo, ChannelCatchUp, type CatchUpQuery } from '@purlay/types';
 import { ChannelGroup, ChannelGroupPage, CHANNEL_GROUP_LIMIT } from '@purlay/types';
+import { FollowedThreadsPage, type FollowedThreadsQuery } from '@purlay/types';
 import {
   Issue,
   IssuePage,
@@ -438,6 +439,12 @@ export interface Api {
   readonly threadFollow: (rootId: string, signal?: AbortSignal) => Promise<ThreadFollow>;
   /** Follows this root's thread, or lets it go: the caller's own choice (D-161). */
   readonly setThreadFollow: (rootId: string, following: boolean) => Promise<ThreadFollow>;
+  /** The caller's followed roots, including authored and answered conversations without a manual choice. */
+  readonly followedThreads: (
+    workspaceId: string,
+    query?: FollowedThreadsQuery,
+    signal?: AbortSignal,
+  ) => Promise<FollowedThreadsPage>;
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
@@ -1113,6 +1120,21 @@ export const createApi = (http: Http): Api => {
         `/api/messages/${at(rootId)}/follow`,
         ThreadFollow,
         options({ body: { following } satisfies SetThreadFollowRequest }),
+      ),
+    followedThreads: (workspaceId, query = {}, signal) =>
+      http.request(
+        'GET',
+        `/api/workspaces/${at(workspaceId)}/followed-threads`,
+        FollowedThreadsPage,
+        options(
+          {
+            query: {
+              ...query,
+              unreadOnly: query.unreadOnly === undefined ? undefined : String(query.unreadOnly),
+            },
+          },
+          signal,
+        ),
       ),
     search: (workspaceId, query, signal) =>
       http.request(

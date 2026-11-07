@@ -392,6 +392,14 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
   },
   {
+    id: 'followed-visible-query-crosses-workspaces',
+    why: 'The visibility subquery accepts follows from another workspace the viewer belongs to. (D-289)',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
+    find: "  visibleChannels(executor, context.userId)\n    .where('channels.workspace_id', '=', context.workspaceId)\n    .select('channels.id');",
+    replace: "  visibleChannels(executor, context.userId)\n    .select('channels.id');",
+    tests: ['apps/api/src/features/chat/messages/followed.integration.test.ts'],
+  },
+  {
     id: 'group-filled-in-again',
     why: 'somebody removed and let back in returns to a group, and reads what was written while out',
     file: 'apps/api/src/features/chat/channels/direct-messages.ts',

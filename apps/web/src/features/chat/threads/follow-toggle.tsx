@@ -20,7 +20,8 @@ import type { ThreadFollow } from '@purlay/types';
 import { useApi } from '../../../data/api-provider';
 import { isTransient } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
-import { keys } from '../../../data/keys';
+import { families, keys } from '../../../data/keys';
+import { readAgain, threadUnfollowed } from '../../../data/cache';
 import { useThreadFollow } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
@@ -32,7 +33,7 @@ import { useToast } from '../../../ui/toast';
 const lines = new WeakMap<QueryClient, Map<string, Promise<void>>>();
 
 /** Follow a thread or let it go: painted at once, put back when refused. */
-const useSetThreadFollow = (rootId: string): ((following: boolean) => void) => {
+export const useSetThreadFollow = (rootId: string): ((following: boolean) => void) => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
@@ -45,6 +46,7 @@ const useSetThreadFollow = (rootId: string): ((following: boolean) => void) => {
     // A read already on its way would land after this paint and take it back: let it go.
     void client.cancelQueries({ queryKey: key });
     client.setQueryData<ThreadFollow>(key, { following });
+    const undo = following ? undefined : threadUnfollowed(client, rootId);
     const line = lines.get(client) ?? new Map<string, Promise<void>>();
     lines.set(client, line);
     const after = line.get(rootId) ?? Promise.resolve();
@@ -55,6 +57,7 @@ const useSetThreadFollow = (rootId: string): ((following: boolean) => void) => {
           client.setQueryData<ThreadFollow>(key, answer);
         },
         (failure: unknown) => {
+          undo?.();
           if (before !== undefined) client.setQueryData<ThreadFollow>(key, before);
           show({
             message: `${t(following ? 'thread.follow.failed' : 'thread.follow.unfollowFailed')} ${describe(failure)}`,
@@ -73,7 +76,10 @@ const useSetThreadFollow = (rootId: string): ((following: boolean) => void) => {
         },
       )
       .finally(() => {
-        if (line.get(rootId) === done) line.delete(rootId);
+        if (line.get(rootId) === done) {
+          line.delete(rootId);
+          readAgain(client, families.followedThreads);
+        }
       });
     line.set(rootId, done);
   };

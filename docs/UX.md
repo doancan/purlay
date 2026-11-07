@@ -67,7 +67,7 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   field (the palette's door, `⌘K`), **All unreads** while a channel waits (D-216: each unread, unmuted channel's
   oldest unread root messages, 20 at a time, **Mark read** reading only displayed roots; waiting threads
   show their root context and a link to the first unread reply, with separate **More unread threads** pagination,
-  D-282. Opening this view reads nothing; failed refreshes preserve a retry and never claim everything was read), the **starred** channels — a section of their own above the
+  D-282. Opening this view reads nothing; failed refreshes preserve a retry and never claim everything was read), **Followed conversations** (D-289: authored, answered or explicitly followed roots, All/Unread in the address, a source and preview, unread reply navigation and Unfollow; failed actions recover and a removed row moves keyboard focus to the next row or heading), the **starred** channels — a section of their own above the
   rest, by name, there only once one is starred, from **Star this channel** in a channel's header
   (D-132) — the channels, by name so that a new message never moves a row (D-160), under a heading that carries **Browse channels** and **New channel**, always
 shown in the section's quiet tone with a tooltip each, never revealed only under a pointer — the **conversations** — groups of up to ten

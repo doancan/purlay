@@ -3,7 +3,7 @@
  * `import()` (`manifest.ts`) and nothing imports it statically, so none of chat's code is in the shell's chunk: a
  * server that does not run chat is never sent it, and `budget:web` fails the build if it is.
  */
-import { createElement } from 'react';
+import { createElement, lazy } from 'react';
 import { ChannelScreen } from './channel/channel-screen';
 import { DraftsScreen } from './drafts/drafts-screen';
 import { InboxScreen } from './inbox/inbox-screen';
@@ -12,6 +12,9 @@ import { SavedScreen } from './saved/saved-screen';
 import { SearchScreen } from './search/search-screen';
 import { UnreadsScreen } from './unreads/unreads-screen';
 import type { ChatScreens } from './manifest';
+const FollowedScreen = lazy(async () => ({
+  default: (await import('./followed/followed-screen')).FollowedScreen,
+}));
 
 /** What the manifest's `load` reads: the screen of each of chat's routes, given what its address names. */
 export const screens: ChatScreens = {
@@ -22,4 +25,5 @@ export const screens: ChatScreens = {
   saved: SavedScreen,
   search: SearchScreen,
   unreads: UnreadsScreen,
+  followed: () => createElement(FollowedScreen),
 };

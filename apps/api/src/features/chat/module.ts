@@ -90,6 +90,7 @@ export const chatModule = {
       '/api/workspaces/:workspaceId/reminders',
       '/api/workspaces/:workspaceId/saved',
       '/api/workspaces/:workspaceId/saved/ids',
+      '/api/workspaces/:workspaceId/followed-threads',
       '/api/workspaces/:workspaceId/saved-searches',
       '/api/workspaces/:workspaceId/saved-searches/:searchId',
       '/api/workspaces/:workspaceId/scheduled',
