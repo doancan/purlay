@@ -14022,7 +14022,9 @@ fact for each message (D-35).
 1. **A row is one delivery.** `outbox` (`0089_outbox.sql`, the core's, a new table with its indexes made with it): `id` and `fact_id`
    (UUIDv7, the application's, as a message's id is), `workspace_id` on every row with a key to `workspaces`, `type`, `producer`,
    `consumer`, the `payload`, `state` (`pending`, `delivered`, `dead`, `skipped`), `attempts`, `next_attempt_at`, `last_error`
-   (a class of error, at most 300 characters, never the payload), and `created_at`, `finished_at` and `expires_at`. One row for each
+   (a class of error, at most 300 characters, never the payload), `shape` (the version of the fact's declaration that wrote it, from 1),
+   `correlation_id` (the request that published it) and `caused_by` (the fact whose delivery published it) so a log line follows the
+   chain from request to fact to consumer, and `created_at`, `finished_at` and `expires_at`. One row for each
    (fact, consumer), `UNIQUE (fact_id, consumer)`. Times are the application's clock's, as in the core's other tables, so a test moves
    them. `finished_at` is set exactly when `state` is not `pending`, by a `CHECK`. The table is never exported. Its erasure decision is
    `nobody`, since no column names a person and an id in a payload names the anonymised account after an erasure (D-256); its
@@ -14034,19 +14036,24 @@ fact for each message (D-35).
    not the fact's owner or does not list the type under `publishes`; a request of another module than the publisher's (`currentRequest`);
    a payload that does not fit the declaration, saying where and never what; a payload past 8192 bytes of compact JSON. The table's own
    check is 16384, since `jsonb` writes a space after each separator, and is the backstop and not the rule. A fact nobody consumes writes
-   nothing.
+   nothing. A consumer the workspace is not entitled to gets no row either: `entitled(workspaceId, module)` is an injected seam, true
+   always until workspace-level enablement (D-250 rule 9) is built, and no policy of its own.
 3. **`absent` is in the declaration.** `'drop'` writes no row for a consumer the publishing process does not run and counts it
    (`purlay_outbox_dropped_total`); `{ holdDays: n }`, `n` a whole number from 1 to 14 (`FACT_HOLD_DAYS_MAX`, held by
    `factOwnerProblems`), writes it and expires it after `n` days. A row for a consumer that is run and whose fact is `drop` expires after
    a day, because a notice delivered later than that is wrong, and the module may be turned off in the meantime.
-4. **The claim** takes up to a batch of a consumer's due rows with `FOR UPDATE SKIP LOCKED`, oldest due first, adds one to `attempts`
+4. **The claim** takes up to a batch of due rows of the (consumer, type) pairs this node has a handler for, and of the shapes it knows
+   (`shape` at most the declaration's), with `FOR UPDATE SKIP LOCKED`, oldest due first, adds one to `attempts`
    and sets `next_attempt_at` to now plus `min(5 s * 2^(n-1), 1 h)` within 20% either way, and commits. The backoff is the lease: a
    row is not given to a second node before it. A row that has already used eight attempts without ending is made `dead` there,
    `AttemptsExhausted`, and its handler is not asked again: a fact that hangs or kills the node that runs it reaches the ceiling by
    that and is not the node's last words for ever.
 5. **The delivery** locks the claimed row in the consumer's own transaction (`FOR UPDATE SKIP LOCKED`, `state = 'pending'`) and leaves it,
-   as `gone`, if it is delivered or held. It checks the payload against the declaration again, and a payload that no longer fits is `dead`
-   at once, `PayloadRefused`. The handler runs under a savepoint with the transaction, the fact's id and its **workspace as the row
+   as `gone`, if it is delivered or held. It checks the payload against the declaration again, and a payload of a shape this node knows that does not fit is `dead`
+   at once, `PayloadRefused`: it is not going to get better. A type or a shape this node does not know is never claimed, so a newer
+   node's row waits, untouched and with no attempt burned, for a node that does, and expires as any row does if none comes; a
+   rolling deploy kills no fact. A change to a payload that an older node would refuse (a new required field, a value more in an enum)
+   raises the declaration's `shape`; an optional field does not. The handler runs under a savepoint with the transaction, the fact's id and its **workspace as the row
    has it**, and a throw rolls the savepoint back, records the class of the error and leaves the row pending for its backoff, or
    makes it `dead` when it was the eighth attempt (the ceiling is `OUTBOX_ATTEMPTS_MAX`). A handler that returns `'skipped'` ends the row
    as `skipped`. Otherwise the row is marked `delivered` in the same transaction, outside the savepoint, so a failure of the mark

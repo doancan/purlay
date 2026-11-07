@@ -483,7 +483,9 @@ export interface ObjectDeletions {
 
 export interface Outbox {
   attempts: Generated<number>;
+  caused_by: string | null;
   consumer: string;
+  correlation_id: string | null;
   created_at: Timestamp;
   expires_at: Timestamp;
   fact_id: string;
@@ -493,6 +495,7 @@ export interface Outbox {
   next_attempt_at: Timestamp;
   payload: Json;
   producer: string;
+  shape: Generated<number>;
   state: Generated<string>;
   type: string;
   workspace_id: string;

@@ -16,12 +16,13 @@ import {
   type Outbox,
   type Selectable,
 } from '@purlay/db';
-import { messageIdTime } from '@purlay/types';
+import { messageId, messageIdTime } from '@purlay/types';
 import { aMovableClock, NOW } from '../testing/doubles';
 import {
   aPublishWorld,
   aWorkspaceRow,
   NOTE_CREATED,
+  NOTE_CREATED_V2,
   NOTE_PINNED,
   NOTES,
   WIKI,
@@ -83,6 +84,56 @@ describe('integration: publishing a fact', () => {
       expect(messageIdTime(rows[0]?.fact_id ?? '')).toBe(NOW.getTime());
       expect(new Set(rows.map((row) => row.fact_id)).size).toBe(1);
       expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+    }, cloned.db);
+  });
+
+  test('notes the request that published it and the fact whose delivery did, so a log can follow the chain', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      const { context } = aPublishWorld(workspaceId, clock);
+      const causedBy = messageId(NOW);
+      await withinRequest(
+        { requestId: 'req-'.padEnd(100, 'x'), startedAt: 0, module: 'notes' },
+        () =>
+          publishFact(tx, { ...context, causedBy }, NOTE_CREATED, { noteId: 'n1', title: 'Plan' }),
+      );
+      await publishFact(tx, context, NOTE_PINNED, { noteId: 'n1' });
+      const rows = await rowsOf(tx, workspaceId);
+      const created = rows.filter((row) => row.type === 'notes.created');
+      expect(created.map((row) => [row.correlation_id, row.caused_by])).toEqual([
+        ['req-'.padEnd(64, 'x'), causedBy],
+        ['req-'.padEnd(64, 'x'), causedBy],
+      ]);
+      expect(rows.find((row) => row.type === 'notes.pinned')).toMatchObject({
+        correlation_id: null,
+        caused_by: null,
+      });
+    }, cloned.db);
+  });
+
+  test('says which shape of its declaration wrote it, the first unless the declaration is a later one', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      const { context } = aPublishWorld(workspaceId, clock);
+      await publishFact(tx, context, NOTE_CREATED_V2, { noteId: 'n', title: 't', folder: 'f' });
+      await publishFact(tx, context, NOTE_PINNED, { noteId: 'n' });
+      const shapes = (await rowsOf(tx, workspaceId)).map((row) => [row.type, row.shape].join(':'));
+      expect(shapes.sort()).toEqual(['notes.created:2', 'notes.created:2', 'notes.pinned:1']);
+    }, cloned.db);
+  });
+
+  test('writes no row for a consumer the workspace is not entitled to, and a row for the others', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      const { context } = aPublishWorld(workspaceId, clock);
+      const asked: string[] = [];
+      const entitled = (workspace: string, module: string): boolean => {
+        asked.push(`${workspace}:${module}`);
+        return module !== 'wiki';
+      };
+      await publishFact(tx, { ...context, entitled }, NOTE_CREATED, { noteId: 'n', title: 't' });
+      expect((await rowsOf(tx, workspaceId)).map((row) => row.consumer)).toEqual(['shelf']);
+      expect(asked.sort()).toEqual([`${workspaceId}:shelf`, `${workspaceId}:wiki`]);
     }, cloned.db);
   });
 

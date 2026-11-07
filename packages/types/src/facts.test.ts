@@ -61,6 +61,18 @@ describe('what becomes of a fact when its consumer is not run', () => {
     ).toEqual([]);
   });
 
+  test('has a shape that counts from one', () => {
+    const shaped = (shape: number): ReturnType<typeof defineFact> =>
+      defineFact({ ...fact('notes.a', 'notes'), shape });
+    expect(factOwnerProblems([shaped(1), shaped(2)].slice(0, 1), ['notes'])).toEqual([]);
+    expect(factOwnerProblems([shaped(7)], ['notes'])).toEqual([]);
+    for (const shape of [0, -1, 1.5, Number.NaN]) {
+      expect(factOwnerProblems([shaped(shape)], ['notes'])).toEqual([
+        `the fact "notes.a" has the shape ${String(shape)}: a whole number from 1`,
+      ]);
+    }
+  });
+
   test('is never held for no time, for longer than the table keeps it, or for part of a day', () => {
     for (const days of [0, -1, FACT_HOLD_DAYS_MAX + 1, 1.5, Number.NaN]) {
       expect(factOwnerProblems([fact('notes.a', 'notes', { holdDays: days })], ['notes'])).toEqual([

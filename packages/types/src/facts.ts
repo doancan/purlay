@@ -14,6 +14,9 @@ import type { TSchema } from '@sinclair/typebox';
  */
 export const FACT_HOLD_DAYS_MAX = 14;
 
+/** The shape a declaration has until it says another. */
+export const FACT_SHAPE_FIRST = 1;
+
 /** What the publisher does about a consumer its process does not run: write no row, or write it and let any node that runs it deliver. */
 export type FactAbsence = 'drop' | { readonly holdDays: number };
 
@@ -26,6 +29,12 @@ export interface FactDeclaration<Payload extends TSchema = TSchema> {
   readonly schema: Payload;
   /** What becomes of the fact where its consumer is not run, which only the declaration can say: the publisher does not know the consumer. */
   readonly absent: FactAbsence;
+  /**
+   * The version of the payload's shape, from 1. Adding an optional field leaves it; anything an older node would refuse (a new
+   * required field, a value more in an enum, a narrower bound) raises it, so a node that does not know the shape leaves the row
+   * for one that does and a rolling deploy kills nothing (D-288). Dropping a shape needs the release exception of a dropped type.
+   */
+  readonly shape?: number;
 }
 
 export const defineFact = <Payload extends TSchema>(
@@ -47,7 +56,7 @@ export const factOwnerProblems = (
   moduleIds: readonly string[],
 ): string[] => {
   const seen = new Set<string>();
-  return facts.flatMap(({ type, owner, absent }) => {
+  return facts.flatMap(({ type, owner, absent, shape }) => {
     const problems: string[] = [];
     if (seen.has(type)) problems.push(`the fact "${type}" is declared twice`);
     seen.add(type);
@@ -64,6 +73,9 @@ export const factOwnerProblems = (
       problems.push(
         `the fact "${type}" is held ${String(absent.holdDays)} days when its consumer is off: a whole number from 1 to ${String(FACT_HOLD_DAYS_MAX)}`,
       );
+    }
+    if (shape !== undefined && !(Number.isInteger(shape) && shape >= FACT_SHAPE_FIRST)) {
+      problems.push(`the fact "${type}" has the shape ${String(shape)}: a whole number from 1`);
     }
     return problems;
   });

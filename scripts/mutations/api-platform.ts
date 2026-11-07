@@ -584,6 +584,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox.integration.test.ts'],
   },
   {
+    id: 'publish-drops-the-correlation',
+    why: 'the row does not say which request published it, so a log line cannot be followed from the request to the consumer (D-288)',
+    file: 'apps/api/src/platform/outbox.ts',
+    find: '        correlation_id: requestScope?.requestId.slice(0, CORRELATION_ID_MAX) ?? null,\n',
+    replace: '        correlation_id: null,\n',
+    tests: ['apps/api/src/platform/outbox.integration.test.ts'],
+  },
+  {
     id: 'publish-failure-after-commit-is-an-error',
     why: 'a write that committed answers 500 because a frame could not be sent, and the retry repeats what is already done',
     file: 'apps/api/src/platform/events.ts',
@@ -616,6 +624,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox.integration.test.ts'],
   },
   {
+    id: 'publish-ignores-entitlement',
+    why: 'a consumer a workspace may not use is written a row all the same, so the entitlement seam decides nothing (D-288)',
+    file: 'apps/api/src/platform/outbox.ts',
+    find: '.filter((consumer) => entitled(workspaceId, consumer))',
+    replace: '',
+    tests: ['apps/api/src/platform/outbox.integration.test.ts'],
+  },
+  {
     id: 'publish-ignores-the-fact-owner',
     why: 'a module publishes a fact another module owns, so the owner of a shape is whoever wrote last (D-288)',
     file: 'apps/api/src/platform/outbox.ts',
@@ -637,6 +653,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     file: 'apps/api/src/platform/outbox.ts',
     find: '  if (requestModule !== undefined && requestModule !== producer) {',
     replace: '  if (false as boolean) {',
+    tests: ['apps/api/src/platform/outbox.integration.test.ts'],
+  },
+  {
+    id: 'publish-forgets-the-shape',
+    why: 'the row does not say which shape it was written with, so an older node cannot tell a row it cannot read from one it can and kills it in a rolling deploy (D-288)',
+    file: 'apps/api/src/platform/outbox.ts',
+    find: '        shape: fact.shape ?? FACT_SHAPE_FIRST,\n',
+    replace: '',
     tests: ['apps/api/src/platform/outbox.integration.test.ts'],
   },
   {

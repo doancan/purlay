@@ -11,7 +11,7 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { type Static } from '@sinclair/typebox';
-import { messageId, type FactDeclaration } from '@purlay/types';
+import { FACT_SHAPE_FIRST, messageId, type FactDeclaration } from '@purlay/types';
 import { isTransaction, type Transaction } from '@purlay/db';
 import { DAY_MS, type Clock } from './clock';
 import { currentRequest } from './logging';
@@ -23,6 +23,11 @@ export const OUTBOX_PAYLOAD_BYTES_MAX = 8192;
 
 /** How long a row of a fact that is dropped when its consumer is off waits for a consumer that is on: a notice that late is wrong. */
 const DROPPING_FACT_PENDING_DAYS = 1;
+
+/** The table's own limit: a request id may come from a header. */
+const CORRELATION_ID_MAX = 64;
+
+const ALWAYS_ENTITLED = (): boolean => true;
 
 /** Who consumes what, for the modules a build carries, and which of them this process runs. Built from the manifests, once. */
 export interface FactRouting {
@@ -53,6 +58,13 @@ export interface FactPublishContext {
   readonly routing: FactRouting;
   /** `purlay_outbox_dropped_total`: a fact whose consumer is not run here and which is not held. */
   readonly dropped: Counter<'module' | 'fact'>;
+  /** The fact whose delivery is publishing this one, when one is: the chain from a fact to the facts it caused. */
+  readonly causedBy?: string;
+  /**
+   * Whether the workspace may use the module (D-250 rule 9, which is not built): a consumer it may not use gets no row. Always
+   * true until workspace-level enablement exists, and a seam for it and not a policy.
+   */
+  readonly entitled?: (workspaceId: string, module: string) => boolean;
 }
 
 /** A fact that could not be published: a programming error, which ends the publisher's transaction and so leaves nothing of the fact. */
@@ -88,11 +100,13 @@ export const publishFact = async <Fact extends FactDeclaration>(
   fact: Fact,
   payload: Static<Fact['schema']>,
 ): Promise<void> => {
-  const { workspaceId, clock, producer, routing, dropped } = context;
+  const { workspaceId, clock, producer, routing, dropped, causedBy } = context;
+  const entitled = context.entitled ?? ALWAYS_ENTITLED;
   // The type says it, and a cast could unsay it: a fact written with nothing to roll back with outlives the thing it reports.
   if (!isTransaction(transaction))
     throw new FactPublishError(fact.type, 'it is not in a transaction');
-  const requestModule = currentRequest()?.module;
+  const requestScope = currentRequest();
+  const requestModule = requestScope?.module;
   if (fact.owner !== producer || !routing.mayPublish(producer, fact.type)) {
     throw new FactPublishError(fact.type, `"${producer}" is not its publisher`);
   }
@@ -109,7 +123,9 @@ export const publishFact = async <Fact extends FactDeclaration>(
   const factId = messageId(now);
   const holdDays = typeof fact.absent === 'object' ? fact.absent.holdDays : undefined;
   const expiresAt = new Date(now.getTime() + (holdDays ?? DROPPING_FACT_PENDING_DAYS) * DAY_MS);
-  const consumers = routing.consumersOf(fact.type);
+  const consumers = routing
+    .consumersOf(fact.type)
+    .filter((consumer) => entitled(workspaceId, consumer));
   const written = consumers.filter((consumer) => routing.runs(consumer) || holdDays !== undefined);
   for (const consumer of consumers.filter((one) => !written.includes(one))) {
     dropped.inc({ module: consumer, fact: fact.type });
@@ -129,6 +145,9 @@ export const publishFact = async <Fact extends FactDeclaration>(
         next_attempt_at: now,
         created_at: now,
         expires_at: expiresAt,
+        shape: fact.shape ?? FACT_SHAPE_FIRST,
+        correlation_id: requestScope?.requestId.slice(0, CORRELATION_ID_MAX) ?? null,
+        caused_by: causedBy ?? null,
       })),
     )
     .execute();

@@ -11,6 +11,10 @@
 --     ceiling. `next_attempt_at` is pushed out at the claim by the backoff, which is also the lease: a node that dies
 --     between claim and delivery leaves a row that shows again.
 --   * `last_error` is a class of error, never the payload, which carries ids and a short label but is not for a log.
+--   * `shape` is the version of the payload's declaration the publisher wrote it with. A node claims only the shapes it knows, so a
+--     newer node's row waits through a rolling deploy for a node that can read it and is not killed by one that cannot.
+--   * `correlation_id` is the id of the request that published the fact and `caused_by` the fact whose delivery published it,
+--     so a log line follows request, fact and consumer. Both are only read back in a log or by an operator, so neither is indexed.
 --
 -- A new table with nothing in it: its indexes are made with it. The size of a payload is held at 8192 bytes by the publisher,
 -- measured as compact JSON; `jsonb` writes its text with a space after each separator, so the check here has room for that and is
@@ -34,6 +38,9 @@ CREATE TABLE outbox (
     created_at      TIMESTAMPTZ NOT NULL,
     finished_at     TIMESTAMPTZ,
     expires_at      TIMESTAMPTZ NOT NULL,
+    shape           INTEGER NOT NULL DEFAULT 1,
+    correlation_id  TEXT,
+    caused_by       UUID,
 
     CONSTRAINT outbox_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
@@ -51,6 +58,10 @@ CREATE TABLE outbox (
         CHECK (state IN ('pending', 'delivered', 'dead', 'skipped')),
     CONSTRAINT outbox_attempts_count
         CHECK (attempts >= 0),
+    CONSTRAINT outbox_shape_is_counted
+        CHECK (shape >= 1),
+    CONSTRAINT outbox_correlation_is_short
+        CHECK (char_length(correlation_id) <= 64),
     CONSTRAINT outbox_error_is_short
         CHECK (char_length(last_error) <= 300),
     -- A row that is no longer pending says when it stopped, and one that is pending does not.

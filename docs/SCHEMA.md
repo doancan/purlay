@@ -2333,6 +2333,9 @@ CREATE TABLE outbox (
     created_at      TIMESTAMPTZ NOT NULL,
     finished_at     TIMESTAMPTZ,     -- set exactly when the row is no longer pending
     expires_at      TIMESTAMPTZ NOT NULL,
+    shape           INTEGER NOT NULL DEFAULT 1,  -- the version of the fact's declaration that wrote it; a node claims the shapes it knows
+    correlation_id  TEXT,            -- the request that published it, at most 64 characters
+    caused_by       UUID,            -- the fact whose delivery published it
     UNIQUE (fact_id, consumer)
 );
 -- Then ALTER TABLE outbox SET (fillfactor = 80, autovacuum_vacuum_scale_factor = 0.02): the table is mostly churn.

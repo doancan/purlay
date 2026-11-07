@@ -28,6 +28,19 @@ export const NOTE_PINNED = defineFact({
   schema: Type.Object({ noteId: Type.String({ maxLength: 36 }) }),
 });
 
+/** `notes.created` as a newer release writes it: one more required field, which an older node's declaration refuses. */
+export const NOTE_CREATED_V2 = defineFact({
+  type: 'notes.created',
+  owner: 'notes',
+  absent: 'drop',
+  shape: 2,
+  schema: Type.Object({
+    noteId: Type.String({ maxLength: 36 }),
+    title: Type.String({ maxLength: 9000 }),
+    folder: Type.String({ maxLength: 64 }),
+  }),
+});
+
 const base = { requires: [], optional: [], provides: [], budget: { none: 'a test module' } };
 
 export const NOTES: ModuleManifest = {
