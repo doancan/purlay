@@ -56,6 +56,12 @@ const sentence = (items: readonly string[]): string => items.map((item) => `'${i
 
 /** The words of the templates: `__NAME__`, replaced everywhere, in paths as in files. */
 export const fill = (template: string, names: Names, options: Options): string => {
+  const degrades = options.optional
+    .map(
+      (partner) =>
+        `\n      ${partner}: 'Works without ${partner}; say here what a person sees instead.',`,
+    )
+    .join('');
   const tokens: Readonly<Record<string, string>> = {
     ID: names.id,
     PASCAL: names.pascal,
@@ -63,6 +69,16 @@ export const fill = (template: string, names: Names, options: Options): string =
     SNAKE: names.snake,
     UPPER: names.upper,
     REQUIRES: sentence(options.requires),
+    OPTIONAL: sentence(options.optional),
+    SCENARIOS: options.optional
+      .map(
+        (partner) =>
+          `  '${partner}': ({ runs }) => {
+    if (runs('${partner}')) throw new Error('${partner} should be out of this world');
+  },`,
+      )
+      .join('\n'),
+    DEGRADES: degrades === '' ? '' : `${degrades}\n    `,
   };
   return template.replace(
     /__([A-Z]+(?:_[A-Z]+)*)__/g,
