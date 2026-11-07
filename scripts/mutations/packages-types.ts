@@ -130,11 +130,19 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {
+    id: 'issues-assignment-notice-not-counted',
+    why: 'the manifest declares an assignment as needing nobody, so the rail’s dot and the badge’s count leave it out (D-286)',
+    file: 'packages/types/src/issues.ts',
+    find: "{ type: 'issue_assigned', needsYou: true, pushed: true, mailed: false }",
+    replace: "{ type: 'issue_assigned', needsYou: false, pushed: true, mailed: false }",
+    tests: ['apps/api/src/notification-kinds.test.ts'],
+  },
+  {
     id: 'issues-assignment-notice-not-pushed',
     why: 'the manifest declares an assignment not pushed, so no device is told of it (D-286 §9)',
     file: 'packages/types/src/issues.ts',
-    find: "{ type: 'issue_assigned', needsYou: false, pushed: true, mailed: false }",
-    replace: "{ type: 'issue_assigned', needsYou: false, pushed: false, mailed: false }",
+    find: "{ type: 'issue_assigned', needsYou: true, pushed: true, mailed: false }",
+    replace: "{ type: 'issue_assigned', needsYou: true, pushed: false, mailed: false }",
     tests: ['apps/api/src/composition.test.ts'],
   },
   {

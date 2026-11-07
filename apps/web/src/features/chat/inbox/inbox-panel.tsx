@@ -18,7 +18,7 @@
  */
 import * as Popover from '@radix-ui/react-popover';
 import { useMemo, useState } from 'react';
-import { useChannels, useNotificationsPanel } from '../../../data/queries';
+import { PANEL_LIMIT, useChannels, useNotificationsPanel } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Link, useRoute } from '../../../router/router-provider';
 import { Button } from '../../../ui/button';
@@ -29,7 +29,15 @@ import { Tooltip } from '../../../ui/tooltip';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
-import { INBOX_CATEGORIES, inboxSearch, typesOf, type InboxCategory } from './categories';
+import {
+  categoriesOffered,
+  inboxSearch,
+  typesOf,
+  type ConversationCategory,
+  type InboxCategory,
+} from './categories';
+import { LazyUpdates, LazyUpdatesReadAll } from './updates-lazy';
+import { noticesOf } from '../../../modules/registry';
 import { groupInbox, type InboxRow } from './group';
 import { InboxRowItem } from './inbox-row';
 import { useInboxReads } from './read';
@@ -46,7 +54,7 @@ const Body = ({
   category,
   onDone,
 }: {
-  readonly category: InboxCategory;
+  readonly category: ConversationCategory;
   /** The panel has done its job — a row was opened, or See all chosen — and closes. */
   readonly onDone: () => void;
 }): React.JSX.Element => {
@@ -139,7 +147,11 @@ const Body = ({
 };
 
 /** Mark all read for the view on screen; drawn only while something in it waits. */
-const ReadAll = ({ category }: { readonly category: InboxCategory }): React.JSX.Element | null => {
+const ReadAll = ({
+  category,
+}: {
+  readonly category: ConversationCategory;
+}): React.JSX.Element | null => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const reads = useInboxReads();
@@ -170,6 +182,9 @@ const ReadAll = ({ category }: { readonly category: InboxCategory }): React.JSX.
 export const InboxPanel = ({ trigger, label }: InboxPanelProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
+  const { modules } = useSession();
+  // Updates are offered where a running module writes some (D-286).
+  const updates = Object.keys(noticesOf(modules)).length > 0;
   const [open, setOpen] = useState(false);
   // Kept while the panel is closed: opened again, it shows the category it was left on.
   const [category, setCategory] = useState<InboxCategory>('all');
@@ -193,13 +208,18 @@ export const InboxPanel = ({ trigger, label }: InboxPanelProps): React.JSX.Eleme
         >
           <div className="flex items-center gap-2 px-4 pt-3 pb-2">
             <h2 className="flex-1 text-title text-ink">{t('inbox.title')}</h2>
-            {open && <ReadAll category={category} />}
+            {open &&
+              (category === 'updates' ? (
+                <LazyUpdatesReadAll limit={PANEL_LIMIT} />
+              ) : (
+                <ReadAll category={category} />
+              ))}
           </div>
           <div className="px-4 pb-2">
             <ListFilter
               label={t('inbox.category.label')}
               value={category}
-              choices={INBOX_CATEGORIES.map((choice) => ({
+              choices={categoriesOffered(updates).map((choice) => ({
                 value: choice,
                 label: t(`inbox.category.${choice}`),
               }))}
@@ -207,7 +227,12 @@ export const InboxPanel = ({ trigger, label }: InboxPanelProps): React.JSX.Eleme
             />
           </div>
           <div className="border-t-hairline border-border-subtle">
-            {open && <Body category={category} onDone={done} />}
+            {open &&
+              (category === 'updates' ? (
+                <LazyUpdates density="panel" limit={PANEL_LIMIT} onDone={done} />
+              ) : (
+                <Body category={category} onDone={done} />
+              ))}
           </div>
           <Link
             to="inbox"

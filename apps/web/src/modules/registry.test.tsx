@@ -14,8 +14,8 @@ import { installDom } from '../testing/dom';
 import { renderApp } from '../testing/render';
 import { ShortcutList } from '../features/shortcuts/shortcuts-dialog';
 import type { ModuleSettingsPage, ModuleShortcut } from './manifest';
-import { AUDIT_ACTIONS, CORE_AUDIT_ACTIONS } from '@purlay/types';
-import { MODULES, auditActionsOf, running } from './registry';
+import { AUDIT_ACTIONS, CORE_AUDIT_ACTIONS, ISSUES_NOTIFICATION_KINDS } from '@purlay/types';
+import { MODULES, auditActionsOf, noticesOf, running } from './registry';
 
 installDom();
 
@@ -152,5 +152,27 @@ describe('the audit actions a server offers to filter by (D-265)', () => {
     for (const action of AUDIT_ACTIONS) {
       expect(en[`audit.kind.${action}` as keyof typeof en]).toBeDefined();
     }
+  });
+});
+
+describe('every module’s notices (D-286)', () => {
+  test('open a place of the module’s own, in words both languages have', () => {
+    for (const module of MODULES) {
+      for (const [kind, notice] of Object.entries(module.notices)) {
+        const routes: readonly string[] = Object.values(module.routes);
+        expect(routes, `${kind} opens ${notice.path}`).toContain(`/w/:slug/${notice.path}`);
+        expect(en[notice.words], kind).toContain('{name}');
+      }
+    }
+  });
+
+  test('are the kinds the server’s manifest declares for the module, and only where it runs', () => {
+    const issues = MODULES.find((module) => module.id === 'issues');
+    expect(Object.keys(issues?.notices ?? {})).toEqual(
+      ISSUES_NOTIFICATION_KINDS.map((kind) => kind.type),
+    );
+    expect(Object.keys(noticesOf(['chat']))).toEqual([]);
+    expect(Object.keys(noticesOf(['chat', 'issues']))).toEqual(['issue_assigned']);
+    expect(Object.keys(noticesOf([]))).toEqual([]);
   });
 });

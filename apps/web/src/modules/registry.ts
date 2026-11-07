@@ -6,6 +6,7 @@
 import { AUDIT_ACTIONS, CORE_AUDIT_ACTIONS, type AuditAction } from '@purlay/types';
 import { chat } from '../features/chat/manifest';
 import { issues } from '../features/issues/manifest';
+import type { ModuleNotice } from './manifest';
 
 export const MODULES = [chat, issues] as const;
 
@@ -24,6 +25,12 @@ export type ModuleRoutes = Intersection<ModuleManifestOf['routes']>;
 /** The manifests of the modules a server runs, in the registry's order. */
 export const running = (modules: readonly string[]): readonly ModuleManifestOf[] =>
   MODULES.filter((module) => modules.includes(module.id));
+
+/** What the modules a server runs say of the notices they write to the core's inbox, by kind (D-286). */
+export const noticesOf = (modules: readonly string[]): Readonly<Record<string, ModuleNotice>> =>
+  Object.assign({}, ...running(modules).map((module) => module.notices)) as Readonly<
+    Record<string, ModuleNotice>
+  >;
 
 /** A place a manifest puts on the rail, its route as the literal the manifest spells, so the rail's links are checked against the route table. */
 export type RailEntry = ModuleManifestOf['rail'][number];
