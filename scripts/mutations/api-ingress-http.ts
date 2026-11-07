@@ -730,4 +730,13 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     replace: 'userId);',
     tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
+  {
+    id: 'workspace-modules-writable-by-workspace-owner',
+    why: 'the owner of a workspace grants it any module, and the commercial gate is a button on their own settings page (D-289)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  const admin = await guard(deps, request);\n  const id = validated(Uuid, workspaceId);\n  const input = validated(ServerWorkspaceModuleRequest, body);',
+    replace:
+      '  const admin = { userId: crypto.randomUUID() } as never;\n  const id = validated(Uuid, workspaceId);\n  const input = validated(ServerWorkspaceModuleRequest, body);',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
 ];

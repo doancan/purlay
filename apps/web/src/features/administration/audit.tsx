@@ -197,6 +197,11 @@ const AuditList = ({
                           {t('admin.target')}: {entry.targetUserId ?? entry.targetWorkspaceId}
                         </p>
                       )}
+                      {entry.targetModule !== null && (
+                        <p className="font-mono text-caption text-ink-muted">
+                          {entry.targetModule}
+                        </p>
+                      )}
                     </details>
                   </li>
                 ))}
