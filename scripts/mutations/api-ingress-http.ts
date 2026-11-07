@@ -362,7 +362,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   },
   {
     id: 'http-drain-keeps-the-original-listener-running',
-    why: 'A drain reports completion while its own HTTP listener still handles new requests; the ownership probe must catch that even if the port is already occupied.',
+    why: 'A drain reports completion while its own HTTP listener still handles new requests; the synchronous auth-entry probe must catch that even if the port is already occupied.',
     file: 'apps/api/src/ingress/http/app.ts',
     find: 'await Promise.all([app.stop(false), sockets.settled()]);',
     replace:
