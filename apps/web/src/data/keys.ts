@@ -46,6 +46,8 @@ export const keys = {
   thread: (messageId: string) => ['thread', messageId] as const,
   /** Whether the caller follows a root's thread (D-161): theirs alone, so not under `thread`. */
   threadFollow: (rootId: string) => ['thread-follow', rootId] as const,
+  followedThreads: (workspaceId: string, unreadOnly = false) =>
+    ['followed-threads', workspaceId, unreadOnly] as const,
   /** The workspace's open questions, or one channel's (`UX.md` §2): one prefix, so a change to a thread reaches both. */
   unresolved: (
     workspaceId: string,
@@ -147,6 +149,7 @@ export const keys = {
 
 /** The families, for the code that addresses one of them whole. */
 export const families = {
+  followedThreads: ['followed-threads'] as const,
   unreads: ['unreads'] as const,
   search: ['search'] as const,
   saved: ['saved'] as const,

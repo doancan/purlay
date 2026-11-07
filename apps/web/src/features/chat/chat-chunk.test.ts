@@ -12,10 +12,11 @@ const SRC = join(import.meta.dirname, '..', '..');
 const CHAT_ENTRY = join(SRC, 'features', 'chat', 'chat.ts');
 /** The test harness mounts screens directly and is no part of the build. */
 const HARNESS = join(SRC, 'testing');
-/** The seven screens the entry re-exports: the only modules the shell must reach through `import()`. */
+/** The screens behind the entry, including its nested lazy screen: none may enter the shell statically. */
 const SCREENS = [
   'channel/channel-screen',
   'drafts/drafts-screen',
+  'followed/followed-screen',
   'inbox/inbox-screen',
   'questions/questions-screen',
   'saved/saved-screen',
@@ -51,13 +52,14 @@ describe("chat's chunk", () => {
     expect(offenders).toEqual([]);
   });
 
-  test('is asked for once, and holds the seven screens', async () => {
+  test('is asked for once, and holds every registered screen', async () => {
     const chat = moduleChunk('chat');
     expect(chat.get()).toBe(chat.get());
     const { screens } = await chat.get();
     expect(Object.keys(screens).sort()).toEqual([
       'channel',
       'drafts',
+      'followed',
       'inbox',
       'questions',
       'saved',

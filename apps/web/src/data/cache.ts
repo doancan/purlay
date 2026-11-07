@@ -30,12 +30,79 @@ import type {
   NotificationLevel,
   MeResponse,
   QuietHoursSetting,
+  FollowedThread,
+  FollowedThreadsPage,
 } from '@purlay/types';
 import { families, keys } from './keys';
 import type { FeedPages } from './queries';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 type CatchUpPages = InfiniteData<ChannelCatchUp, string | undefined>;
+type FollowedPages = InfiniteData<FollowedThreadsPage>;
+const followedVersions = new WeakMap<QueryClient, number>();
+
+/** Privacy changes invalidate undo snapshots even when an optimistic action already removed the root. */
+const editFollowed = (
+  client: QueryClient,
+  edit: (row: FollowedThread) => FollowedThread | null,
+  invalidateUndo = false,
+): void => {
+  if (invalidateUndo) followedVersions.set(client, (followedVersions.get(client) ?? 0) + 1);
+  for (const [key, held] of client.getQueriesData<FollowedPages>({
+    queryKey: families.followedThreads,
+  })) {
+    if (held === undefined) continue;
+    const pages = held.pages.map((page) => ({
+      ...page,
+      data: page.data.flatMap((row) => {
+        const next = edit(row);
+        return next === null ? [] : [next];
+      }),
+    }));
+    const changed = pages.some((page, index) => {
+      const before = held.pages[index];
+      return (
+        page.data.length !== before?.data.length ||
+        page.data.some((row, rowIndex) => row !== before.data[rowIndex])
+      );
+    });
+    if (changed) client.setQueryData<FollowedPages>(key, { ...held, pages });
+    askAgainIfOnItsWay(client, key);
+  }
+};
+
+/** A refused choice restores only the exact view painted by that choice, never newer authority or content. */
+export const threadUnfollowed = (client: QueryClient, rootId: string): (() => void) => {
+  void client.cancelQueries({ queryKey: families.followedThreads });
+  const version = followedVersions.get(client) ?? 0;
+  const painted: {
+    readonly key: QueryKey;
+    readonly before: FollowedPages;
+    readonly after: FollowedPages;
+  }[] = [];
+  for (const [key, before] of client.getQueriesData<FollowedPages>({
+    queryKey: families.followedThreads,
+  })) {
+    if (!before?.pages.some((page) => page.data.some((row) => row.root.id === rootId))) continue;
+    const after = {
+      ...before,
+      pages: before.pages.map((page) => ({
+        ...page,
+        data: page.data.filter((row) => row.root.id !== rootId),
+      })),
+    };
+    client.setQueryData<FollowedPages>(key, after);
+    // TanStack may share unchanged subtrees; compare the actual cached value on undo.
+    const actual = client.getQueryData<FollowedPages>(key);
+    if (actual !== undefined) painted.push({ key, before, after: actual });
+  }
+  return () => {
+    if ((followedVersions.get(client) ?? 0) !== version) return;
+    for (const { key, before, after } of painted) {
+      if (client.getQueryData<FollowedPages>(key) === after) client.setQueryData(key, before);
+    }
+  };
+};
 
 /** Quiet hours follow the profile's clock, including a profile read after another device changed it. */
 export const profileTimeZoneChanged = (client: QueryClient, timeZone: string | null): void => {
@@ -208,6 +275,9 @@ export const patchMessage = (
   messageId: string,
   edit: (message: Message) => Message,
 ): void => {
+  editFollowed(client, (row) =>
+    row.root.id === messageId ? { ...row, root: edit(row.root) } : row,
+  );
   patchCatchUpMessage(client, messageId, edit);
   patchPins(client, messageId, edit);
   for (const [key, data] of messageLists(client)) {
@@ -228,6 +298,7 @@ export const patchMessage = (
  * Either way the channel moves to the top of the sidebar's order.
  */
 export const messageCreated = (client: QueryClient, message: Message): void => {
+  readAgain(client, families.followedThreads);
   // A channel's files list has no frame of its own: a message carrying files reads it again (D-129).
   if (message.attachments.length > 0) readAgain(client, keys.files(message.channelId));
   if (message.parentId === null) {
@@ -306,6 +377,7 @@ export const threadUpdated = (
   // and which page it falls on; asking again is cheaper than reasoning about it. A view that failed
   // keeps its failure and its Retry (#540).
   readAgain(client, families.unresolved);
+  readAgain(client, families.followedThreads);
   readAgain(client, ['search']);
 };
 
@@ -352,6 +424,21 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
               }),
         }
       : m;
+  editFollowed(
+    client,
+    (row) =>
+      row.root.id !== id
+        ? row
+        : {
+            ...row,
+            root: {
+              ...revise(row.root),
+              ...(revision.deletedAt === null ? {} : { attachments: [], reactions: [] }),
+            },
+          },
+    true,
+  );
+  readAgain(client, families.followedThreads);
   patchCatchUpMessage(client, id, (message) =>
     message.hiddenForMe === true ? message : revise(message),
   );
@@ -436,6 +523,7 @@ export const channelStateChanged = (
   state: ChannelState,
 ): void => {
   editChannels(client, channelId, (c) => ({ ...c, state }));
+  readAgain(client, families.followedThreads);
   // A reused count can still describe a newer snapshot, including a receipt from another tab.
   readAgain(client, keys.unreads(channelId, state.lastReadMessageId, state.unreadCount));
 };
@@ -544,6 +632,8 @@ export const channelAdded = (client: QueryClient, channel: Channel): void => {
 
 /** Delivery for these channels stopped. They leave the list and their messages leave the cache. */
 export const channelsRevoked = (client: QueryClient, channelIds: readonly string[]): void => {
+  editFollowed(client, (row) => (channelIds.includes(row.root.channelId) ? null : row), true);
+  readAgain(client, families.followedThreads);
   for (const [key, list] of client.getQueriesData<Channel[]>({ queryKey: families.channels })) {
     if (list === undefined) continue;
     client.setQueryData<Channel[]>(
@@ -599,6 +689,8 @@ export const messageHidden = (
   at: string,
   channelId?: string,
 ): void => {
+  editFollowed(client, (row) => (row.root.id === messageId ? null : row), true);
+  readAgain(client, families.followedThreads);
   const hide: (message: Message) => Message = (message) =>
     message.id === messageId
       ? {

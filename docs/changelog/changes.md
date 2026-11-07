@@ -29,6 +29,7 @@ have it.
 
 ### Added
 
+- **Conversations** — Return to conversations you started, answered or followed, filter waiting replies and choose which threads to keep following (D-290)
 - **Issues** — Assigning an issue to somebody else now tells them in the core's inbox, in the same step as the assignment (D-286)
 - **Inbox** — A new Updates section beside Mentions, Direct and Threads lists what the workspace's other parts, issues for now, told you, and the inbox's dot lights while one waits unread (D-286)
 - **Notifications** — Being assigned an issue also sends a push to your devices, held while you are in Deep Work or your quiet hours and sent when they end, and never saying the issue's title (D-286)

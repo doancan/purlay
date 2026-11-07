@@ -13,6 +13,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { ChannelSections } from '../chat/sidebar/channel-list';
 import { UnreadsRow } from '../chat/unreads/unreads-row';
+import { FollowedRow } from './followed-row';
 import { ConversationList } from '../chat/sidebar/conversation-list';
 import { JumpField } from '../chat/sidebar/jump-field';
 import { PeopleList } from '../chat/sidebar/people-list';
@@ -71,6 +72,7 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
             <WhenRun module="chat">
               <div className="pt-1 pb-3">
                 <UnreadsRow />
+                <FollowedRow />
                 <ChannelSections />
               </div>
               <div className="border-t-hairline border-nav-border py-3">

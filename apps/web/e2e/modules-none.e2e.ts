@@ -80,7 +80,15 @@ test.describe('a server with no module', () => {
     // The rail and the sidebar.
     const sidebar = await openNav(page);
     const rail = page.getByRole('navigation', { name: 'Places' });
-    for (const name of ['Inbox', 'Saved', 'Drafts', 'Search', 'Open questions', 'Issues']) {
+    for (const name of [
+      'Inbox',
+      'Saved',
+      'Drafts',
+      'Search',
+      'Open questions',
+      'Followed conversations',
+      'Issues',
+    ]) {
       await expect(rail.getByRole('link', { name })).toHaveCount(0);
       await expect(sidebar.getByRole('link', { name })).toHaveCount(0);
     }
@@ -92,6 +100,9 @@ test.describe('a server with no module', () => {
 
     // The address of a screen of chat.
     await page.goto(`/w/${slug}/inbox`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Nothing here' })).toBeVisible();
+    await expectNoAxe();
+    await page.goto(`/w/${slug}/followed`);
     await expect(page.getByRole('heading', { level: 1, name: 'Nothing here' })).toBeVisible();
     await expectNoAxe();
     // And of issues, which is a module of its own.

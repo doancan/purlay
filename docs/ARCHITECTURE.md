@@ -1102,3 +1102,12 @@ that share a Redis set different ones (§6), because nothing else keeps their bu
 
 
 **Thread knowledge (D-204).** ThreadSummary optionally includes knowledge; old rows omit it. A message page hydrates root metadata and bounded live-answer previews in one batched join. Metadata writes advance both knowledge_version (editor concurrency) and state_version (event ordering), so the existing changed_at trigger includes them in reconnect replay. THREAD_UPDATED carries the additive summary. Answer revisions update previews in held client lists; deleted roots drop decision metadata. Saved searches are database-backed personal filters; no new event, scheduler or external service is introduced.
+
+
+**Followed conversations (D-290).** Chat owns a read-only workspace endpoint and a lazily loaded list. Its root query
+uses the channel guard's visibility subquery, the existing explicit-or-participating follow relation and a composite
+activity/UUID cursor with PostgreSQL microseconds preserved. A grouped receipt query and the message builder hydrate
+the page in batches. Public nonmembers have unknown receipts; D-282 controls member unread replies. The client cache
+family refreshes on socket open, subscription answer, reconnect and foreground transitions. Revisions patch previews;
+hides and revoked access remove rows immediately and invalidate pending undo snapshots. Existing preferences and
+receipts are reused; the list has no write, acknowledgement, new table or external dependency.

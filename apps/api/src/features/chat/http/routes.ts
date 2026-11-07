@@ -20,6 +20,7 @@ import { missedMailRoutes } from './missed-mail';
 import { pinRoutes } from './pins';
 import { reactionRoutes } from './reactions';
 import { savedRoutes } from './saved';
+import { followedRoutes } from './followed';
 import { incidentRoutes } from './incidents';
 import { knowledgeRoutes } from './knowledge';
 import { notificationRoutes } from './notifications';
@@ -42,6 +43,7 @@ export const chatRoutes = (context: ModuleRouteDependencies): AnyElysia => {
     .use(pinRoutes(context))
     .use(reactionRoutes(context))
     .use(savedRoutes(context))
+    .use(followedRoutes(context))
     .use(incidentRoutes(context))
     .use(knowledgeRoutes(context))
     .use(notificationRoutes(context))

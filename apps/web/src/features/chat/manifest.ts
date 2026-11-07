@@ -13,6 +13,7 @@ const routes = {
   saved: '/w/:slug/saved',
   drafts: '/w/:slug/drafts',
   unreads: '/w/:slug/unreads',
+  followed: '/w/:slug/followed',
 } as const;
 
 /** The screens `chat.ts` must export: one for each route above, so a route without a screen does not compile. */
@@ -41,6 +42,7 @@ export const chat = defineModule({
     { route: 'saved', glyph: 'saved', label: 'saved.title' },
     { route: 'drafts', glyph: 'edit', label: 'drafts.title' },
     { route: 'unreads', glyph: 'channels', label: 'unreads.title' },
+    { route: 'followed', glyph: 'notifications', label: 'followed.title' },
     { route: 'search', glyph: 'search', label: 'search.title' },
   ],
   shortcuts: [
