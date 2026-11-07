@@ -12,6 +12,8 @@ const module = (id: string, rest: Partial<ModuleManifest> = {}): ModuleManifest 
   requires: [],
   optional: [],
   provides: [],
+  // The test modules speak on the socket, which only a module no workspace is granted may (D-289).
+  entitlement: 'always',
   budget: { none: 'a test module with no queries of its own' },
   ...rest,
 });
@@ -37,6 +39,31 @@ describe('a build with no modules', () => {
     expect(problemsOf(() => registry.resolve('chat'))).toEqual([
       'MODULES names "chat", which this build does not have (it has: none)',
     ]);
+  });
+});
+
+describe('a module a workspace is granted', () => {
+  test('may not declare frames or events, which are closed for the process and not for a workspace', () => {
+    for (const rest of [{ frames: ['TYPING'] }, { events: ['TYPING'] }]) {
+      expect(
+        problemsOf(() => moduleRegistry([module('notes', { ...rest, entitlement: 'grant' })])),
+      ).toEqual([
+        '"notes" is a grant of the workspace and declares frames or events, which are closed per process and not per workspace: it must say entitlement: \'always\'',
+      ]);
+      // Saying nothing is a grant.
+      const unsaid: ModuleManifest = {
+        id: 'notes',
+        requires: [],
+        optional: [],
+        provides: [],
+        budget: { none: 'a test module with no queries of its own' },
+        ...rest,
+      };
+      expect(problemsOf(() => moduleRegistry([unsaid]))).toHaveLength(1);
+      expect(() =>
+        moduleRegistry([module('notes', { ...rest, entitlement: 'always' })]),
+      ).not.toThrow();
+    }
   });
 });
 

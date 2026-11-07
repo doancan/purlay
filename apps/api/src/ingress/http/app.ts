@@ -92,6 +92,7 @@ import { httpLimits, WRITE_BUDGET, type HttpBudgets } from './rate-limit';
 import type { Timers } from '../../realtime/hub';
 import { inProcessLimiters } from '../../realtime/rate-limiter';
 import type { SharedState } from '../../realtime/shared';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { AppError } from '../../platform/errors';
 import {
   JSON_BODY_MAX_BYTES,
@@ -443,6 +444,13 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const closedRoute = (request: Request): boolean => modules.closed(new URL(request.url).pathname);
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
+  /** How a request reads its workspace's grants (D-289): the composition's set, and the count of a request turned away for one. */
+  const entitlements: EntitlementPolicy = {
+    effective: modules.effectiveModules,
+    refused: (module) => {
+      metrics.entitlementRefusals.inc({ module });
+    },
+  };
   /** The module that owns a route as registered; the request log names it for a module's route only. */
   const moduleOfRoute = (route: string | undefined): string =>
     modules.owner.ofRoute(routeLabel(route));
@@ -703,7 +711,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .onRequest(({ request, set }) => {
       // An id from the edge is kept when well-formed, as a label only (#234).
       const requestId = inboundRequestId(request.headers);
-      enterRequest({ requestId, startedAt: performance.now() });
+      enterRequest({ requestId, startedAt: performance.now(), entitlements });
       requestIds.set(request, requestId);
       // Before anything asks the library: every use of it in this request, and in what the request
       // leaves for after its answer, is of the instance current now (D-179 §4).

@@ -69,7 +69,7 @@ sendAuditLinesTo(log);
 // the start here, before anything listens.
 const modules = ((): Composition => {
   try {
-    return compositionFor(config.MODULES);
+    return compositionFor(config.MODULES, config.WORKSPACE_MODULES);
   } catch (error) {
     if (!(error instanceof ModuleConfigError)) throw error;
     log.error('MODULES cannot be run; exiting', { problems: error.problems });

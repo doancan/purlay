@@ -11,7 +11,7 @@
 import type { ModuleManifest } from './manifest';
 
 /** What a workspace with no row for a module is granted: `open` is the module, `managed` is nothing. */
-type EntitlementMode = 'open' | 'managed';
+export type EntitlementMode = 'open' | 'managed';
 
 /** One row of `workspace_modules`: the operator's word for one workspace and one module. */
 export interface EntitlementRow {
@@ -51,6 +51,16 @@ const granted = (
   if (own.some((row) => row.state === 'on')) return true;
   return mode === 'open';
 };
+
+/**
+ * What a request is given to judge its workspace's grants with (`RequestScope.entitlements`): the set for the rows just read, and
+ * what to do when a request is turned away for them. The composition makes the first (`Composition.effectiveModules`); whoever
+ * starts the request names the second, because counting is the transport's.
+ */
+export interface EntitlementPolicy {
+  readonly effective: (rows: readonly EntitlementRow[], now: Date) => ReadonlySet<string>;
+  readonly refused: (module: string) => void;
+}
 
 export const effectiveModules = ({
   running,

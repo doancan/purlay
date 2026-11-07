@@ -14117,7 +14117,8 @@ default, every module (D-24, D-250 rule 9).
 4. **The framework asks, not the module.** The set is read in the same statement as the membership (`requireWorkspaceMembership`, the
    one producer of a `WorkspaceContext`, D-54) and rides on the context. The guard checks the membership first and the grant after, so
    a stranger learns nothing about a workspace's grants, and a refusal for a grant is the answer of a module that is not run, byte for
-   byte (`ROUTE_NOT_FOUND`, the plain `404`). A module cannot forget to ask, because the question is not in its code. A path that
+   byte (`ROUTE_NOT_FOUND`, the plain `404`). A module cannot forget to ask, because the question is not in its code. Each request turned away for a grant is counted in
+   `purlay_entitlement_refusals_total{module}`. A path that
    resolves its workspace without a membership (a signed webhook) asks the same function, by the same name. `GET /api/me` lists the
    set per workspace; the web draws from it. Search, the inbox, the ports, the workers and the outbox consume the same function and do
    not recompute it.

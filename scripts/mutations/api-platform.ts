@@ -426,6 +426,48 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: [MAIL_TESTS],
   },
   {
+    id: 'membership-guard-answers-a-missing-grant-differently',
+    why: 'a refusal for a grant says it is one, and a caller learns which modules a workspace lacks (D-289, D-255)',
+    file: 'apps/api/src/platform/tenancy.ts',
+    find: '    policy.refused(request.module);\n    throw routeNotFound();',
+    replace:
+      "    policy.refused(request.module);\n    throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'Module not granted.' });",
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
+    id: 'membership-guard-does-not-count-a-refusal',
+    why: 'an edition that disagrees with the clients is invisible to the operator (D-289)',
+    file: 'apps/api/src/platform/tenancy.ts',
+    find: '    policy.refused(request.module);\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
+    id: 'membership-guard-ignores-entitlement',
+    why: 'a member of a workspace that was not granted a module is served it, so the edition sells nothing (D-289)',
+    file: 'apps/api/src/platform/tenancy.ts',
+    find: '  if (request?.module !== undefined && !modules.has(request.module)) {',
+    replace: '  if (false) {',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
+    id: 'membership-guard-reads-another-workspaces-grants',
+    why: 'a workspace is served a module because another workspace was granted it (D-289)',
+    file: 'apps/api/src/platform/grants.ts',
+    find: 'where m.workspace_id = workspaces.id) g',
+    replace: "where m.state = 'on') g",
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
+    id: 'membership-guard-tells-a-stranger-the-module-is-off',
+    why: 'a person who is not a member can tell which modules a workspace was granted by the answer they get (D-289, D-21)',
+    file: 'apps/api/src/platform/tenancy.ts',
+    find: '  if (row === undefined) throw workspaceNotFound();\n\n  const request = currentRequest();',
+    replace:
+      '  if (row === undefined) throw currentRequest()?.module === undefined ? workspaceNotFound() : routeNotFound();\n\n  const request = currentRequest();',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'membership-read-inside-a-module-share',
     why: 'a signed-in person who is not in the workspace takes a slot of the module’s share for the membership read, and members are refused as busy (D-266)',
     file: 'apps/api/src/platform/tenancy.ts',
@@ -848,6 +890,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: '.filter((type) => !FACT_TYPE.test(type) || !type.startsWith(`${id}.`))',
     replace: '.filter((type) => !FACT_TYPE.test(type))',
     tests: ['apps/api/src/platform/module-kit/communication.test.ts'],
+  },
+  {
+    id: 'registry-accepts-a-grant-with-frames',
+    why: 'a module a workspace can lose is given a socket the downgrade cannot close (D-289)',
+    file: 'apps/api/src/platform/module-kit/registry.ts',
+    find: "entitlement === 'always' || ((frames ?? []).length === 0 && (events ?? []).length === 0)",
+    replace: 'true',
+    tests: ['apps/api/src/platform/module-kit/registry.test.ts'],
   },
   {
     id: 'registry-accepts-a-module-without-a-budget',

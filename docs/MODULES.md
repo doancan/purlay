@@ -6,7 +6,7 @@
 > without either: `MODULES` is read at boot, a module's routes, frames, events and jobs are closed when it is not
 > run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them, §3),
 > and the migration sets, the composition, the cluster record and the table-ownership list exist. The budget (§7) and
-> the CI matrix (§8) are built, for both modules. What is not built: workspace-level enablement (D-250 rule 9), the design
+> the CI matrix (§8) are built, for both modules. What is built of workspace-level enablement (D-250 rule 9, D-289) is the table, the one function that decides and the guard that asks it; the writers, the lists and the downgrade lifecycle are not all built, and §10 says which. What is not built: the design
 > intent that has no consumer yet and is labelled as such (D-272), and **how modules tell one another things** — decided
 > in D-283 and built in the steps of §10 step 14, a row of §4, §8 or §10 saying which and whether it has landed. §8 says
 > what each rule is held by, and §10 the order; a line marked **built** there is, and one not marked is intent.
@@ -155,6 +155,20 @@ share (D-270, D-266), answering what it throws with the frame's `refId`. A handl
 and publishes the rest to the bus; it never touches the socket. `PING` and `ACTIVE` are the router's own. A handler for an
 operation the manifest does not name stops the build (`compose`). A module reaches what its handler needs beyond the
 context by declaring a context of its own that extends it (chat's: `ChatFrameContext`), so it takes no more than it names.
+
+**A workspace that is not granted a module is turned away as a path nobody has** (D-289). `requireWorkspaceMembership` is the one place
+a `WorkspaceContext` is made, and it reads the workspace's `workspace_modules` rows in the statement that finds the membership. The
+request carries how to judge them (`RequestScope.entitlements`: the composition's `effectiveModules` and a counter of refusals);
+the module is the one the router noted for the route. A request of a module the workspace may not use is answered `ROUTE_NOT_FOUND`
+with the body of `routeNotFound()`, the same value a closed route throws, so the two cannot differ; this is asked **after** the
+membership, so a person who is not a member is told the workspace does not exist whatever its grants. The set rides on the context
+(`context.modules`, `null` for a request made with no policy, such as a command, which is unrestricted) for what must not work it out
+again. A module whose `entitlement` is `always` (chat) is in every workspace's set, and the registry refuses a module that is a grant
+and declares `frames` or `events`, because the socket is closed per process and not per workspace: a downgrade could not close what
+was open. A route that finds its workspace without a membership (a signed webhook) would have to ask the same function; no route of
+a module that is a grant is one today, and `entitlement.integration.test.ts` fails the day one is. No cache: the read is one more
+subselect of the statement that already runs, measured at 0.03 to 0.05 ms at the median and under 0.1 ms at the 95th percentile on
+50 000 workspaces with three grants each (D-289 §5).
 
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
@@ -583,6 +597,7 @@ requires every selected entry to be caught, even if it declares equivalence.
 | Every audit action a module's code records is in its manifest, and every one its manifest lists is recorded | `audit-emissions.test.ts` reads each module's source (the same files, and the core's) as `module-emissions.test.ts` reads events', `core-claims.test.ts` holds the manifests' actions and the core's to the wire's `AUDIT_ACTIONS`, each once, the registry refuses an action two owners list and a reading permission that is another module's, and the composition's `auditAccess` judges every module the build carries — **built** (D-265); mutations `audit-trail-read-by-a-member`, `trail-shows-what-the-role-cannot-read`, `registry-accepts-an-audit-action-read-by-a-foreign-permission` and `chat-stops-declaring-its-audit-actions` | 12 |
 | Every permission a module's code asks is in its manifest, and every one its manifest lists is asked | `permission-emissions.test.ts` reads each module's source (the same files, and the core's) as `module-emissions.test.ts` reads events', the registry refuses a permission not named for its module and one declared twice, and the composition's `permissions` have a module's own only while it runs — **built** (D-265); mutations `issues-delete-ignores-its-permission`, `issues-permission-asked-is-not-the-one-declared`, `composition-holds-the-permissions-of-a-module-that-is-not-run` and `registry-accepts-a-permission-not-named-for-its-module` | 12 |
 | Every kind of notification and search source a module sends is declared, and the wire's and the database's lists are the declarations | `notification-kinds.test.ts` holds `NotificationType`, `NEEDS_YOU` and the database's enum to the manifests' kinds, each once; the registry refuses a kind or a source two modules both list; `composition.notificationKinds` and `composition.searchSources` have a module's only while it runs — **built** (D-265); mutations `chat-stops-declaring-its-notification-kinds`, `missed-mail-takes-every-pushed-kind`, `composition-queries-the-search-sources-of-modules-that-are-off` and `registry-lets-two-modules-send-one-notification-kind` | 12 |
+| A workspace is served only the modules it is granted | `requireWorkspaceMembership` reads `workspace_modules` with the membership and turns a request of a module the workspace may not use away as `routeNotFound()`, after the membership; `effectiveModules` is the one function that decides; `entitlement.integration.test.ts` crosses every endpoint of a module that is a grant (read from `CROSS_TENANT`) against a process without the module, byte for byte with nothing written, and a stranger against every combination of grant and mode — **built** (D-289, the guard); mutations `entitlement-closure-ignores-requires`, `entitlement-expired-grant-still-counts`, `entitlement-managed-mode-treats-no-row-as-on`, `entitlement-off-row-is-ignored`, `membership-guard-ignores-entitlement`, `membership-guard-tells-a-stranger-the-module-is-off`, `membership-guard-reads-another-workspaces-grants`, `membership-guard-answers-a-missing-grant-differently`, `membership-guard-does-not-count-a-refusal` and `registry-accepts-a-grant-with-frames` | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
@@ -1244,6 +1259,11 @@ table, so that §11's listing test reads only the modules.
 - **Capability** — a name a module lists under `provides`: held to no repeat by the registry and to the last release's by
   `module-compat.test.ts`. A module that `uses` one is handed its implementation or `undefined` (`Composition.ports`, built, with no
   module yet using one), and there is no `capabilities.has` (§4, D-283 §3).
+- **Grant** — a row of `workspace_modules` (D-289): the operator's word that one workspace may, or may not, use one module. With no row a
+  workspace has what `WORKSPACE_MODULES` says (`open` is the module, `managed` is none that is a grant). Not a permission: a member's
+  rights are the role's.
+- **Effective modules** — `closure_requires(running ∩ granted)`, the one answer to *which modules may this workspace use*, made by
+  `effectiveModules` (`platform/module-kit/entitlement.ts`) and carried on the `WorkspaceContext` as `modules`.
 - **Said, never acted on** — how a node reports a cluster whose members run different sets: one log line, nothing else
   (D-255 §1).
 
