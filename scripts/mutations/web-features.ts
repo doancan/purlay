@@ -151,13 +151,23 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/settings/pages/general.test.tsx'],
   },
   {
+    id: 'inbox-dot-ignores-updates',
+    why: 'an update a module wrote waits unread and the rail’s Inbox carries no dot for it (D-286)',
+    file: 'apps/web/src/features/chat/inbox/inbox-link.tsx',
+    find: '(updates > 0 ||\n      (channels ?? [])',
+    replace: '(false ||\n      (channels ?? [])',
+    tests: ['apps/web/src/features/chat/inbox/updates.test.tsx'],
+  },
+  {
     id: 'inbox-dot-lit-in-deep-work',
     why: 'the rail asks for attention in Deep Work, when every badge it stands for is quiet',
     file: 'apps/web/src/features/chat/inbox/inbox-link.tsx',
-    find: '    !quiet && (channels ?? []).some((channel) => (channel.state?.unreadMentionCount ?? 0) > 0);\n',
-    replace:
-      '    (channels ?? []).some((channel) => (channel.state?.unreadMentionCount ?? 0) > 0);\n',
-    tests: ['apps/web/src/features/shell/rail.test.tsx'],
+    find: '    !quiet &&\n    (updates > 0 ||\n',
+    replace: '    (updates > 0 ||\n',
+    tests: [
+      'apps/web/src/features/shell/rail.test.tsx',
+      'apps/web/src/features/chat/inbox/updates.test.tsx',
+    ],
   },
   {
     id: 'inbox-read-not-painted-first',
@@ -187,6 +197,30 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/inbox/inbox-screen.test.tsx'],
     equivalent:
       'the ids are sent in chunks of the page limit, and no ids is no chunks, so nothing is asked either way; the guard only spares a paint and a cancel, and opening a row leaves the view, whose fetch is cancelled with it',
+  },
+  {
+    id: 'inbox-updates-offered-where-no-module-writes',
+    why: 'a server whose modules write no notices still offers an Updates section, which is always empty (D-286)',
+    file: 'apps/web/src/features/chat/inbox/categories.ts',
+    find: "category !== 'updates' || updates",
+    replace: 'true',
+    tests: ['apps/web/src/features/chat/inbox/updates.test.tsx'],
+  },
+  {
+    id: 'inbox-updates-refused-read-not-asked-again',
+    why: 'a read the server refused leaves the list painted as read, and a notice the person did not read looks read (D-286)',
+    file: 'apps/web/src/features/chat/inbox/updates.tsx',
+    find: '      (failure: unknown) => {\n        void client.invalidateQueries({ queryKey: keys.inbox(workspace.id) });\n',
+    replace: '      (failure: unknown) => {\n',
+    tests: ['apps/web/src/features/chat/inbox/updates.test.tsx'],
+  },
+  {
+    id: 'inbox-updates-unknown-kind-opens-a-place',
+    why: 'a kind from a newer server opens a place that does not exist (D-286)',
+    file: 'apps/web/src/features/chat/inbox/updates.tsx',
+    find: '          if (notice === undefined) return;\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/inbox/updates.test.tsx'],
   },
   {
     id: 'invitation-kept-after-it-closed',

@@ -212,6 +212,14 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/ui/fireworks.test.tsx'],
   },
   {
+    id: 'inbox-updates-asked-where-no-module-writes',
+    why: 'every page of a server whose modules write no notices asks for a count of updates that cannot exist (D-286)',
+    file: 'apps/web/src/data/queries.ts',
+    find: '    enabled,\n  });\n  return data?.unreadCount',
+    replace: '  });\n  return data?.unreadCount',
+    tests: ['apps/web/src/features/chat/inbox/updates.test.tsx'],
+  },
+  {
     id: 'issues-route-is-the-cores',
     why: 'the issues address is drawn on a server that does not run the module instead of being not found, and asks it for a list that answers 404 (D-250, D-254)',
     file: 'apps/web/src/router/routes.ts',
@@ -318,6 +326,14 @@ export const WEB_CORE: readonly Mutation[] = [
     find: '        patchMessage(client, message.id, (m) => ({ ...m, ...before }));',
     replace: '',
     tests: ['apps/web/src/data/actions.test.ts'],
+  },
+  {
+    id: 'registry-notices-of-a-module-that-is-off',
+    why: 'a module the server does not run has its kinds of notice said and opened (D-286)',
+    file: 'apps/web/src/modules/registry.ts',
+    find: '...running(modules).map((module) => module.notices)',
+    replace: '...MODULES.map((module) => module.notices)',
+    tests: ['apps/web/src/modules/registry.test.tsx'],
   },
   {
     id: 'search-asked-below-the-minimum',

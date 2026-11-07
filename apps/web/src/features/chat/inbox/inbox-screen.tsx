@@ -29,8 +29,10 @@ import { NavToggle } from '../../shell/nav';
 import { ListCard, ListColumn, ListFilter } from '../../../ui/list-column';
 import { useWorkspace } from '../../shell/workspace';
 import { useSession } from '../../session/session';
+import { noticesOf } from '../../../modules/registry';
+import { LazyUpdates, LazyUpdatesReadAll } from './updates-lazy';
 import {
-  INBOX_CATEGORIES,
+  categoriesOffered,
   categoryIn,
   inboxSearch,
   typesOf,
@@ -63,24 +65,28 @@ const CATEGORY_GLYPH = {
   mentions: 'mention',
   direct: 'person',
   threads: 'reply',
-} as const satisfies Record<Exclude<InboxCategory, 'all'>, GlyphName>;
+} as const satisfies Record<Exclude<InboxCategory, 'all' | 'updates'>, GlyphName>;
 
 export const InboxScreen = (): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const { navigate, search } = useRoute();
   const ports = useFeedPorts();
-  const { user: me } = useSession();
+  const { user: me, modules } = useSession();
+  // Updates are the modules' own notices, a list apart from the conversations' (D-286): offered where a module writes some.
+  const updates = Object.keys(noticesOf(modules)).length > 0;
   const reads = useInboxReads();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   // The address is the category's source of truth (D-208): the panel's See all lands on it, a
   // reload keeps it, and Back goes to the one before.
-  const category = categoryIn(search);
+  const category = categoryIn(search, updates);
   const types = typesOf(category);
   const query = useNotifications(
     workspace.id,
     filter === 'unread',
     types === undefined ? undefined : { key: category, types },
+    // Updates are another list, asked for by its own section (D-286).
+    category !== 'updates',
   );
   const showCategory = (next: InboxCategory): void => {
     const query = inboxSearch(next);
@@ -106,7 +112,9 @@ export const InboxScreen = (): React.JSX.Element => {
   const anyUnread = all.some((n) => n.readAt === null);
 
   let body: React.JSX.Element;
-  if (query.isPending) {
+  if (category === 'updates') {
+    body = <LazyUpdates />;
+  } else if (query.isPending) {
     body = (
       <LoadingStatus label={t('state.inbox.loading')} className="flex flex-col gap-4 py-2">
         {[0, 1, 2].map((row) => (
@@ -205,7 +213,8 @@ export const InboxScreen = (): React.JSX.Element => {
             </span>
           </div>
         </div>
-        {newest !== undefined && anyUnread && (
+        {category === 'updates' && <LazyUpdatesReadAll />}
+        {category !== 'updates' && newest !== undefined && anyUnread && (
           <Button
             variant="ghost"
             glyph="confirm"
@@ -225,21 +234,23 @@ export const InboxScreen = (): React.JSX.Element => {
           <ListFilter
             label={t('inbox.category.label')}
             value={category}
-            choices={INBOX_CATEGORIES.map((choice) => ({
+            choices={categoriesOffered(updates).map((choice) => ({
               value: choice,
               label: t(`inbox.category.${choice}`),
             }))}
             onChange={showCategory}
           />
-          <ListFilter
-            label={t('inbox.show')}
-            value={filter}
-            choices={(['all', 'unread'] as const).map((choice) => ({
-              value: choice,
-              label: t(`inbox.filter.${choice}`),
-            }))}
-            onChange={setFilter}
-          />
+          {category !== 'updates' && (
+            <ListFilter
+              label={t('inbox.show')}
+              value={filter}
+              choices={(['all', 'unread'] as const).map((choice) => ({
+                value: choice,
+                label: t(`inbox.filter.${choice}`),
+              }))}
+              onChange={setFilter}
+            />
+          )}
         </div>
         {body}
       </ListColumn>

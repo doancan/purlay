@@ -155,6 +155,8 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   unresolved: unexpected('unresolved'),
   notifications: unexpected('notifications'),
   search: unexpected('search'),
+  inbox: unexpected('inbox'),
+  readInbox: unexpected('readInbox'),
   readNotifications: unexpected('readNotifications'),
   readThread: unexpected('readThread'),
   // The thread panel asks on every opening whether its person follows the thread (D-161), so a test
