@@ -1,3 +1,4 @@
+import { memberReadScope } from '../channels/read-scope';
 /**
  * Editing a message (D-103): the author replaces the content; the reading is done again, once,
  * as at write time (D-101); the people the new content names for the first time are told.
@@ -30,6 +31,7 @@ import type { Logger } from '../../../platform/logging';
 import type { Atomically } from '../../../platform/transactions';
 import { requireLiveSession } from '../../../modules/auth/sessions';
 import { notify, resolveMentions, type ChannelStateUpdate } from './delivery';
+import { unreadMessage } from '../channels/unread';
 import { readBody } from './body';
 import { readBuilt } from './reader';
 import type { PushSender } from '../../../modules/push/sender';
@@ -256,7 +258,11 @@ const countMentions = async (
     .updateTable('channel_members')
     .set({
       unread_mention_count: sql<number>`unread_mention_count + 1`,
-      unread_count: sql<number>`unread_count + case when last_read_message_id >= ${messageId}::uuid then 1 else 0 end`,
+      unread_count: sql<number>`unread_count + case when not ${unreadMessage(
+        memberReadScope('channel_members'),
+        messageId,
+        false,
+      )} then 1 else 0 end`,
       state_version: sql<number>`state_version + 1`,
     })
     .where('channel_id', '=', context.channelId)
@@ -269,7 +275,12 @@ const countMentions = async (
             eb('last_read_message_id', '<', messageId),
           ]),
     )
-    .where('joined_at', '<=', writtenAt)
+    .where((eb) =>
+      eb.or([
+        eb(sql<Date>`${memberReadScope('channel_members').since}`, '<=', writtenAt),
+        eb(sql<string>`${memberReadScope('channel_members').historyFrom}`, '<=', messageId),
+      ]),
+    )
     .returning([
       'user_id',
       'last_read_message_id',

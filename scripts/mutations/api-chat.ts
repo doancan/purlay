@@ -48,6 +48,22 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/bookmarks/bookmarks.integration.test.ts'],
   },
   {
+    id: 'catch-up-join-without-scope-transaction',
+    why: 'A failed private scope write leaves a new channel membership without its join floor.',
+    file: 'apps/api/src/features/chat/http/channels.ts',
+    find: '  const joined = await atomicallyOn(database)(\n    async (transaction) => await joinChannel(transaction, clock, context),\n  );\n',
+    replace: '  const joined = await joinChannel(database, clock, context);\n',
+    tests: ['apps/api/src/features/chat/http/catch-up-race.integration.test.ts'],
+  },
+  {
+    id: 'catch-up-older-export-loses-workspace-context',
+    why: 'New optional receipt tables make an older stopped chat lose the places a departed person wrote in.',
+    file: 'apps/api/src/features/chat/personal-export.ts',
+    find: "  ownSet: ['message_attachments'],\n  optionalTables: ['thread_reads', 'channel_read_scopes'],",
+    replace: "  ownSet: ['message_attachments', 'thread_reads', 'channel_read_scopes'],",
+    tests: ['apps/api/src/modules/export/personal-older-chat.integration.test.ts'],
+  },
+  {
     id: 'channel-removal-tells-the-remover',
     why: 'the person taken out keeps receiving the channel on their open sockets: the frame goes to whoever removed them (D-85, D-172)',
     file: 'apps/api/src/features/chat/http/channels.ts',

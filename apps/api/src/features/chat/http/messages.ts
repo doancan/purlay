@@ -11,6 +11,8 @@ import type { ModuleRouteDependencies } from '../../../ingress/http/module-route
 import type { Auth } from '../../../modules/auth/better-auth';
 import {
   EditMessageRequest,
+  CatchUpQuery,
+  type ChannelCatchUp,
   FileQuery,
   type FilePage,
   PageQuery,
@@ -49,6 +51,7 @@ import {
 import { followState, setFollowing } from '../messages/follow';
 import { searchIn } from '../search/search';
 import { channelFiles } from '../channels/files';
+import { catchUpIn } from '../channels/catch-up';
 import { requireSession } from '../../../ingress/http/session';
 import { queryOf, validated } from '../../../ingress/http/validate';
 
@@ -62,6 +65,17 @@ export interface HistoryDependencies {
 
 /** Sending needs the one send path's boundary and bus as well. */
 interface MessageDependencies extends HistoryDependencies, SendDependencies {}
+
+const readCatchUp = async (
+  dependencies: HistoryDependencies,
+  request: Request,
+  channelId: string,
+): Promise<ChannelCatchUp> => {
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireChannelById(dependencies.database, userId, channelId);
+  const query = validated(CatchUpQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  return await catchUpIn(dependencies.database, context, query);
+};
 
 const readHistory = async (
   dependencies: HistoryDependencies,
@@ -285,6 +299,10 @@ const readSearch = async (
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
 export const messageRoutes = (context: ModuleRouteDependencies): AnyElysia =>
   new Elysia()
+    .get(
+      '/api/channels/:channelId/unreads',
+      async ({ request, params }) => await readCatchUp(context, request, params.channelId),
+    )
     .get(
       '/api/channels/:channelId/messages',
       async ({ request, params }) => await readHistory(context, request, params.channelId),

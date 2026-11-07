@@ -1,3 +1,4 @@
+import { loadReadScope } from '../channels/read-scope';
 import { sql } from '@purlay/db';
 import type { ChatTx } from '../schema';
 import type { Message } from '@purlay/types';
@@ -5,6 +6,7 @@ import { requireMessageById, messageNotFound } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import { readNotifications, type Told } from '../notifications/notifications';
 import { waitingNotifications } from '../channels/read-state';
+import { unreadMessages } from '../channels/unread';
 import { readBuilt } from './reader';
 
 export interface Hidden {
@@ -37,6 +39,7 @@ export const hideMessage = async (
     .where('channel_id', '=', context.channelId)
     .forUpdate()
     .executeTakeFirst();
+  const scope = await loadReadScope(tx, context.channelId, userId);
   const inserted = await tx
     .insertInto('hidden_messages')
     .values({
@@ -68,30 +71,48 @@ export const hideMessage = async (
     member !== undefined &&
     original.deleted_at === null &&
     original.sender_id !== userId &&
-    original.created_at >= member.joined_at &&
-    (member.last_read_message_id === null || member.last_read_message_id < messageId)
+    (scope.unread_since !== null ||
+      (original.created_at >= member.joined_at &&
+        (member.last_read_message_id === null || member.last_read_message_id < messageId)))
   ) {
-    const unread = sql<number>`greatest(unread_count - 1, 0)`;
+    const unread =
+      scope.unread_since === null
+        ? sql<number>`greatest(unread_count - 1, 0)`
+        : unreadMessages(
+            {
+              userId,
+              position: member.last_read_message_id,
+              since: scope.unread_since,
+              historyFrom: scope.unread_history_from,
+              threadBaseline: scope.thread_read_baseline_id,
+            },
+            context.channelId,
+          );
+    const mentions = sql<number>`least(${unread}, ${waitingNotifications(userId, context.channelId)})`;
     const row = await tx
       .updateTable('channel_members')
       .set({
         unread_count: unread,
-        unread_mention_count: sql<number>`least(${unread}, ${waitingNotifications(userId, context.channelId)})`,
+        unread_mention_count: mentions,
         state_version: sql<number>`state_version + 1`,
       })
       .where('user_id', '=', userId)
       .where('channel_id', '=', context.channelId)
+      .where((eb) =>
+        eb.or([eb('unread_count', '<>', unread), eb('unread_mention_count', '<>', mentions)]),
+      )
       .returning(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
-      .executeTakeFirstOrThrow();
-    states.splice(0, states.length, {
-      channelId: context.channelId,
-      version: row.state_version,
-      state: {
-        lastReadMessageId: row.last_read_message_id,
-        unreadCount: row.unread_count,
-        unreadMentionCount: row.unread_mention_count,
-      },
-    });
+      .executeTakeFirst();
+    if (row !== undefined)
+      states.splice(0, states.length, {
+        channelId: context.channelId,
+        version: row.state_version,
+        state: {
+          lastReadMessageId: row.last_read_message_id,
+          unreadCount: row.unread_count,
+          unreadMentionCount: row.unread_mention_count,
+        },
+      });
   }
   await tx
     .deleteFrom('saved_messages')

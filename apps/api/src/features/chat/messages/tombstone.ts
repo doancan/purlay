@@ -1,3 +1,4 @@
+import { memberReadScope } from '../channels/read-scope';
 /**
  * What removing messages from a channel does, for any number of them at once (D-9, D-139 §2): the
  * tombstone's row change, and taking back what they added to the people they were counted for.
@@ -10,6 +11,7 @@ import { sql } from '@purlay/db';
 import type { ChatDb, ChatTx } from '../schema';
 import { NEEDS_YOU } from '@purlay/types';
 import type { ChannelStateUpdate } from './delivery';
+import { unreadMessage } from '../channels/unread';
 
 /** A message as the counters saw it when it was sent. */
 export interface Counted {
@@ -139,12 +141,13 @@ export const takeBack = async (
       from channel_members as counted
       join lateral (
         select m.id, m.sender_id, m.created_at,
-          (counted.last_read_message_id is null or counted.last_read_message_id < m.id) as ahead
+          ${unreadMessage(memberReadScope('counted'), sql.ref('m.id'), false)} as ahead
         from unnest(${ids}::uuid[], ${senders}::uuid[], ${times}::timestamptz[])
           as m(id, sender_id, created_at)
       ) as message
         on (message.sender_id is null or counted.user_id <> message.sender_id)
-        and counted.joined_at <= message.created_at
+        and (${memberReadScope('counted').since} <= message.created_at
+          or message.id >= ${memberReadScope('counted').historyFrom})
       left join unnest(${waitedUsers}::uuid[], ${waitedMessages}::uuid[])
         as waited(user_id, message_id)
         on waited.user_id = counted.user_id and waited.message_id = message.id

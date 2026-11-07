@@ -109,7 +109,11 @@ const created = async (response: Response): Promise<string> => {
 };
 
 /** A workspace with a channel, and a thread in it, owned by whoever `cookie` belongs to. */
-const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids> => {
+const aTenant = async (
+  db: Executor,
+  cookie: string,
+  slug: string,
+): Promise<Ids & { readonly replyId: string }> => {
   const workspaceId = await created(
     await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug: aUniqueSlug(slug) }),
   );
@@ -143,7 +147,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
       attachmentIds: [attachmentId],
     }),
   );
-  await created(
+  const replyId = await created(
     await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
       id: messageId(NOW),
       content: 'an answer',
@@ -185,6 +189,15 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     .insertInto('channel_members')
     .values({ channel_id: channelId, user_id: member.userId })
     .execute();
+  // A colleague's root gives private catch-up a positive unread control; one's own writes never wait.
+  expect(
+    (
+      await call(db, 'POST', `/api/channels/${channelId}/messages`, member.cookie, {
+        id: messageId(NOW),
+        content: 'A colleague’s unread handover',
+      })
+    ).status,
+  ).toBe(201);
   // A link to revoke.
   const invitation = await call(db, 'POST', `/api/workspaces/${workspaceId}/invitations`, cookie);
   expect(invitation.status).toBe(201);
@@ -315,6 +328,7 @@ const aTenant = async (db: Executor, cookie: string, slug: string): Promise<Ids>
     workspaceId,
     channelId,
     messageId: root,
+    replyId,
     attachmentId,
     unsentAttachmentId,
     memberId: member.userId,
@@ -390,6 +404,7 @@ describe('integration: cross-tenant isolation', () => {
             userId: ownerUser.userId,
             workspaceId: theirs.workspaceId,
             messageId: theirs.messageId,
+            replyId: theirs.replyId,
           });
 
           const across = await call(

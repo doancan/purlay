@@ -582,9 +582,10 @@ export type ReadAllChannelsResponse = Static<typeof ReadAllChannelsResponse>;
 /**
  * `PUT /api/messages/:messageId/thread/read` — the newest reply the person has seen in the thread
  * of this root. A reply is read here, not by the channel's read position (D-147): the caller's
- * notifications for this thread's replies up to and including it are read. Nothing is stored but
- * that, so a bound behind an earlier one changes nothing; the answer is `204`, and the channel's new
- * state goes to the caller's devices as `CHANNEL_STATE`.
+ * notifications for this thread's replies up to and including it are read, and their private thread
+ * receipt advances monotonically (D-282). The bound must be a reply of this root; another thread's
+ * or a missing message is `MESSAGE_NOT_FOUND`. The feed position does not move. The answer is `204`,
+ * and the channel's new state goes to the caller's devices as `CHANNEL_STATE`.
  */
 export const ReadThreadRequest = FromClient({ lastReadMessageId: Uuid });
 export type ReadThreadRequest = Static<typeof ReadThreadRequest>;

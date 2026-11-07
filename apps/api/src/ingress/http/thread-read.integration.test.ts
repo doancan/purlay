@@ -262,14 +262,18 @@ describe('integration: a reply is read in its thread, not by the feed', () => {
     });
   });
 
-  test('a mention an edit adds to a reply read past in the feed waits for the thread', async () => {
+  test('a mention an edit adds to an undisplayed reply increases needs-you without counting the reply twice', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db);
       const question = await say(db, room, room.carol, 1, 'a question');
       const reply = await say(db, room, room.alice, 2, 'an answer', question);
       const unrelated = await say(db, room, room.carol, 3, 'unrelated');
       await readFeed(db, room, room.bob, unrelated);
-      expect(await stateOf(db, room, room.bob)).toMatchObject({ unreadCount: 0 });
+      // Reading roots does not read the unfollowed reply in between them (D-282).
+      expect(await stateOf(db, room, room.bob)).toMatchObject({
+        unreadCount: 1,
+        unreadMentionCount: 0,
+      });
 
       const edited = await call(db, 'PATCH', `/api/messages/${reply}`, {
         cookie: room.alice.cookie,

@@ -82,6 +82,14 @@ export const PACKAGES_DB: readonly Mutation[] = [
     tests: ['packages/db/src/upgrade.integration.test.ts'],
   },
   {
+    id: 'catch-up-scope-move-loses-known-history',
+    why: 'Moving an applied development scope discards an explicit historical range and reply baseline.',
+    file: 'packages/db/migrations/chat/0010_membership_read_scopes.sql',
+    find: 'INSERT INTO channel_read_scopes(channel_id, user_id, unread_since, unread_history_from, thread_read_baseline_id)\nSELECT channel_id, user_id, unread_since, unread_history_from, thread_read_baseline_id FROM channel_members\nWHERE unread_since IS NOT NULL OR unread_history_from IS NOT NULL OR thread_read_baseline_id IS NOT NULL;\n',
+    replace: '',
+    tests: ['packages/db/src/upgrade.integration.test.ts'],
+  },
+  {
     id: 'closing-pool-handed-out',
     why: 'the next file is handed the shared pool while it is being destroyed, and every query fails (#797)',
     file: 'packages/db/src/testing.ts',
@@ -412,6 +420,14 @@ export const PACKAGES_DB: readonly Mutation[] = [
     find: '} else if (!MODULE_ID.test(item)) {',
     replace: '} else if (false) {',
     tests: ['packages/db/src/migration-sets.test.ts', 'apps/api/src/module-setting-pair.test.ts'],
+  },
+  {
+    id: 'query-scan-upsert-target-not-indexed',
+    why: 'A guarded upsert is mistaken for a table scan by its guard column alone, ignoring the unique key it probes.',
+    file: 'packages/db/src/query-columns.ts',
+    find: "        if (conflict !== undefined)\n          for (const column of conflict.columns) take(node, column, 'where', chain);\n",
+    replace: '',
+    tests: ['packages/db/src/query-columns.test.ts'],
   },
   {
     id: 'session-hash-plugin-drops-the-table-scope',

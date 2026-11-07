@@ -83,6 +83,8 @@ const CHAT_PERSONAL_TABLES = [
   'saved_messages',
   'saved_searches',
   'thread_follows',
+  'thread_reads',
+  'channel_read_scopes',
   'notifications',
   'missed_mail_letters',
 ] as const;
@@ -354,7 +356,24 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
           type: 'mention',
         })
         .execute();
-      // ... and in the five that chat's own set makes.
+      await tx
+        .insertInto('thread_reads')
+        .values({
+          channel_id: channel,
+          user_id: who.userId,
+          root_id: bobs,
+          last_read_message_id: bobs,
+          read_at: NOW,
+        })
+        .execute();
+      await tx
+        .insertInto('channel_read_scopes')
+        .values({ channel_id: channel, user_id: who.userId, unread_since: NOW })
+        .onConflict((conflict) =>
+          conflict.columns(['channel_id', 'user_id']).doUpdateSet({ unread_since: NOW }),
+        )
+        .execute();
+      // ... and in the tables that chat's own set makes.
       await tx
         .insertInto('hidden_messages')
         .values({

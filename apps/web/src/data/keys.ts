@@ -73,6 +73,7 @@ export const keys = {
    */
   unreads: (channelId: string, position: string | null, count: number) =>
     ['unreads', channelId, position ?? 'start', count] as const,
+  unreadsFor: (channelId: string) => ['unreads', channelId] as const,
   /** One message, read for the card a link to it is drawn as (D-217). */
   message: (messageId: string) => ['message', messageId] as const,
   /** What one person sent in a workspace, newest first (D-215): search narrowed to them. */
@@ -143,6 +144,7 @@ export const keys = {
 
 /** The families, for the code that addresses one of them whole. */
 export const families = {
+  unreads: ['unreads'] as const,
   search: ['search'] as const,
   saved: ['saved'] as const,
   files: ['files'] as const,

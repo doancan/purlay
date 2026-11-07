@@ -81,6 +81,8 @@ export const TABLE_OWNERS = {
   saved_messages: 'chat',
   saved_searches: 'chat',
   thread_follows: 'chat',
+  thread_reads: 'chat',
+  channel_read_scopes: 'chat',
 
   // Issues: a workspace's issues (its own set, `migrations/issues/`).
   issues: 'issues',

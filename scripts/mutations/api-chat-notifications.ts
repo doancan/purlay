@@ -7,6 +7,22 @@ const INBOX_TESTS = ['apps/api/src/features/chat/notifications/notifications.int
 
 export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
   {
+    id: 'catch-up-receipt-bound-from-other-thread',
+    why: 'A caller clears a thread with an unrelated reply boundary.',
+    file: 'apps/api/src/features/chat/notifications/notifications.ts',
+    find: "    .where('parent_id', '=', rootId)\n    .executeTakeFirst();",
+    replace: '    .executeTakeFirst();',
+    tests: ['apps/api/src/features/chat/channels/read-scopes.integration.test.ts'],
+  },
+  {
+    id: 'catch-up-stale-thread-receipt-rewinds',
+    why: 'A stale second device moves a read receipt backwards.',
+    file: 'apps/api/src/features/chat/notifications/notifications.ts',
+    find: "          .where('thread_reads.last_read_message_id', '<', input.lastReadMessageId),",
+    replace: '          ,',
+    tests: ['apps/api/src/features/chat/channels/read-scopes.integration.test.ts'],
+  },
+  {
     id: 'inbox-cursor-from-another-workspace',
     why: 'a cursor from the same person’s other workspace is taken as a place in this one, and the page starts somewhere arbitrary',
     file: INBOX,

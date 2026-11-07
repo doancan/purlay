@@ -104,6 +104,34 @@ const footprint = async (
       added_by: who.userId,
     })
     .execute();
+  // A retained receipt can name a purged reply; only their own receipts are exported.
+  await db
+    .insertInto('thread_reads')
+    .values({
+      channel_id: room.channelId,
+      user_id: who.userId,
+      root_id: other,
+      last_read_message_id: messageId(next()),
+      read_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('channel_read_scopes')
+    .values({
+      channel_id: room.channelId,
+      user_id: who.userId,
+      unread_since: NOW,
+      unread_history_from: other,
+      thread_read_baseline_id: other,
+    })
+    .onConflict((conflict) =>
+      conflict.columns(['channel_id', 'user_id']).doUpdateSet({
+        unread_since: NOW,
+        unread_history_from: other,
+        thread_read_baseline_id: other,
+      }),
+    )
+    .execute();
   // An issue they made, given to somebody else, and the issue somebody else made for them: only the first is theirs.
   await db
     .insertInto('issues')
@@ -368,6 +396,18 @@ describe('integration: exporting a person’s own data', () => {
         target,
       );
       expect(path).toBe(target);
+      const receipts = await lines(target, 'thread_reads');
+      expect(receipts).toHaveLength(2);
+      expect(receipts.every((row) => row['user_id'] === pat.userId)).toBe(true);
+      const memberships = await lines(target, 'channel_read_scopes');
+      expect(
+        memberships.every(
+          (row) => new Date(String(row['unread_since'])).toISOString() === NOW.toISOString(),
+        ),
+      ).toBe(true);
+      expect(memberships.every((row) => typeof row['thread_read_baseline_id'] === 'string')).toBe(
+        true,
+      );
       expect(Value.Check(PersonalExportManifest, manifest)).toBe(true);
       expect(JSON.parse(await readFile(join(target, 'manifest.json'), 'utf8'))).toEqual(manifest);
       expect((await readdir(target)).sort()).toEqual(
@@ -620,6 +660,8 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'message_attachments',
     'saved_messages',
     'saved_searches',
+    'channel_read_scopes',
+    'thread_reads',
     'thread_follows',
     'channel_bookmarks',
     'issues',
@@ -629,6 +671,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'blobs',
     'channel_bookmarks.ndjson',
     'channel_members.ndjson',
+    'channel_read_scopes.ndjson',
     'channels.ndjson',
     'issues.ndjson',
     'manifest.json',
@@ -638,6 +681,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'saved_messages.ndjson',
     'saved_searches.ndjson',
     'thread_follows.ndjson',
+    'thread_reads.ndjson',
     'users.ndjson',
     'workspace_invitation_mail_attempts.ndjson',
     'workspace_invitation_recipients.ndjson',
@@ -791,6 +835,20 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     saved_searches: {
       rows: 2,
       columns: ['created_at', 'id', 'name', 'query', 'user_id', 'workspace_id'],
+    },
+    channel_read_scopes: {
+      rows: 2,
+      columns: [
+        'channel_id',
+        'thread_read_baseline_id',
+        'unread_history_from',
+        'unread_since',
+        'user_id',
+      ],
+    },
+    thread_reads: {
+      rows: 2,
+      columns: ['channel_id', 'last_read_message_id', 'read_at', 'root_id', 'user_id'],
     },
     thread_follows: {
       rows: 2,

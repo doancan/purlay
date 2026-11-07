@@ -431,6 +431,22 @@ describe('the endpoints', () => {
     });
   });
 
+  test('private catch-up has independent thread paging', async () => {
+    const controller = new AbortController();
+    const page = harness({
+      roots: { data: [message], nextCursor: null },
+      threads: [],
+      nextThreadCursor: null,
+    });
+    await page.api.unreads(ID, { limit: 20, afterThread: ID }, controller.signal);
+    expect(page.calls[0]).toMatchObject({
+      method: 'GET',
+      url: `/api/channels/${ID}/unreads?limit=20&afterThread=${ID}`,
+    });
+    await page.api.unreads(ID);
+    expect(page.calls[1]?.url).toBe(`/api/channels/${ID}/unreads`);
+  });
+
   test('messages, threads and the open questions page by cursor', async () => {
     const page = harness({ data: [message], nextCursor: null });
     await page.api.messages(ID, { before: 'b', limit: 25 });

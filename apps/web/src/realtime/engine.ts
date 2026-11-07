@@ -497,6 +497,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     // cursor; the counters and the open questions moved without a frame to say so.
     void client.invalidateQueries({ queryKey: families.thread });
     void client.invalidateQueries({ queryKey: families.unresolved });
+    void client.invalidateQueries({ queryKey: families.unreads });
     void client.invalidateQueries({ queryKey: families.channels });
     // An incident moved while away (D-137): its frame went to a socket that was down.
     void client.invalidateQueries({ queryKey: families.incident });
@@ -515,6 +516,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     readAgain(client, families.members);
     readAgain(client, families.notifications);
     readAgain(client, families.saved);
+    readAgain(client, families.unreads);
   };
 
   /** Waits on the injected schedule; false when the page stopped meanwhile. */
@@ -608,6 +610,7 @@ export const createEngine = (options: EngineOptions): Engine => {
             // (found in a browser: a reaction taken back in that gap stayed on the other screen).
             // Read again, what is cached for the channel is correct from this moment on.
             readAgain(client, keys.messages(channelId));
+            readAgain(client, keys.unreadsFor(channelId));
             // A file sent, or its message deleted, in the gap is in no frame either (D-129).
             readAgain(client, keys.files(channelId));
             readAgain(client, keys.pins(channelId));
@@ -667,7 +670,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         }
         return;
       case 'MESSAGE_HIDDEN':
-        messageHidden(client, frame.data.messageId, frame.data.hiddenAt);
+        messageHidden(client, frame.data.messageId, frame.data.hiddenAt, frame.data.channelId);
         return;
       case 'MESSAGE_REVISED':
         if (isNewest('revision', frame.data.messageId, frame.version)) {

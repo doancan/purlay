@@ -134,6 +134,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   pin: unexpected('pin'),
   unpin: unexpected('unpin'),
   messages: unexpected('messages'),
+  unreads: unexpected('unreads'),
   messageWindow: unexpected('messageWindow'),
   send: unexpected('send'),
   upload: unexpected('upload'),

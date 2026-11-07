@@ -1,4 +1,4 @@
-import { OwnAdmission, InstanceInfo } from '@purlay/types';
+import { OwnAdmission, InstanceInfo, ChannelCatchUp, type CatchUpQuery } from '@purlay/types';
 import {
   Issue,
   IssuePage,
@@ -345,6 +345,11 @@ export interface Api {
     page?: PageQuery,
     signal?: AbortSignal,
   ) => Promise<MessagePage>;
+  readonly unreads: (
+    channelId: string,
+    query?: CatchUpQuery,
+    signal?: AbortSignal,
+  ) => Promise<ChannelCatchUp>;
   /** One message, for the card a link to it is drawn as (D-217); 404 when it is not the caller's to see. */
   readonly message: (messageId: string, signal?: AbortSignal) => Promise<Message>;
   /** The feed around one message, for a link to it (D-149). */
@@ -921,6 +926,13 @@ export const createApi = (http: Http): Api => {
         `/api/workspaces/${at(workspaceId)}/read`,
         ReadAllChannelsResponse,
         options(),
+      ),
+    unreads: (channelId, query = {}, signal) =>
+      http.request(
+        'GET',
+        `/api/channels/${at(channelId)}/unreads`,
+        ChannelCatchUp,
+        options({ query: { ...query } }, signal),
       ),
     messages: (channelId, page = {}, signal) =>
       http.request(

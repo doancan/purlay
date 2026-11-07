@@ -2314,6 +2314,7 @@ describe('every family of cached reads is read again after the gap a frame can f
   const DECIDED: Readonly<
     Record<keyof typeof families, { where: Where; key: readonly unknown[] }>
   > = {
+    unreads: { where: 'both', key: keys.unreads(CH, null, 1) },
     search: { where: 'answer', key: keys.search(WS, 'words', null, null) },
     saved: { where: 'open', key: keys.saved(WS) },
     files: { where: 'answer', key: keys.files(CH) },

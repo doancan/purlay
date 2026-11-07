@@ -1,3 +1,4 @@
+import { memberReadScope } from '../channels/read-scope';
 /**
  * What a new message does to the people it is for (D-99 §1–§3).
  *
@@ -26,6 +27,7 @@ import type { ChannelState, NEEDS_YOU } from '@purlay/types';
 import type { ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
+import { unreadMessage } from '../channels/unread';
 
 /** A root has no thread to have chosen about. */
 const NO_CHOICES: ThreadChoices = { followed: [], unfollowed: new Set() };
@@ -168,15 +170,31 @@ export const notify = async (
   const alreadyRead = new Set<string>();
   const levels = await executor
     .selectFrom('channel_members')
-    .select(['user_id', 'notification_level', 'last_read_message_id', 'joined_at'])
-    .where('channel_id', '=', context.channelId)
-    .where('user_id', 'in', candidates)
+    .leftJoin('channel_read_scopes as read_scope', (join) =>
+      join
+        .onRef('read_scope.channel_id', '=', 'channel_members.channel_id')
+        .onRef('read_scope.user_id', '=', 'channel_members.user_id'),
+    )
+    .select([
+      'channel_members.user_id',
+      'channel_members.notification_level',
+      'channel_members.last_read_message_id',
+      'channel_members.joined_at',
+      'read_scope.unread_since',
+      'read_scope.unread_history_from',
+    ])
+    .where('channel_members.channel_id', '=', context.channelId)
+    .where('channel_members.user_id', 'in', candidates)
     .execute();
   for (const row of levels) {
     if (row.notification_level === 'none') muted.add(row.user_id);
     if (!message.reply && isBehind(row.last_read_message_id, messageId))
       alreadyRead.add(row.user_id);
-    if (writtenAt !== undefined && new Date(row.joined_at) > writtenAt)
+    if (
+      writtenAt !== undefined &&
+      new Date(row.unread_since ?? row.joined_at) > writtenAt &&
+      (row.unread_history_from === null || messageId < row.unread_history_from)
+    )
       alreadyRead.add(row.user_id);
   }
   const hidden = new Set(
@@ -350,9 +368,8 @@ export const countArrival = async (
   notified: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
   const messageId = message.id;
-  const ahead = sql<boolean>`(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)`;
   const needs = sql<boolean>`(user_id = any(${notified}::uuid[]))`;
-  const counted = message.reply ? sql<boolean>`(${ahead} or ${needs})` : ahead;
+  const counted = unreadMessage(memberReadScope('channel_members'), messageId);
   // The rows are locked first, in one order (#668). An `UPDATE` of several rows locks them in the
   // order it reaches them, which follows where each row's newest version happens to lie for this
   // snapshot: two senders could each hold a row the other needed, and one send failed with a
