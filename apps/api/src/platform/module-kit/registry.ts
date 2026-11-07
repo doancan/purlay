@@ -188,6 +188,18 @@ const vocabularyProblems = (manifest: ModuleManifest): string[] => {
   return problems;
 };
 
+/**
+ * A module a workspace is granted cannot have a socket operation or an event yet (D-289): a grant is judged where a request
+ * is made a context, and the socket's topics and events are closed per process, so a downgrade could not close what was open.
+ * A module that wants frames is `always` until the socket closes per workspace.
+ */
+const entitlementProblems = ({ id, entitlement, frames, events }: ModuleManifest): string[] =>
+  entitlement === 'always' || ((frames ?? []).length === 0 && (events ?? []).length === 0)
+    ? []
+    : [
+        `"${id}" is a grant of the workspace and declares frames or events, which are closed per process and not per workspace: it must say entitlement: 'always'`,
+      ];
+
 /** The longest a deadline may be: past it a proxy in front of the process has given up, and a client with it. */
 const DEADLINE_MS_MAX = 120_000;
 
@@ -266,6 +278,7 @@ const bundleProblems = (
       ...budgetProblems(manifest),
       ...vocabularyProblems(manifest),
       ...deadlineProblems(manifest),
+      ...entitlementProblems(manifest),
     );
 
     for (const capability of manifest.provides) {

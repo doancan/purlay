@@ -43,6 +43,8 @@ export const TABLE_OWNERS = {
   workspace_invitation_recipients: 'core',
   workspace_invitation_mail_attempts: 'core',
   workspace_members: 'core',
+  // Which modules one workspace may use: the operator's grant, not the workspace's (D-289).
+  workspace_modules: 'core',
   workspaces: 'core',
 
   // Chat: channels and what is said in them, and the integrations that post into them.

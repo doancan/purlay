@@ -150,6 +150,7 @@ export type CoreExcluded =
   | 'sessions'
   | 'push_subscriptions'
   | 'inbox_entries'
+  | 'workspace_modules'
   | 'job_runs'
   | 'workspace_exports'
   | 'personal_exports'
@@ -177,6 +178,8 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
   push_subscriptions: 'a device’s keys, the person’s own',
   inbox_entries:
     'what modules told one person: theirs alone and short-lived (read rows go after 30 days, all after 180), so it is in their own export and in no workspace’s (D-286)',
+  workspace_modules:
+    'which modules the operator granted the workspace, and until when: the server’s commercial record, not the workspace’s content (D-289)',
   job_runs: 'the scheduler’s own record',
   workspace_exports: 'an export’s own record: its archive is the export',
   personal_exports:

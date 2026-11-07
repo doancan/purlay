@@ -21,6 +21,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pino from 'pino';
+import type { EntitlementPolicy } from './module-kit/entitlement';
 
 /** Never written to a log, at any depth (`ARCHITECTURE.md` §10). */
 export const NEVER_LOGGED: ReadonlySet<string> = new Set([
@@ -135,6 +136,11 @@ export interface RequestScope {
   sessionId?: string;
   /** The module whose route this is, once the router knows it (`noteModule`): the share of the database that holds it. */
   module?: string;
+  /**
+   * How to read the grants of the workspace this request is made in (`tenancy.ts`, D-289). A request that is made without it
+   * (a command, a test) is judged by no grant: it is unrestricted, and a request of the process's own is always given one.
+   */
+  entitlements?: EntitlementPolicy;
   /** Aborts when the module's deadline for this request passes (`request-deadline.ts`): the work stops with the answer. */
   signal?: AbortSignal;
 }

@@ -116,6 +116,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   TRUST_PROXY: false,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,
+  WORKSPACE_MODULES: 'open',
   GITHUB_CLIENT_ID: 'client-id',
   GITHUB_CLIENT_SECRET: 'client-secret',
   ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,

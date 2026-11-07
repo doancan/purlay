@@ -58,6 +58,7 @@ const askOne = async (
             ...(request?.sessionId === undefined ? {} : { sessionId: request.sessionId }),
             module,
             signal,
+            ...(request?.entitlements === undefined ? {} : { entitlements: request.entitlements }),
           },
           async () => await source.search({ database, context, query, limit }),
         ),

@@ -72,6 +72,11 @@ export interface ModuleManifest {
   readonly optional: readonly string[];
   /** Capabilities this module offers, asked for by name through the core (`MODULES.md` §4). */
   readonly provides: readonly string[];
+  /**
+   * Whether a workspace is granted the module by the operator (`grant`, what a module left out says) or has it whenever the
+   * process runs it (`always`): a workspace's grant is the commercial gate of a package, not a permission (D-289).
+   */
+  readonly entitlement?: 'always' | 'grant';
   /** The module's share of the database pool, or `none` with the reason it has no need of one. */
   readonly budget: ModuleBudgetDeclaration;
   /** How long a request or frame of the module may take; left out, `DEFAULT_DEADLINE_MS` (`platform/request-deadline.ts`). */
