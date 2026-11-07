@@ -87,7 +87,7 @@ describe('integration: reading the outbox for the operator', () => {
   });
 });
 
-describe('the page when the outbox cannot be read', () => {
+describe('integration: the page when the outbox cannot be read', () => {
   test('says so once in the log and leaves the gauges out, so a failure is not a zero', async () => {
     const { log, lines } = aRecordingLogger();
     let fail = true;

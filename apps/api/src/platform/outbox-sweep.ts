@@ -12,8 +12,8 @@
 import type { Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from './clock';
 
-export const OUTBOX_FINISHED_KEPT_DAYS = 1;
-export const OUTBOX_DEAD_KEPT_DAYS = 30;
+const OUTBOX_FINISHED_KEPT_DAYS = 1;
+const OUTBOX_DEAD_KEPT_DAYS = 30;
 const SWEEP_BATCH = 5_000;
 
 /** What a sweep took, by the rule that took it. */

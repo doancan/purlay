@@ -99,6 +99,33 @@ describe('server overview problem summary', () => {
     quiet.unmount();
   });
 
+  test('names the dead facts alone, with no wait to report, and the wait alone, with no dead fact', async () => {
+    const deadOnly = await renderAdministration('overview', (call) =>
+      call.path === '/api/server/overview'
+        ? adminJson({ ...ADMIN_OVERVIEW, outboxDeadFacts: 1, outboxOldestPendingSeconds: 30 })
+        : call.path === '/api/server/backups'
+          ? adminJson(backup)
+          : undefined,
+    );
+    const dead = within(await deadOnly.findByRole('region', { name: 'Server problems' }));
+    expect(await dead.findByText('Given up on after their tries: 1')).toBeDefined();
+    expect(dead.queryByText(/has waited/)).toBeNull();
+    expect(dead.getByText('Reported problems: 1')).toBeDefined();
+    deadOnly.unmount();
+
+    const waitOnly = await renderAdministration('overview', (call) =>
+      call.path === '/api/server/overview'
+        ? adminJson({ ...ADMIN_OVERVIEW, outboxOldestPendingSeconds: 901 })
+        : call.path === '/api/server/backups'
+          ? adminJson(backup)
+          : undefined,
+    );
+    const waiting = within(await waitOnly.findByRole('region', { name: 'Server problems' }));
+    expect(await waiting.findByText('The oldest has waited 15 minutes')).toBeDefined();
+    expect(waiting.queryByText(/Given up on/)).toBeNull();
+    waitOnly.unmount();
+  });
+
   test.each(['unconfigured', 'unreported', 'invalid', 'stale'] as const)(
     'backup evidence state %s remains actionable',
     async (state) => {

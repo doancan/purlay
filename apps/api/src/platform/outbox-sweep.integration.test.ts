@@ -28,8 +28,14 @@ afterAll(async () => {
 
 const clock = aMovableClock(NOW);
 const ago = (ms: number): Date => new Date(NOW.getTime() - ms);
-const remaining = async (): Promise<string[]> =>
-  (await cloned.db.selectFrom('outbox').select(['state', 'created_at']).execute())
+const remaining = async (workspaceId: string): Promise<string[]> =>
+  (
+    await cloned.db
+      .selectFrom('outbox')
+      .select(['state', 'created_at'])
+      .where('workspace_id', '=', workspaceId)
+      .execute()
+  )
     .map((row) => `${row.state}@${String((NOW.getTime() - row.created_at.getTime()) / DAY_MS)}d`)
     .sort();
 
@@ -44,7 +50,7 @@ describe('integration: sweeping the outbox', () => {
       dead: 0,
       expired: 0,
     });
-    expect(await remaining()).toEqual(['delivered@0.041666666666666664d']);
+    expect(await remaining(workspaceId)).toEqual(['delivered@0.041666666666666664d']);
   });
 
   test('keeps a dead fact thirty days to be looked at, and takes it after', async () => {
@@ -56,7 +62,7 @@ describe('integration: sweeping the outbox', () => {
       dead: 1,
       expired: 0,
     });
-    expect(await remaining()).toEqual(['dead@29d']);
+    expect(await remaining(workspaceId)).toEqual(['dead@29d']);
   });
 
   test('takes a pending fact past its expiry, counted as expired, and leaves one in flight', async () => {
@@ -72,7 +78,7 @@ describe('integration: sweeping the outbox', () => {
       dead: 0,
       expired: 1,
     });
-    expect(await remaining()).toHaveLength(2);
+    expect(await remaining(workspaceId)).toHaveLength(2);
   });
 
   test('goes on past one batch and stops when a batch comes back short', async () => {
