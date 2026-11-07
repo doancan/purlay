@@ -155,6 +155,21 @@ describe('integration: the notification sink', () => {
     });
   });
 
+  test('a deleted workspace is not notified through an earlier context', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      await db
+        .updateTable('workspaces')
+        .set({ deleted_at: NOW })
+        .where('id', '=', workspaceId)
+        .execute();
+      expect(await sinkOn().notify(db, bob.context, noticeFor(ada.userId))).toBeUndefined();
+      expect(await entriesOf(db, ada.userId)).toEqual([]);
+    });
+  });
+
   test('the one acting is not told of what they did themselves', async () => {
     await withRollback(async (db) => {
       const workspaceId = await aWorkspace(db);
