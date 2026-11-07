@@ -263,6 +263,31 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
   },
   {
+    id: 'followed-http-skips-session',
+    why: 'The anonymous request no longer receives the required authentication refusal. (D-290)',
+    file: 'apps/api/src/features/chat/http/followed.ts',
+    find: '  const { userId } = await requireSession(auth, request);',
+    replace: "  const userId = '00000000-0000-4000-8000-000000000001';",
+    tests: ['apps/api/src/features/chat/http/followed.integration.test.ts'],
+  },
+  {
+    id: 'followed-http-skips-validation',
+    why: 'Malformed, repeated, extra and incomplete query parameters reach the reader. (D-290)',
+    file: 'apps/api/src/features/chat/http/followed.ts',
+    find: "  const input = validated(\n    FollowedThreadsQuery,\n    queryOf(new URL(request.url), {\n      numbers: ['limit'],\n      booleans: ['unreadOnly'],\n    }),\n  );",
+    replace:
+      "  const input = queryOf(new URL(request.url), { numbers: ['limit'], booleans: ['unreadOnly'] }) as never;",
+    tests: ['apps/api/src/features/chat/http/followed.integration.test.ts'],
+  },
+  {
+    id: 'followed-http-skips-workspace',
+    why: 'A stranger receives a successful empty list instead of the workspace refusal. (D-290)',
+    file: 'apps/api/src/features/chat/http/followed.ts',
+    find: '  const context = await requireWorkspaceMembership(database, userId, workspaceId);',
+    replace: "  const context = { userId, workspaceId, role: 'member' } as never;",
+    tests: ['apps/api/src/features/chat/http/followed.integration.test.ts'],
+  },
+  {
     id: 'github-token-checked-before-the-role',
     why: 'a member makes this server ask GitHub about any token they type (#884)',
     file: 'apps/api/src/features/chat/http/github-integration.ts',

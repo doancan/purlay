@@ -1110,6 +1110,11 @@ from the modules `GET /api/me` lists (step 11, **built**); (e) *the cluster chec
 shared record, renewed and lapsing by itself, and a node that finds another set logs it once and again when the nodes agree;
 it never refuses traffic, so a new set rolls out node by node; (f) the matrix in CI (the cells of §8 are built, and so is the run of the suites that need no module in each of them; a suite that needs two modules runs only where both do).
 
+**Followed conversations (D-290).** Chat also owns `GET /api/workspaces/:workspaceId/followed-threads`, its private
+follow-list cache family and `/w/:slug/followed`, reached from the channel sidebar and palette. The screen is a nested
+lazy import under chat's existing module gate, preserving the measured chat entry budget. The SQL reader reuses
+`thread_follows`, participation, the canonical visibility guard and D-282 receipt scopes; it adds no migration.
+
 **Step 11 in detail — chat's screens as a chunk (built; measured 2026-11-03).** The seven screens (channel, inbox,
 questions, search, saved, drafts, unreads) and what only they reach — the composer, the feed, messages and threads —
 are exported by `features/chat/chat.ts`, which only chat's manifest imports, with `import()` (<!-- web-module-registry -->): one chunk,

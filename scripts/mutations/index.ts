@@ -54,6 +54,7 @@ import { WEB_CORE } from './web-core';
 import { WEB_FEATURES } from './web-features';
 import { WEB_FEATURES_CHANNEL } from './web-features-channel';
 import { WEB_FEATURES_COMPOSER } from './web-features-composer';
+import { WEB_FEATURES_FOLLOWED } from './web-features-followed';
 import { WEB_FEATURES_SIDEBAR } from './web-features-sidebar';
 import { WEB_REALTIME } from './web-realtime';
 
@@ -101,6 +102,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'web-features': WEB_FEATURES,
   'web-features-channel': WEB_FEATURES_CHANNEL,
   'web-features-composer': WEB_FEATURES_COMPOSER,
+  'web-features-followed': WEB_FEATURES_FOLLOWED,
   'web-features-sidebar': WEB_FEATURES_SIDEBAR,
 };
 

@@ -455,6 +455,44 @@ describe('the endpoints', () => {
     ).toBe('refused');
   });
 
+  test('followed conversations preserve a complete microsecond cursor and validate unread state', async () => {
+    const activityAt = '2026-11-07T12:00:00.000001Z';
+    const body = {
+      data: [{ root: message, activityAt, unread: null }],
+      nextCursor: { activityAt, rootId: ID },
+    };
+    const call = harness(body);
+    expect(
+      await call.api.followedThreads(ID, {
+        limit: 1,
+        unreadOnly: true,
+        beforeActivityAt: activityAt,
+        beforeRootId: ID,
+      }),
+    ).toEqual(body);
+    const request = call.calls[0];
+    if (request === undefined) throw new Error('Missing request');
+    const url = new URL(request.url, 'https://purlay.test');
+    expect(request.method).toBe('GET');
+    expect(url.pathname).toBe(`/api/workspaces/${ID}/followed-threads`);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      limit: '1',
+      unreadOnly: 'true',
+      beforeActivityAt: activityAt,
+      beforeRootId: ID,
+    });
+    const broken = harness({
+      ...body,
+      data: [{ ...body.data[0], unread: { count: 1, firstUnreadMessageId: null } }],
+    });
+    expect(
+      await broken.api.followedThreads(ID).then(
+        () => 'parsed',
+        () => 'refused',
+      ),
+    ).toBe('refused');
+  });
+
   test('channels, joining, direct messages and the read position', async () => {
     const list = harness([channel]);
     await list.api.channels(ID);

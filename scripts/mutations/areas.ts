@@ -109,6 +109,13 @@ export const AREAS = [
   { name: 'web-features', prefixes: ['apps/web/src/features/'] },
   { name: 'web-features-channel', prefixes: ['apps/web/src/features/chat/channel/'] },
   { name: 'web-features-composer', prefixes: ['apps/web/src/features/chat/composer/'] },
+  {
+    name: 'web-features-followed',
+    prefixes: [
+      'apps/web/src/features/chat/followed/',
+      'apps/web/src/features/chat/threads/follow-toggle.tsx',
+    ],
+  },
   { name: 'web-features-sidebar', prefixes: ['apps/web/src/features/chat/sidebar/'] },
 ] as const satisfies readonly Area[];
 

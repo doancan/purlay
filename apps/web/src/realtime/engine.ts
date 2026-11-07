@@ -517,6 +517,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     readAgain(client, families.notifications);
     readAgain(client, families.inbox);
     readAgain(client, families.saved);
+    readAgain(client, families.followedThreads);
     readAgain(client, families.unreads);
     readAgain(client, families.channelGroups);
   };
@@ -628,6 +629,7 @@ export const createEngine = (options: EngineOptions): Engine => {
           // edit), and an open edit history (D-135 §5). Each is in no frame sent before this answer.
           readAgain(client, families.channels);
           readAgain(client, families.unresolved);
+          readAgain(client, families.followedThreads);
           readAgain(client, families.search);
           readAgain(client, families.messageVersions);
         }

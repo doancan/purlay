@@ -337,6 +337,19 @@ const aWorld = async (db: Executor): Promise<World> => {
         })),
       )
       .execute();
+    // Previous personal choices survive channel membership loss: neither follows nor saves grant access.
+    await db
+      .insertInto('thread_follows')
+      .values(
+        [owner.id, outsider.id].map((userId) => ({
+          user_id: userId,
+          workspace_id: workspaceId,
+          channel_id: channelId,
+          message_id: root,
+          following: true,
+        })),
+      )
+      .execute();
     // And both saved it (D-128): what the saved lists must not show the outsider from a channel
     // they cannot see — their own saves there included — and do show from the visible one.
     await db

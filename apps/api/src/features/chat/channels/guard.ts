@@ -227,6 +227,19 @@ export const visibleChannelIds = async (
 ): Promise<readonly string[]> =>
   (await visibleChannelsIn(executor, context)).map((channel) => channel.channelId);
 
+/** The same guarded visibility inside a workspace list's SQL snapshot, without a separate id read. */
+export const visibleChannelIdsQuery = (
+  executor: ChatDb,
+  context: WorkspaceContext,
+): SelectQueryBuilder<
+  ChatSchema,
+  'channels' | 'workspaces' | 'workspace_members' | 'channel_members',
+  { id: string }
+> =>
+  visibleChannels(executor, context.userId)
+    .where('channels.workspace_id', '=', context.workspaceId)
+    .select('channels.id');
+
 /** The one refusal for a message that is not there for the caller; reused, never copied. */
 export const messageNotFound = (): AppError =>
   new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });

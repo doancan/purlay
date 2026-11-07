@@ -2330,7 +2330,7 @@ describe('a send whose id the server finds too old (D-33, D-8)', () => {
  */
 describe('every family of cached reads is read again after the gap a frame can fall into', () => {
   /** `open`: at every open of the socket, the first too — the person's own topic, which a subscription's answer does not say. */
-  type Where = 'answer' | 'reconnect' | 'open' | 'both';
+  type Where = 'answer' | 'reconnect' | 'open' | 'both' | 'all';
   /** One real key of each family, and when it is read again; the frames that rewrite it are in `engine.ts`. */
   const DECIDED: Readonly<
     Record<keyof typeof families, { where: Where; key: readonly unknown[] }>
@@ -2338,6 +2338,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     unreads: { where: 'both', key: keys.unreads(CH, null, 1) },
     search: { where: 'answer', key: keys.search(WS, 'words', null, null) },
     saved: { where: 'open', key: keys.saved(WS) },
+    followedThreads: { where: 'all', key: keys.followedThreads(WS) },
     files: { where: 'answer', key: keys.files(CH) },
     channels: { where: 'both', key: keys.channels(WS) },
     channelGroups: { where: 'open', key: keys.channelGroups(WS) },
@@ -2357,7 +2358,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     expect(names.map(String).sort()).toEqual(Object.keys(families).sort());
   });
 
-  test.each(names.filter((name) => ['answer', 'both'].includes(DECIDED[name].where)))(
+  test.each(names.filter((name) => ['answer', 'both', 'all'].includes(DECIDED[name].where)))(
     'the subscription’s answer reads %s again',
     (name) => {
       const w = world();
@@ -2371,7 +2372,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     },
   );
 
-  test.each(names.filter((name) => DECIDED[name].where === 'open'))(
+  test.each(names.filter((name) => ['open', 'all'].includes(DECIDED[name].where)))(
     'the first open reads %s again: the page read it before the socket was listening',
     (name) => {
       const w = world();
