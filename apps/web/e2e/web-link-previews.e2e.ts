@@ -13,6 +13,28 @@ const PNG = Buffer.from(
   'base64',
 );
 
+test('unavailable decorative code leaves the conversation and composer usable', async ({
+  page,
+  room,
+  signIn,
+}) => {
+  const made = await room({ members: ['dogancan', 'bob'], messages: [{ by: 'bob', text: URL }] });
+  let refused = 0;
+  await page.route('**/assets/web-link-cards-visible-*.js', async (route) => {
+    refused += 1;
+    await route.abort('failed');
+  });
+  await signIn('dogancan');
+  await page.goto(made.path);
+  await expect.poll(() => refused).toBeGreaterThan(0);
+  await expect(page.locator('[data-message-row]').getByRole('link', { name: URL })).toBeVisible();
+  await expect(page.locator('[data-web-link-card]')).toHaveCount(0);
+  const composer = page.getByRole('textbox', { name: `Message ${made.name}` });
+  await composer.fill('The conversation still works');
+  await composer.press('Enter');
+  await expect(page.getByText('The conversation still works', { exact: true })).toBeVisible();
+});
+
 test('a freshly sent message gets its preview after the server has accepted it', async ({
   page,
   room,
@@ -50,21 +72,28 @@ test('a compact card keeps the real destination, proxy privacy and keyboard focu
   signIn,
   expectNoAxe,
 }, info) => {
+  const shown = {
+    ...card,
+    title: `Vardiya${'X'.repeat(160)}<script>1</script>`,
+    description: 'Teslimat'.repeat(50),
+  };
+  const destination =
+    'https://docs.example.partner.supplies-and-warehouse.example.net/operations/shift-plan#handover';
   const made = await room({
     members: ['dogancan', 'bob'],
-    messages: [{ by: 'bob', text: `Güncel vardiya planı: ${URL}` }],
+    messages: [{ by: 'bob', text: `Güncel vardiya planı: ${destination}` }],
   });
   const originRequests: string[] = [];
   page.on('request', (request) => {
-    if (new globalThis.URL(request.url()).hostname.endsWith('.example'))
+    if (new globalThis.URL(request.url()).hostname !== 'localhost')
       originRequests.push(request.url());
   });
   await page.route('**/api/messages/*/link-preview', async (route) => {
-    expect(route.request().postDataJSON()).toEqual({ url: URL });
+    expect(route.request().postDataJSON()).toEqual({ url: destination });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(card),
+      body: JSON.stringify(shown),
     });
   });
   await page.route('**/api/images?*', async (route) => {
@@ -75,11 +104,20 @@ test('a compact card keeps the real destination, proxy privacy and keyboard focu
   await page.goto(made.path);
   const preview = page.locator('[data-web-link-card]');
   await expect(preview).toBeVisible();
+  const box = await preview.boundingBox();
+  if (box === null) throw new Error('The card has no painted box');
+  expect(box.x + box.width).toBeLessThanOrEqual(320);
   const link = preview.getByRole('link');
-  await expect(link).toHaveAttribute('href', URL);
+  await expect(link).toHaveAttribute('href', destination);
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   await expect(preview).toContainText('docs.example');
-  await expect(preview).toContainText(card.title);
+  await expect(preview).toContainText(shown.title);
+  const host = preview.getByText(new globalThis.URL(destination).hostname, { exact: true });
+  expect(
+    await host.evaluate(
+      (node) => node.scrollWidth <= node.clientWidth && node.scrollHeight <= node.clientHeight,
+    ),
+  ).toBe(true);
   await expect(preview.locator('script')).toHaveCount(0);
   await expect(preview.locator('img')).toHaveAttribute(
     'src',
@@ -146,7 +184,7 @@ test('a long feed fetches metadata only for visible messages and learns more whi
   const target = page
     .locator('[data-message-row]')
     .filter({ has: page.locator(`a[href="${unseen}"]`) });
-  await target.locator('[data-web-link-cards]').scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
   await expect(target.locator('[data-web-link-card]')).toBeVisible();
   expect(asked.size).toBeGreaterThan(initial);
 });

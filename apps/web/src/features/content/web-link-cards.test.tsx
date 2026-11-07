@@ -4,7 +4,7 @@ import { act, fireEvent, waitFor } from '@testing-library/react';
 import type { Api } from '../../data/api';
 import { keys } from '../../data/keys';
 import { expectNoAxeViolations } from '../../testing/axe';
-import { installDom } from '../../testing/dom';
+import { installDom, settleScheduler } from '../../testing/dom';
 import { IDS, aMessage, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { WebLinkCards } from './web-link-cards';
@@ -55,11 +55,17 @@ const show = async (
   previewMessageLink: Api['previewMessageLink'],
   content = URL,
   locale: 'en' | 'tr' = 'en',
-): ReturnType<typeof renderApp> =>
-  await renderApp(<WebLinkCards {...props} content={content} />, {
+): ReturnType<typeof renderApp> => {
+  const view = await renderApp(<WebLinkCards {...props} content={content} />, {
     api: aSignedInApi({ previewMessageLink }),
     locale,
   });
+  if (/https/i.test(content))
+    await waitFor(() => {
+      expect(observed.size).toBeGreaterThan(0);
+    });
+  return view;
+};
 
 test('waits for the viewport, then uses plain text, the original destination and no origin image', async () => {
   const calls: string[] = [];
@@ -111,14 +117,28 @@ test('leaving the viewport retains card height and disables stale background rea
   });
 });
 
-test('no candidate means no observer, query or suspended content', async () => {
+test('plain messages add no preview observer, query or suspended content', async () => {
+  let calls = 0;
+  const view = await show(() => {
+    calls += 1;
+    return Promise.resolve(CARD);
+  }, 'The next shift plan will be shared here.');
+  expect(observed.size).toBe(0);
+  expect(view.container.querySelector('[data-web-link-cards]')).toBeNull();
+  expect(calls).toBe(0);
+});
+
+test('code and existing special links never make generic metadata requests', async () => {
   let calls = 0;
   const view = await show(() => {
     calls += 1;
     return Promise.resolve(CARD);
   }, '`https://docs.example/report`\nhttps://github.com/org/repo/pull/1\nhttps://pictures.example/a.png');
-  expect(observed.size).toBe(0);
-  expect(view.container.querySelector('[data-web-link-cards]')).toBeNull();
+  await visible();
+  await act(async () => {
+    await settleScheduler();
+  });
+  expect(view.container.querySelector('[data-web-link-card]') === null).toBe(true);
   expect(calls).toBe(0);
 });
 

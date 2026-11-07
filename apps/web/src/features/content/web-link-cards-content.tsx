@@ -2,6 +2,9 @@
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { WebLinkPreviewResponse } from '@purlay/types';
+import { webLinksOf } from '@purlay/markdown';
+import { readBody } from './render-content';
+import type { WebLinkCardsProps } from './web-link-cards';
 import { useApi } from '../../data/api-provider';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
@@ -26,16 +29,14 @@ const Cover = ({ url }: { readonly url: string }): React.JSX.Element | null => {
 const WebLinkCardsContent = ({
   channelId,
   messageId,
-  links,
+  content,
   visible,
-}: {
-  readonly channelId: string;
-  readonly messageId: string;
-  readonly links: readonly string[];
+}: WebLinkCardsProps & {
   readonly visible: boolean;
 }): React.JSX.Element | null => {
   const api = useApi();
   const { t } = useI18n();
+  const links = webLinksOf(readBody(content).tree, window.location.origin);
   const answers = useQueries({
     queries: links.map((url) => ({
       queryKey: keys.webLinkPreview(channelId, messageId, url),
@@ -67,7 +68,7 @@ const WebLinkCardsContent = ({
             className="group flex min-w-0 items-start gap-3 rounded-xl px-3 py-2 text-ink focus-visible:-outline-offset-focus"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="truncate font-mono text-caption text-ink-muted">
+              <span className="break-all font-mono text-caption text-ink-muted">
                 {new URL(url).hostname}
               </span>
               <span className="line-clamp-2 break-words text-body font-medium group-hover:underline">

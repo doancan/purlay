@@ -14252,7 +14252,10 @@ networks, spend unbounded resources and tell a website who was reading.
    pending entries are released on failure. Each fetch has its own deadline; a queued RPC may span three
    batches. Hold no database transaction over origin work. Use the costly-read bucket, independently of sends.
    Logs contain the host and workspace, never arbitrary transport reasons or a full secret-bearing address.
-4. **A quiet chat decoration.** Lazy-load cards only for eligible content. Fetch only after the server has
+4. **A quiet chat decoration.** A cheap HTTPS text hint can load the optional feature code; the shared AST
+   alone selects actual candidates, and only when their message is visible. A local render boundary keeps
+   unavailable decorative code from replacing the conversation. Missing cards reserve no layout height.
+   Fetch only after the server has
    accepted the message and while it is visible, keep mounted results when it leaves the viewport, and use
    five-minute/one-minute client freshness.
    Display the actual destination hostname and retain the original link and fragment; ignore site identity,
