@@ -77,6 +77,14 @@ export const API_MODULES_USERS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {
+    id: 'erasure-keeps-the-inbox',
+    why: 'what modules told an erased person, titles of what they were assigned, stays in the table (D-286)',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: "  await executor.deleteFrom('inbox_entries').where('user_id', '=', person.id).execute();\n",
+    replace: '',
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
+  {
     id: 'erasure-keeps-the-link-count',
     why: 'an erased address keeps the counts of the links it was sent from each client, under its digest',
     file: 'apps/api/src/modules/users/erasure.ts',

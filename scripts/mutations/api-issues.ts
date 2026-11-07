@@ -310,6 +310,14 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
+    id: 'module-names-the-inbox-table',
+    why: 'a module writes a notice around the sink, skipping its checks of the kind, the recipient and the size (D-286)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: 'const issueNotFound = (): AppError =>',
+    replace: "const INBOX = 'inbox_entries';\nconst issueNotFound = (): AppError =>",
+    tests: ['apps/api/src/core-tables.test.ts'],
+  },
+  {
     id: 'purge-forgets-a-modules-table',
     why: 'a module owns a table with a workspace_id and forgets to list it in its workspacePurge.tables: the workspace keeps its tombstone row, no key cascades, and the module’s rows stay for ever (#901)',
     file: 'apps/api/src/features/issues/module.ts',

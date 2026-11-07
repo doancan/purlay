@@ -31,6 +31,7 @@ have it.
 
 - **Channel groups** — Organize your channels under personal headings across devices, rename or fold groups, and move a channel from its menu; deleting a group preserves its channels and conversations (D-284)
 - **Search** — A workspace-wide find answers a group of hits for each source, starting with the messages a person may read, and says which source it skipped and why (off, slow or failed), so a slow module cannot hold the others up; it works with chat turned off (D-285)
+- **Operations** — The core keeps an inbox table for what modules tell a person, swept daily by `sweep:inbox` (read notices after 30 days, all after 180) and included in a person's own export as `inbox_entries.ndjson`; nothing writes to it yet (D-286)
 
 ### Fixed
 

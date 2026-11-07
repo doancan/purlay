@@ -33,6 +33,7 @@ import type { UserErased } from './modules/users/erasure';
 import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspaces/channels-port';
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
+import type { KindOwners } from './modules/inbox/sink';
 import type { FactConsumers } from './platform/fact-consumers';
 import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
 import type { FrameHandlers } from './platform/frame-handlers';
@@ -265,6 +266,8 @@ export interface Composition {
   readonly auditAccess: AuditAccess;
   /** The kinds of notification the modules this process runs send: a module that is off offers none. */
   readonly notificationKinds: readonly NotificationKindDeclaration[];
+  /** Which running module declares each kind of notification: whose notice a kind written to the inbox is (D-286). */
+  readonly noticeOwners: KindOwners;
   /** The ids of the search sources of the modules this process runs: a module that is off is not queried. */
   readonly searchSources: readonly string[];
   /** The sources `find` asks, each with the module it is asked as: the modules this process runs, and none that is off. */
@@ -341,6 +344,14 @@ export const compose = (
       holding.flatMap((module) => module.manifest.auditActions ?? []),
     ),
     notificationKinds: modules.flatMap((module) => module.manifest.notifications ?? []),
+    noticeOwners: new Map(
+      modules.flatMap((module) =>
+        (module.manifest.notifications ?? []).map((kind): [string, string] => [
+          kind.type,
+          module.manifest.id,
+        ]),
+      ),
+    ),
     searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
     findSources: modules.flatMap((module) =>
       (module.searchSources ?? []).map((source) => ({ module: module.manifest.id, source })),

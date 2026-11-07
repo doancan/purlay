@@ -80,6 +80,24 @@ const head = [
     (userId) => ({ where: sql`user_id = ${userId}`, order: 'id' }),
   ),
   personalTableExport(
+    'inbox_entries',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      user_id: 'export',
+      module: 'export',
+      kind: 'export',
+      // Another person's id: nobody else's anything rides in a person's own export.
+      actor_id: 'omit',
+      subject_type: 'export',
+      subject_id: 'export',
+      params: 'export',
+      read_at: 'export',
+      created_at: 'export',
+    },
+    (userId) => ({ where: sql`user_id = ${userId}`, order: 'id' }),
+  ),
+  personalTableExport(
     'workspace_invitation_recipients',
     {
       id: 'export',
@@ -126,6 +144,7 @@ export const corePersonalExport: CorePersonalContribution = {
   tables: [],
   workspaces: (userId) => [
     sql`select workspace_id from workspace_members where user_id = ${userId}`,
+    sql`select workspace_id from inbox_entries where user_id = ${userId}`,
     sql`select workspace_id from workspace_invitation_recipients where applicant_user_id = ${userId} or email = (select lower(trim(email)) from users where id = ${userId} and email_verified = true)`,
   ],
 };

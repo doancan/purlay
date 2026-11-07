@@ -55,6 +55,8 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   admin_email_verification: decided('deleted', 'swept'),
   attachments: decided('anonymised', 'window'),
   audit_log: decided('anonymised', { kept: 'the workspace’s trail of who changed what' }),
+  // The person's own rows go with them (`eraseAccount`); `actor_id` of another's keeps naming the anonymised account (D-256).
+  inbox_entries: decided('deleted', 'swept'),
   invitation_passports: decided('deleted', 'swept'),
   job_runs: decided(
     { nobody: 'when each job last ran' },
