@@ -19,6 +19,22 @@ export const WEB_REALTIME: readonly Mutation[] = [
     tests: ['apps/web/src/realtime/engine.test.ts'],
   },
   {
+    id: 'inbox-frame-reads-every-workspace',
+    why: 'a notice in one workspace makes the inbox of every other read again (D-286)',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '        readAgain(client, keys.inbox(frame.data.workspaceId));',
+    replace: '        readAgain(client, families.inbox);',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
+  {
+    id: 'inbox-not-read-again-when-the-socket-opens',
+    why: 'a notice written while the socket was down is never found, because its frame went to nobody (D-286, D-268)',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '    readAgain(client, families.inbox);\n',
+    replace: '',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
+  {
     id: 'inbox-not-told-of-a-new-notification',
     why: 'an open inbox does not show a notification that arrived while it was open — a resolution only after a reload',
     file: 'apps/web/src/realtime/engine.ts',

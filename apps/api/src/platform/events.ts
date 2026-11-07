@@ -455,6 +455,26 @@ export const inboxPublications = (
     ),
   );
 
+/**
+ * The core's inbox changed for each of these people in a workspace (D-286): a module wrote them a notice, or they read some.
+ * Their own tabs read it again; nothing of the notice is in it, and nobody else hears it. One stage of `publishAfterCommit`.
+ */
+export const inboxUpdatedPublications = (
+  bus: EventBus,
+  clock: Clock,
+  workspaceId: string,
+  userIds: readonly string[],
+): Publish[] =>
+  userIds.map((userId) =>
+    publication('INBOX_UPDATED', () =>
+      bus.publish(userTopic(userId), {
+        event: 'INBOX_UPDATED',
+        data: { workspaceId },
+        ts: clock.now().getTime(),
+      }),
+    ),
+  );
+
 /** What the bus hands a frame to. The hub implements it; nothing else needs to. */
 export type Deliver = (socketId: string, frame: ServerFrame) => void;
 

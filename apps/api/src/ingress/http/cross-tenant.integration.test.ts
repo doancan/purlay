@@ -290,6 +290,21 @@ const aTenant = async (
     .where('workspace_id', '=', workspaceId)
     .where('role', '=', 'owner')
     .executeTakeFirstOrThrow();
+  // Something a module told the owner, in the core's inbox (D-286): a list of it that is empty would prove nothing.
+  await db
+    .insertInto('inbox_entries')
+    .values({
+      id: messageId(new Date(NOW.getTime() + 8)),
+      workspace_id: workspaceId,
+      user_id: ownerId,
+      module: 'issues',
+      kind: 'issue_assigned',
+      subject_type: 'issue',
+      subject_id: issueId,
+      params: JSON.stringify({ title: 'Crossing' }),
+      created_at: NOW,
+    })
+    .execute();
   // The workspace's installation of the App, and its owner's own authorization: what making an issue needs.
   await db
     .insertInto('github_app_installations')

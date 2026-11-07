@@ -31,6 +31,7 @@ export * from './two-factor';
 export * from './missed-mail';
 export * from './github-app';
 export * from './github-issues';
+export * from './inbox';
 export * from './issues';
 export * from './find';
 export * from './releases';

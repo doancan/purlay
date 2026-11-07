@@ -74,6 +74,8 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/workspaces/:workspaceId/exports',
   '/api/workspaces/:workspaceId/exports/:exportId/download',
   '/api/workspaces/:workspaceId/find',
+  '/api/workspaces/:workspaceId/inbox',
+  '/api/workspaces/:workspaceId/inbox/read',
   '/api/workspaces/:workspaceId/invitation-recipients',
   '/api/workspaces/:workspaceId/invitation-recipients/:recipientId',
   '/api/workspaces/:workspaceId/invitation-recipients/:recipientId/attempts',
@@ -139,6 +141,7 @@ export const CORE_EVENTS: readonly string[] = [
   'SESSION_ENDED',
   'ACCESS_REVOKED',
   'DEEP_WORK_UPDATED',
+  'INBOX_UPDATED',
   'WORKSPACE_UPDATED',
   'PONG',
 ];

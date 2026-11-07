@@ -97,6 +97,7 @@ import {
   WorkspaceMemberList,
 } from './api';
 import { FindQuery, FindResponse } from './find';
+import { InboxPage, InboxQuery, MarkInboxReadRequest } from './inbox';
 import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';
 import { Attachment, Channel, Message, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
@@ -244,6 +245,23 @@ export const ENDPOINTS = [
     auth: 'session',
     body: SetDeepWorkRequest,
     responses: { 200: DeepWorkResponse },
+  }),
+
+  read({
+    id: 'listInbox',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/inbox',
+    auth: 'session',
+    query: InboxQuery,
+    responses: { 200: InboxPage },
+  }),
+  read({
+    id: 'markInboxRead',
+    method: 'POST',
+    path: '/api/workspaces/:workspaceId/inbox/read',
+    auth: 'session',
+    body: MarkInboxReadRequest,
+    responses: { 204: null },
   }),
 
   // ── Channels and conversations

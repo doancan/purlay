@@ -3,6 +3,7 @@
  * is written in the caller's transaction, so it is as atomic with the caller's work as the work is with itself.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
+import { Value } from '@sinclair/typebox/value';
 import {
   closeIntegrationDatabase,
   sql,
@@ -11,8 +12,12 @@ import {
   type Transaction,
   withRollback,
 } from '@purlay/db';
+import { ServerFrame, type Topic } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
-import type { ModuleNotice } from '../../platform/ports/notification-sink';
+import { NO_LOG, userTopic, type EventBus } from '../../platform/events';
+import { renderMetrics, serverMetrics } from '../../platform/metrics';
+import { readExposition, sampleOf } from '../../testing/exposition';
+import type { ModuleNotice, WrittenNotice } from '../../platform/ports/notification-sink';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { NOW } from '../../testing/doubles';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
@@ -28,8 +33,29 @@ let tick = 0;
 const later = (): ReturnType<typeof fixedClock> =>
   fixedClock(new Date(NOW.getTime() + (tick += 10)));
 
-const sinkOn = (kinds: KindOwners = KINDS): ReturnType<typeof notificationSink> =>
-  notificationSink({ clock: later(), kinds });
+/** What the sink tells after a commit, kept: the frames it published and the series it counted. */
+const told: { topic: Topic; frame: ServerFrame }[] = [];
+const recordingBus: EventBus = {
+  publish: (topic, frame): Promise<void> => {
+    told.push({ topic, frame });
+    return Promise.resolve();
+  },
+  subscribe: () => true,
+  unsubscribe: () => undefined,
+  forget: () => undefined,
+};
+const metrics = serverMetrics(
+  undefined,
+  ['things'],
+  [],
+  [{ module: 'things', kind: 'thing_assigned' }],
+);
+
+const sinkOn = (
+  kinds: KindOwners = KINDS,
+  bus: EventBus = recordingBus,
+): ReturnType<typeof notificationSink> =>
+  notificationSink({ clock: later(), kinds, bus, log: NO_LOG, written: metrics.inboxEntries });
 
 const anIssueId = (): string => crypto.randomUUID();
 
@@ -45,6 +71,13 @@ const aMember = async (
     .execute();
   return { userId, context: await requireWorkspaceMembership(db, userId, workspaceId) };
 };
+
+/** What the counter holds for a kind, read from the page the registry renders. */
+const seriesOf = (kind: string): number =>
+  sampleOf(readExposition(renderMetrics(metrics)), 'purlay_inbox_entries_total', {
+    module: 'things',
+    kind,
+  }) ?? -1;
 
 const aWorkspace = async (db: Transaction): Promise<string> =>
   (
@@ -269,6 +302,60 @@ describe('integration: the notification sink', () => {
         params: { title },
       });
       expect((await entriesOf(db, ada.userId))[0]?.params).toEqual({ title });
+    });
+  });
+
+  describe('announce', () => {
+    const written = (workspaceId: string, recipientId: string): WrittenNotice => ({
+      entryId: crypto.randomUUID(),
+      workspaceId,
+      recipientId,
+      module: 'things',
+      kind: 'thing_assigned',
+    });
+
+    test('tells each person once per workspace, on their own topic and no other, and counts every notice', async () => {
+      const workspaceId = crypto.randomUUID();
+      const [ada, bob] = [crypto.randomUUID(), crypto.randomUUID()];
+      told.splice(0);
+      const before = seriesOf('thing_assigned');
+      await sinkOn().announce([
+        written(workspaceId, ada),
+        written(workspaceId, ada),
+        written(workspaceId, bob),
+      ]);
+      expect(told.map(({ topic }) => topic).sort()).toEqual(
+        [userTopic(ada), userTopic(bob)].sort(),
+      );
+      for (const { frame } of told) {
+        expect(frame).toMatchObject({ event: 'INBOX_UPDATED', data: { workspaceId } });
+        expect(Value.Check(ServerFrame, frame)).toBe(true);
+      }
+      expect(seriesOf('thing_assigned') - before).toBe(3);
+    });
+
+    test('tells nothing of nothing', async () => {
+      told.splice(0);
+      await sinkOn().announce([]);
+      expect(told).toEqual([]);
+    });
+
+    test('a bus that fails is logged and is not the caller’s error, and the other people are still told', async () => {
+      const heard: string[] = [];
+      const flaky: EventBus = {
+        ...recordingBus,
+        publish: (topic): Promise<void> => {
+          if (topic === userTopic('down')) return Promise.reject(new Error('the bus is down'));
+          heard.push(topic);
+          return Promise.resolve();
+        },
+      };
+      const workspaceId = crypto.randomUUID();
+      await sinkOn(KINDS, flaky).announce([
+        written(workspaceId, 'down'),
+        written(workspaceId, 'up'),
+      ]);
+      expect(heard).toEqual([userTopic('up')]);
     });
   });
 });

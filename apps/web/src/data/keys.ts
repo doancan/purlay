@@ -68,6 +68,8 @@ export const keys = {
         : (['notifications', workspaceId, filter] as const);
     return category === undefined ? base : ([...base, category] as const);
   },
+  /** What modules told the person in a workspace, the core's inbox (D-286): every view of it under this prefix. */
+  inbox: (workspaceId: string) => ['inbox', workspaceId] as const,
   /**
    * A channel's new messages past a read position (D-216), keyed by the position and the count: read
    * elsewhere or added to, it is asked again.
@@ -155,6 +157,7 @@ export const families = {
   thread: ['thread'] as const,
   unresolved: ['unresolved'] as const,
   notifications: ['notifications'] as const,
+  inbox: ['inbox'] as const,
   pins: ['pins'] as const,
   incident: ['incident'] as const,
   messageVersions: ['message-versions'] as const,

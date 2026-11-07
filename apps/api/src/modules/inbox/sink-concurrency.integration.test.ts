@@ -9,6 +9,8 @@ import {
   type DatabasePool,
 } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
+import { NO_LOG, type EventBus } from '../../platform/events';
+import { serverMetrics } from '../../platform/metrics';
 import { hookList } from '../../platform/hooks';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { NOW } from '../../testing/doubles';
@@ -16,6 +18,14 @@ import { aSession } from '../../testing/signed-in';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
 import { eraseAccount } from '../users/erasure';
 import { notificationSink } from './sink';
+
+// This race writes a notice inside its caller transaction; announcements are covered by the sink suite.
+const idleBus: EventBus = {
+  publish: (): Promise<void> => Promise.resolve(),
+  subscribe: () => true,
+  unsubscribe: () => undefined,
+  forget: () => undefined,
+};
 
 const deferred = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
   let resolve: (value: T) => void = (): void => undefined;
@@ -84,6 +94,9 @@ describe('integration: notification and account erasure lock ordering', () => {
         await sql`set local deadlock_timeout = '100ms'`.execute(tx);
         return await notificationSink({
           clock,
+          bus: idleBus,
+          log: NO_LOG,
+          written: serverMetrics().inboxEntries,
           kinds: new Map([['thing_assigned', 'things']]),
         }).notify(tx.withPlugin(barrier), world.context, {
           kind: 'thing_assigned',

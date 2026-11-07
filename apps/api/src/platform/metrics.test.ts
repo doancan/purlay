@@ -161,6 +161,31 @@ describe("the server's instruments", () => {
     ).toBe(1);
   });
 
+  test('count the notices of the inbox by the module and kind a manifest declares, each at zero from the start and no other series', () => {
+    const carried: readonly BundledModule[] = bundledModules;
+    const notices = carried.flatMap((module) =>
+      (module.manifest.notifications ?? []).map(({ type }) => ({
+        module: module.manifest.id,
+        kind: type,
+      })),
+    );
+    expect(notices.length).toBeGreaterThan(0);
+    const metrics = serverMetrics(fixedProcess, [], [], notices);
+    const page = readExposition(renderMetrics(metrics));
+    expect(page.types.get('purlay_inbox_entries_total')).toBe('counter');
+    for (const { module, kind } of notices) {
+      expect(sampleOf(page, 'purlay_inbox_entries_total', { module, kind })).toBe(0);
+    }
+    const series = page.samples.filter((sample) => sample.name === 'purlay_inbox_entries_total');
+    expect(series).toHaveLength(notices.length);
+    const [first] = notices;
+    if (first === undefined) throw new Error('no notice');
+    metrics.inboxEntries.inc(first);
+    expect(
+      sampleOf(readExposition(renderMetrics(metrics)), 'purlay_inbox_entries_total', first),
+    ).toBe(1);
+  });
+
   test('count no series for an owner it was not told of until a failure names it, and never one that is not an owner by name', () => {
     const page = readExposition(renderMetrics(serverMetrics(fixedProcess)));
     const modules = page.samples

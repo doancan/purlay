@@ -115,6 +115,12 @@ const metrics = serverMetrics(
   modules.bundled.flatMap((module) =>
     (module.workers ?? []).map((worker) => ({ module: module.manifest.id, name: worker.name })),
   ),
+  modules.bundled.flatMap((module) =>
+    (module.manifest.notifications ?? []).map((kind) => ({
+      module: module.manifest.id,
+      kind: kind.type,
+    })),
+  ),
 );
 log.info(
   config.METRICS_TOKEN === undefined

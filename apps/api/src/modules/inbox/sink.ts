@@ -16,6 +16,9 @@ import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { messageId, Uuid } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
+import { inboxUpdatedPublications, publishAfterCommit, type EventBus } from '../../platform/events';
+import type { Logger } from '../../platform/logging';
+import type { Counter } from '../../platform/metrics';
 import type {
   ModuleNotice,
   NotificationSink,
@@ -60,6 +63,10 @@ const problemWith = (notice: ModuleNotice): string | undefined => {
 export const notificationSink = (dependencies: {
   readonly clock: Clock;
   readonly kinds: KindOwners;
+  readonly bus: EventBus;
+  readonly log: Logger;
+  /** Notices written, by module and kind: counted once they have committed, so a rolled-back one is never counted. */
+  readonly written: Counter<'module' | 'kind'>;
 }): NotificationSink => ({
   notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
     const module = dependencies.kinds.get(notice.kind);
@@ -124,5 +131,16 @@ export const notificationSink = (dependencies: {
       module,
       kind: notice.kind,
     };
+  },
+  announce: async (written): Promise<void> => {
+    for (const { module, kind } of written) dependencies.written.inc({ module, kind });
+    // One frame to each person for each workspace they were told in, however many notices they were written.
+    const people = new Map<string, WrittenNotice>();
+    for (const notice of written) people.set(`${notice.workspaceId}:${notice.recipientId}`, notice);
+    await publishAfterCommit(dependencies.log, [
+      [...people.values()].flatMap(({ workspaceId, recipientId }) =>
+        inboxUpdatedPublications(dependencies.bus, dependencies.clock, workspaceId, [recipientId]),
+      ),
+    ]);
   },
 });

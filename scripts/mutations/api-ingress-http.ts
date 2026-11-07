@@ -353,12 +353,37 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
   },
   {
+    id: 'inbox-list-skips-the-membership',
+    why: 'a stranger is answered the inbox of a workspace they are not in instead of the stranger’s 404 (D-286)',
+    file: 'apps/api/src/ingress/http/inbox.ts',
+    find: '  const context = await requireWorkspaceMembership(database, userId, workspaceId);\n  return await snapshotOn',
+    replace:
+      '  const context = { workspaceId, userId, role: "member" as const } as never;\n  return await snapshotOn',
+    tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
+  },
+  {
     id: 'inbox-query-key-repeated',
     why: 'the guard checks the first workspaceId and the schema the last, so the two disagree about which workspace is asked for',
     file: 'apps/api/src/ingress/http/validate.ts',
     find: '  if (repeated !== undefined) {\n',
     replace: '  if (repeated === "never") {\n',
     tests: ['apps/api/src/features/chat/http/notifications.integration.test.ts'],
+  },
+  {
+    id: 'inbox-read-always-tells-the-tabs',
+    why: 'every read, including one that changed nothing, makes the person’s other tabs read the inbox again (D-286)',
+    file: 'apps/api/src/ingress/http/inbox.ts',
+    find: '  if (read === 0) return;\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
+  },
+  {
+    id: 'inbox-routes-count-modules-that-are-not-run',
+    why: 'the inbox lists the notices of every module the build carries, run or not (D-286)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '    running: modules.modules.map((module) => module.manifest.id),',
+    replace: '    running: modules.bundled.map((module) => module.manifest.id),',
+    tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
   },
   {
     id: 'incoming-webhook-secret-logged',

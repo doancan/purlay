@@ -560,6 +560,21 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'the workspace’s own list; no channel is named or listed' },
   },
+  'GET /api/workspaces/:workspaceId/inbox': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'the caller’s own notices from modules; no channel is named or listed',
+    },
+  },
+  'POST /api/workspaces/:workspaceId/inbox/read': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ all: true }),
+    visibility: {
+      kind: 'none',
+      reason: 'the caller’s own notices from modules; no channel is named or listed',
+    },
+  },
   'GET /api/workspaces/:workspaceId/reminders': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide' },
