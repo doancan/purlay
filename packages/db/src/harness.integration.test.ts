@@ -5,12 +5,14 @@
  * checked the only way it can be: two tests write the same row, and neither
  * sees the other's.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
-import { sql } from 'kysely';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import {
   buildIntegrationTemplate,
   cloneIntegrationDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
   backendsGone,
   closeIntegrationDatabase,
   dropDatabases,
@@ -226,15 +228,20 @@ describe('integration: the database the rollback harness uses directly', () => {
   // `withRollback` runs on the configured database itself, not on a clone of the migrated template: one
   // that was last migrated before a migration was added answers "relation does not exist" to the tests that
   // use it, which reads as a defect in whatever the tests were about.
-  test('is brought up to date by the run itself, from whatever it was left at', async () => {
+  const name = `purlay_harness_stale_${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`;
+  let connectionString = '';
+  let inspected: Kysely<unknown> | undefined;
+  let created = false;
+
+  // Database allocation and checkpoint-backed cleanup are fixture work. The real migration and
+  // its assertions still have the default five seconds; the separate cost test keeps its budgets.
+  beforeAll(async () => {
     const source = process.env['DATABASE_URL'] ?? '';
-    const name = `purlay_harness_stale_${crypto.randomUUID().replaceAll('-', '').slice(0, 10)}`;
     const admin = new URL(source);
     admin.pathname = '/postgres';
     const target = new URL(source);
     target.pathname = `/${name}`;
-    const { Kysely, PostgresDialect } = await import('kysely');
-    const pg = (await import('pg')).default;
+    connectionString = target.toString();
     const control = new Kysely<unknown>({
       dialect: new PostgresDialect({
         pool: new pg.Pool({ connectionString: admin.toString(), max: 1 }),
@@ -242,28 +249,40 @@ describe('integration: the database the rollback harness uses directly', () => {
     });
     try {
       await sql`create database ${sql.id(name)}`.execute(control);
-      await migrateIntegrationDatabase(target.toString());
-      const inspected = new Kysely<unknown>({
+      created = true;
+      inspected = new Kysely<unknown>({
         dialect: new PostgresDialect({
-          pool: new pg.Pool({ connectionString: target.toString(), max: 1 }),
+          pool: new pg.Pool({ connectionString, max: 1 }),
         }),
       });
-      try {
-        const tables = await sql<{
-          name: string;
-        }>`select to_regclass('public.server_settings')::text as name`.execute(inspected);
-        expect(tables.rows[0]?.name).toBe('server_settings');
-        // A second run finds nothing to do and fails on nothing.
-        await migrateIntegrationDatabase(target.toString());
-      } finally {
-        await inspected.destroy();
-      }
     } finally {
-      // Pool shutdown can finish before its socket closes; do not force-drop it mid-hang-up.
-      await backendsGone(name, 1_000);
-      await sql`drop database if exists ${sql.id(name)} with (force)`.execute(control);
       await control.destroy();
     }
+  }, CLONE_HOOK_MS);
+
+  afterAll(async () => {
+    try {
+      await inspected?.destroy();
+    } finally {
+      if (created) await dropDatabases([name]);
+    }
+  }, DROP_HOOK_MS);
+
+  test('is brought up to date by the run itself, from whatever it was left at', async () => {
+    const database = inspected;
+    if (database === undefined) throw new Error('the private database was not created');
+    const table = async (): Promise<string | null> =>
+      (
+        await sql<{
+          name: string | null;
+        }>`select to_regclass('public.server_settings')::text as name`.execute(database)
+      ).rows[0]?.name ?? null;
+    expect(await table()).toBeNull();
+    await migrateIntegrationDatabase(connectionString);
+    expect(await table()).toBe('server_settings');
+    // A second run finds nothing to do and fails on nothing.
+    await migrateIntegrationDatabase(connectionString);
+    expect(await table()).toBe('server_settings');
   });
 });
 
