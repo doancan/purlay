@@ -61,6 +61,11 @@ afterAll(async () => {
 const HELD_ELSEWHERE: Readonly<
   Record<string, { readonly why: string; readonly file: string; readonly schema: string }>
 > = {
+  channelUnreads: {
+    why: 'needs independently waiting threads and pre-join history; the private catch-up door tests own those fixtures',
+    file: 'apps/api/src/features/chat/http/catch-up.integration.test.ts',
+    schema: 'ChannelCatchUp',
+  },
   unfurlGitHubLink: {
     why: 'needs a GitHub to answer; the stub and its cases live with the integration',
     file: 'apps/api/src/features/chat/http/integrations.integration.test.ts',

@@ -140,8 +140,7 @@ const ThreadPanelView = ({
 
   // ── Open in front of the person, the thread is read (D-147) ─────────────
   const channels = useChannels(workspace.id);
-  const waiting =
-    (channels.data?.find((c) => c.id === channelId)?.state?.unreadMentionCount ?? 0) > 0;
+  const waiting = (channels.data?.find((c) => c.id === channelId)?.state?.unreadCount ?? 0) > 0;
   const newestReplyId = useMemo(
     () => replies.reduce<string | null>((n, r) => (n === null || r.id > n ? r.id : n), null),
     [replies],

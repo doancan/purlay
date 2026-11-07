@@ -152,6 +152,46 @@ const chainOf = (
   return tables.length > 0 && root !== undefined ? { tables, root } : undefined;
 };
 
+/** An upsert guard probes its declared unique key first; it is not a scan by the guard column alone. */
+const conflictOf = (
+  receiver: ts.Expression,
+  from: ts.Node,
+): { readonly chain: Chain; readonly columns: readonly ts.Expression[] } | undefined => {
+  let current = unwrap(receiver);
+  let columns: readonly ts.Expression[] | undefined;
+  while (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)) {
+    const first = current.arguments[0];
+    const method = current.expression.name.text;
+    if (method === 'columns' && first !== undefined && ts.isArrayLiteralExpression(first))
+      columns = first.elements;
+    else if (method === 'column' && first !== undefined) columns = [first];
+    current = unwrap(current.expression.expression);
+  }
+  if (!ts.isIdentifier(current) || columns === undefined) return undefined;
+  let parent = from.parent;
+  while (!ts.isSourceFile(parent)) {
+    if (
+      ts.isCallExpression(parent) &&
+      ts.isPropertyAccessExpression(parent.expression) &&
+      parent.expression.name.text === 'onConflict'
+    ) {
+      const callback = parent.arguments[0];
+      if (
+        callback !== undefined &&
+        (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+      ) {
+        const name = callback.parameters[0]?.name;
+        if (name !== undefined && ts.isIdentifier(name) && name.text === current.text) {
+          const chain = chainOf(parent.expression.expression);
+          if (chain !== undefined) return { chain, columns };
+        }
+      }
+    }
+    parent = parent.parent;
+  }
+  return undefined;
+};
+
 const SIMPLE_REFERENCE = /^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?$/i;
 
 const lineOf = (source: ts.SourceFile, node: ts.Node): number =>
@@ -224,7 +264,13 @@ export const scanSource = (file: string, text: string): Scan => {
         method === 'on' ||
         method === 'onRef';
       if (isQuery) {
-        const chain = chainOf(node.expression.expression);
+        const conflict =
+          method === 'where' || method === 'whereRef' || method === 'having'
+            ? conflictOf(node.expression.expression, node)
+            : undefined;
+        const chain = chainOf(node.expression.expression) ?? conflict?.chain;
+        if (conflict !== undefined)
+          for (const column of conflict.columns) take(node, column, 'where', chain);
         if (method === 'where' || method === 'having') take(node, first, 'where', chain);
         else if (method === 'whereRef') {
           take(node, first, 'where', chain);

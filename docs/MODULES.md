@@ -830,6 +830,8 @@ lifecycle proof for `deleted` and `window` decisions (#1011) are merged, and eve
 probed (all 29; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
 no index starts with is held too (`query-columns.integration.test.ts`, seven reasoned exceptions, capped at 7), but
 only as far as a source scan sees: a `where` or `orderBy` with a literal column on a chain it can follow to its table.
+For an upsert’s guard it also reads the unique target columns of that same `onConflict` callback: a
+receipt’s cursor comparison probes its declared primary key, not the whole receipt table by cursor.
 It does not see a column named inside a `where((eb) => ...)` callback, in a `sql` template, or in a variable, a chain
 that starts from a parameter or a helper's return value, a CTE or select alias (each is common; they were counted once
 and the counts went stale, so none is stated), or whether a partial index's predicate serves the statement. And the rule is per statement and table, not per column:

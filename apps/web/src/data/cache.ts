@@ -23,6 +23,7 @@ import type {
   ChannelState,
   Message,
   MessagePage,
+  ChannelCatchUp,
   Reaction,
   ThreadSummary,
   MessageRevision,
@@ -34,6 +35,7 @@ import { families, keys } from './keys';
 import type { FeedPages } from './queries';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
+type CatchUpPages = InfiniteData<ChannelCatchUp, string | undefined>;
 
 /** Quiet hours follow the profile's clock, including a profile read after another device changed it. */
 export const profileTimeZoneChanged = (client: QueryClient, timeZone: string | null): void => {
@@ -169,11 +171,44 @@ const patchPins = (
   }
 };
 
+/** Catch-up has both feed roots and thread-context copies, with server-owned unread counts. */
+const patchCatchUpMessage = (
+  client: QueryClient,
+  messageId: string,
+  edit: (message: Message) => Message,
+): void => {
+  for (const [key, data] of client.getQueriesData<CatchUpPages>({ queryKey: families.unreads })) {
+    if (
+      !data?.pages.some(
+        (page) =>
+          page.roots.data.some((message) => message.id === messageId) ||
+          page.threads.some((thread) => thread.root.id === messageId),
+      )
+    )
+      continue;
+    const patch = (message: Message): Message =>
+      message.id === messageId ? edit(message) : message;
+    client.setQueryData<CatchUpPages>(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        roots: {
+          ...page.roots,
+          data: page.roots.data.map(patch).filter((message) => message.deletedAt === null),
+        },
+        threads: page.threads.map((thread) => ({ ...thread, root: patch(thread.root) })),
+      })),
+    });
+    askAgainIfOnItsWay(client, key);
+  }
+};
+
 export const patchMessage = (
   client: QueryClient,
   messageId: string,
   edit: (message: Message) => Message,
 ): void => {
+  patchCatchUpMessage(client, messageId, edit);
   patchPins(client, messageId, edit);
   for (const [key, data] of messageLists(client)) {
     if (!hasMessage(data, messageId)) continue;
@@ -291,6 +326,40 @@ export const reactionsUpdated = (
  */
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  const revise: (message: Message) => Message = (m) =>
+    m.id === id
+      ? {
+          ...m,
+          content: revision.content,
+          editedAt: revision.editedAt,
+          deletedAt: revision.deletedAt,
+          mentions: [...revision.mentions],
+          // A removed event keeps nothing of what it said, as the server reads it (D-134 §6).
+          ...(revision.deletedAt === null
+            ? {}
+            : {
+                githubEvent: null,
+                ...(m.thread === null
+                  ? {}
+                  : {
+                      thread: {
+                        replyCount: m.thread.replyCount,
+                        lastReplyAt: m.thread.lastReplyAt,
+                        resolvedAt: m.thread.resolvedAt,
+                        resolvedBy: m.thread.resolvedBy,
+                      },
+                    }),
+              }),
+        }
+      : m;
+  patchCatchUpMessage(client, id, (message) =>
+    message.hiddenForMe === true ? message : revise(message),
+  );
+  for (const query of client
+    .getQueryCache()
+    .findAll({ queryKey: keys.unreadsFor(revision.channelId) })) {
+    askAgainIfOnItsWay(client, query.queryKey);
+  }
   if (revision.parentId !== null)
     patchMessage(client, revision.parentId, (root) => {
       const knowledge = root.thread?.knowledge;
@@ -349,33 +418,7 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
               data: page.data.filter((m) => m.id !== id),
             })),
           }
-        : mapMessages(data, (m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  content: revision.content,
-                  editedAt: revision.editedAt,
-                  deletedAt: revision.deletedAt,
-                  mentions: [...revision.mentions],
-                  // A removed event keeps nothing of what it said, as the server reads it (D-134 §6).
-                  ...(revision.deletedAt === null
-                    ? {}
-                    : {
-                        githubEvent: null,
-                        ...(m.thread === null
-                          ? {}
-                          : {
-                              thread: {
-                                replyCount: m.thread.replyCount,
-                                lastReplyAt: m.thread.lastReplyAt,
-                                resolvedAt: m.thread.resolvedAt,
-                                resolvedBy: m.thread.resolvedBy,
-                              },
-                            }),
-                      }),
-                }
-              : m,
-          ),
+        : mapMessages(data, revise),
     );
     askAgainIfOnItsWay(client, key);
   }
@@ -393,6 +436,8 @@ export const channelStateChanged = (
   state: ChannelState,
 ): void => {
   editChannels(client, channelId, (c) => ({ ...c, state }));
+  // A reused count can still describe a newer snapshot, including a receipt from another tab.
+  readAgain(client, keys.unreads(channelId, state.lastReadMessageId, state.unreadCount));
 };
 
 /**
@@ -503,6 +548,7 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
   }
   for (const id of channelIds) {
     client.removeQueries({ queryKey: keys.messages(id) });
+    client.removeQueries({ queryKey: keys.unreadsFor(id) });
     client.removeQueries({ queryKey: keys.channelMembers(id) });
     client.removeQueries({ queryKey: keys.files(id) });
     client.removeQueries({ queryKey: keys.pins(id) });
@@ -542,26 +588,35 @@ export const keepNewestPage = (client: QueryClient, channelId: string): void => 
 };
 
 /** A private deletion only changes this person's cache. */
-export const messageHidden = (client: QueryClient, messageId: string, at: string): void => {
+export const messageHidden = (
+  client: QueryClient,
+  messageId: string,
+  at: string,
+  channelId?: string,
+): void => {
+  const hide: (message: Message) => Message = (message) =>
+    message.id === messageId
+      ? {
+          ...message,
+          hiddenForMe: true,
+          content: '',
+          deletedAt: message.deletedAt ?? at,
+          editedAt: null,
+          githubEvent: null,
+          attachments: [],
+          mentions: [],
+          reactions: [],
+        }
+      : message;
+  patchCatchUpMessage(client, messageId, hide);
+  if (channelId !== undefined) {
+    for (const query of client.getQueryCache().findAll({ queryKey: keys.unreadsFor(channelId) }))
+      askAgainIfOnItsWay(client, query.queryKey);
+    readAgain(client, keys.unreadsFor(channelId));
+  } else readAgain(client, families.unreads);
+
   for (const [key, data] of messageLists(client)) {
-    client.setQueryData<Pages>(
-      key,
-      mapMessages(data, (message) =>
-        message.id === messageId
-          ? {
-              ...message,
-              hiddenForMe: true,
-              content: '',
-              deletedAt: message.deletedAt ?? at,
-              editedAt: null,
-              githubEvent: null,
-              attachments: [],
-              mentions: [],
-              reactions: [],
-            }
-          : message,
-      ),
-    );
+    client.setQueryData<Pages>(key, mapMessages(data, hide));
     askAgainIfOnItsWay(client, key);
   }
   for (const family of [

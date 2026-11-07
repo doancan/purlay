@@ -27,6 +27,22 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/i18n/i18n-provider.test.tsx'],
   },
   {
+    id: 'catch-up-access-revoked-keeps-private-pages',
+    why: 'A channel revoked from the person remains in every cached catch-up scope.',
+    file: 'apps/web/src/data/cache.ts',
+    find: '    client.removeQueries({ queryKey: keys.unreadsFor(id) });\n',
+    replace: '',
+    tests: ['apps/web/src/data/catch-up-cache.test.ts'],
+  },
+  {
+    id: 'catch-up-live-thread-context-not-patched',
+    why: 'A waiting thread keeps old words after a revision or private hide.',
+    file: 'apps/web/src/data/cache.ts',
+    find: 'threads: page.threads.map((thread) => ({ ...thread, root: patch(thread.root) })),',
+    replace: 'threads: page.threads,',
+    tests: ['apps/web/src/data/catch-up-cache.test.ts'],
+  },
+  {
     id: 'channel-left-keeps-every-page',
     why: 'a channel scrolled back through two thousand messages is drawn whole when it is returned to: 1.9 s against a 100 ms budget (D-199)',
     file: 'apps/web/src/data/cache.ts',
@@ -46,9 +62,9 @@ export const WEB_CORE: readonly Mutation[] = [
     id: 'counters-ask-the-inbox-again',
     why: 'one mention reads an open inbox twice, once for its frame and once for the count it moved',
     file: 'apps/web/src/data/cache.ts',
-    find: '  editChannels(client, channelId, (c) => ({ ...c, state }));\n};\n\n/**\n * Every channel of a workspace',
+    find: '  editChannels(client, channelId, (c) => ({ ...c, state }));\n',
     replace:
-      "  editChannels(client, channelId, (c) => ({ ...c, state }));\n  void client.invalidateQueries({ queryKey: ['notifications'] });\n};\n\n/**\n * Every channel of a workspace",
+      "  editChannels(client, channelId, (c) => ({ ...c, state }));\n  void client.invalidateQueries({ queryKey: ['notifications'] });\n",
     tests: ['apps/web/src/data/cache.test.ts'],
   },
   {

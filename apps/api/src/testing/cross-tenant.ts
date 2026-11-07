@@ -154,6 +154,7 @@ type Visibility =
  * the body was read is told from one that came after.
  */
 export interface OwnerIds {
+  readonly replyId: string;
   readonly userId: string;
   readonly messageId: string;
   readonly workspaceId: string;
@@ -336,6 +337,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     visibility: CHANNEL,
   },
   'GET /api/channels/:channelId/messages': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
+  'GET /api/channels/:channelId/unreads': { refusal: 'CHANNEL_NOT_FOUND', visibility: CHANNEL },
   'GET /api/channels/:channelId/changes': {
     refusal: 'CHANNEL_NOT_FOUND',
     // Without `since` it answers the watermark and no rows, which no filter could leak.
@@ -580,7 +582,7 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/messages/:messageId/thread': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
   'PUT /api/messages/:messageId/thread/read': {
     refusal: 'MESSAGE_NOT_FOUND',
-    body: (_now, owner) => ({ lastReadMessageId: owner.messageId }),
+    body: (_now, owner) => ({ lastReadMessageId: owner.replyId }),
     visibility: MESSAGE,
   },
   'GET /api/messages/:messageId/follow': { refusal: 'MESSAGE_NOT_FOUND', visibility: MESSAGE },
@@ -869,12 +871,16 @@ export const listEndpoints = (): readonly (readonly [string, CrossTenantCase])[]
 export const rowsIn = (body: unknown): number | undefined => {
   if (Array.isArray(body)) return body.length;
   if (typeof body !== 'object' || body === null) return undefined;
-  const collections = Object.values(body).filter((value): value is unknown[] =>
-    Array.isArray(value),
-  );
+  // A nested page is a collection; an arbitrary resource’s nested arrays are not.
+  const collections = Object.values(body).flatMap((value: unknown): number[] => {
+    if (Array.isArray(value)) return [value.length];
+    if (typeof value === 'object' && value !== null && 'data' in value && Array.isArray(value.data))
+      return [value.data.length];
+    return [];
+  });
   return collections.length === 0
     ? undefined
-    : collections.reduce((rows, collection) => rows + collection.length, 0);
+    : collections.reduce((rows, count) => rows + count, 0);
 };
 
 /**

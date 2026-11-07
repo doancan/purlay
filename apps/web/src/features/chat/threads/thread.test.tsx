@@ -1205,7 +1205,7 @@ describe('a thread open in front of the person is read (D-147)', () => {
     view.unmountAll();
   });
 
-  test('asks nothing when nothing in the channel needs the person', async () => {
+  test('reads an unfollowed reply even when the channel has no mentions', async () => {
     const reads = recording();
     const view = await mount({
       channels: waitingInApi(0),
@@ -1213,6 +1213,22 @@ describe('a thread open in front of the person is read (D-147)', () => {
     });
     await showThread(view);
     expect(sectionOf(view)).toBeDefined();
+    expect(reads.calls).toEqual([[messageIdAt(ROOT), messageIdAt(4)]]);
+    view.unmountAll();
+  });
+
+  test('asks nothing when the channel has no unread messages', async () => {
+    const reads = recording();
+    const channels = waitingInApi(0).map((channel) =>
+      channel.id === IDS.api
+        ? {
+            ...channel,
+            state: { lastReadMessageId: messageIdAt(5), unreadCount: 0, unreadMentionCount: 0 },
+          }
+        : channel,
+    );
+    const view = await mount({ channels, api: { readThread: reads.readThread } });
+    await showThread(view);
     expect(reads.calls).toEqual([]);
     view.unmountAll();
   });

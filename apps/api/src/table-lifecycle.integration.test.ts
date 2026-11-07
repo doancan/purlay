@@ -442,6 +442,27 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  channel_read_scopes: ofAda('channel_read_scopes', async (db, world) => {
+    await db
+      .insertInto('channel_read_scopes')
+      .values({ channel_id: world.channelId, user_id: world.adaId, unread_since: NOW })
+      .onConflict((conflict) =>
+        conflict.columns(['channel_id', 'user_id']).doUpdateSet({ unread_since: NOW }),
+      )
+      .execute();
+  }),
+  thread_reads: ofAda('thread_reads', async (db, world) => {
+    await db
+      .insertInto('thread_reads')
+      .values({
+        channel_id: world.channelId,
+        user_id: world.adaId,
+        root_id: world.bobsMessage,
+        last_read_message_id: world.bobsMessage,
+        read_at: NOW,
+      })
+      .execute();
+  }),
   thread_follows: ofAda('thread_follows', async (db, world) => {
     await db
       .insertInto('thread_follows')

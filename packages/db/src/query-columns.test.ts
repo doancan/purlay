@@ -10,6 +10,34 @@ const written = (code: string): string[] =>
   scanSource('x.ts', code).references.map((reference) => reference.written);
 
 describe('what the scan reads', () => {
+  test('an upsert guard shares its query with the unique target columns, without counting another callback’s chain', () => {
+    const scan = scanSource(
+      'x.ts',
+      "db.insertInto('issues').values(row).onConflict(c => c.columns(['workspace_id', 'id']).doUpdateSet(row).where('issues.status', '!=', 'closed'));",
+    );
+    expect(scan.references.map((r) => [r.written, r.scope[0]?.table])).toEqual([
+      ['workspace_id', 'issues'],
+      ['id', 'issues'],
+      ['issues.status', 'issues'],
+    ]);
+    expect(new Set(scan.references.map((r) => r.query)).size).toBe(1);
+    expect(
+      written(
+        "db.insertInto('issues').onConflict(function(c) { return c.column('id').doUpdateSet(row).where('status', '!=', 'closed'); });",
+      ),
+    ).toEqual(['id', 'status']);
+    expect(
+      written(
+        "db.insertInto('issues').onConflict(c => other.columns(['id']).where('issues.status', '=', 'open')); ",
+      ),
+    ).toEqual(['issues.status']);
+    expect(
+      written(
+        "db.insertInto('issues').onConflict(c => c.columns(variable).where('issues.status', '=', 'open')); ",
+      ),
+    ).toEqual(['issues.status']);
+  });
+
   test('a filter and an order by a literal column, with the table of the chain', () => {
     const { references, blind } = scanSource(
       'x.ts',

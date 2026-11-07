@@ -1,9 +1,10 @@
+import { beginReadScopes } from './read-scope';
 /**
  * Who is in a channel (D-104): a member brings in somebody from the workspace. A private channel
  * is reached no other way; a public one can also be joined by the person themselves
  * (`joinChannel`). A direct message is between the two people it was opened for.
  */
-import type { ChatDb } from '../schema';
+import type { ChatDb, ChatTx } from '../schema';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { requireChannelMember, type ChannelContext } from './guard';
@@ -70,7 +71,7 @@ export interface Added {
  * is the same answer, and is not told again.
  */
 export const addMember = async (
-  executor: ChatDb,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
   userId: string,
@@ -84,15 +85,21 @@ export const addMember = async (
   await requireChannelMember(executor, context, 'Join the channel to bring people into it.');
   await requireWorkspacePerson(executor, context, userId);
 
+  const joinedAt = clock.now();
   const inserted = await executor
     .insertInto('channel_members')
-    .values({ channel_id: context.channelId, user_id: userId, joined_at: clock.now() })
+    .values({
+      channel_id: context.channelId,
+      user_id: userId,
+      joined_at: joinedAt,
+    })
     .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
     .returning('user_id')
     .executeTakeFirst();
   // Who brought whom into which channel is the trail's: "who added X to #private?" has an answer.
   // Somebody already in it was not added, and is not recorded again.
   if (inserted !== undefined) {
+    await beginReadScopes(executor, context.channelId, [userId], joinedAt);
     await recordAudit(executor, clock, {
       workspaceId: context.workspaceId,
       actorUserId: context.userId,

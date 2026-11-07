@@ -134,7 +134,9 @@ export const joinPublicChannel = async (
   const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
-  const joined = await joinChannel(database, clock, context);
+  const joined = await atomicallyOn(database)(
+    async (transaction) => await joinChannel(transaction, clock, context),
+  );
   const channel = await channelIn(database, context);
   if (joined) {
     await publishAfterCommit(log, [

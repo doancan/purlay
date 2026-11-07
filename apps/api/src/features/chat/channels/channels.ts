@@ -1,3 +1,4 @@
+import { beginReadScopes } from './read-scope';
 /**
  * Channels: create a public one, join it, list what you can see.
  *
@@ -295,10 +296,16 @@ export const createChannel = async (
     .returning('id')
     .executeTakeFirstOrThrow();
 
+  const joinedAt = clock.now();
   await executor
     .insertInto('channel_members')
-    .values({ channel_id: row.id, user_id: context.userId, joined_at: clock.now() })
+    .values({
+      channel_id: row.id,
+      user_id: context.userId,
+      joined_at: joinedAt,
+    })
     .execute();
+  await beginReadScopes(executor, row.id, [context.userId], joinedAt);
 
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
@@ -343,7 +350,7 @@ export const channelIn = async (executor: ChatDb, context: ChannelContext): Prom
  */
 /** Joins a public channel; answers whether this call is what joined it — a second is a no-op. */
 export const joinChannel = async (
-  executor: ChatDb,
+  executor: ChatTx,
   clock: Clock,
   context: ChannelContext,
 ): Promise<boolean> => {
@@ -353,11 +360,18 @@ export const joinChannel = async (
     // the answer a stranger gets (`channel-visibility.integration.test.ts`).
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   }
+  const joinedAt = clock.now();
   const joined = await executor
     .insertInto('channel_members')
-    .values({ channel_id: context.channelId, user_id: context.userId, joined_at: clock.now() })
+    .values({
+      channel_id: context.channelId,
+      user_id: context.userId,
+      joined_at: joinedAt,
+    })
     .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
     .returning('channel_id')
     .executeTakeFirst();
+  if (joined !== undefined)
+    await beginReadScopes(executor, context.channelId, [context.userId], joinedAt);
   return joined !== undefined;
 };

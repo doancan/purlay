@@ -16,6 +16,7 @@
  * `code` is `ErrorCode` and whose status is `ERROR_STATUS`.
  */
 import type { TSchema } from '@sinclair/typebox';
+import { CatchUpQuery, ChannelCatchUp } from './catch-up';
 import {
   AddChannelMemberRequest,
   AuthMethods,
@@ -388,6 +389,14 @@ export const ENDPOINTS = [
   }),
 
   // ── Messages
+  read({
+    id: 'channelUnreads',
+    method: 'GET',
+    path: '/api/channels/:channelId/unreads',
+    auth: 'session',
+    query: CatchUpQuery,
+    responses: { 200: ChannelCatchUp },
+  }),
   read({
     id: 'listMessages',
     method: 'GET',

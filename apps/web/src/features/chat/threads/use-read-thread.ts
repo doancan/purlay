@@ -6,8 +6,9 @@
  * thread is open in front of the person. Then its replies are read **up to the newest one the panel
  * has from the server**, never further, so a reply that arrives after the request is still waiting.
  *
- * Only while something in the channel needs the person (`waiting`, the channel's
- * `unreadMentionCount`): with nothing waiting there is nothing a thread could read, and opening one is
+ * Only while something in the channel is unread (`waiting`, the channel's
+ * `unreadCount`): an unfollowed reply has no mention badge but still needs its own receipt (D-282).
+ * With nothing waiting there is nothing a thread could read, and opening one is
  * not a request. A request the server did not take is not retried in a loop; the next reply, or the
  * next time the thread is opened, asks again. The badge moves by the `CHANNEL_STATE` the server tells
  * the person's devices; the inbox, if it is cached, is asked for again.

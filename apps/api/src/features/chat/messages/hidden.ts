@@ -4,7 +4,7 @@ import type { Message } from '@purlay/types';
 
 /** Personal lists omit hidden messages before pagination. Shared content remains available to others. */
 export const notHiddenBy = (
-  userId: string,
+  userId: string | RawBuilder<unknown>,
   message: RawBuilder<unknown> = sql.ref('messages.id'),
 ): RawBuilder<boolean> =>
   sql<boolean>`not exists (select 1 from hidden_messages h where h.user_id = ${userId} and h.message_id = ${message})`;

@@ -398,12 +398,17 @@ const aWorld = async (db: Executor): Promise<World> => {
     },
   };
 
+  const reply = await db
+    .selectFrom('messages')
+    .select('id')
+    .where('parent_id', '=', threads.visible)
+    .executeTakeFirstOrThrow();
   const world: World = {
     owner: owner.cookie,
     outsider: outsider.cookie,
     // What a body may need: the outsider, who is certainly in the workspace, and a message
     // of the visible channel (a read position names one).
-    ids: { userId: outsider.id, messageId: threads.visible, workspaceId },
+    ids: { userId: outsider.id, messageId: threads.visible, replyId: reply.id, workspaceId },
     workspaceId,
     visible,
     feed: await aFeed(db, workspaceId, visible),

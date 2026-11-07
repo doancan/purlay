@@ -202,8 +202,10 @@ const FileAttachment = ({ attachment }: { readonly attachment: Attachment }): Re
       className="flex min-w-0 items-center gap-2 rounded-xl border-hairline border-border-subtle bg-surface-100 px-3 py-2 text-label text-ink shadow-card"
     >
       <Icon name="file" size="sm" />
-      <span className="min-w-0 truncate">{attachment.fileName}</span>
-      <span className="font-mono text-caption text-ink-muted">{size}</span>
+      <span className="min-w-0 truncate">{attachment.fileName}</span>{' '}
+      <span className="shrink-0 whitespace-nowrap font-mono text-caption text-ink-muted">
+        {size}
+      </span>
     </a>
   );
   if (preview === null) return card;

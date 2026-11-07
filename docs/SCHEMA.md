@@ -725,6 +725,52 @@ CREATE INDEX idx_channel_members_last_read
 > `channels`. The migration therefore creates `channels`, then `messages`, then
 > `channel_members` — or adds the `last_read_message_id` foreign key in a later statement.
 
+**Private membership read scopes (D-282).** New memberships record their injected join clock in this
+chat-owned table, keyed to the membership. No row means an unknown legacy scope; its first explicit read
+preserves old history conservatively. The historical UUID range adds to the join floor, and the reply baseline
+is independent of the feed. These fields are not added to a legacy core migration's table (D-275).
+
+```sql
+CREATE TABLE channel_read_scopes (
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    unread_since TIMESTAMPTZ,
+    unread_history_from UUID,
+    thread_read_baseline_id UUID,
+    PRIMARY KEY (channel_id, user_id),
+    FOREIGN KEY (channel_id, user_id)
+        REFERENCES channel_members(channel_id, user_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_channel_read_scopes_user ON channel_read_scopes(user_id);
+```
+
+**Private thread read positions (D-282).** One receipt per member and root. Membership and root deletion
+cascade; the last reply has no foreign key because retention may remove it while the root survives.
+Only a reply of that root/channel can advance the boundary, monotonically, through the service.
+
+```sql
+CREATE TABLE thread_reads (
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    root_id UUID NOT NULL,
+    last_read_message_id UUID NOT NULL,
+    read_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (channel_id, user_id, root_id),
+    FOREIGN KEY (channel_id, user_id)
+        REFERENCES channel_members(channel_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (root_id, channel_id)
+        REFERENCES messages(id, channel_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_thread_reads_root ON thread_reads(root_id, channel_id);
+CREATE INDEX idx_thread_reads_user ON thread_reads(user_id);
+```
+
+`unread_since` and `unread_history_from` define a union: post-join writes or the explicit historical UUID range.
+Feed reads leave undisplayed replies waiting; `thread_read_baseline_id` preserves only replies already read by
+legacy feed positions or the explicit workspace-wide mark-read action. A root's receipt adds its own read range.
+These columns and receipts are private: omitted from workspace exports, included in the person's own export.
+Where chat’s set has never been applied, the personal export omits the absent private tables.
+
 ### 5.3. `channel_departures`
 
 How a person is no longer in a channel, kept for them alone (D-264). Leaving and being taken out delete the
@@ -2791,6 +2837,10 @@ chat/0003_message_reminders.sql   message_reminders; notification_type gains rem
 chat/0004_hidden_messages.sql     hidden_messages: account-scoped personal deletion markers and replay timestamps
 chat/0005_message_attachments_contract.sql  drops attachments.message_id and channel_id, their keys and indexes, after refusing a link table that lacks a sent file  (D-250; ships in the release after the expand)
 chat/0006_channel_departures.sql  channel_departures: how a person left or was taken out of a channel, for the refusal of their own SUBSCRIBE  (D-264)
+chat/0007_read_scopes.sql         channel_members.unread_since; private thread_reads with membership/root cascades (D-282)
+chat/0008_unread_history_range.sql channel_members.unread_history_from: explicit historical range in union with the join floor (D-282)
+chat/0009_thread_read_baseline.sql channel_members.thread_read_baseline_id: independent lazy legacy reply baseline (D-282)
+chat/0010_membership_read_scopes.sql channel_read_scopes: moves the three prototype scope columns into chat's own table, preserving known scopes and restoring the core's shape (D-282)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 ```
 

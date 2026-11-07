@@ -29,6 +29,22 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/settings/pages/audit.test.tsx'],
   },
   {
+    id: 'catch-up-next-page-failure-hides-displayed-context',
+    why: 'A failed next thread page hides the already displayed roots and conversation context instead of offering a local retry.',
+    file: 'apps/web/src/features/chat/unreads/unreads-screen.tsx',
+    find: 'page.isError && !page.isFetchNextPageError',
+    replace: 'page.isError',
+    tests: ['apps/web/src/features/chat/unreads/unreads-screen.test.tsx'],
+  },
+  {
+    id: 'catch-up-unfollowed-replies-never-read',
+    why: 'Opening a thread without mentions leaves its reply unread forever.',
+    file: 'apps/web/src/features/chat/threads/thread.tsx',
+    find: '?.state?.unreadCount ?? 0',
+    replace: '?.state?.unreadMentionCount ?? 0',
+    tests: ['apps/web/src/features/chat/threads/thread.test.tsx'],
+  },
+  {
     id: 'deep-work-client-never-ends',
     why: 'the bar says Deep Work long after it ended on the server, and the badges stay hidden',
     file: 'apps/web/src/features/shell/deep-work.tsx',

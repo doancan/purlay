@@ -158,6 +158,9 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   },
   // Reading the inbox, or a thread, recounts the counters of the channels it touched. It changes
   // no membership, so nobody's access moves (D-106, D-147, #58).
+  'apps/api/src/features/chat/notifications/notifications.ts#readThreadNotifications': {
+    none: 'stores a private thread receipt and recounts existing membership counters; nobody gains or loses channel access (#1193)',
+  },
   'apps/api/src/features/chat/notifications/notifications.ts#readAndCount': {
     none: 'recounts the counters of existing memberships and changes no access (#58)',
   },

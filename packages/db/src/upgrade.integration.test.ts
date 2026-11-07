@@ -319,6 +319,10 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0004_hidden_messages',
         CONTRACT_MIGRATION,
         'chat/0006_channel_departures',
+        'chat/0007_read_scopes',
+        'chat/0008_unread_history_range',
+        'chat/0009_thread_read_baseline',
+        'chat/0010_membership_read_scopes',
         'issues/0001_issues',
       ]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -429,6 +433,10 @@ describe('integration: the contract release on a database that has run the expan
       expect(after.results?.map((result) => result.migrationName)).toEqual([
         CONTRACT_MIGRATION,
         'chat/0006_channel_departures',
+        'chat/0007_read_scopes',
+        'chat/0008_unread_history_range',
+        'chat/0009_thread_read_baseline',
+        'chat/0010_membership_read_scopes',
       ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
@@ -640,6 +648,10 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0004_hidden_messages',
         CONTRACT_MIGRATION,
         'chat/0006_channel_departures',
+        'chat/0007_read_scopes',
+        'chat/0008_unread_history_range',
+        'chat/0009_thread_read_baseline',
+        'chat/0010_membership_read_scopes',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -659,4 +671,85 @@ describe('integration: the matrix of sets around the contract', () => {
       await db.destroy();
     }
   });
+});
+
+describe('integration: moving development read scopes into chat’s own table', () => {
+  test(
+    'preserves an explicit scope and receipt, leaves an unknown legacy scope absent, and changes no final core column',
+    async () => {
+      const name = await emptyDatabase();
+      const db = open(name);
+      try {
+        const sets = PRODUCT_MIGRATION_SETS.map((set) => ({
+          ...set,
+          directory:
+            set.id === 'chat'
+              ? copiedBelow(set.directory, '0010_membership_read_scopes.sql')
+              : set.directory,
+        }));
+        expect((await migrateToLatest(db, undefined, { modules: sets })).error).toBeUndefined();
+        const at = new Date('2026-11-07T12:00:00.000Z');
+        const root = Bun.randomUUIDv7('hex', at);
+        const cursor = Bun.randomUUIDv7('hex', new Date(at.getTime() + 1));
+        const people = await sql<{ id: string }>`insert into users(email, username, display_name)
+        values ('known@test.invalid', 'known', 'Known'), ('legacy@test.invalid', 'legacy', 'Legacy') returning id`.execute(
+          db,
+        );
+        const [known, legacy] = people.rows;
+        if (known === undefined || legacy === undefined) throw new Error('Missing people');
+        const spaces = await sql<{
+          id: string;
+        }>`insert into workspaces(name, slug) values ('Ops', 'scope') returning id`.execute(db);
+        const workspace = spaces.rows[0];
+        if (workspace === undefined) throw new Error('Missing workspace');
+        const channels = await sql<{
+          id: string;
+        }>`insert into channels(workspace_id, name) values (${workspace.id}, 'handover') returning id`.execute(
+          db,
+        );
+        const channel = channels.rows[0];
+        if (channel === undefined) throw new Error('Missing channel');
+        await sql`insert into messages(id, workspace_id, channel_id, sender_id, content)
+        values (${root}, ${workspace.id}, ${channel.id}, ${known.id}, 'Root')`.execute(db);
+        await sql`insert into channel_members(channel_id, user_id, unread_since, unread_history_from, thread_read_baseline_id)
+        values (${channel.id}, ${known.id}, ${at}, ${root}, ${cursor}), (${channel.id}, ${legacy.id}, null, null, null)`.execute(
+          db,
+        );
+        await sql`insert into thread_reads(channel_id, user_id, root_id, last_read_message_id, read_at)
+        values (${channel.id}, ${known.id}, ${root}, ${cursor}, ${at})`.execute(db);
+        const after = await migrateToLatest(db, undefined, { modules: PRODUCT_MIGRATION_SETS });
+        expect(after.error).toBeUndefined();
+        expect(after.results?.map((result) => result.migrationName)).toEqual([
+          'chat/0010_membership_read_scopes',
+        ]);
+        expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([
+          {
+            channel_id: channel.id,
+            user_id: known.id,
+            unread_since: at,
+            unread_history_from: root,
+            thread_read_baseline_id: cursor,
+          },
+        ]);
+        expect((await sql`select last_read_message_id from thread_reads`.execute(db)).rows).toEqual(
+          [{ last_read_message_id: cursor }],
+        );
+        const columns = await sql<{
+          name: string;
+        }>`select column_name as name from information_schema.columns
+        where table_name = 'channel_members' and column_name in ('unread_since', 'unread_history_from', 'thread_read_baseline_id')`.execute(
+          db,
+        );
+        expect(columns.rows).toEqual([]);
+        await sql`delete from channel_members where channel_id = ${channel.id} and user_id = ${known.id}`.execute(
+          db,
+        );
+        expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([]);
+        expect((await sql`select * from thread_reads`.execute(db)).rows).toEqual([]);
+      } finally {
+        await db.destroy();
+      }
+    },
+    CLONE_HOOK_MS,
+  );
 });

@@ -1,3 +1,4 @@
+import { beginReadScopes } from './read-scope';
 /**
  * Opening a direct message: the same people always get the same conversation (I-5, D-99 §7,
  * D-127) — two of them, or a group of up to `CONVERSATION_PEOPLE_MAX`.
@@ -91,19 +92,27 @@ export const openConversation = async (
     ).id;
 
   if (inserted !== undefined || people.length <= 2) {
+    const joinedAt = clock.now();
     // Everybody is a member of a new conversation. Of two people, a membership that is somehow
     // missing is restored, so a direct message can never exist that one of its people cannot open.
-    await executor
+    const newMembers = await executor
       .insertInto('channel_members')
       .values(
         people.map((userId) => ({
           channel_id: channelId,
           user_id: userId,
-          joined_at: clock.now(),
+          joined_at: joinedAt,
         })),
       )
       .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
+      .returning('user_id')
       .execute();
+    await beginReadScopes(
+      executor,
+      channelId,
+      newMembers.map((member) => member.user_id),
+      joinedAt,
+    );
   } else {
     // A group is never filled in again: somebody removed from the workspace and let back in does
     // not return to read what its people wrote meanwhile (D-127 §3). The caller must still be in it.

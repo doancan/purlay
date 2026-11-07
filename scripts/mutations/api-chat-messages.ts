@@ -62,8 +62,8 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'backdated-message-counted-as-unread',
     why: 'a message that sorts behind the reader’s position is counted unread, leaving a badge a read cannot clear',
     file: 'apps/api/src/features/chat/messages/delivery.ts',
-    find: '(last_read_message_id is null or last_read_message_id < ${messageId}::uuid)',
-    replace: '(true)',
+    find: "memberReadScope('channel_members')",
+    replace: "{ ...memberReadScope('channel_members'), position: null }",
     tests: ['apps/api/src/features/chat/messages/delivery-backdated.integration.test.ts'],
   },
   {
@@ -73,6 +73,14 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     find: 'if (mentions.broadcast.length > 0) {',
     replace: 'if (false) {',
     tests: ['apps/api/src/features/chat/messages/send-effects.integration.test.ts'],
+  },
+  {
+    id: 'catch-up-hide-blind-decrement',
+    why: 'Hiding an already-read reply steals an unrelated root unread count.',
+    file: 'apps/api/src/features/chat/messages/hide.ts',
+    find: 'scope.unread_since === null\n        ? sql<number>`greatest(unread_count - 1, 0)`',
+    replace: 'true\n        ? sql<number>`greatest(unread_count - 1, 0)`',
+    tests: ['apps/api/src/features/chat/channels/read-scopes.integration.test.ts'],
   },
   {
     id: 'changes-cursor-and-since-together',
@@ -305,8 +313,9 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'delete-uncounts-the-late-joiner',
     why: 'a member who joined after the message loses an unread they never had for it',
     file: 'apps/api/src/features/chat/messages/tombstone.ts',
-    find: '        and counted.joined_at <= message.created_at\n',
-    replace: '',
+    find: "          ${unreadMessage(memberReadScope('counted'), sql.ref('m.id'), false)} as ahead\n        from unnest(${ids}::uuid[], ${senders}::uuid[], ${times}::timestamptz[])\n          as m(id, sender_id, created_at)\n      ) as message\n        on (message.sender_id is null or counted.user_id <> message.sender_id)\n        and (${memberReadScope('counted').since} <= message.created_at\n          or message.id >= ${memberReadScope('counted').historyFrom})\n",
+    replace:
+      "          ${unreadMessage({ ...memberReadScope('counted'), since: null }, sql.ref('m.id'), false)} as ahead\n        from unnest(${ids}::uuid[], ${senders}::uuid[], ${times}::timestamptz[])\n          as m(id, sender_id, created_at)\n      ) as message\n        on (message.sender_id is null or counted.user_id <> message.sender_id)\n",
     tests: ['apps/api/src/features/chat/messages/delete.integration.test.ts'],
   },
   {
@@ -329,7 +338,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'edit-counts-a-message-never-counted',
     why: 'naming somebody who joined after the message puts their mentions above their unread, and the edit fails',
     file: 'apps/api/src/features/chat/messages/edit.ts',
-    find: "    .where('joined_at', '<=', writtenAt)\n",
+    find: "    .where((eb) =>\n      eb.or([\n        eb(sql<Date>`${memberReadScope('channel_members').since}`, '<=', writtenAt),\n        eb(sql<string>`${memberReadScope('channel_members').historyFrom}`, '<=', messageId),\n      ]),\n    )\n",
     replace: '',
     tests: ['apps/api/src/features/chat/messages/edit.integration.test.ts'],
   },

@@ -125,6 +125,14 @@ export interface ChannelMembers {
   user_id: string;
 }
 
+export interface ChannelReadScopes {
+  channel_id: string;
+  thread_read_baseline_id: string | null;
+  unread_history_from: string | null;
+  unread_since: Timestamp | null;
+  user_id: string;
+}
+
 export interface Channels {
   created_at: Generated<Timestamp>;
   created_by: string | null;
@@ -628,6 +636,14 @@ export interface ThreadFollows {
   workspace_id: string;
 }
 
+export interface ThreadReads {
+  channel_id: string;
+  last_read_message_id: string;
+  read_at: Timestamp;
+  root_id: string;
+  user_id: string;
+}
+
 export interface TwoFactors {
   backup_codes: string;
   failed_verification_count: Generated<number>;
@@ -760,6 +776,7 @@ export interface DB {
   channel_bookmarks: ChannelBookmarks;
   channel_departures: ChannelDepartures;
   channel_members: ChannelMembers;
+  channel_read_scopes: ChannelReadScopes;
   channels: Channels;
   github_app_deliveries: GithubAppDeliveries;
   github_app_handshakes: GithubAppHandshakes;
@@ -803,6 +820,7 @@ export interface DB {
   sessions: Sessions;
   setup_state: SetupState;
   thread_follows: ThreadFollows;
+  thread_reads: ThreadReads;
   two_factors: TwoFactors;
   users: Users;
   verifications: Verifications;

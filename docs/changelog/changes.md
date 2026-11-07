@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **Unread conversations** — Catch up from the oldest unread messages, read only the page shown, and open waiting threads at their first unread reply; joining a channel keeps its old history read and thread reads leave other conversations waiting (D-282)
 
 ---

@@ -21,6 +21,8 @@ export const forgetWhatChatKeeps = async (
     'message_reminders',
     'scheduled_messages',
     'channel_departures',
+    'thread_reads',
+    'channel_read_scopes',
   ] as const) {
     if (await tableExists(transaction, table)) {
       await transaction.deleteFrom(table).where('user_id', '=', userId).execute();

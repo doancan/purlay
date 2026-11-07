@@ -1,3 +1,4 @@
+import { loadReadScope, saveReadScope } from './read-scope';
 /**
  * Where a person has read to in a channel, and what is waiting beyond it
  * (D-99 §4, I-3, I-6).
@@ -24,6 +25,7 @@ import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
 import { visibleChannelsIn, type ChannelContext } from './guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
+import { HISTORY_BEGINNING, unreadMessages } from './unread';
 
 /**
  * The notifications still waiting for a person in one channel, of the kinds that need them: what
@@ -42,46 +44,9 @@ export const waitingNotifications = (
     and ${notHiddenBy(userId, sql.ref('m.id'))}
 )`;
 
-/**
- * The replies at or behind a read position whose notification still waits for the person: unread
- * though the feed has been read past them (D-147).
- */
-const waitingRepliesBehind = (
-  userId: string,
-  channelId: string,
-  position: string,
-): RawBuilder<number> => sql<number>`(
-  select count(*)::int from notifications n
-  join messages m on m.id = n.message_id and m.deleted_at is null and m.parent_id is not null
-  where n.user_id = ${userId} and n.channel_id = ${channelId}
-    and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
-    and ${notHiddenBy(userId, sql.ref('m.id'))}
-    and n.message_id <= ${position}
-)`;
-
-/**
- * What is unread for a person in one channel, counted from the rows (D-99 §4, D-147): every message
- * by somebody else past the read position, and every reply at or behind it whose notification is
- * still waiting — the feed has been read past it, the thread has not. The second term is what keeps
- * `unread_mention_count` within `unread_count` (I-6) for an answer read past in the feed. Bounded,
- * as the recount was: the first by the unread messages, the second by the waiting notifications.
- */
-const unreadMessages = (
-  userId: string,
-  channelId: string,
-  position: string,
-): RawBuilder<number> => sql<number>`(
-  (
-    select count(*)::int from messages
-    where channel_id = ${channelId} and id > ${position}
-      and sender_id is distinct from ${userId} and deleted_at is null
-      and ${notHiddenBy(userId)}
-  ) + ${waitingRepliesBehind(userId, channelId, position)}
-)`;
-
 export interface ReadOutcome {
   readonly state: ChannelState;
-  /** False when the position was at or behind where it already was. */
+  /** False when neither the feed nor the explicitly requested thread baseline advanced. */
   readonly moved: boolean;
   /** The row's `state_version` the state was read at (0015). */
   readonly version: number;
@@ -101,6 +66,7 @@ export const markRead = async (
   clock: Clock,
   context: ChannelContext,
   messageId: string,
+  options: { readonly includeUnnotifiedReplies?: boolean } = {},
 ): Promise<ReadOutcome> => {
   const member = await executor
     .selectFrom('channel_members')
@@ -114,6 +80,7 @@ export const markRead = async (
   if (member === undefined) {
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   }
+  const scope = await loadReadScope(executor, context.channelId, context.userId);
 
   const target = await executor
     .selectFrom('messages')
@@ -126,9 +93,17 @@ export const markRead = async (
   }
 
   const current = member.last_read_message_id;
+  const previousThreadBaseline =
+    scope.unread_since === null ? current : scope.thread_read_baseline_id;
+  const threadBaseline =
+    options.includeUnnotifiedReplies === true &&
+    (previousThreadBaseline === null || previousThreadBaseline < messageId)
+      ? messageId
+      : previousThreadBaseline;
+  const position = current !== null && current >= messageId ? current : messageId;
   // A UUIDv7 sorts by time and the text form is lower-case hex of fixed width, so
   // comparing strings is comparing positions (`SCHEMA.md` §6.3).
-  if (current !== null && messageId <= current) {
+  if (current !== null && messageId <= current && threadBaseline === previousThreadBaseline) {
     return {
       moved: false,
       version: member.state_version,
@@ -148,7 +123,7 @@ export const markRead = async (
     .where('user_id', '=', context.userId)
     .where('channel_id', '=', context.channelId)
     .where('read_at', 'is', null)
-    .where('message_id', '<=', messageId)
+    .where('message_id', '<=', position)
     .where((eb) =>
       eb.exists(
         eb
@@ -160,11 +135,26 @@ export const markRead = async (
     )
     .execute();
 
-  const unread = unreadMessages(context.userId, context.channelId, messageId);
+  const since = scope.unread_since ?? HISTORY_BEGINNING;
+  await saveReadScope(executor, context.channelId, context.userId, {
+    unread_since: since,
+    unread_history_from: scope.unread_history_from,
+    thread_read_baseline_id: threadBaseline,
+  });
+  const unread = unreadMessages(
+    {
+      userId: context.userId,
+      position,
+      threadBaseline,
+      since,
+      historyFrom: scope.unread_history_from,
+    },
+    context.channelId,
+  );
   const updated = await executor
     .updateTable('channel_members')
     .set({
-      last_read_message_id: messageId,
+      last_read_message_id: position,
       state_version: sql<number>`state_version + 1`,
       unread_count: unread,
       // The lesser of the two, because a message that needs you is, first, one you
@@ -257,14 +247,11 @@ export const markAllRead = async (
               unreadMentionCount: member.unread_mention_count,
             },
           }
-        : await markRead(executor, clock, channel, newest.id);
+        : await markRead(executor, clock, channel, newest.id, { includeUnnotifiedReplies: true });
     outcomes.push({ channelId: member.channel_id, ...outcome });
   }
   return outcomes;
 };
-
-/** Below every UUIDv7: counting "past the position" with no position counts the whole channel. */
-const BEFORE_EVERYTHING = '00000000-0000-0000-0000-000000000000';
 
 /**
  * "Mark unread from here" (D-212): the read position moves back to the newest message before this
@@ -290,6 +277,7 @@ export const markUnread = async (
   if (member === undefined) {
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   }
+  const scope = await loadReadScope(executor, context.channelId, context.userId);
 
   const target = await executor
     .selectFrom('messages')
@@ -311,10 +299,20 @@ export const markUnread = async (
       unreadMentionCount: member.unread_mention_count,
     },
   });
-  // Already unread from here: the position is before it, or there is none.
-  if (member.last_read_message_id === null || member.last_read_message_id < from) {
-    return unchanged();
-  }
+  const behind = member.last_read_message_id === null || member.last_read_message_id < from;
+  const includesHistory =
+    scope.unread_since === null ||
+    scope.unread_since.getTime() === 0 ||
+    (scope.unread_history_from !== null && scope.unread_history_from <= from);
+  const readReplies = await executor
+    .selectFrom('thread_reads')
+    .select('root_id')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .where('last_read_message_id', '>=', from)
+    .limit(1)
+    .executeTakeFirst();
+  if (behind && includesHistory && readReplies === undefined) return unchanged();
 
   const previous = await executor
     .selectFrom('messages')
@@ -324,8 +322,46 @@ export const markUnread = async (
     .orderBy('id', 'desc')
     .limit(1)
     .executeTakeFirst();
-  const position = previous?.id ?? null;
-  const unread = unreadMessages(context.userId, context.channelId, position ?? BEFORE_EVERYTHING);
+  const boundary = previous?.id ?? null;
+  const position = behind ? member.last_read_message_id : boundary;
+  if (boundary === null) {
+    await executor
+      .deleteFrom('thread_reads')
+      .where('channel_id', '=', context.channelId)
+      .where('user_id', '=', context.userId)
+      .where('last_read_message_id', '>=', from)
+      .execute();
+  } else {
+    await executor
+      .updateTable('thread_reads')
+      .set({ last_read_message_id: boundary })
+      .where('channel_id', '=', context.channelId)
+      .where('user_id', '=', context.userId)
+      .where('last_read_message_id', '>=', from)
+      .execute();
+  }
+  const since = scope.unread_since ?? HISTORY_BEGINNING;
+  const previousThreadBaseline =
+    scope.unread_since === null ? member.last_read_message_id : scope.thread_read_baseline_id;
+  const threadBaseline =
+    boundary === null
+      ? null
+      : previousThreadBaseline !== null && previousThreadBaseline > boundary
+        ? boundary
+        : previousThreadBaseline;
+  const historyFrom =
+    scope.unread_history_from === null || from < scope.unread_history_from
+      ? from
+      : scope.unread_history_from;
+  await saveReadScope(executor, context.channelId, context.userId, {
+    unread_since: since,
+    unread_history_from: historyFrom,
+    thread_read_baseline_id: threadBaseline,
+  });
+  const unread = unreadMessages(
+    { userId: context.userId, position, threadBaseline, since, historyFrom },
+    context.channelId,
+  );
   const updated = await executor
     .updateTable('channel_members')
     .set({

@@ -2,19 +2,19 @@
  * All unreads (D-216): what is new in every channel the person has not read, on one screen, channel by
  * channel — Slack's "Unreads".
  *
- * - **Only what is new**: each channel's roots after its read position, oldest first, as the feed's own
- *   `after` page reads them (D-8); a channel with more than a page says so and opens.
+ * - **Only what is new**: the server's oldest unread roots in the membership's join/historical scope,
+ *   20 at a time, plus separately paginated waiting threads (D-282).
  * - **Mark read reads what was shown**, up to its newest: nothing the person did not see is marked read,
  *   and a channel with more waiting shows its next page.
- * - **Replies wait in their threads** (D-147): a channel whose unread are replies, with no new message in
- *   the feed, says so and opens — a reply is read in its thread, not here.
+ * - **Replies wait in their threads** (D-147): their roots provide context; the primary link opens the
+ *   exact first unread reply. A thread read leaves the feed and other threads waiting.
  * - **Quiet channels are not here**: one set to tell nothing (D-107) is not asking to be caught up on.
  * - **In the sidebar's order**, so a channel is where the person expects it; the state is the channels'
  *   cache, so a frame that reads one elsewhere takes it off this screen too.
  */
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import type { Channel, Message } from '@purlay/types';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useId, useMemo, useState } from 'react';
+import { CATCH_UP_PAGE, type Channel, type Message, type UnreadThread } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { useActions } from '../../../data/actions-provider';
 import { useApi } from '../../../data/api-provider';
@@ -27,7 +27,7 @@ import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { ListCard, ListColumn } from '../../../ui/list-column';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
-import { GlyphEmptyState } from '../../../ui/states';
+import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
@@ -37,16 +37,22 @@ import { useSession } from '../../session/session';
 import { NavToggle } from '../../shell/nav';
 import { useWorkspace } from '../../shell/workspace';
 import { waitingChannels } from './waiting';
+import { Attachments } from '../messages/attachments';
+import { GitHubEventCard } from '../../content/github-event';
+import { GitHubCards } from '../../content/github-cards';
+import { MessageCards } from '../../content/message-cards';
 
 /** How many new messages a channel shows at once: enough to catch up, few enough to scan. */
-export const UNREADS_PAGE = 20;
+export const UNREADS_PAGE = CATCH_UP_PAGE;
 
 const Line = ({
   message,
   names,
   repository,
+  unreadThread,
 }: {
   readonly message: Message;
+  readonly unreadThread?: UnreadThread;
   /** The channel's repository, for its code references (D-223). */
   readonly repository: string | null;
   /** Members by id, as usernames: who the message mentions, highlighted as the feed does. */
@@ -55,6 +61,7 @@ const Line = ({
   const { t, format } = useI18n();
   const { clock } = useFeedPorts();
   const { user: me } = useSession();
+  const { workspace } = useWorkspace();
   const author = authorOf(message, t('user.erased'));
   const mentioned = new Set(
     message.mentions.flatMap((id) => {
@@ -72,11 +79,64 @@ const Line = ({
             {format.time(message.createdAt, clock.now())}
           </time>
         </div>
-        {renderContent(message.content, {
-          mentioned,
-          me: me.username.toLowerCase(),
-          repository,
-        })}
+        {message.deletedAt !== null ? (
+          <p className="text-body text-ink-muted">{t('message.deleted')}</p>
+        ) : (
+          <>
+            {message.githubEvent !== null ? (
+              <GitHubEventCard event={message.githubEvent} />
+            ) : (
+              renderContent(message.content, {
+                mentioned,
+                me: me.username.toLowerCase(),
+                repository,
+              })
+            )}
+            {message.githubEvent === null && <GitHubCards content={message.content} />}
+            {message.githubEvent === null && <MessageCards content={message.content} />}
+            <Attachments
+              attachments={message.attachments}
+              sharedBy={author.displayName}
+              sharedAt={message.createdAt}
+            />
+          </>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-caption">
+          {unreadThread !== undefined && (
+            <Link
+              to="channel"
+              params={{ slug: workspace.slug, channelId: message.channelId }}
+              search={new URLSearchParams({
+                message: unreadThread.firstUnreadMessageId,
+              }).toString()}
+              className="font-medium text-accent-text hover:underline"
+            >
+              {t('unreads.openReplies')} · {t('unreads.count', { count: unreadThread.unreadCount })}
+            </Link>
+          )}
+          {message.deletedAt === null && (
+            <Link
+              to="channel"
+              params={{ slug: workspace.slug, channelId: message.channelId }}
+              search={new URLSearchParams({ message: message.id }).toString()}
+              className="font-medium text-accent-text hover:underline"
+            >
+              {t('unreads.openMessage')}
+            </Link>
+          )}
+          {unreadThread === undefined &&
+            message.thread !== null &&
+            message.thread.replyCount > 0 && (
+              <Link
+                to="channel"
+                params={{ slug: workspace.slug, channelId: message.channelId }}
+                search={new URLSearchParams({ thread: message.id }).toString()}
+                className="font-medium text-accent-text hover:underline"
+              >
+                {t('thread.show')} · {t('thread.replies', { count: message.thread.replyCount })}
+              </Link>
+            )}
+        </div>
       </div>
     </li>
   );
@@ -96,47 +156,75 @@ const ChannelUnreads = ({
   const { show } = useToast();
   const describe = useDescribeFailure();
   const title = useChannelTitle(channel);
+  const headingId = useId();
+  const [reading, setReading] = useState(false);
   const state = channel.state;
   const position = state?.lastReadMessageId ?? null;
   const unread = state?.unreadCount ?? 0;
   // Keyed by the position and the count: read elsewhere, or a new message, and it is asked again.
-  const page = useQuery({
+  const client = useQueryClient();
+  const page = useInfiniteQuery({
     queryKey: keys.unreads(channel.id, position, unread),
-    queryFn: async ({ signal }) => {
-      if (position !== null) {
-        return await api.messages(channel.id, { after: position, limit: UNREADS_PAGE }, signal);
-      }
-      // Never read: the newest page, turned to read oldest first like the rest.
-      const newest = await api.messages(channel.id, { limit: UNREADS_PAGE }, signal);
-      return { ...newest, data: [...newest.data].reverse() };
-    },
+    queryFn: async ({ pageParam, signal }) =>
+      await api.unreads(
+        channel.id,
+        { limit: UNREADS_PAGE, ...(pageParam === undefined ? {} : { afterThread: pageParam }) },
+        signal,
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextThreadCursor ?? undefined,
   });
+  const threads = useMemo(
+    () => [
+      ...new Map(
+        (page.data?.pages.flatMap((part) => part.threads) ?? []).map((thread) => [
+          thread.root.id,
+          thread,
+        ]),
+      ).values(),
+    ],
+    [page.data],
+  );
   if (state === null) return null;
-  const shown = page.data?.data ?? [];
+  const roots = page.data?.pages[0]?.roots;
+  const shown = roots?.data ?? [];
   const newest = shown.at(-1);
+  const failed = page.isError && !page.isFetchNextPageError;
   return (
     <ListCard
+      headingId={headingId}
       heading={
-        <div className="flex items-center gap-3">
-          <Link
-            to="channel"
-            params={{ slug: workspace.slug, channelId: channel.id }}
-            className="min-w-0 truncate text-label font-semibold text-ink hover:underline"
+        <div className="flex flex-wrap items-center gap-3">
+          <h2
+            id={headingId}
+            className="min-w-0 flex-1 basis-16 truncate text-label font-semibold text-ink"
           >
-            {title}
-          </Link>
+            <Link
+              to="channel"
+              params={{ slug: workspace.slug, channelId: channel.id }}
+              className="hover:underline"
+            >
+              {title}
+            </Link>
+          </h2>
           <span className="shrink-0 text-caption text-ink-muted">
             {t('unreads.count', { count: unread })}
           </span>
-          {newest !== undefined && (
+          {newest !== undefined && !failed && (
             <span className="ml-auto">
               <Button
                 variant="ghost"
                 glyph="confirm"
+                busy={reading}
                 onClick={() => {
-                  markRead(channel.id, newest.id).catch((failure: unknown) => {
-                    show({ message: `${t('unreads.readFailed')} ${describe(failure)}` });
-                  });
+                  setReading(true);
+                  markRead(channel.id, newest.id)
+                    .catch((failure: unknown) => {
+                      show({ message: `${t('unreads.readFailed')} ${describe(failure)}` });
+                    })
+                    .finally(() => {
+                      setReading(false);
+                    });
                 }}
               >
                 {t('unreads.markRead')}
@@ -153,7 +241,7 @@ const ChannelUnreads = ({
             <Skeleton className="w-feed" />
           </LoadingStatus>
         </li>
-      ) : page.isError ? (
+      ) : failed ? (
         <li className="flex items-center gap-3 px-5 py-3 text-label text-danger-text">
           {t('unreads.failed')}
           <Button
@@ -175,20 +263,53 @@ const ChannelUnreads = ({
               repository={channel.codeRepository}
             />
           ))}
-          {shown.length === 0 && (
-            // What waits is replies, read in their threads (D-147), not new messages in the feed.
-            <li className="flex items-center gap-3 px-5 py-3 text-label text-ink-muted">
-              {t('unreads.inThreads', { count: unread })}
-              <Link
-                to="channel"
-                params={{ slug: workspace.slug, channelId: channel.id }}
-                className="font-medium text-accent-text hover:underline"
-              >
-                {t('unreads.open')}
-              </Link>
+          {threads.length > 0 && (
+            <li className="border-t-hairline border-border-subtle px-5 py-3">
+              <h3 className="text-label font-semibold text-ink-muted">
+                {t('unreads.threadsTitle')}
+              </h3>
             </li>
           )}
-          {page.data.nextCursor !== null && (
+          {threads.map((thread) => (
+            <Line
+              key={`thread-${thread.root.id}`}
+              message={thread.root}
+              unreadThread={thread}
+              names={names}
+              repository={channel.codeRepository}
+            />
+          ))}
+          {page.hasNextPage && (
+            <li className="px-5 py-3">
+              {page.isFetchNextPageError && (
+                <p className="mb-2 text-label text-danger-text">{t('unreads.failed')}</p>
+              )}
+              <Button
+                variant="secondary"
+                busy={page.isFetchingNextPage}
+                onClick={() => {
+                  void page.fetchNextPage();
+                }}
+              >
+                {page.isFetchNextPageError ? t('common.retry') : t('unreads.moreThreads')}
+              </Button>
+            </li>
+          )}
+          {shown.length === 0 && threads.length === 0 && (
+            <li className="flex flex-wrap items-center gap-3 px-5 py-3 text-label text-ink-muted">
+              {t('unreads.changed')}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void client.invalidateQueries({ queryKey: keys.channels(workspace.id) });
+                  void page.refetch();
+                }}
+              >
+                {t('common.retry')}
+              </Button>
+            </li>
+          )}
+          {roots?.nextCursor != null && (
             <li className="px-5 py-3 not-first:border-t-hairline border-border-subtle">
               <Link
                 to="channel"
@@ -232,6 +353,15 @@ export const UnreadsScreen = (): React.JSX.Element => {
             <Skeleton className="w-members" />
             <Skeleton className="w-feed" />
           </LoadingStatus>
+        ) : channels.isError ? (
+          <ErrorState
+            title={t('unreads.failed')}
+            body={t('unreads.failedBody')}
+            retryLabel={t('common.retry')}
+            onRetry={() => {
+              void channels.refetch();
+            }}
+          />
         ) : waiting.length === 0 ? (
           <GlyphEmptyState
             glyph="confirm"

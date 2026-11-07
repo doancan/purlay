@@ -1,3 +1,4 @@
+import { loadReadScope, saveReadScope, memberReadScope } from '../channels/read-scope';
 /**
  * The inbox (D-106): what is waiting for a person in one workspace, newest first, and marking it
  * read.
@@ -13,7 +14,7 @@
  * been read past, which was unread only because its notification waited (D-147).
  *
  * **A thread is read here too** (D-147): opening it reads the caller's notifications for its
- * replies, by the same path, since that is all reading a thread changes.
+ * replies, by the same path, with its independent read receipt (D-282).
  */
 import { notHiddenBy } from '../messages/hidden';
 import { sql, type RawBuilder } from '@purlay/db';
@@ -32,6 +33,7 @@ import { AppError } from '../../../platform/errors';
 import { requireMessageById } from '../channels/guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
+import { HISTORY_BEGINNING, unreadMessages } from '../channels/unread';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
 import { limitOf } from '../../../platform/pagination';
 
@@ -220,7 +222,8 @@ export const readNotifications = async (
  * Reads the caller's notifications for the replies of one thread, up to and including
  * `lastReadMessageId` — what opening the thread reads (D-147). The root is asked of the guard first,
  * so a thread the caller cannot see is the stranger's `404`; a reply has no thread, as reading one
- * does not (`API.md` §5). Nothing else is stored: the bound is only a bound.
+ * does not (`API.md` §5). A member also advances their private thread receipt (D-282);
+ * the bound must be a reply of this root, and never advances the channel feed.
  */
 export const readThreadNotifications = async (
   transaction: ChatTx,
@@ -234,6 +237,52 @@ export const readThreadNotifications = async (
   if (root.parentId !== null) {
     throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
   }
+  const channelId = root.context.channelId;
+  const bound = await transaction
+    .selectFrom('messages')
+    .select('id')
+    .where('id', '=', input.lastReadMessageId)
+    .where('channel_id', '=', channelId)
+    .where('parent_id', '=', rootId)
+    .executeTakeFirst();
+  if (bound === undefined) {
+    throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
+  }
+  const member = await transaction
+    .selectFrom('channel_members')
+    .select('last_read_message_id')
+    .where('channel_id', '=', channelId)
+    .where('user_id', '=', userId)
+    .forUpdate()
+    .executeTakeFirst();
+  if (member !== undefined) {
+    const scope = await loadReadScope(transaction, channelId, userId);
+    await saveReadScope(transaction, channelId, userId, {
+      unread_since: scope.unread_since ?? HISTORY_BEGINNING,
+      unread_history_from: scope.unread_history_from,
+      thread_read_baseline_id:
+        scope.unread_since === null ? member.last_read_message_id : scope.thread_read_baseline_id,
+    });
+    await transaction
+      .insertInto('thread_reads')
+      .values({
+        channel_id: channelId,
+        user_id: userId,
+        root_id: rootId,
+        last_read_message_id: input.lastReadMessageId,
+        read_at: clock.now(),
+      })
+      .onConflict((conflict) =>
+        conflict
+          .columns(['channel_id', 'user_id', 'root_id'])
+          .doUpdateSet({
+            last_read_message_id: input.lastReadMessageId,
+            read_at: clock.now(),
+          })
+          .where('thread_reads.last_read_message_id', '<', input.lastReadMessageId),
+      )
+      .execute();
+  }
   const targets = await transaction
     .selectFrom('notifications')
     .innerJoin('messages', 'messages.id', 'notifications.message_id')
@@ -243,7 +292,37 @@ export const readThreadNotifications = async (
     .where('messages.parent_id', '=', rootId)
     .where('notifications.message_id', '<=', input.lastReadMessageId)
     .execute();
-  return await readAndCount(transaction, clock, userId, targets);
+  const told = await readAndCount(transaction, clock, userId, targets);
+  if (member === undefined) return told;
+  const count = unreadMessages(memberReadScope('channel_members', false), channelId);
+  const mentions = sql<number>`least(${count}, ${waitingNotifications(userId, channelId)})`;
+  const changed = await transaction
+    .updateTable('channel_members')
+    .set({
+      unread_count: count,
+      unread_mention_count: mentions,
+      state_version: sql<number>`state_version + 1`,
+    })
+    .where('channel_id', '=', channelId)
+    .where('user_id', '=', userId)
+    .where((eb) =>
+      eb.or([eb('unread_count', '<>', count), eb('unread_mention_count', '<>', mentions)]),
+    )
+    .returning(['last_read_message_id', 'unread_count', 'unread_mention_count', 'state_version'])
+    .executeTakeFirst();
+  return changed === undefined
+    ? told
+    : [
+        {
+          channelId,
+          version: changed.state_version,
+          state: {
+            lastReadMessageId: changed.last_read_message_id,
+            unreadCount: changed.unread_count,
+            unreadMentionCount: changed.unread_mention_count,
+          },
+        },
+      ];
 };
 
 /** Marks these of the caller's notifications read and counts each channel touched again. */
@@ -286,12 +365,15 @@ const readAndCount = async (
   // read now, it is unread no longer. The rest are still unread messages past the position.
   const position = sql.ref('channel_members.last_read_message_id');
   const channel = sql.ref('channel_members.channel_id');
-  const unread = sql<number>`greatest(unread_count - (
+  const legacyUnread = sql<number>`greatest(unread_count - (
     select count(*)::int from notifications n
     join messages m on m.id = n.message_id and m.deleted_at is null and m.parent_id is not null
     where n.id = any(${newlyRead.map((row) => row.id)}::uuid[]) and n.channel_id = ${channel}
       and n.type in (${sql.join(NEEDS_YOU)}) and n.message_id <= ${position}
   ), 0)`;
+  const scope = memberReadScope('channel_members', false);
+  const unread = sql<number>`case when ${scope.since} is null then ${legacyUnread}
+    else ${unreadMessages(scope, channel)} end`;
   const rows = await transaction
     .updateTable('channel_members')
     .set({

@@ -173,6 +173,15 @@ describe('a list that holds nothing proves nothing', () => {
     expect(rowsIn([1, 2])).toBe(2);
     expect(rowsIn({ data: [], nextCursor: null })).toBe(0);
     expect(rowsIn({ data: [1], nextCursor: null })).toBe(1);
+    expect(rowsIn({ roots: { data: [1, 2], nextCursor: null }, threads: [] })).toBe(2);
+    expect(rowsIn({ roots: { data: [], nextCursor: null }, threads: [] })).toBe(0);
+    expect(
+      rowsIn({
+        roots: { data: [1], nextCursor: null },
+        threads: [{ root: { attachments: [1, 2] } }],
+      }),
+    ).toBe(2);
+    expect(rowsIn({ incident: { responders: [] } })).toBeUndefined();
     expect(rowsIn({ usedBytes: 200 })).toBeUndefined();
     expect(rowsIn(null)).toBeUndefined();
   });

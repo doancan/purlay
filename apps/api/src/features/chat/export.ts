@@ -339,6 +339,8 @@ type ChatExcluded =
   | 'saved_messages'
   | 'saved_searches'
   | 'thread_follows'
+  | 'thread_reads'
+  | 'channel_read_scopes'
   | 'link_previews';
 
 const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
@@ -369,6 +371,9 @@ const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   saved_messages: 'each person’s saved items, their own state',
   saved_searches: 'each person’s named filters, their own state',
   thread_follows: 'which threads each person follows or let go, their own state',
+  thread_reads: 'how far each person read each thread, their own state',
+  channel_read_scopes:
+    'each person’s join floor, historical rewind and reply baseline, their own state',
   link_previews: 'a cache of other sites’ pages',
 };
 
