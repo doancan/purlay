@@ -9,6 +9,7 @@ import {
   SEARCH_TESTS,
   SETUP_HTTP_TESTS,
   SETUP_UNIT_TESTS,
+  SWAP_TESTS,
 } from './shared';
 
 const SMTP_ADDRESS = 'apps/api/src/platform/smtp-address.ts';
@@ -408,6 +409,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: "  'claimToken',\n",
     replace: '',
     tests: [SETUP_UNIT_TESTS],
+  },
+  {
+    id: 'mail-flush-bound-timer-kept',
+    why: 'the timer that bounds a flush is left waiting after the letters drained: every change of the settings that retires a relay leaves a two-second timer behind',
+    file: MAIL,
+    find: '  clearTimeout(timer);\n',
+    replace: '',
+    tests: [SWAP_TESTS],
   },
   {
     id: 'mail-flush-unbounded',
