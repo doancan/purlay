@@ -35,6 +35,8 @@ export const PLAN: readonly Slot[] = [
   { job: 'sweep:exports', every: 'hour', minute: 40 },
   // Hourly, so a file the store refused is tried again within the hour, not the next night (D-141).
   { job: 'sweep:deletions', every: 'hour', minute: 50 },
+  // Daily, once the night's purges are done: what people were told and never read, or read long ago (D-286).
+  { job: 'sweep:inbox', every: 'day', hour: 5, minute: 0 },
   // Every quarter hour, at :07, :22, :37 and :52 — clear of every other slot — so a letter about what waited
   // unread leaves within a quarter hour of its delay (D-240).
   { job: 'mail:missed', every: 'quarter-hour', minute: 7 },

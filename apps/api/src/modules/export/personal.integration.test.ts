@@ -287,6 +287,28 @@ const aPersonWithAFootprint = async (db: Transaction): Promise<Fixture> => {
     .where('id', '=', regretted.message.id)
     .execute();
 
+  // What modules told pat, and what they told ann: only the first is pat's to be given.
+  await db
+    .insertInto('inbox_entries')
+    .values(
+      [
+        [pat, 'pat is told'],
+        [ann, 'ann is told'],
+      ].map(([told, title]) => ({
+        id: messageId(next()),
+        workspace_id: a.workspaceId,
+        user_id: (told as Member).userId,
+        module: 'issues',
+        kind: 'issue_assigned',
+        actor_id: qui.userId,
+        subject_type: 'issue',
+        subject_id: crypto.randomUUID(),
+        params: JSON.stringify({ title }),
+        created_at: NOW,
+      })),
+    )
+    .execute();
+
   // pat's secrets, each in its own table: none may ride out.
   const passwordHash = `scrypt:${crypto.randomUUID()}`;
   await db
@@ -499,6 +521,7 @@ describe('integration: exporting a person’s own data', () => {
         'qui wrote this first',
         'zed alone in c',
         'ann in acme',
+        'ann is told',
         'qui in beta',
         'regretted words',
         regretted.message.id,
@@ -518,7 +541,13 @@ describe('integration: exporting a person’s own data', () => {
       ]) {
         expect({ absent, found: everything.includes(absent) }).toEqual({ absent, found: false });
       }
-      for (const present of ['pat in acme', 'pat in beta', 'said before leaving', 'mentions']) {
+      for (const present of [
+        'pat in acme',
+        'pat in beta',
+        'said before leaving',
+        'mentions',
+        'pat is told',
+      ]) {
         expect(everything).toContain(present);
       }
 
@@ -661,13 +690,14 @@ describe('integration: a person’s export that fails', () => {
  * by changing this, in the same pull request, with the reason. (`google_made` is the Google sign-in change's: a column of
  * `users` it added to a person's own export after this was first frozen; `away_chosen` is away presence's, D-257;
  * `message_attachments` is chat's link of a file to its message and channel, which `attachments` carried as two
- * columns until chat/0005.)
+ * columns until chat/0005; `inbox_entries` is the core's inbox of what modules told a person, D-286.)
  */
 const FROZEN_SHAPE: Record<string, unknown> = {
   order: [
     'users',
     'workspaces',
     'workspace_members',
+    'inbox_entries',
     'workspace_invitation_recipients',
     'workspace_invitation_mail_attempts',
     'channels',
@@ -695,6 +725,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'channel_members.ndjson',
     'channel_read_scopes.ndjson',
     'channels.ndjson',
+    'inbox_entries.ndjson',
     'issues.ndjson',
     'manifest.json',
     'message_attachments.ndjson',
@@ -711,6 +742,21 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     'workspaces.ndjson',
   ],
   tables: {
+    inbox_entries: {
+      rows: 1,
+      columns: [
+        'created_at',
+        'id',
+        'kind',
+        'module',
+        'params',
+        'read_at',
+        'subject_id',
+        'subject_type',
+        'user_id',
+        'workspace_id',
+      ],
+    },
     workspace_invitation_recipients: {
       rows: 1,
       columns: [

@@ -30,6 +30,7 @@ import { API_MODULES_AUTH_BETTER_AUTH } from './api-modules-auth-better-auth';
 import { API_MODULES_EXPORT } from './api-modules-export';
 import { API_MODULES_FIND } from './api-modules-find';
 import { API_MODULES_IMAGES } from './api-modules-images';
+import { API_MODULES_INBOX } from './api-modules-inbox';
 import { API_MODULES_JOBS } from './api-modules-jobs';
 import { API_MODULES_PUSH } from './api-modules-push';
 import { API_MODULES_SETUP } from './api-modules-setup';
@@ -82,6 +83,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-modules-export': API_MODULES_EXPORT,
   'api-modules-find': API_MODULES_FIND,
   'api-modules-images': API_MODULES_IMAGES,
+  'api-modules-inbox': API_MODULES_INBOX,
   'api-modules-jobs': API_MODULES_JOBS,
   'api-modules-push': API_MODULES_PUSH,
   'api-modules-setup': API_MODULES_SETUP,

@@ -220,6 +220,7 @@ import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail } from './missed-mail';
 import { runningModuleIds, type Composition } from '../../composition';
+import { notificationSink } from '../../modules/inbox/sink';
 
 export interface Dependencies {
   readonly config: Config;
@@ -575,6 +576,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
           module.routes({
             ...dependencies,
             permissions: modules.permissions,
+            inbox: notificationSink({ clock: dependencies.clock, kinds: modules.noticeOwners }),
             bus: sockets.bus,
             atomically: sockets.atomically,
             online: sockets.online,

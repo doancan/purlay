@@ -67,6 +67,7 @@ describe('the next run of a slot', () => {
       'sweep:email-sign-ins',
       'sweep:exports',
       'sweep:github-deliveries',
+      'sweep:inbox',
       'sweep:link-previews',
       'sweep:orphans',
       'sweep:sessions',

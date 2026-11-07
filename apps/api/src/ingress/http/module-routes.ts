@@ -19,6 +19,7 @@ import type { Logger } from '../../platform/logging';
 import type { LimiterFactory } from '../../realtime/rate-limiter';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import type { OnlinePresence } from '../../realtime/online';
+import type { NotificationSink } from '../../platform/ports/notification-sink';
 import type { Atomically } from '../../platform/transactions';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 
@@ -37,6 +38,8 @@ export interface ModuleRouteDependencies {
   readonly bus: EventBus;
   /** Who is online on this node and across them (`realtime/online.ts`), for a module that shows presence. */
   readonly online: OnlinePresence;
+  /** How a module tells a person something in the core's inbox, inside its own transaction (D-286). */
+  readonly inbox: NotificationSink;
   /** The transaction boundary a write that tells the sockets runs in, so that it tells them only once committed. */
   readonly atomically: Atomically;
   /** Where a failed publish is written; the write it follows is already committed. */

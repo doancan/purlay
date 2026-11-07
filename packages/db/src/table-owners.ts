@@ -19,6 +19,8 @@ export const TABLE_OWNERS = {
   admin_email_verification: 'core',
   attachments: 'core',
   audit_log: 'core',
+  // The notices of any module for one person, written through the `NotificationSink` port (D-286).
+  inbox_entries: 'core',
   invitation_passports: 'core',
   job_runs: 'core',
   native_authorizations: 'core',

@@ -69,6 +69,7 @@ export const AREAS = [
   { name: 'api-modules-export', prefixes: ['apps/api/src/modules/export/'] },
   { name: 'api-modules-find', prefixes: ['apps/api/src/modules/find/'] },
   { name: 'api-modules-images', prefixes: ['apps/api/src/modules/images/'] },
+  { name: 'api-modules-inbox', prefixes: ['apps/api/src/modules/inbox/'] },
   { name: 'api-modules-jobs', prefixes: ['apps/api/src/modules/jobs/'] },
   { name: 'api-modules-push', prefixes: ['apps/api/src/modules/push/'] },
   { name: 'api-modules-setup', prefixes: ['apps/api/src/modules/setup/'] },

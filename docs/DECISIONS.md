@@ -13874,3 +13874,52 @@ argument*: it is in the request scope the share is already read from, and a seco
 
 **Cost of reversing.** The route and its types are additive and may be removed with the web's use of them; the two indexes drop
 with the module's set and cost nothing to the rest.
+
+### D-286. The core's inbox is a table a module writes through a port, in its own transaction, listed only for the modules that run — builds on D-283; amends `MODULES.md` §4, §5, §8 and §10
+
+**Context.** D-283 §4 decided that the notices of any module live in a core table of their own, written through a
+`NotificationSink`, and left the shape of the table, of the sink's refusals and of what keeps and removes a row to the steps that
+build them (`MODULES.md` §10, steps 14f to 14h). This decision is those shapes, for the first consumer that exists: issues telling
+an assignee, which is written in the same transaction as the assignment.
+
+**Decision.**
+
+1. **The table is `inbox_entries`, owned by the core** (`TABLE_OWNERS`), made by a migration of the core's set with its indexes.
+   A row is one notice for one person in one workspace: the module it is of, a `kind` that is text and not a core enum, who acted,
+   what it is about (a type of the module's own word and an id, with no key to the module's tables), at most 1 KiB of short plain
+   `params`, and `read_at`. Both keys to the person and the workspace cascade; the actor's is `SET NULL`.
+2. **One unread notice for a person about a subject** (`uq_inbox_unread_subject`, over the person, the workspace, the module,
+   the kind and the subject), so that telling a person again of what they have not read is one row. *Amends D-283 §4's sketch in
+   one respect:* the workspace is part of that key, so an upsert could not move a row between workspaces even for a module that
+   passed an id that is not unique. Telling again **raises** the row: it takes a new id (a list ordered by id then shows it
+   first), the newer actor and the newer words. A read notice is history; telling again makes a new row.
+3. **The sink is the one writer** (`modules/inbox/sink.ts`, the port in `platform/ports/notification-sink.ts`). It runs in the
+   transaction the caller gives it, so a notice is committed with the thing it is about or not at all. The module a row is of is
+   the module whose manifest declares its kind, which the composition holds for the modules that run (`noticeOwners`): a caller
+   passes no module name to get wrong. It **refuses with an error** a kind no running module declares (so a module that is off
+   writes nothing, loudly), an id that is not an id, a subject type of the wrong length, and `params` that are not at most eight
+   named plain values of at most 1 KiB; the caller's transaction rolls back. It **writes nothing and says so by answering
+   nothing** for the one who is acting and for a person who is not a current member of the workspace or whose account is erased,
+   read under a share lock so that a member removed at that moment is not told. A notice of a workspace never reaches a person of
+   another.
+4. **Only the sink writes it** (`core-tables.test.ts`): no file of a module names `inbox_entries`, and a module's typed handle
+   does not hold the table (`CORE_READS`), so a module cannot write around the sink's checks.
+5. **A notice outlives neither its reader's interest nor the person.** `sweep:inbox`, a core job in every process (the rows are
+   there whether or not the module that wrote them runs), deletes what was **read over 30 days ago and every notice over 180 days
+   old** (the owner's decision, D-283 §8.4), in batches of a thousand. An erasure deletes the person's rows in its own transaction;
+   another person's row that names them as the actor keeps naming the anonymised account (D-256). A deleted workspace's purge
+   takes the table's rows with the tables that still name it. The person's own export holds their notices; a workspace's holds
+   none, with the reason (`CORE_EXCLUDED`).
+6. **Built in three steps, each alone:** the table, the port, the sink and the lifecycle above (14f); the routes that list and
+   read, the `INBOX_UPDATED` frame and the metric (14g); and issues' assignment notice (14h). Push and the web's *Updates* section
+   are later steps (14i, 14j) and are not decided here beyond D-283 §8.
+
+**Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
+each module, and the first one that forgot would write a stranger a notice. *The module named by the caller*: a lie the type
+cannot catch; the manifest that declares the kind is the one place that says whose it is. *A unique key without the workspace*:
+D-283's sketch; it is correct only while every subject id is globally unique, which a module's id is not obliged to be.
+*Keeping the old row's id when raising it*: a list ordered by id would then leave a notice told again where it was. *A separate
+retention for each module*: a person's inbox is one list, and a rule per module is a rule nobody can state.
+
+**Cost of reversing.** The table is new and additive, so a node of the release before ignores it; a rollback is the backup's
+(D-86). Dropping it loses only notices, which are short-lived by design.
