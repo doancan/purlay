@@ -2,7 +2,7 @@
  * Telling another module a fact, in the transaction that made it true (`MODULES.md` §4, D-288, D-283 §2).
  *
  * A fact is written to the outbox as one row for each module of the build that consumes it, so a fact exists exactly when what
- * it reports does: rolled back with the publisher's transaction, committed with it. The step that delivers it (D-288, 14d) is
+ * it reports does: rolled back with the publisher's transaction, committed with it. `outbox-drain.ts`, which delivers it (D-288), is
  * the only other place the table will be named.
  *
  * The outbox is for facts of human scale (an assignment, a link): a fact is never one for each message, which has a path of its
