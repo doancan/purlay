@@ -34,6 +34,7 @@ import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspace
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import type { FactConsumers } from './platform/fact-consumers';
+import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
 import type { FrameHandlers } from './platform/frame-handlers';
 import type { RouterFrameContext } from './realtime/router';
 import { hookList } from './platform/hooks';
@@ -116,6 +117,12 @@ export interface BundledModule {
    * defines in `platform/ports/` (D-283 §3). Handed to the modules that `use` it only while this module runs.
    */
   readonly ports?: Readonly<Record<string, object>>;
+  /**
+   * What answers the workspace-wide find for each source the manifest lists under `searchSources`, and no other: the core's `find`
+   * asks each of the modules that run, as the module, under a deadline (D-285). A source listed with nothing behind it, or one
+   * supplied that is not listed, stops the build (`compose`).
+   */
+  readonly searchSources?: readonly SearchSource[];
 }
 
 /**
@@ -198,6 +205,24 @@ const portProblem = ({ manifest, ports = {} }: BundledModule): string | undefine
   return undefined;
 };
 
+/** What is wrong with the search sources a module supplies and the ids its manifest lists, or `undefined` when they are the same. */
+const searchSourceProblem = ({
+  manifest,
+  searchSources = [],
+}: BundledModule): string | undefined => {
+  const named = manifest.searchSources ?? [];
+  const supplied = searchSources.map((source) => source.id);
+  const unanswered = named.filter((id) => !supplied.includes(id));
+  const notListed = supplied.filter((id) => !named.includes(id));
+  if (unanswered.length > 0) {
+    return `"${manifest.id}" lists the search sources ${unanswered.join(', ')} in its manifest and supplies nothing behind them`;
+  }
+  if (notListed.length > 0) {
+    return `"${manifest.id}" supplies the search sources ${notListed.join(', ')}, which its manifest does not list under searchSources`;
+  }
+  return undefined;
+};
+
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
 export const bundledModules = [
   chatModule,
@@ -242,6 +267,10 @@ export interface Composition {
   readonly notificationKinds: readonly NotificationKindDeclaration[];
   /** The ids of the search sources of the modules this process runs: a module that is off is not queried. */
   readonly searchSources: readonly string[];
+  /** The sources `find` asks, each with the module it is asked as: the modules this process runs, and none that is off. */
+  readonly findSources: readonly ModuleSearchSource[];
+  /** The ids of the sources of the modules the build carries and this process does not run, which `find` answers as `off` and never asks. */
+  readonly findSourcesOff: readonly string[];
   /** The implementation of each capability the modules this process runs provide; one whose module is off is not a key, so a read of it is `undefined`. */
   readonly ports: Readonly<Record<string, object>>;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
@@ -293,6 +322,7 @@ export const compose = (
       frameHandlerProblem(module) ??
       factConsumerProblem(module) ??
       portProblem(module) ??
+      searchSourceProblem(module) ??
       workerProblem(module.manifest.id, module.workers ?? []);
     if (problem !== undefined) throw new Error(problem);
   }
@@ -312,6 +342,12 @@ export const compose = (
     ),
     notificationKinds: modules.flatMap((module) => module.manifest.notifications ?? []),
     searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
+    findSources: modules.flatMap((module) =>
+      (module.searchSources ?? []).map((source) => ({ module: module.manifest.id, source })),
+    ),
+    findSourcesOff: bundled
+      .filter((module) => !modules.includes(module))
+      .flatMap((module) => module.manifest.searchSources ?? []),
     ports: Object.fromEntries(modules.flatMap((module) => Object.entries(module.ports ?? {}))),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     workers: modules.flatMap((module) =>

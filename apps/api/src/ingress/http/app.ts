@@ -132,6 +132,7 @@ import {
   readStorageUsage,
   updateRetentionSetting,
 } from './workspaces';
+import { readFind } from './find';
 import { readPushKey, setMyLocale, subscribeDevice, unsubscribeDevice } from './push';
 import {
   choosePolicyOf,
@@ -319,6 +320,8 @@ export interface Dependencies {
    * whole build's from `testDependencies`.
    */
   readonly composition: Composition;
+  /** What `find` holds a search source to, where a test wants less than `SEARCH_SOURCE_DEADLINE_MS`; a module's own shorter deadline always wins. */
+  readonly findDeadlineMs?: number;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
   readonly collatedColumns?: readonly CollatedColumn[];
   /**
@@ -1308,6 +1311,23 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/workspaces/:workspaceId/storage',
       async ({ request, params }) =>
         await readStorageUsage(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/find',
+      async ({ request, params }) =>
+        await readFind(
+          {
+            ...dependencies,
+            sources: modules.findSources,
+            off: modules.findSourcesOff,
+            deadlineOf,
+            ...(dependencies.findDeadlineMs === undefined
+              ? {}
+              : { sourceDeadlineMs: dependencies.findDeadlineMs }),
+          },
+          request,
+          params.workspaceId,
+        ),
     )
     .get(
       '/api/workspaces/:workspaceId/audit',

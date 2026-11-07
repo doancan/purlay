@@ -96,6 +96,18 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/module-compat.test.ts'],
   },
   {
+    id: 'chat-find-reads-the-channels-the-caller-cannot-see',
+    why: 'the find of messages is narrowed by every channel of the workspace and not by the ones the caller can see, so a private conversation reaches the answer (D-34, D-285)',
+    file: 'apps/api/src/features/chat/search/source.ts',
+    find: 'await visibleChannelIds(database, context), {',
+    replace:
+      "(await database.selectFrom('channels').select('id').where('workspace_id', '=', context.workspaceId).execute()).map((row) => row.id), {",
+    tests: [
+      'apps/api/src/ingress/http/find.integration.test.ts',
+      'apps/api/src/ingress/http/channel-visibility.integration.test.ts',
+    ],
+  },
+  {
     id: 'chat-handler-records-an-issues-action',
     why: 'a route handler of chat records an action issues owns, which no manifest lists for chat, and the sweep that held only a module’s folder never read the handler (D-265)',
     file: 'apps/api/src/features/chat/http/pins.ts',

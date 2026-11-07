@@ -459,6 +459,11 @@ const STEPS: readonly Step[] = [
     status: 200,
   },
   {
+    id: 'findAcrossSources',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId }, query: { q: 'deploy' } }),
+    status: 200,
+  },
+  {
     id: 'listNotifications',
     spec: (c) => ({ query: { workspaceId: c.workspaceId } }),
     status: 200,
