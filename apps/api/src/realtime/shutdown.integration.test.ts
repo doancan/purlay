@@ -14,7 +14,7 @@ import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import type { GithubFetch } from '../modules/auth/better-auth';
 import { createApp, type HttpApplication } from '../ingress/http/app';
-import { aRecordingLogger, testConfig, testDependencies } from '../testing/doubles';
+import { testConfig, testDependencies } from '../testing/doubles';
 import {
   aGitHubAuth,
   aGitHubFor,
@@ -84,23 +84,32 @@ describe('integration: draining for shutdown', () => {
   test('finishes what is in flight, tells sockets to reconnect, and takes nothing new', async () => {
     const github = aGate();
     const slow = aSlowGitHub(github);
-    const recorded = aRecordingLogger();
+    const probePath = `/auth/drain-probe-${crypto.randomUUID()}`;
+    const handled = new Set<string>();
+    const auth = aGitHubAuth(cloned.db, slow.fetch, { baseUrl: origin });
     const app: HttpApplication = createApp(
       testDependencies({
         database: cloned.db,
         clock,
-        log: recorded.log,
-        auth: aGitHubAuth(cloned.db, slow.fetch, { baseUrl: origin }),
+        auth: {
+          ...auth,
+          handler: async (request: Request): Promise<Response> => {
+            if (new URL(request.url).pathname !== probePath) return await auth.handler(request);
+            // Record entry before answering. An after-response log can arrive after fetch resolves.
+            handled.add(request.headers.get('x-request-id') ?? '');
+            return new Response('owned listener');
+          },
+        },
         config: testConfig({ APP_URL: origin }),
       }),
     );
     const port = app.listen(0);
     const server = `http://localhost:${String(port)}`;
     const beforeId = crypto.randomUUID();
-    const before = await fetch(`${server}/health`, { headers: { 'x-request-id': beforeId } });
+    const before = await fetch(`${server}${probePath}`, { headers: { 'x-request-id': beforeId } });
     expect(before.status).toBe(200);
     await before.text();
-    expect(recorded.lines.some((line) => line['requestId'] === beforeId)).toBe(true);
+    expect(handled.has(beforeId)).toBe(true);
 
     const user = await aSignedInUser(cloned.db, clock, 'drain');
     const socket = new WebSocket(`${server.replace('http', 'ws')}/ws`, {
@@ -151,16 +160,16 @@ describe('integration: draining for shutdown', () => {
       });
     } catch (error) {
       // A concurrent listener, or a broken drain leaving this one alive, can already own it.
-      // The per-listener request record below still distinguishes those cases.
+      // The synchronous per-listener entry record below still distinguishes those cases.
       if (!Value.Check(PortInUse, error)) throw error;
     }
     try {
       const afterId = crypto.randomUUID();
-      const response = await fetch(`${server}/health`, {
+      const response = await fetch(`${server}${probePath}`, {
         headers: { 'x-request-id': afterId },
       }).catch(() => null);
       if (response !== null) await response.text();
-      const ownHandled = recorded.lines.some((line) => line['requestId'] === afterId);
+      const ownHandled = handled.has(afterId);
       if (ownHandled) await app.stop(true);
       expect(ownHandled).toBe(false);
       if (replacement !== undefined) {
