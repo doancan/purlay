@@ -135,8 +135,8 @@ describe('the capabilities a module uses', () => {
 describe('the facts the core claims', () => {
   test('are the types of its declarations, so a module cannot take one', () => {
     const declared = [
-      defineFact({ type: 'core.moved', owner: 'core', schema: Type.Object({}) }),
-      defineFact({ type: 'core.renamed', owner: 'core', schema: Type.Object({}) }),
+      defineFact({ type: 'core.moved', owner: 'core', absent: 'drop', schema: Type.Object({}) }),
+      defineFact({ type: 'core.renamed', owner: 'core', absent: 'drop', schema: Type.Object({}) }),
     ];
     expect(factTypes(declared)).toEqual(['core.moved', 'core.renamed']);
     expect(factTypes([])).toEqual([]);

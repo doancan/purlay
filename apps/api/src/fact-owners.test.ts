@@ -49,6 +49,7 @@ describe('the facts of the build', () => {
     const declaration = defineFact({
       type: 'notes.created',
       owner: 'notes',
+      absent: 'drop',
       schema: Type.Object({}),
     });
     expect(unmatched([declaration], new Map([['notes', []]]))).toEqual([

@@ -4,10 +4,20 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
-import { CORE_FACTS, FACTS, defineFact, factOwnerProblems } from './facts';
+import {
+  CORE_FACTS,
+  FACTS,
+  FACT_HOLD_DAYS_MAX,
+  defineFact,
+  factOwnerProblems,
+  type FactDeclaration,
+} from './facts';
 
-const fact = (type: string, owner: string): ReturnType<typeof defineFact> =>
-  defineFact({ type, owner, schema: Type.Object({}) });
+const fact = (
+  type: string,
+  owner: string,
+  absent: FactDeclaration['absent'] = 'drop',
+): ReturnType<typeof defineFact> => defineFact({ type, owner, absent, schema: Type.Object({}) });
 
 describe('who owns each fact type', () => {
   test('the build carries none yet, and the core owns the ones it will', () => {
@@ -34,5 +44,28 @@ describe('who owns each fact type', () => {
         ['notes'],
       ),
     ).toEqual(['the fact "notes.created" is declared twice']);
+  });
+});
+
+describe('what becomes of a fact when its consumer is not run', () => {
+  test('is dropped, or held for a whole number of days up to the most the table is kept', () => {
+    expect(
+      factOwnerProblems(
+        [
+          fact('notes.a', 'notes', 'drop'),
+          fact('notes.b', 'notes', { holdDays: 1 }),
+          fact('notes.c', 'notes', { holdDays: FACT_HOLD_DAYS_MAX }),
+        ],
+        ['notes'],
+      ),
+    ).toEqual([]);
+  });
+
+  test('is never held for no time, for longer than the table keeps it, or for part of a day', () => {
+    for (const days of [0, -1, FACT_HOLD_DAYS_MAX + 1, 1.5, Number.NaN]) {
+      expect(factOwnerProblems([fact('notes.a', 'notes', { holdDays: days })], ['notes'])).toEqual([
+        `the fact "notes.a" is held ${String(days)} days when its consumer is off: a whole number from 1 to ${String(FACT_HOLD_DAYS_MAX)}`,
+      ]);
+    }
   });
 });
