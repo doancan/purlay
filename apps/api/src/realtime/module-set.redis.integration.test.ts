@@ -5,7 +5,16 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { CLONE_HOOK_MS, createDatabase, DROP_HOOK_MS, dropDatabases, sql } from '@purlay/db';
+import {
+  CLONE_HOOK_MS,
+  createDatabase,
+  databaseNameFromUrl,
+  DROP_HOOK_MS,
+  dropDatabases,
+  onDatabase,
+  scratchDatabaseName,
+  sql,
+} from '@purlay/db';
 import { bunRedisClient, connectRedis } from '../platform/redis';
 import { createLogger } from '../platform/logging';
 import { redisNames } from '../platform/redis-names';
@@ -18,13 +27,12 @@ const source = process.env['DATABASE_URL'];
 if (source === undefined || source === '') {
   throw new Error('DATABASE_URL is not set, so these tests would silently prove nothing.');
 }
-const urlFor = (name: string): string => {
-  const url = new URL(source);
-  url.pathname = `/${name}`;
-  return url.toString();
-};
+const urlFor = (name: string): string => onDatabase(source, name);
 
-const NAME = `${new URL(source).pathname.slice(1)}_mset_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+const NAME = scratchDatabaseName(
+  `${databaseNameFromUrl(source)}_mset_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`,
+);
+let created = false;
 const admin = createDatabase({ connectionString: urlFor('postgres'), poolSize: 1 });
 const redisUrl = redisUrlForTests();
 const redis = connectRedis({
@@ -98,6 +106,7 @@ const nodes: Node[] = [];
 
 beforeAll(async () => {
   await sql`create database ${sql.id(NAME)}`.execute(admin);
+  created = true;
   await redis.send('DEL', [names.moduleSet]);
 }, CLONE_HOOK_MS);
 
@@ -107,7 +116,7 @@ afterAll(async () => {
   await redis.send('DEL', [names.moduleSet]).catch(() => undefined);
   redis.close();
   await admin.destroy();
-  await dropDatabases([NAME]);
+  if (created) await dropDatabases([NAME]);
 }, DROP_HOOK_MS);
 
 describe('integration: a cluster whose nodes run different module sets', () => {

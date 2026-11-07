@@ -85,6 +85,13 @@ export {
   type ClonedDatabase,
 } from './testing';
 export type * from './schema';
+export {
+  cloneDatabaseName,
+  databaseNameFromUrl,
+  integrationTemplateName,
+  onDatabase,
+  scratchDatabaseName,
+} from './scratch-databases';
 
 /**
  * The generator names the root interface `DB`; the documents call it `Database`

@@ -17,6 +17,13 @@ import pg from 'pg';
 import { executorOnPool } from './client';
 import { migrateToLatest, setsNamedBy, type MigrationSet } from './migrator';
 import type { DB } from './schema';
+import {
+  cloneDatabaseName,
+  databaseNameFromUrl,
+  integrationTemplateName,
+  onDatabase,
+  scratchDatabaseName,
+} from './scratch-databases';
 
 class Rollback extends Error {
   constructor() {
@@ -51,13 +58,6 @@ const integrationUrl = (): string => {
 
 const connect = <T>(connectionString: string, max: number): Kysely<T> =>
   executorOnPool<T>(new pg.Pool({ connectionString, max }));
-
-/** The same server, another database on it. */
-const onDatabase = (connectionString: string, name: string): string => {
-  const url = new URL(connectionString);
-  url.pathname = `/${name}`;
-  return url.toString();
-};
 
 /**
  * A handle that has never connected and, pointed at a closed port, cannot: for a test that builds
@@ -217,7 +217,10 @@ const holdingTemplate = async (
  */
 export const buildIntegrationTemplate = async (name?: string): Promise<string> => {
   const source = integrationUrl();
-  const template = name ?? `${new URL(source).pathname.slice(1)}_template`;
+  const template =
+    name === undefined
+      ? integrationTemplateName(databaseNameFromUrl(source))
+      : scratchDatabaseName(name);
   const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
   try {
     await holdingTemplate(admin, template, async () => {
@@ -327,7 +330,10 @@ export const DROP_HOOK_MS = 60_000;
 export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
   const source = integrationUrl();
   const template = await prepareIntegrationTemplate();
-  const clone = `${new URL(source).pathname.slice(1)}_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+  const clone = cloneDatabaseName(
+    databaseNameFromUrl(source),
+    crypto.randomUUID().replaceAll('-', '').slice(0, 12),
+  );
 
   const admin = connect<unknown>(onDatabase(source, 'postgres'), 1);
   try {

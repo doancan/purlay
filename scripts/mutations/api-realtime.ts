@@ -391,6 +391,14 @@ export const API_REALTIME: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/revocation-contract.test.ts'],
   },
   {
+    id: 'scratch-fixture-drops-unowned',
+    why: 'A fixture whose creation failed drops the pre-existing database in teardown.',
+    file: 'apps/api/src/realtime/module-set.redis.integration.test.ts',
+    find: 'if (created) await dropDatabases([NAME]);',
+    replace: 'await dropDatabases([NAME]);',
+    tests: ['apps/api/src/testing/scratch-ownership.integration.test.ts'],
+  },
+  {
     id: 'socket-frame-of-a-closed-module-taken',
     why: 'a socket of a process that does not run chat still writes, watches and types in channels: the module is off and its door is open (D-250)',
     file: 'apps/api/src/realtime/router.ts',

@@ -23,7 +23,14 @@
  */
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
-import { createDatabase, dropDatabases, sql } from '@purlay/db';
+import {
+  createDatabase,
+  databaseNameFromUrl,
+  dropDatabases,
+  onDatabase as urlOn,
+  scratchDatabaseName,
+  sql,
+} from '@purlay/db';
 import { bundledModules, type BundledModule } from '../composition';
 import { systemClock } from '../platform/clock';
 import { moduleCells, type ModuleCell } from './module-cells';
@@ -143,12 +150,6 @@ const answerOf = async (port: number, method: string, path: string): Promise<Ans
   return { status: response.status, body: await response.text() };
 };
 
-const urlOn = (base: string, name: string): string => {
-  const url = new URL(base);
-  url.pathname = `/${name}`;
-  return url.toString();
-};
-
 /** The environment of a deployment's two commands: its database and its `MODULES`, and nothing of this machine's. */
 const environmentOf = (url: string, setting: string | undefined): Record<string, string> => ({
   PATH: process.env['PATH'] ?? '',
@@ -251,10 +252,15 @@ export const main = async (
   }
   const probes = probesOf(bundledModules);
   const carried = bundledModules.map((module) => module.manifest.id);
-  const prefix = `${new URL(base).pathname.slice(1)}_smoke_${randomBytes(4).toString('hex')}`;
+  const prefix = `${databaseNameFromUrl(base)}_smoke_${randomBytes(4).toString('hex')}`;
   let failed = false;
   for (const [index, cell] of moduleCells(bundledModules).entries()) {
-    const seen = await observe(cell, base, `${prefix}_${String(index)}`, probes);
+    const seen = await observe(
+      cell,
+      base,
+      scratchDatabaseName(`${prefix}_${String(index)}`),
+      probes,
+    );
     const problems = problemsOf(carried, cell.ids, seen);
     const asked = String(seen.answers.length);
     if (problems.length === 0) {

@@ -19,7 +19,15 @@
 import { randomBytes } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { createDatabase, dropDatabases, sql } from '@purlay/db';
+import {
+  createDatabase,
+  databaseNameFromUrl,
+  dropDatabases,
+  integrationTemplateName,
+  onDatabase,
+  scratchDatabaseName,
+  sql,
+} from '@purlay/db';
 import { bundledModules } from '../composition';
 import { moduleCells, type ModuleCell } from './module-cells';
 import { needsReader, type NeedsOf } from './module-needs';
@@ -122,12 +130,6 @@ const stdio: Say = {
   err: (line) => process.stderr.write(`${line}\n`),
 };
 
-const onDatabase = (base: string, name: string): string => {
-  const url = new URL(base);
-  url.pathname = `/${name}`;
-  return url.toString();
-};
-
 /**
  * One cell: its database made and dropped around a `bun test` of the suites it runs, started the way `test:all` starts it
  * except for `MODULES` and the database. The suites' own clones and templates are `${database}_…`, dropped by the files that made
@@ -170,7 +172,7 @@ const runCell = async (
       },
     ).exited;
   } finally {
-    await dropDatabases([`${database}_template`, database]);
+    await dropDatabases([integrationTemplateName(database), database]);
   }
 };
 
@@ -195,7 +197,7 @@ export const main = async (
   const needsOf = needsReader(bundledModules.map((module) => module.manifest.id));
   const carried = bundledModules.map((module) => module.manifest.id);
   const suites = integrationSuites().filter((file) => redisHere || !file.endsWith(REDIS_SUITE));
-  const prefix = `${new URL(base).pathname.slice(1)}_cells_${randomBytes(4).toString('hex')}`;
+  const prefix = `${databaseNameFromUrl(base)}_cells_${randomBytes(4).toString('hex')}`;
   const verdicts: CellVerdict[] = [];
   const chosen = cellsToRun(carried, moduleCells(bundledModules)).filter(
     (cell) => only.length === 0 || only.includes(cell.setting ?? ''),
@@ -213,7 +215,7 @@ export const main = async (
     verdicts.push({
       cell,
       suites: runs.length,
-      exitCode: await run(cell, runs, base, `${prefix}_${slug(cell)}`),
+      exitCode: await run(cell, runs, base, scratchDatabaseName(`${prefix}_${slug(cell)}`)),
     });
   }
   say.out('');
