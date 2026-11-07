@@ -221,6 +221,7 @@ import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail } from './missed-mail';
 import { runningModuleIds, type Composition } from '../../composition';
 import { notificationSink } from '../../modules/inbox/sink';
+import { listInbox, readInbox } from './inbox';
 
 export interface Dependencies {
   readonly config: Config;
@@ -516,6 +517,10 @@ export const createApp = (given: Dependencies): HttpApplication => {
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
+  const inboxDependencies = {
+    ...sending,
+    running: modules.modules.map((module) => module.manifest.id),
+  };
   // Uploads being read on this node, against `UPLOADS_AT_ONCE`.
   const uploading = { count: 0 };
   // Sign-in by link: the library's, decided by Purlay's rules (`modules/auth/magic-link.ts`). Read
@@ -576,7 +581,13 @@ export const createApp = (given: Dependencies): HttpApplication => {
           module.routes({
             ...dependencies,
             permissions: modules.permissions,
-            inbox: notificationSink({ clock: dependencies.clock, kinds: modules.noticeOwners }),
+            inbox: notificationSink({
+              clock: dependencies.clock,
+              kinds: modules.noticeOwners,
+              bus: sockets.bus,
+              log,
+              written: metrics.inboxEntries,
+            }),
             bus: sockets.bus,
             atomically: sockets.atomically,
             online: sockets.online,
@@ -1372,6 +1383,16 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, params, body }) =>
         await setMyDeepWork(sending, request, params.workspaceId, body),
     )
+    .get(
+      '/api/workspaces/:workspaceId/inbox',
+      async ({ request, params }) =>
+        await listInbox(inboxDependencies, request, params.workspaceId),
+    )
+    .post('/api/workspaces/:workspaceId/inbox/read', async ({ request, params, body, set }) => {
+      await readInbox(inboxDependencies, request, params.workspaceId, body);
+      set.status = 204;
+      return null;
+    })
     .use(moduleRoutes)
 
     .post(

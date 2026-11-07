@@ -365,6 +365,17 @@ export const DeepWorkUpdatedFrame = Type.Object({
 });
 
 /**
+ * A module wrote the person a notice in the core's inbox (D-286), or the person read one on another device: their own tabs
+ * read the inbox again. On their own `user:` topic only, after the commit, with nothing of the notice in it; nobody else
+ * hears it. Chat's own notifications are `NOTIFICATIONS_UPDATED`.
+ */
+export const InboxUpdatedFrame = Type.Object({
+  event: Type.Literal('INBOX_UPDATED'),
+  data: Type.Object({ workspaceId: Uuid }, { additionalProperties: false }),
+  ...envelope,
+});
+
+/**
  * The person's saved messages changed in a workspace (D-128): saved, moved or removed, in another
  * tab or another device. On their own `user:` topic only; it carries no message, and a client asks
  * again for what it shows.
@@ -574,6 +585,7 @@ export const ServerFrame = Type.Union([
   SessionEndedFrame,
   AccessRevokedFrame,
   DeepWorkUpdatedFrame,
+  InboxUpdatedFrame,
   SavedUpdatedFrame,
   RemindersUpdatedFrame,
   MessageHiddenFrame,

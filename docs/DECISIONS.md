@@ -13910,7 +13910,18 @@ an assignee, which is written in the same transaction as the assignment.
    another person's row that names them as the actor keeps naming the anonymised account (D-256). A deleted workspace's purge
    takes the table's rows with the tables that still name it. The person's own export holds their notices; a workspace's holds
    none, with the reason (`CORE_EXCLUDED`).
-6. **Built in three steps, each alone:** the table, the port, the sink and the lifecycle above (14f); the routes that list and
+6. **The routes** are the core's, `GET` and `POST` of `/api/workspaces/:workspaceId/inbox` and `…/inbox/read`, answering in a
+   process that runs no module. The list is the caller's own, newest first by keyset on `id`, with the count of every unread
+   notice of theirs in the workspace; it holds **only the modules this process runs**, and so does the count and a read of all,
+   so a module that is off keeps its unread notices for the day it runs again. A read names ids or says `all`, answers `204`
+   and is idempotent: an id that is not the caller's, in this workspace, of a module that runs, or is read already is not read
+   and not reported, as chat's `PUT /api/notifications/read` does, so there is no answer that says whether another person's
+   notice exists. *Amends D-283 §4's sketch:* it said `404` for another person's id; a silent no-op tells a prober nothing at
+   all. A write that moves the inbox is told after the commit, on the person's own topic only, as `INBOX_UPDATED {
+   workspaceId }`: a frame of the core's own, additive, which a client built before it ignores (D-82), and which the web reads
+   again on each open of the socket (D-268). `purlay_inbox_entries_total{module,kind}` counts what committed, its labels the
+   kinds the manifests declare and nothing a caller sent.
+7. **Built in three steps, each alone:** the table, the port, the sink and the lifecycle above (14f); the routes that list and
    read, the `INBOX_UPDATED` frame and the metric (14g); and issues' assignment notice (14h). Push and the web's *Updates* section
    are later steps (14i, 14j) and are not decided here beyond D-283 §8.
 

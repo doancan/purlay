@@ -219,12 +219,19 @@ export interface ServerMetrics {
   readonly pushFailures: Counter<'reason' | 'module'>;
   readonly mailFailures: Counter<'module'>;
   readonly workerFailures: Counter<'module' | 'worker'>;
+  readonly inboxEntries: Counter<'module' | 'kind'>;
 }
 
 /** A background loop a module declares: the pair that labels its failures (`MODULES.md` §7). */
 export interface WorkerSeries {
   readonly module: string;
   readonly name: string;
+}
+
+/** A kind of notice a module declares in its manifest: the pair that labels what the inbox counts (D-286). */
+export interface NoticeSeries {
+  readonly module: string;
+  readonly kind: string;
 }
 
 /**
@@ -235,6 +242,7 @@ export const serverMetrics = (
   readings: ProcessReadings = thisProcess,
   modules: readonly string[] = [],
   workers: readonly WorkerSeries[] = [],
+  notices: readonly NoticeSeries[] = [],
 ): ServerMetrics => {
   const registry = createMetricsRegistry();
   registry.gauge(
@@ -273,6 +281,11 @@ export const serverMetrics = (
     'Iterations of a module’s background loops that threw or ran past their deadline, by the module and the worker (both named by a manifest and a slot, never by a caller).',
     ['module', 'worker'],
   );
+  const inboxEntries = registry.counter(
+    'purlay_inbox_entries_total',
+    'Notices modules wrote to the core’s inbox and committed, by the module and the kind of notice (both named by a manifest, never by a caller).',
+    ['module', 'kind'],
+  );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
   const owners = [CORE_OWNER, ...modules];
@@ -284,7 +297,16 @@ export const serverMetrics = (
   }
   for (const module of owners) mailFailures.inc({ module }, 0);
   for (const { module, name } of workers) workerFailures.inc({ module, worker: name }, 0);
-  return { registry, httpDuration, rateLimited, pushFailures, mailFailures, workerFailures };
+  for (const { module, kind } of notices) inboxEntries.inc({ module, kind }, 0);
+  return {
+    registry,
+    httpDuration,
+    rateLimited,
+    pushFailures,
+    mailFailures,
+    workerFailures,
+    inboxEntries,
+  };
 };
 
 /** The page, from what the registry holds and what was read for this scrape alone. */

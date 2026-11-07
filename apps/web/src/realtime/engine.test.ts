@@ -1148,6 +1148,26 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(stale(IDS.browse)).toBe(false);
   });
 
+  test('a notice a module wrote to the core’s inbox asks that workspace’s inbox again, and the open asks them all (D-286)', () => {
+    const w = world();
+    const seed = (): void => {
+      w.client.setQueryData(keys.inbox(WS), { entries: [] });
+      w.client.setQueryData(keys.inbox(IDS.browse), { entries: [] });
+    };
+    seed();
+    w.engine.start();
+    w.open();
+    const stale = (workspaceId: string): boolean | undefined =>
+      w.client.getQueryState(keys.inbox(workspaceId))?.isInvalidated;
+    // Read again by the open, which is how a notice told while the socket was down is found.
+    expect(stale(WS)).toBe(true);
+    expect(stale(IDS.browse)).toBe(true);
+    seed();
+    w.deliver(frame({ event: 'INBOX_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    expect(stale(WS)).toBe(true);
+    expect(stale(IDS.browse)).toBe(false);
+  });
+
   test('saved messages changed elsewhere are read again, in that workspace only (D-128)', () => {
     const w = world();
     w.client.setQueryData([...keys.saved(WS), 'ids'], []);
@@ -2325,6 +2345,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     thread: { where: 'both', key: keys.thread('root') },
     unresolved: { where: 'both', key: keys.unresolved(WS) },
     notifications: { where: 'open', key: keys.notifications(WS) },
+    inbox: { where: 'open', key: keys.inbox(WS) },
     pins: { where: 'answer', key: keys.pins(CH) },
     incident: { where: 'both', key: keys.incident(CH) },
     messageVersions: { where: 'answer', key: keys.messageVersions('message') },

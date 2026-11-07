@@ -306,6 +306,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: [HTTP_BODY_TESTS],
   },
   {
+    id: 'inbox-series-not-started-at-zero',
+    why: 'a rate over the notices a module writes misses its first one, because the series appears only with it (D-286)',
+    file: 'apps/api/src/platform/metrics.ts',
+    find: '  for (const { module, kind } of notices) inboxEntries.inc({ module, kind }, 0);\n',
+    replace: '',
+    tests: ['apps/api/src/platform/metrics.test.ts'],
+  },
+  {
     id: 'invite-mail-allowance-unlocked',
     why: 'requests at once each read the same count and together send past the limit',
     file: 'apps/api/src/platform/quota.ts',

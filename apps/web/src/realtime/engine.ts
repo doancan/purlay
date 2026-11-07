@@ -505,7 +505,7 @@ export const createEngine = (options: EngineOptions): Engine => {
 
   /**
    * What the person's own topic says, read again: a notification (D-106), what they saved or let go on
-   * another device (D-128), a workspace's name, their role or Deep Work (D-124) and a profile (D-131).
+   * another device (D-128), a module's notice in the core's inbox (D-286), a workspace's name, their role or Deep Work (D-124) and a profile (D-131).
    * Their frames go to a socket that is open, so each was read before the socket was, or while it was
    * down, and no frame says it moved. The API has no version to ask, so the cached reads themselves are
    * read again — only those that hold data, once per open, never on a timer.
@@ -515,6 +515,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     void client.invalidateQueries({ queryKey: keys.me, exact: true });
     readAgain(client, families.members);
     readAgain(client, families.notifications);
+    readAgain(client, families.inbox);
     readAgain(client, families.saved);
     readAgain(client, families.unreads);
     readAgain(client, families.channelGroups);
@@ -756,6 +757,10 @@ export const createEngine = (options: EngineOptions): Engine => {
         // Something new in the inbox, of any kind (D-106): an open inbox reads it again — once more
         // after a read already on its way, however many arrive meanwhile — and a closed one on opening.
         readAgain(client, keys.notifications(frame.data.workspaceId));
+        return;
+      case 'INBOX_UPDATED':
+        // Something told or read in the core's inbox (D-286): an open Updates list reads it again, in this workspace only.
+        readAgain(client, keys.inbox(frame.data.workspaceId));
         return;
       case 'WORKSPACE_UPDATED':
         // No state in the frame (D-124): the memberships are read again, newest wins — and the

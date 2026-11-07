@@ -155,6 +155,13 @@ const STEPS: readonly Step[] = [
     spec: (c) => ({ params: { workspaceId: c.workspaceId }, json: { active: false } }),
     status: 200,
   },
+  // The core's inbox: nothing in it, which is still the contract's page and a read that changes nothing (D-286).
+  { id: 'listInbox', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
+  {
+    id: 'markInboxRead',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId }, json: { all: true } }),
+    status: 204,
+  },
 
   // ── Issues, a module of its own (D-254, D-273)
   {

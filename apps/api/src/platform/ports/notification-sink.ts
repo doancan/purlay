@@ -41,4 +41,10 @@ export interface NotificationSink {
     context: WorkspaceContext,
     notice: ModuleNotice,
   ) => Promise<WrittenNotice | undefined>;
+  /**
+   * Called once the caller's transaction has **committed**, with what `notify` answered: counts the notices and tells each
+   * person's own tabs to read their inbox again (`INBOX_UPDATED`). A hint, not the notice: it never throws, and a publish
+   * that fails is logged and is not the request's error, as any publish after a commit is (D-35).
+   */
+  readonly announce: (written: readonly WrittenNotice[]) => Promise<void>;
 }
