@@ -24,6 +24,8 @@ export interface Names {
 export interface Options {
   readonly requires: readonly string[];
   readonly optional: readonly string[];
+  /** The number of the decision the module's skeleton is written under: the next one in `DECISIONS.md`. */
+  readonly decision: number;
 }
 
 export const namesOf = (id: string): Names => {
@@ -54,6 +56,9 @@ export const idProblem = (
 
 const sentence = (items: readonly string[]): string => items.map((item) => `'${item}'`).join(', ');
 
+const cell = (items: readonly string[]): string =>
+  items.length === 0 ? '—' : items.map((item) => `\`${item}\``).join(', ');
+
 /** The words of the templates: `__NAME__`, replaced everywhere, in paths as in files. */
 export const fill = (template: string, names: Names, options: Options): string => {
   const degrades = options.optional
@@ -68,6 +73,8 @@ export const fill = (template: string, names: Names, options: Options): string =
     CAMEL: names.camel,
     SNAKE: names.snake,
     UPPER: names.upper,
+    REQUIRES_CELL: cell(options.requires),
+    OPTIONAL_CELL: cell(options.optional),
     REQUIRES: sentence(options.requires),
     OPTIONAL: sentence(options.optional),
     SCENARIOS: options.optional
@@ -78,6 +85,7 @@ export const fill = (template: string, names: Names, options: Options): string =
   },`,
       )
       .join('\n'),
+    DECISION: String(options.decision),
     DEGRADES: degrades === '' ? '' : `${degrades}\n    `,
   };
   return template.replace(

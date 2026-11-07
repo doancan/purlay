@@ -12,7 +12,7 @@ import { editsFor } from './module-new/edits';
 import { applyEdit, fill, idProblem, namesOf, templateFiles } from './module-new/plan';
 
 const ROOT = join(import.meta.dir, '../../../..');
-const OPTIONS = { requires: [], optional: ['issues'] };
+const OPTIONS = { requires: [], optional: ['issues'], decision: 999 };
 
 describe('the names of a module', () => {
   test('are one word in each case the code needs', () => {
@@ -84,6 +84,33 @@ describe('against the repository as it is', () => {
     expect(
       templateFiles(names, { ...OPTIONS, optional: [] }).map((file) => file.path),
     ).not.toContain('apps/api/src/features/zz/degradation.testing.ts');
+  });
+
+  test('the edits give the module its row in the documents, its cases at the crossing and its line in the registries', () => {
+    const edited = (file: string): string =>
+      editsFor(names, OPTIONS)
+        .filter((edit) => edit.file === file)
+        .reduce(
+          (content, edit) => applyEdit(content, edit),
+          readFileSync(join(ROOT, file), 'utf8'),
+        );
+    expect(edited('docs/MODULES.md')).toContain('| `zz` | — | `issues` | — |');
+    expect(edited('docs/MODULES.md')).toContain('### `zz`');
+    expect(edited('docs/SCHEMA.md')).toContain('CREATE TABLE zz');
+    expect(edited('docs/API.md')).toContain('`/api/workspaces/:workspaceId/zz`');
+    expect(edited('apps/api/src/testing/cross-tenant.ts')).toContain(
+      "'POST /api/workspaces/:workspaceId/zz'",
+    );
+    expect(edited('apps/api/src/composition.ts')).toContain('  zzModule,\n');
+    expect(edited('packages/db/src/migrator.ts')).toContain("id: 'zz'");
+    expect(edited('docs/DECISIONS.md')).toContain(`### D-${String(OPTIONS.decision)}.`);
+  });
+
+  test('the pool-share test is made for the module, and names it among the modules it needs', () => {
+    const made = templateFiles(names, OPTIONS).find(
+      (file) => file.path === 'apps/api/src/features/zz/http/budget.integration.test.ts',
+    );
+    expect(made?.content).toContain('@needs-modules chat, zz');
   });
 
   test('a manifest says what it does without each optional partner it lists', () => {

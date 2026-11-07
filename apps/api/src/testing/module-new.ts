@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { PRODUCT_MODULE_IDS } from '@purlay/db';
 import { RESERVED_MODULE_IDS } from '../platform/module-kit/registry';
-import { editsFor } from './module-new/edits';
+import { editsFor, readmeCount } from './module-new/edits';
 import { applyEdit, idProblem, namesOf, templateFiles, type Options } from './module-new/plan';
 
 const list = (value: string | undefined): string[] =>
@@ -16,7 +16,7 @@ const list = (value: string | undefined): string[] =>
 /** The command's words: `<id>` and the flags it knows; anything else is refused. */
 export const parseArguments = (
   argv: readonly string[],
-): { id: string; options: Options; dryRun: boolean } | string => {
+): { id: string; options: Omit<Options, 'decision'>; dryRun: boolean } | string => {
   const flags: Record<string, string> = {};
   const words: string[] = [];
   let dryRun = false;
@@ -36,6 +36,14 @@ export const parseArguments = (
     options: { requires: list(flags['--requires']), optional: list(flags['--optional']) },
   };
 };
+
+/** The number after the last decision in `DECISIONS.md`: what the new module's skeleton is written under. */
+const nextDecision = (root: string): number =>
+  Math.max(
+    ...[...readFileSync(join(root, 'docs/DECISIONS.md'), 'utf8').matchAll(/^### D-(\d+)\./gm)].map(
+      (match) => Number(match[1]),
+    ),
+  ) + 1;
 
 /**
  * The new table's types: `db:generate` reads a migrated database, so a clone of the test template is migrated and read and then
@@ -79,7 +87,8 @@ export const main = (
     say(parsed);
     return 2;
   }
-  const { id, options, dryRun } = parsed;
+  const { id, dryRun } = parsed;
+  const options = { ...parsed.options, decision: nextDecision(root) };
   const problem = idProblem(id, new Set(PRODUCT_MODULE_IDS), RESERVED_MODULE_IDS);
   if (problem !== undefined && !problem.endsWith('is already a module')) {
     say(problem);
@@ -107,7 +116,8 @@ export const main = (
   }
   const changed = new Map<string, string>();
   try {
-    for (const edit of editsFor(names, options)) {
+    const readme = readFileSync(join(root, 'README.md'), 'utf8');
+    for (const edit of [...editsFor(names, options), readmeCount(readme, options.decision)]) {
       const content = changed.get(edit.file) ?? readFileSync(join(root, edit.file), 'utf8');
       changed.set(edit.file, applyEdit(content, edit));
     }

@@ -18,6 +18,7 @@ a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 | 2 | **`DECISIONS.md`** | Why every non-obvious choice was made, and what was rejected | **Everything — it wins any conflict** |
 | 3 | **`ARCHITECTURE.md`** | How the parts fit: layers, transport, protocol, isolation | Structure |
 | — | **`MODULES.md`** | How a module is declared, loaded, kept apart and removed, and the checklist for adding one (D-250, D-254, D-255; built for chat and issues, not complete: its header says what is not) | Modularity |
+| — | **`MODULE-GUIDE.md`** | What to run and write to add a module, publish a fact, use a port, add a worker, make a module sellable (D-294) | Practice of building a module |
 | 4 | **`SCHEMA.md`** | What is stored: tables, indexes, invariants, migration order | Data |
 | 5 | **`UX.md`** | How it behaves: layout, thread interaction, keyboard, states | Interaction |
 | 6 | **`API.md`** | The HTTP endpoint contract, per phase | Interface |
