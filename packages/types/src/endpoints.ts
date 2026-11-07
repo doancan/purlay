@@ -18,6 +18,14 @@
 import type { TSchema } from '@sinclair/typebox';
 import { CatchUpQuery, ChannelCatchUp } from './catch-up';
 import {
+  ChannelGroup,
+  ChannelGroupPage,
+  ChannelGroupQuery,
+  FoldChannelGroupRequest,
+  MoveChannelGroupRequest,
+  SaveChannelGroupRequest,
+} from './channel-groups';
+import {
   AddChannelMemberRequest,
   AuthMethods,
   ChannelList,
@@ -334,6 +342,45 @@ export const ENDPOINTS = [
     path: '/api/channels/:channelId/star',
     auth: 'session',
     responses: { 204: null },
+  }),
+  read({
+    id: 'listChannelGroups',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/channel-groups',
+    auth: 'session',
+    query: ChannelGroupQuery,
+    responses: { 200: ChannelGroupPage },
+  }),
+  read({
+    id: 'saveChannelGroup',
+    method: 'PUT',
+    path: '/api/workspaces/:workspaceId/channel-groups/:groupId',
+    auth: 'session',
+    body: SaveChannelGroupRequest,
+    responses: { 200: ChannelGroup },
+  }),
+  read({
+    id: 'foldChannelGroup',
+    method: 'PATCH',
+    path: '/api/workspaces/:workspaceId/channel-groups/:groupId',
+    auth: 'session',
+    body: FoldChannelGroupRequest,
+    responses: { 200: ChannelGroup },
+  }),
+  read({
+    id: 'removeChannelGroup',
+    method: 'DELETE',
+    path: '/api/workspaces/:workspaceId/channel-groups/:groupId',
+    auth: 'session',
+    responses: { 204: null },
+  }),
+  read({
+    id: 'moveChannelToGroup',
+    method: 'PUT',
+    path: '/api/channels/:channelId/sidebar-group',
+    auth: 'session',
+    body: MoveChannelGroupRequest,
+    responses: { 200: Channel },
   }),
   read({
     id: 'unstarChannel',

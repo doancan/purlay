@@ -102,6 +102,17 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   while anything is changed, and its name says *changed*. A list emptied by these says *Nothing unread.* or *Nothing to show
   with these options.* in the section's quiet tone, never as an error. Kept in the browser, per person and workspace; a
   browser that refuses storage still arranges the column while the page is open.
+- **Personal channel groups (D-284).** Sidebar options offers New channel group; each heading offers
+  Rename and Delete. A channel's row menu offers Move to group, with Channels as its default. The
+  headings are the person's own across devices. A move removes the star; a star clears group
+  placement, and unstarring returns to Channels. Deleting a heading confirms that only its
+  arrangement is removed. Channels and membership remain. The same disclosure keeps unread,
+  mentions, incidents and the current channel under a folded group; global display rules continue to
+  apply. Group metadata loading or failure never hides a channel: unknown placement falls back to
+  Channels, with Retry. Named groups survive Reset sidebar's existing local display reset. Dialogs
+  retain entered names on failure, distinguish in-flight work and keep keyboard/focus behavior; the
+  move dialog remains present while its channel changes section, and is dismissed if membership is
+  revoked.
 - **Browse channels** — the public channels the person has not joined, by name (D-160), each saying
   what it is before it is joined: its name, and on one quiet line how many people are in it (*12
   members*) and its topic, cut with an ellipsis; **Join** on the row joins and goes there. Past eight

@@ -6,10 +6,9 @@
  * says why, with Retry when trying again could help (CONTRIBUTING §1.9). Its name stays "Star";
  * `aria-pressed` says whether it is.
  */
-import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Channel } from '@purlay/types';
 import { useApi } from '../../../data/api-provider';
-import { channelStarred } from '../../../data/cache';
 import { isTransient } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { families, keys } from '../../../data/keys';
@@ -17,13 +16,18 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { cn } from '../../../ui/cn';
 import { IconButton } from '../../../ui/icon-button';
 import { useToast } from '../../../ui/toast';
+import {
+  channelInCache,
+  channelPlacementLedger,
+  paintChannelPlacement,
+  sidebarActor,
+} from '../../../data/channel-placement';
 
 /**
  * Each channel's star requests, one after another: a second click waits for the first, so the
  * server is asked in the order the person clicked and the last click is what stays. Per client,
  * so two screens of one page share the line and two pages never do.
  */
-const lines = new WeakMap<QueryClient, Map<string, Promise<void>>>();
 
 /** Star or let go of a channel, painted at once and put back when refused; null for a non-member. */
 export const useStar = (channel: Channel | undefined): ((starred: boolean) => void) | null => {
@@ -33,47 +37,51 @@ export const useStar = (channel: Channel | undefined): ((starred: boolean) => vo
   const { show } = useToast();
   const describe = useDescribeFailure();
   if (channel === undefined || channel.state === null) return null;
-  const starredNow = (): boolean | undefined =>
-    client
-      .getQueriesData<Channel[]>({ queryKey: families.channels })
-      .flatMap(([, list]) => list ?? [])
-      .find((c) => c.id === channel.id)?.starred;
-
+  const actor = sidebarActor(client);
+  const actorKey = actor ?? 'no-session';
+  const sameActor = (): boolean => sidebarActor(client) === actor;
   const set = (starred: boolean): void => {
-    // A list read already on its way would land after this paint and take it back: let it go.
+    if (!sameActor()) return;
     void client.cancelQueries({ queryKey: families.channels });
-    channelStarred(client, channel.id, starred);
-    const line = lines.get(client) ?? new Map<string, Promise<void>>();
-    lines.set(client, line);
-    const after = line.get(channel.id) ?? Promise.resolve();
-    const done = after
-      .then(() => api.star(channel.id, starred))
-      .then(
-        () => undefined,
-        (failure: unknown) => {
-          channelStarred(client, channel.id, starred, true);
-          show({
-            message: `${t(starred ? 'star.failed' : 'star.unstarFailed')} ${describe(failure)}`,
-            ...(isTransient(failure)
-              ? {
-                  actionLabel: t('common.retry'),
-                  // Asks again for what was asked, only if it is still not so.
-                  onAction: (): void => {
-                    if (starredNow() !== starred) set(starred);
-                  },
-                }
-              : {}),
-          });
+    const apply = (before: Channel): Channel => ({
+      ...before,
+      starred,
+      sidebarGroupId: starred ? null : before.sidebarGroupId,
+    });
+    void channelPlacementLedger
+      .send({
+        client,
+        key: `${actorKey}:${channel.id}`,
+        queueKey: `${actorKey}:${channel.id}`,
+        read: () => channelInCache(client, channel),
+        paint: (value) => {
+          if (sameActor()) paintChannelPlacement(client, value);
         },
-      )
-      .finally(() => {
-        if (line.get(channel.id) === done) {
-          line.delete(channel.id);
-          // The last of the line has its answer: the server's list is the one that stays.
-          void client.invalidateQueries({ queryKey: keys.channels(channel.workspaceId) });
-        }
+        apply,
+        write: async () => {
+          if (!sameActor()) throw new Error('The signed-in account changed.');
+          await api.star(channel.id, starred);
+        },
+        accepted: (before) => apply(before),
+        refresh: () => {
+          if (sameActor())
+            void client.invalidateQueries({ queryKey: keys.channels(channel.workspaceId) });
+        },
+      })
+      .catch((failure: unknown) => {
+        if (!sameActor()) return;
+        show({
+          message: `${t(starred ? 'star.failed' : 'star.unstarFailed')} ${describe(failure)}`,
+          ...(isTransient(failure)
+            ? {
+                actionLabel: t('common.retry'),
+                onAction: (): void => {
+                  if (channelInCache(client, channel).starred !== starred) set(starred);
+                },
+              }
+            : {}),
+        });
       });
-    line.set(channel.id, done);
   };
   return set;
 };

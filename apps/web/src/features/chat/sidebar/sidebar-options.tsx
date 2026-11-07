@@ -27,80 +27,107 @@ import {
 } from '../../../ui/menu';
 import { isDefault, withToggled, type ChannelOrder } from './preferences';
 import { useSidebarPreferences } from './preferences-context';
+import { useRef, useState } from 'react';
+import { useDeferred } from '../../../app/deferred-door';
+import { WhenRun } from '../../shell/module-gate';
 
 export const SidebarOptions = (): React.JSX.Element => {
   const { t } = useI18n();
   const { preferences, change, reset } = useSidebarPreferences();
   const changed = !isDefault(preferences);
+  const [creating, setCreating] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const deferred = useDeferred([creating, setCreating]);
   return (
-    <Menu
-      align="end"
-      trigger={
-        <IconButton
-          label={
-            changed
-              ? `${t('sidebar.options')}, ${t('sidebar.options.changed')}`
-              : t('sidebar.options')
-          }
-          glyph="preferences"
-          size="nav"
-          {...(changed ? { className: 'bg-nav-hover text-nav-ink' } : {})}
+    <>
+      <Menu
+        align="end"
+        returnFocus={() => !creating}
+        trigger={
+          <IconButton
+            ref={trigger}
+            data-sidebar-options=""
+            label={
+              changed
+                ? `${t('sidebar.options')}, ${t('sidebar.options.changed')}`
+                : t('sidebar.options')
+            }
+            glyph="preferences"
+            size="nav"
+            {...(changed ? { className: 'bg-nav-hover text-nav-ink' } : {})}
+          />
+        }
+      >
+        <MenuLabel>{t('sidebar.options.show')}</MenuLabel>
+        <MenuRadioGroup
+          value={preferences.unreadOnly ? 'unread' : 'all'}
+          onValueChange={(value) => {
+            change({ unreadOnly: value === 'unread' });
+          }}
+        >
+          <MenuRadioItem value="all">{t('sidebar.options.showAll')}</MenuRadioItem>
+          <MenuRadioItem value="unread">{t('sidebar.options.showUnread')}</MenuRadioItem>
+        </MenuRadioGroup>
+        <MenuSeparator />
+        <MenuLabel>{t('sidebar.options.sort')}</MenuLabel>
+        <MenuRadioGroup
+          value={preferences.channelOrder}
+          onValueChange={(value) => {
+            const channelOrder: ChannelOrder = value === 'activity' ? 'activity' : 'name';
+            change({ channelOrder });
+          }}
+        >
+          <MenuRadioItem value="name">{t('sidebar.options.sortName')}</MenuRadioItem>
+          <MenuRadioItem value="activity">{t('sidebar.options.sortActivity')}</MenuRadioItem>
+        </MenuRadioGroup>
+        <MenuSeparator />
+        <MenuLabel>{t('sidebar.options.sections')}</MenuLabel>
+        <WhenRun module="chat">
+          <MenuItem
+            onSelect={() => {
+              setCreating(true);
+            }}
+          >
+            {t('channelGroups.create')}
+          </MenuItem>
+        </WhenRun>
+        <MenuCheckboxItem
+          checked={!preferences.hidden.includes('conversations')}
+          onCheckedChange={() => {
+            change({ hidden: withToggled(preferences.hidden, 'conversations') });
+          }}
+        >
+          {t('conversations.title')}
+        </MenuCheckboxItem>
+        <MenuCheckboxItem
+          checked={!preferences.hidden.includes('people')}
+          onCheckedChange={() => {
+            change({ hidden: withToggled(preferences.hidden, 'people') });
+          }}
+        >
+          {t('sidebar.people')}
+        </MenuCheckboxItem>
+        <MenuSeparator />
+        <MenuCheckboxItem
+          checked={preferences.hideMuted}
+          onCheckedChange={(checked) => {
+            change({ hideMuted: checked });
+          }}
+        >
+          {t('sidebar.options.hideMuted')}
+        </MenuCheckboxItem>
+        <MenuSeparator />
+        <MenuItem disabled={!changed} onSelect={reset}>
+          {t('sidebar.options.reset')}
+        </MenuItem>
+      </Menu>
+      {deferred !== null && creating && (
+        <deferred.ChannelGroupEditor
+          open={creating}
+          onOpenChange={setCreating}
+          returnFocus={() => trigger.current}
         />
-      }
-    >
-      <MenuLabel>{t('sidebar.options.show')}</MenuLabel>
-      <MenuRadioGroup
-        value={preferences.unreadOnly ? 'unread' : 'all'}
-        onValueChange={(value) => {
-          change({ unreadOnly: value === 'unread' });
-        }}
-      >
-        <MenuRadioItem value="all">{t('sidebar.options.showAll')}</MenuRadioItem>
-        <MenuRadioItem value="unread">{t('sidebar.options.showUnread')}</MenuRadioItem>
-      </MenuRadioGroup>
-      <MenuSeparator />
-      <MenuLabel>{t('sidebar.options.sort')}</MenuLabel>
-      <MenuRadioGroup
-        value={preferences.channelOrder}
-        onValueChange={(value) => {
-          const channelOrder: ChannelOrder = value === 'activity' ? 'activity' : 'name';
-          change({ channelOrder });
-        }}
-      >
-        <MenuRadioItem value="name">{t('sidebar.options.sortName')}</MenuRadioItem>
-        <MenuRadioItem value="activity">{t('sidebar.options.sortActivity')}</MenuRadioItem>
-      </MenuRadioGroup>
-      <MenuSeparator />
-      <MenuLabel>{t('sidebar.options.sections')}</MenuLabel>
-      <MenuCheckboxItem
-        checked={!preferences.hidden.includes('conversations')}
-        onCheckedChange={() => {
-          change({ hidden: withToggled(preferences.hidden, 'conversations') });
-        }}
-      >
-        {t('conversations.title')}
-      </MenuCheckboxItem>
-      <MenuCheckboxItem
-        checked={!preferences.hidden.includes('people')}
-        onCheckedChange={() => {
-          change({ hidden: withToggled(preferences.hidden, 'people') });
-        }}
-      >
-        {t('sidebar.people')}
-      </MenuCheckboxItem>
-      <MenuSeparator />
-      <MenuCheckboxItem
-        checked={preferences.hideMuted}
-        onCheckedChange={(checked) => {
-          change({ hideMuted: checked });
-        }}
-      >
-        {t('sidebar.options.hideMuted')}
-      </MenuCheckboxItem>
-      <MenuSeparator />
-      <MenuItem disabled={!changed} onSelect={reset}>
-        {t('sidebar.options.reset')}
-      </MenuItem>
-    </Menu>
+      )}
+    </>
   );
 };

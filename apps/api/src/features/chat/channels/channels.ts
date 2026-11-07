@@ -40,6 +40,7 @@ interface ChannelRow {
   readonly unread_mention_count: number | null;
   readonly notification_level: Channel['notificationLevel'];
   readonly starred_at: Date | string | null;
+  readonly sidebar_group_id: string | null;
   /** Its open incident's, when one is open (D-137): the partial unique index finds it. */
   readonly incident_severity: number | null;
   readonly incident_status: string | null;
@@ -115,6 +116,10 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
         },
   notificationLevel: row.member_user_id === null ? null : row.notification_level,
   starred: row.member_user_id !== null && row.starred_at !== null,
+  sidebarGroupId:
+    row.member_user_id !== null && row.starred_at === null && row.type !== 'direct_message'
+      ? row.sidebar_group_id
+      : null,
   peer:
     row.peer_id === null
       ? null
@@ -169,6 +174,11 @@ const readChannels = async (
         .onRef('channel_members.channel_id', '=', 'channels.id')
         .on('channel_members.user_id', '=', userId),
     )
+    .leftJoin('channel_group_channels', (join) =>
+      join
+        .onRef('channel_group_channels.channel_id', '=', 'channel_members.channel_id')
+        .onRef('channel_group_channels.user_id', '=', 'channel_members.user_id'),
+    )
     // At most one open incident a channel (`idx_incidents_one_open`): a join, never a row more.
     .leftJoin('incidents', (join) =>
       join
@@ -199,6 +209,7 @@ const readChannels = async (
       'channel_members.unread_mention_count as unread_mention_count',
       'channel_members.notification_level as notification_level',
       'channel_members.starred_at as starred_at',
+      'channel_group_channels.group_id as sidebar_group_id',
       'incidents.severity as incident_severity',
       'incidents.status as incident_status',
       'users.id as peer_id',

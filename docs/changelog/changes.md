@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Channel groups** — Organize your channels under personal headings across devices, rename or fold groups, and move a channel from its menu; deleting a group preserves its channels and conversations (D-284)
+
 ### Fixed
 
 - **Unread conversations** — Catch up from the oldest unread messages, read only the page shown, and open waiting threads at their first unread reply; joining a channel keeps its old history read and thread reads leave other conversations waiting (D-282)

@@ -157,6 +157,7 @@ const aTenant = async (
   // The owner's own, one of each, so every list of them has a row to show (the list case needs one).
   const dueAt = new Date(NOW.getTime() + 3_600_000).toISOString();
   for (const [method, path, body] of [
+    ['PUT', `/api/workspaces/${workspaceId}/channel-groups/${root}`, { name: 'My channels' }],
     ['PUT', `/api/messages/${root}/pin`, undefined],
     ['PUT', `/api/messages/${root}/saved`, {}],
     ['PUT', `/api/messages/${root}/reminder`, { remindAt: dueAt }],

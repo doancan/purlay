@@ -71,6 +71,7 @@ const channel = (over: Partial<Channel> = {}): Channel => ({
   state,
   notificationLevel: 'mentions',
   starred: false,
+  sidebarGroupId: null,
   peer: null,
   peers: [],
   memberCount: 1,
@@ -791,5 +792,22 @@ describe('private deletion', () => {
       mentions: [],
     });
     expect(held?.find((item) => item.id === id(3))?.content).toBe('m3');
+  });
+});
+
+test('starring a grouped channel clears its placement before an unstar can resurrect it (#1198)', () => {
+  const client = new QueryClient();
+  const group = '00000000-0000-4000-8000-0000000000f1';
+  const grouped = channel({ sidebarGroupId: group });
+  client.setQueryData<Channel[]>(keys.channels(WS), [grouped]);
+  channelStarred(client, CH, true);
+  expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]).toMatchObject({
+    starred: true,
+    sidebarGroupId: null,
+  });
+  channelStarred(client, CH, false);
+  expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]).toMatchObject({
+    starred: false,
+    sidebarGroupId: null,
   });
 });

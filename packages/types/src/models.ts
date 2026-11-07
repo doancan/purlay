@@ -224,6 +224,8 @@ export const Channel = Type.Object({
   notificationLevel: Type.Union([NotificationLevel, Type.Null()]),
   /** Whether the caller keeps it among their starred (D-132); never for somebody not in it. */
   starred: Type.Boolean(),
+  /** The caller's own sidebar heading; null for ungrouped, starred or unjoined channels and DMs. */
+  sidebarGroupId: Type.Union([Uuid, Type.Null()]),
   /**
    * The other person in a direct message between two (the caller themselves, for a note to
    * self). Null for a group conversation and for every other kind, which has a name (D-6, D-127).

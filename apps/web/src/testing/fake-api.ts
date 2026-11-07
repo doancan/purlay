@@ -12,6 +12,11 @@ const unexpected = (name: string) => (): never => {
 
 export const anApi = (overrides: Partial<Api> = {}): Api => ({
   me: unexpected('me'),
+  channelGroups: unexpected('channelGroups'),
+  saveChannelGroup: unexpected('saveChannelGroup'),
+  foldChannelGroup: unexpected('foldChannelGroup'),
+  removeChannelGroup: unexpected('removeChannelGroup'),
+  moveChannelGroup: unexpected('moveChannelGroup'),
   // Public identity and own admission are read by sign-in/session gates; old servers have neither restriction.
   ownAdmission: () => Promise.resolve({ state: null }),
   instanceInfo: () =>

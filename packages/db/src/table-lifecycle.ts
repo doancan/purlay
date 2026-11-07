@@ -149,6 +149,8 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   thread_follows: decided('deleted', 'until-removed'),
   thread_reads: decided('deleted', 'with-parent'),
   channel_read_scopes: decided('deleted', 'with-parent'),
+  channel_groups: decided('deleted', 'with-parent'),
+  channel_group_channels: decided('deleted', 'with-parent'),
 
   // Issues.
   issues: decided('anonymised', 'until-removed'),

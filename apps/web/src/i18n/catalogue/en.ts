@@ -3099,4 +3099,32 @@ export const en = {
   'admin.backup.restoreLimit':
     'Archive checks verify checksums, SQL restoration and table counts. Rehearse application behavior and off-site recovery separately.',
   'admin.backup.guide': 'Operator backup and recovery guide',
+  'channelGroups.create': 'New channel group',
+  'channelGroups.rename': 'Rename group',
+  'channelGroups.delete': 'Delete group',
+  'channelGroups.createButton': 'Create group',
+  'channelGroups.name': 'Group name',
+  'channelGroups.nameRequired': 'Enter a group name.',
+  'channelGroups.description':
+    'These headings are only yours. Channel membership and permissions stay the same.',
+  'channelGroups.empty': 'Move channels here from their menus.',
+  'channelGroups.loading': 'Loading channel groups…',
+  'channelGroups.loadFailed': 'Channel groups couldn’t load',
+  'channelGroups.loadFailedBody':
+    'Your channels remain available under Channels. Try again to restore your grouping.',
+  'channelGroups.failed': 'The channel group couldn’t be updated.',
+  'channelGroups.manage': 'Options for {name}',
+  'channelGroups.deleteTitle': 'Delete {name}?',
+  'channelGroups.deleteDescription':
+    'Its channels return to Channels. Messages and memberships stay as they are.',
+  'channelGroups.move': 'Move to group…',
+  'channelGroups.moveTitle': 'Move {name}',
+  'channelGroups.moveDescription':
+    'Choose where this channel appears in your sidebar. Moving it clears its star.',
+  'channelGroups.moveButton': 'Move channel',
+  'channelGroups.createHint': 'Create a channel group from Sidebar options first.',
+  'failure.channelGroupName': 'You already have a group with that name.',
+  'failure.channelGroupLimit': 'Remove a channel group before adding another.',
+  'channelGroups.save': 'Save group',
+  'channelGroups.section': 'Channel group: {name}',
 } as const satisfies Record<string, Message>;

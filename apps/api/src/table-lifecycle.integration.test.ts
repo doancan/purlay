@@ -442,6 +442,37 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  channel_groups: ofAda('channel_groups', async (db, world) => {
+    await db
+      .insertInto('channel_groups')
+      .values({
+        id: anId(),
+        workspace_id: world.workspaceId,
+        user_id: world.adaId,
+        name: 'Finance',
+      })
+      .execute();
+  }),
+  channel_group_channels: ofAda('channel_group_channels', async (db, world) => {
+    const groupId = anId();
+    await db
+      .insertInto('channel_groups')
+      .values({
+        id: groupId,
+        workspace_id: world.workspaceId,
+        user_id: world.adaId,
+        name: 'Operations',
+      })
+      .execute();
+    await db
+      .insertInto('channel_group_channels')
+      .values({
+        channel_id: world.channelId,
+        user_id: world.adaId,
+        group_id: groupId,
+      })
+      .execute();
+  }),
   channel_read_scopes: ofAda('channel_read_scopes', async (db, world) => {
     await db
       .insertInto('channel_read_scopes')

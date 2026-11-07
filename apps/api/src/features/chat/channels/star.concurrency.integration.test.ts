@@ -1,6 +1,6 @@
 /**
  * One star asked for twice at once (D-132): the row changes once, and the second is told it did
- * not, so the person's tabs are told once. The decision and the write are one statement; the
+ * not, so the person's tabs are told once. The membership is locked for the write; the
  * second waits on the first's row and finds it already starred.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';

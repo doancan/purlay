@@ -211,6 +211,27 @@ const tables = [
     (userId) => ({ where: sql`user_id = ${userId}`, order: 'root_id' }),
   ),
   personalTableExport(
+    'channel_groups',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      user_id: 'export',
+      name: 'export',
+      collapsed: 'export',
+      name_key: 'omit',
+    },
+    (userId) => ({ where: sql`user_id = ${userId}`, order: 'id' }),
+  ),
+  personalTableExport(
+    'channel_group_channels',
+    {
+      channel_id: 'export',
+      user_id: 'export',
+      group_id: 'export',
+    },
+    (userId) => ({ where: sql`user_id = ${userId}`, order: 'channel_id' }),
+  ),
+  personalTableExport(
     'thread_follows',
     {
       workspace_id: 'export',
@@ -304,7 +325,12 @@ export const chatPersonalExport = {
   id: 'chat',
   // Made by chat's own set (`chat/0001`): a database migrated without it has no link to export.
   ownSet: ['message_attachments'],
-  optionalTables: ['thread_reads', 'channel_read_scopes'],
+  optionalTables: [
+    'thread_reads',
+    'channel_read_scopes',
+    'channel_groups',
+    'channel_group_channels',
+  ],
   tables,
   workspaces: (userId: string): RawBuilder<unknown>[] => [
     sql`select workspace_id from channels where id in (${theirChannels(userId)})`,

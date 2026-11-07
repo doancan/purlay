@@ -172,6 +172,26 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['scripts/browser-measurement.test.ts'],
   },
   {
+    id: 'personal-groups-rollback-unconfirmed-intent',
+    why: 'A failed second request restores a first optimistic change that was never saved.',
+    file: 'apps/web/src/data/sidebar-writes.ts',
+    find: 'const base = answer === null ? current.base : accepted(current.base, answer.value);',
+    replace:
+      'const base = answer === null ? operation.apply(current.base) : accepted(current.base, answer.value);',
+    tests: [
+      'apps/web/src/features/chat/sidebar/groups-data.test.tsx',
+      'apps/web/src/data/sidebar-writes.test.ts',
+    ],
+  },
+  {
+    id: 'personal-groups-same-transformation-drops-pending',
+    why: 'Reusing an intention function removes a later still-pending operation.',
+    file: 'apps/web/src/data/sidebar-writes.ts',
+    find: 'current.pending.filter((entry) => entry !== operation)',
+    replace: 'current.pending.filter((entry) => entry.apply !== operation.apply)',
+    tests: ['apps/web/src/data/sidebar-writes.test.ts'],
+  },
+  {
     id: 'refused-edit-stays-on-screen',
     why: 'words the server refused stay on screen as though they were saved',
     file: 'apps/web/src/data/actions.ts',

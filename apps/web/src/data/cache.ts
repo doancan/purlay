@@ -485,9 +485,14 @@ export const channelStarred = (
   channelId: string,
   starred: boolean,
   undo = false,
+  previousGroup: string | null = null,
 ): void => {
   editChannels(client, channelId, (c) =>
-    undo ? (c.starred === starred ? { ...c, starred: !starred } : c) : { ...c, starred },
+    undo
+      ? c.starred === starred
+        ? { ...c, starred: !starred, sidebarGroupId: previousGroup }
+        : c
+      : { ...c, starred, sidebarGroupId: starred ? null : c.sidebarGroupId },
   );
 };
 

@@ -3067,4 +3067,32 @@ export const tr = {
   'admin.backup.restoreLimit':
     'Arşiv kontrolleri sağlama toplamını, SQL geri yüklemesini ve tablo sayısını sınar. Uygulama davranışını ve sunucu dışı kurtarmayı ayrıca prova edin.',
   'admin.backup.guide': 'Operatör yedekleme ve kurtarma kılavuzu',
+  'channelGroups.create': 'Yeni kanal grubu',
+  'channelGroups.rename': 'Grubu yeniden adlandır',
+  'channelGroups.delete': 'Grubu sil',
+  'channelGroups.createButton': 'Grup oluştur',
+  'channelGroups.name': 'Grup adı',
+  'channelGroups.nameRequired': 'Bir grup adı girin.',
+  'channelGroups.description':
+    'Bu başlıkları yalnızca siz görürsünüz. Kanal üyelikleri ve yetkiler aynı kalır.',
+  'channelGroups.empty': 'Kanalları kendi menülerinden buraya taşıyın.',
+  'channelGroups.loading': 'Kanal grupları yükleniyor…',
+  'channelGroups.loadFailed': 'Kanal grupları yüklenemedi',
+  'channelGroups.loadFailedBody':
+    'Kanallarınıza Kanallar bölümünden ulaşabilirsiniz. Grupları yüklemek için yeniden deneyin.',
+  'channelGroups.failed': 'Kanal grubu güncellenemedi.',
+  'channelGroups.manage': '{name} seçenekleri',
+  'channelGroups.deleteTitle': '{name} silinsin mi?',
+  'channelGroups.deleteDescription':
+    'İçindeki kanallar Kanallar bölümüne döner. Mesajlar ve üyelikler korunur.',
+  'channelGroups.move': 'Gruba taşı…',
+  'channelGroups.moveTitle': '{name} kanalını taşı',
+  'channelGroups.moveDescription':
+    'Kanalın kenar çubuğunuzdaki yerini seçin. Taşınan kanalın yıldızı kaldırılır.',
+  'channelGroups.moveButton': 'Kanalı taşı',
+  'channelGroups.createHint': 'Önce Kenar çubuğu seçeneklerinden bir kanal grubu oluşturun.',
+  'failure.channelGroupName': 'Bu adda bir grubunuz zaten var.',
+  'failure.channelGroupLimit': 'Yeni kanal grubu eklemek için önce birini kaldırın.',
+  'channelGroups.save': 'Grubu kaydet',
+  'channelGroups.section': 'Kanal grubu: {name}',
 } as const satisfies Catalogue;

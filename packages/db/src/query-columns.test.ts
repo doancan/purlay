@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { resolveReference, scanSource } from './query-columns';
+import { relevantToSchema, resolveReference, scanSource } from './query-columns';
 
 const COLUMNS = new Map([
   ['issues', new Set(['id', 'status', 'workspace_id', 'assignee_id'])],
@@ -134,6 +134,28 @@ describe('which table a column belongs to', () => {
     if (first === undefined) throw new Error('no reference');
     return first;
   };
+
+  test('an uninstalled module is outside this schema, while unknown or missing core tables and misspelled columns stay guarded', () => {
+    const owners = { issues: 'issues', users: 'core' };
+    const coreOnly = new Map([['users', new Set(['id'])]]);
+    const moduleQuery = reference("db.selectFrom('issues').where('status', '=', 'open')");
+    expect(relevantToSchema(moduleQuery, coreOnly, owners)).toBe(false);
+    expect(relevantToSchema(moduleQuery, COLUMNS, owners)).toBe(true);
+    const joined = reference(
+      "db.selectFrom('users').innerJoin('issues', 'issues.assignee_id', 'users.id').where('users.id', '=', 1)",
+    );
+    expect(relevantToSchema(joined, coreOnly, owners)).toBe(false);
+    expect(relevantToSchema(joined, COLUMNS, owners)).toBe(true);
+    expect(
+      relevantToSchema(reference("db.selectFrom('users').where('id', '=', 1)"), new Map(), owners),
+    ).toBe(true);
+    const unknown = reference("db.selectFrom('misspelled').where('id', '=', 1)");
+    expect(relevantToSchema(unknown, coreOnly, owners)).toBe(true);
+    expect(resolveReference(unknown, coreOnly)).toBeUndefined();
+    const wrongColumn = reference("db.selectFrom('users').where('wrong', '=', 1)");
+    expect(relevantToSchema(wrongColumn, coreOnly, owners)).toBe(true);
+    expect(resolveReference(wrongColumn, coreOnly)).toBeUndefined();
+  });
 
   test('a qualifier is an alias of the chain, or else a table of the database', () => {
     expect(

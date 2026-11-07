@@ -79,6 +79,7 @@ describe('publishing the wedge', () => {
       state,
       notificationLevel: 'mentions',
       starred: false,
+      sidebarGroupId: null,
       peer: user,
       peers: [user],
       memberCount: 2,

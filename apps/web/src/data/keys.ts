@@ -35,6 +35,7 @@ export const keys = {
   members: (workspaceId: string) => ['members', workspaceId] as const,
   channelMembers: (channelId: string) => ['channel-members', channelId] as const,
   channels: (workspaceId: string) => ['channels', workspaceId] as const,
+  channelGroups: (workspaceId: string) => ['channel-groups', workspaceId] as const,
   messages: (channelId: string) => ['messages', channelId] as const,
   /**
    * The feed around one message, which a link opens (D-149). Under the channel's own key, so what
@@ -149,6 +150,7 @@ export const families = {
   saved: ['saved'] as const,
   files: ['files'] as const,
   channels: ['channels'] as const,
+  channelGroups: ['channel-groups'] as const,
   messages: ['messages'] as const,
   thread: ['thread'] as const,
   unresolved: ['unresolved'] as const,

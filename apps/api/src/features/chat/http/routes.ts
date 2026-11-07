@@ -27,6 +27,7 @@ import { presenceRoutes } from './presence';
 import { reminderRoutes } from './reminders';
 import { scheduledRoutes } from './scheduled';
 import { starRoutes } from './star';
+import { channelGroupRoutes } from './channel-groups';
 import { versionRoutes } from './versions';
 import { githubWiring } from './wiring';
 
@@ -48,6 +49,7 @@ export const chatRoutes = (context: ModuleRouteDependencies): AnyElysia => {
     .use(reminderRoutes(context))
     .use(scheduledRoutes(context))
     .use(starRoutes(context))
+    .use(channelGroupRoutes(context))
     .use(feedRoutes(context))
     .use(githubAppRoutes(context, wiring))
     .use(githubIntegrationRoutes(context, wiring))

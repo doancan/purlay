@@ -156,6 +156,9 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/features/chat/channels/star.ts#setStarred': {
     none: 'marks an existing member’s own row; nobody gains or loses sight of a channel (#489)',
   },
+  'apps/api/src/features/chat/channels/groups.ts#moveToGroup': {
+    none: 'clears an existing member’s own star when moving its sidebar placement; nobody gains or loses channel access (#1198)',
+  },
   // Reading the inbox, or a thread, recounts the counters of the channels it touched. It changes
   // no membership, so nobody's access moves (D-106, D-147, #58).
   'apps/api/src/features/chat/notifications/notifications.ts#readThreadNotifications': {

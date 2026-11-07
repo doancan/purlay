@@ -55,7 +55,8 @@ const referring = async (db: Executor): Promise<string[]> =>
 /** How many rows of each table name this workspace, the trails left out. */
 const footprint = async (db: Executor, workspaceId: string): Promise<Record<string, number>> => {
   const counts: Record<string, number> = {};
-  for (const table of await referring(db)) {
+  // A module may bind workspace_id through workspace_members rather than directly to workspaces.
+  for (const table of new Set([...(await referring(db)), ...composition.workspacePurge.tables])) {
     if (table === 'audit_log' || table === 'server_audit_log') continue;
     const { rows } = await sql<{ count: string }>`
       select count(*)::text as count from ${sql.table(table)} where workspace_id = ${workspaceId}
@@ -137,6 +138,11 @@ const aLivedInWorkspace = async (
     name: 'ops',
   })) as { id: string };
   await call('POST', `/api/channels/${channelId}/join`, member);
+  const groupId = anId();
+  await call('PUT', `/api/workspaces/${workspaceId}/channel-groups/${groupId}`, owner, {
+    name: 'Operations',
+  });
+  await call('PUT', `/api/channels/${channelId}/sidebar-group`, owner, { groupId });
   await call('POST', `/api/workspaces/${workspaceId}/channels`, owner, {
     name: 'secret',
     type: 'private',
@@ -293,7 +299,8 @@ describe('integration: the workspace purge', () => {
         ...composition.workspacePurge.tables,
         ...CORE_REMAINING_TABLES,
       ];
-      expect(await referring(db)).toEqual([...emptied, 'audit_log', 'server_audit_log'].sort());
+      const covered = new Set([...emptied, 'audit_log', 'server_audit_log']);
+      expect((await referring(db)).filter((table) => !covered.has(table))).toEqual([]);
     });
   });
 
@@ -305,6 +312,9 @@ describe('integration: the workspace purge', () => {
         ...CORE_REMAINING_TABLES,
       ]);
       const present = await withWorkspaceColumn(db);
+      // Also refuse stale or misspelled declarations; a composite membership key is a valid
+      // reference, but every declared table must really have the column the purge deletes by.
+      expect([...emptied].filter((table) => !present.includes(table))).toEqual([]);
       expect(
         present.filter((table) => !emptied.has(table) && !(table in NOT_PURGED)),
         'A table with a workspace_id is its module’s to list in `workspacePurge.tables`: the workspace keeps its row as a tombstone, so no key cascades and the rows would stay for ever.',
@@ -329,6 +339,7 @@ describe('integration: the workspace purge', () => {
         [
           'attachments',
           'channel_bookmarks',
+          'channel_groups',
           'channels',
           'github_integrations',
           'incidents',

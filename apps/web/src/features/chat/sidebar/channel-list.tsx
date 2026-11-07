@@ -24,8 +24,46 @@ import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
 import { SectionHeading } from './section-heading';
 import { SectionEmpty, SectionError, SectionLoading } from './section-state';
+import { useChannelGroups } from './groups-data';
+import { StarredList } from './starred-list';
+import { ChannelPlacementProvider } from './placement-provider';
+import type { ChannelGroup } from '@purlay/types';
 
-export const ChannelList = (): React.JSX.Element => {
+/** Chat owns its channel sections and the move dialog that survives a channel changing section. */
+export const ChannelSections = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const groups = useChannelGroups();
+  const [enabled, setEnabled] = useState(true);
+  const wanted = groups.isError || (groups.data?.data.length ?? 0) > 0;
+  const deferred = useDeferred([enabled && wanted, setEnabled]);
+  return (
+    <ChannelPlacementProvider>
+      <StarredList />
+      {deferred !== null ? (
+        <deferred.PersonalGroups />
+      ) : groups.isPending ? (
+        <SectionLoading label={t('channelGroups.loading')} />
+      ) : !enabled && wanted ? (
+        <SectionError
+          title={t('deferred.unavailable')}
+          body={t('channelGroups.loadFailedBody')}
+          retryLabel={t('common.retry')}
+          onRetry={() => {
+            setEnabled(true);
+          }}
+        />
+      ) : null}
+      {/* Until both data and its view arrive, every joined channel remains in Channels. */}
+      <ChannelList groups={deferred === null ? [] : (groups.data?.data ?? [])} />
+    </ChannelPlacementProvider>
+  );
+};
+
+const ChannelList = ({
+  groups,
+}: {
+  readonly groups: readonly ChannelGroup[];
+}): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
@@ -36,7 +74,11 @@ export const ChannelList = (): React.JSX.Element => {
   const deferred = useDeferred([creating, setCreating], [browsing, setBrowsing]);
   const currentId = match.name === 'channel' ? match.params.channelId : null;
   const { preferences, change } = useSidebarPreferences();
-  const mine = joinedChannels(channels.data ?? [], preferences.channelOrder);
+  const knownGroups = new Set(groups.map((group) => group.id));
+  const allMine = joinedChannels(channels.data ?? [], preferences.channelOrder);
+  const mine = allMine.filter(
+    (channel) => channel.sidebarGroupId === null || !knownGroups.has(channel.sidebarGroupId),
+  );
   const collapsed = preferences.collapsed.includes('channels');
   const shown = shownRows(
     mine.map((channel) => ({ ...rowOf(channel), channel })),
@@ -48,7 +90,7 @@ export const ChannelList = (): React.JSX.Element => {
     },
   );
   // In no channel at all is the empty state; in channels that are all starred is not (D-132).
-  const none = mine.length === 0 && starredChannels(channels.data ?? []).length === 0;
+  const none = allMine.length === 0 && starredChannels(channels.data ?? []).length === 0;
   // In none, but with public ones to join (an invited member arrives so): "create the first" would be untrue.
   const joinable = none && joinableChannels(channels.data ?? []).length > 0;
 

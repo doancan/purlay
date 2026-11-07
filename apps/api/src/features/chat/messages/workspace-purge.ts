@@ -72,6 +72,7 @@ export const chatWorkspacePurge: WorkspacePurge = {
     'github_repo_feeds',
     'incidents',
     'saved_searches',
+    'channel_groups',
     'github_integrations',
     'github_app_installations',
     'github_app_handshakes',

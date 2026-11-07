@@ -75,6 +75,8 @@ export const chatModule = {
       '/api/github-app/**',
       '/api/integrations/**',
       '/api/workspaces/:workspaceId/channels',
+      '/api/workspaces/:workspaceId/channel-groups',
+      '/api/workspaces/:workspaceId/channel-groups/:groupId',
       '/api/workspaces/:workspaceId/archived-channels',
       '/api/workspaces/:workspaceId/conversations',
       '/api/workspaces/:workspaceId/dms',

@@ -95,6 +95,7 @@ interface Context {
   nativeCode: string;
   bookmarkId: string;
   issueId: string;
+  groupId: string;
 }
 
 const ids = new Set<string>();
@@ -218,6 +219,37 @@ const STEPS: readonly Step[] = [
   },
   { id: 'starChannel', spec: (c) => ({ params: { channelId: c.channelId } }), status: 204 },
   { id: 'unstarChannel', spec: (c) => ({ params: { channelId: c.channelId } }), status: 204 },
+  {
+    id: 'saveChannelGroup',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, groupId: c.groupId },
+      json: { name: 'Operations' },
+    }),
+    status: 200,
+  },
+  {
+    id: 'listChannelGroups',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId }, query: { limit: 20 } }),
+    status: 200,
+  },
+  {
+    id: 'foldChannelGroup',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, groupId: c.groupId },
+      json: { collapsed: true },
+    }),
+    status: 200,
+  },
+  {
+    id: 'moveChannelToGroup',
+    spec: (c) => ({ params: { channelId: c.channelId }, json: { groupId: c.groupId } }),
+    status: 200,
+  },
+  {
+    id: 'removeChannelGroup',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId, groupId: c.groupId } }),
+    status: 204,
+  },
   {
     id: 'openConversation',
     spec: (c) => ({ params: { workspaceId: c.workspaceId }, json: { userIds: [c.bob.userId] } }),
@@ -589,6 +621,7 @@ const world = async (): Promise<Context> => {
     nativeCode: '',
     bookmarkId: '',
     issueId: '',
+    groupId: crypto.randomUUID(),
   };
 };
 

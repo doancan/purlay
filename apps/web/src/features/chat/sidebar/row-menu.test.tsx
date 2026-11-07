@@ -218,6 +218,7 @@ describe('what it offers', () => {
     expect(items(view)).toEqual([
       'Mark as read',
       'Star',
+      'Move to group…',
       'Every message',
       'Mentions and replies',
       'Nothing',
@@ -271,6 +272,7 @@ describe('what it offers', () => {
     expect(items(view)).toEqual([
       'Okundu olarak işaretle',
       'Yıldızla',
+      'Gruba taşı…',
       'Her mesaj',
       'Bahsetmeler ve yanıtlar',
       'Hiçbir şey',
