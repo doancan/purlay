@@ -3,6 +3,22 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_ENTITLEMENTS: readonly Mutation[] = [
   {
+    id: 'entitlement-restriction-allowed-while-a-peer-is-behind',
+    why: 'withdrawing a module is allowed whatever the cluster reads (D-292)',
+    file: 'apps/api/src/modules/entitlements/peers.ts',
+    find: "write.state === 'off' ||",
+    replace: 'false ||',
+    tests: ['apps/api/src/modules/entitlements/peers.test.ts'],
+  },
+  {
+    id: 'entitlement-restriction-guessed-when-the-cluster-cannot-be-asked',
+    why: 'a restriction is written when Redis cannot say whether every node reads grants (D-292)',
+    file: 'apps/api/src/modules/entitlements/peers.ts',
+    find: 'behind = await peersBehind();',
+    replace: 'behind = await peersBehind().catch(() => 0);',
+    tests: ['apps/api/src/modules/entitlements/peers.test.ts'],
+  },
+  {
     id: 'entitlement-write-accepts-a-module-no-workspace-is-granted',
     why: 'an operator withdraws chat from a workspace, which the sockets cannot honour, and the edition file says it sold what it cannot take back (D-289)',
     file: 'apps/api/src/modules/entitlements/apply.ts',

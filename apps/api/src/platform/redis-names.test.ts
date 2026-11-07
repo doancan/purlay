@@ -16,6 +16,7 @@ describe('the names in a namespace', () => {
     expect(redisNames()).toEqual({
       bus: 'purlay:bus',
       moduleSet: 'purlay:modules',
+      entitlementNodes: 'purlay:entitlement-nodes',
       typingPrefix: 'purlay:typing:',
       onlinePrefix: 'purlay:online:',
       lapseIndex: 'purlay:online-lapse',

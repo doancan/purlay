@@ -9,7 +9,7 @@ import type { EntitlementRow } from './module-kit/entitlement';
 interface RawGrant {
   readonly module: string;
   readonly state: string;
-  readonly valid_until: string | null;
+  readonly valid_until: string | Date | null;
 }
 
 /**

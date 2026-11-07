@@ -47,6 +47,14 @@ export const API_REALTIME: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
   },
   {
+    id: 'entitlement-peers-script-counts-nobody',
+    why: 'the cluster is always ready for a restriction, because no node is ever found behind (D-292)',
+    file: 'apps/api/src/realtime/entitlement-peers.ts',
+    find: '    if (not lapse) or tonumber(lapse) <= now then behind = behind + 1 end',
+    replace: '    if false then behind = behind + 1 end',
+    tests: ['apps/api/src/realtime/entitlement-peers.redis.integration.test.ts'],
+  },
+  {
     id: 'frame-budget-skipped',
     why: 'a module’s frames cost its connection nothing against the frame budget, so the budget that bounds a flood does not bound this module’s (D-198)',
     file: 'apps/api/src/realtime/router.ts',
