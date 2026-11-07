@@ -13941,6 +13941,14 @@ an assignee, which is written in the same transaction as the assignment.
    `quiet_from`, `quiet_to`, `workspace_members.deep_work_until`, `is_deep_work_active`) now have a second reader, the core's
    sender, so by `MODULES.md` §5 they leave `CORE_COLUMNS_FOR_A_MODULE` in this change and its cap falls from 14 to 9.
    `issue_assigned` is declared `pushed`; `needsYou` follows with the badge (14j).
+10. **The web's Updates section** (14j, decided by the owner in D-283 §8.3): a category of the inbox beside Mentions, Direct and
+    Threads, never merged into them. It lists `GET …/inbox` and reads with `POST …/inbox/read`, painting a read at once and asking
+    for the list again when the server refuses. It is offered only where a running module's *web* manifest declares `notices` (the
+    kind, the sentence that takes who did it, the place it opens), so a server whose modules write none shows no empty tab and
+    asks for nothing. A kind the page does not know, which a newer server may send, is said plainly by its module's name, opens
+    nothing and is still read: the page never breaks on it. The list is its own lazy chunk, so the first load carries the rail's
+    dot (a page of one row, the server's own count) and none of the list. `issue_assigned` is now `needsYou`. *Not built:* the
+    inbox screen is chat's, so a server that runs issues and no chat has no Updates to open.
 
 **Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
 each module, and the first one that forgot would write a stranger a notice. *The module named by the caller*: a lie the type

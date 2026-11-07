@@ -10,7 +10,7 @@
 import type { AuditAction } from '@purlay/types';
 import type { GlyphName } from '../components/icon';
 import type { KeyLabels } from '../features/shortcuts/platform';
-import type { PlainKey } from '../i18n/types';
+import type { NamedKey, PlainKey } from '../i18n/types';
 
 /** A route of a module is inside a workspace, so the shell around it is `Shell` and its params carry the slug. */
 type ModuleRoutePath = `/w/:slug/${string}`;
@@ -62,6 +62,15 @@ export interface ModuleChunk {
   readonly screens: Readonly<Record<string, (props: never) => React.ReactNode>>;
 }
 
+/**
+ * How the Updates section of the inbox says and opens one kind of notice the module writes (D-286): the sentence, which takes
+ * who did it, and the place in the workspace it opens (a route of the module, without the slash).
+ */
+export interface ModuleNotice {
+  readonly words: NamedKey;
+  readonly path: string;
+}
+
 export interface ModuleManifest {
   /** The id the server lists in `MODULES` (D-250). */
   readonly id: string;
@@ -82,6 +91,11 @@ export interface ModuleManifest {
    * module. The API manifest lists the same ones; both read the module's list in `@purlay/types`.
    */
   readonly auditActions: readonly AuditAction[];
+  /**
+   * The notices the module writes to the core's inbox, by kind, as the API manifest's `notifications` declares them. A kind
+   * this client does not know is drawn plainly and opens nothing, so a newer server never breaks an older page.
+   */
+  readonly notices: Readonly<Record<string, ModuleNotice>>;
 }
 
 /** A shortcut row, its group and label by key, and the row it sits after; the keys are a function of the platform's names. */

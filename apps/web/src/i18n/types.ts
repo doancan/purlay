@@ -64,4 +64,15 @@ export type PlainKey = {
   readonly [K in MessageKey]: NeedsParams<K> extends true ? never : K;
 }[MessageKey];
 
+/** The keys whose message takes exactly a `{name}`: the sentence of a notice, which a module's manifest names by key. */
+export type NamedKey = {
+  readonly [K in MessageKey]: IsPlural<K> extends true
+    ? never
+    : keyof ParamsOf<K> extends 'name'
+      ? 'name' extends keyof ParamsOf<K>
+        ? K
+        : never
+      : never;
+}[MessageKey];
+
 export type Translate = <K extends MessageKey>(key: K, ...args: TranslateArgs<K>) => string;

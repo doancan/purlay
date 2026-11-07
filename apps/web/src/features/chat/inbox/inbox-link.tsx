@@ -4,13 +4,14 @@
  * It carries no number of its own — the one numeric badge in the product is a channel's unread
  * mentions (`channel-row.tsx`), and a second count of the same thing would be noise. What it does
  * carry is a dot while any channel has something that needs the person (D-110): the same fact as
- * those badges, said once where the inbox is, so it can be seen with the sidebar closed. So in Deep
+ * those badges, said once where the inbox is, so it can be seen with the sidebar closed — and while an update a module wrote
+ * (D-286) waits unread, by the server's count of them. So in Deep
  * Work, when the badges draw nothing (D-15), neither does it: the inbox itself still lists everything.
  *
  * On a wide window it opens the inbox's panel (D-208), the newest of each category at a glance with
  * See all to the page; on a narrow one it is the link to the page, inside the navigation's overlay.
  */
-import { useChannels } from '../../../data/queries';
+import { useChannels, useUpdatesUnread } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Link, useRoute } from '../../../router/router-provider';
 import { Tooltip } from '../../../ui/tooltip';
@@ -18,6 +19,8 @@ import { useDeepWork } from '../../shell/deep-work';
 import { useNav } from '../../shell/nav';
 import { RailItemContent, railItemClasses } from '../../shell/rail-item';
 import { useWorkspace } from '../../shell/workspace';
+import { noticesOf } from '../../../modules/registry';
+import { useSession } from '../../session/session';
 import { InboxPanel } from './inbox-panel';
 
 export const InboxLink = (): React.JSX.Element => {
@@ -29,8 +32,15 @@ export const InboxLink = (): React.JSX.Element => {
   const quiet = useDeepWork().until !== null;
   // No navigation context (a page drawn alone) is treated as narrow: the plain link.
   const narrow = useNav()?.narrow !== false;
+  // What a module told the person counts with what the channels did, where a running module writes notices (D-286).
+  const updates = useUpdatesUnread(
+    workspace.id,
+    Object.keys(noticesOf(useSession().modules)).length > 0,
+  );
   const waiting =
-    !quiet && (channels ?? []).some((channel) => (channel.state?.unreadMentionCount ?? 0) > 0);
+    !quiet &&
+    (updates > 0 ||
+      (channels ?? []).some((channel) => (channel.state?.unreadMentionCount ?? 0) > 0));
   const content = (
     <RailItemContent
       glyph="inbox"

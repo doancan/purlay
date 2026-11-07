@@ -106,4 +106,6 @@ export const chat = defineModule({
     },
   ],
   auditActions: CHAT_AUDIT_ACTIONS,
+  // Chat's notifications are its own list in the inbox, bound to a message (D-250 §1); it writes none to the core's.
+  notices: {},
 });

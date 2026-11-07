@@ -31,6 +31,7 @@ have it.
 
 - **Conversations** — Return to conversations you started, answered or followed, filter waiting replies and choose which threads to keep following (D-290)
 - **Issues** — Assigning an issue to somebody else now tells them in the core's inbox, in the same step as the assignment (D-286)
+- **Inbox** — A new Updates section beside Mentions, Direct and Threads lists what the workspace's other parts, issues for now, told you, and the inbox's dot lights while one waits unread (D-286)
 - **Notifications** — Being assigned an issue also sends a push to your devices, held while you are in Deep Work or your quiet hours and sent when they end, and never saying the issue's title (D-286)
 - **Messages** — Read PDF attachments inside the conversation, browse pages, zoom and select their text, with the original download available throughout (D-287)
 - **Channel groups** — Organize your channels under personal headings across devices, rename or fold groups, and move a channel from its menu; deleting a group preserves its channels and conversations (D-284)
