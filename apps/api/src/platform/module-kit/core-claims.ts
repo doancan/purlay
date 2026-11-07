@@ -4,7 +4,7 @@
  * Each list is held to the code by a test (`route-ownership.test.ts`, `core-claims.test.ts`), so a new core claim that is
  * not added here fails there rather than waiting for a module to collide with it.
  */
-import { CORE_AUDIT_ACTIONS } from '@purlay/types';
+import { CORE_AUDIT_ACTIONS, CORE_FACTS, type FactDeclaration } from '@purlay/types';
 import { CORE_PERMISSIONS } from './permissions';
 
 /**
@@ -151,10 +151,15 @@ export type CoreClaims = Readonly<
     | 'permissions'
     | 'auditActions'
     | 'notifications'
-    | 'searchSources',
+    | 'searchSources'
+    | 'facts',
     readonly string[]
   >
 >;
+
+/** The types of a list of fact declarations: what the core claims of the facts a module may publish. */
+export const factTypes = (facts: readonly FactDeclaration[]): string[] =>
+  facts.map((fact) => fact.type);
 
 export const CORE_CLAIMS: CoreClaims = {
   routes: CORE_ROUTES,
@@ -165,4 +170,5 @@ export const CORE_CLAIMS: CoreClaims = {
   auditActions: CORE_AUDIT_ACTIONS,
   notifications: [],
   searchSources: [],
+  facts: factTypes(CORE_FACTS),
 };

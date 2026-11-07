@@ -13692,7 +13692,8 @@ the second writer that §10 step 5 said a generic inbox waits for.
      optional, or that nothing provides; a `provides` with no implementation and an implementation with no `provides`.
    - **No `register`, no `capabilities.has`.** Nothing is registered at run time: the running modules are known at start and the
      composition is made once. A module is handed a `ports` object whose members are the type of the port *or* `undefined`, so
-     the compiler makes the caller handle the absence, and a scan holds a module to reading only the ports its `uses` names.
+     the compiler makes the caller handle the absence, and, once a module first reads one, a scan holds it to the ports its
+     `uses` names.
    - **An optional partner does not become a requirement.** `uses` and `consumes` name a provider that is `optional`;
      `module-compat.test.ts` holds `publishes`, `consumes` and `uses` to the last release as it holds `provides`, so a
      published fact type that goes is a break that needs a dated exception.

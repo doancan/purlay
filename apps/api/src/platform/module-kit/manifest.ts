@@ -126,4 +126,20 @@ export interface ModuleManifest {
   readonly notifications?: readonly NotificationKindDeclaration[];
   /** The sources the module adds to a workspace search, by id; a process that does not run it queries none of them. */
   readonly searchSources?: readonly string[];
+  /**
+   * The fact types the module owns and may publish, each named `<id>.<what>` and declared in `@purlay/types` (`MODULES.md` §4,
+   * D-283 §3). One module owns a type: the registry refuses two, and the core's.
+   */
+  readonly publishes?: readonly string[];
+  /**
+   * The fact types the module handles, its own, another module's or the core's. Each needs a publisher in the build and a handler
+   * in the module's slot (`factConsumers`), and the build is refused for a type without either.
+   */
+  readonly consumes?: readonly string[];
+  /**
+   * The capabilities the module asks of another, by the names that module lists under `provides`. The provider must be a
+   * partner the module `requires` or lists as `optional`: asking never makes a requirement, and where the provider is not run the
+   * module is handed `undefined` and hides the feature or does nothing (D-283 §3).
+   */
+  readonly uses?: readonly string[];
 }

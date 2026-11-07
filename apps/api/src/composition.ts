@@ -33,6 +33,7 @@ import type { UserErased } from './modules/users/erasure';
 import { noWorkspaceChannels, type WorkspaceChannels } from './modules/workspaces/channels-port';
 import type { WorkspacePurge } from './modules/workspaces/deletion-purge';
 import type { WorkspaceCreated } from './modules/workspaces/workspaces';
+import type { FactConsumers } from './platform/fact-consumers';
 import type { FrameHandlers } from './platform/frame-handlers';
 import type { RouterFrameContext } from './realtime/router';
 import { hookList } from './platform/hooks';
@@ -105,6 +106,16 @@ export interface BundledModule {
    * and supplies none fails `route-ownership.test.ts`.
    */
   readonly routes?: (dependencies: ModuleRouteDependencies) => AnyElysia;
+  /**
+   * What handles each fact type the manifest names under `consumes`, and no other: a type consumed with no handler, or a handler
+   * for one not consumed, stops the build (`compose`), as for the work of a job (D-283 §3).
+   */
+  readonly factConsumers?: FactConsumers;
+  /**
+   * What implements each capability the manifest lists under `provides`, and no other, by the capability's name: a port the core
+   * defines in `platform/ports/` (D-283 §3). Handed to the modules that `use` it only while this module runs.
+   */
+  readonly ports?: Readonly<Record<string, object>>;
 }
 
 /**
@@ -155,6 +166,38 @@ const frameHandlerProblem = ({
     : `"${manifest.id}" supplies handlers for ${unnamed.join(', ')}, which its manifest does not name under frames`;
 };
 
+/** What is wrong with the fact handlers a module supplies and the types its manifest consumes, or `undefined` when they are the same. */
+const factConsumerProblem = ({
+  manifest,
+  factConsumers = {},
+}: BundledModule): string | undefined => {
+  const named = manifest.consumes ?? [];
+  const unhandled = named.filter((type) => !(type in factConsumers));
+  const undeclared = Object.keys(factConsumers).filter((type) => !named.includes(type));
+  if (unhandled.length > 0) {
+    return `"${manifest.id}" consumes the facts ${unhandled.join(', ')} in its manifest and supplies no handler for them`;
+  }
+  if (undeclared.length > 0) {
+    return `"${manifest.id}" supplies handlers for ${undeclared.join(', ')}, which its manifest does not name under consumes`;
+  }
+  return undefined;
+};
+
+/** What is wrong with the ports a module supplies and the capabilities its manifest provides, or `undefined` when they are the same. */
+const portProblem = ({ manifest, ports = {} }: BundledModule): string | undefined => {
+  const unimplemented = manifest.provides.filter((capability) => !(capability in ports));
+  const unlisted = Object.keys(ports).filter(
+    (capability) => !manifest.provides.includes(capability),
+  );
+  if (unimplemented.length > 0) {
+    return `"${manifest.id}" provides ${unimplemented.join(', ')} in its manifest and supplies no implementation for it`;
+  }
+  if (unlisted.length > 0) {
+    return `"${manifest.id}" supplies implementations for ${unlisted.join(', ')}, which its manifest does not list under provides`;
+  }
+  return undefined;
+};
+
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
 export const bundledModules = [
   chatModule,
@@ -199,6 +242,8 @@ export interface Composition {
   readonly notificationKinds: readonly NotificationKindDeclaration[];
   /** The ids of the search sources of the modules this process runs: a module that is off is not queried. */
   readonly searchSources: readonly string[];
+  /** The implementation of each capability the modules this process runs provide; one whose module is off is not a key, so a read of it is `undefined`. */
+  readonly ports: Readonly<Record<string, object>>;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -246,6 +291,8 @@ export const compose = (
     const problem =
       jobWorkProblem(module) ??
       frameHandlerProblem(module) ??
+      factConsumerProblem(module) ??
+      portProblem(module) ??
       workerProblem(module.manifest.id, module.workers ?? []);
     if (problem !== undefined) throw new Error(problem);
   }
@@ -265,6 +312,7 @@ export const compose = (
     ),
     notificationKinds: modules.flatMap((module) => module.manifest.notifications ?? []),
     searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),
+    ports: Object.fromEntries(modules.flatMap((module) => Object.entries(module.ports ?? {}))),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     workers: modules.flatMap((module) =>
       (module.workers ?? []).map((worker) => ({
