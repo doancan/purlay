@@ -12,6 +12,9 @@ export interface ReleasedManifest {
   readonly routes: readonly string[];
   readonly jobs: readonly string[];
   readonly frames: readonly string[];
+  /** Absent from a snapshot written before facts existed (D-287): such a release promised none. */
+  readonly publishes?: readonly string[];
+  readonly consumes?: readonly string[];
 }
 
 /** A deliberate break, said where a reviewer reads it. `change` is the sentence `incompatibilities` gives. */
@@ -39,6 +42,8 @@ export const releasedFrom = (manifest: ModuleManifest): ReleasedManifest => ({
   routes: sorted(manifest.routes),
   jobs: sorted(manifest.jobs),
   frames: sorted(manifest.frames),
+  publishes: sorted(manifest.publishes),
+  consumes: sorted(manifest.consumes),
 });
 
 const missing = (released: readonly string[], current: readonly string[]): string[] =>
@@ -46,7 +51,7 @@ const missing = (released: readonly string[], current: readonly string[]): strin
 
 /**
  * Each way the current manifests break what the last release promised, as a sentence. Not breaks: a new module, a
- * new capability, route, job or socket operation, a dropped requirement, a new or dropped optional partner. What is silent is the
+ * new capability, route, job, socket operation or fact, a dropped requirement or question, a new or dropped optional partner. What is silent is the
  * rest — an operator who ran the last release's set would find a module refusing to start for a partner it never
  * needed, a capability another module asks for gone, or a route, a socket operation or a scheduled job that now answers as if it never
  * existed.
@@ -79,6 +84,12 @@ export const incompatibilities = (
       ),
       ...missing(before.frames, after.frames).map(
         (op) => `module '${before.id}' no longer owns the socket operation '${op}'`,
+      ),
+      ...missing(before.publishes ?? [], after.publishes ?? []).map(
+        (type) => `module '${before.id}' no longer publishes the fact '${type}'`,
+      ),
+      ...missing(before.consumes ?? [], after.consumes ?? []).map(
+        (type) => `module '${before.id}' no longer consumes the fact '${type}'`,
       ),
     ];
   });
