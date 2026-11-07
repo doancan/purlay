@@ -34,6 +34,7 @@ import type { SealedSetting, ServerSettings } from './modules/setup/settings';
 import { credentialCipher } from './platform/crypto';
 import { inProcessBackplane } from './realtime/bus';
 import { bunRedisClient, connectRedis } from './platform/redis';
+import { advertiseEntitlements, peersBehind } from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
@@ -194,15 +195,25 @@ log.info(
 const backplane = sharing?.backplane ?? inProcessBackplane();
 // Where nodes share state they also share the question of which modules each runs: a mismatch is said, never
 // acted on, so a rolling deploy of a new set passes (D-250).
-const moduleSet =
+const nodeId = crypto.randomUUID();
+const moduleSetWatch =
   redis === undefined
     ? undefined
     : watchModuleSet({
         link: redis,
-        nodeId: crypto.randomUUID(),
+        nodeId,
         set: moduleSetOf(modules.modules.map((module) => module.manifest.id)),
         log,
       });
+// And of which of them read a workspace's grants, so that a restriction is not written beside one that does not (D-292).
+const grantsAdvertised =
+  redis === undefined ? undefined : advertiseEntitlements({ link: redis, nodeId, log });
+const moduleSet = {
+  stop: async (): Promise<void> => {
+    await grantsAdvertised?.stop();
+    await moduleSetWatch?.stop();
+  },
+};
 
 // Who every request and socket is: sessions are resolved through Better Auth, signing with a secret
 // derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
@@ -243,6 +254,9 @@ const workers: Workers = {
 const app = createApp({
   composition: modules,
   moduleShares,
+  ...(redis === undefined
+    ? {}
+    : { peersBehind: async (): Promise<number> => await peersBehind(redis) }),
   auth: services.auth,
   services,
   // The setup's steps and, later, Administration → Server change the settings through this (D-179 §4.9).

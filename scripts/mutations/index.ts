@@ -23,6 +23,7 @@ import { API_INGRESS_HTTP_AUTH } from './api-ingress-http-auth';
 import { API_INGRESS_HTTP_SETUP } from './api-ingress-http-setup';
 import { API_INGRESS_WS } from './api-ingress-ws';
 import { API_ISSUES } from './api-issues';
+import { API_MODULES_ADMINISTRATION } from './api-modules-administration';
 import { API_MODULES_ATTACHMENTS } from './api-modules-attachments';
 import { API_MODULES_AUDIT } from './api-modules-audit';
 import { API_MODULES_AUTH } from './api-modules-auth';
@@ -79,6 +80,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-ingress-http-auth': API_INGRESS_HTTP_AUTH,
   'api-ingress-http-setup': API_INGRESS_HTTP_SETUP,
   'api-ingress-ws': API_INGRESS_WS,
+  'api-modules-administration': API_MODULES_ADMINISTRATION,
   'api-modules-attachments': API_MODULES_ATTACHMENTS,
   'api-modules-audit': API_MODULES_AUDIT,
   'api-modules-auth': API_MODULES_AUTH,

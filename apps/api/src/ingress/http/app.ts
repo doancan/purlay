@@ -95,6 +95,7 @@ import { inProcessLimiters } from '../../realtime/rate-limiter';
 import type { SharedState } from '../../realtime/shared';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { AppError } from '../../platform/errors';
+import type { PeersBehind } from '../../modules/entitlements/peers';
 import {
   JSON_BODY_MAX_BYTES,
   crossSiteResponse,
@@ -325,6 +326,8 @@ export interface Dependencies {
    * whole build's from `testDependencies`.
    */
   readonly composition: Composition;
+  /** How many live nodes of the cluster do not read workspace grants (D-292); absent where there is one node. */
+  readonly peersBehind?: PeersBehind;
   /** What `find` holds a search source to, where a test wants less than `SEARCH_SOURCE_DEADLINE_MS`; a module's own shorter deadline always wins. */
   readonly findDeadlineMs?: number;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
@@ -637,6 +640,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       carried: modules.bundled.map((module) => module.manifest),
       mode: modules.entitlementMode,
     },
+    peersBehind: dependencies.peersBehind,
     jobs: [
       ...CORE_JOBS,
       ...Object.keys(modules.jobWork).filter((name) => !modules.closedJob(name)),

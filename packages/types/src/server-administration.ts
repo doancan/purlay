@@ -134,6 +134,19 @@ export const ServerUserDetail = Type.Object({
   activeSessions: Type.Integer({ minimum: 0 }),
 });
 export type ServerUserDetail = Static<typeof ServerUserDetail>;
+/** What the operator has said of one module for one workspace, and what that comes to now (D-289). */
+export const ServerWorkspaceModule = Type.Object({
+  module: Type.String(),
+  /** What the row says: `inherit` when there is none (or it has run out), and the server's mode decides. */
+  state: Type.Union([Type.Literal('on'), Type.Literal('off'), Type.Literal('inherit')]),
+  /** Whether the workspace may use it now, the module it requires counted. */
+  effective: Type.Boolean(),
+  validUntil: Type.Union([Timestamp, Type.Null()]),
+  source: Type.Union([Type.String(), Type.Null()]),
+  /** Whether this process runs the module: a grant for one it does not is kept and does nothing here. */
+  running: Type.Boolean(),
+});
+export type ServerWorkspaceModule = Static<typeof ServerWorkspaceModule>;
 export const ServerWorkspace = Type.Object({
   id: Uuid,
   name: Type.String(),
@@ -147,6 +160,8 @@ export const ServerWorkspace = Type.Object({
   usedBytes: Type.String({ pattern: '^[0-9]+$' }),
   quotaBytes: Type.String({ pattern: '^[0-9]+$' }),
   retentionDays: Type.Union([Type.Integer(), Type.Null()]),
+  /** One entry for each module of the build that a workspace can be granted (D-289). */
+  modules: Type.Array(ServerWorkspaceModule),
 });
 export type ServerWorkspace = Static<typeof ServerWorkspace>;
 export const ServerWorkspacePage = Page(ServerWorkspace);

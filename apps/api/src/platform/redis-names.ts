@@ -23,6 +23,8 @@ export interface RedisNames {
   readonly bus: string;
   /** The hash of the modules each node runs. */
   readonly moduleSet: string;
+  /** The hash of the nodes that read a workspace's grants (D-292). */
+  readonly entitlementNodes: string;
   /** Typing windows: this, then `channelId:userId`. */
   readonly typingPrefix: string;
   /** A person's online record: this, then `userId`. */
@@ -43,6 +45,7 @@ export const redisNames = (namespace: string = DEFAULT_REDIS_NAMESPACE): RedisNa
   return {
     bus: `${prefix}bus`,
     moduleSet: `${prefix}modules`,
+    entitlementNodes: `${prefix}entitlement-nodes`,
     typingPrefix: `${prefix}typing:`,
     onlinePrefix: `${prefix}online:`,
     lapseIndex: `${prefix}online-lapse`,
