@@ -93,40 +93,42 @@ test('a waiting thread keeps live edits and a deleted parent, then opens its act
   await expect.poll(async () => (await viewer.channelState(made.id))?.unreadCount).toBe(0);
 });
 
-test('unreads preserve file-only content and usable controls in both themes at narrow and wide widths', async ({
-  page,
-  signIn,
-  room,
-  tenant,
-  api,
-  asPerson,
-  expectNoAxe,
-}, info) => {
-  const made = await room({ members: ['dogancan', 'alice'] });
-  const name = `satin-alma-tedarik-planlama-ve-vardiya-bildirimleri-${made.id.slice(-12)}`;
-  await api('dogancan').patch(`/api/channels/${made.id}`, { name });
-  const writer = await asPerson('alice');
-  await writer.goto(made.path);
-  await expect(writer.getByRole('textbox', { name: `Message ${name}` })).toBeVisible();
-  await writer.locator('input[type="file"]').setInputFiles({
-    name: 'Vardiya-planı.csv',
-    mimeType: 'text/csv',
-    buffer: Buffer.from('Ekip,Vardiya\nDepo,Sabah\n'),
-  });
-  await expect(
-    writer.getByRole('list', { name: 'Files to send' }).getByText(/Uploading/),
-  ).toHaveCount(0);
-  await writer.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(writer.getByRole('link', { name: /Download Vardiya-planı\.csv/ })).toBeVisible();
-  await signIn();
-  await page.goto(`/w/${tenant.slug}/unreads`);
-  for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => {
-      localStorage.setItem('purlay.theme', value);
-    }, theme);
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    for (const width of [320, 768, 1440]) {
+// Each theme/width gets its own test budget and fixture cleanup. Six full-page
+// accessibility passes in one test exceed WebKit's 30-second CI budget.
+for (const theme of ['light', 'dark']) {
+  for (const width of [320, 768, 1440]) {
+    test(`unreads preserve file-only content and usable controls in ${theme} at ${String(width)} pixels`, async ({
+      page,
+      signIn,
+      room,
+      tenant,
+      api,
+      asPerson,
+      expectNoAxe,
+    }, info) => {
+      const made = await room({ members: ['dogancan', 'alice'] });
+      const name = `satin-alma-tedarik-planlama-ve-vardiya-bildirimleri-${made.id.slice(-12)}`;
+      await api('dogancan').patch(`/api/channels/${made.id}`, { name });
+      const writer = await asPerson('alice');
+      await writer.goto(made.path);
+      await expect(writer.getByRole('textbox', { name: `Message ${name}` })).toBeVisible();
+      await writer.locator('input[type="file"]').setInputFiles({
+        name: 'Vardiya-planı.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from('Ekip,Vardiya\nDepo,Sabah\n'),
+      });
+      await expect(
+        writer.getByRole('list', { name: 'Files to send' }).getByText(/Uploading/),
+      ).toHaveCount(0);
+      await writer.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(writer.getByRole('link', { name: /Download Vardiya-planı\.csv/ })).toBeVisible();
+      await signIn();
+      await page.goto(`/w/${tenant.slug}/unreads`);
+      await page.evaluate((value) => {
+        localStorage.setItem('purlay.theme', value);
+      }, theme);
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await page.setViewportSize({ width, height: 900 });
       const channel = page.getByRole('region', { name, exact: true });
       // The heading exists while its content loads; scroll only after the file is
@@ -152,10 +154,10 @@ test('unreads preserve file-only content and usable controls in both themes at n
         // exceed WebKit's full-page image dimension limit in the shared suite.
         fullPage: false,
       });
-    }
+      expect((await api('dogancan').channelState(made.id))?.unreadCount).toBe(1);
+    });
   }
-  expect((await api('dogancan').channelState(made.id))?.unreadCount).toBe(1);
-});
+}
 
 test('joining after history shows only subsequent unread messages', async ({
   page,
