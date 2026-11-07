@@ -103,7 +103,7 @@ test('unreads preserve file-only content and usable controls in both themes at n
   expectNoAxe,
 }, info) => {
   const made = await room({ members: ['dogancan', 'alice'] });
-  const name = 'satin-alma-tedarik-planlama-ve-vardiya-bildirimleri';
+  const name = `satin-alma-tedarik-planlama-ve-vardiya-bildirimleri-${made.id.slice(-12)}`;
   await api('dogancan').patch(`/api/channels/${made.id}`, { name });
   const writer = await asPerson('alice');
   await writer.goto(made.path);
@@ -129,6 +129,11 @@ test('unreads preserve file-only content and usable controls in both themes at n
     for (const width of [320, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const channel = page.getByRole('region', { name, exact: true });
+      // The heading exists while its content loads; scroll only after the file is
+      // ready so replacing the loading row does not move it out of view.
+      await expect(
+        channel.getByRole('link', { name: /Download Vardiya-planı\.csv/ }),
+      ).toBeVisible();
       await channel.scrollIntoViewIfNeeded();
       await expect(
         channel.getByRole('link', { name: /Download Vardiya-planı\.csv/ }),
@@ -143,7 +148,9 @@ test('unreads preserve file-only content and usable controls in both themes at n
       await expectNoAxe();
       await page.screenshot({
         path: info.outputPath(`unreads-${theme}-${String(width)}.png`),
-        fullPage: true,
+        // Keep the visible controls as evidence; accumulated offscreen unreads can
+        // exceed WebKit's full-page image dimension limit in the shared suite.
+        fullPage: false,
       });
     }
   }
