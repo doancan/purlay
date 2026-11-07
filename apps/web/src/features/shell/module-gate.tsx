@@ -3,7 +3,7 @@
  * not found, as the server's own answer for the same path is.
  */
 import { moduleOf, type RouteName } from '../../router/routes';
-import { useRuns, useSession } from '../session/session';
+import { useModules, useRuns } from '../session/session';
 import { NotFound } from './not-found';
 
 interface ModuleGateProps {
@@ -12,7 +12,7 @@ interface ModuleGateProps {
 }
 
 export const ModuleGate = ({ route, children }: ModuleGateProps): React.JSX.Element => {
-  const { modules } = useSession();
+  const modules = useModules();
   const owner = moduleOf(route);
   return owner === null || modules.some((id) => id === owner) ? <>{children}</> : <NotFound />;
 };

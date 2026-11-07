@@ -34,6 +34,8 @@ const another: BundledModule = {
     requires: [],
     optional: [],
     provides: [],
+    // Its tests give it jobs and workers, which only a module no workspace is granted may have (D-289).
+    entitlement: 'always',
     budget: { none: 'a test module' },
   },
   workspaceChannels: { ...noWorkspaceChannels },
@@ -505,6 +507,48 @@ describe('the share of the database each module declares (D-250 rule 7, D-266)',
         undefined,
       ),
     ).toThrow(/"other" does not say what it may take of the database/);
+  });
+});
+
+describe('a module a workspace is granted', () => {
+  const grant = (
+    manifest: { jobs?: string[] },
+    workers?: BundledModule['workers'],
+  ): BundledModule => ({
+    manifest: { ...another.manifest, entitlement: 'grant', ...manifest },
+    ...(manifest.jobs === undefined
+      ? {}
+      : { jobWork: { 'other:send': () => Promise.resolve({ done: 1 }) } }),
+    ...(workers === undefined ? {} : { workers }),
+  });
+
+  test('may not run a job or a worker, whose work is not given the workspace’s grant', () => {
+    const problem =
+      "\"other\" is a grant of the workspace and declares jobs or workers, whose work is not given the workspace's grant: it must say entitlement: 'always'";
+    expect(() => compose([], [grant({ jobs: ['other:send'] })])).toThrow(problem);
+    expect(() =>
+      compose(
+        [],
+        [
+          grant({}, [
+            { name: 'tick', intervalMs: 5_000, work: (): Promise<void> => Promise.resolve() },
+          ]),
+        ],
+      ),
+    ).toThrow(problem);
+    // Saying nothing is a grant; a module with neither is fine, and so is one no grant can take.
+    expect(() => compose([], [grant({})])).not.toThrow();
+    expect(() =>
+      compose(
+        [],
+        [
+          {
+            ...grant({ jobs: ['other:send'] }),
+            manifest: { ...another.manifest, jobs: ['other:send'] },
+          },
+        ],
+      ),
+    ).not.toThrow();
   });
 });
 

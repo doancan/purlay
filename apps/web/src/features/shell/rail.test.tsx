@@ -157,6 +157,50 @@ describe('the rail', () => {
     });
   });
 
+  describe('a workspace that is not granted a module (D-289)', () => {
+    /** The server runs chat and issues, and each workspace says which of them it may use. */
+    const granted = (modules: MeResponse['memberships'][number]['modules']): Api =>
+      aSignedInApi({
+        me: () => {
+          const session = aSession();
+          return Promise.resolve({
+            ...session,
+            modules: ['chat', 'issues'],
+            memberships: session.memberships.map((membership) =>
+              modules === undefined ? membership : { ...membership, modules },
+            ),
+          });
+        },
+        issues: () => Promise.resolve({ data: [], nextCursor: null }),
+      });
+
+    test('draws no place for it, though the server runs it', async () => {
+      const view = await renderApp(<Outlet />, { path: '/w/acme/search', api: granted(['chat']) });
+      const rail = await view.findByRole('navigation', { name: 'Places' });
+      expect(within(rail).queryByRole('link', { name: 'Issues' })).toBeNull();
+    });
+
+    test('draws it where the workspace is granted it', async () => {
+      const view = await renderApp(<Outlet />, {
+        path: '/w/acme/search',
+        api: granted(['chat', 'issues']),
+      });
+      const rail = await view.findByRole('navigation', { name: 'Places' });
+      expect(within(rail).getByRole('link', { name: 'Issues' })).toBeDefined();
+    });
+
+    test('answers its address as not found', async () => {
+      const view = await renderApp(<Outlet />, { path: '/w/acme/issues', api: granted(['chat']) });
+      expect(await view.findByRole('heading', { level: 1, name: 'Nothing here' })).toBeDefined();
+    });
+
+    test('takes what the server runs when the server says nothing of the workspace', async () => {
+      const view = await renderApp(<Outlet />, { path: '/w/acme/search', api: granted(undefined) });
+      const rail = await view.findByRole('navigation', { name: 'Places' });
+      expect(within(rail).getByRole('link', { name: 'Issues' })).toBeDefined();
+    });
+  });
+
   test('Channels marks a section, not a page: the open channel’s row is the page', async () => {
     const view = await open();
     expect(

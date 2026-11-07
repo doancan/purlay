@@ -9,7 +9,7 @@
  */
 import { createContext, useContext } from 'react';
 import type { UserRole, Workspace } from '@purlay/types';
-import { useSession } from '../session/session';
+import { useSession, WorkspaceModulesProvider } from '../session/session';
 
 interface WorkspaceScope {
   readonly workspace: Workspace;
@@ -42,7 +42,9 @@ export const WorkspaceScopeProvider = ({
   if (membership === undefined) return <>{notFound}</>;
   return (
     <WorkspaceContext.Provider value={{ workspace: membership.workspace, role: membership.role }}>
-      {children}
+      <WorkspaceModulesProvider value={membership.modules ?? null}>
+        {children}
+      </WorkspaceModulesProvider>
     </WorkspaceContext.Provider>
   );
 };
