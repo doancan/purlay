@@ -157,7 +157,7 @@ export const WEB_CORE: readonly Mutation[] = [
   },
   {
     id: 'followed-hidden-content-kept',
-    why: 'A personally hidden root remains in the cached follow list. (D-289)',
+    why: 'A personally hidden root remains in the cached follow list. (D-290)',
     file: 'apps/web/src/data/cache.ts',
     find: '  editFollowed(client, (row) => (row.root.id === messageId ? null : row), true);\n',
     replace: '',
@@ -165,7 +165,7 @@ export const WEB_CORE: readonly Mutation[] = [
   },
   {
     id: 'followed-pending-page-not-cancelled',
-    why: 'An old in-flight page can briefly restore revoked content before the fresh read replaces it. (D-289)',
+    why: 'An old in-flight page can briefly restore revoked content before the fresh read replaces it. (D-290)',
     file: 'apps/web/src/data/cache.ts',
     find: '    askAgainIfOnItsWay(client, key);\n  }\n};\n\n/** A refused choice',
     replace: '  }\n};\n\n/** A refused choice',
@@ -173,7 +173,7 @@ export const WEB_CORE: readonly Mutation[] = [
   },
   {
     id: 'followed-revoked-content-kept',
-    why: 'Revoked channel content remains in the cached follow list. (D-289)',
+    why: 'Revoked channel content remains in the cached follow list. (D-290)',
     file: 'apps/web/src/data/cache.ts',
     find: '  editFollowed(client, (row) => (channelIds.includes(row.root.channelId) ? null : row), true);\n',
     replace: '',
@@ -181,7 +181,7 @@ export const WEB_CORE: readonly Mutation[] = [
   },
   {
     id: 'followed-undo-overwrites-newer-page',
-    why: 'An old refused choice overwrites a newer authoritative page. (D-289)',
+    why: 'An old refused choice overwrites a newer authoritative page. (D-290)',
     file: 'apps/web/src/data/cache.ts',
     find: 'if (client.getQueryData<FollowedPages>(key) === after) client.setQueryData(key, before);',
     replace: 'client.setQueryData(key, before);',
@@ -189,7 +189,7 @@ export const WEB_CORE: readonly Mutation[] = [
   },
   {
     id: 'followed-undo-restores-after-authority-change',
-    why: 'A refused optimistic choice restores a hidden, deleted or revoked conversation. (D-289)',
+    why: 'A refused optimistic choice restores a hidden, deleted or revoked conversation. (D-290)',
     file: 'apps/web/src/data/cache.ts',
     find: '    if ((followedVersions.get(client) ?? 0) !== version) return;\n',
     replace: '',

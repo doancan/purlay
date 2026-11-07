@@ -12,7 +12,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'cursor-time-impossible-day-accepted',
-    why: 'A normalized impossible calendar day is accepted as a cursor. (D-289)',
+    why: 'A normalized impossible calendar day is accepted as a cursor. (D-290)',
     file: 'packages/types/src/formats.ts',
     find: "parsed.toISOString() === value.replace(/(\\.\\d{3})\\d{3}Z$/, '$1Z') && parsed.getUTCFullYear() > 0",
     replace: 'parsed.getUTCFullYear() > 0',
@@ -20,7 +20,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'cursor-time-invalid-month-throws',
-    why: 'An invalid month reaches toISOString and throws instead of being refused by validation. (D-289)',
+    why: 'An invalid month reaches toISOString and throws instead of being refused by validation. (D-290)',
     file: 'packages/types/src/formats.ts',
     find: '  if (!Number.isFinite(instant)) return false;\n',
     replace: '',
@@ -28,7 +28,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'cursor-time-shape-not-checked',
-    why: 'An extended year outside the canonical four-digit cursor format is accepted. (D-289)',
+    why: 'An extended year outside the canonical four-digit cursor format is accepted. (D-290)',
     file: 'packages/types/src/formats.ts',
     find: '  if (!CURSOR_TIME.test(value)) return false;\n',
     replace: '',
@@ -36,7 +36,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'cursor-time-year-zero-accepted',
-    why: 'The year zero reaches PostgreSQL instead of being refused as an invalid cursor. (D-289)',
+    why: 'The year zero reaches PostgreSQL instead of being refused as an invalid cursor. (D-290)',
     file: 'packages/types/src/formats.ts',
     find: ' && parsed.getUTCFullYear() > 0',
     replace: '',
@@ -127,7 +127,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-query-limit-unbounded',
-    why: 'A request can exceed the supported page size. (D-289)',
+    why: 'A request can exceed the supported page size. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'minimum: 1, maximum: PAGE_LIMIT.max',
     replace: 'minimum: 1',
@@ -135,7 +135,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-query-root-without-time',
-    why: 'A root UUID without its activity timestamp is accepted as a complete cursor. (D-289)',
+    why: 'A root UUID without its activity timestamp is accepted as a complete cursor. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'beforeActivityAt: ActivityAt',
     replace: 'beforeActivityAt: Type.Optional(ActivityAt)',
@@ -143,7 +143,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-query-time-without-root',
-    why: 'A timestamp without its root UUID is accepted as a complete cursor. (D-289)',
+    why: 'A timestamp without its root UUID is accepted as a complete cursor. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'beforeRootId: Uuid',
     replace: 'beforeRootId: Type.Optional(Uuid)',
@@ -151,7 +151,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-query-zero-limit-accepted',
-    why: 'A zero page size is accepted by the request contract. (D-289)',
+    why: 'A zero page size is accepted by the request contract. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'minimum: 1, maximum: PAGE_LIMIT.max',
     replace: 'minimum: 0, maximum: PAGE_LIMIT.max',
@@ -159,7 +159,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-response-page-unbounded',
-    why: 'A response larger than the supported page is trusted by the client. (D-289)',
+    why: 'A response larger than the supported page is trusted by the client. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'Type.Array(FollowedThread, { maxItems: PAGE_LIMIT.max })',
     replace: 'Type.Array(FollowedThread)',
@@ -167,7 +167,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-unread-positive-may-have-no-first',
-    why: 'A positive unread count may have no reply to open. (D-289)',
+    why: 'A positive unread count may have no reply to open. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'count: Type.Literal(0)',
     replace: 'count: Type.Integer({ minimum: 0 })',
@@ -175,7 +175,7 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
   },
   {
     id: 'followed-unread-zero-may-have-first',
-    why: 'A zero unread count may claim a first unread reply. (D-289)',
+    why: 'A zero unread count may claim a first unread reply. (D-290)',
     file: 'packages/types/src/followed-threads.ts',
     find: 'count: Type.Integer({ minimum: 1 })',
     replace: 'count: Type.Integer({ minimum: 0 })',

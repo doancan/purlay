@@ -14100,8 +14100,69 @@ get better, and a retry only delays the line in the log. *Holding `uses` in the 
 **Cost of reversing.** One table of transient rows, which may be dropped once no fact is published, and a guard in `module-compat`,
 which a dated exception lifts for a fact that is removed on purpose. The facts in flight at the moment of a drop are lost.
 
+### D-289. A workspace is granted the modules it may use, in one table and one pure function, and the framework's guard asks it — builds on D-21, D-54, D-250, D-255, D-278, D-283; completes D-250 rule 9's precondition
 
-### D-289. Followed conversations are a personal, read-only view of the existing follow relation — builds on D-34, D-103, D-161, D-282
+**Context.** D-250 rule 9 lets the cloud price what it operates by the modules a customer runs, and forbids selling a package before a
+workspace can be enabled on its own: a package per instance would make the cloud one deployment per customer and end D-1's small
+operation. `MODULES` is a process's setting (D-255), read once at boot, so today every workspace of an instance has every module the
+instance runs and `DEPLOY.md` says that mixed packages on one instance are not supported. This decision makes them supported. It is
+a commercial gate and not a permission: being a member decides what a person may read (D-21), and a grant decides only whether the
+workspace may use a feature at all. It is not a licence check either; all code stays AGPL and a server you run yourself is, by
+default, every module (D-24, D-250 rule 9).
+
+**Decision.**
+
+1. **One table, `workspace_modules`**, owned by the core (`TABLE_OWNERS`), key `(workspace_id, module)`: `state` `on` or `off`, an
+   optional `valid_until`, a `source` label (`operator`, `file:<name>`, or a billing system's), `changed_by` and `changed_at`.
+   `module` has no foreign key and no list of values, because a build may not carry the module a row names and a core table never
+   names a module's table (D-250 rule 5). Rows are sparse: a module added later is a migration of nothing.
+2. **Two modes, `WORKSPACE_MODULES=open|managed`**, default `open`. With no row for a module, `open` grants it and `managed` does
+   not; a row overrides the mode in both directions. A row past `valid_until` is read as no row, at the moment of the read, by the
+   process's clock, with no job and no event, so a trial that ends needs nobody to end it. `open` with an empty table behaves exactly
+   as the instance did before this decision: that is how the change ships dark. `managed` is what the cloud sets, so a module that
+   appears in a later release is given to no customer unseen.
+3. **One pure function decides.** `effectiveModules` (`platform/module-kit/entitlement.ts`) takes the modules the process runs, the
+   workspace's rows, the mode and the time, and returns `closure_requires((running ∩ granted))`: a module whose requirement is not in
+   the set leaves it, and what requires that leaves in turn. A manifest may say `entitlement: 'always'`, and then no row can take it
+   from a workspace; a manifest that says nothing says `grant`. **Chat is `always` in this release**: its topics, frames and events are
+   closed per process (D-255 §2), and a downgrade that cannot close an open socket is not a downgrade. Making chat a grant is a
+   decision of its own, with the socket's side.
+4. **The framework asks, not the module.** The set is read in the same statement as the membership (`requireWorkspaceMembership`, the
+   one producer of a `WorkspaceContext`, D-54) and rides on the context. The guard checks the membership first and the grant after, so
+   a stranger learns nothing about a workspace's grants, and a refusal for a grant is the answer of a module that is not run, byte for
+   byte (`ROUTE_NOT_FOUND`, the plain `404`). A module cannot forget to ask, because the question is not in its code. Each request turned away for a grant is counted in
+   `purlay_entitlement_refusals_total{module}`. A path that
+   resolves its workspace without a membership (a signed webhook) asks the same function, by the same name. `GET /api/me` lists the
+   set per workspace; the web draws from it. Search, the inbox, the ports, the workers and the outbox consume the same function and do
+   not recompute it.
+5. **No cache.** The grant is one more read in the statement that already joins the workspace, in the same snapshot, so every node
+   agrees at once and there is nothing to invalidate; the bus carries socket frames and not state (D-7). The cost is measured when it
+   is built and the decision reopens if the membership read's p95 moves by more than half a millisecond with rows present, or if
+   `budget:latency` fails.
+6. **A downgrade hides, never deletes.** A workspace that loses a module loses its paths, rail entry, search results and inbox lines,
+   and keeps every row. Erasure, workspace purge, both exports and retention cover the data of a module the workspace is not granted,
+   as they cover a module the process does not run (D-250 rule 5, D-255 §3). A grant back brings everything back. Deleting a
+   disabled module's data after a stated period stays an explicit, confirmed, audited act and is not built here.
+7. **Only the server's administrator writes**, through one service, `applyEntitlements`, which the administration console and the
+   `entitlements:apply` command (an edition file) both call; a workspace's owner cannot grant themselves a module. Every change is
+   audited by id and value, never by words (D-222). No billing is built; a billing system would call the same service as an actor of
+   its own.
+8. **A restrictive write waits for the cluster.** A node that does not know the table treats every workspace as granted. Making a
+   grant `off`, or switching a server to `managed`, is refused with `409 PEERS_BEHIND` unless every live peer advertises that it
+   reads grants; the roll is finished first (`DEPLOY.md`). Rolling the release back lifts every restriction, which is safe and not
+   what was sold.
+
+**Rejected.** *A `modules` column on `workspaces`:* a hot table for one module's concern (D-275), and a column cannot carry an end date,
+a source or a writer. *A JSON setting on the server:* not per workspace. *Environment or file with a restart:* an edition sale is
+hundreds of workspaces changing in minutes. *A per-request cache with an invalidation message:* a second node would serve a stale grant,
+which is a wrong bill or a wrong `404`, and the invalidation is a new class of bug for a read that is one indexed lookup in a statement
+that already runs. *A service of its own:* D-7. *Pre-filling every workspace and module:* adding a module would be a data migration.
+*Letting each module check its grant:* a check a module can forget is a check that will be forgotten.
+
+**Cost of reversing.** Before a restrictive row exists, none: drop the table's reader and the guard. After, remove the rows (or set
+`open`) and every workspace has every module again; nothing was deleted, so nothing is restored.
+
+### D-290. Followed conversations are a personal, read-only view of the existing follow relation — builds on D-34, D-103, D-161, D-282
 
 **Context.** A person in purchasing, a warehouse, administration or a software team needs to return to a conversation
 without searching notification history. D-161 already decides which threads they follow; a personal list must use

@@ -27,7 +27,9 @@
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type UserRole } from '@purlay/types';
 import type { Executor } from '@purlay/db';
-import { AppError } from './errors';
+import { AppError, routeNotFound } from './errors';
+import { currentRequest } from './logging';
+import { asGrants, grantColumns } from './grants';
 import { inTheCore } from './module-budget';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
@@ -37,6 +39,12 @@ export interface WorkspaceContext {
   readonly workspaceId: string;
   readonly userId: string;
   readonly role: UserRole;
+  /**
+   * The modules this workspace may use, as the guard read the grants (D-289): what search, the inbox, the ports, the workers and
+   * the outbox are asked, so that none of them works the set out again. `null` for a request made with no policy to judge by
+   * (a command, a test), which is unrestricted.
+   */
+  readonly modules: ReadonlySet<string> | null;
   readonly [tenancy]: true;
 }
 
@@ -65,6 +73,12 @@ export const workspaceNotFound = (): AppError =>
  * A soft-deleted workspace is not a workspace you are a member of: the join
  * requires `deleted_at IS NULL`, so a membership row that outlives its workspace
  * mints nothing.
+ *
+ * **Then the grant (D-289).** The workspace's grants are read in the same statement, so they are of the same snapshot as the
+ * membership and no node can hold them stale. A request of a module the workspace is not granted is turned away as a path
+ * nobody has, which is what a module that is not run answers. It is asked after the membership and not before: a person who is
+ * not a member learns nothing of a workspace, its grants included. The guard is the one place that mints a context, so a module
+ * cannot forget to ask.
  */
 const workspaceMembership = async (
   executor: Executor,
@@ -76,7 +90,7 @@ const workspaceMembership = async (
   const row = await executor
     .selectFrom('workspace_members')
     .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
-    .select('workspace_members.role')
+    .select(['workspace_members.role', ...grantColumns])
     .where('workspace_members.workspace_id', '=', workspaceId)
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
@@ -84,7 +98,17 @@ const workspaceMembership = async (
 
   if (row === undefined) throw workspaceNotFound();
 
-  return { workspaceId, userId, role: row.role, [tenancy]: true };
+  const request = currentRequest();
+  const policy = request?.entitlements;
+  if (policy === undefined)
+    return { workspaceId, userId, role: row.role, modules: null, [tenancy]: true };
+
+  const modules = policy.effective(asGrants(row.grants), row.read_at);
+  if (request?.module !== undefined && !modules.has(request.module)) {
+    policy.refused(request.module);
+    throw routeNotFound();
+  }
+  return { workspaceId, userId, role: row.role, modules, [tenancy]: true };
 };
 
 /** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-266). */

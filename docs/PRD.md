@@ -149,7 +149,7 @@ available and the original download; the reader's bounds and lifecycle are D-287
 **4.5 · Noise control** (D-12, D-15, D-29)
 `@username` mentions · **thread participation** — a reply notifies the root author and everyone
 who has already replied in that thread (D-29), and a person can follow a thread or let it go
-(D-161) · a personal **Followed conversations** list, with All/Unread, direct navigation to waiting replies and Unfollow (D-289) · in-app notification inbox · unread and
+(D-161) · a personal **Followed conversations** list, with All/Unread, direct navigation to waiting replies and Unfollow (D-290) · in-app notification inbox · unread and
 unread-mention counts · Deep Work mode, which suppresses **server-side delivery** and expires
 automatically
 

@@ -2135,8 +2135,14 @@ CREATE TABLE server_audit_log (
     -- Which workspace an entry is about (`server.workspace_purged`, D-242); RESTRICT, as `audit_log`'s:
     -- the record outlives what it describes. (0071)
     target_workspace_id UUID REFERENCES workspaces(id) ON DELETE RESTRICT,
+    -- Which module an entry is about (`server.module_granted`, `server.module_withdrawn`, `server.module_reset`, D-289), by
+    -- id; NULL for every other entry. No key: the build may not carry the module. (0090)
+    target_module TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    -- Added NOT VALID to a table that has rows, and validated in the next statement. (0090)
+    CONSTRAINT server_audit_log_target_module_shape
+        CHECK (target_module ~ '^[a-z][a-z0-9-]{0,31}$'),
     CONSTRAINT server_audit_log_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 );
@@ -2804,6 +2810,35 @@ CREATE INDEX idx_inbox_created ON inbox_entries (created_at);
 CREATE INDEX idx_inbox_read ON inbox_entries (read_at) WHERE read_at IS NOT NULL;
 ```
 
+### 9.12. `workspace_modules`
+
+Which of the build's modules one workspace may use (D-289): the operator's grant, one row per workspace and module, in the core's
+own table. Sparse: a workspace with no row for a module takes the server's mode (`WORKSPACE_MODULES`), `open` meaning the module
+and `managed` meaning none of those that are a grant. Only the server's administrator writes it.
+
+- **No key to a module.** `module` is text in the module id's grammar, checked and nothing more: the build may not carry the
+  module a row names, and a core table never names a module's table (D-250 rule 5).
+- **`off` closes, `on` opens, past `valid_until` is no row.** The expiry is judged at the read, by the process's clock; nothing
+  sweeps it. `source` says who wrote the row (`operator`, `file:<name>`, or a billing system's) and `changed_by` which
+  administrator, `SET NULL` on the key and still naming the anonymised account after an erasure (D-256).
+- **Kept until changed; purged with the workspace.** A purged workspace keeps its row as a tombstone and the cascade never fires, so
+  the purge empties the table by name (`CORE_REMAINING_TABLES`). In no export: it is the server's commercial record.
+
+```sql
+CREATE TABLE workspace_modules (
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    module       TEXT NOT NULL CHECK (module ~ '^[a-z][a-z0-9-]{0,31}$'),
+    state        TEXT NOT NULL CHECK (state IN ('on', 'off')),
+    valid_until  TIMESTAMPTZ,
+    source       TEXT NOT NULL CHECK (char_length(source) BETWEEN 1 AND 48),
+    changed_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    changed_at   TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (workspace_id, module)
+);
+
+CREATE INDEX idx_workspace_modules_changed_by ON workspace_modules (changed_by) WHERE changed_by IS NOT NULL;
+```
+
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
 **Generated** by `kysely-codegen` from a database with every migration applied, and committed so
@@ -2989,6 +3024,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0087_invitation_recipient_foreign_keys.sql  usable child indexes for recipient attribution and cascading deletion (D-279)
 0088_inbox_entries.sql  inbox_entries: what modules told a person, written by the notification sink (D-286)
 0089_outbox.sql  outbox: the facts one module tells another, a row for each consumer  (D-288)
+0090_workspace_modules.sql  workspace_modules: which modules the operator granted one workspace, and server_audit_log.target_module (D-289)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

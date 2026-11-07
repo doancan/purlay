@@ -20,7 +20,7 @@ export const WEB_REALTIME: readonly Mutation[] = [
   },
   {
     id: 'followed-subscription-gap-not-refreshed',
-    why: 'A change before the subscription answer leaves a cached follow list stale. (D-289)',
+    why: 'A change before the subscription answer leaves a cached follow list stale. (D-290)',
     file: 'apps/web/src/realtime/engine.ts',
     find: '          readAgain(client, families.followedThreads);\n',
     replace: '',

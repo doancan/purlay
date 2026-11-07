@@ -4,7 +4,7 @@ const FOLLOW_PANEL_TESTS = 'apps/web/src/features/chat/threads/thread.test.tsx';
 export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   {
     id: 'followed-choice-refusal-hides-row',
-    why: 'A refused unfollow loses the row when the recovery read also fails. (D-289)',
+    why: 'A refused unfollow loses the row when the recovery read also fails. (D-290)',
     file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
     find: '          undo?.();\n',
     replace: '',
@@ -12,7 +12,7 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   },
   {
     id: 'followed-foreground-keeps-old-choices',
-    why: 'Choices made elsewhere remain stale when the reader returns to the page. (D-289)',
+    why: 'Choices made elsewhere remain stale when the reader returns to the page. (D-290)',
     file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
     find: '      if (visible && !wasVisible) readAgain(client, families.followedThreads);\n',
     replace: '',
@@ -20,7 +20,7 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   },
   {
     id: 'followed-hidden-page-still-reads',
-    why: 'Visibility and focus events start reads while hidden or repeatedly while already visible. (D-289)',
+    why: 'Visibility and focus events start reads while hidden or repeatedly while already visible. (D-290)',
     file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
     find: 'if (visible && !wasVisible) readAgain(client, families.followedThreads);',
     replace: 'readAgain(client, families.followedThreads);',
@@ -28,7 +28,7 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   },
   {
     id: 'followed-new-follow-leaves-old-list',
-    why: 'Following from the thread header leaves a previously cached list stale. (D-289)',
+    why: 'Following from the thread header leaves a previously cached list stale. (D-290)',
     file: 'apps/web/src/features/chat/threads/follow-toggle.tsx',
     find: '          readAgain(client, families.followedThreads);\n',
     replace: '',
@@ -36,7 +36,7 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   },
   {
     id: 'followed-older-page-retry-starts-over',
-    why: 'Retrying a failed later page restarts the list instead of recovering the exact waiting cursor. (D-289)',
+    why: 'Retrying a failed later page restarts the list instead of recovering the exact waiting cursor. (D-290)',
     file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
     find: '              if (query.isFetchNextPageError) void query.fetchNextPage();\n              else void query.refetch();',
     replace: '              void query.refetch();',
@@ -44,7 +44,7 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   },
   {
     id: 'followed-removal-loses-keyboard-focus',
-    why: 'Unfollowing a row loses focus instead of moving to the next conversation. (D-289)',
+    why: 'Unfollowing a row loses focus instead of moving to the next conversation. (D-290)',
     file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
     find: '            moveFocus();\n',
     replace: '',
@@ -52,7 +52,7 @@ export const WEB_FEATURES_FOLLOWED: readonly Mutation[] = [
   },
   {
     id: 'followed-unknown-receipt-claims-read',
-    why: 'A public channel without a membership receipt falsely says every reply has been read. (D-289)',
+    why: 'A public channel without a membership receipt falsely says every reply has been read. (D-290)',
     file: 'apps/web/src/features/chat/followed/followed-screen.tsx',
     find: "? t('followed.unknown')",
     replace: "? t('followed.read')",

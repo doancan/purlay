@@ -55,6 +55,8 @@ x-environment: &environment
   LOG_LEVEL: ${LOG_LEVEL:-info}
   # Which modules this stack runs; blank is every one. The API, the jobs and the commands read the same (D-250).
   MODULES: ${MODULES:-}
+  # What a workspace with no grant of its own may use of them: `open` (blank is open) or `managed` (D-289).
+  WORKSPACE_MODULES: ${WORKSPACE_MODULES:-}
   # Kept with production for the scheduler; the API uses its built-in read-only receipt volume below.
   BACKUP_STATUS_DIRECTORY: ${BACKUP_STATUS_DIRECTORY:-}
   DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay

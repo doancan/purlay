@@ -264,7 +264,7 @@ export const API_CHAT: readonly Mutation[] = [
   },
   {
     id: 'followed-http-skips-session',
-    why: 'The anonymous request no longer receives the required authentication refusal. (D-289)',
+    why: 'The anonymous request no longer receives the required authentication refusal. (D-290)',
     file: 'apps/api/src/features/chat/http/followed.ts',
     find: '  const { userId } = await requireSession(auth, request);',
     replace: "  const userId = '00000000-0000-4000-8000-000000000001';",
@@ -272,7 +272,7 @@ export const API_CHAT: readonly Mutation[] = [
   },
   {
     id: 'followed-http-skips-validation',
-    why: 'Malformed, repeated, extra and incomplete query parameters reach the reader. (D-289)',
+    why: 'Malformed, repeated, extra and incomplete query parameters reach the reader. (D-290)',
     file: 'apps/api/src/features/chat/http/followed.ts',
     find: "  const input = validated(\n    FollowedThreadsQuery,\n    queryOf(new URL(request.url), {\n      numbers: ['limit'],\n      booleans: ['unreadOnly'],\n    }),\n  );",
     replace:
@@ -281,7 +281,7 @@ export const API_CHAT: readonly Mutation[] = [
   },
   {
     id: 'followed-http-skips-workspace',
-    why: 'A stranger receives a successful empty list instead of the workspace refusal. (D-289)',
+    why: 'A stranger receives a successful empty list instead of the workspace refusal. (D-290)',
     file: 'apps/api/src/features/chat/http/followed.ts',
     find: '  const context = await requireWorkspaceMembership(database, userId, workspaceId);',
     replace: "  const context = { userId, workspaceId, role: 'member' } as never;",

@@ -315,6 +315,7 @@ describe('integration: upgrading from the previous release', () => {
         '0087_invitation_recipient_foreign_keys',
         '0088_inbox_entries',
         '0089_outbox',
+        '0090_workspace_modules',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

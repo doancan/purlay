@@ -98,6 +98,13 @@ export const Environment = Type.Object({
    *  where the modules the build carries are known: an unknown or repeated id or a missing requirement stops it. */
   MODULES: Type.Optional(Type.String({ maxLength: 512 })),
 
+  /** What a workspace with no row in `workspace_modules` is granted of the modules this process runs (D-289): `open`, the
+   *  default, is every one, as a server you run yourself has always been; `managed` is none of those that are a grant, for a
+   *  server that sells them. Read at the guard of each request, so changing it takes a restart of every node. */
+  WORKSPACE_MODULES: Type.Union([Type.Literal('open'), Type.Literal('managed')], {
+    default: 'open',
+  }),
+
   /** Where `error`-level lines are also reported, as a Sentry-compatible DSN. Unset
    *  means off and nothing leaves the process; there is no default (D-44, D-96). */
   ERROR_TRACKING_DSN: Type.Optional(Type.String({ minLength: 1 })),

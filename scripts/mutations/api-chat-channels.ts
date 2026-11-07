@@ -393,7 +393,7 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
   },
   {
     id: 'followed-visible-query-crosses-workspaces',
-    why: 'The visibility subquery accepts follows from another workspace the viewer belongs to. (D-289)',
+    why: 'The visibility subquery accepts follows from another workspace the viewer belongs to. (D-290)',
     file: 'apps/api/src/features/chat/channels/guard.ts',
     find: "  visibleChannels(executor, context.userId)\n    .where('channels.workspace_id', '=', context.workspaceId)\n    .select('channels.id');",
     replace: "  visibleChannels(executor, context.userId)\n    .select('channels.id');",

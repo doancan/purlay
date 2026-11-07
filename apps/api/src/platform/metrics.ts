@@ -220,6 +220,7 @@ export interface ServerMetrics {
   readonly mailFailures: Counter<'module'>;
   readonly workerFailures: Counter<'module' | 'worker'>;
   readonly inboxEntries: Counter<'module' | 'kind'>;
+  readonly entitlementRefusals: Counter<'module'>;
 }
 
 /** A background loop a module declares: the pair that labels its failures (`MODULES.md` §7). */
@@ -286,6 +287,11 @@ export const serverMetrics = (
     'Notices modules wrote to the core’s inbox and committed, by the module and the kind of notice (both named by a manifest, never by a caller).',
     ['module', 'kind'],
   );
+  const entitlementRefusals = registry.counter(
+    'purlay_entitlement_refusals_total',
+    'Requests turned away as a path nobody has because the workspace is not granted the module that owns the route (D-289), by that module (named by a manifest, never by a caller). A sudden rise is a client or an edition file that disagrees with the grants.',
+    ['module'],
+  );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
   const owners = [CORE_OWNER, ...modules];
@@ -296,6 +302,7 @@ export const serverMetrics = (
     for (const module of owners) pushFailures.inc({ reason, module }, 0);
   }
   for (const module of owners) mailFailures.inc({ module }, 0);
+  for (const module of modules) entitlementRefusals.inc({ module }, 0);
   for (const { module, name } of workers) workerFailures.inc({ module, worker: name }, 0);
   for (const { module, kind } of notices) inboxEntries.inc({ module, kind }, 0);
   return {
@@ -306,6 +313,7 @@ export const serverMetrics = (
     mailFailures,
     workerFailures,
     inboxEntries,
+    entitlementRefusals,
   };
 };
 

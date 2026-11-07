@@ -401,7 +401,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-activity-ties-not-ordered',
-    why: 'Equal activity times have no stable UUID ordering across pages. (D-289)',
+    why: 'Equal activity times have no stable UUID ordering across pages. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "    .orderBy('messages.id', 'desc')\n",
     replace: '',
@@ -409,7 +409,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-channel-authority-bypassed',
-    why: 'A workspace member can list a private conversation after losing channel membership. (D-289)',
+    why: 'A workspace member can list a private conversation after losing channel membership. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "    .where('messages.channel_id', 'in', visibleChannelIdsQuery(executor, context))\n",
     replace: "    .where('messages.workspace_id', '=', context.workspaceId)\n",
@@ -417,7 +417,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-cursor-loses-microseconds',
-    why: 'Activity is rounded to milliseconds and the next page skips roots with finer timestamps. (D-289)',
+    why: 'Activity is rounded to milliseconds and the next page skips roots with finer timestamps. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: 'MI:SS.US',
     replace: 'MI:SS.MS',
@@ -425,7 +425,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-cursor-loses-uuid-tie',
-    why: 'A cursor skips the other roots with exactly the same activity time. (D-289)',
+    why: 'A cursor skips the other roots with exactly the same activity time. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: '(${activity}, messages.id) < (${input.beforeActivityAt}::timestamptz, ${input.beforeRootId}::uuid)',
     replace: '${activity} < ${input.beforeActivityAt}::timestamptz',
@@ -433,7 +433,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-deleted-reply-participates',
-    why: 'A deleted reply creates an implicit follow that the existing relation does not grant. (D-289)',
+    why: 'A deleted reply creates an implicit follow that the existing relation does not grant. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: ' and participated.deleted_at is null',
     replace: '',
@@ -441,7 +441,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-final-page-claims-more',
-    why: 'A complete final page incorrectly offers another page. (D-289)',
+    why: 'A complete final page incorrectly offers another page. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: 'rows.length > limit && last !== undefined',
     replace: 'rows.length >= limit && last !== undefined',
@@ -449,7 +449,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-hidden-root-paginated',
-    why: 'A hidden root consumes the page before the message projection removes it. (D-289)',
+    why: 'A hidden root consumes the page before the message projection removes it. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: '    .where(notHiddenBy(context.userId))\n',
     replace: '',
@@ -457,7 +457,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-late-hide-returned',
-    why: 'A root hidden between selection and hydration returns as a row instead of leaving the personal list. (D-289)',
+    why: 'A root hidden between selection and hydration returns as a row instead of leaving the personal list. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: '        root.hiddenForMe === true ||\n',
     replace: '',
@@ -465,7 +465,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-only-manual-choices',
-    why: 'Authored and answered conversations disappear unless the person explicitly followed them. (D-289)',
+    why: 'Authored and answered conversations disappear unless the person explicitly followed them. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: 'preference.following = true or (preference.user_id is null and (',
     replace: 'preference.following = true or (false and (',
@@ -473,7 +473,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-read-during-hydration-returned-unread',
-    why: 'A receipt arriving between selection and hydration leaves a read row in the unread-only list. (D-289)',
+    why: 'A receipt arriving between selection and hydration leaves a read row in the unread-only list. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: '        (input.unreadOnly === true && (state?.count ?? 0) === 0)',
     replace: '        false',
@@ -481,7 +481,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-replies-listed-as-roots',
-    why: 'Replies appear as independent followed conversations. (D-289)',
+    why: 'Replies appear as independent followed conversations. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "    .where('messages.parent_id', 'is', null)\n",
     replace: '',
@@ -489,7 +489,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-sentinel-returned',
-    why: 'The lookahead row is returned as part of the requested page. (D-289)',
+    why: 'The lookahead row is returned as part of the requested page. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: 'const selected = rows.slice(0, limit);',
     replace: 'const selected = rows;',
@@ -497,7 +497,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unfollow-overridden-by-participation',
-    why: 'Answering a conversation silently overrides an explicit unfollow. (D-289)',
+    why: 'Answering a conversation silently overrides an explicit unfollow. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: 'preference.user_id is null and (',
     replace: 'true and (',
@@ -505,7 +505,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unknown-receipt-claimed-read',
-    why: 'A public nonmember is falsely told that their conversation is read. (D-289)',
+    why: 'A public nonmember is falsely told that their conversation is read. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: 'row.member_id === null\n        ? null',
     replace: 'row.member_id === null\n        ? { count: 0 as const, firstUnreadMessageId: null }',
@@ -513,7 +513,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unknown-unread-paginated',
-    why: 'An unjoined public follow consumes an unread page before its unknown receipt is excluded. (D-289)',
+    why: 'An unjoined public follow consumes an unread page before its unknown receipt is excluded. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "statement = statement.where('channel_members.user_id', 'is not', null)",
     replace: 'statement = statement',
@@ -521,7 +521,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unread-counts-deleted',
-    why: 'Deleted replies inflate the unread count. (D-289)',
+    why: 'Deleted replies inflate the unread count. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "        .on('waiting.deleted_at', 'is', null)\n",
     replace: '',
@@ -529,7 +529,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unread-counts-hidden',
-    why: 'A personally hidden reply is counted as waiting. (D-289)',
+    why: 'A personally hidden reply is counted as waiting. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "        .on(notHiddenBy(context.userId, sql.ref('waiting.id')))\n",
     replace: '',
@@ -537,7 +537,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unread-counts-own',
-    why: 'A persons own reply is counted as waiting for them. (D-289)',
+    why: 'A persons own reply is counted as waiting for them. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: '        .on(sql<boolean>`waiting.sender_id is distinct from ${context.userId}`)\n',
     replace: '',
@@ -545,7 +545,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'followed-unread-ignores-receipts',
-    why: 'Replies already acknowledged in a thread are counted as waiting again. (D-289)',
+    why: 'Replies already acknowledged in a thread are counted as waiting again. (D-290)',
     file: 'apps/api/src/features/chat/messages/followed.ts',
     find: "        .on(unreadCondition(scope, 'waiting')),",
     replace: '        .on(sql<boolean>`true`),',
