@@ -669,7 +669,11 @@ source and any database already present are never claimed by a failed allocation
 
 Written from what building issues (D-254) needed, in the order a change is made. Each item names the file or test
 that fails if it is skipped; an item with no such thing is said to have none. `issues` is the worked example: read its
-commit beside this list.
+commit beside this list. **Start with `bun run module:new <id>`** (D-294, `MODULE-GUIDE.md`): it makes the folder, the migration set,
+the types, the registry lines, the documents' rows, a decision skeleton and the starter mutations, and
+`module-new.integration.test.ts` runs it on a copy of the repository and requires the compilers and the guards below to accept
+the result with no hand edit. This list is what a reviewer holds the result to, and what is still the author's: the decision,
+the removal threshold, the behaviour, the hot path of `HOT_PATHS`, and the web feature.
 
 **1. Decide it.**
 
@@ -873,7 +877,7 @@ commit beside this list.
   all of them), which the `changes` job runs and the matrix reads with `fromJSON`; `module-suites.test.ts` holds the workflow to that.
 - **The lifecycle seed**: `module-lifecycle.integration.test.ts` seeds a row for each module's data so that erasure, purge
   and export are proven on something; a module with a `features/<id>/testing.ts` exporting `seedLifecycle` is seeded by it, found by the folder
-  (`testing/module-seeders.ts`, which the cross-tenant crossing uses for its list check too); chat's and issues' are written out in
+  (`module:new` writes it; `testing/module-seeders.ts`, which the cross-tenant crossing uses for its list check too); chat's and issues' are written out in
   `seed`, behind `hasSet(state, '<id>')`. Or the test fails for each table the module owns that the seed leaves empty, unless it is in `UNSEEDED` with a reason (capped,
   `MAX_UNSEEDED`, and only shrinking).
 - The **smoke cell**: nothing to edit — `modules:smoke` makes its cells from the bundle and its paths from the manifest's `routes`, so a

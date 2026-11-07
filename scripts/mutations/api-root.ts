@@ -601,6 +601,22 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/module-new.test.ts'],
   },
   {
+    id: 'module-new-skips-the-docs-row',
+    why: 'the generated module has no row in MODULES.md §11, so module-listing fails on the first thing the author sees',
+    file: 'apps/api/src/testing/module-new/edits.ts',
+    find: '    text: `${MODULES_ROW}| \\`__ID__\\` | __REQUIRES_CELL__ | __OPTIONAL_CELL__ | — |\\n`,',
+    replace: '    text: MODULES_ROW,',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
+    id: 'module-new-skips-the-pool-share-test',
+    why: 'the pool-share test is made without chat among the modules it needs, so a cell without chat runs it and fails, or it holds the share of a module against nothing',
+    file: 'apps/api/src/testing/module-new/templates/apps/api/src/features/__ID__/http/budget.integration.test.ts.tpl',
+    find: ' * @needs-modules chat, __ID__\n',
+    replace: ' * @needs-modules __ID__\n',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
     id: 'module-smoke-ignores-a-module-left-out-that-answers',
     why: 'a module a cell does not run still answers its paths and the matrix job says it is closed, so removal is claimed and not proven (D-250)',
     file: 'apps/api/src/testing/module-smoke.ts',
