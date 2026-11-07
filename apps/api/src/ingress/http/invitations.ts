@@ -158,7 +158,8 @@ export const joinByInvitation = async (
   const { userId } = await requireSession(auth, request);
   const { token } = validated(InvitationTokenRequest, body);
   const { membership, memberIds } = await atomicallyOn(database)(
-    async (transaction) => await acceptInvitation(transaction, clock, userId, token, effectiveModules),
+    async (transaction) =>
+      await acceptInvitation(transaction, clock, userId, token, effectiveModules),
   );
   await publishAfterCommit(log, [
     [

@@ -69,6 +69,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {
+    id: 'invitation-accept-forgets-the-workspaces-modules',
+    why: 'a person who joins is told the workspace has every module the server runs until they reload (D-289)',
+    file: 'apps/api/src/modules/workspaces/invitations.ts',
+    find: 'workspace.id, effective);',
+    replace: 'workspace.id);',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'invitation-brings-back-the-removed',
     why: 'a member an admin removed comes straight back through a link handed out before',
     file: 'apps/api/src/modules/workspaces/invitations.ts',
@@ -318,8 +326,8 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     id: 'membership-list-omits-the-workspaces-modules',
     why: 'a person’s list of workspaces says nothing of what each may use, and the client draws every module the server runs (D-289)',
     file: 'apps/api/src/modules/workspaces/workspaces.ts',
-    find: '...(effective === undefined ? {}',
-    replace: '...(true ? {}',
+    find: '...(effective === undefined\n      ? {}',
+    replace: '...(true\n      ? {}',
     tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {

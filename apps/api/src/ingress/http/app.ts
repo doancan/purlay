@@ -1222,7 +1222,14 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return null;
     })
-    .get('/api/workspaces', async ({ request }) => await listMyWorkspaces({ ...dependencies, effectiveModules: modules.effectiveModules }, request))
+    .get(
+      '/api/workspaces',
+      async ({ request }) =>
+        await listMyWorkspaces(
+          { ...dependencies, effectiveModules: modules.effectiveModules },
+          request,
+        ),
+    )
     .post('/api/workspaces', async ({ request, body, set }) => {
       set.status = 201;
       return await createMyWorkspace(creating, request, body);

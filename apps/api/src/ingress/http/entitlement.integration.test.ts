@@ -10,6 +10,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { messageId } from '@purlay/types';
 import {
   bundledModules,
   compose,
@@ -287,6 +288,74 @@ describe('integration: what a person is told they may use', () => {
         memberships: Listed[];
       };
       expect(modulesOf(memberships, workspaceId)).toEqual(['chat']);
+    });
+  });
+});
+
+describe('integration: what is asked of several modules at once', () => {
+  const noticeFor = async (db: Executor, workspaceId: string, userId: string): Promise<void> => {
+    await db
+      .insertInto('inbox_entries')
+      .values({
+        id: messageId(NOW),
+        workspace_id: workspaceId,
+        user_id: userId,
+        module: 'issues',
+        kind: 'issue_assigned',
+        subject_type: 'issue',
+        subject_id: crypto.randomUUID(),
+        params: JSON.stringify({ title: 'Seen' }),
+        created_at: NOW,
+      })
+      .execute();
+  };
+  interface Found {
+    readonly groups: readonly { readonly source: string }[];
+    readonly skipped: readonly { readonly source: string; readonly reason: string }[];
+  }
+  interface Inbox {
+    readonly data: readonly unknown[];
+    readonly unreadCount: number;
+  }
+
+  test('the find asks only the sources of modules the workspace may use, and says the others are off', async () => {
+    await withRollback(async (db) => {
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(db, owner);
+      const path = `/api/workspaces/${workspaceId}/find?q=seen`;
+      const managed = caller(db, MANAGED);
+      const refused = (await managed('GET', path, owner)).body as Found;
+      expect(refused.groups.map(({ source }) => source)).not.toContain('issues');
+      expect(refused.skipped).toContainEqual({ source: 'issues', reason: 'off' });
+      await grant(db, workspaceId, 'issues', 'on');
+      const granted = (await managed('GET', path, owner)).body as Found;
+      expect(granted.groups.map(({ source }) => source)).toContain('issues');
+      expect(granted.skipped.map(({ source }) => source)).not.toContain('issues');
+    });
+  });
+
+  test('the inbox shows, counts and reads the notices of the modules the workspace may use, and keeps the rest', async () => {
+    await withRollback(async (db) => {
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(db, owner);
+      await noticeFor(db, workspaceId, owner.userId);
+      const managed = caller(db, MANAGED);
+      const inbox = `/api/workspaces/${workspaceId}/inbox`;
+
+      const hidden = (await managed('GET', inbox, owner)).body as Inbox;
+      expect([hidden.data.length, hidden.unreadCount]).toEqual([0, 0]);
+      // Reading all of them reads none of the notices a workspace may not see.
+      expect((await managed('POST', `${inbox}/read`, owner, { all: true })).status).toBe(204);
+      const kept = await db
+        .selectFrom('inbox_entries')
+        .select('read_at')
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirstOrThrow();
+      expect(kept.read_at).toBeNull();
+
+      await grant(db, workspaceId, 'issues', 'on');
+      const shown = (await managed('GET', inbox, owner)).body as Inbox;
+      expect([shown.data.length, shown.unreadCount]).toEqual([1, 1]);
     });
   });
 });

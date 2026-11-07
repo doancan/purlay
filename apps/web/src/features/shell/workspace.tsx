@@ -42,7 +42,9 @@ export const WorkspaceScopeProvider = ({
   if (membership === undefined) return <>{notFound}</>;
   return (
     <WorkspaceContext.Provider value={{ workspace: membership.workspace, role: membership.role }}>
-      <WorkspaceModulesProvider value={membership.modules ?? null}>{children}</WorkspaceModulesProvider>
+      <WorkspaceModulesProvider value={membership.modules ?? null}>
+        {children}
+      </WorkspaceModulesProvider>
     </WorkspaceContext.Provider>
   );
 };

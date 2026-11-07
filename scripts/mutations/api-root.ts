@@ -387,6 +387,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/cli/jobs.integration.test.ts'],
   },
   {
+    id: 'composition-lets-a-grant-run-unguarded-work',
+    why: 'a module a workspace is granted runs its jobs and loops for a workspace that lost it (D-289)',
+    file: 'apps/api/src/composition.ts',
+    find: '      unguardedWorkProblem(module) ??\n',
+    replace: '',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'composition-offers-the-ports-of-modules-that-are-off',
     why: 'the ports of a module that is bundled and not run are handed to the modules that use them, so a caller meets a port whose tables and routes are closed instead of the `undefined` it was written to handle (D-283)',
     file: 'apps/api/src/composition.ts',

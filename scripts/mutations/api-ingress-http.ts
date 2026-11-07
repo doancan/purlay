@@ -379,6 +379,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
   },
   {
+    id: 'inbox-lists-entries-of-modules-the-workspace-lacks',
+    why: 'a workspace that lost a module still lists, and counts, its notices (D-289)',
+    file: 'apps/api/src/ingress/http/inbox.ts',
+    find: 'const visible = running.filter((module) => entitledTo(context, module));\n    return await inboxPage',
+    replace: 'const visible = running;\n    return await inboxPage',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
     id: 'inbox-query-key-repeated',
     why: 'the guard checks the first workspaceId and the schema the last, so the two disagree about which workspace is asked for',
     file: 'apps/api/src/ingress/http/validate.ts',
@@ -393,6 +401,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '  if (read === 0) return;\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
+  },
+  {
+    id: 'inbox-reads-entries-of-modules-the-workspace-lacks',
+    why: 'reading everything marks the notices of a module the workspace cannot see as read, and they are gone when it is granted again (D-289)',
+    file: 'apps/api/src/ingress/http/inbox.ts',
+    find: 'const visible = running.filter((module) => entitledTo(context, module));\n  const read',
+    replace: 'const visible = running;\n  const read',
+    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {
     id: 'inbox-routes-count-modules-that-are-not-run',
@@ -418,14 +434,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     replace:
       "import { UpdateProfileRequest, type Profile } from '@purlay/types';\nimport { sweepLinkPreviews } from '../../features/chat/sweeps';\nvoid sweepLinkPreviews;",
     tests: ['apps/api/src/module-seams.test.ts'],
-  },
-  {
-    id: 'invitation-accept-forgets-the-workspaces-modules',
-    why: 'a person who joins is told the workspace has every module the server runs until they reload (D-289)',
-    file: 'apps/api/src/modules/workspaces/invitations.ts',
-    find: 'workspace.id, effective);',
-    replace: 'workspace.id);',
-    tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {
     id: 'invite-mail-letters-posted-inside-the-answer',

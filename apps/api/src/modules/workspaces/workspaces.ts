@@ -168,7 +168,9 @@ export const membershipsOf = async (
       row.is_deep_work_active && row.deep_work_until !== null && new Date(row.deep_work_until) > now
         ? new Date(row.deep_work_until).toISOString()
         : null,
-    ...(effective === undefined ? {} : { modules: moduleIdsIn(effective(asGrants(row.grants), row.read_at)) }),
+    ...(effective === undefined
+      ? {}
+      : { modules: moduleIdsIn(effective(asGrants(row.grants), row.read_at)) }),
   }));
 };
 
