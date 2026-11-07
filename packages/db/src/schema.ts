@@ -481,6 +481,26 @@ export interface ObjectDeletions {
   storage_key: string;
 }
 
+export interface Outbox {
+  attempts: Generated<number>;
+  caused_by: string | null;
+  consumer: string;
+  correlation_id: string | null;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+  fact_id: string;
+  finished_at: Timestamp | null;
+  id: string;
+  last_error: string | null;
+  next_attempt_at: Timestamp;
+  payload: Json;
+  producer: string;
+  shape: Generated<number>;
+  state: Generated<string>;
+  type: string;
+  workspace_id: string;
+}
+
 export interface PersonalExports {
   created_at: Timestamp;
   downloaded_at: Timestamp | null;
@@ -837,6 +857,7 @@ export interface DB {
   native_authorizations: NativeAuthorizations;
   notifications: Notifications;
   object_deletions: ObjectDeletions;
+  outbox: Outbox;
   personal_exports: PersonalExports;
   pinned_messages: PinnedMessages;
   push_subscriptions: PushSubscriptions;

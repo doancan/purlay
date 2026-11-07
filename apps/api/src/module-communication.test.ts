@@ -14,7 +14,7 @@ interface ChannelAccess {
 }
 
 const base = { requires: [], optional: [], provides: [], budget: { none: 'a test module' } };
-const consumer: FactConsumer = () => Promise.resolve();
+const consumer: FactConsumer = () => Promise.resolve('done');
 const access: ChannelAccess = { canPost: () => true };
 
 const notes = (overrides: Partial<BundledModule> = {}): BundledModule => ({

@@ -23,6 +23,8 @@ import { CORPUS } from '@purlay/markdown';
 import { bundledModules, type BundledModule } from '../composition';
 import { CORE_OWNER } from '../platform/module-kit/ownership';
 import { SERVER_VERSION } from '../platform/server-version';
+import type { ModuleManifest } from '../platform/module-kit/manifest';
+import { moduleStructure } from './module-structure';
 import {
   CONSTANTS,
   SUPPORTED_KEYWORDS,
@@ -402,7 +404,7 @@ describe('the assembled bundle', () => {
 });
 
 describe('the modules in the contract (D-273)', () => {
-  const manifests = bundledModules.map((module) => module.manifest);
+  const manifests: readonly ModuleManifest[] = bundledModules.map((module) => module.manifest);
   const byId = new Map(contract.modules.map((module) => [module.id, module]));
 
   test('list every module the build carries, with what each needs and owns, from the manifests', () => {
@@ -418,7 +420,29 @@ describe('the modules in the contract (D-273)', () => {
     for (const manifest of manifests) {
       expect(byId.get(manifest.id)?.requires).toEqual([...manifest.requires].sort());
       expect(byId.get(manifest.id)?.optional).toEqual([...manifest.optional].sort());
+      expect(byId.get(manifest.id)?.publishes).toEqual([...(manifest.publishes ?? [])].sort());
+      expect(byId.get(manifest.id)?.consumes).toEqual([...(manifest.consumes ?? [])].sort());
+      expect(byId.get(manifest.id)?.uses).toEqual([...(manifest.uses ?? [])].sort());
     }
+  });
+
+  test('say what a module publishes, consumes and uses, even where the build’s own modules say nothing', () => {
+    const notes = {
+      id: 'notes',
+      requires: [],
+      optional: ['wiki'],
+      provides: [],
+      budget: { none: 'a test module' },
+      publishes: ['notes.moved', 'notes.created'],
+      consumes: ['wiki.opened'],
+      uses: ['wiki.access'],
+    };
+    const structure = moduleStructure([...manifests, notes]);
+    expect(structure.modules.find((module) => module.id === 'notes')).toMatchObject({
+      publishes: ['notes.created', 'notes.moved'],
+      consumes: ['wiki.opened'],
+      uses: ['wiki.access'],
+    });
   });
 
   test('say which module owns each endpoint: the core, or a module the contract lists', () => {

@@ -73,6 +73,39 @@ describe('what a release promised of a manifest', () => {
   });
 });
 
+describe('the facts a release promised', () => {
+  const telling = manifest({
+    id: 'notes',
+    publishes: ['notes.created', 'notes.moved'],
+    consumes: ['wiki.opened'],
+    uses: ['wiki.access'],
+  });
+  const told = [releasedFrom(telling)];
+
+  test('a fact published or consumed that is new, and a question dropped, are not breaks', () => {
+    const now = manifest({
+      id: 'notes',
+      publishes: ['notes.created', 'notes.moved', 'notes.pinned'],
+      consumes: ['wiki.opened', 'wiki.closed'],
+    });
+    expect(incompatibilities(told, [now])).toEqual([]);
+  });
+
+  test('a fact that is no longer published, and one that is no longer consumed, are each said', () => {
+    const now = manifest({ id: 'notes', publishes: ['notes.created'] });
+    expect(incompatibilities(told, [now])).toEqual([
+      "module 'notes' no longer publishes the fact 'notes.moved'",
+      "module 'notes' no longer consumes the fact 'wiki.opened'",
+    ]);
+  });
+
+  test('a snapshot written before facts existed promised none', () => {
+    const { id, requires, optional, provides, routes, jobs, frames } = releasedFrom(telling);
+    const old = [{ id, requires, optional, provides, routes, jobs, frames }];
+    expect(incompatibilities(old, [manifest({ id: 'notes' })])).toEqual([]);
+  });
+});
+
 describe('exceptions', () => {
   const change = "module 'issues' no longer provides 'issues.link'";
   const snapshot = (exceptions: ReleasedSnapshot['exceptions']): ReleasedSnapshot => ({

@@ -22,6 +22,7 @@
 import { absentTables, type Database, type Executor, type Transaction } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS } from '@purlay/types';
 import { DAY_MS } from '../../platform/clock';
+import { purgeWorkspaceFacts } from '../../platform/outbox';
 import type { ObjectStore } from '../../platform/storage';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
@@ -117,6 +118,13 @@ const exportBatch = async (transaction: Transaction, workspaceId: string): Promi
   return { rows: gone.length, files: keys.length, keys };
 };
 
+/** The facts in flight between modules for the workspace: ids and short labels of what is being erased (D-288). */
+const factBatch = async (transaction: Transaction, workspaceId: string): Promise<Batch> => ({
+  rows: await purgeWorkspaceFacts(transaction, workspaceId, WORKSPACE_PURGE_BATCH),
+  files: 0,
+  keys: [],
+});
+
 /** What the erasure of one workspace did. */
 export interface PurgedWorkspace {
   readonly messages: number;
@@ -139,6 +147,7 @@ export const purgeWorkspaceContent = async (
     ...purge.before,
     { batch: uploadBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
     { batch: exportBatch, size: Number.POSITIVE_INFINITY, messages: false },
+    { batch: factBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
     ...purge.after,
   ];
   for (const step of steps) {

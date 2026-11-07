@@ -23,6 +23,11 @@ export interface ModuleJson {
   readonly events: readonly string[];
   /** The `NotificationType` values the module's notifications have. */
   readonly notificationTypes: readonly string[];
+  /** The fact types the module tells the others, and the ones it takes from them (D-288): what a second implementation must handle. */
+  readonly publishes: readonly string[];
+  readonly consumes: readonly string[];
+  /** The capabilities it asks another module for, which are `undefined` for it where that module is off. */
+  readonly uses: readonly string[];
 }
 
 export interface ModuleStructure {
@@ -73,6 +78,9 @@ export const moduleStructure = (manifests: readonly ModuleManifest[]): ModuleStr
         frames: sorted(manifest.frames),
         events: sorted(manifest.events),
         notificationTypes: sorted(manifest.notifications?.map((kind) => kind.type)),
+        publishes: sorted(manifest.publishes),
+        consumes: sorted(manifest.consumes),
+        uses: sorted(manifest.uses),
       }))
       .sort((a, b) => (a.id < b.id ? -1 : 1)),
     ownerOfEndpoint: (endpoint): string => {

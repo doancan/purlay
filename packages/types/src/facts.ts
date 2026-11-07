@@ -8,6 +8,18 @@
  */
 import type { TSchema } from '@sinclair/typebox';
 
+/**
+ * The most days a fact is held for a consumer that is not run: the outbox keeps a row no longer than it would have a person wait
+ * for a module to be turned back on (D-288).
+ */
+export const FACT_HOLD_DAYS_MAX = 14;
+
+/** The shape a declaration has until it says another. */
+export const FACT_SHAPE_FIRST = 1;
+
+/** What the publisher does about a consumer its process does not run: write no row, or write it and let any node that runs it deliver. */
+export type FactAbsence = 'drop' | { readonly holdDays: number };
+
 export interface FactDeclaration<Payload extends TSchema = TSchema> {
   /** `<owner>.<what>`. */
   readonly type: string;
@@ -15,6 +27,14 @@ export interface FactDeclaration<Payload extends TSchema = TSchema> {
   readonly owner: string;
   /** The shape of the payload, checked where it is published and where it is delivered. */
   readonly schema: Payload;
+  /** What becomes of the fact where its consumer is not run, which only the declaration can say: the publisher does not know the consumer. */
+  readonly absent: FactAbsence;
+  /**
+   * The version of the payload's shape, from 1. Adding an optional field leaves it; anything an older node would refuse (a new
+   * required field, a value more in an enum, a narrower bound) raises it, so a node that does not know the shape leaves the row
+   * for one that does and a rolling deploy kills nothing (D-288). Dropping a shape needs the release exception of a dropped type.
+   */
+  readonly shape?: number;
 }
 
 export const defineFact = <Payload extends TSchema>(
@@ -27,13 +47,16 @@ export const CORE_FACTS: readonly FactDeclaration[] = [];
 /** Every fact type of the build: the core's and, as a module gets some, each module's `<ID>_FACTS`. */
 export const FACTS: readonly FactDeclaration[] = [...CORE_FACTS];
 
-/** What is wrong with a list of declarations: a type not named for its owner, an owner nobody is, a type declared twice. */
+const isHoldDays = (days: number): boolean =>
+  Number.isInteger(days) && days >= 1 && days <= FACT_HOLD_DAYS_MAX;
+
+/** What is wrong with a list of declarations: a type not named for its owner, an owner nobody is, a type declared twice, a hold for no days or for more than the outbox keeps. */
 export const factOwnerProblems = (
   facts: readonly FactDeclaration[],
   moduleIds: readonly string[],
 ): string[] => {
   const seen = new Set<string>();
-  return facts.flatMap(({ type, owner }) => {
+  return facts.flatMap(({ type, owner, absent, shape }) => {
     const problems: string[] = [];
     if (seen.has(type)) problems.push(`the fact "${type}" is declared twice`);
     seen.add(type);
@@ -45,6 +68,14 @@ export const factOwnerProblems = (
       problems.push(
         `the fact "${type}" is owned by "${owner}", so it must be named "${owner}.<what>"`,
       );
+    }
+    if (typeof absent === 'object' && !isHoldDays(absent.holdDays)) {
+      problems.push(
+        `the fact "${type}" is held ${String(absent.holdDays)} days when its consumer is off: a whole number from 1 to ${String(FACT_HOLD_DAYS_MAX)}`,
+      );
+    }
+    if (shape !== undefined && !(Number.isInteger(shape) && shape >= FACT_SHAPE_FIRST)) {
+      problems.push(`the fact "${type}" has the shape ${String(shape)}: a whole number from 1`);
     }
     return problems;
   });

@@ -206,6 +206,22 @@ const aLivedInWorkspace = async (
       expires_at: DUE,
     })
     .execute();
+  // A fact in flight to a module, which a tombstone's cascade would never take.
+  await db
+    .insertInto('outbox')
+    .values({
+      id: anId(),
+      fact_id: anId(),
+      workspace_id: workspaceId,
+      type: 'notes.created',
+      producer: 'notes',
+      consumer: 'wiki',
+      payload: JSON.stringify({ noteId: 'n' }),
+      next_attempt_at: ASKED,
+      created_at: ASKED,
+      expires_at: DUE,
+    })
+    .execute();
   return { workspaceId, owner, member, name };
 };
 
@@ -262,6 +278,7 @@ const EMPTIED_BY_THE_CORE_STEPS = [
   'messages',
   'attachments',
   'workspace_exports',
+  'outbox',
   'channels',
   'workspace_members',
 ];
@@ -348,6 +365,7 @@ describe('integration: the workspace purge', () => {
           'mentions',
           'messages',
           'notifications',
+          'outbox',
           'pinned_messages',
           'saved_messages',
           'saved_searches',

@@ -40,29 +40,37 @@ const moduleTables = Object.entries(TABLE_OWNERS)
   .map(([table]) => table)
   .sort((a, b) => b.length - a.length);
 
-const NAMES = `(?:${moduleTables.join('|')})`;
 const BUILDER_METHODS =
   'selectFrom|insertInto|deleteFrom|updateTable|mergeInto|with|innerJoin|leftJoin|rightJoin|fullJoin|crossJoin|innerJoinLateral|leftJoinLateral|crossJoinLateral';
 
-/** The ways a statement names a table: the builder's methods, SQL's keywords, `table.column`, the schema type, `tableExists`. */
-const WAYS_TO_NAME_A_TABLE: readonly RegExp[] = [
-  new RegExp(String.raw`\.(?:${BUILDER_METHODS})\(\s*['"\`]${NAMES}\b`),
-  new RegExp(
-    String.raw`\b(?:from|join|into|update|truncate|table)\s+(?:only\s+)?(?:public\.)?${NAMES}\b`,
-    'i',
-  ),
-  new RegExp(String.raw`['"\`]${NAMES}\.[a-z_*]+['"\`]`),
-  new RegExp(String.raw`\b(?:Database|DB)\[\s*['"]${NAMES}['"]\s*\]`),
-  new RegExp(String.raw`\btableExists\(\s*[^,()]+,\s*['"]${NAMES}['"]`),
-];
+/** The ways a statement names one of `tables`: the builder's methods, SQL's keywords, `table.column`, the schema type, `tableExists`. */
+const waysToName = (tables: readonly string[]): readonly RegExp[] => {
+  const names = `(?:${tables.join('|')})`;
+  return [
+    new RegExp(String.raw`\.(?:${BUILDER_METHODS})\(\s*['"\`]${names}\b`),
+    new RegExp(
+      String.raw`\b(?:from|join|into|update|truncate|table)\s+(?:only\s+)?(?:public\.)?${names}\b`,
+      'i',
+    ),
+    new RegExp(String.raw`['"\`]${names}\.[a-z_*]+['"\`]`),
+    new RegExp(String.raw`\b(?:Database|DB)\[\s*['"]${names}['"]\s*\]`),
+    new RegExp(String.raw`\btableExists\(\s*[^,()]+,\s*['"]${names}['"]`),
+  ];
+};
+
+const WAYS_TO_NAME_A_TABLE = waysToName(moduleTables);
+const WAYS_TO_NAME_THE_OUTBOX = waysToName(['outbox']);
 
 const withoutComments = (source: string): string =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-/** The first way `source` names a module's table, as the text it matched; none when it names no table. */
-const tableNamed = (source: string): string | undefined => {
+/** The first way `source` names a table by `ways`, as the text it matched; none when it names none. */
+const tableNamed = (
+  source: string,
+  ways: readonly RegExp[] = WAYS_TO_NAME_A_TABLE,
+): string | undefined => {
   const code = withoutComments(source);
-  for (const way of WAYS_TO_NAME_A_TABLE) {
+  for (const way of ways) {
     const found = way.exec(code);
     if (found !== null) return found[0];
   }
@@ -154,6 +162,49 @@ describe('no module names the core’s inbox', () => {
       expect(withoutComments(readFileSync(join(SOURCE_ROOT, file), 'utf8'))).not.toContain(
         'inbox_entries',
       );
+    });
+  }
+});
+
+/**
+ * The outbox is the core's, and only the files that write and read it name it (D-288): a module that wrote a fact's row
+ * itself would skip the owner, the schema and the transaction check of `publishFact`, and one that read it would see another
+ * module's facts. The tables a module may name are typed (`IssuesSchema`), which keeps a module out; this keeps the rest of the core.
+ */
+describe('only the outbox’s own files name the outbox', () => {
+  const OUTBOX_FILES = [join('platform', 'outbox.ts')];
+
+  test('it sees the table in each place a query puts one, and nothing in a word', () => {
+    for (const named of [
+      "db.insertInto('outbox').values(row)",
+      'await sql`update outbox set state = ${state}`',
+      "q.deleteFrom('outbox')",
+      "eb.ref('outbox.consumer')",
+    ]) {
+      expect(tableNamed(named, WAYS_TO_NAME_THE_OUTBOX)).toBeDefined();
+    }
+    for (const unnamed of [
+      'const outbox = createOutbox(mail);',
+      "log.warn('the mail outbox is full')",
+      '// db.insertInto("outbox") in a comment',
+    ]) {
+      expect(tableNamed(unnamed, WAYS_TO_NAME_THE_OUTBOX)).toBeUndefined();
+    }
+  });
+
+  test('the file that does is where it is said to be', () => {
+    for (const file of OUTBOX_FILES) {
+      expect(
+        tableNamed(readFileSync(join(SOURCE_ROOT, file), 'utf8'), WAYS_TO_NAME_THE_OUTBOX),
+      ).toBeDefined();
+    }
+  });
+
+  for (const file of coreSources().filter((one) => !OUTBOX_FILES.includes(one))) {
+    test(`${file} does not`, () => {
+      expect(
+        tableNamed(readFileSync(join(SOURCE_ROOT, file), 'utf8'), WAYS_TO_NAME_THE_OUTBOX),
+      ).toBeUndefined();
     });
   }
 });

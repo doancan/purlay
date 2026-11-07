@@ -315,6 +315,15 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/members.integration.test.ts'],
   },
   {
+    id: 'module-writes-the-outbox-directly',
+    why: 'the purge writes the outbox itself instead of through platform/outbox.ts, which skips the checks the table’s own files make (D-288)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: '  rows: await purgeWorkspaceFacts(transaction, workspaceId, WORKSPACE_PURGE_BATCH),',
+    replace:
+      "  rows: (await transaction.deleteFrom('outbox').where('workspace_id', '=', workspaceId).returning('id').execute()).length,",
+    tests: ['apps/api/src/core-tables.test.ts'],
+  },
+  {
     id: 'passport-allowed-for-a-dead-link',
     why: 'a passport still allows a sign-up once its link was revoked, expired or its workspace deleted',
     file: 'apps/api/src/modules/workspaces/invitation-passport.ts',
@@ -410,6 +419,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
       'apps/api/src/modules/workspaces/invitation-passport.integration.test.ts',
       'apps/api/src/ingress/http/invitation-passport.integration.test.ts',
     ],
+  },
+  {
+    id: 'purge-leaves-the-facts-of-a-deleted-workspace',
+    why: 'the purge of a workspace does not take its facts, and a tombstone’s cascade never fires, so ids and labels of an erased workspace stay for ever (D-288)',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: '    { batch: factBatch, size: WORKSPACE_PURGE_BATCH, messages: false },\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
   },
   {
     id: 'purge-leaves-the-inbox',
