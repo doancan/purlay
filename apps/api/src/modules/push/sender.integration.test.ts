@@ -5,21 +5,21 @@
  */
 import { inMemoryAttention, nobodyActive, type Attention } from '../../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
-import { createECDH } from 'node:crypto';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { aSession } from '../../testing/signed-in';
+import { aPushService, aBrowser, KEYS } from '../../testing/push-service';
 import { aRoom, type Room } from '../../testing/rooms';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import { edit } from '../../features/chat/messages/edit';
 import { send } from '../../features/chat/messages/messages';
 import { chatPushNotices } from '../../features/chat/notifications/push-notices';
+import { noNoticeWords } from './notices';
 import { PUSH_FAILURES_MAX, createPushSender, type PushPost } from './sender';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
-import type { VapidKeys } from './vapid';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -35,103 +35,6 @@ const quietBus: EventBus = {
   subscribe: () => false,
   unsubscribe: () => undefined,
   forget: () => undefined,
-};
-
-const KEYS: VapidKeys = ((): VapidKeys => {
-  const pair = createECDH('prime256v1');
-  pair.generateKeys();
-  return {
-    publicKey: pair.getPublicKey().toString('base64url'),
-    privateKey: Buffer.from(pair.getPrivateKey().toString('hex').padStart(64, '0'), 'hex').toString(
-      'base64url',
-    ),
-    subject: 'mailto:ops@example.com',
-  };
-})();
-
-const text = (value: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(value);
-
-const hkdf = async (
-  salt: Uint8Array<ArrayBuffer>,
-  secret: Uint8Array<ArrayBuffer>,
-  info: Uint8Array<ArrayBuffer>,
-  length: number,
-): Promise<Uint8Array<ArrayBuffer>> =>
-  new Uint8Array(
-    await crypto.subtle.deriveBits(
-      { name: 'HKDF', hash: 'SHA-256', salt, info },
-      await crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveBits']),
-      length * 8,
-    ),
-  );
-
-/** A browser: its key pair and secret, and what it does with a body it is sent (RFC 8291). */
-const aBrowser = async (): Promise<{
-  readonly p256dh: string;
-  readonly auth: string;
-  readonly read: (body: Uint8Array) => Promise<unknown>;
-}> => {
-  const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
-    'deriveBits',
-  ]);
-  const own = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
-  const secret = crypto.getRandomValues(new Uint8Array(16));
-  return {
-    p256dh: Buffer.from(own).toString('base64url'),
-    auth: Buffer.from(secret).toString('base64url'),
-    read: async (body): Promise<unknown> => {
-      const salt = body.slice(0, 16);
-      const length = body[20] ?? 0;
-      const server = body.slice(21, 21 + length);
-      const shared = new Uint8Array(
-        await crypto.subtle.deriveBits(
-          {
-            name: 'ECDH',
-            public: await crypto.subtle.importKey(
-              'raw',
-              server,
-              { name: 'ECDH', namedCurve: 'P-256' },
-              false,
-              [],
-            ),
-          },
-          pair.privateKey,
-          256,
-        ),
-      );
-      const joined = new Uint8Array([...text('WebPush: info\0'), ...own, ...server]);
-      const ikm = await hkdf(secret, shared, joined, 32);
-      const key = await hkdf(salt, ikm, text('Content-Encoding: aes128gcm\0'), 16);
-      const nonce = await hkdf(salt, ikm, text('Content-Encoding: nonce\0'), 12);
-      const plain = new Uint8Array(
-        await crypto.subtle.decrypt(
-          { name: 'AES-GCM', iv: nonce },
-          await crypto.subtle.importKey('raw', key, 'AES-GCM', false, ['decrypt']),
-          body.slice(21 + length),
-        ),
-      );
-      const payload: unknown = JSON.parse(new TextDecoder().decode(plain.slice(0, -1)));
-      return payload;
-    },
-  };
-};
-
-interface Sent {
-  readonly url: string;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly body: Uint8Array;
-}
-
-/** A push service answering `status`, keeping what it was sent. */
-const aPushService = (status = 201): { post: PushPost; sent: Sent[] } => {
-  const sent: Sent[] = [];
-  return {
-    sent,
-    post: (url, headers, body): Promise<{ kind: 'answered'; status: number }> => {
-      sent.push({ url: url.href, headers, body });
-      return Promise.resolve({ kind: 'answered', status });
-    },
-  };
 };
 
 /** Devices are made in the order a test makes them, a millisecond apart. */
@@ -186,6 +89,7 @@ const sending = async (
     keys: KEYS,
     attention: heard,
     notices: chatPushNotices,
+    noticeWords: noNoticeWords,
     post,
     // The notices are chat's, so the failures of what they told are chat's.
     ...(metrics === undefined ? {} : { failures: metrics.pushFailures, owner: 'chat' }),
@@ -333,6 +237,7 @@ describe('integration: a device is told', () => {
         keys: KEYS,
         attention,
         notices: chatPushNotices,
+        noticeWords: noNoticeWords,
         post: service.post,
       });
       const { say } = await sending(db, service.post);
@@ -676,6 +581,7 @@ describe('integration: what the push service answers', () => {
       keys: KEYS,
       attention,
       notices: chatPushNotices,
+      noticeWords: noNoticeWords,
       post: () => Promise.reject(new Error('nothing is posted')),
       failures: metrics.pushFailures,
       owner: 'chat',
@@ -733,6 +639,7 @@ describe('integration: what the push service answers', () => {
         keys: KEYS,
         attention,
         notices: chatPushNotices,
+        noticeWords: noNoticeWords,
         post: () => new Promise(() => undefined),
       });
       const context = room.members['alice']?.context;
