@@ -374,3 +374,18 @@ export const modulesInfoFamily = (running: readonly string[]): MetricFamily => (
   type: 'gauge',
   samples: running.map((module) => ({ suffix: '', labels: { module }, value: 1 })),
 });
+
+/** Which of those the administrator has stopped (D-296), so an alert can say that a stop has been left on. */
+export const moduleSuspendedFamily = (
+  running: readonly string[],
+  suspended: ReadonlySet<string>,
+): MetricFamily => ({
+  name: 'purlay_module_suspended',
+  help: 'Whether the administrator has stopped the module at run time (1) or not (0), for each module this process runs.',
+  type: 'gauge',
+  samples: running.map((module) => ({
+    suffix: '',
+    labels: { module },
+    value: suspended.has(module) ? 1 : 0,
+  })),
+});

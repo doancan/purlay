@@ -50,12 +50,12 @@ import { createLogger } from '../platform/logging';
 import { sendAuditLinesTo } from '../modules/audit/lines';
 import { errorTrackingFor } from '../platform/error-tracking';
 import { storeFor, type ObjectStore } from '../platform/storage';
+import { readSuspended, suspensionCache } from '../platform/suspended-modules';
 
 /** Sessions one statement of the sweep removes. */
 const SESSION_BATCH = 1_000;
 
 const config = loadConfig(process.env);
-const composition = compositionFor(config.MODULES);
 // A job's failure is logged at `error`, and so reported as the API's errors are (#635).
 const { tracker, log } = errorTrackingFor(
   config,
@@ -66,6 +66,9 @@ const { tracker, log } = errorTrackingFor(
 sendAuditLinesTo(log);
 const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
 const clock = systemClock;
+// A run is its own process and reads the stopped modules once (D-296): a module the administrator stopped has no job to do here.
+const suspension = suspensionCache({ read: async () => await readSuspended(database), log });
+const composition = compositionFor(config.MODULES, 'open', suspension);
 
 /**
  * The relay the server's settings name, as the API builds it (`runtimeServicesFrom`): read once a run, so a
@@ -169,6 +172,7 @@ const runOne = scheduledJobRunner({
 });
 
 const name = process.argv[2] ?? '';
+await suspension.fresh();
 // A job of a module this process does not run is not overdue and has nothing to do (`MODULES.md` §3).
 const running = Object.keys(jobs).filter((job) => !composition.closedJob(job));
 try {
@@ -184,9 +188,11 @@ try {
       if (!(await runOne(job, work))) process.exitCode = 1;
     }
   } else if (composition.closedJob(name)) {
+    const owner = composition.owner.ofJob(name);
     log.info('the job belongs to a module that is not run; nothing to do', {
       job: name,
-      module: composition.owner.ofJob(name),
+      module: owner,
+      stopped: suspension.current().has(owner),
     });
   } else {
     const work = jobs[name];

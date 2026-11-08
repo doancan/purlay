@@ -9,6 +9,7 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Logger } from './logging';
+import type { FactRouting } from './outbox';
 
 /**
  * How stale a node's view of the stops may be: the contract of the kill switch (an operator sees it take effect on every node
@@ -113,3 +114,15 @@ export const suspensionCache = ({
     },
   };
 };
+
+/**
+ * A fact for a module that is stopped is a fact for a module this process does not run: it follows the fact's own `absent` word,
+ * held for the days it says or counted and dropped, and what was written before waits in the table for the module to return.
+ */
+export const withoutStopped = (
+  routing: FactRouting,
+  suspended: Suspension['current'],
+): FactRouting => ({
+  ...routing,
+  runs: (module) => routing.runs(module) && !suspended().has(module),
+});

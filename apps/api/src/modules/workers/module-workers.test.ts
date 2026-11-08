@@ -63,6 +63,7 @@ const aWorker = (work: WorkerWork, overrides: Partial<RunningWorker> = {}): Runn
 
 const harness = (
   workers: readonly RunningWorker[],
+  suspended?: () => Promise<ReadonlySet<string>>,
 ): ReturnType<typeof startWorkers> & {
   readonly timer: ReturnType<typeof aManualTimer>;
   readonly lines: Record<string, unknown>[];
@@ -81,6 +82,7 @@ const harness = (
         failures.push(labels);
       },
     },
+    ...(suspended === undefined ? {} : { suspended }),
     later: timer.later,
   });
   return { ...started, timer, lines, failures };
@@ -224,6 +226,77 @@ describe('a worker’s iterations', () => {
     await settle();
     expect(ran).toEqual(['free']);
     void run.stop();
+  });
+});
+
+describe('a worker of a module the administrator has stopped (D-296)', () => {
+  test('does no work and counts no failure, while the workers of every other module go on', async () => {
+    const ran: string[] = [];
+    const run = harness(
+      [
+        aWorker(async () => {
+          ran.push('chat');
+          await Promise.resolve();
+        }),
+        aWorker(
+          async () => {
+            ran.push('issues');
+            await Promise.resolve();
+          },
+          { module: 'issues', name: 'sweep:issues' },
+        ),
+      ],
+      () => Promise.resolve(new Set(['chat'])),
+    );
+    await settle();
+    expect(ran).toEqual(['issues']);
+    expect(run.failures).toEqual([]);
+    await run.stop();
+  });
+
+  test('is asked again at its next interval, and works again once the stop is lifted, with nothing lost to the wait', async () => {
+    let stopped: ReadonlySet<string> = new Set(['chat']);
+    let calls = 0;
+    const run = harness(
+      [
+        aWorker(async () => {
+          calls += 1;
+          await Promise.resolve();
+        }),
+      ],
+      () => Promise.resolve(stopped),
+    );
+    await settle();
+    expect(calls).toBe(0);
+    expect(run.timer.pending()).toBe(1);
+    stopped = new Set();
+    run.timer.fire();
+    await settle();
+    expect(calls).toBe(1);
+    await run.stop();
+  });
+
+  test('stops within an iteration of the stop being read, not at the next restart', async () => {
+    let stopped: ReadonlySet<string> = new Set();
+    let calls = 0;
+    const run = harness(
+      [
+        aWorker(async () => {
+          calls += 1;
+          await Promise.resolve();
+        }),
+      ],
+      () => Promise.resolve(stopped),
+    );
+    await settle();
+    run.timer.fire();
+    await settle();
+    expect(calls).toBe(2);
+    stopped = new Set(['chat']);
+    run.timer.fire();
+    await settle();
+    expect(calls).toBe(2);
+    await run.stop();
   });
 });
 

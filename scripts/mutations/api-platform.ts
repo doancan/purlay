@@ -1521,6 +1521,17 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/suspended-modules.test.ts'],
   },
   {
+    id: 'suspension-fact-routing-runs-a-stopped-module',
+    why: 'a fact for a stopped consumer is written as for one that runs, and the fact’s own word on absence is not followed (D-296, D-288)',
+    file: 'apps/api/src/platform/suspended-modules.ts',
+    find: '  runs: (module) => routing.runs(module) && !suspended().has(module),',
+    replace: '  runs: (module) => routing.runs(module),',
+    tests: [
+      'apps/api/src/platform/suspended-modules.test.ts',
+      'apps/api/src/platform/suspended-modules.integration.test.ts',
+    ],
+  },
+  {
     id: 'swap-letters-of-a-replaced-relay-not-in-the-ledger',
     why: 'a letter posted to a relay the settings replaced is not waited for at shutdown, and is cut off with the process',
     file: MAIL,

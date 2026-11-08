@@ -196,6 +196,14 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     ],
   },
   {
+    id: 'suspension-sink-writes-for-a-stopped-module',
+    why: 'a stopped module goes on filling people’s inboxes (D-296)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: '    if (dependencies.suspended?.() === true) return undefined;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/inbox/sink.test.ts'],
+  },
+  {
     id: 'sweep-inbox-keeps-the-oldest',
     why: 'a notice nobody reads stays for ever and the table only grows (D-286)',
     file: 'apps/api/src/modules/inbox/sweep.ts',
