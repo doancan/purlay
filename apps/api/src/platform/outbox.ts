@@ -12,7 +12,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { type Static } from '@sinclair/typebox';
 import { FACT_SHAPE_FIRST, messageId, type FactDeclaration } from '@purlay/types';
-import { isTransaction, type Transaction } from '@purlay/db';
+import { isTransaction, sql, type Transaction } from '@purlay/db';
 import { DAY_MS, type Clock } from './clock';
 import { readGrants } from './grants';
 import { currentRequest } from './logging';
@@ -58,6 +58,10 @@ export interface FactPublishContext {
   readonly routing: FactRouting;
   /** `purlay_outbox_dropped_total`: a fact whose consumer is not run here and which is not held. */
   readonly dropped: Counter<'module' | 'fact'>;
+  /** `purlay_outbox_refused_total`: a fact not written because its consumer's backlog in the workspace is full. */
+  readonly refused: Counter<'module' | 'fact'>;
+  /** The most rows one workspace may have pending for one consumer (`OUTBOX_PENDING_MAX`): a publish that would pass it is refused. */
+  readonly pendingMax: number;
   /** The fact whose delivery is publishing this one, when one is: the chain from a fact to the facts it caused. */
   readonly causedBy?: string;
   /**
@@ -75,6 +79,35 @@ export class FactPublishError extends Error {
   }
 }
 
+/**
+ * A fact that was not published because the workspace already has the most the consumer may wait for (D-288 §10). Unlike
+ * `FactPublishError` it is not a defect of the publisher: the consumer is behind, or a loop is publishing in a flood. Nothing was
+ * written, and a publisher that does not catch it ends its transaction and so leaves nothing of what the fact reports; one that
+ * does catch it holds a transaction that is still usable and decides for itself. The fact is never dropped in silence.
+ */
+export class FactBacklogFull extends Error {
+  readonly type: string;
+  readonly workspaceId: string;
+  readonly consumer: string;
+  readonly ceiling: number;
+
+  constructor(input: {
+    readonly type: string;
+    readonly workspaceId: string;
+    readonly consumer: string;
+    readonly ceiling: number;
+  }) {
+    super(
+      `The fact "${input.type}" was not published: workspace ${input.workspaceId} already has ${String(input.ceiling)} facts waiting for "${input.consumer}", the most it may.`,
+    );
+    this.name = 'FactBacklogFull';
+    this.type = input.type;
+    this.workspaceId = input.workspaceId;
+    this.consumer = input.consumer;
+    this.ceiling = input.ceiling;
+  }
+}
+
 const invalidReason = (fact: FactDeclaration, payload: unknown): string | undefined => {
   if (!Value.Check(fact.schema, payload)) {
     // The path and the rule, never the value: a payload is not for a log.
@@ -85,6 +118,44 @@ const invalidReason = (fact: FactDeclaration, payload: unknown): string | undefi
   return bytes > OUTBOX_PAYLOAD_BYTES_MAX
     ? `its payload is ${String(bytes)} bytes, past ${String(OUTBOX_PAYLOAD_BYTES_MAX)}`
     : undefined;
+};
+
+/**
+ * Counts, up to the ceiling and no further, what the workspace has pending for each consumer about to get a row, and refuses the
+ * whole fact if any is at it. A soft ceiling: two publishes in flight at once may both pass, by the number in flight and no more.
+ */
+const refuseWhenBacklogFull = async (
+  transaction: Transaction,
+  input: {
+    readonly workspaceId: string;
+    readonly type: string;
+    readonly written: readonly string[];
+    readonly pendingMax: number;
+    readonly refused: Counter<'module' | 'fact'>;
+  },
+): Promise<void> => {
+  const { workspaceId, type, written, pendingMax, refused } = input;
+  const full: string[] = [];
+  for (const consumer of written) {
+    const { count } = await transaction
+      .selectFrom(
+        transaction
+          .selectFrom('outbox')
+          .select(sql<number>`1`.as('one'))
+          .where('workspace_id', '=', workspaceId)
+          .where('consumer', '=', consumer)
+          .where('state', '=', 'pending')
+          .limit(pendingMax)
+          .as('waiting'),
+      )
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirstOrThrow();
+    if (Number(count) >= pendingMax) full.push(consumer);
+  }
+  const [first] = full;
+  if (first === undefined) return;
+  for (const consumer of full) refused.inc({ module: consumer, fact: type });
+  throw new FactBacklogFull({ type, workspaceId, consumer: first, ceiling: pendingMax });
 };
 
 /**
@@ -100,7 +171,17 @@ export const publishFact = async <Fact extends FactDeclaration>(
   fact: Fact,
   payload: Static<Fact['schema']>,
 ): Promise<void> => {
-  const { workspaceId, clock, producer, routing, dropped, causedBy, effective } = context;
+  const {
+    workspaceId,
+    clock,
+    producer,
+    routing,
+    dropped,
+    refused,
+    pendingMax,
+    causedBy,
+    effective,
+  } = context;
   // The type says it, and a cast could unsay it: a fact written with nothing to roll back with outlives the thing it reports.
   if (!isTransaction(transaction))
     throw new FactPublishError(fact.type, 'it is not in a transaction');
@@ -135,6 +216,13 @@ export const publishFact = async <Fact extends FactDeclaration>(
     dropped.inc({ module: consumer, fact: fact.type });
   }
   if (written.length === 0) return;
+  await refuseWhenBacklogFull(transaction, {
+    workspaceId,
+    type: fact.type,
+    written,
+    pendingMax,
+    refused,
+  });
   await transaction
     .insertInto('outbox')
     .values(

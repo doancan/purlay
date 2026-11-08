@@ -19,6 +19,7 @@ import {
 import { messageId, messageIdTime } from '@purlay/types';
 import { aMovableClock, NOW } from '../testing/doubles';
 import {
+  anOutboxRow,
   aGrant,
   aPublishWorld,
   aWorkspaceRow,
@@ -32,6 +33,7 @@ import {
 import { DAY_MS } from './clock';
 import { withinRequest } from './logging';
 import {
+  FactBacklogFull,
   FactPublishError,
   OUTBOX_PAYLOAD_BYTES_MAX,
   factRoutingOf,
@@ -368,5 +370,127 @@ describe('integration: a deleted workspace’s facts', () => {
       expect(await rowsOf(tx, mine)).toEqual([]);
       expect(await rowsOf(tx, theirs)).toHaveLength(1);
     }, cloned.db);
+  });
+});
+
+describe('integration: the most facts a workspace may have waiting for one consumer', () => {
+  const CEILING = 3;
+  const fill = async (
+    tx: Executor,
+    workspaceId: string,
+    consumer: string,
+    count: number,
+    state: 'pending' | 'delivered' | 'dead' | 'skipped' = 'pending',
+  ): Promise<void> => {
+    for (let index = 0; index < count; index += 1) {
+      await anOutboxRow(tx, workspaceId, {
+        consumer,
+        state,
+        at: new Date(NOW.getTime() + index),
+      });
+    }
+  };
+  const worldOf = (workspaceId: string): ReturnType<typeof aPublishWorld> => {
+    const world = aPublishWorld(workspaceId, clock);
+    return { ...world, context: { ...world.context, pendingMax: CEILING } };
+  };
+
+  test('refuses a publish that would pass it, names the workspace and the consumer, writes nothing and counts it', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      await fill(tx, workspaceId, 'wiki', CEILING);
+      const { context, refusedCount } = worldOf(workspaceId);
+      const refused = await refusalOf(
+        publishFact(tx, context, NOTE_CREATED, { noteId: 'n', title: 't' }),
+      );
+      expect(refused).toBeInstanceOf(FactBacklogFull);
+      expect(refused).toMatchObject({
+        workspaceId,
+        consumer: 'wiki',
+        type: 'notes.created',
+        ceiling: CEILING,
+      });
+      expect(String(refused)).toContain(workspaceId);
+      expect(String(refused)).toContain('"wiki"');
+      // All or nothing: shelf, which has room, did not get its row of a fact wiki could not take.
+      expect(await rowsOf(tx, workspaceId)).toHaveLength(CEILING);
+      expect(refusedCount('wiki')).toBe(1);
+      expect(refusedCount('shelf')).toBe(0);
+    }, cloned.db);
+  });
+
+  test('takes a publish that reaches it exactly, and refuses the next', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      await fill(tx, workspaceId, 'wiki', CEILING - 1);
+      const { context } = worldOf(workspaceId);
+      await publishFact(tx, context, NOTE_PINNED, { noteId: 'last' });
+      expect(await rowsOf(tx, workspaceId)).toHaveLength(CEILING);
+      const refused = await refusalOf(publishFact(tx, context, NOTE_PINNED, { noteId: 'over' }));
+      expect(refused).toBeInstanceOf(FactBacklogFull);
+    }, cloned.db);
+  });
+
+  test('is one for each consumer: a full one does not stop a fact it alone does not consume', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      await fill(tx, workspaceId, 'shelf', CEILING);
+      const { context, refusedCount } = worldOf(workspaceId);
+      // notes.pinned is wiki's alone, and wiki has room.
+      await publishFact(tx, context, NOTE_PINNED, { noteId: 'n' });
+      expect(await rowsOf(tx, workspaceId)).toHaveLength(CEILING + 1);
+      expect(refusedCount('shelf')).toBe(0);
+      const refused = await refusalOf(
+        publishFact(tx, context, NOTE_CREATED, { noteId: 'n', title: 't' }),
+      );
+      expect(refused).toMatchObject({ consumer: 'shelf' });
+    }, cloned.db);
+  });
+
+  test('is one for each workspace: a neighbour at the ceiling does not stop this one', async () => {
+    await withRollback(async (tx) => {
+      const hot = await aWorkspaceRow(tx);
+      const quiet = await aWorkspaceRow(tx);
+      await fill(tx, hot, 'wiki', CEILING);
+      const { context } = worldOf(quiet);
+      await publishFact(tx, context, NOTE_CREATED, { noteId: 'n', title: 't' });
+      expect(await rowsOf(tx, quiet)).toHaveLength(2);
+    }, cloned.db);
+  });
+
+  test('counts what waits and not what ended: delivered, skipped and dead rows are room', async () => {
+    await withRollback(async (tx) => {
+      const workspaceId = await aWorkspaceRow(tx);
+      await fill(tx, workspaceId, 'wiki', 2, 'delivered');
+      await fill(tx, workspaceId, 'wiki', 2, 'skipped');
+      await fill(tx, workspaceId, 'wiki', 2, 'dead');
+      const { context } = worldOf(workspaceId);
+      await publishFact(tx, context, NOTE_PINNED, { noteId: 'n' });
+      expect(await rowsOf(tx, workspaceId)).toHaveLength(7);
+    }, cloned.db);
+  });
+
+  test('ends the publisher’s transaction when the refusal is not caught, and leaves it usable when it is', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await cloned.db.transaction().execute(async (tx) => {
+      await fill(tx, workspaceId, 'wiki', CEILING);
+    });
+    const { context } = worldOf(workspaceId);
+    const failed = await refusalOf(
+      cloned.db.transaction().execute(async (tx) => {
+        await anOutboxRow(tx, workspaceId, { consumer: 'shelf', at: new Date(NOW.getTime() + 99) });
+        await publishFact(tx, context, NOTE_PINNED, { noteId: 'n' });
+      }),
+    );
+    expect(failed).toBeInstanceOf(FactBacklogFull);
+    // The publisher's own write went with the refusal: a fact is never dropped while what it reports stays.
+    expect(await rowsOf(cloned.db, workspaceId)).toHaveLength(CEILING);
+    // A caller that catches it keeps a healthy transaction and decides for itself.
+    await cloned.db.transaction().execute(async (tx) => {
+      expect(
+        await refusalOf(publishFact(tx, context, NOTE_PINNED, { noteId: 'n' })),
+      ).toBeInstanceOf(FactBacklogFull);
+      expect(await rowsOf(tx, workspaceId)).toHaveLength(CEILING);
+    });
   });
 });

@@ -44,6 +44,9 @@ export const DEVELOPMENT_ENCRYPTION_KEY = 'ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0Z
 export const GITHUB_URL_DEFAULT = 'https://github.com';
 export const GITHUB_API_URL_DEFAULT = 'https://api.github.com';
 
+/** Facts one workspace may have waiting for one consumer before a publish is refused (`CONFIG.md`, D-288 §10). */
+export const OUTBOX_PENDING_MAX_DEFAULT = 5000;
+
 export const Environment = Type.Object({
   NODE_ENV: Type.Union(
     [Type.Literal('development'), Type.Literal('test'), Type.Literal('production')],
@@ -80,6 +83,13 @@ export const Environment = Type.Object({
 
   DATABASE_URL: Type.String({ minLength: 1 }),
   DATABASE_POOL_MAX: Type.Integer({ minimum: 1, maximum: 100, default: 10 }),
+  /** The facts one workspace may have waiting for one module's outbox worker; a publish past it is refused with
+   *  `FactBacklogFull`, so one workspace cannot bury the others' facts (D-288 §10). Per workspace and consumer. */
+  OUTBOX_PENDING_MAX: Type.Integer({
+    minimum: 1,
+    maximum: 1_000_000,
+    default: OUTBOX_PENDING_MAX_DEFAULT,
+  }),
   DATABASE_SSL: Type.Boolean({ default: false }),
   /** Production refuses a database connection without TLS unless this says the
    *  operator knows: a database on the same private network, say (#236). */

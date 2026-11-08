@@ -35,6 +35,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 |---|---|---|---|
 | `DATABASE_URL` | ✅ | — | `postgres://user:pass@host:5432/purlay` |
 | `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling. The issues module takes at most a third of it (rounded down, never more than the pool less one, at least one: `features/issues/budget.ts`); chat is not budgeted |
+| `OUTBOX_PENDING_MAX` | — | `5000` | The most facts one workspace may have waiting for one module's outbox worker (D-288 §10), from `1` to `1000000`. A publish that would pass it is refused with `FactBacklogFull`, nothing is written and the publisher's transaction ends, so one workspace in a flood cannot bury the others' facts; counted in `purlay_outbox_refused_total`. Per workspace and consumer, soft by the publishes in flight. Raise it only if `purlay_outbox_pending` shows a consumer that keeps up and a workspace that legitimately bursts (`DEPLOY.md`) |
 | `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. Verifies the server's certificate. `bun run db:migrate` reads it too. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
 | `DATABASE_ALLOW_PLAINTEXT` | — | `false` | Production only: acknowledges that the database link is not encrypted because the network is private (a compose network, a unix socket). Without it production will not start on `DATABASE_SSL=false`. It does not turn TLS off by itself |
 | `DATABASE_SSL_CA_FILE` | — | — | Path to a PEM file of the certificate authority to trust instead of the system's, for a private or managed root. Needs `DATABASE_SSL=true`; a file that cannot be read stops the boot (D-87) |
@@ -479,7 +480,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `MIGRATE_ON_START=true` and `S3_ENDPOINT`. It passes through `APP_URL` (**`https://`**),
 `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
-`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`,
+`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`, `OUTBOX_PENDING_MAX`,
 `SOCKET_MAX_CONNECTIONS`, `SOCKET_REPLAY_CONCURRENCY`, `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), `UPDATE_CHECK` (on unless `false`), and to the API alone `METRICS_TOKEN` (metrics, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's

@@ -236,6 +236,12 @@ days it holds) and is then swept by `sweep:outbox`, hourly. The table is meant f
 message. **When to look again:** more than a million rows a day, or vacuum that falls behind on `outbox` (`pg_stat_user_tables.n_dead_tup`), is the point at
 which to partition it by day; below that it is not worth the complexity, and nothing in this change measures it yet.
 
+**Tuning the backlog ceiling (D-288 §10).** One workspace may have `OUTBOX_PENDING_MAX` (5000) facts waiting for one module; a publish past it is refused with
+`FactBacklogFull` (workspace, consumer and fact type named in the error), nothing is written and the publisher's transaction ends, counted in
+`purlay_outbox_refused_total{module,fact}`. A rising count means a consumer that is behind (look at `purlay_outbox_pending` and `purlay_outbox_oldest_age_seconds` of
+that module first) or a module publishing in a loop; raising the ceiling only moves the point at which the other workspaces' facts wait behind it, so raise it for a
+measured, legitimate burst and not to silence the counter. The ceiling is per workspace and consumer and soft by the publishes in flight at once.
+
 **Backup evidence in server administration (D-278).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
 
 The production Compose stack passes this optional variable but does not mount a host directory by default. Add the metadata-only read-only API volume through a Compose override and set the container path in `production.env`; setting a path alone does not provide evidence.
