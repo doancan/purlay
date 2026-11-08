@@ -1,5 +1,5 @@
 /**
- * The administrator's view of the outbox (D-288 §11). Listing is metadata and reads nothing it need not; reading one fact whole
+ * The administrator's view of the outbox (D-288 §12). Listing is metadata and reads nothing it need not; reading one fact whole
  * shows its payload to the administrator and only to them, and is written on the server's trail by the fact's id in the same
  * transaction as the read, after the administrator is rechecked under the lock every authority change takes: a read that is not
  * on the trail did not happen, and one by an administrator demoted a moment ago did not either.

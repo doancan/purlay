@@ -1,5 +1,5 @@
 /**
- * What the server's administrator may see of the outbox (D-288 §11): the dead facts and the ones stuck behind their backoff, as
+ * What the server's administrator may see of the outbox (D-288 §12): the dead facts and the ones stuck behind their backoff, as
  * metadata, and one row whole. The list never carries a payload; the one-row read does, because a fact cannot be judged
  * (fixed and requeued, or discarded) without it, and the caller writes that read on the server's trail. This file and
  * `outbox-drain.ts` are the only readers of the table, so the route that asks stays out of it (`core-tables.test.ts`).

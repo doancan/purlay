@@ -31,7 +31,7 @@ export const recordServerAudit = async (
     readonly targetModule?: string;
     /** The operator's own words for why, on the entry that carries them (`server.module_suspended`, D-296). */
     readonly note?: string;
-    /** Which fact an entry about the outbox is about, by id (D-288 §11). */
+    /** Which fact an entry about the outbox is about, by id (D-288 §12). */
     readonly targetFactId?: string;
   },
 ): Promise<void> => {

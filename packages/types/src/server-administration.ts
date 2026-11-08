@@ -182,7 +182,7 @@ export const ServerAuditEntry = Type.Object({
   targetModule: Type.Union([Type.String(), Type.Null()]),
   /** The operator's own words for why, on the one entry that carries them (`server.module_suspended`, D-296); null for every other. */
   note: Type.Union([Type.String(), Type.Null()]),
-  /** The fact an entry about the outbox is about (D-288 §11), by id; null for every other entry. */
+  /** The fact an entry about the outbox is about (D-288 §12), by id; null for every other entry. */
   targetFactId: Type.Union([Uuid, Type.Null()]),
   createdAt: Timestamp,
 });
@@ -355,7 +355,7 @@ export const ServerBackupStatus = Type.Object({
 });
 export type ServerBackupStatus = Static<typeof ServerBackupStatus>;
 
-/** What the operator's list of the outbox can be asked for (D-288 §11): `stuck` is pending past the overview's fifteen minutes. */
+/** What the operator's list of the outbox can be asked for (D-288 §12): `stuck` is pending past the overview's fifteen minutes. */
 export const ServerOutboxState = Type.Union([
   Type.Literal('dead'),
   Type.Literal('stuck'),

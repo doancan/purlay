@@ -4,7 +4,7 @@ import type { Mutation } from '../mutate';
 export const API_MODULES_ADMINISTRATION: readonly Mutation[] = [
   {
     id: 'outbox-inspect-not-on-the-trail',
-    why: 'a payload is read and no entry says by whom, so the auditor’s question has no answer (D-288 §11)',
+    why: 'a payload is read and no entry says by whom, so the auditor’s question has no answer (D-288 §12)',
     file: 'apps/api/src/modules/administration/outbox.ts',
     find: "  await recordServerAudit(tx, clock, {\n    actorUserId: admin.userId,\n    action: 'server.fact_inspected',",
     replace:
@@ -13,7 +13,7 @@ export const API_MODULES_ADMINISTRATION: readonly Mutation[] = [
   },
   {
     id: 'outbox-inspect-skips-the-administrator-recheck',
-    why: 'an administrator demoted a moment ago still reads a payload (D-288 §11, D-292 §2)',
+    why: 'an administrator demoted a moment ago still reads a payload (D-288 §12, D-292 §2)',
     file: 'apps/api/src/modules/administration/outbox.ts',
     find: '  await lockServerAdministrator(tx, admin);\n  const fact',
     replace: '  const fact',

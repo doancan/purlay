@@ -185,7 +185,7 @@ export const readAdministrationOverview = async (
     deps.outboxConsumers,
   );
 };
-/** `GET /api/server/outbox` — the dead and stuck facts between modules, as metadata and never a payload (D-288 §11). */
+/** `GET /api/server/outbox` — the dead and stuck facts between modules, as metadata and never a payload (D-288 §12). */
 export const readAdministrationOutbox = async (
   deps: AccountDependencies,
   request: Request,
@@ -194,7 +194,7 @@ export const readAdministrationOutbox = async (
   const query = validated(ServerOutboxQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await listServerOutbox(deps.database, deps.clock, query);
 };
-/** `GET /api/server/outbox/:id` — one delivery whole, payload included, on the server's trail as read (D-288 §11). */
+/** `GET /api/server/outbox/:id` — one delivery whole, payload included, on the server's trail as read (D-288 §12). */
 export const readAdministrationOutboxFact = async (
   deps: AccountDependencies,
   request: Request,

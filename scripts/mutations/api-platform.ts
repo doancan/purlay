@@ -933,7 +933,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'outbox-list-ignores-the-cursor',
-    why: 'a second page repeats the first, so an operator pages through the same facts for ever (D-288 §11)',
+    why: 'a second page repeats the first, so an operator pages through the same facts for ever (D-288 §12)',
     file: 'apps/api/src/platform/outbox-operate.ts',
     find: "  if (query.after !== undefined) statement = statement.where('id', '>', query.after);\n",
     replace: '',
@@ -941,7 +941,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'outbox-list-ignores-the-workspace',
-    why: 'a list asked for one workspace shows every workspace’s facts (D-288 §11)',
+    why: 'a list asked for one workspace shows every workspace’s facts (D-288 §12)',
     file: 'apps/api/src/platform/outbox-operate.ts',
     find: "  if (query.workspaceId !== undefined)\n    statement = statement.where('workspace_id', '=', query.workspaceId);\n",
     replace: '',
@@ -965,7 +965,7 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'outbox-stuck-counts-a-fact-that-just-waited',
-    why: 'the stuck list is every pending fact, so it is as long as the backlog and says nothing (D-288 §11)',
+    why: 'the stuck list is every pending fact, so it is as long as the backlog and says nothing (D-288 §12)',
     file: 'apps/api/src/platform/outbox-operate.ts',
     find: "          .where('created_at', '<', new Date(now.getTime() - OUTBOX_STALE_AFTER_SECONDS * 1000))\n",
     replace: '',

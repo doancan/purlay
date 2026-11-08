@@ -2669,7 +2669,7 @@ describe('integration — server administration inventory', () => {
   });
 });
 
-describe('integration — the administrator’s view of the outbox (D-288 §11)', () => {
+describe('integration — the administrator’s view of the outbox (D-288 §12)', () => {
   const SECRET = 'a-payload-word-nobody-lists';
   const MINUTE = 60_000;
   const seeded = async (): Promise<{

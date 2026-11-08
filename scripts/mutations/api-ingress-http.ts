@@ -544,7 +544,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   },
   {
     id: 'outbox-inspect-open-to-a-stranger',
-    why: 'a fact’s payload is read by someone who is not the server’s administrator (D-288 §11)',
+    why: 'a fact’s payload is read by someone who is not the server’s administrator (D-288 §12)',
     file: 'apps/api/src/ingress/http/server-administration.ts',
     find: '  const admin = await guard(deps, request);\n  const rowId = validated(Uuid, id);',
     replace:
@@ -553,7 +553,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   },
   {
     id: 'outbox-list-open-to-a-stranger',
-    why: 'the dead facts of every module, with their workspaces, are listed to anyone who asks (D-288 §11)',
+    why: 'the dead facts of every module, with their workspaces, are listed to anyone who asks (D-288 §12)',
     file: 'apps/api/src/ingress/http/server-administration.ts',
     find: '  await guard(deps, request);\n  const query = validated(ServerOutboxQuery,',
     replace: '  const query = validated(ServerOutboxQuery,',
