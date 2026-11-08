@@ -9,7 +9,7 @@ import { AppError } from '../../platform/errors';
 import { aMovableClock, NOW } from '../../testing/doubles';
 import { aUserRow } from '../../testing/users';
 import type { EntitlementCatalogue } from '../entitlements/apply';
-import { applySuspension, type SuspensionChange } from './apply';
+import { applySuspension, moduleStatuses, type SuspensionChange } from './apply';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -144,6 +144,16 @@ describe('integration: stopping and resuming a module', () => {
       const resumed = await applySuspension(tx, clock, noApp, ACTOR, resume('base'));
       expect(resumed.alsoAffected).toEqual(['extra']);
       expect(await stoppedIn(tx)).toEqual([]);
+    });
+  });
+
+  test('says which modules are stopped and which are out because of one that is', async () => {
+    await withRollback(async (tx) => {
+      const states = async (): Promise<string[]> =>
+        (await moduleStatuses(tx, noApp, NOW)).map(({ module, state }) => `${module}:${state}`);
+      expect(await states()).toEqual(['chat:active', 'base:active', 'extra:active']);
+      await applySuspension(tx, clock, noApp, ACTOR, stop('base'));
+      expect(await states()).toEqual(['chat:active', 'base:suspended', 'extra:blocked']);
     });
   });
 

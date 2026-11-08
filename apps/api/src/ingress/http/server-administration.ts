@@ -25,6 +25,7 @@ import {
   ServerModuleId,
   ServerModuleSuspensionRequest,
   type ServerModuleSuspensionResult,
+  type ServerModules,
   ServerUsersQuery,
   ServerWorkspacesQuery,
   ServerEmptyRequest,
@@ -61,7 +62,7 @@ import {
   requireStopPeersReady,
   type PeersBehind,
 } from '../../modules/entitlements/peers';
-import { applySuspension } from '../../modules/suspension/apply';
+import { applySuspension, moduleStatuses } from '../../modules/suspension/apply';
 import type { Suspension } from '../../platform/suspended-modules';
 import {
   serverMailStatus,
@@ -137,6 +138,25 @@ export interface ModuleSuspensionDependencies extends AccountDependencies {
   /** The modules this process runs. */
   readonly modules: readonly string[];
 }
+
+/** `GET /api/server/modules` — every module of the build, whether it is stopped and why (D-296). */
+export const readAdministrationModules = async (
+  deps: ModuleSuspensionDependencies,
+  request: Request,
+): Promise<ServerModules> => {
+  await guard(deps, request);
+  const rows = await moduleStatuses(deps.database, deps.entitlements, deps.clock.now());
+  return {
+    data: rows.map((row) => ({
+      module: row.module,
+      running: deps.modules.includes(row.module),
+      state: row.state,
+      reason: row.reason,
+      suspendedAt: row.suspendedAt?.toISOString() ?? null,
+      suspendedBy: row.suspendedBy,
+    })),
+  };
+};
 
 /** `POST /api/server/modules/:moduleId/suspension` — only the server's administrator stops a module for every workspace, or lets it run again (D-296). */
 export const writeAdministrationModuleSuspension = async (

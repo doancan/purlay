@@ -19,6 +19,7 @@ import {
   readAdministrationOutboxFact,
   writeAdministrationModule,
   writeAdministrationModuleSuspension,
+  readAdministrationModules,
   writeAdministrationQuota,
   writeAdministrationSessions,
 } from './server-administration';
@@ -1138,6 +1139,10 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return '';
     })
+    .get(
+      '/api/server/modules',
+      async ({ request }) => await readAdministrationModules(administration, request),
+    )
     .post(
       '/api/server/modules/:moduleId/suspension',
       async ({ request, params, body }) =>

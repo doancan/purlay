@@ -130,6 +130,20 @@ export const ServerModuleSuspensionResult = Type.Object({
   alsoAffected: Type.Array(Type.String()),
 });
 export type ServerModuleSuspensionResult = Static<typeof ServerModuleSuspensionResult>;
+/** One module of the build and whether the administrator has stopped it. */
+export const ServerModuleStatus = Type.Object({
+  module: Type.String(),
+  /** Whether this process runs it (`MODULES`), before any stop. */
+  running: Type.Boolean(),
+  /** `suspended` is a stop; `blocked` is out because a module it requires is stopped. */
+  state: Type.Union([Type.Literal('active'), Type.Literal('suspended'), Type.Literal('blocked')]),
+  reason: Type.Union([Type.String(), Type.Null()]),
+  suspendedAt: Type.Union([Timestamp, Type.Null()]),
+  suspendedBy: Type.Union([Uuid, Type.Null()]),
+});
+export type ServerModuleStatus = Static<typeof ServerModuleStatus>;
+export const ServerModules = Type.Object({ data: Type.Array(ServerModuleStatus) });
+export type ServerModules = Static<typeof ServerModules>;
 export const ServerAdminRequest = FromClient({ isServerAdmin: Type.Boolean() });
 export type ServerAdminRequest = Static<typeof ServerAdminRequest>;
 export const ServerUser = Type.Object({

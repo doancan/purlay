@@ -447,6 +447,34 @@ describe('integration: the administrator’s stop and its lifting (D-296)', () =
     });
   });
 
+  test('lists what is stopped and why for the administrator alone', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const admin = await anAdmin(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      expect(withoutRequestId(await node.call('GET', '/api/server/modules', owner))).toContain(
+        '"status":404',
+      );
+      await node.call('POST', stopPath('issues'), admin, {
+        state: 'suspended',
+        reason: 'leaks rows between tickets',
+      });
+      const listed = await node.call('GET', '/api/server/modules', admin);
+      const { data } = listed.body as {
+        data: { module: string; state: string; reason: string | null; running: boolean }[];
+      };
+      expect(data.find(({ module }) => module === 'issues')).toMatchObject({
+        state: 'suspended',
+        reason: 'leaks rows between tickets',
+        running: true,
+      });
+      expect(data.find(({ module }) => module === 'chat')).toMatchObject({
+        state: 'active',
+        reason: null,
+      });
+    });
+  });
+
   test('a resume brings everything back, on the trail, and again is the same', async () => {
     await withRollback(async (db) => {
       const node = aNode(db);
