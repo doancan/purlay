@@ -67,7 +67,10 @@ export const AREAS = [
     name: 'api-modules-auth-better-auth',
     prefixes: ['apps/api/src/modules/auth/better-auth.ts'],
   },
-  { name: 'api-modules-entitlements', prefixes: ['apps/api/src/modules/entitlements/'] },
+  {
+    name: 'api-modules-entitlements',
+    prefixes: ['apps/api/src/modules/entitlements/', 'apps/api/src/modules/suspension/'],
+  },
   { name: 'api-modules-export', prefixes: ['apps/api/src/modules/export/'] },
   { name: 'api-modules-find', prefixes: ['apps/api/src/modules/find/'] },
   { name: 'api-modules-images', prefixes: ['apps/api/src/modules/images/'] },

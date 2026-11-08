@@ -49,31 +49,29 @@ export interface EntitlementPeers {
   readonly stop: () => Promise<void>;
 }
 
-export const advertiseEntitlements = ({
-  link,
-  nodeId,
-  log,
-  timers = systemTimers,
-}: {
+interface Advertising {
   readonly link: RedisLink;
   /** The id this node announced its module set under: the two records are read together. */
   readonly nodeId: string;
   readonly log: Logger;
   readonly timers?: Timers;
-}): EntitlementPeers => {
+}
+
+/** Says, for as long as the node lives, that it reads what `hash` is the record of. */
+const advertiseIn = (
+  hash: string,
+  what: string,
+  { link, nodeId, log, timers = systemTimers }: Advertising,
+): EntitlementPeers => {
   let stopped = false;
   let next: unknown;
   const renew = async (): Promise<void> => {
     let advertised = true;
     try {
-      await link.script(
-        ADVERTISE_SCRIPT,
-        [link.names.entitlementNodes],
-        [nodeId, String(NODE_TTL_MS)],
-      );
+      await link.script(ADVERTISE_SCRIPT, [hash], [nodeId, String(NODE_TTL_MS)]);
     } catch (error) {
       advertised = false;
-      log.debug('this node could not say that it reads workspace grants', { err: error });
+      log.debug(`this node could not say that it reads ${what}`, { err: error });
     }
     if (!stopped) next = timers.set(() => void renew(), advertised ? RENEW_MS : ANNOUNCE_RETRY_MS);
   };
@@ -83,23 +81,37 @@ export const advertiseEntitlements = ({
       stopped = true;
       if (next !== undefined) timers.clear(next);
       try {
-        await link.send('HDEL', [link.names.entitlementNodes, nodeId]);
+        await link.send('HDEL', [hash, nodeId]);
       } catch (error) {
-        log.debug('this node’s grants capability could not be taken out of the shared record', {
-          err: error,
-        });
+        log.debug(
+          `this node’s capability to read ${what} could not be taken out of the shared record`,
+          {
+            err: error,
+          },
+        );
       }
     },
   };
 };
 
-/** How many live nodes do not read grants. Rejects when Redis cannot say: a restriction waits for an answer. */
-export const peersBehind = async (link: RedisLink): Promise<number> => {
-  const answer = await link.script(
-    BEHIND_SCRIPT,
-    [link.names.moduleSet, link.names.entitlementNodes],
-    [],
-  );
+export const advertiseEntitlements = (advertising: Advertising): EntitlementPeers =>
+  advertiseIn(advertising.link.names.entitlementNodes, 'workspace grants', advertising);
+
+/** How many live nodes are not in `hash`. Rejects when Redis cannot say: a restriction waits for an answer. */
+const behindIn = async (link: RedisLink, hash: string): Promise<number> => {
+  const answer = await link.script(BEHIND_SCRIPT, [link.names.moduleSet, hash], []);
   if (typeof answer !== 'number') throw new Error('the peers script answered something else');
   return answer;
 };
+
+/** How many live nodes do not read grants. Rejects when Redis cannot say: a restriction waits for an answer. */
+export const peersBehind = async (link: RedisLink): Promise<number> =>
+  await behindIn(link, link.names.entitlementNodes);
+
+/** Says, as `advertiseEntitlements` does for grants, that this node reads the modules the administrator has stopped (D-296). */
+export const advertiseSuspension = (advertising: Advertising): EntitlementPeers =>
+  advertiseIn(advertising.link.names.suspensionNodes, 'the stopped modules', advertising);
+
+/** How many live nodes do not read the stopped modules, which a stop waits to be none. */
+export const suspensionPeersBehind = async (link: RedisLink): Promise<number> =>
+  await behindIn(link, link.names.suspensionNodes);

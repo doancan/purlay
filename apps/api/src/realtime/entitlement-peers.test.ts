@@ -8,7 +8,12 @@ import { describe, expect, test } from 'bun:test';
 import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink } from '../testing/redis';
-import { advertiseEntitlements, peersBehind } from './entitlement-peers';
+import {
+  advertiseEntitlements,
+  advertiseSuspension,
+  peersBehind,
+  suspensionPeersBehind,
+} from './entitlement-peers';
 import type { Timers } from './hub';
 import { ANNOUNCE_RETRY_MS, NODE_TTL_MS } from './module-set';
 
@@ -148,5 +153,40 @@ describe('how many nodes do not read workspace grants', () => {
       throw new Error('redis is not connected');
     };
     expect(await reasonOf(away)).toContain('not connected');
+  });
+});
+
+describe('a node that reads the stopped modules says so in a record of its own (D-296)', () => {
+  test('under its own id, in the suspension record and not in the grants one, and takes its field out when it stops', async () => {
+    const link = aFakeLink();
+    link.behaviour.script = (): number => 1;
+    link.behaviour.send = (): number => 1;
+    const clock = manualTimers();
+    const node = advertiseSuspension({
+      link,
+      nodeId: 'node-a',
+      log: aRecordingLogger().log,
+      timers: clock.timers,
+    });
+    await settle();
+    expect(link.scripts[0]?.keys).toEqual([names.suspensionNodes]);
+    expect(link.scripts[0]?.args).toEqual(['node-a', String(NODE_TTL_MS)]);
+    await node.stop();
+    expect(link.sent).toEqual([{ command: 'HDEL', args: [names.suspensionNodes, 'node-a'] }]);
+  });
+
+  test('is asked of the module-set record and the suspension record together, and is a failure and not a zero when it is not a number', async () => {
+    const link = aFakeLink();
+    link.behaviour.script = (): number => 3;
+    expect(await suspensionPeersBehind(link)).toBe(3);
+    expect(link.scripts[0]?.keys).toEqual([names.moduleSet, names.suspensionNodes]);
+    link.behaviour.script = (): string => 'ok';
+    let message = 'answered';
+    try {
+      await suspensionPeersBehind(link);
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('something else');
   });
 });
