@@ -8,7 +8,8 @@
  *
  * A module's HTTP is part of the module: its slot supplies `routes`, every path it registers is its manifest's and none of
  * them is also registered in `app.ts`. A route of the core that a module's code serves stays in `app.ts` and is the core's
- * (`CORE_ROUTES`), as `GET` and `PUT /api/me/missed-mail` are.
+ * (`CORE_ROUTES`); a route about a module's feature is the module's even where its path is under `/api/me`, as
+ * `GET` and `PUT /api/me/missed-mail` are chat's.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';

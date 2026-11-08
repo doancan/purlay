@@ -22,6 +22,7 @@ import {
 } from '@purlay/db';
 import type { AuthMethods, MeResponse, MySignIn } from '@purlay/types';
 import { createApp, type HttpApplication } from './app';
+import { runComposition } from '../../testing/run-composition';
 import type { SignInPolicy } from '../../modules/auth/better-auth';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { AppError } from '../../platform/errors';
@@ -130,14 +131,17 @@ const signedInWithPassword = async (server: Server, user: TestUser): Promise<Res
 
 /** What a held-back person may still reach, and what they may not: one of each kind of route. */
 const ENROLMENT = ['/api/me', '/api/me/sign-in'] as const;
-const HELD = [
+const HELD: readonly string[] = [
   '/api/workspaces',
   '/api/me/sessions',
   '/api/me/quiet-hours',
-  '/api/me/missed-mail',
+  // Chat's, so a route only where chat runs (D-250).
+  ...(runComposition.modules.some((module) => module.manifest.id === 'chat')
+    ? ['/api/me/missed-mail']
+    : []),
   '/api/me/exports',
   '/api/push/key',
-] as const;
+];
 
 describe('integration: two-step verification required of an account with a password (D-239)', () => {
   test('off, a password account without it reaches everything, as before', async () => {

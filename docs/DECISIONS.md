@@ -13484,16 +13484,25 @@ folder, and a third module would have added its handlers to the core's door.
    handlers are in `ingress/`), when `app.ts` registers a path of a module that supplies them, when a plugin registers a
    path its manifest does not own, and when the plugin and its folder's text disagree. `module-seams.test.ts`'s `ALLOWED`
    shrinks by each handler file that moves, and its cap with it.
+7. **A route about a module's feature is the module's, whatever its path.** `GET` and `PUT /api/me/missed-mail` were the core's
+   (`CORE_ROUTES`) over chat's service, so `ingress/http/missed-mail.ts` stayed a door that imported chat. They are a chat
+   feature (the setting of chat's letter, D-240), so they moved into `features/chat/http/missed-mail.ts` beside the stop
+   link, are listed in chat's manifest and left `CORE_ROUTES`. The public URL, the request and response shapes and the
+   behaviour with chat run are unchanged (the contract bundle is byte-identical); in a process without chat they answer the
+   `404 ROUTE_NOT_FOUND` of any unknown path (D-250), as every chat route does, and run in chat's share, under its deadline and
+   with the `module` label `chat`. The setting is on the Notifications page, a settings section of chat's manifest, so the web offers it only where chat runs and no
+   client asks for the closed path.
+   `ALLOWED` shrinks to three doors and its cap with it; `module-seams.test.ts` names them, so a door re-added for a
+   module's route fails there.
 
 **Built.** The seam, the fence, the guard and issues' four routes first (#1159); then chat's handlers in batches, each a `git mv`
 and a rewrite of imports proved by a script that compares every moved file with its base once each import specifier is replaced
 by the file it resolves to (#1164 and the ones after it), until `app.ts` registered none of a module's paths. Chat's 97 routes are
 in `features/chat/http/`, one file per resource, joined in `routes.ts`; what its GitHub-facing resources share is made once in
 `wiring.ts` from the context, which gained the named fields they need (the application's configuration, the cipher, the limiter
-factory, the App's settings, API and addresses, the node's presence record). `module-seams.test.ts`'s `ALLOWED` went from 27 to 4,
-the real remainder of the core's doors: `missed-mail.ts` (`GET` and `PUT /api/me/missed-mail` are the core's routes, in
-`CORE_ROUTES`, over chat's service; handing them to chat would close them in a process without chat, a change of the wire that
-has its own decision), `releases.ts`, the socket's presence and `erase-content`. The ownership test's `HTTP_IN_INGRESS` list,
+factory, the App's settings, API and addresses, the node's presence record). `module-seams.test.ts`'s `ALLOWED` went from 27 to 3
+(from 4 once `missed-mail.ts` moved, item 7), the real remainder of the core's doors: `releases.ts`, the socket's presence and
+`erase-content`. The ownership test's `HTTP_IN_INGRESS` list,
 which held chat while it moved, is gone: a module that has routes supplies a plugin, with no exception. The workspace's GitHub
 token (`/api/workspaces/:workspaceId/integrations/github`) was chat's by its manifest and served by a core file that imported chat;
 its handlers moved into chat's folder and `workspaces.ts` left `ALLOWED`. What is not done: a module's own error codes and wire

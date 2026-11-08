@@ -118,7 +118,7 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     replace: '',
     tests: [
       'apps/api/src/features/chat/notifications/missed-mail.integration.test.ts',
-      'apps/api/src/ingress/http/missed-mail.integration.test.ts',
+      'apps/api/src/features/chat/http/missed-mail.integration.test.ts',
     ],
   },
   {

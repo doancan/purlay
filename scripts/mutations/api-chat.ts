@@ -386,6 +386,31 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/module-listing.test.ts'],
   },
   {
+    id: 'missed-mail-http-relay-assumed',
+    why: 'the setting is offered, and turned on, whether or not the server has a relay to send through (D-240)',
+    file: 'apps/api/src/features/chat/http/missed-mail.ts',
+    find: 'const mailOn = (auth: Auth): boolean => auth.signInLinks !== undefined;\n',
+    replace: 'const mailOn = (auth: Auth): boolean => true;\n',
+    tests: ['apps/api/src/features/chat/http/missed-mail.integration.test.ts'],
+  },
+  {
+    id: 'missed-mail-http-setting-body-unchecked',
+    why: 'the body of the setting is not held to the contract before it is applied',
+    file: 'apps/api/src/features/chat/http/missed-mail.ts',
+    find: '    validated(SetMissedMailRequest, body),\n',
+    replace: '    body as never,\n',
+    tests: ['apps/api/src/features/chat/http/missed-mail.integration.test.ts'],
+  },
+  {
+    id: 'missed-mail-http-setting-unsigned',
+    why: 'the setting is read for whoever asks, with no session to name the person',
+    file: 'apps/api/src/features/chat/http/missed-mail.ts',
+    find: '  const { userId } = await requireSession(dependencies.auth, request);\n  return await readMissedMail(',
+    replace:
+      "  const userId = '00000000-0000-7000-8000-000000000000';\n  return await readMissedMail(",
+    tests: ['apps/api/src/features/chat/http/missed-mail.integration.test.ts'],
+  },
+  {
     id: 'open-questions-not-narrowed-on-the-server',
     why: 'one channel’s open questions are the workspace’s visible ones, so a channel’s header and narrowed view count what is not theirs',
     file: 'apps/api/src/features/chat/http/messages.ts',

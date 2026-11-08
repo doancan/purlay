@@ -26,7 +26,6 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/me/exports',
   '/api/me/exports/:exportId/download',
   '/api/me/locale',
-  '/api/me/missed-mail',
   '/api/me/profile',
   '/api/me/quiet-hours',
   '/api/me/sessions',

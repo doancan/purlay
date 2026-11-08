@@ -75,6 +75,7 @@ export const chatModule = {
       '/api/messages/**',
       '/api/notifications',
       '/api/notifications/read',
+      '/api/me/missed-mail',
       '/api/missed-mail/stop',
       '/api/webhooks/**',
       '/api/github-app/**',
