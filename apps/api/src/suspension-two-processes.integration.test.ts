@@ -151,7 +151,9 @@ describe('integration: two API processes on one database', () => {
   test('the command stops a module for both processes and lets it run again, with the processes left running', async () => {
     const { one, two, operator, workspaceId } = await cluster();
     const command = (...args: string[]): { code: number; out: string } => {
+      // This test has no Redis: a REDIS_URL of the runner's would make the command ask for --cluster-ready.
       const rest = { ...process.env };
+      delete rest['REDIS_URL'];
       const done = Bun.spawnSync(
         ['bun', '--no-env-file', 'run', `${import.meta.dir}/cli/module-suspension.ts`, ...args],
         {
