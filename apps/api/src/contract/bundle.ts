@@ -51,6 +51,7 @@ import {
 } from '@purlay/markdown';
 import { EXEMPT, PAIRS } from '@purlay/tokens/pairs';
 import { bundledModules, type BundledModule } from '../composition';
+import { RESERVED_MODULE_IDS } from '../platform/module-kit/registry';
 import { SERVER_VERSION } from '../platform/server-version';
 import { moduleStructure, type ModuleJson } from './module-structure';
 
@@ -327,6 +328,9 @@ export const moduleIdProblems = (contract: Contract): string[] => {
   const known = new Set<string>(MODULE_IDS);
   const carried = new Set(contract.modules.map((module) => module.id));
   return [
+    ...[...new Set([...known, ...carried])]
+      .filter((id) => RESERVED_MODULE_IDS.has(id))
+      .map((id) => `the module ${id} has a name the core owns`),
     ...[...carried]
       .filter((id) => !known.has(id))
       .map((id) => `the module ${id} is carried by the build and is not a ModuleId`),

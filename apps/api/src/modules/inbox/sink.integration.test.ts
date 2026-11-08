@@ -160,6 +160,20 @@ describe('integration: the notification sink', () => {
     });
   });
 
+  test('a context the guard did not mint is refused, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const otherWorkspace = await aWorkspace(db);
+      const forged: WorkspaceContext = { ...bob.context, workspaceId: otherWorkspace };
+      expect(await failureOf(sinkOn().notify(db, forged, noticeFor(ada.userId)))).toContain(
+        'did not mint',
+      );
+      expect(await entriesOf(db, ada.userId)).toEqual([]);
+    });
+  });
+
   test('a kind no running module declares is refused, and nothing is written (a module that is off writes nothing)', async () => {
     await withRollback(async (db) => {
       const workspaceId = await aWorkspace(db);

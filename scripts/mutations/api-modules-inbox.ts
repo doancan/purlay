@@ -118,6 +118,14 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     tests: ['apps/api/src/modules/inbox/inbox.integration.test.ts'],
   },
   {
+    id: 'notification-sink-trusts-any-context',
+    why: 'a module writes a notice into another tenant’s member with a copy of its context aimed at that workspace, the actor being itself (the red-team review, D-286)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: '    assertMinted(context);\n    if (notice.recipientId === context.userId) return undefined;',
+    replace: '    if (notice.recipientId === context.userId) return undefined;',
+    tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
     id: 'sink-accepts-an-undeclared-kind',
     why: 'a module writes a notice of a kind no manifest declares, and a person is told something no screen can say (D-286)',
     file: 'apps/api/src/modules/inbox/sink.ts',

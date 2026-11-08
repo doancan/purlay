@@ -33,6 +33,7 @@ import type {
   NotificationSink,
   WrittenNotice,
 } from '../../platform/ports/notification-sink';
+import { assertMinted } from '../../platform/tenancy';
 import type { PushSender } from '../push/sender';
 
 /** What the table's CHECK holds as well, so a mistake is named here and not as a database error. */
@@ -141,6 +142,7 @@ export const notificationSink = (dependencies: {
     if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);
     // A stopped module tells nobody anything, and what it would have said is not kept for later (D-296).
     if (dependencies.suspended?.() === true) return undefined;
+    assertMinted(context);
     if (notice.recipientId === context.userId) return undefined;
     // Erasure locks the workspace before its user; take the insert's foreign-key lock in that order.
     const workspace = await transaction
