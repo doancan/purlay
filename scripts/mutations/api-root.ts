@@ -224,6 +224,22 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/frame-handlers.test.ts'],
   },
   {
+    id: 'composition-accepts-a-grants-plain-job',
+    why: 'a module that is a grant runs a scheduled job that acts for every workspace, including one that lost the grant (D-289)',
+    file: 'apps/api/src/composition.ts',
+    find: 'return work !== undefined && !isPerWorkspace(work);',
+    replace: 'return false;',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-accepts-a-grants-plain-worker',
+    why: 'a module that is a grant runs a loop that acts for every workspace, including one that lost the grant (D-289)',
+    file: 'apps/api/src/composition.ts',
+    find: '.filter(({ work }) => !isPerWorkspace(work))',
+    replace: '.filter(() => false)',
+    tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
     id: 'composition-accepts-a-handler-for-an-unnamed-fact',
     why: 'a module supplies a handler for a fact its manifest does not consume, so it is run for a type the build never checked has a publisher (D-283)',
     file: 'apps/api/src/composition.ts',

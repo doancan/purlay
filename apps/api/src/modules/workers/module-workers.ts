@@ -16,6 +16,14 @@ import { withinRequest, type Logger } from '../../platform/logging';
 import type { ModuleManifest } from '../../platform/module-kit/manifest';
 import type { Counter } from '../../platform/metrics';
 import { withDeadline } from '../../platform/request-deadline';
+import {
+  eachEntitled,
+  markPerWorkspace,
+  noEntitledWorkspaces,
+  type EntitledFor,
+  type EntitledWorkspaces,
+} from '../../platform/entitled-workspaces';
+import type { WorkspaceScope } from '../../platform/ports/record-ref';
 import { noPorts, type ModulePorts, type PortsFor } from '../../platform/ports/module-ports';
 import type { OutboxCounters } from '../../platform/outbox-drain';
 import type { PushSender } from '../push/sender';
@@ -40,6 +48,8 @@ interface WorkerContext {
   readonly bus: EventBus;
   /** The ports of what the module `uses`, reading through `database`: ask them for each workspace the work touches (D-283 §3). */
   readonly ports: ModulePorts;
+  /** The workspaces the module may act for now (D-289): for a loop that acts for workspaces, `perWorkspaceWorker` walks them. */
+  readonly entitled: EntitledWorkspaces;
   /** Where the process has Web Push on. */
   readonly push?: PushSender;
   /** What the outbox worker of a module counts into, where the process records metrics. */
@@ -48,6 +58,20 @@ interface WorkerContext {
 
 /** One iteration of a worker. A throw is the iteration's failure and nothing more. */
 export type WorkerWork = (context: WorkerContext) => Promise<void>;
+
+/**
+ * The work of a loop that acts for workspaces, written for one: `visit` is called for each workspace the module may act for
+ * when the iteration reaches it, with the modules that workspace may use (so `ports.of(turn)` is right for it), and for no other.
+ * A module that is a grant may declare no other kind of worker (`unguardedWorkProblem`, D-289).
+ */
+export const perWorkspaceWorker = (
+  visit: (turn: WorkspaceScope, context: WorkerContext) => Promise<void>,
+): WorkerWork =>
+  markPerWorkspace(async (context) => {
+    await eachEntitled(context.entitled, async (turn) => {
+      await visit(turn, context);
+    });
+  });
 
 /** What a module declares: the work, how often it is done and the name its lines and its counter carry. */
 export interface ModuleWorker {
@@ -137,6 +161,8 @@ export interface WorkersDependencies {
   readonly outbox?: OutboxCounters;
   /** The composition's `portsFor`; left out, a worker has no ports. */
   readonly portsFor?: PortsFor;
+  /** The composition's `entitledFor`; left out, a worker has no workspace to act for. */
+  readonly entitledFor?: EntitledFor;
   /** `purlay_worker_failures_total`: one series for each worker the build carries, made at zero by `serverMetrics`. */
   readonly failures: Counter<'module' | 'worker'>;
   /** The modules the administrator has stopped (D-296), as fresh as the TTL: a worker of one of them does not run its iteration. */
@@ -166,6 +192,7 @@ export const startWorkers = (
     failures,
     suspended,
     portsFor,
+    entitledFor,
     later = timeoutLater,
   } = dependencies;
   let stopped = false;
@@ -173,6 +200,7 @@ export const startWorkers = (
     const { module, name, work, deadlineMs } = worker;
     const log = dependencies.log.child({ module, worker: name });
     const ports = portsFor?.(module, database) ?? noPorts;
+    const entitled = entitledFor?.(module, database) ?? noEntitledWorkspaces;
     const iteration = async (): Promise<void> => {
       // A stopped module claims nothing and sweeps nothing; its rows wait for it (D-296).
       if ((await suspended?.())?.has(module) === true) return;
@@ -191,6 +219,7 @@ export const startWorkers = (
               log,
               bus,
               ports,
+              entitled,
               ...(push === undefined ? {} : { push }),
               ...(outbox === undefined ? {} : { outbox }),
             });

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import { currentRequest } from '../../platform/logging';
+import { noEntitledWorkspaces, type EntitledWorkspaces } from '../../platform/entitled-workspaces';
+import { sql } from '@purlay/db';
 import { noPorts, type ModulePorts } from '../../platform/ports/module-ports';
 import { UNAVAILABLE_REF } from '../../platform/ports/record-ref';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
@@ -129,6 +131,45 @@ describe('a worker’s ports', () => {
     expect(given.get('bare')).toBe(noPorts);
     await withComposition.stop();
     await without.stop();
+  });
+});
+
+describe('a worker’s workspaces', () => {
+  const never = (): Promise<never> => Promise.reject(new Error('a view of a test'));
+
+  test('are its module’s entitled workspaces on its own database, and none without a composition', async () => {
+    const database = aDatabaseThatMustNotBeTouched();
+    const handed = new Map<string, EntitledWorkspaces>();
+    const asked: [string, unknown][] = [];
+    const view: EntitledWorkspaces = { has: () => sql<boolean>`true`, turns: never };
+    const base = {
+      database,
+      clock: fixedClock(new Date('2026-01-01T00:00:00Z')),
+      log: aRecordingLogger().log,
+      bus,
+      failures: { inc: (): void => undefined },
+      later: aManualTimer().later,
+    };
+    const work =
+      (name: string): WorkerWork =>
+      (context) => {
+        handed.set(name, context.entitled);
+        return Promise.resolve();
+      };
+    const composed = startWorkers([aWorker(work('composed'))], {
+      ...base,
+      entitledFor: (module, bound) => {
+        asked.push([module, bound]);
+        return view;
+      },
+    });
+    const bare = startWorkers([aWorker(work('bare'))], base);
+    await settle();
+    expect(handed.get('composed')).toBe(view);
+    expect(asked).toEqual([['chat', database]]);
+    expect(handed.get('bare')).toBe(noEntitledWorkspaces);
+    await composed.stop();
+    await bare.stop();
   });
 });
 

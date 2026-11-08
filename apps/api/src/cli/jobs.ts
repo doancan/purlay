@@ -68,7 +68,7 @@ const database = createDatabase({ ...databaseConnection(config, log), poolSize: 
 const clock = systemClock;
 // A run is its own process and reads the stopped modules once (D-296): a module the administrator stopped has no job to do here.
 const suspension = suspensionCache({ read: async () => await readSuspended(database), log });
-const composition = compositionFor(config.MODULES, 'open', suspension);
+const composition = compositionFor(config.MODULES, config.WORKSPACE_MODULES, suspension);
 
 /**
  * The relay the server's settings name, as the API builds it (`runtimeServicesFrom`): read once a run, so a
@@ -95,8 +95,9 @@ const withMailer: JobContext['withMailer'] = async (use) => {
  * What a module's job is given: this process's settings and the connections `on` names — its module's share of the pool,
  * as the runner hands it — and nothing the module opens itself.
  */
-const contextOn = (on: JobContext['database']): JobContext => ({
+const contextOn = (on: JobContext['database'], job: string): JobContext => ({
   database: on,
+  entitled: composition.entitledFor(composition.owner.ofJob(job), on),
   clock,
   log,
   // Built when a job asks, as each job did: the store is not needed to sweep sessions.
@@ -147,7 +148,7 @@ const coreJobs: Readonly<Record<CoreJobName, Work>> = {
 const moduleJobs: Readonly<Record<string, Work>> = Object.fromEntries(
   Object.entries(composition.jobWork).map(([job, work]): [string, Work] => [
     job,
-    (on): ReturnType<Work> => work(contextOn(on)),
+    (on): ReturnType<Work> => work(contextOn(on, job)),
   ]),
 );
 const jobs: Readonly<Record<string, Work>> = { ...coreJobs, ...moduleJobs };

@@ -156,16 +156,31 @@ and opens no connection of its own (D-281). It runs only where the module runs, 
 A scheduled job is not a worker: it is `jobs` or `retention` in the manifest, `jobWork` in the slot and a place in `PLAN`
 (`apps/api/src/modules/jobs/schedule.ts`).
 
-**The module `module:new` makes is a grant, and a grant cannot declare `jobs` or `workers`.** Add one and the build stops:
-`"acme" is a grant of the workspace and declares jobs or workers ... it must say entitlement: 'always'` (`unguardedWorkProblem` in
-`composition.ts`, held by `composition.test.ts`). The reason: a loop or a job acts for workspaces with no request to carry the
-workspace's grant, so it would go on serving a workspace that lost it. So, before you write the loop, choose (the table is in §7):
+**The module `module:new` makes is a grant, so a loop that acts for workspaces is written per workspace.** A loop or a job acts for
+workspaces with no request to carry the workspace's grant, so a plain one would go on serving a workspace that lost it, and the build
+stops: `"acme" is a grant of the workspace and declares the worker "sweep:overdue"; work that acts for workspaces must be written with
+perWorkspaceWorker or perWorkspaceJob ...` (`unguardedWorkProblem` in `composition.ts`, held by `composition.test.ts`). Write it so:
 
-- Say `entitlement: 'always'` in the manifest. The module is then part of every workspace that runs it and is not sold per workspace.
-  This is what chat does.
-- Or keep the module a grant and do the work without a loop: a purge or a sweep that only keeps rows tidy is `retention`, which is
-  allowed on a grant (it runs in every process, whether the module runs or not). A loop that must act for a workspace waits for the SQL
-  form of `effectiveModules` (`MODULES.md` §10, the table of what is not built); the first module that needs it brings it.
+```ts
+export const acmeWorkers: readonly ModuleWorker[] = [
+  {
+    name: 'sweep:overdue',
+    intervalMs: 60_000,
+    work: perWorkspaceWorker(async (workspace, { database, clock, ports }) => {
+      // `workspace.workspaceId` is one the module may act for now; `ports.of(workspace)` is right for it.
+      await markOverdue(database, workspace.workspaceId, clock.now());
+    }),
+  },
+];
+```
+
+The framework pages through the workspaces where the module is effective (its grant, the grants of what it requires, the process's
+`MODULES` and the administrator's stop) and calls `visit` for each: a workspace that lost the grant is not in the next run, and a
+module that is stopped does nothing. A scheduled job is the same with `perWorkspaceJob(visit)` in `jobWork` (`visit` answers its counts).
+If your sweep is one statement over your own table, `context.entitled.has('acme_items.workspace_id')` is the same question as SQL to
+put in its `where`; the page and the statement share it. What is exempt is the data's lifecycle: `retention`, purge, erasure and the
+exports cover the rows of a workspace that lost the module, and are written as plain jobs. A module that is `entitlement: 'always'` (chat)
+has no grant to lose and may write a plain `work`.
 
 ## 7. Make it sellable
 
@@ -178,7 +193,7 @@ list, search, notice and fact; your code does not. What it costs you:
 |---|---|---|
 | none of `frames`, `events`, `jobs`, `workers` | nothing: `entitlement` defaults to `grant` | the framework closes it per workspace |
 | any of `frames`, `events` | `entitlement: 'always'` | a frame or an event is closed per process, never per workspace (`registry` refuses a grant with them) |
-| any of `jobs`, `workers` | `entitlement: 'always'`, or no loop (§6) | their work is not given the workspace's grant (`compose` refuses it) |
+| any of `jobs`, `workers` | `entitlement: 'always'`, or write them per workspace (§6) | a plain loop is not given the workspace's grant (`compose` refuses it); a per-workspace one is |
 
 Owed either way: a name and a removal threshold (`MODULES.md` §11), a `degrades` for every partner, and data decisions for erasure and
 export that hold whether or not the module is granted, because taking a grant away hides the module's rows and keeps them (D-289 §6).

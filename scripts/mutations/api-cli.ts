@@ -170,8 +170,8 @@ export const API_CLI: readonly Mutation[] = [
     id: 'job-command-runs-a-modules-job-on-the-pool',
     why: 'the command hands a module’s job the pool as it is, whatever share its runner leased, so no share holds its statements (D-274)',
     file: 'apps/api/src/cli/jobs.ts',
-    find: '    (on): ReturnType<Work> => work(contextOn(on)),',
-    replace: '    (): ReturnType<Work> => work(contextOn(database)),',
+    find: '    (on): ReturnType<Work> => work(contextOn(on, job)),',
+    replace: '    (): ReturnType<Work> => work(contextOn(database, job)),',
     tests: ['apps/api/src/cli/jobs-wiring.test.ts'],
   },
   {

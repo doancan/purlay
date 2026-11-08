@@ -14368,6 +14368,21 @@ default, every module (D-24, D-250 rule 9).
    erasure, the purge and both exports, which are the data's lifecycle and apply to a module's rows whoever is granted it (§6);
    `retention` work is the process's own and `entitlement-hooks.integration.test.ts` holds it identical to the module's. *Not built:* a push
    held in Deep Work for an inbox notice of a module the workspace has since lost is still sent when Deep Work ends.
+10. **The jobs and workers of a module that is a grant are written per workspace, over the SQL form of the same function.** The build
+   used to refuse them (`unguardedWorkProblem`) because their work carries no request. `platform/entitled-workspaces.ts` is the
+   function as a statement (`closure(requires)` of the module, each member running, not stopped (D-296) and granted: no row
+   `off` that counts, then a row `on` that counts or the mode `open`; a row counts until its `valid_until`, judged by the database's
+   clock), written once and held to the TS function by `entitled-workspaces.integration.test.ts` over every shape of grant, both
+   modes and a stop. A worker or a job is `perWorkspaceWorker(visit)` / `perWorkspaceJob(visit)`: the framework pages through the
+   workspaces where the module is effective (a hundred at a time, in id order, reading each page's grants once) and calls `visit` with
+   a `WorkspaceScope` that carries the modules the workspace may use (so `ports.of(turn)` is right for it). The module's code never
+   sees a workspace it was not given, so it cannot forget: `compose` accepts a work on a grant only if it was made by those
+   constructors (a registry of functions they fill, not a flag the author sets), and refuses any other, naming it. A workspace that
+   loses the grant, or a module that is stopped, is left out of the next page and so of the next run. `context.entitled.has(column)` is
+   the same condition for a sweep's own statement. Chat is `always` and unchanged; `retention` and the other lifecycle jobs stay
+   plain and cover un-entitled data. A scheduled job now reads `WORKSPACE_MODULES` (the CLI had composed the build in `open` mode
+   whatever the server's setting). *Not done:* the outbox claim still reads the grants in TypeScript (D-288 §11, changed
+   elsewhere); it can take the statement when it is next touched.
 
 **Rejected.** *A `modules` column on `workspaces`:* a hot table for one module's concern (D-275), and a column cannot carry an end date,
 a source or a writer. *A JSON setting on the server:* not per workspace. *Environment or file with a restart:* an edition sale is
@@ -14639,7 +14654,7 @@ tried to go round the guards.
    built where they were still marked as intent, and the placeholder row of the table of what a new module edits (`index.ts`)
    says that nothing is edited.
 2. **What is not built is one table with a trigger and what watches** (`MODULES.md` §10): a fact published by a module of the
-   product, `ports.of`, the SQL form of the entitlement function for jobs and workers, the web's search groups, a runtime kill
+   product, `ports.of`, the SQL form of the entitlement function for jobs and workers (all three since built, D-289 §10, D-291 §5), the web's search groups, a runtime kill
    switch, tracing across modules, per-tenant quotas, the web scaffold of a module, the scan of ports and the wire-union watcher.
    A row whose watcher is "review" says so.
 3. **The paved road's measured gaps are listed in §9** (`MODULES.md`), with the evidence of the audit: the second `module:new`, a
