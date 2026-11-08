@@ -13949,10 +13949,19 @@ an assignee, which is written in the same transaction as the assignment.
     nothing and is still read: the page never breaks on it. The list is its own lazy chunk, so the first load carries the rail's
     dot (a page of one row, the server's own count) and none of the list. `issue_assigned` is now `needsYou`. *Not built:* the
     inbox screen is chat's, so a server that runs issues and no chat has no Updates to open.
+11. **The sink is the caller's, and a feature does not import the composition** (an audit of 2026-11-08 found both open). The
+    module a notice is written as was taken from the manifest that declares its kind, so a module `zz` could write
+    `issue_assigned` and the inbox listed it under `issues`. A sink is now made for one module (`notificationSink({ module, … })`,
+    given the id of the module whose routes are being made in `ingress/http/app.ts`), writes every row as that module, and refuses,
+    by an error that rolls the caller's transaction back, a kind the module does not declare in its own manifest, whether another
+    module declares it or none does. The id is bound where the port is made, so a call cannot pass another's. Separately, a
+    feature's code (not its tests) is kept from importing `composition.ts` by the lint (`feature-fences.mjs`; its `http/` folder
+    already was), since the composition holds every module's slot and a feature that imported it could open another's. A
+    module that is handed the wrong sink is a bug of the composition root, which is one file and read by review.
 
 **Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
-each module, and the first one that forgot would write a stranger a notice. *The module named by the caller*: a lie the type
-cannot catch; the manifest that declares the kind is the one place that says whose it is. *A unique key without the workspace*:
+each module, and the first one that forgot would write a stranger a notice. *The module named by the caller in each call*: a lie
+the type cannot catch; it is the sink's own (§11), bound where it is made, and the manifest that declares the kind is the one place that says whose the kind is. *A unique key without the workspace*:
 D-283's sketch; it is correct only while every subject id is globally unique, which a module's id is not obliged to be.
 *Keeping the old row's id when raising it*: a list ordered by id would then leave a notice told again where it was. *A separate
 retention for each module*: a person's inbox is one list, and a rule per module is a rule nobody can state. *A held push in a table, with a job that sends it when Deep Work
