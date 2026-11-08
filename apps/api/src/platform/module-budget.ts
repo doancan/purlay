@@ -80,7 +80,7 @@ export const inTheCore =
 export const coreReserve = (poolMax: number): number =>
   poolMax <= 1 ? 0 : Math.max(1, Math.floor(poolMax / CORE_RESERVE_DIVISOR));
 
-const CORE_RESERVE_DIVISOR = 5;
+export const CORE_RESERVE_DIVISOR = 5;
 
 interface Share {
   readonly module: string;
