@@ -443,6 +443,19 @@ The session says which modules run: `GET /api/me`'s `modules`, not the public `G
 
 Modules share a process, an event loop and a connection pool, so they are kept apart by **budget**:
 
+What each module is held to, written from the manifests (`bun run docs:sync`; a hand edit fails `docs-sync.test.ts`):
+
+<!-- generated:module-limits (bun run docs:sync) -->
+| Module | Request or frame | Job run | Worker iteration | Pool share (pool of 10) |
+| --- | --- | --- | --- | --- |
+| `chat` | 20 s (default) | 10 min (default) | 1 min (default) | 7 of 10, queue 3 s, statement 30 s |
+| `issues` | 8 s | 10 min (default) | 1 min (default) | 3 of 10, queue 1 s, statement 5 s |
+
+A request deadline is declared from 1 s to 2 min, a job deadline from 1 s to 60 min; the pool's own statement limit is 30 s.
+<!-- /generated:module-limits -->
+
+In detail:
+
 - a share of the pool: a cap on the requests a module has holding a connection at once, with a queue timeout and a
   `statement_timeout` (`moduleConnections`, `platform/module-budget.ts`, D-266). **Every module declares one** (`budget` in
   the manifest, D-260), and it is held **at the connection, not at the transaction**: `createApp` leases the one database
@@ -1049,7 +1062,7 @@ file and cluster check, and the scaffold. Not built:
 | The web's search groups and the skipped line (14m) | the product wants the find drawn; the route answers them today | none; a metric of how long each source took and how many were skipped is also not built |
 | A runtime kill switch for a module | the administrator's route and command that write `suspended_modules` (D-296: the state, the cache, and everything that reads it are built) | until then a row written by hand is believed by every node within two seconds; `MODULES` is read at boot, `WORKSPACE_MODULES` at each node's start and a grant row at the next request |
 | Tracing across modules (OpenTelemetry) | a latency question that the per-module histograms, `purlay_worker_failures_total` and the request id in the logs cannot answer | none |
-| Per-tenant quotas of a module's work (requests, notices) | one workspace measured filling a share | the share of the pool and the rate limits are per module and per connection, not per tenant; facts have a ceiling per workspace and consumer (D-288 §10); D-283 §10 names `purlay_outbox_rows` as the watcher of partitioning, and it does not exist (`DEPLOY.md` says to watch `pg_stat_user_tables.n_dead_tup`) |
+| Per-tenant quotas of a module's work (requests, notices) | one workspace measured filling a share | the share of the pool and the rate limits are per module and per connection, not per tenant; facts have a ceiling per workspace and consumer (D-288 §10); D-283 §10 names `pg_stat_user_tables.n_dead_tup` of `outbox` and `purlay_outbox_pending` as the watchers of partitioning (`DEPLOY.md`) |
 | The web feature of a new module (C2b) | the client's API object, keys and catalogues gain a declaration a module can be added to without editing them (D-294 §5) | `module:new` makes the server side only; item 5 of §9 is by hand |
 | A scan holding a module to the ports its `uses` names; the watcher that asks for a decision when a manifest fills `frames` or `events` with no opened union (14n) | the first module that reads a port; the first module with an operation of its own | review |
 | A downgraded module's data kept for a stated period and then offered for deletion (D-250 rule 9) | the first operator who must remove a module's rows for a workspace that left it | none: a downgrade hides every row and keeps it, exports and erasure still cover it (D-289 §6); review |

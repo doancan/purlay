@@ -147,6 +147,20 @@ for needle, owner in {'26214400': 'docs/SCHEMA.md', '5368709120': 'docs/SCHEMA.m
     if homes != [owner]:
         problems['SSOT ihlali'].append(f"{needle}: {homes}")
 
+# A path a document names in backticks exists. A file that was renamed or deleted leaves a sentence that sends a reader
+# nowhere (the audit found `ingress/http/messages.ts` and `issues-budget.integration.test.ts` named long after they moved).
+# History keeps what was true on its date, and the module guide's `acme` is an example, so both are left out; the few
+# paths below are named on purpose as what is not there (a build output, a rejected directory, the file a decision removed).
+PATH_HISTORY_PREFIXES = ('docs/changelog/', 'docs/spikes/', 'docs/superpowers/', '.')
+PATH_ABSENT_ON_PURPOSE = {'.github/dependabot.yml', 'apps/macos', 'apps/desktop', 'apps/web/dist'}
+path_re = re.compile(r'`((?:apps|packages|scripts|docs|docker)/[A-Za-z0-9_./@-]+?)(?::\d+)?`')
+for f, s in docs.items():
+    if f.startswith(PATH_HISTORY_PREFIXES) or f == 'docs/MODULE-GUIDE.md':
+        continue
+    for named in sorted({m.rstrip('/.') for m in path_re.findall(s)} - PATH_ABSENT_ON_PURPOSE):
+        if '*' not in named and not pathlib.Path(named).exists():
+            problems['a document names a path that does not exist'].append(f"{f}: {named}")
+
 for f, s in docs.items():
     for i, line in enumerate(s.split('\n'), 1):
         if re.search(r'\b(CLAUDE|Claude|Copilot|Windsurf)\b', line):

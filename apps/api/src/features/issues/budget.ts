@@ -6,11 +6,11 @@
 import type { ModuleBudget } from '../../platform/module-budget';
 
 /** A third of the pool: what is left, two thirds, is chat's and the core's. */
-const POOL_SHARE_DIVISOR = 3;
+export const POOL_SHARE_DIVISOR = 3;
 /** A request over the share waits this long for a slot, then is told the database is busy and may retry. */
-const ISSUES_QUEUE_TIMEOUT_MS = 1_000;
+export const ISSUES_QUEUE_TIMEOUT_MS = 1_000;
 /** Far past any statement of a list of issues or a write to one; under the pool's own limit of thirty seconds. */
-const ISSUES_STATEMENT_TIMEOUT_MS = 5_000;
+export const ISSUES_STATEMENT_TIMEOUT_MS = 5_000;
 
 /**
  * The share of a pool of `poolMax` connections: a third, never more than the pool less one so that something is

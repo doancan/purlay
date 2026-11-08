@@ -236,6 +236,21 @@ days it holds) and is then swept by `sweep:outbox`, hourly. The table is meant f
 message. **When to look again:** more than a million rows a day, or vacuum that falls behind on `outbox` (`pg_stat_user_tables.n_dead_tup`), is the point at
 which to partition it by day; below that it is not worth the complexity, and nothing in this change measures it yet.
 
+The limits of the outbox, written from the code (`bun run docs:sync`):
+
+<!-- generated:outbox-policy (bun run docs:sync) -->
+| Limit | Value | Constant |
+| --- | --- | --- |
+| Tries before a fact is dead | 8 | `OUTBOX_ATTEMPTS_MAX` |
+| Wait between tries | from 5 s, doubling, to 60 min (jittered) | `BACKOFF_FIRST_MS`, `BACKOFF_MAX_MS` |
+| Consuming worker runs every | 2 s | `OUTBOX_CONSUME_INTERVAL_MS` |
+| Facts one workspace may have waiting for one module | 5000 | `OUTBOX_PENDING_MAX` (`CONFIG.md`) |
+| Dead rows are kept | 30 days | `OUTBOX_DEAD_KEPT_DAYS` |
+| A fact is held for a consumer that is off, at most | 14 days | `FACT_HOLD_DAYS_MAX` |
+| Largest payload (compact JSON) | 8192 bytes | `OUTBOX_PAYLOAD_BYTES_MAX` |
+| The overview calls a waiting fact stale after | 15 min | `OUTBOX_STALE_AFTER_SECONDS` |
+<!-- /generated:outbox-policy -->
+
 **Tuning the backlog ceiling (D-288 §10).** One workspace may have `OUTBOX_PENDING_MAX` (5000) facts waiting for one module; a publish past it is refused with
 `FactBacklogFull` (workspace, consumer and fact type named in the error), nothing is written and the publisher's transaction ends, counted in
 `purlay_outbox_refused_total{module,fact}`. A rising count means a consumer that is behind (look at `purlay_outbox_pending` and `purlay_outbox_oldest_age_seconds` of
