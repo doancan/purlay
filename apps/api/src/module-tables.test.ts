@@ -11,8 +11,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { TABLE_OWNERS } from '@purlay/db';
+import { FACTS } from '@purlay/types';
 import { shown, sourcesOf } from './testing/module-sources';
-import { coreWrites, foreignUses, tablesNamed, unsaidCoreWrites } from './testing/module-tables';
+import {
+  coreWrites,
+  foreignUses,
+  tablesNamed,
+  unsaidCoreWrites,
+  withoutFactTypes,
+} from './testing/module-tables';
 
 const FEATURES = join(import.meta.dir, 'features');
 
@@ -122,6 +129,15 @@ describe('what the scan sees', () => {
     ]);
   });
 
+  test('a fact type is not a table’s column, though a module’s id is its table’s name', () => {
+    const source =
+      "consumes: ['issues.assigned'],\npublishes: ['issues.closed'],\neb.ref('issues.id')";
+    expect(seen(source)).toEqual(['issues', 'issues', 'issues']);
+    expect(seen(withoutFactTypes(source, ['issues.assigned', 'issues.closed']))).toEqual([
+      'issues',
+    ]);
+  });
+
   test('a foreign table is one the module neither owns nor reads', () => {
     const source = "db.selectFrom('issues'); sql`select 1 from channels`; db.selectFrom('users');";
     expect(foreignUses(source, names, ['issues', 'users']).map((use) => use.table)).toEqual([
@@ -173,7 +189,10 @@ describe('the tables a module names', () => {
       for (const file of sourcesOf(id)) {
         test(`${shown(file)} names no table that is not its own or one it reads`, async () => {
           const allowed = [...ownTablesOf(id), ...(await readCoreReads(id))];
-          const source = readFileSync(file, 'utf8');
+          const source = withoutFactTypes(
+            readFileSync(file, 'utf8'),
+            FACTS.map((fact) => fact.type),
+          );
           expect(
             foreignUses(source, TABLES, allowed).map(
               (use) => `${shown(file)}:${String(use.line)} ${use.table}`,

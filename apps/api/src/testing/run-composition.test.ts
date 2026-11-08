@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { bundledModules } from '../composition';
 import { testDependencies } from './doubles';
-import { moduleCells } from './module-cells';
+import { inStartOrder, moduleCells } from './module-cells';
 import { runComposition } from './run-composition';
 
 /** What a process started with this `MODULES` composes for a test, asked of a process of its own: the setting is read at start. */
@@ -27,8 +27,9 @@ describe('the application a test builds', () => {
   });
 
   test('runs the modules the run’s MODULES names, whichever cell that is, and every module when it is unset', () => {
-    expect(modulesRunBy(undefined)).toEqual(bundledModules.map((module) => module.manifest.id));
-    for (const cell of moduleCells(bundledModules)) {
+    const started = inStartOrder(bundledModules);
+    expect(modulesRunBy(undefined)).toEqual(started.map((module) => module.manifest.id));
+    for (const cell of moduleCells(started)) {
       expect(modulesRunBy(cell.setting)).toEqual([...cell.ids]);
     }
   });

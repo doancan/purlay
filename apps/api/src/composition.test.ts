@@ -23,10 +23,13 @@ import { attachmentNotFound, AppError } from './platform/errors';
 import { CORE_EVENTS, CORE_FRAMES, CORE_JOBS } from './platform/module-kit/core-claims';
 import { coreReserve } from './platform/module-budget';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
-import { moduleCells } from './testing/module-cells';
+import { inStartOrder, moduleCells } from './testing/module-cells';
 import { concretePath } from './testing/module-smoke';
 
 const bundle: readonly BundledModule[] = bundledModules;
+
+/** The bundle in the order a process starts it: what a composition holds is compared with this and not with `bundledModules`. */
+const started: readonly BundledModule[] = inStartOrder(bundle);
 
 const another: BundledModule = {
   manifest: {
@@ -84,7 +87,10 @@ describe('the application as its modules make it', () => {
     expect(carried).toContain('chat');
     expect(carried).toContain('issues');
     expect(new Set(carried).size).toBe(carried.length);
-    expect(registry.resolve(undefined).map((module) => module.id)).toEqual(carried);
+    expect(registry.resolve(undefined).map((module) => module.id)).toEqual(
+      started.map((module) => module.manifest.id),
+    );
+    expect([...carried].sort()).toEqual(started.map((module) => module.manifest.id).sort());
   });
 
   test('in a build with no module at all, the core stands alone: no hook, nobody for the channels, a purge of its own, its own exports', () => {
@@ -127,7 +133,7 @@ describe('the application as its modules make it', () => {
   });
 
   test('with chat, it has chat’s hooks, answers, purge steps, tables and columns', () => {
-    expect(composition.modules).toEqual(bundledModules);
+    expect(composition.modules).toEqual(started);
     expect(composition.workspaceChannels).toBe(chatModule.workspaceChannels);
     expect(composition.workspacePurge.before).toHaveLength(2);
     expect(composition.workspacePurge.after).toHaveLength(1);
@@ -295,7 +301,7 @@ describe('the application as its modules make it', () => {
     });
 
     test('is the same for a build’s own modules whatever the setting', () => {
-      const cells = moduleCells(bundledModules);
+      const cells = moduleCells(started);
       expect(cells.length).toBeGreaterThan(1);
       const tablesOf = (cell: (typeof cells)[number]): readonly string[] =>
         cell.composition.workspacePurge.tables;
@@ -311,7 +317,7 @@ describe('the application as its modules make it', () => {
   describe('for the MODULES setting', () => {
     test('unset or blank runs every module; none runs the core alone', () => {
       for (const setting of [undefined, '', '  ']) {
-        expect(compositionFor(setting).modules).toEqual(bundledModules);
+        expect(compositionFor(setting).modules).toEqual(started);
       }
       expect(compositionFor('none').modules).toEqual([]);
       expect(compositionFor('chat').modules).toEqual([chatModule]);
@@ -320,17 +326,17 @@ describe('the application as its modules make it', () => {
         .map(({ manifest }) => manifest.id)
         .reverse()
         .join(', ');
-      expect(compositionFor(everyModule).modules).toEqual(bundledModules);
+      expect(compositionFor(everyModule).modules).toEqual(started);
     });
 
     test('in every cell of the matrix a module left out has no migration set and its routes, jobs, frames and events are closed', () => {
-      const cells = moduleCells(bundledModules);
+      const cells = moduleCells(started);
       expect(cells.length).toBeGreaterThan(bundledModules.length);
       const withSets = new Set<string>(PRODUCT_MIGRATION_SETS.map((set) => set.id));
       for (const cell of cells) {
         const seen = cell.composition;
-        expect(seen.migrationSets.map((set) => set.id)).toEqual(
-          cell.ids.filter((id) => withSets.has(id)),
+        expect(seen.migrationSets.map((set) => set.id).sort()).toEqual(
+          cell.ids.filter((id) => withSets.has(id)).sort(),
         );
         for (const { manifest } of bundle) {
           const closed = !cell.ids.includes(manifest.id);
@@ -403,8 +409,9 @@ describe('the application as its modules make it', () => {
 
 describe('what the boot says about modules', () => {
   test('names the ones a process runs and the ones the build carries and it does not', () => {
+    // What runs is reported in the order it starts, what does not in the order the bundle lists it.
     const carried = bundledModules.map((module) => module.manifest.id);
-    for (const cell of moduleCells(bundledModules)) {
+    for (const cell of moduleCells(started)) {
       expect({ cell: cell.label, ...moduleReport(cell.composition) }).toEqual({
         cell: cell.label,
         running: cell.ids,
@@ -417,7 +424,7 @@ describe('what the boot says about modules', () => {
 describe('the ids a process tells a client it runs (D-273)', () => {
   test('are the ones it runs, as the contract’s ModuleId spells them', () => {
     const running: string[] = runningModuleIds(compositionFor(undefined));
-    expect(running).toEqual(bundledModules.map(({ manifest }) => manifest.id));
+    expect(running).toEqual(started.map(({ manifest }) => manifest.id));
     expect(runningModuleIds(compositionFor('issues'))).toEqual(['issues']);
     expect(runningModuleIds(compositionFor('none'))).toEqual([]);
   });
@@ -666,7 +673,11 @@ describe('what a process that does not run a module offers of it', () => {
     expect(compositionFor(undefined).notificationKinds.map((kind) => kind.type)).toContain(
       'mention',
     );
-    expect(compositionFor(undefined).searchSources).toEqual(['messages', 'issues']);
+    expect(compositionFor(undefined).searchSources).toEqual(
+      started.flatMap((module) => module.manifest.searchSources ?? []),
+    );
+    expect(compositionFor(undefined).searchSources).toContain('messages');
+    expect(compositionFor(undefined).searchSources).toContain('issues');
     expect(compositionFor('issues').notificationKinds.map((kind) => kind.type)).toEqual([
       'issue_assigned',
     ]);

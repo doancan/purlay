@@ -15,6 +15,7 @@ import {
   bundledModules,
   compose,
   compositionFor,
+  runningModuleIds,
   type BundledModule,
   type Composition,
 } from '../../composition';
@@ -37,6 +38,19 @@ const ORIGIN = 'https://purlay.test';
 
 const OPEN = compositionFor(undefined, 'open');
 const MANAGED = compositionFor(undefined, 'managed');
+/** Every module the build carries, by id: what an open server lets a workspace use. Sets are compared sorted: each list orders its modules its own way. */
+const RUNNING: string[] = [...runningModuleIds(OPEN)].sort();
+/** What an open server lets a workspace use once `off` is withdrawn from it: every module but that one and those that need it. */
+const usableWithout = (off: string): string[] => {
+  const gone = new Set([off]);
+  for (let before = 0; before !== gone.size;) {
+    before = gone.size;
+    for (const { manifest } of bundledModules) {
+      if (manifest.requires.some((required) => gone.has(required))) gone.add(manifest.id);
+    }
+  }
+  return RUNNING.filter((id) => !gone.has(id));
+};
 /** A process that does not run issues: the answer a grant that is not given must equal. */
 const WITHOUT_ISSUES = compose([chatModule], bundledModules);
 
@@ -260,7 +274,7 @@ describe('integration: what a person is told they may use', () => {
     readonly modules?: readonly string[];
   }
   const modulesOf = (memberships: readonly Listed[], workspaceId: string): unknown =>
-    memberships.find(({ workspace }) => workspace.id === workspaceId)?.modules;
+    memberships.find(({ workspace }) => workspace.id === workspaceId)?.modules?.toSorted();
 
   test('is each workspace’s own set in the person’s session, their list of workspaces and an accepted invitation', async () => {
     await withRollback(async (db) => {
@@ -275,7 +289,7 @@ describe('integration: what a person is told they may use', () => {
       expect(modulesOf(memberships, withIssues)).toEqual(['chat', 'issues']);
       expect(modulesOf(memberships, without)).toEqual(['chat']);
       // What the server runs is the server's, whatever a workspace may use.
-      expect(modules).toEqual(['chat', 'issues']);
+      expect(modules.toSorted()).toEqual(RUNNING);
 
       const listed = (await managed('GET', '/api/workspaces', owner)).body as Listed[];
       expect(modulesOf(listed, withIssues)).toEqual(['chat', 'issues']);
@@ -300,8 +314,8 @@ describe('integration: what a person is told they may use', () => {
       const { memberships } = (await caller(db, OPEN)('GET', '/api/me', owner)).body as {
         memberships: Listed[];
       };
-      expect(modulesOf(memberships, closed)).toEqual(['chat']);
-      expect(modulesOf(memberships, untouched)).toEqual(['chat', 'issues']);
+      expect(modulesOf(memberships, closed)).toEqual(usableWithout('issues'));
+      expect(modulesOf(memberships, untouched)).toEqual(RUNNING);
     });
   });
 
@@ -445,7 +459,7 @@ describe('integration: a request turned away for a grant', () => {
     await withRollback(async (db) => {
       const owner = await aSignedInUser(db, clock, 'Owner');
       const workspaceId = await aWorkspaceOf(db, owner);
-      const metrics = serverMetrics(undefined, ['chat', 'issues']);
+      const metrics = serverMetrics(undefined, RUNNING);
       const asked = caller(db, MANAGED, metrics);
       const counted = (): string =>
         renderMetrics(metrics)

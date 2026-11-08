@@ -59,7 +59,9 @@ describe('MODULES.md lists the manifests of the build', () => {
       optional: [...manifest.optional].sort(),
       provides: [...manifest.provides].sort(),
     }));
-    expect(listed()).toEqual(manifests);
+    // Rows are in the order modules were added, which is not the bundle's: a row is a module's, wherever it stands.
+    const byId = (a: Listed, b: Listed): number => a.id.localeCompare(b.id);
+    expect(listed().sort(byId)).toEqual(manifests.sort(byId));
   });
 });
 

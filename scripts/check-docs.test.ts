@@ -241,7 +241,7 @@ describe('the document check', () => {
 
     test('fails when CONFIG.md’s MODULES row does not name one', () => {
       const root = aCopy();
-      edit(root, 'docs/CONFIG.md', (text) => text.replace('`chat`, `issues`.', '`chat`.'));
+      edit(root, 'docs/CONFIG.md', (text) => text.replace('`chat`, `issues`', '`chat`'));
       const { status, output } = run(root);
       expect(status).toBe(1);
       expect(output).toContain('a bundled module is missing from CONFIG.md');
@@ -251,7 +251,7 @@ describe('the document check', () => {
     test('fails when a module is bundled and no document knows it', () => {
       const root = aCopy();
       edit(root, 'apps/api/src/composition.ts', (text) =>
-        text.replace('  issuesModule,\n]', '  issuesModule,\n  notesModule,\n]'),
+        text.replace('  issuesModule,\n', '  issuesModule,\n  notesModule,\n'),
       );
       const { status, output } = run(root);
       expect(status).toBe(1);

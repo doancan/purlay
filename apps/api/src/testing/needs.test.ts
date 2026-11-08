@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { bundledModules } from '../composition';
+import { inStartOrder } from './module-cells';
 import { describeNeeding, testNeeding } from './needs';
 import { runComposition } from './run-composition';
 
@@ -17,7 +18,7 @@ describe('what a test needs of the modules a run has', () => {
     const setting = process.env['MODULES'];
     const running = runComposition.modules.map((module) => module.manifest.id);
     if (setting === undefined || setting.trim() === '') {
-      expect(running).toEqual(bundledModules.map((module) => module.manifest.id));
+      expect(running).toEqual(inStartOrder(bundledModules).map((module) => module.manifest.id));
     } else {
       expect(running.every((id) => setting.split(',').includes(id))).toBe(true);
     }

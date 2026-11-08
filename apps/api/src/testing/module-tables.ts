@@ -139,6 +139,21 @@ export const tablesNamed = (source: string, tables: readonly string[]): readonly
   return uses.sort((a, b) => a.line - b.line || a.table.localeCompare(b.table));
 };
 
+/**
+ * `source` with each quoted fact type blanked. A fact is named `<module>.<what>` and a column `<table>.<column>`: the scan reads
+ * both as a table's column when a module's id is also its table's name (`consumes: ['issues.assigned']`), which a module's
+ * default is. The two namespaces are told apart by the declarations, so a string that is a declared fact type is not a table's.
+ */
+export const withoutFactTypes = (source: string, types: readonly string[]): string =>
+  types.reduce(
+    (code, type) =>
+      ["'", '"', '`'].reduce(
+        (blanked, quote) => blanked.replaceAll(`${quote}${type}${quote}`, `${quote}${quote}`),
+        code,
+      ),
+    source,
+  );
+
 /** The uses in `source` of a table of `tables` that `allowed` does not hold: a table that is neither the module's nor one it reads. */
 export const foreignUses = (
   source: string,
