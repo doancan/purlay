@@ -241,6 +241,7 @@ import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { runningModuleIds, type Composition } from '../../composition';
 import { factContextOf, sinkOfModule } from '../../module-seams-wiring';
+import { FACT_BACKLOG_RETRY_AFTER_SECONDS, FactBacklogFull } from '../../platform/outbox';
 import { factPublisherOf } from '../../platform/ports/fact-publisher';
 import { listInbox, readInbox } from './inbox';
 
@@ -883,6 +884,18 @@ export const createApp = (given: Dependencies): HttpApplication => {
         metrics.rateLimited.inc({ door: 'http', module: moduleOfRoute(route) });
       if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
         set.headers['retry-after'] = String(error.retryAfterSeconds);
+      }
+      if (error instanceof FactBacklogFull) {
+        set.headers['retry-after'] = String(FACT_BACKLOG_RETRY_AFTER_SECONDS);
+        // The client is told to wait; which workspace and which consumer is for the operator.
+        log.warn('a fact was refused: the consumer’s backlog in the workspace is full', {
+          path: where,
+          fact: error.type,
+          workspaceId: error.workspaceId,
+          consumer: error.consumer,
+          ceiling: error.ceiling,
+          ...moduleField(route),
+        });
       }
       set.status = refusal.status;
       return refusal.body;

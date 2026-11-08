@@ -14304,9 +14304,9 @@ fact for each message (D-35).
     ceiling is soft, because the count takes no lock: publishes in flight at once may pass it by their number. The count stops at
     the ceiling (`LIMIT`), so it costs at most that many index entries, and it is served by `idx_outbox_pending_workspace`
     (`0091`): on a million rows a workspace with 150,000 delivered rows of history and three pending was counted in 0.06 ms with the
-    index and 130 ms without it (0093 replaces that index with the one of §11, which counts as fast). Over HTTP an uncaught refusal is an
-    `INTERNAL` `500` like any defect (a new `AppError` code would move the contract, and is not worth it for a state only a flood
-    reaches). The claim's fairness across workspaces is the next item.
+    index and 130 ms without it (0093 replaces that index with the one of §11, which counts as fast). Over HTTP an uncaught refusal is
+    answered `503` `FACT_BACKLOG_FULL` with `Retry-After: 30` (an additive code; the body names neither the workspace nor the module,
+    and the log at `warn` does). The claim's fairness across workspaces is the next item.
 11. **A claim goes by turns across workspaces** *(added 2026-11-08)*. The claim of §4 took the oldest due rows of the consumer, so a
     workspace whose backlog was older than everyone's filled every batch of 20 until it was empty (ten thousand facts at ten a
     second is a quarter of an hour; the ceiling of §10 bounds it, and this keeps even that from being a wait for the rest). It now

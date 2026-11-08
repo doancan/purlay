@@ -228,6 +228,7 @@ const uploadRefusal = (
     case 'NOT_A_CHANNEL_MEMBER':
     case 'ONLY_ADMINS_POST':
     case 'DATABASE_UNAVAILABLE':
+    case 'FACT_BACKLOG_FULL':
     case 'INTERNAL':
     case 'MALFORMED':
     case 'UNKNOWN':
