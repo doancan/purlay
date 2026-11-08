@@ -603,6 +603,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/module-kit/compatibility.test.ts'],
   },
   {
+    id: 'module-compat-ignores-a-shape-no-longer-read',
+    why: 'a declaration ships a new current shape without the reader of the one the last release wrote, so a rolling deploy leaves its nodes rows they refuse and kills the facts (D-288 §5)',
+    file: 'apps/api/src/platform/module-kit/compatibility.ts',
+    find: '.filter((shape) => shape !== after.shape && !after.reads.includes(shape))',
+    replace: '.filter((shape) => shape !== after.shape && shape < 0)',
+    tests: ['apps/api/src/platform/module-kit/compatibility.test.ts'],
+  },
+  {
     id: 'module-request-holds-a-slot-per-connection',
     why: 'a request that holds a transaction and reads again waits for a second slot of its own module’s share, and with a small share waits for itself (MODULES.md §7)',
     file: 'apps/api/src/platform/module-budget.ts',
