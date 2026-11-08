@@ -543,6 +543,23 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/serving-the-client.test.ts'],
   },
   {
+    id: 'outbox-inspect-open-to-a-stranger',
+    why: 'a fact’s payload is read by someone who is not the server’s administrator (D-288 §11)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  const admin = await guard(deps, request);\n  const rowId = validated(Uuid, id);',
+    replace:
+      '  const admin = { userId: crypto.randomUUID() } as Awaited<ReturnType<typeof guard>>;\n  const rowId = validated(Uuid, id);',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
+    id: 'outbox-list-open-to-a-stranger',
+    why: 'the dead facts of every module, with their workspaces, are listed to anyone who asks (D-288 §11)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  await guard(deps, request);\n  const query = validated(ServerOutboxQuery,',
+    replace: '  const query = validated(ServerOutboxQuery,',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'passport-cookie-outlives-its-hour',
     why: "the invite cookie is kept by the browser far past the passport's hour",
     file: 'apps/api/src/ingress/http/invitations.ts',

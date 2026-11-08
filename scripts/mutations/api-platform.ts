@@ -932,6 +932,22 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
+    id: 'outbox-list-ignores-the-cursor',
+    why: 'a second page repeats the first, so an operator pages through the same facts for ever (D-288 §11)',
+    file: 'apps/api/src/platform/outbox-operate.ts',
+    find: "  if (query.after !== undefined) statement = statement.where('id', '>', query.after);\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
+    id: 'outbox-list-ignores-the-workspace',
+    why: 'a list asked for one workspace shows every workspace’s facts (D-288 §11)',
+    file: 'apps/api/src/platform/outbox-operate.ts',
+    find: "  if (query.workspaceId !== undefined)\n    statement = statement.where('workspace_id', '=', query.workspaceId);\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'outbox-oldest-age-takes-the-newest',
     why: 'the age of the oldest waiting fact is the age of the newest, so a fact stuck for hours reads as fresh (D-288)',
     file: 'apps/api/src/platform/outbox-report.ts',
@@ -946,6 +962,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: 'total + one.dead',
     replace: 'total',
     tests: ['apps/api/src/platform/outbox-report.integration.test.ts'],
+  },
+  {
+    id: 'outbox-stuck-counts-a-fact-that-just-waited',
+    why: 'the stuck list is every pending fact, so it is as long as the backlog and says nothing (D-288 §11)',
+    file: 'apps/api/src/platform/outbox-operate.ts',
+    find: "          .where('created_at', '<', new Date(now.getTime() - OUTBOX_STALE_AFTER_SECONDS * 1000))\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
   },
   {
     id: 'outbox-sweep-keeps-the-expired',

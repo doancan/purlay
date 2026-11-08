@@ -53,6 +53,8 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/server/workspaces',
   '/api/server/workspaces/:workspaceId/quota',
   '/api/server/workspaces/:workspaceId/modules',
+  '/api/server/outbox',
+  '/api/server/outbox/:id',
   '/api/server/audit',
   '/api/server/audit/export',
   '/api/server/accounts',

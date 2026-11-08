@@ -8,6 +8,7 @@ import type {
   ServerAuditPage,
   ServerMailTest,
   ServerOperations,
+  ServerOutboxPage,
   ServerOverview,
   ServerUserDetail,
   ServerUserPage,
@@ -66,6 +67,7 @@ import { aGitHubPerson, cookiesFrom, signInWithGitHub } from '../../testing/gith
 import { aGitHubStub, GITHUB_STUB_CREDENTIALS, type GitHubStub } from '../../testing/github-stub';
 import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
+import { anOutboxRow } from '../../testing/facts';
 import {
   anOidcStub,
   OIDC_STUB_CREDENTIALS,
@@ -2667,6 +2669,195 @@ describe('integration — server administration inventory', () => {
   });
 });
 
+describe('integration — the administrator’s view of the outbox (D-288 §11)', () => {
+  const SECRET = 'a-payload-word-nobody-lists';
+  const MINUTE = 60_000;
+  const seeded = async (): Promise<{
+    server: Server;
+    workspaceId: string;
+    dead: { id: string; factId: string };
+  }> => {
+    const server = await aServer();
+    const listed = (await (
+      await call(server, 'GET', '/api/server/workspaces', { cookie: server.admin.cookie })
+    ).json()) as ServerWorkspacePage;
+    const workspaceId = listed.data[0]?.id ?? '';
+    const now = Date.now();
+    const dead = await anOutboxRow(server.db, workspaceId, {
+      state: 'dead',
+      at: new Date(now - 60 * MINUTE),
+      attempts: 8,
+      lastError: 'TypeError',
+      payload: { noteId: 'n', title: SECRET },
+    });
+    await anOutboxRow(server.db, workspaceId, { at: new Date(now - 30 * MINUTE), attempts: 2 });
+    await anOutboxRow(server.db, workspaceId, { at: new Date(now - MINUTE) });
+    await anOutboxRow(server.db, workspaceId, {
+      state: 'dead',
+      consumer: 'shelf',
+      type: 'notes.moved',
+      at: new Date(now - 50 * MINUTE),
+    });
+    return { server, workspaceId, dead };
+  };
+  const trail = async (
+    server: Server,
+  ): Promise<{ action: string; target_fact_id: string | null }[]> =>
+    await server.db
+      .selectFrom('server_audit_log')
+      .select(['action', 'target_fact_id'])
+      .where('action', '=', 'server.fact_inspected')
+      .execute();
+
+  test('only the server administrator reads: an owner, a member and nobody get one answer, and nothing is written', async () => {
+    const { server, dead } = await seeded();
+    for (const path of ['/api/server/outbox', `/api/server/outbox/${dead.id}`]) {
+      const answers: string[] = [];
+      for (const cookie of [server.owner.cookie, server.member.cookie, undefined]) {
+        const response = await call(server, 'GET', path, {
+          ...(cookie === undefined ? {} : { cookie }),
+        });
+        const { error } = (await response.json()) as { error: { code: string; message: string } };
+        answers.push(`${String(response.status)} ${error.code} ${error.message}`);
+      }
+      expect(new Set(answers).size).toBe(1);
+      expect(answers[0]).toStartWith('404 ');
+    }
+    expect(await trail(server)).toEqual([]);
+  });
+
+  test('lists the dead facts by default as metadata, and the payload is nowhere in a list', async () => {
+    const { server, dead } = await seeded();
+    const response = await call(server, 'GET', '/api/server/outbox', {
+      cookie: server.admin.cookie,
+    });
+    const text = await response.text();
+    expect(response.status).toBe(200);
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain('payload');
+    const page = JSON.parse(text) as ServerOutboxPage;
+    expect(page.data.map((fact) => fact.state)).toEqual(['dead', 'dead']);
+    expect(page.data[0]).toMatchObject({
+      id: dead.id,
+      factId: dead.factId,
+      type: 'notes.created',
+      consumer: 'wiki',
+      attempts: 8,
+      lastError: 'TypeError',
+    });
+    expect(await trail(server)).toEqual([]);
+  });
+
+  test('filters by consumer, type, workspace and state, and a stuck fact is a pending one older than fifteen minutes', async () => {
+    const { server, workspaceId } = await seeded();
+    const ask = async (query: string): Promise<ServerOutboxPage> =>
+      (await (
+        await call(server, 'GET', `/api/server/outbox?${query}`, { cookie: server.admin.cookie })
+      ).json()) as ServerOutboxPage;
+    expect((await ask('consumer=shelf')).data.map(({ type }) => type)).toEqual(['notes.moved']);
+    expect((await ask('type=notes.created')).data).toHaveLength(1);
+    expect((await ask(`workspaceId=${crypto.randomUUID()}`)).data).toEqual([]);
+    expect((await ask(`workspaceId=${workspaceId}`)).data).toHaveLength(2);
+    const stuck = await ask('state=stuck');
+    expect(stuck.data.map(({ attempts, state }) => [state, attempts])).toEqual([['pending', 2]]);
+    expect((await ask('state=discarded')).data).toEqual([]);
+  });
+
+  test('pages by cursor without repeating or skipping a fact, and refuses what is not a query', async () => {
+    const { server } = await seeded();
+    const first = (await (
+      await call(server, 'GET', '/api/server/outbox?limit=1', { cookie: server.admin.cookie })
+    ).json()) as ServerOutboxPage;
+    expect(first.data).toHaveLength(1);
+    expect(first.nextCursor).toBe(first.data[0]?.id ?? null);
+    const second = (await (
+      await call(server, 'GET', `/api/server/outbox?limit=1&after=${first.nextCursor ?? ''}`, {
+        cookie: server.admin.cookie,
+      })
+    ).json()) as ServerOutboxPage;
+    expect(second.data).toHaveLength(1);
+    expect(second.data[0]?.id).not.toBe(first.data[0]?.id);
+    expect(second.nextCursor).toBeNull();
+    for (const bad of [
+      'limit=0',
+      'limit=101',
+      'state=pending',
+      'consumer=Wiki',
+      'after=x',
+      'a=1&a=2',
+    ])
+      expect(
+        (await call(server, 'GET', `/api/server/outbox?${bad}`, { cookie: server.admin.cookie }))
+          .status,
+      ).toBe(400);
+  });
+
+  test('shows one fact whole to the administrator, and the read is on the trail by the fact’s id and never its words', async () => {
+    const { server, workspaceId, dead } = await seeded();
+    const cookie = server.admin.cookie;
+    for (let again = 0; again < 2; again++) {
+      const response = await call(server, 'GET', `/api/server/outbox/${dead.id}`, { cookie });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        id: dead.id,
+        payload: { noteId: 'n', title: SECRET },
+      });
+    }
+    // Each read is an entry: reading twice is two reads.
+    expect(await trail(server)).toEqual([
+      { action: 'server.fact_inspected', target_fact_id: dead.factId },
+      { action: 'server.fact_inspected', target_fact_id: dead.factId },
+    ]);
+    const entries = (await (
+      await call(server, 'GET', `/api/server/audit?action=server.fact_inspected`, { cookie })
+    ).json()) as ServerAuditPage;
+    expect(JSON.stringify(entries)).not.toContain(SECRET);
+    expect(entries.data[0]).toMatchObject({
+      actorUserId: server.admin.userId,
+      targetFactId: dead.factId,
+      targetWorkspaceId: workspaceId,
+      targetModule: 'wiki',
+    });
+  });
+
+  test('an administrator demoted between the guard and the read reads nothing and leaves no entry', async () => {
+    const { server, dead } = await seeded();
+    const original = setupAuthority.requireServerAdmin;
+    const guard = spyOn(setupAuthority, 'requireServerAdmin').mockImplementationOnce(
+      async (...args) => {
+        const authority = await original(...args);
+        await server.db
+          .updateTable('users')
+          .set({ is_server_admin: false })
+          .where('id', '=', server.admin.userId)
+          .execute();
+        return authority;
+      },
+    );
+    try {
+      const response = await call(server, 'GET', `/api/server/outbox/${dead.id}`, {
+        cookie: server.admin.cookie,
+      });
+      expect(response.status).toBe(404);
+      expect(await response.text()).not.toContain(SECRET);
+      expect(await trail(server)).toEqual([]);
+    } finally {
+      guard.mockRestore();
+    }
+  });
+
+  test('a fact that is not there, or an id that is not one, is refused and writes nothing', async () => {
+    const { server } = await seeded();
+    const cookie = server.admin.cookie;
+    expect(
+      (await call(server, 'GET', `/api/server/outbox/${crypto.randomUUID()}`, { cookie })).status,
+    ).toBe(404);
+    expect((await call(server, 'GET', '/api/server/outbox/not-a-uuid', { cookie })).status).toBe(
+      400,
+    );
+    expect(await trail(server)).toEqual([]);
+  });
+});
 describe('integration — saved mail relay testing', () => {
   test('sends only to the verified requesting administrator, reuses saved credentials and persists a safe receipt', async () => {
     const server = await aServer();
