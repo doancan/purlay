@@ -161,12 +161,18 @@ describe('integration harness: dropping a database whose connections are still c
  * build one template at the same moment, and one can clone it while another is still connected to it.
  */
 describe('integration harness: two processes and one template', () => {
+  // What is claimed is who creates the database, so no schema is put in it: migrating every file into a
+  // database that is dropped a moment later was the whole of this test's cost (0.3 s alone, and it grew
+  // with the machine's load past the five seconds a test has). That a template being migrated is safe to
+  // clone is the next test's claim.
+  const noSchema = (): Promise<void> => Promise.resolve();
+
   test('building the same new template twice at once makes it once, and both are told its name', async () => {
     const scratch = `purlay_race_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
     try {
       const built = await Promise.all([
-        buildIntegrationTemplate(scratch),
-        buildIntegrationTemplate(scratch),
+        buildIntegrationTemplate(scratch, noSchema),
+        buildIntegrationTemplate(scratch, noSchema),
       ]);
       expect(built).toEqual([scratch, scratch]);
     } finally {
@@ -174,17 +180,26 @@ describe('integration harness: two processes and one template', () => {
     }
   });
 
-  test('a clone made while the template is being brought up to date waits for it, and is whole', async () => {
-    const [, cloned] = await Promise.all([buildIntegrationTemplate(), cloneIntegrationDatabase()]);
-    try {
-      const applied = await sql<{ n: string }>`select count(*) as n from kysely_migration`.execute(
-        cloned.db,
-      );
-      expect(Number(applied.rows[0]?.n)).toBeGreaterThan(1);
-    } finally {
-      await cloned.drop();
-    }
-  });
+  test(
+    'a clone made while the template is being brought up to date waits for it, and is whole',
+    async () => {
+      const [, cloned] = await Promise.all([
+        buildIntegrationTemplate(),
+        cloneIntegrationDatabase(),
+      ]);
+      try {
+        const applied = await sql<{
+          n: string;
+        }>`select count(*) as n from kysely_migration`.execute(cloned.db);
+        expect(Number(applied.rows[0]?.n)).toBeGreaterThan(1);
+      } finally {
+        await cloned.drop();
+      }
+      // The clone takes the run's own template, so it waits its turn on that template's lock behind every
+      // other worker's clones and builds: the queue's bound, as the hooks that clone have (`CLONE_HOOK_MS`).
+    },
+    CLONE_HOOK_MS,
+  );
 });
 
 describe('integration harness cost', () => {

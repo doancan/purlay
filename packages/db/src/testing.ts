@@ -201,6 +201,11 @@ const holdingTemplate = async (
   }
 };
 
+const migrateTemplate = async (database: Kysely<unknown>): Promise<void> => {
+  const { error } = await migrateToLatest(database, undefined, { modules: setsOfTheRun() });
+  if (error !== undefined) throw new Error('migrating the test template failed', { cause: error });
+};
+
 /**
  * Brings the template database into being and up to date, and returns its name.
  *
@@ -215,7 +220,10 @@ const holdingTemplate = async (
  * no-op; skipping it would let a template from an older run hide a migration added
  * since, and the test would pass against a schema that no longer exists.
  */
-export const buildIntegrationTemplate = async (name?: string): Promise<string> => {
+export const buildIntegrationTemplate = async (
+  name?: string,
+  migrate: (database: Kysely<unknown>) => Promise<void> = migrateTemplate,
+): Promise<string> => {
   const source = integrationUrl();
   const template =
     name === undefined
@@ -230,11 +238,7 @@ export const buildIntegrationTemplate = async (name?: string): Promise<string> =
       if (exists.rows.length === 0) await sql`create database ${sql.id(template)}`.execute(admin);
       const templateDb = connect<unknown>(onDatabase(source, template), 1);
       try {
-        const { error } = await migrateToLatest(templateDb, undefined, {
-          modules: setsOfTheRun(),
-        });
-        if (error !== undefined)
-          throw new Error('migrating the test template failed', { cause: error });
+        await migrate(templateDb);
       } finally {
         await templateDb.destroy();
       }
