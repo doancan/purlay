@@ -31,6 +31,8 @@ export const recordServerAudit = async (
     readonly targetModule?: string;
     /** The operator's own words for why, on the entry that carries them (`server.module_suspended`, D-296). */
     readonly note?: string;
+    /** Which fact an entry about the outbox is about, by id (D-288 §11). */
+    readonly targetFactId?: string;
   },
 ): Promise<void> => {
   const now = clock.now();
@@ -46,6 +48,7 @@ export const recordServerAudit = async (
       target_workspace_id: entry.targetWorkspaceId ?? null,
       target_module: entry.targetModule ?? null,
       note: entry.note ?? null,
+      target_fact_id: entry.targetFactId ?? null,
       created_at: now,
     })
     .execute();

@@ -2927,6 +2927,7 @@ export const en = {
   'admin.audit.action.server.module_reset': 'Workspace module grant removed',
   'admin.audit.action.server.module_suspended': 'Module stopped for the whole server',
   'admin.audit.action.server.module_resumed': 'Module running again',
+  'admin.audit.action.server.fact_inspected': 'Server administrator read a fact between modules',
   'admin.audit.action.server.smtp_tested': 'Email connection tested',
   'admin.audit.action.server.admission_policy_changed': 'Account admission policy changed',
   'admin.audit.action.server.identity_changed': 'Server name or support details changed',

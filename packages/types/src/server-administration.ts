@@ -41,6 +41,7 @@ export const ServerAuditAction = Type.Union([
   Type.Literal('server.module_reset'),
   Type.Literal('server.module_suspended'),
   Type.Literal('server.module_resumed'),
+  Type.Literal('server.fact_inspected'),
 ]);
 export type ServerAuditAction = Static<typeof ServerAuditAction>;
 
@@ -181,6 +182,8 @@ export const ServerAuditEntry = Type.Object({
   targetModule: Type.Union([Type.String(), Type.Null()]),
   /** The operator's own words for why, on the one entry that carries them (`server.module_suspended`, D-296); null for every other. */
   note: Type.Union([Type.String(), Type.Null()]),
+  /** The fact an entry about the outbox is about (D-288 §11), by id; null for every other entry. */
+  targetFactId: Type.Union([Uuid, Type.Null()]),
   createdAt: Timestamp,
 });
 export const ServerAuditPage = Page(ServerAuditEntry);
@@ -196,6 +199,7 @@ export const SERVER_AUDIT_EXPORT_COLUMNS = [
   'targetWorkspaceId',
   'targetModule',
   'note',
+  'targetFactId',
 ] as const satisfies readonly (keyof ServerAuditEntry)[];
 export const ServerJob = Type.Object({
   name: Type.String(),
@@ -350,3 +354,51 @@ export const ServerBackupStatus = Type.Object({
   restoreMatchesLatest: Type.Boolean(),
 });
 export type ServerBackupStatus = Static<typeof ServerBackupStatus>;
+
+/** What the operator's list of the outbox can be asked for (D-288 §11): `stuck` is pending past the overview's fifteen minutes. */
+export const ServerOutboxState = Type.Union([
+  Type.Literal('dead'),
+  Type.Literal('stuck'),
+  Type.Literal('discarded'),
+]);
+export type ServerOutboxState = Static<typeof ServerOutboxState>;
+export const ServerOutboxQuery = FromClient({
+  state: Type.Optional(ServerOutboxState),
+  consumer: Type.Optional(Type.String({ pattern: '^[a-z][a-z0-9-]{0,31}$' })),
+  type: Type.Optional(
+    Type.String({ pattern: '^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$', maxLength: 80 }),
+  ),
+  workspaceId: Type.Optional(Uuid),
+  after: Type.Optional(Uuid),
+  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+});
+export type ServerOutboxQuery = Static<typeof ServerOutboxQuery>;
+/** A delivery of a fact, as metadata: never the payload, which only the one-row read shows. */
+export const ServerOutboxFact = Type.Object({
+  id: Uuid,
+  factId: Uuid,
+  type: Type.String(),
+  shape: Type.Integer({ minimum: 1 }),
+  workspaceId: Uuid,
+  producer: Type.String(),
+  consumer: Type.String(),
+  state: Type.String(),
+  attempts: Type.Integer({ minimum: 0 }),
+  /** A class of error, at most 300 characters (D-288 §1). */
+  lastError: Type.Union([Type.String(), Type.Null()]),
+  createdAt: Timestamp,
+  nextAttemptAt: Timestamp,
+  finishedAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type ServerOutboxFact = Static<typeof ServerOutboxFact>;
+export const ServerOutboxPage = Page(ServerOutboxFact);
+export type ServerOutboxPage = Static<typeof ServerOutboxPage>;
+export const ServerOutboxFactDetail = Type.Composite([
+  ServerOutboxFact,
+  Type.Object({
+    payload: Type.Unknown(),
+    correlationId: Type.Union([Type.String(), Type.Null()]),
+    causedBy: Type.Union([Uuid, Type.Null()]),
+  }),
+]);
+export type ServerOutboxFactDetail = Static<typeof ServerOutboxFactDetail>;
