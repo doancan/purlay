@@ -510,6 +510,15 @@ describe('the modules in the contract (D-273)', () => {
     },
   };
 
+  test('refuse a module whose id is a name the core owns, however it came to be carried', () => {
+    for (const id of ['none', 'all', 'users']) {
+      const reserved = buildContract([...bundledModules, { manifest: { ...notes.manifest, id } }]);
+      expect(moduleIdProblems(reserved).join('\n'), id).toContain(
+        `the module ${id} has a name the core owns`,
+      );
+    }
+  });
+
   test('change when a module is added to the registry, and the build refuses the bundle until the type knows its id', () => {
     const more = buildContract([...bundledModules, notes]);
     expect(more.modules.map((module) => module.id)).toContain('notes');

@@ -8,6 +8,7 @@
 import type { Executor } from '@purlay/db';
 import type { MetricFamily } from './exposition';
 import type { Logger } from './logging';
+import { OUTBOX_DEAD_KEPT_DAYS } from './outbox-sweep';
 
 /** A consumer whose oldest waiting fact is older than this, or any dead fact, is a problem the overview names. */
 export const OUTBOX_STALE_AFTER_SECONDS = 900;
@@ -94,7 +95,7 @@ export const outboxFamilies = (readings: readonly OutboxReading[]): readonly Met
   },
   {
     name: 'purlay_outbox_dead',
-    help: 'Facts given up on after their tries, kept thirty days to be looked at, by the module that was to consume them.',
+    help: `Facts given up on after their tries, kept ${String(OUTBOX_DEAD_KEPT_DAYS)} days to be looked at, by the module that was to consume them.`,
     type: 'gauge',
     samples: readings.map((r) => ({ suffix: '', labels: { module: r.consumer }, value: r.dead })),
   },

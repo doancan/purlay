@@ -14,6 +14,7 @@ import { TABLE_OWNERS } from '@purlay/db';
 import { FACTS } from '@purlay/types';
 import { shown, sourcesOf } from './testing/module-sources';
 import {
+  builtTableNames,
   coreWrites,
   foreignUses,
   tablesNamed,
@@ -138,6 +139,29 @@ describe('what the scan sees', () => {
     ]);
   });
 
+  test('a table name built at run time is found, and a literal, a subquery, a typed variable and a callback are not', () => {
+    for (const built of [
+      "tx.selectFrom(['mes', 'sages'].join('') as never)",
+      'tx.selectFrom(name as never)',
+      "tx.selectFrom(name as unknown as 'messages')",
+      "tx.selectFrom(\n  ['mes', 'sages'].join(''),\n)",
+      "tx.insertInto('mes' + 'sages').values(row)",
+      'tx.deleteFrom(`${prefix}_messages`)',
+    ]) {
+      expect(builtTableNames(built), built).not.toEqual([]);
+    }
+    for (const fine of [
+      "tx.selectFrom('messages')",
+      'tx.selectFrom(`messages`)',
+      "tx.selectFrom(\n  'messages',\n)",
+      "tx.selectFrom((eb) => eb.selectFrom('messages').as('m'))",
+      'tx.selectFrom(function () { return 1; })',
+      '// tx.selectFrom(name as never)\nconst x = 1;',
+    ]) {
+      expect(builtTableNames(fine), fine).toEqual([]);
+    }
+  });
+
   test('a foreign table is one the module neither owns nor reads', () => {
     const source = "db.selectFrom('issues'); sql`select 1 from channels`; db.selectFrom('users');";
     expect(foreignUses(source, names, ['issues', 'users']).map((use) => use.table)).toEqual([
@@ -196,6 +220,14 @@ describe('the tables a module names', () => {
           expect(
             foreignUses(source, TABLES, allowed).map(
               (use) => `${shown(file)}:${String(use.line)} ${use.table}`,
+            ),
+          ).toEqual([]);
+        });
+
+        test(`${shown(file)} builds no table name at run time`, () => {
+          expect(
+            builtTableNames(readFileSync(file, 'utf8')).map(
+              (line) => `${shown(file)}:${String(line)}`,
             ),
           ).toEqual([]);
         });

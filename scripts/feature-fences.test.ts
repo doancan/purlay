@@ -132,6 +132,23 @@ describe('the fence of a feature', () => {
     }
   });
 
+  test('keeps every file of a feature from the ways round the fences, the http folder and the tests included', () => {
+    const realtime = { group: ['**/realtime/**'], message: 'r' };
+    const bypass = { group: ['**/packages/**'], message: 'b' };
+    const fences = featureFences(
+      'd',
+      ['chat', 'notes'],
+      transport,
+      () => [database],
+      () => [database],
+      realtime,
+      undefined,
+      [bypass],
+    );
+    expect(fences).toHaveLength(8);
+    for (const fence of fences) expect(optionsOf(fence).patterns).toContain(bypass);
+  });
+
   test('keeps a feature from nothing more when it is given no composition to keep it from', () => {
     const [only] = featureFences('d', ['chat'], transport, () => [database]);
     expect(optionsOf(only).patterns).toEqual([transport]);

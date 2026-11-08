@@ -34,6 +34,24 @@ describe('the names of a module', () => {
     expect(idProblem('chat', taken, RESERVED_MODULE_IDS)).toContain('already a module');
     expect(idProblem('my-tasks', taken, RESERVED_MODULE_IDS)).toBeUndefined();
   });
+
+  test("refuse the words the build uses for no module and every module, the core's services and the names of its tables", () => {
+    const taken = new Set(PRODUCT_MODULE_IDS);
+    for (const id of [
+      'core',
+      'none',
+      'all',
+      'search',
+      'find',
+      'inbox',
+      'users',
+      'outbox',
+      'audit-log',
+      'sessions',
+    ]) {
+      expect(idProblem(id, taken, RESERVED_MODULE_IDS), id).toContain('core owns');
+    }
+  });
 });
 
 describe('the editor', () => {
@@ -65,6 +83,29 @@ describe('the arguments', () => {
     for (const argv of [['--help'], ['zz', '--help'], ['-h']]) {
       const said: string[] = [];
       expect(main(argv, ROOT, (line) => said.push(line))).toBe(0);
+      expect(said.join('\n')).toContain('usage: bun run module:new <id>');
+    }
+  });
+});
+
+describe('the command, asked for what it cannot make', () => {
+  const run = (argv: string[]): { code: number; said: string[] } => {
+    const said: string[] = [];
+    return { code: main(argv, ROOT, (line) => said.push(line)), said };
+  };
+
+  test('refuses a reserved id with 2 and writes nothing', () => {
+    for (const id of ['core', 'none', 'users', 'outbox', 'all']) {
+      const { code, said } = run([id, '--dry-run']);
+      expect({ id, code }).toEqual({ id, code: 2 });
+      expect(said.join('\n')).toContain('core owns');
+    }
+  });
+
+  test('prints its usage for --help and -h, and makes nothing', () => {
+    for (const flag of ['--help', '-h']) {
+      const { code, said } = run([flag]);
+      expect(code).toBe(0);
       expect(said.join('\n')).toContain('usage: bun run module:new <id>');
     }
   });

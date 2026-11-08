@@ -73,6 +73,24 @@ const sqlTemplates = (
 
 const lineOf = (code: string, index: number): number => code.slice(0, index).split('\n').length;
 
+/**
+ * Where a statement is given a table in a way the text cannot name: an assertion to `never` or through `unknown` (how a name
+ * built at run time is made to fit the typed handle), or a first argument assembled in the call (`selectFrom(['mes', 'sages'].join(''))`). The lint refuses the assertions too; this is the same line read from the text.
+ */
+export const builtTableNames = (source: string): readonly number[] => {
+  const code = withoutComments(source);
+  const patterns = [
+    /\bas\s+never\b/g,
+    /\bas\s+unknown\s+as\b/g,
+    // A first argument assembled in the call: joined parts, a template with a value in it, a concatenation. A variable is
+    // typed, and the compiler holds it to the handle's tables.
+    /\.(?:selectFrom|insertInto|updateTable|deleteFrom|mergeInto)\(\s*(?:\[[^\]]*\]\s*\.join|`[^`]*\$\{|['"][^'"]*['"]\s*\+)/g,
+  ];
+  return patterns.flatMap((pattern) =>
+    [...code.matchAll(pattern)].map((found) => lineOf(code, found.index)),
+  );
+};
+
 /** Every use of a table of `tables` that `source` makes in a place a statement names one. */
 export const tablesNamed = (source: string, tables: readonly string[]): readonly TableUse[] => {
   if (tables.length === 0) return [];

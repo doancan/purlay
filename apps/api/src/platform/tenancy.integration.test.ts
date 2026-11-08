@@ -14,7 +14,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { AppError } from './errors';
-import { requireWorkspaceMembership, type WorkspaceContext } from './tenancy';
+import { assertMinted, requireWorkspaceMembership, type WorkspaceContext } from './tenancy';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -71,6 +71,33 @@ describe('integration: the workspace membership guard', () => {
       expect(context.userId).toBe(userId);
       expect(context.role).toBe('admin');
       expect(scopedRead(context)).toBe(workspaceId);
+    });
+  });
+
+  test('a minted context is accepted, and a copy of it for another workspace is refused loudly', async () => {
+    await withRollback(async (db) => {
+      const userId = await addUser(db, 'forger');
+      const workspaceId = await addWorkspace(db, 'forger-home');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: userId, role: 'member' })
+        .execute();
+      const mine = await requireWorkspaceMembership(db, userId, workspaceId);
+
+      // The spread keeps the symbol-keyed brand, so it type-checks as a WorkspaceContext.
+      const spread: WorkspaceContext = { ...mine, workspaceId: crypto.randomUUID() };
+      const sameWorkspace: WorkspaceContext = { ...mine };
+
+      expect(() => {
+        assertMinted(mine);
+      }).not.toThrow();
+      expect(() => {
+        assertMinted(spread);
+      }).toThrow('did not mint');
+      expect(() => {
+        assertMinted(sameWorkspace);
+      }).toThrow('did not mint');
+      expect(Object.isFrozen(mine)).toBe(true);
     });
   });
 
