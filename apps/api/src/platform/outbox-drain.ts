@@ -28,6 +28,7 @@ import { noSeams, type ModuleSeams } from './ports/module-seams';
 import type { WrittenNotice } from './ports/notification-sink';
 import { mintTurn } from './workspace-turn';
 import { atomicallyOn } from './transactions';
+import { withDeadline } from './request-deadline';
 
 /** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about twenty minutes (`backoffMs`). */
 export const OUTBOX_ATTEMPTS_MAX = 8;
@@ -396,6 +397,60 @@ export const deliver = async (
   return outcome;
 };
 
+/**
+ * Tries a delivery gets: twenty rows of this are the worker's default deadline of a minute, so a batch of rows that are all slow
+ * ends with the iteration and is not cut off by it, and one slow row delays the ones after it by this much and no more.
+ */
+const OUTBOX_ROW_DEADLINE_MS = 3_000;
+
+/**
+ * One delivery under its own deadline. Past it the delivery's signal aborts, which cancels what the handler asked of the database
+ * and refuses what it asks next, so its transaction cannot commit and the fact is not marked; the fact is `failed` and waits for its
+ * backoff, the attempt having been counted at the claim. A delivery that throws anything else is `failed` too, and is the batch's
+ * only loss. A handler that waits on something that is not the database and ignores the signal is not waited for.
+ */
+const deliverWithin = async (
+  deadlineMs: number,
+  database: Executor,
+  claimed: ClaimedFact,
+  handling: FactHandling,
+  dependencies: Parameters<typeof deliver>[3],
+): Promise<Delivery> => {
+  const request = currentRequest();
+  const fail = (failure: unknown, reason: string): Delivery => {
+    dependencies.log.warn(reason, {
+      fact: claimed.type,
+      factId: claimed.factId,
+      consumer: claimed.consumer,
+      failure: errorClass(failure),
+    });
+    return 'failed';
+  };
+  try {
+    return await withDeadline<Delivery>(
+      deadlineMs,
+      async (signal) =>
+        await withinRequest(
+          {
+            startedAt: performance.now(),
+            ...request,
+            requestId: request?.requestId ?? `fact:${claimed.factId}`,
+            signal:
+              request?.signal === undefined ? signal : AbortSignal.any([request.signal, signal]),
+          },
+          async () => await deliver(database, claimed, handling, dependencies),
+        ),
+      () =>
+        fail(
+          new Error('DeliveryDeadline'),
+          'a fact took too long to deliver; it is tried again later',
+        ),
+    );
+  } catch (error) {
+    return fail(error, 'a delivery failed outside its handler; the fact is tried again later');
+  }
+};
+
 /** What a drain counts: the facts delivered and the deliveries that failed or were given up on, by module and fact type. */
 export interface OutboxCounters {
   readonly delivered: Counter<'module' | 'fact'>;
@@ -412,11 +467,23 @@ export const drainOnce = async (
     readonly log: Logger;
     readonly effective?: EntitlementPolicy['effective'];
     readonly counters?: OutboxCounters;
+    /** What one delivery has before it is stopped; the default is the tenth of the worker's default deadline, for a batch of twenty. */
+    readonly rowDeadlineMs?: number;
     readonly ports?: ModulePorts;
     readonly seams?: ModuleSeams;
   },
 ): Promise<Record<Delivery | 'exhausted', number>> => {
-  const { handlers, batch, clock, log, effective, counters, ports, seams } = input;
+  const {
+    handlers,
+    batch,
+    clock,
+    log,
+    effective,
+    counters,
+    ports,
+    seams,
+    rowDeadlineMs = OUTBOX_ROW_DEADLINE_MS,
+  } = input;
   const tally = { delivered: 0, skipped: 0, failed: 0, dead: 0, gone: 0, exhausted: 0 };
   const { claimed, exhausted } = await claimDue(database, {
     handles: handlers,
@@ -438,7 +505,9 @@ export const drainOnce = async (
       (candidate) => candidate.consumer === one.consumer && candidate.type === one.type,
     );
     if (handling === undefined) continue;
-    const outcome = await deliver(database, one, handling, {
+    // The worker's deadline went by while earlier rows ran: the rest are left to their backoff, as a crash would leave them.
+    if (currentRequest()?.signal?.aborted === true) break;
+    const outcome = await deliverWithin(rowDeadlineMs, database, one, handling, {
       clock,
       log,
       ...(ports === undefined ? {} : { ports }),

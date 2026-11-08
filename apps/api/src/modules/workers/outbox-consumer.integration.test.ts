@@ -122,6 +122,24 @@ describe('integration: what a consumer is handed by its worker', () => {
   });
 });
 
+describe('integration: a burst of facts', () => {
+  test('is drained in one iteration of the worker while batches come back full, and not one batch for each interval', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    const { context } = aPublishWorld(workspaceId, clock);
+    const BURST = 70;
+    await cloned.db.transaction().execute(async (tx) => {
+      for (let n = 0; n < BURST; n += 1) {
+        await publishFact(tx, context, NOTE_CREATED, { noteId: `b${String(n)}`, title: 't' });
+      }
+    });
+    const handle: FactConsumer = () => Promise.resolve('done');
+    await runWorkers(compose([notes, wikiWith(handle)], undefined, 'open', FACTS));
+    const rows = await rowsOf(workspaceId);
+    expect(rows).toHaveLength(BURST);
+    expect(rows.every((row) => row.state === 'delivered')).toBe(true);
+  });
+});
+
 describe('integration: a fact between two modules', () => {
   test('is delivered by the consumer’s worker, as the consumer, in the transaction that marks it', async () => {
     const workspaceId = await aWorkspaceRow(cloned.db);

@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **Operations** — A fact whose handler hangs or fails no longer holds up the rest of its batch: each delivery is stopped after three seconds on its own, and a burst of facts is delivered as fast as the batches come back full instead of twenty every two seconds (D-288)
 
 ---

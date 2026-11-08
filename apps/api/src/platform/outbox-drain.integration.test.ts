@@ -1028,3 +1028,72 @@ describe('integration: a row whose producer does not own its fact (red-team F9)'
     ).toBe(true);
   });
 });
+
+describe('integration: one bad delivery does not take its batch with it', () => {
+  const handlersOf = (handle: FactConsumer): readonly (Handled & FactHandling)[] => [
+    { ...wiki[0]!, declaration, handle },
+  ];
+  const titleOf = (fact: { payload: unknown }): string => (fact.payload as { title: string }).title;
+
+  test('a handler that swallows a database error and returns leaves the rest of the batch delivered', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    for (const title of ['first', 'swallows', 'third']) {
+      await publish(workspaceId, clock, title, title);
+      clock.advance(1);
+    }
+    const handle: FactConsumer = async (fact, transaction, ports, seams) => {
+      if (titleOf(fact) === 'swallows') {
+        // The transaction is aborted from here on, whatever the handler does with the error.
+        await sql`select 1 / 0`.execute(transaction).catch(() => undefined);
+        return 'done';
+      }
+      return await recording(fact, transaction, ports, seams);
+    };
+    const { log } = aRecordingLogger();
+    const tally = await drainOnce(cloned.db, {
+      handlers: handlersOf(handle),
+      batch: BATCH,
+      clock,
+      log,
+    });
+    expect(tally).toMatchObject({ delivered: 2, failed: 1 });
+    const states = (await rowOf(workspaceId)).map((row) => [row.payload, row.state]);
+    expect(states.filter(([, state]) => state === 'delivered')).toHaveLength(2);
+  });
+
+  test('a handler that does not return within its time is stopped and counted, and the next fact is delivered on time', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    for (const title of ['hangs', 'second', 'third']) {
+      await publish(workspaceId, clock, title, title);
+      clock.advance(1);
+    }
+    let sawAbort = false;
+    const handle: FactConsumer = async (fact, transaction, ports, seams) => {
+      if (titleOf(fact) !== 'hangs') return await recording(fact, transaction, ports, seams);
+      const signal = currentRequest()?.signal;
+      await new Promise<void>((resolve) => {
+        signal?.addEventListener('abort', () => {
+          sawAbort = true;
+          resolve();
+        });
+      });
+      throw new Error('stopped');
+    };
+    const { log } = aRecordingLogger();
+    const started = performance.now();
+    const tally = await drainOnce(cloned.db, {
+      handlers: handlersOf(handle),
+      batch: BATCH,
+      clock,
+      log,
+      rowDeadlineMs: 100,
+    });
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(tally).toMatchObject({ delivered: 2, failed: 1 });
+    expect(sawAbort).toBe(true);
+    const rows = await rowOf(workspaceId);
+    expect(rows.filter((row) => row.state === 'pending')).toHaveLength(1);
+  });
+});

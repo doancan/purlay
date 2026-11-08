@@ -6,6 +6,7 @@
  * claim a row, lock one or mark one.
  */
 import { FACT_SHAPE_FIRST, type FactDeclaration } from '@purlay/types';
+import { currentRequest } from '../../platform/logging';
 import type { FactConsumers } from '../../platform/fact-consumers';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { drainOnce, type Handled, type FactHandling } from '../../platform/outbox-drain';
@@ -18,6 +19,14 @@ export const OUTBOX_CONSUME_INTERVAL_MS = 2_000;
 
 /** Rows a drain takes: the handlers run one after another, and a module's deadline bounds the whole. */
 const OUTBOX_CONSUME_BATCH = 20;
+
+/**
+ * A drain that came back full is followed by another at once, so a burst is not delivered at a batch for each interval (the
+ * code path does well over a thousand rows a second; the interval alone allowed ten), until a drain is not full, this many have
+ * run, or this long has passed: the worker's deadline and a shutdown are respected. An idle module still claims once an interval.
+ */
+const OUTBOX_CONSUME_DRAINS_MAX = 10;
+const OUTBOX_CONSUME_SLICE_MS = 20_000;
 
 /** The workers a module's handlers need: none without handlers, else the one that delivers. */
 export const outboxConsumerWorkers = (
@@ -49,16 +58,28 @@ export const outboxConsumerWorkers = (
       name: OUTBOX_CONSUME_WORKER,
       intervalMs: OUTBOX_CONSUME_INTERVAL_MS,
       work: async ({ database, clock, log, outbox, ports, seams }): Promise<void> => {
-        await drainOnce(database, {
-          handlers,
-          batch: OUTBOX_CONSUME_BATCH,
-          clock,
-          log,
-          ports,
-          seams,
-          ...(effective === undefined ? {} : { effective }),
-          ...(outbox === undefined ? {} : { counters: outbox }),
-        });
+        const started = performance.now();
+        for (let drains = 0; drains < OUTBOX_CONSUME_DRAINS_MAX; drains += 1) {
+          const tally = await drainOnce(database, {
+            handlers,
+            batch: OUTBOX_CONSUME_BATCH,
+            clock,
+            log,
+            ports,
+            seams,
+            ...(effective === undefined ? {} : { effective }),
+            ...(outbox === undefined ? {} : { counters: outbox }),
+          });
+          const taken = Object.values(tally).reduce((sum, count) => sum + count, 0);
+          const stopped = currentRequest()?.signal?.aborted === true;
+          if (
+            taken < OUTBOX_CONSUME_BATCH ||
+            stopped ||
+            performance.now() - started > OUTBOX_CONSUME_SLICE_MS
+          ) {
+            return;
+          }
+        }
       },
     },
   ];

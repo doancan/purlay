@@ -22,6 +22,14 @@ export const API_MODULES_WORKERS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'outbox-consumer-worker-drains-one-batch-an-interval',
+    why: 'a burst is delivered at twenty facts for each two seconds however many wait, so a busy module’s facts wait for minutes (D-288 §14)',
+    file: 'apps/api/src/modules/workers/outbox-consumer.ts',
+    find: '            taken < OUTBOX_CONSUME_BATCH ||\n',
+    replace: '            true ||\n',
+    tests: ['apps/api/src/modules/workers/outbox-consumer.integration.test.ts'],
+  },
+  {
     id: 'outbox-consumer-worker-ignores-the-shape',
     why: 'the worker claims every shape of a type, whatever its declaration, so an older node kills a newer one’s facts (D-288)',
     file: 'apps/api/src/modules/workers/outbox-consumer.ts',
