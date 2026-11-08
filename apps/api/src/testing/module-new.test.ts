@@ -71,6 +71,22 @@ describe('against the repository as it is', () => {
     }
   });
 
+  test('a second module finds every anchor the first one left, whatever the number of modules before it', () => {
+    const made = new Map<string, string>();
+    const contentOf = (file: string): string =>
+      made.get(file) ?? readFileSync(join(ROOT, file), 'utf8');
+    for (const id of ['zz', 'yy', 'xx']) {
+      for (const edit of editsFor(namesOf(id), OPTIONS)) {
+        expect(() => applyEdit(contentOf(edit.file), edit), `${id}: ${edit.file}`).not.toThrow();
+        made.set(edit.file, applyEdit(contentOf(edit.file), edit));
+      }
+    }
+    expect(made.get('docs/CONFIG.md')).toContain('`chat`, `issues`, `zz`, `yy`, `xx`. **Unset');
+    expect(made.get('packages/types/src/facts.ts')).toContain(
+      '...CORE_FACTS, ...XX_FACTS, ...YY_FACTS, ...ZZ_FACTS',
+    );
+  });
+
   test('every template is filled, in its path and its text, and none is a file that exists', () => {
     const files = templateFiles(names, OPTIONS);
     expect(files.length).toBeGreaterThan(10);
@@ -101,7 +117,7 @@ describe('against the repository as it is', () => {
     expect(edited('apps/api/src/testing/cross-tenant.ts')).toContain(
       "'POST /api/workspaces/:workspaceId/zz'",
     );
-    expect(edited('apps/api/src/composition.ts')).toContain('  zzModule,\n');
+    expect(edited('apps/api/src/composition.ts')).toContain('  issuesModule,\n  zzModule,\n');
     expect(edited('packages/db/src/migrator.ts')).toContain("id: 'zz'");
     expect(edited('docs/DECISIONS.md')).toContain(`### D-${String(OPTIONS.decision)}.`);
   });

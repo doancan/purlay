@@ -5,7 +5,11 @@
 import { fill, type Edit, type Names, type Options } from './plan';
 
 const ISSUES_MODULE_IMPORT = "import { issuesModule } from './features/issues/module';\n";
-const BUNDLE_END = '] as const satisfies readonly BundledModule[];';
+/** Every list of modules takes the new one after issues, so that all of them are in the same order. */
+const ISSUES_IN_THE_BUNDLE = '  issuesModule,\n';
+const FACTS_IMPORT =
+  "import { FACT_HOLD_DAYS_MAX, FACT_SHAPE_FIRST, type FactDeclaration } from './fact-declaration';\n";
+const FACTS_LIST = '...CORE_FACTS';
 const ISSUES_ID = "Type.Literal('issues')";
 const ISSUES_EXPORT = "export * from './issues';\n";
 const ISSUES_SET = "  { id: 'issues', directory: join(MIGRATIONS_DIRECTORY, 'issues') },\n";
@@ -23,7 +27,8 @@ const SCHEMA_LAST_FILE =
   'issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)\n';
 const SCHEMA_SECTION_8 = '## 8. GitHub Integration';
 const TREE_ISSUES = "│   │       │   └── issues/      a workspace's issues (D-254)";
-const CONFIG_MODULES = '`chat`, `issues`. **Unset or blank';
+/** The end of the list of ids, whatever the number of modules before it. */
+const CONFIG_MODULES = '`. **Unset or blank';
 const DATA_ISSUES = "| `issues` | A workspace's issue:";
 const API_ISSUES = '| ○ | `GET` | `/api/workspaces/:workspaceId/issues` |';
 const MODULES_ROW = '| `issues` | — | — | — |\n';
@@ -42,8 +47,8 @@ const EDITS: readonly Edit[] = [
   },
   {
     file: 'apps/api/src/composition.ts',
-    anchor: BUNDLE_END,
-    text: `  __CAMEL__Module,\n${BUNDLE_END}`,
+    anchor: ISSUES_IN_THE_BUNDLE,
+    text: `${ISSUES_IN_THE_BUNDLE}  __CAMEL__Module,\n`,
   },
   {
     file: 'packages/types/src/modules.ts',
@@ -54,6 +59,16 @@ const EDITS: readonly Edit[] = [
     file: 'packages/types/src/index.ts',
     anchor: ISSUES_EXPORT,
     text: `${ISSUES_EXPORT}export * from './__ID__';\n`,
+  },
+  {
+    file: 'packages/types/src/facts.ts',
+    anchor: FACTS_IMPORT,
+    text: `${FACTS_IMPORT}import { __UPPER___FACTS } from './__ID__';\n`,
+  },
+  {
+    file: 'packages/types/src/facts.ts',
+    anchor: FACTS_LIST,
+    text: `${FACTS_LIST}, ...__UPPER___FACTS`,
   },
   {
     file: 'packages/types/src/endpoints.ts',
@@ -172,7 +187,7 @@ ${TREE_ISSUES}`,
   {
     file: 'docs/CONFIG.md',
     anchor: CONFIG_MODULES,
-    text: '`chat`, `issues`, `__ID__`. **Unset or blank',
+    text: '`, `__ID__`. **Unset or blank',
   },
   {
     file: 'docs/DATA.md',

@@ -53,7 +53,7 @@ const regenerateSchema = (root: string, say: (line: string) => void): void => {
   const url = process.env['DATABASE_URL'];
   if (url === undefined) {
     say(
-      'run `bun run db:check` against a database to regenerate packages/db/src/schema.ts, or `bun run db:generate` on a migrated one',
+      'packages/db/src/schema.ts does not have the new table yet: run `bun run db:check` (it migrates a throwaway clone, rewrites the file and exits 1 because it changed), then commit the file',
     );
     return;
   }
