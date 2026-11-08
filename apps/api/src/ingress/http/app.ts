@@ -226,6 +226,8 @@ import { setMyAway } from './away';
 import { readMyMissedMail, setMyMissedMail } from './missed-mail';
 import { runningModuleIds, type Composition } from '../../composition';
 import { notificationSink } from '../../modules/inbox/sink';
+import { factRoutingOf } from '../../platform/outbox';
+import { factPublisherOf } from '../../platform/ports/fact-publisher';
 import { listInbox, readInbox } from './inbox';
 
 export interface Dependencies {
@@ -596,6 +598,16 @@ export const createApp = (given: Dependencies): HttpApplication => {
       ? dependencies.settingsChange?.holder.current()?.settings.githubApp
       : dependencies.githubApp();
 
+  // Who consumes what over the whole build, and which of it this process runs: what a publish writes a row for (D-288).
+  const factContext = {
+    clock: dependencies.clock,
+    routing: factRoutingOf(
+      modules.bundled.map((module) => module.manifest),
+      modules.modules.map((module) => module.manifest),
+    ),
+    dropped: metrics.outboxDropped,
+    effective: modules.effectiveModules,
+  };
   // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
   // manifest, as the rest of the surface is (D-255 §2).
   const moduleRoutes = modules.bundled.flatMap((module) =>
@@ -615,6 +627,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
               pushedKinds: modules.pushedKinds,
               ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
             }),
+            publishFact: factPublisherOf(module.manifest.id, factContext),
             bus: sockets.bus,
             atomically: sockets.atomically,
             online: sockets.online,
