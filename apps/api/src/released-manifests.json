@@ -15,9 +15,12 @@
         "/api/notifications/read",
         "/api/webhooks/**",
         "/api/workspaces/:workspaceId/archived-channels",
+        "/api/workspaces/:workspaceId/channel-groups",
+        "/api/workspaces/:workspaceId/channel-groups/:groupId",
         "/api/workspaces/:workspaceId/channels",
         "/api/workspaces/:workspaceId/conversations",
         "/api/workspaces/:workspaceId/dms",
+        "/api/workspaces/:workspaceId/followed-threads",
         "/api/workspaces/:workspaceId/github-app",
         "/api/workspaces/:workspaceId/github-app/installation",
         "/api/workspaces/:workspaceId/github-repositories",
@@ -41,7 +44,9 @@
         "SUBSCRIBE",
         "TYPING",
         "UNSUBSCRIBE"
-      ]
+      ],
+      "publishes": [],
+      "consumes": []
     },
     {
       "id": "issues",
@@ -53,7 +58,9 @@
         "/api/workspaces/:workspaceId/issues/**"
       ],
       "jobs": [],
-      "frames": []
+      "frames": [],
+      "publishes": [],
+      "consumes": []
     }
   ],
   "exceptions": []
