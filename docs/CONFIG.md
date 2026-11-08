@@ -393,7 +393,12 @@ asks its API about github.com links, which it does not have; run Enterprise Serv
 > **HTTP limits are not configurable here either, and the writes' budget is the socket's (D-81, D-198).** Sign-in: 30
 > requests per client address at once, then one every two seconds. Writes: 10 a second with a burst
 > of 60 per signed-in user, the socket's own budget. A refusal is `429` with `Retry-After`. The
-> numbers live in `apps/api/src/ingress/http/rate-limit.ts`. The largest JSON body is 64 KiB, the
+> numbers live in `apps/api/src/ingress/http/rate-limit.ts`. Two reads that fan out have buckets of their own, per signed-in
+> user and before the workspace is looked at: the workspace find (`FIND_BUDGET`, 20 at once then 5 a second) and the inbox
+> list (`INBOX_LIST_BUDGET`, 60 at once then 10 a second); marking the inbox read is a write. A person's pushes of one kind of
+> notice from one module are 3 at once then one a minute (`NOTICE_PUSH_BUDGET` in `modules/push/sender.ts`), and the unread
+> notices of a module in a person's inbox are at most 200 (`UNREAD_PER_MODULE_MAX` in `modules/inbox/sink.ts`). With
+> `REDIS_URL` the HTTP buckets are shared by the nodes; the push budget is each node's own. The largest JSON body is 64 KiB, the
 > socket's frame (D-80).
 >
 > The socket's limits are **not** configurable here. The frame cap is part of the wire contract —
@@ -669,11 +674,12 @@ for every value it can take from the start, at zero, so a rate over it misses no
 | `purlay_websocket_connections` | | WebSocket connections open on this process | a fall to zero on a node that had people |
 | `purlay_http_request_duration_seconds` | `method`, `route`, `status`, `module` | requests answered, as a histogram; `_count` is the number | `status` of `5xx` by `module`; a slow p95 by `module` |
 | `purlay_rate_limited_total` | `door`, `module` | requests and socket frames refused for the rate, by the door they came through | a sustained rate for one `module` |
-| `purlay_push_failures_total` | `reason`, `module` | Web Push deliveries that did not reach their push service | a rise for one `reason` |
+| `purlay_push_failures_total` | `reason`, `module` | Web Push deliveries that did not reach their push service, and (`throttled`) those held back because a person had three of one kind at once (D-286 §12) | a rise for one `reason` |
 | `purlay_mail_failures_total` | `module` | letters the mail relay did not accept, by the module that sent them | any rise: mail is not arriving |
 | `purlay_modules_info` | `module` | `1` for each module the process runs | `count by (module)` differing between nodes outside a rolling deploy |
 | `purlay_entitlement_refusals_total` | `module` | requests answered as a path nobody has because the workspace is not granted the module that owns the route (D-289) | a sudden rise: a client, or an edition file, that disagrees with the grants (see *Workspaces and modules* in `DEPLOY.md`) |
 | `purlay_inbox_entries_total` | `module`, `kind` | notices modules wrote to the core's inbox and committed | a module whose count stops while people use it |
+| `purlay_inbox_collapsed_total` | `module`, `kind` | older unread notices read as history because a person had 200 unread of one module in one workspace (D-286 §12) | a steady rate: a module or a person looping |
 | `purlay_worker_failures_total` | `module`, `worker` | iterations of a module's background loop that threw or ran past their deadline | a rate above zero for one `worker` |
 | `purlay_outbox_pending` | `module` | facts waiting for the module that consumes them (the same on every node) | growth that does not come back down |
 | `purlay_outbox_oldest_age_seconds` | `module` | seconds the oldest fact waiting for a module has waited, `0` where none waits | a value that keeps rising: the consumer is not running anywhere |
