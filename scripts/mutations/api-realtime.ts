@@ -47,6 +47,14 @@ export const API_REALTIME: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/shutdown.integration.test.ts'],
   },
   {
+    id: 'entitlement-advertise-waits-a-renewal-after-a-miss',
+    why: 'a node that starts before its Redis connection is up is absent from the grants record for a third of the lapse, so a restriction is not held for a node that is not yet seen (D-292)',
+    file: 'apps/api/src/realtime/entitlement-peers.ts',
+    find: 'advertised ? RENEW_MS : ANNOUNCE_RETRY_MS',
+    replace: 'RENEW_MS',
+    tests: ['apps/api/src/realtime/entitlement-peers.test.ts'],
+  },
+  {
     id: 'entitlement-capability-keeps-expired-nodes',
     why: 'a live node keeps refreshing the hash while crashed nodes leave expired fields behind, so the record grows with restarts',
     file: 'apps/api/src/realtime/entitlement-peers.ts',
@@ -184,6 +192,14 @@ export const API_REALTIME: readonly Mutation[] = [
     find: '      stopped = true;\n      timers.clear(handle);\n',
     replace: '      stopped = true;\n',
     tests: [LIVENESS_TESTS],
+  },
+  {
+    id: 'module-set-announce-waits-a-renewal-after-a-miss',
+    why: 'a node that starts before its Redis connection is up is absent from the module-set record for a third of the lapse, so a restriction is not held for an older node that has just joined (D-292)',
+    file: 'apps/api/src/realtime/module-set.ts',
+    find: 'announced ? RENEW_MS : ANNOUNCE_RETRY_MS',
+    replace: 'RENEW_MS',
+    tests: ['apps/api/src/realtime/module-set.test.ts'],
   },
   {
     id: 'module-set-fixture-shares-its-control-cluster',

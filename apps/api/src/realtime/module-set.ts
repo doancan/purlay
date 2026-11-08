@@ -20,6 +20,8 @@ import { systemTimers, type Timers } from './hub';
 
 export const NODE_TTL_MS = 30_000;
 const RENEW_MS = NODE_TTL_MS / 3;
+/** Between a failed announcement and the next: a process announces as it starts, before its connection is up. */
+export const ANNOUNCE_RETRY_MS = 1_000;
 
 /** A set as one word: the ids in order, or `none` for the core alone. The same modules are the same word. */
 export const moduleSetOf = (ids: readonly string[]): string =>
@@ -74,7 +76,8 @@ export const watchModuleSet = ({
   let stopped = false;
   let next: unknown;
 
-  const announce = async (): Promise<void> => {
+  /** Whether the record now has this node; a node it does not have is asked again soon. */
+  const announce = async (): Promise<boolean> => {
     try {
       const answer = await link.script(
         ANNOUNCE_SCRIPT,
@@ -93,15 +96,17 @@ export const watchModuleSet = ({
         log.info('the nodes of this cluster run the same modules again', { set });
       }
       mismatched = others.length > 0;
+      return true;
     } catch (error) {
       // Redis being away is the link's to say; a node that cannot compare has nothing to warn of.
       log.debug('the modules this cluster runs could not be compared', { err: error });
+      return false;
     }
   };
 
   const loop = async (): Promise<void> => {
-    await announce();
-    if (!stopped) next = timers.set(() => void loop(), RENEW_MS);
+    const announced = await announce();
+    if (!stopped) next = timers.set(() => void loop(), announced ? RENEW_MS : ANNOUNCE_RETRY_MS);
   };
   void loop();
 

@@ -10,17 +10,26 @@ import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink } from '../testing/redis';
 import { advertiseEntitlements, peersBehind } from './entitlement-peers';
 import type { Timers } from './hub';
-import { NODE_TTL_MS } from './module-set';
+import { ANNOUNCE_RETRY_MS, NODE_TTL_MS } from './module-set';
 
 const names = redisNames();
 
 /** Timers that run when the test says: a renewal is a turn of the loop, not a wait. */
-const manualTimers = (): { timers: Timers; tick: () => Promise<void>; pending: () => number } => {
+const manualTimers = (): {
+  timers: Timers;
+  tick: () => Promise<void>;
+  pending: () => number;
+  /** The wait each timer was set for, in the order they were set. */
+  delays: number[];
+} => {
   const waiting = new Map<number, () => void>();
+  const delays: number[] = [];
   let id = 0;
   return {
+    delays,
     timers: {
-      set: (callback): number => {
+      set: (callback, ms): number => {
+        delays.push(ms);
         id += 1;
         waiting.set(id, callback);
         return id;
@@ -45,6 +54,31 @@ const settle = async (): Promise<void> => {
 };
 
 describe('a node that reads workspace grants says so', () => {
+  test('asks again soon when it could not say so, and settles to the renewal once it has', async () => {
+    const link = aFakeLink();
+    let connected = false;
+    link.behaviour.script = (): number => {
+      if (!connected) throw new Error('redis is not connected');
+      return 1;
+    };
+    const clock = manualTimers();
+    advertiseEntitlements({
+      link,
+      nodeId: 'node-a',
+      log: aRecordingLogger().log,
+      timers: clock.timers,
+    });
+    await settle();
+    // As the module set: a process says it as it starts, before its Redis connection is up, and a node absent from the
+    // record for a third of the lapse is a node a restriction does not wait for.
+    expect(clock.delays).toEqual([ANNOUNCE_RETRY_MS]);
+
+    connected = true;
+    await clock.tick();
+    await clock.tick();
+    expect(clock.delays).toEqual([ANNOUNCE_RETRY_MS, NODE_TTL_MS / 3, NODE_TTL_MS / 3]);
+  });
+
   test('under its own id with the time to live of the module set, and again at each renewal, until it stops', async () => {
     const link = aFakeLink();
     link.behaviour.script = (): number => 1;
