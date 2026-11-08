@@ -256,6 +256,8 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
     setup: ROOMY,
     setupSecrets: ROOMY,
     nativeTokens: ROOMY,
+    find: ROOMY,
+    inbox: ROOMY,
   },
   storage: aStoreThatMustNotBeTouched(),
   // An export asked for is made by nobody, unless the test is about exports and says so.
