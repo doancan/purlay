@@ -142,6 +142,14 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
+    id: 'issues-deadline-changed-without-the-documents',
+    why: 'the documents say 8 s for issues, and a deadline moved in the manifest alone leaves them saying it',
+    file: 'apps/api/src/features/issues/module.ts',
+    find: 'deadline: { ms: 8_000 },',
+    replace: 'deadline: { ms: 9_000 },',
+    tests: ['apps/api/src/stated-numbers.test.ts', 'apps/api/src/docs-sync.test.ts'],
+  },
+  {
     id: 'issues-declares-no-budget-unlisted',
     why: 'issues declares no share, without a line in the list of exemptions, so the choice not to hold a module is nobody’s decision (D-266)',
     file: 'apps/api/src/features/issues/module.ts',
