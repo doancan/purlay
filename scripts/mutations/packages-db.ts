@@ -160,6 +160,14 @@ export const PACKAGES_DB: readonly Mutation[] = [
     tests: ['packages/db/src/testing-preload.integration.test.ts'],
   },
   {
+    id: 'harness-template-built-without-its-lock',
+    why: 'two test processes build the same new template at once without the lock on its name, both find no database and both create it, so the second fails on a duplicate name and takes its worker’s integration tests with it (D-228)',
+    file: 'packages/db/src/testing.ts',
+    find: '  await sql`select pg_advisory_lock(hashtext(${template}))`.execute(admin);\n',
+    replace: '',
+    tests: ['packages/db/src/harness.integration.test.ts'],
+  },
+  {
     id: 'message-attachments-attachment-key-dropped',
     why: "a link can name an attachment of one workspace under another's name (I-1, D-250)",
     file: 'packages/db/migrations/chat/0001_message_attachments.sql',
