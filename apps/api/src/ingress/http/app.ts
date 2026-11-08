@@ -639,6 +639,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
               bus: sockets.bus,
               log,
               written: metrics.inboxEntries,
+              collapsed: metrics.inboxCollapsed,
               pushedKinds: modules.pushedKinds,
               suspended: () => modules.suspension.current().has(module.manifest.id),
               ...(dependencies.push === undefined ? {} : { push: dependencies.push }),

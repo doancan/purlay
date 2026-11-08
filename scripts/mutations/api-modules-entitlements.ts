@@ -3,6 +3,30 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_ENTITLEMENTS: readonly Mutation[] = [
   {
+    id: 'entitled-notices-keep-lost-workspaces',
+    why: 'a workspace that lost the module is still pushed to for what the module’s writes told (D-289, red-team F10)',
+    file: 'apps/api/src/modules/entitlements/hooks.ts',
+    find: '    return told.filter((notice) => granted.get(notice.workspaceId) === true);\n',
+    replace: '    return told;\n',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
+  },
+  {
+    id: 'entitled-reader-reads-for-any-workspace',
+    why: 'a file of a module is readable by its reader whichever workspace holds it, granted or not (D-289, red-team F10)',
+    file: 'apps/api/src/modules/entitlements/hooks.ts',
+    find: '      !(await modulesOf(executor, stored.workspace_id, effective)).has(module)\n',
+    replace: '      false\n',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
+  },
+  {
+    id: 'entitled-start-ignores-the-grant',
+    why: 'a module starts a new workspace that is not granted it (D-289, red-team F10)',
+    file: 'apps/api/src/modules/entitlements/hooks.ts',
+    find: '    if (entitledTo(context, module)) await start(...args);\n',
+    replace: '    await start(...args);\n',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
+  },
+  {
     id: 'entitlement-dry-run-writes',
     why: 'a dry run changes the grants it was asked only to describe (D-292)',
     file: 'apps/api/src/modules/entitlements/edition.ts',

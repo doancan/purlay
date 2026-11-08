@@ -22,7 +22,7 @@ import { requireWorkspaceMembership, type WorkspaceContext } from '../../platfor
 import { NOW } from '../../testing/doubles';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
 import type { PushSender } from '../push/sender';
-import { notificationSink, type KindOwners } from './sink';
+import { notificationSink, UNREAD_PER_MODULE_MAX, type KindOwners } from './sink';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -49,7 +49,10 @@ const metrics = serverMetrics(
   undefined,
   ['things'],
   [],
-  [{ module: 'things', kind: 'thing_assigned' }],
+  [
+    { module: 'things', kind: 'thing_assigned' },
+    { module: 'zz', kind: 'other_thing' },
+  ],
 );
 
 const sinkOn = (
@@ -65,6 +68,7 @@ const sinkOn = (
     bus,
     log: NO_LOG,
     written: metrics.inboxEntries,
+    collapsed: metrics.inboxCollapsed,
     pushedKinds: new Set(['thing_assigned']),
     ...(push === undefined ? {} : { push }),
   });
@@ -151,6 +155,7 @@ describe('integration: the notification sink', () => {
         recipientId: ada.userId,
         module: 'things',
         kind: 'thing_assigned',
+        collapsed: 0,
       });
     });
   });
@@ -343,6 +348,7 @@ describe('integration: the notification sink', () => {
       recipientId,
       module: 'things',
       kind: 'thing_assigned',
+      collapsed: 0,
     });
 
     test('tells each person once per workspace, on their own topic and no other, and counts every notice', async () => {
@@ -405,6 +411,111 @@ describe('integration: the notification sink', () => {
         written(workspaceId, 'up'),
       ]);
       expect(heard).toEqual([userTopic('up')]);
+    });
+  });
+});
+
+/** Red-team F8: one person could be given any number of unread notices, and every one of them was a push. */
+describe('integration: the unread notices of a person are bounded', () => {
+  const OTHER_KINDS: KindOwners = new Map([
+    ['thing_assigned', 'things'],
+    ['other_thing', 'zz'],
+  ]);
+
+  const collapsedOf = (kind: string): number =>
+    sampleOf(readExposition(renderMetrics(metrics)), 'purlay_inbox_collapsed_total', {
+      module: kind === 'other_thing' ? 'zz' : 'things',
+      kind,
+    }) ?? -1;
+
+  test('past the cap the oldest unread are read as history and counted, the newest stay unread, and the one told is not asked to wait', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const sink = sinkOn();
+      const overflow = 5;
+      const before = collapsedOf('thing_assigned');
+      const answers: WrittenNotice[] = [];
+      for (let i = 0; i < UNREAD_PER_MODULE_MAX + overflow; i += 1) {
+        const answer = await sink.notify(db, bob.context, noticeFor(ada.userId));
+        if (answer !== undefined) answers.push(answer);
+      }
+      const rows = await entriesOf(db, ada.userId);
+      expect(rows).toHaveLength(UNREAD_PER_MODULE_MAX + overflow);
+      const unread = rows.filter((row) => row.read_at === null);
+      expect(unread).toHaveLength(UNREAD_PER_MODULE_MAX);
+      // The rows kept unread are the newest by id; the five oldest were read, not deleted.
+      expect(rows.slice(0, UNREAD_PER_MODULE_MAX).every((row) => row.read_at === null)).toBe(true);
+      expect(rows.slice(UNREAD_PER_MODULE_MAX).every((row) => row.read_at !== null)).toBe(true);
+      expect(answers.reduce((sum, answer) => sum + answer.collapsed, 0)).toBe(overflow);
+      await sink.announce(answers);
+      expect(collapsedOf('thing_assigned') - before).toBe(overflow);
+    });
+  });
+
+  test('the cap is for one module: another module’s unread notices of the same person are not collapsed', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const zz = sinkOn(OTHER_KINDS, recordingBus, undefined, 'zz');
+      await zz.notify(db, bob.context, { ...noticeFor(ada.userId), kind: 'other_thing' });
+      for (let i = 0; i < UNREAD_PER_MODULE_MAX + 3; i += 1) {
+        await sinkOn(OTHER_KINDS).notify(db, bob.context, noticeFor(ada.userId));
+      }
+      const rows = await entriesOf(db, ada.userId);
+      expect(rows.filter((row) => row.module === 'zz' && row.read_at === null)).toHaveLength(1);
+      expect(rows.filter((row) => row.module === 'things' && row.read_at === null)).toHaveLength(
+        UNREAD_PER_MODULE_MAX,
+      );
+    });
+  });
+
+  test('the cap is for one person in one workspace: a second person and a second workspace keep theirs', async () => {
+    await withRollback(async (db) => {
+      const here = await aWorkspace(db);
+      const there = await aWorkspace(db);
+      const ada = await aMember(db, here, 'ada');
+      const bob = await aMember(db, here, 'bob');
+      const carol = await aMember(db, here, 'carol');
+      const dan = await aMember(db, there, 'dan');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: there, user_id: ada.userId, role: 'member' })
+        .execute();
+      const sink = sinkOn();
+      await sink.notify(db, dan.context, noticeFor(ada.userId));
+      for (let i = 0; i < UNREAD_PER_MODULE_MAX + 2; i += 1) {
+        await sink.notify(db, bob.context, noticeFor(ada.userId));
+      }
+      await sink.notify(db, bob.context, noticeFor(carol.userId));
+      const unreadOf = async (userId: string, workspaceId: string): Promise<number> =>
+        (await entriesOf(db, userId)).filter(
+          (row) => row.workspace_id === workspaceId && row.read_at === null,
+        ).length;
+      expect(await unreadOf(ada.userId, here)).toBe(UNREAD_PER_MODULE_MAX);
+      expect(await unreadOf(ada.userId, there)).toBe(1);
+      expect(await unreadOf(carol.userId, here)).toBe(1);
+    });
+  });
+
+  test('telling again of a subject at the cap raises that notice and collapses nothing', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const sink = sinkOn();
+      const repeated = anIssueId();
+      for (let i = 0; i < UNREAD_PER_MODULE_MAX - 1; i += 1) {
+        await sink.notify(db, bob.context, noticeFor(ada.userId));
+      }
+      await sink.notify(db, bob.context, noticeFor(ada.userId, repeated));
+      const again = await sink.notify(db, bob.context, noticeFor(ada.userId, repeated));
+      expect(again?.collapsed).toBe(0);
+      expect((await entriesOf(db, ada.userId)).filter((row) => row.read_at === null)).toHaveLength(
+        UNREAD_PER_MODULE_MAX,
+      );
     });
   });
 });

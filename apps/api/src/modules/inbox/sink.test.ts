@@ -42,6 +42,7 @@ const sinkFor = (module: string, suspended?: () => boolean): ReturnType<typeof n
     },
     log: NO_LOG,
     written: serverMetrics().inboxEntries,
+    collapsed: serverMetrics().inboxCollapsed,
     pushedKinds: new Set(),
   });
 

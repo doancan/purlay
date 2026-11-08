@@ -41,4 +41,9 @@ have it.
 - **Operations** — `bun run entitlements:apply --help` and `bun run module:new --help` print their usage and succeed; the first used to stop with a configuration error before reading its arguments (D-292, D-294)
 - **Operations** — A server that starts now joins its cluster's record within about a second instead of ten, so a restriction of a workspace's modules is not written beside a server that does not read grants and has only just started (D-292)
 
+### Security
+
+- **Inbox** — A person can no longer be flooded: the workspace find and the inbox list are rate limited per user (`429` with `Retry-After`), a person's unread notices of one module in a workspace are capped at 200 (the oldest are read as history and counted in `purlay_inbox_collapsed_total`), and their pushes of one kind are limited to three at once and then one a minute (`purlay_push_failures_total{reason="throttled"}`) (D-285, D-286)
+- **Modules** — A module's files, its start for a new workspace and its pushes now follow the workspace's grant like its routes do; retention, export, purge and erasure still cover its data (D-289)
+
 ---
