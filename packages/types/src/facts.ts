@@ -24,7 +24,7 @@ export const factOwnerProblems = (
   moduleIds: readonly string[],
 ): string[] => {
   const seen = new Set<string>();
-  return facts.flatMap(({ type, owner, absent, shape }) => {
+  return facts.flatMap(({ type, owner, absent, shape, reads }) => {
     const problems: string[] = [];
     if (seen.has(type)) problems.push(`the fact "${type}" is declared twice`);
     seen.add(type);
@@ -44,6 +44,17 @@ export const factOwnerProblems = (
     }
     if (shape !== undefined && !(Number.isInteger(shape) && shape >= FACT_SHAPE_FIRST)) {
       problems.push(`the fact "${type}" has the shape ${String(shape)}: a whole number from 1`);
+    }
+    for (const earlier of Object.keys(reads ?? {}).map(Number)) {
+      if (!(
+        Number.isInteger(earlier) &&
+        earlier >= FACT_SHAPE_FIRST &&
+        earlier < (shape ?? FACT_SHAPE_FIRST)
+      )) {
+        problems.push(
+          `the fact "${type}" reads the shape ${String(earlier)}, which is not an earlier shape than its own`,
+        );
+      }
     }
     return problems;
   });

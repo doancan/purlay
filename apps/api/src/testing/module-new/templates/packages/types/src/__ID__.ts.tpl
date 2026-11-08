@@ -20,6 +20,7 @@ export type Create__PASCAL__ItemRequest = Static<typeof Create__PASCAL__ItemRequ
 
 /**
  * The facts __ID__ publishes (`docs/MODULE-GUIDE.md` §5), joined to `FACTS` in `facts.ts` already. Declare each with
- * `defineFact` from `./fact-declaration`: `./facts` imports this file, so a value imported from it here is a cycle.
+ * `defineFact` from `./fact-declaration`: `./facts` imports this file, so a value imported from it here is a cycle. A fact that
+ * later gains a required field takes a `shape` and a `reads` for the one before it (§5, "Evolving a fact").
  */
 export const __UPPER___FACTS: readonly FactDeclaration[] = [];

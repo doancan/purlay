@@ -14080,11 +14080,19 @@ fact for each message (D-35).
    `AttemptsExhausted`, and its handler is not asked again: a fact that hangs or kills the node that runs it reaches the ceiling by
    that and is not the node's last words for ever.
 5. **The delivery** locks the claimed row in the consumer's own transaction (`FOR UPDATE SKIP LOCKED`, `state = 'pending'`) and leaves it,
-   as `gone`, if it is delivered or held. It checks the payload against the declaration again, and a payload of a shape this node knows that does not fit is `dead`
-   at once, `PayloadRefused`: it is not going to get better. A type or a shape this node does not know is never claimed, so a newer
-   node's row waits, untouched and with no attempt burned, for a node that does, and expires as any row does if none comes; a
-   rolling deploy kills no fact. A change to a payload that an older node would refuse (a new required field, a value more in an enum)
-   raises the declaration's `shape`; an optional field does not. The handler runs under a savepoint with the transaction, the fact's id and its **workspace as the row
+   as `gone`, if it is delivered or held. It checks the payload again, **against the schema of the shape the row was written in** (the row's `shape`), and
+   hands the handler the payload in the declaration's current shape. A row of the current shape is checked against `schema`; a row of an
+   earlier shape against the `schema` of the declaration's `reads[shape]` and made current by that reader's `upcast`, whose result is
+   checked against `schema` too. A payload that does not fit its own shape, a shape no reader describes, and an upgrade that throws or
+   makes what the current shape refuses are `dead` at once, `PayloadRefused`: none is going to get better. A type or a shape newer than
+   this node's is never claimed, so a newer node's row waits, untouched and with no attempt burned, for a node that does, and expires
+   as any row does if none comes. A change to a payload that an older node would refuse (a new required field, a value more in an
+   enum, a narrower bound) raises the declaration's `shape`; an optional field does not. **Shapes only grow:** the declaration that
+   raises the shape keeps a reader for every shape the last release could write, so the newer node of a rolling deploy delivers
+   the rows the older node published instead of ending them; `module-compat.test.ts` holds this against the release snapshot's
+   `facts` (each fact's shape and the shapes it reads), and a reader is dropped only by a dated exception, as a dropped type is.
+   (The first text of this item checked every row against the newest schema, which lost a fact for each row an older node had
+   published under a shape that added a required field, #1265.) The handler runs under a savepoint with the transaction, the fact's id and its **workspace as the row
    has it**, and a throw rolls the savepoint back, records the class of the error and leaves the row pending for its backoff, or
    makes it `dead` when it was the eighth attempt (the ceiling is `OUTBOX_ATTEMPTS_MAX`). A handler that returns `'skipped'` ends the row
    as `skipped`. Otherwise the row is marked `delivered` in the same transaction, outside the savepoint, so a failure of the mark
@@ -14094,7 +14102,7 @@ fact for each message (D-35).
    reads every other file of the core for it, and a module's typed handle does not hold it (D-271).
 7. **What the release holds (amends D-283 §3).** The release snapshot holds `publishes` and `consumes`: a type a module no longer
    publishes or no longer consumes is a break that needs a dated exception, since a row an older node writes waits for a handler that
-   is gone. `uses` is not held: asking a question less breaks nobody. A snapshot written before facts existed promised none. The contract
+   is gone. `uses` is not held: asking a question less breaks nobody. A snapshot written before facts existed promised none. It also holds each declared fact's `shape` and the shapes it reads (§5). The contract
    bundle's module structure gains `publishes`, `consumes` and `uses`, from the manifests; `CONTRACT_VERSION` does not move.
 
 8. **A consumer runs as a worker of its module (step 14d).** For each module that runs and consumes a type, `compose` adds one worker,
@@ -14112,7 +14120,7 @@ fact for each message (D-35).
 tried for ever. *A lease column apart from `next_attempt_at`*: the backoff is a lease already, and a second clock would have to agree
 with it. *Running the handler outside the delivery's transaction and marking after*: an effect with no mark is run twice, and a mark
 with no effect loses the fact. *Writing `dead` for every first failure of a payload that does not fit*: that one is not going to
-get better, and a retry only delays the line in the log. *Holding `uses` in the snapshot*: nobody is hurt by a question asked less.
+get better, and a retry only delays the line in the log. *Leaving rows of an earlier shape to nodes that can read them, without readers*: the node that wrote them stops when the deploy ends, so they would wait to expire; a reader is a few lines and loses nothing. *Validating every row against the newest schema*: a required field added is the very change that raises the shape, so it killed each row an older node had published (#1265). *Holding `uses` in the snapshot*: nobody is hurt by a question asked less.
 *A global ceiling per producer now*: not measured (D-283 §2). *`LISTEN`/`NOTIFY` or Redis to wake a drain*: the poll is bounded and the correctness never rested on a wake-up.
 
 **Cost of reversing.** One table of transient rows, which may be dropped once no fact is published, and a guard in `module-compat`,

@@ -4,7 +4,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
-import { FACT_HOLD_DAYS_MAX, defineFact, type FactDeclaration } from './fact-declaration';
+import {
+  FACT_HOLD_DAYS_MAX,
+  defineFact,
+  readsEarlierShape,
+  type FactDeclaration,
+} from './fact-declaration';
 import { CORE_FACTS, FACTS, factOwnerProblems } from './facts';
 import { MODULE_IDS } from './modules';
 
@@ -66,6 +71,26 @@ describe('what becomes of a fact when its consumer is not run', () => {
         `the fact "notes.a" has the shape ${String(shape)}: a whole number from 1`,
       ]);
     }
+  });
+
+  test('reads only shapes earlier than its own, and a reader refuses a payload its shape does not fit', () => {
+    const reader = readsEarlierShape(Type.Object({ id: Type.String() }), (note) => note);
+    const reading = (shape: number, earlier: number): ReturnType<typeof defineFact> =>
+      defineFact({ ...fact('notes.a', 'notes'), shape, reads: { [earlier]: reader } });
+    expect(factOwnerProblems([reading(3, 1), reading(3, 2)], ['notes'])).toEqual([
+      'the fact "notes.a" is declared twice',
+    ]);
+    for (const [shape, earlier] of [
+      [2, 2],
+      [2, 3],
+      [2, 0],
+    ] as const) {
+      expect(factOwnerProblems([reading(shape, earlier)], ['notes'])).toEqual([
+        `the fact "notes.a" reads the shape ${String(earlier)}, which is not an earlier shape than its own`,
+      ]);
+    }
+    expect(reader.upcast({ id: 'a' })).toEqual({ id: 'a' });
+    expect(() => reader.upcast({ id: 1 })).toThrow('does not fit');
   });
 
   test('is never held for no time, for longer than the table keeps it, or for part of a day', () => {

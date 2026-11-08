@@ -158,8 +158,16 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'consume-skips-schema-check',
     why: 'a payload that does not fit what the consumer expects reaches its handler, which reads fields that are not there (D-288)',
     file: 'apps/api/src/platform/outbox-drain.ts',
-    find: '      !Value.Check(handling.declaration.schema, row.payload)\n',
-    replace: '      false\n',
+    find: 'return Value.Check(declaration.schema, payload) ? { payload } : undefined;',
+    replace: 'return { payload };',
+    tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
+  },
+  {
+    id: 'consume-skips-the-check-of-an-upgrade',
+    why: 'an upgrade that makes what the current shape refuses reaches the handler, which reads fields that are not there (D-288 §5)',
+    file: 'apps/api/src/platform/outbox-drain.ts',
+    find: 'return Value.Check(declaration.schema, upgraded) ? { payload: upgraded } : undefined;',
+    replace: 'return { payload: upgraded };',
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
@@ -595,6 +603,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/module-kit/compatibility.test.ts'],
   },
   {
+    id: 'module-compat-ignores-a-shape-no-longer-read',
+    why: 'a declaration ships a new current shape without the reader of the one the last release wrote, so a rolling deploy leaves its nodes rows they refuse and kills the facts (D-288 §5)',
+    file: 'apps/api/src/platform/module-kit/compatibility.ts',
+    find: '.filter((shape) => shape !== after.shape && !after.reads.includes(shape))',
+    replace: '.filter((shape) => shape !== after.shape && shape < 0)',
+    tests: ['apps/api/src/platform/module-kit/compatibility.test.ts'],
+  },
+  {
     id: 'module-request-holds-a-slot-per-connection',
     why: 'a request that holds a transaction and reads again waits for a second slot of its own module’s share, and with a small share waits for itself (MODULES.md §7)',
     file: 'apps/api/src/platform/module-budget.ts',
@@ -721,6 +737,15 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: "      .where('state', '=', 'dead')\n",
     replace: "      .where('state', '=', 'skipped')\n",
     tests: ['apps/api/src/platform/outbox-report.integration.test.ts'],
+  },
+  {
+    id: 'outbox-delivery-checks-the-current-shape',
+    why: 'a row is validated against the newest shape of its declaration whatever shape it was written in, so a newer node kills the facts an older node published during a rolling deploy (D-288 §5)',
+    file: 'apps/api/src/platform/outbox-drain.ts',
+    find: 'readAsCurrentShape(handling.declaration, row.shape, row.payload)',
+    replace:
+      'readAsCurrentShape(handling.declaration, handling.declaration.shape ?? FACT_SHAPE_FIRST, row.payload)',
+    tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
     id: 'outbox-delivery-loses-the-correlation',

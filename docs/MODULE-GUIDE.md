@@ -82,6 +82,29 @@ in `consumes` and supplies a handler in `factConsumers` of its slot (`MODULES.md
 route it is and for no other (`platform/ports/fact-publisher.ts`). The contract is built; the delivery by the outbox is the part of D-283 §1
 that `MODULES.md` §10 says whether it has landed.
 
+**Evolving a fact.** During a rolling deploy nodes of two releases share the outbox, so a row may be read by a release that did not
+write it. Adding an optional field changes nothing. Anything an older node would refuse (a new required field, a value more in an
+enum, a narrower bound) is a new shape: set `shape: 2` and keep the old schema as a reader, which makes the old payload the new one
+before your handler sees it:
+
+```ts
+const NOTE_CREATED_V1 = Type.Object({ noteId: Type.String(), title: Type.String() });
+
+export const NOTE_CREATED = defineFact({
+  type: 'notes.created',
+  owner: 'notes',
+  absent: 'drop',
+  shape: 2,
+  schema: Type.Object({ noteId: Type.String(), title: Type.String(), folder: Type.String() }),
+  reads: { 1: readsEarlierShape(NOTE_CREATED_V1, (note) => ({ ...note, folder: 'unfiled' })) },
+});
+```
+
+A row is checked against the schema of the shape it was written in; one that fits no reader, or whose upgrade the current schema
+refuses, is dead. Your handler only ever sees the current shape. Keep a reader for every shape the last release wrote:
+`module-compat.test.ts` fails for a new shape without the reader of the one before it, and a reader is dropped only by a dated exception
+in `released-manifests.json` (D-288 §5).
+
 ## 6. Add a worker
 
 A background loop inside the API process is an entry of `workers` in `features/<id>/workers.ts` (the generated file has none): a

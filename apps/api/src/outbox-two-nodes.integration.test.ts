@@ -28,6 +28,7 @@ import {
   aWorkspaceRow,
   NOTE_CREATED,
   NOTE_CREATED_V2,
+  NOTE_FOLDER_DEFAULT,
   NOTE_PINNED,
   NOTES,
   WIKI,
@@ -168,5 +169,35 @@ describe('integration: nodes of two releases run the same consumer', () => {
       false,
     );
     expect(handledBy.newer).toHaveLength(PER_SHAPE);
+  });
+
+  test('a newer node that starts first delivers the older shape upgraded as well as its own, and kills nothing', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    const { context } = aPublishWorld(workspaceId, clock);
+    for (let n = 0; n < PER_SHAPE; n += 1) {
+      await cloned.db.transaction().execute(async (tx) => {
+        await publishFact(tx, context, NOTE_CREATED, { noteId: `v1-${String(n)}`, title: 't' });
+        await publishFact(tx, context, NOTE_CREATED_V2, {
+          noteId: `v2-${String(n)}`,
+          title: 't',
+          folder: 'f',
+        });
+      });
+    }
+    const seen: { noteId: string; folder: string }[] = [];
+    const handle: FactConsumer = (fact) => {
+      seen.push(fact.payload as { noteId: string; folder: string });
+      return Promise.resolve('done');
+    };
+    const newer = compose([notes, wikiWith(handle)], undefined, 'open', NEWER_FACTS);
+    for (let round = 0; round < 5; round += 1) await runWorkers(newer, cloned.db);
+    const states = (await rowsOf(workspaceId)).map((row) => row.state);
+    expect(states).toEqual(Array.from({ length: 2 * PER_SHAPE }, () => 'delivered'));
+    expect(seen).toHaveLength(2 * PER_SHAPE);
+    expect(
+      seen.every(
+        (note) => note.folder === (note.noteId.startsWith('v1-') ? NOTE_FOLDER_DEFAULT : 'f'),
+      ),
+    ).toBe(true);
   });
 });

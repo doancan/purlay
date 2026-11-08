@@ -4,12 +4,18 @@
  * runs it (`scripts/release-prepare.ts`); a release is the only time it is run, and it clears the exceptions.
  */
 import { writeFileSync } from 'node:fs';
+import { FACTS } from '@purlay/types';
 import { bundledModules } from '../composition';
-import { releasedFrom, type ReleasedSnapshot } from '../platform/module-kit/compatibility';
+import {
+  releasedFactFrom,
+  releasedFrom,
+  type ReleasedSnapshot,
+} from '../platform/module-kit/compatibility';
 import { RELEASED_MANIFESTS } from '../released-manifests';
 
 const snapshot: ReleasedSnapshot = {
   manifests: bundledModules.map(({ manifest }) => releasedFrom(manifest)),
+  facts: FACTS.map(releasedFactFrom).sort((a, b) => a.type.localeCompare(b.type)),
   exceptions: [],
 };
 writeFileSync(RELEASED_MANIFESTS, `${JSON.stringify(snapshot, null, 2)}\n`);
