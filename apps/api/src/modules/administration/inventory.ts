@@ -311,6 +311,7 @@ export const listServerAudit = async (
       'a.target_user_id',
       'a.target_workspace_id',
       'a.target_module',
+      'a.note',
       'a.created_at',
       'u.display_name',
     ])
@@ -336,6 +337,7 @@ export const listServerAudit = async (
     targetUserId: row.target_user_id,
     targetWorkspaceId: row.target_workspace_id,
     targetModule: row.target_module,
+    note: row.note,
     createdAt: row.created_at.toISOString(),
   }));
   return { data, nextCursor: rows.length > limit ? (data.at(-1)?.id ?? null) : null };

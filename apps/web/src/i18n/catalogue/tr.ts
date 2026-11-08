@@ -2893,6 +2893,8 @@ export const tr = {
   'admin.audit.action.server.module_granted': 'Çalışma alanına modül verildi',
   'admin.audit.action.server.module_withdrawn': 'Çalışma alanından modül geri alındı',
   'admin.audit.action.server.module_reset': 'Çalışma alanının modül izni kaldırıldı',
+  'admin.audit.action.server.module_suspended': 'Modül tüm sunucu için durduruldu',
+  'admin.audit.action.server.module_resumed': 'Modül yeniden çalışıyor',
   'admin.audit.action.server.smtp_tested': 'E-posta bağlantısı sınandı',
   'admin.audit.action.server.admission_policy_changed': 'Hesap kabul politikası değiştirildi',
   'admin.audit.action.server.identity_changed': 'Sunucu adı veya destek bilgileri değiştirildi',

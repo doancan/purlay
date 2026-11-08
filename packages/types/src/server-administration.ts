@@ -39,6 +39,8 @@ export const ServerAuditAction = Type.Union([
   Type.Literal('server.module_granted'),
   Type.Literal('server.module_withdrawn'),
   Type.Literal('server.module_reset'),
+  Type.Literal('server.module_suspended'),
+  Type.Literal('server.module_resumed'),
 ]);
 export type ServerAuditAction = Static<typeof ServerAuditAction>;
 
@@ -103,6 +105,8 @@ export const ServerWorkspaceModuleRequest = FromClient({
   validUntil: Type.Optional(Timestamp),
 });
 export type ServerWorkspaceModuleRequest = Static<typeof ServerWorkspaceModuleRequest>;
+/** The longest a reason for stopping a module may be: the table's own limit and the trail's (D-296). */
+export const SUSPENSION_REASON_MAX = 200;
 export const ServerAdminRequest = FromClient({ isServerAdmin: Type.Boolean() });
 export type ServerAdminRequest = Static<typeof ServerAdminRequest>;
 export const ServerUser = Type.Object({
@@ -175,6 +179,8 @@ export const ServerAuditEntry = Type.Object({
   targetWorkspaceId: Type.Union([Uuid, Type.Null()]),
   /** The module an entry about a grant is about (D-289); null for every other entry. */
   targetModule: Type.Union([Type.String(), Type.Null()]),
+  /** The operator's own words for why, on the one entry that carries them (`server.module_suspended`, D-296); null for every other. */
+  note: Type.Union([Type.String(), Type.Null()]),
   createdAt: Timestamp,
 });
 export const ServerAuditPage = Page(ServerAuditEntry);
@@ -189,6 +195,7 @@ export const SERVER_AUDIT_EXPORT_COLUMNS = [
   'targetUserId',
   'targetWorkspaceId',
   'targetModule',
+  'note',
 ] as const satisfies readonly (keyof ServerAuditEntry)[];
 export const ServerJob = Type.Object({
   name: Type.String(),
