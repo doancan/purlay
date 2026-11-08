@@ -111,4 +111,29 @@ describe('the fence of a feature', () => {
     expect(optionsOf(fences[3]).patterns).toHaveLength(1);
     expect(optionsOf(fences[3]).patterns[0]?.message).toContain('notes');
   });
+
+  test('may keep a feature’s code from the composition, its tests and its http folder aside', () => {
+    const realtime = { group: ['**/realtime/**'], message: 'r' };
+    const composition = { group: ['**/composition'], message: 'c' };
+    const fences = featureFences(
+      'd',
+      ['chat', 'notes'],
+      transport,
+      () => [database],
+      () => [database],
+      realtime,
+      composition,
+    );
+    // The feature's code (its first block) is kept from it, after the transport; the blocks that win for the rest are not.
+    expect(optionsOf(fences[0]).patterns.slice(0, 2)).toEqual([transport, composition]);
+    expect(optionsOf(fences[4]).patterns.slice(0, 2)).toEqual([transport, composition]);
+    for (const winning of [1, 2, 3, 5, 6, 7]) {
+      expect(optionsOf(fences[winning]).patterns).not.toContain(composition);
+    }
+  });
+
+  test('keeps a feature from nothing more when it is given no composition to keep it from', () => {
+    const [only] = featureFences('d', ['chat'], transport, () => [database]);
+    expect(optionsOf(only).patterns).toEqual([transport]);
+  });
 });

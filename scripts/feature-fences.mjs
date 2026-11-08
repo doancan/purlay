@@ -24,6 +24,10 @@ export const featureIds = (dir) =>
  * other door and the others' features all the same. Its blocks come after the feature's, tests included, so they win; its
  * tests stand up the whole application (`createApp`, the composition, a database of their own) and are kept from no transport
  * and from no path of the database, as the doors' tests are.
+ *
+ * `noComposition` is what the feature's code is kept from besides: the composition, which holds every module's slot, so a
+ * feature that imported it could open another module's (D-286). Its tests may (a block after the feature's for them, when
+ * `testPathsFor` is given, restates the fence without it), and its http folder is kept from it by `httpTransportTypes`.
  */
 export const featureFences = (
   dir,
@@ -32,10 +36,11 @@ export const featureFences = (
   pathsFor,
   testPathsFor,
   httpTransportTypes,
+  noComposition,
 ) =>
   ids.flatMap((id) => {
     const others = ids.filter((other) => other !== id);
-    const fence = (files, paths, transport = noTransportTypes) => ({
+    const fence = (files, paths, transport = noTransportTypes, kept = []) => ({
       files,
       rules: {
         'no-restricted-imports': [
@@ -43,6 +48,7 @@ export const featureFences = (
           {
             patterns: [
               ...(transport === null ? [] : [transport]),
+              ...kept,
               ...(others.length === 0
                 ? []
                 : [
@@ -58,7 +64,12 @@ export const featureFences = (
       },
     });
     return [
-      fence([`${dir}/${id}/**/*.ts`], pathsFor(id)),
+      fence(
+        [`${dir}/${id}/**/*.ts`],
+        pathsFor(id),
+        noTransportTypes,
+        noComposition === undefined ? [] : [noComposition],
+      ),
       ...(testPathsFor === undefined
         ? []
         : [fence([`${dir}/${id}/**/*.test.ts`], testPathsFor(id))]),

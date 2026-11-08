@@ -31,4 +31,5 @@ export function featureFences(
   pathsFor: (id: string) => readonly RestrictedPath[],
   testPathsFor?: (id: string) => readonly RestrictedPath[],
   httpTransportTypes?: RestrictedPattern,
+  noComposition?: RestrictedPattern,
 ): FeatureFence[];
