@@ -34,6 +34,7 @@ have it.
 ### Changed
 
 - **Operations** — A cluster whose nodes read `WORKSPACE_MODULES` differently now says so in each node's log, once and again when they agree, as it does for nodes that run different modules; the metrics table, the edition file and the command to apply it are in the operator documents (D-289, D-292). During the rolling deploy that brings this, a node of the older release logs the different set once
+- **Operations** — A module's facts are delivered by turns across workspaces: a workspace with a long backlog has one place in each batch of 20 while others have facts waiting, so one tenant can no longer delay everyone else's by hours (D-288)
 - **Notifications** — The setting for emailing you about what you missed is part of chat: on a server that does not run chat, `/api/me/missed-mail` answers like any unknown path, and where chat runs nothing is different (D-280)
 
 ### Fixed

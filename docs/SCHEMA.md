@@ -2392,8 +2392,9 @@ CREATE INDEX idx_outbox_expires ON outbox (expires_at) WHERE state = 'pending';
 CREATE INDEX idx_outbox_dead ON outbox (consumer) WHERE state = 'dead';
 -- The key's own check when a workspace's row goes.
 CREATE INDEX idx_outbox_workspace ON outbox (workspace_id);
--- What a publish counts before it writes: the facts a workspace has waiting for a consumer (0091, D-288 §10).
-CREATE INDEX idx_outbox_pending_workspace ON outbox (workspace_id, consumer) WHERE state = 'pending';
+-- What a publish counts before it writes (the facts a workspace has waiting for a consumer, D-288 §10) and a claim walks, from one
+-- workspace to the next and down each one's due times (D-288 §11). (0093; 0091 made it as (workspace_id, consumer).)
+CREATE INDEX idx_outbox_pending_by_workspace ON outbox (consumer, workspace_id, next_attempt_at) WHERE state = 'pending';
 ```
 
 ### 9.5. `server_settings`
@@ -3061,6 +3062,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0090_workspace_modules.sql  workspace_modules: which modules the operator granted one workspace, and server_audit_log.target_module (D-289)
 0091_outbox_pending_by_workspace.sql  idx_outbox_pending_workspace: what a publish counts against the per-consumer ceiling  (D-288)
 0092_suspended_modules.sql  suspended_modules: modules the administrator stopped at run time, and server_audit_log.note (D-296)
+0093_outbox_fair_claim.sql  idx_outbox_pending_by_workspace replaces it: the claim goes by turns across workspaces  (D-288)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
