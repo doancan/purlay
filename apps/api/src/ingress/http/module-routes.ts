@@ -19,6 +19,7 @@ import type { Logger } from '../../platform/logging';
 import type { LimiterFactory } from '../../realtime/rate-limiter';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import type { OnlinePresence } from '../../realtime/online';
+import type { FactPublisher } from '../../platform/ports/fact-publisher';
 import type { NotificationSink } from '../../platform/ports/notification-sink';
 import type { Atomically } from '../../platform/transactions';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
@@ -40,6 +41,11 @@ export interface ModuleRouteDependencies {
   readonly online: OnlinePresence;
   /** How a module tells a person something in the core's inbox, inside its own transaction (D-286). */
   readonly inbox: NotificationSink;
+  /**
+   * How a module tells the build a fact, inside its own transaction and as itself: the publisher is the module whose routes these
+   * are, never the caller's choice (D-283 §2). The module must list the type under `publishes`.
+   */
+  readonly publishFact: FactPublisher;
   /** The transaction boundary a write that tells the sockets runs in, so that it tells them only once committed. */
   readonly atomically: Atomically;
   /** Where a failed publish is written; the write it follows is already committed. */

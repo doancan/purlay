@@ -4,14 +4,9 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
-import {
-  CORE_FACTS,
-  FACTS,
-  FACT_HOLD_DAYS_MAX,
-  defineFact,
-  factOwnerProblems,
-  type FactDeclaration,
-} from './facts';
+import { FACT_HOLD_DAYS_MAX, defineFact, type FactDeclaration } from './fact-declaration';
+import { CORE_FACTS, FACTS, factOwnerProblems } from './facts';
+import { MODULE_IDS } from './modules';
 
 const fact = (
   type: string,
@@ -20,9 +15,9 @@ const fact = (
 ): ReturnType<typeof defineFact> => defineFact({ type, owner, absent, schema: Type.Object({}) });
 
 describe('who owns each fact type', () => {
-  test('the build carries none yet, and the core owns the ones it will', () => {
-    expect(FACTS).toEqual([...CORE_FACTS]);
-    expect(factOwnerProblems(FACTS, ['chat', 'issues'])).toEqual([]);
+  test('of the build are the core’s and its modules’, each named for an owner the build has', () => {
+    expect(FACTS.filter(({ owner }) => owner === 'core')).toEqual([...CORE_FACTS]);
+    expect(factOwnerProblems(FACTS, MODULE_IDS)).toEqual([]);
   });
 
   test('a type is named for its owner, who is the core or a module of the build', () => {

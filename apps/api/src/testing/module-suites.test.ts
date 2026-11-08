@@ -56,7 +56,7 @@ describe('which suites a cell runs', () => {
 
   test('every cell but the one that runs every module, which is the whole suite’s own run', () => {
     const cells = cellsToRun(CARRIED, moduleCells(bundledModules));
-    expect(cells).toHaveLength(2 ** CARRIED.length - 1);
+    expect(cells).toHaveLength(moduleCells(bundledModules).length - 1);
     expect(cells.map((cell) => cell.ids.length).every((count) => count < CARRIED.length)).toBe(
       true,
     );
@@ -117,7 +117,7 @@ describe('the command', () => {
           },
         ),
       ).toBe(0);
-      expect(new Set(databases).size).toBe(2 ** CARRIED.length - 1);
+      expect(new Set(databases).size).toBe(moduleCells(bundledModules).length - 1);
       for (const database of databases) {
         expect(Buffer.byteLength(database)).toBeLessThanOrEqual(63);
         expect(database === root).toBe(false);
@@ -139,7 +139,7 @@ describe('the command', () => {
       },
     );
     expect(code).toBe(0);
-    expect(ran).toHaveLength(2 ** CARRIED.length - 1);
+    expect(ran).toHaveLength(moduleCells(bundledModules).length - 1);
     expect(ran[0]?.startsWith('none:')).toBe(true);
     expect(out.filter((line) => line.startsWith('ok '))).toHaveLength(ran.length);
   });
@@ -152,7 +152,7 @@ describe('the command', () => {
       return Promise.resolve(calls === 1 ? 1 : 0);
     });
     expect(code).toBe(1);
-    expect(calls).toBe(2 ** CARRIED.length - 1);
+    expect(calls).toBe(moduleCells(bundledModules).length - 1);
     expect(err).toHaveLength(1);
     expect(err[0]).toContain('FAIL the core alone');
   });

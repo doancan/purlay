@@ -8,7 +8,20 @@
  * (a module without the partner it requires) is not a value an operator can run, so it is not a cell.
  */
 import { composeFor, type BundledModule, type Composition } from '../composition';
-import { ModuleConfigError } from '../platform/module-kit/registry';
+import { CORE_CLAIMS } from '../platform/module-kit/core-claims';
+import { ModuleConfigError, moduleRegistry } from '../platform/module-kit/registry';
+
+/**
+ * `carried` in the order a process starts them: partners first, then by id (the registry's). A module is added to a list where its
+ * author puts it and a name sorts where it sorts, so what a process reports it runs is compared with this and not with the list.
+ */
+export const inStartOrder = (carried: readonly BundledModule[]): readonly BundledModule[] =>
+  moduleRegistry(
+    carried.map((module) => module.manifest),
+    CORE_CLAIMS,
+  )
+    .resolve(undefined)
+    .flatMap((manifest) => carried.filter((module) => module.manifest === manifest));
 
 /**
  * Up to this many modules every subset is a cell (2^n of them). Beyond it the matrix would grow faster than the

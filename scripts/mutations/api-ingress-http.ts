@@ -599,6 +599,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/revocation.integration.test.ts'],
   },
   {
+    id: 'route-publishes-as-another-module',
+    why: 'a module’s route publishes a fact as chat whichever module the route is, so a fact is signed by a module that did not tell it (D-283 §2)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: 'factPublisherOf(module.manifest.id, factContext)',
+    replace: "factPublisherOf('chat', factContext)",
+    tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
+  },
+  {
     id: 'server-creators-logins-unchecked',
     why: 'a list that is not GitHub logins reaches the settings and is a server error instead of a refusal',
     file: 'apps/api/src/ingress/http/server.ts',

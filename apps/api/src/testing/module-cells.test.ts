@@ -17,11 +17,18 @@ const idsOf = (carried: readonly BundledModule[]): string[] =>
   moduleCells(carried).map((cell) => cell.ids.join('+'));
 
 describe('the cells of the module matrix', () => {
-  test('the build’s own cells are every subset of what it carries', () => {
+  test('the build’s own cells are the subsets the matrix visits that a process can start, whatever the number of modules', () => {
     const carried = bundledModules.map((module) => module.manifest.id);
-    expect(carried.length).toBeLessThanOrEqual(EXHAUSTIVE_MODULE_LIMIT);
-    expect(moduleCells(bundledModules)).toHaveLength(2 ** carried.length);
-    expect(moduleCells(bundledModules)[0]?.ids).toEqual([]);
+    const requires = new Map(
+      bundledModules.map(({ manifest }) => [manifest.id, manifest.requires]),
+    );
+    const startable = subsetsOf(carried).filter((ids) =>
+      ids.every((id) => (requires.get(id) ?? []).every((required) => ids.includes(required))),
+    );
+    const cells = moduleCells(bundledModules);
+    expect(cells.map((cell) => cell.ids)).toEqual(startable);
+    expect(cells[0]?.ids).toEqual([]);
+    expect(cells.at(-1)?.ids).toEqual(carried);
   });
 
   test('a third module adds its cells, with no list edited', () => {

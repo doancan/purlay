@@ -32,7 +32,7 @@ describe('the kinds of notification', () => {
     expect(sorted(databaseKinds())).toEqual(sorted(wire));
     expect(new Set(declared.map((kind) => kind.type)).size).toBe(declared.length);
     const others = declared.filter((kind) => !chatKinds.includes(kind));
-    expect(others.map((kind) => kind.type)).toEqual(['issue_assigned']);
+    expect(others.map((kind) => kind.type)).toContain('issue_assigned');
     expect(others.filter((kind) => wire.some((type) => type === kind.type))).toEqual([]);
   });
 

@@ -184,7 +184,7 @@ describe('the command', () => {
         { out: () => undefined, err: () => undefined },
       );
       expect(code).toBe(0);
-      expect(new Set(databases).size).toBe(2 ** BUNDLE.length);
+      expect(new Set(databases).size).toBe(moduleCells(bundledModules).length);
       for (const database of databases) {
         expect(Buffer.byteLength(database)).toBeLessThanOrEqual(63);
         expect(database === root).toBe(false);
