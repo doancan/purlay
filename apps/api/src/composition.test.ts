@@ -25,6 +25,7 @@ import { coreReserve } from './platform/module-budget';
 import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from './testing/doubles';
 import { inStartOrder, moduleCells } from './testing/module-cells';
 import { concretePath } from './testing/module-smoke';
+import { noSuspension, type Suspension } from './platform/suspended-modules';
 
 const bundle: readonly BundledModule[] = bundledModules;
 
@@ -311,6 +312,91 @@ describe('the application as its modules make it', () => {
           tables: cells[0] === undefined ? [] : tablesOf(cells[0]),
         });
       }
+    });
+  });
+
+  describe('for the modules the administrator has stopped (D-296)', () => {
+    /** A suspension a test sets by hand: the cache over the table is `suspended-modules.test.ts`'s. */
+    const stoppedBy = (
+      ...ids: string[]
+    ): { suspension: Suspension; stop: (...ids: string[]) => void } => {
+      let held: ReadonlySet<string> = new Set(ids);
+      return {
+        suspension: { ...noSuspension, current: () => held },
+        stop: (...next): void => {
+          held = new Set(next);
+        },
+      };
+    };
+    const route = (module: BundledModule): string =>
+      concretePath(module.manifest.routes?.[0] ?? '');
+
+    test('closes a stopped module’s routes, jobs, frames and events as a module that is not run is, and no other module’s', () => {
+      for (const stopped of bundle) {
+        const { suspension } = stoppedBy(stopped.manifest.id);
+        const seen = compositionFor(undefined, 'open', suspension);
+        for (const { manifest } of bundle) {
+          const closed = manifest.id === stopped.manifest.id;
+          const said = (what: string): string =>
+            `${stopped.manifest.id} stopped: ${manifest.id} ${what}`;
+          for (const path of manifest.routes ?? []) {
+            expect({ [said(path)]: seen.closed(concretePath(path)) }).toEqual({
+              [said(path)]: closed,
+            });
+          }
+          for (const job of manifest.jobs ?? []) {
+            expect({ [said(job)]: seen.closedJob(job) }).toEqual({ [said(job)]: closed });
+          }
+          for (const op of manifest.frames ?? []) {
+            expect({ [said(op)]: seen.closedFrame(op) }).toEqual({ [said(op)]: closed });
+          }
+          for (const event of manifest.events ?? []) {
+            expect({ [said(event)]: seen.closedEvent(event) }).toEqual({ [said(event)]: closed });
+          }
+        }
+        for (const op of CORE_FRAMES) expect(seen.closedFrame(op)).toBe(false);
+        for (const event of CORE_EVENTS) expect(seen.closedEvent(event)).toBe(false);
+        for (const job of CORE_JOBS) expect(seen.closedJob(job)).toBe(false);
+      }
+    });
+
+    test('keeps a stopped module’s retention jobs open: rows outlive a stop as they outlive a module that is not run', () => {
+      const { suspension } = stoppedBy('chat');
+      const seen = compositionFor(undefined, 'open', suspension);
+      expect(seen.closedJob('mail:missed')).toBe(true);
+      for (const job of chatModule.manifest.retention) expect(seen.closedJob(job)).toBe(false);
+    });
+
+    test('is asked as it is now: a module stopped after the composition was made is closed, and open again when the stop is lifted', () => {
+      const { suspension, stop } = stoppedBy();
+      const seen = compositionFor(undefined, 'open', suspension);
+      const issuesPath = route(issuesModule);
+      expect(seen.closed(issuesPath)).toBe(false);
+      stop('issues');
+      expect(seen.closed(issuesPath)).toBe(true);
+      expect(seen.effectiveModules([], new Date()).has('issues')).toBe(false);
+      stop();
+      expect(seen.closed(issuesPath)).toBe(false);
+      expect(seen.effectiveModules([], new Date()).has('issues')).toBe(true);
+    });
+
+    test('leaves the process’s own lists as they were: a stop is of the moment, not of the process', () => {
+      const { suspension } = stoppedBy('chat', 'issues');
+      const seen = compositionFor(undefined, 'open', suspension);
+      expect(seen.modules).toEqual(started);
+      expect(seen.workers.map((worker) => worker.module).sort()).toEqual(
+        compositionFor(undefined)
+          .workers.map((worker) => worker.module)
+          .sort(),
+      );
+      expect(seen.migrationSets).toEqual(compositionFor(undefined).migrationSets);
+    });
+
+    test('a stop of the whole build is the core alone, and the core’s paths are open', () => {
+      const { suspension } = stoppedBy(...bundle.map(({ manifest }) => manifest.id));
+      const seen = compositionFor(undefined, 'open', suspension);
+      expect(seen.effectiveModules([], new Date()).size).toBe(0);
+      expect(seen.closed('/api/workspaces/w1/members')).toBe(false);
     });
   });
 

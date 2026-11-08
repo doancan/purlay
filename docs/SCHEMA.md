@@ -2138,11 +2138,17 @@ CREATE TABLE server_audit_log (
     -- Which module an entry is about (`server.module_granted`, `server.module_withdrawn`, `server.module_reset`, D-289), by
     -- id; NULL for every other entry. No key: the build may not carry the module. (0090)
     target_module TEXT,
+    -- The operator's own words for why, on the one entry that carries them (`server.module_suspended`, D-296); NULL for
+    -- every other entry. (0092)
+    note          TEXT,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Added NOT VALID to a table that has rows, and validated in the next statement. (0090)
     CONSTRAINT server_audit_log_target_module_shape
         CHECK (target_module ~ '^[a-z][a-z0-9-]{0,31}$'),
+    -- (0092, as above)
+    CONSTRAINT server_audit_log_note_length
+        CHECK (char_length(note) BETWEEN 1 AND 200),
     CONSTRAINT server_audit_log_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 );
@@ -2841,6 +2847,32 @@ CREATE TABLE workspace_modules (
 CREATE INDEX idx_workspace_modules_changed_by ON workspace_modules (changed_by) WHERE changed_by IS NOT NULL;
 ```
 
+### 9.13. `suspended_modules`
+
+The modules the server's administrator has stopped at run time, for every workspace at once (D-296): one row per module, in the core's
+own table. A row is a stop and deleting it is the resume. Every node reads the table through a cache of two seconds, so a row takes a
+module out of every workspace on every node without a restart. Written only by the administrator's console and command.
+
+- **No key to a module.** `module` is text in the module id's grammar, checked and nothing more, as `workspace_modules.module` is.
+- **The reason is the operator's own words.** 1 to 200 characters, shown to the next administrator who looks; the same words are the
+  `note` of the entry on the server's trail, which is what remains once the row is gone (`server_audit_log.note`, NULL for every
+  other entry).
+- **Kept until lifted; in no export.** It is the server's operational record, not a workspace's content. A purge leaves it: it is
+  not a workspace's.
+
+```sql
+CREATE TABLE suspended_modules (
+    module       TEXT PRIMARY KEY CHECK (module ~ '^[a-z][a-z0-9-]{0,31}$'),
+    reason       TEXT NOT NULL CHECK (char_length(reason) BETWEEN 1 AND 200),
+    source       TEXT NOT NULL CHECK (char_length(source) BETWEEN 1 AND 48),
+    suspended_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    suspended_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_suspended_modules_suspended_by ON suspended_modules (suspended_by) WHERE suspended_by IS NOT NULL;
+
+```
+
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
 **Generated** by `kysely-codegen` from a database with every migration applied, and committed so
@@ -3028,6 +3060,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0089_outbox.sql  outbox: the facts one module tells another, a row for each consumer  (D-288)
 0090_workspace_modules.sql  workspace_modules: which modules the operator granted one workspace, and server_audit_log.target_module (D-289)
 0091_outbox_pending_by_workspace.sql  idx_outbox_pending_workspace: what a publish counts against the per-consumer ceiling  (D-288)
+0092_suspended_modules.sql  suspended_modules: modules the administrator stopped at run time, and server_audit_log.note (D-296)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

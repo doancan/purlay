@@ -806,6 +806,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
     // Before the handler, after the body is parsed: the body is already bounded by the
     // server (`edge.ts`), and a malformed one is a 400 whoever sends it, with no lookup.
     .onBeforeHandle(async ({ request, server, set, route }) => {
+      // The stopped modules are read again when the last read is older than the TTL (D-296): one query in two seconds, not one a request.
+      await modules.suspension.fresh();
       if (closedRoute(request)) {
         throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
       }

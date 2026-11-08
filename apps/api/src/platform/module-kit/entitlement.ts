@@ -3,7 +3,8 @@
  * lists a session is sent, the search, the inbox, the workers and the outbox all ask the same question and get the same
  * answer. No I/O and no environment, as the rest of this folder.
  *
- * The set is `closure_requires((running ∩ granted(workspace)))`. A module that declares `entitlement: 'always'` is not a
+ * The set is `closure_requires((running − suspended) ∩ granted(workspace))`. A suspended module (D-296) is one the server's
+ * administrator stopped for every workspace at once, whatever a workspace is granted, and `always` modules are not spared it. A module that declares `entitlement: 'always'` is not a
  * thing a workspace is granted (chat, in the first release of this: its sockets are not closed per workspace yet); every
  * other module is a grant. What a workspace with no row gets is the server's mode: `open` is on (a server you run yourself
  * runs everything it has), `managed` is off (a module that appears in a later release is not given to every customer unseen).
@@ -32,6 +33,8 @@ export interface EffectiveModulesInput {
   readonly mode: EntitlementMode;
   /** When the rows are read, which the rows' `validUntil` is judged against. */
   readonly now: Date;
+  /** The modules stopped for the whole server (D-296); left out, none. They leave the set, and what requires them leaves with them. */
+  readonly suspended?: ReadonlySet<string>;
 }
 
 const rowCounts = (row: EntitlementRow, now: Date): boolean =>
@@ -67,9 +70,13 @@ export const effectiveModules = ({
   rows,
   mode,
   now,
+  suspended,
 }: EffectiveModulesInput): ReadonlySet<string> => {
   const effective = new Set(
-    running.filter((candidate) => granted(candidate, rows, mode, now)).map(({ id }) => id),
+    running
+      .filter((candidate) => suspended?.has(candidate.id) !== true)
+      .filter((candidate) => granted(candidate, rows, mode, now))
+      .map(({ id }) => id),
   );
   // A module whose requirement is not in the set goes too, and what requires that goes in turn: until nothing moves.
   let dropped = true;

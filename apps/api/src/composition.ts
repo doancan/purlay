@@ -50,6 +50,7 @@ import {
 } from './platform/module-kit/permissions';
 import { CORE_OWNER, ownersOf, type Owners } from './platform/module-kit/ownership';
 import { ownsPath } from './platform/module-kit/routes';
+import { noSuspension, type Suspension } from './platform/suspended-modules';
 import type { AnyElysia } from 'elysia';
 import type { ModuleRouteDependencies } from './ingress/http/module-routes';
 import type { ModuleManifest, NotificationKindDeclaration } from './platform/module-kit/manifest';
@@ -316,6 +317,11 @@ export interface Composition {
   readonly entitlementMode: EntitlementMode;
   /** The modules a workspace may use, from the grants read for it: the modules this process runs less those it is not granted (D-289). */
   readonly effectiveModules: (rows: readonly EntitlementRow[], now: Date) => ReadonlySet<string>;
+  /**
+   * The modules the administrator stopped at run time, which every answer below leaves out as it leaves out a module that is not
+   * run, and which this process reads again within `SUSPENSION_TTL_MS` (D-296). The lists above are of the process; this is of the moment.
+   */
+  readonly suspension: Suspension;
   /** The migration sets of the modules this process runs, applied after the core's (D-250, D-86). */
   readonly migrationSets: readonly MigrationSet[];
   /** Which module each route and job belongs to, over every module the build carries: the label of the metrics and logs. */
@@ -343,6 +349,7 @@ export const compose = (
   bundled: readonly BundledModule[] = bundledModules,
   entitlementMode: EntitlementMode = 'open',
   facts: readonly FactDeclaration[] = FACTS,
+  suspension: Suspension = noSuspension,
 ): Composition => {
   const workspaceCreated = hookList<Parameters<WorkspaceCreated['run']>>();
   const userErased = hookList<Parameters<UserErased['run']>>();
@@ -382,7 +389,21 @@ export const compose = (
       rows,
       mode: entitlementMode,
       now,
+      suspended: suspension.current(),
     });
+  /** Whether a path, job, operation or event is of a module the administrator has stopped: asked of the set as it is now. */
+  const stopped = (owns: (module: BundledModule) => boolean): boolean => {
+    const set = suspension.current();
+    return set.size > 0 && modules.some((module) => set.has(module.manifest.id) && owns(module));
+  };
+  const ownsRoute = new Map(
+    modules.map((module) => [module.manifest.id, ownsPath(module.manifest.routes ?? [])]),
+  );
+  const ownsPathOfModulesNotRun = ownsPath(
+    bundled
+      .filter((module) => !modules.includes(module))
+      .flatMap((module) => module.manifest.routes ?? []),
+  );
   const deadlineOf = workerDeadlinesOf(holding.map((module) => module.manifest));
   const noticing = modules.find((module) => module.pushNotices !== undefined);
   return {
@@ -423,7 +444,15 @@ export const compose = (
     findSourcesOff: bundled
       .filter((module) => !modules.includes(module))
       .flatMap((module) => module.manifest.searchSources ?? []),
-    ports: Object.fromEntries(modules.flatMap((module) => Object.entries(module.ports ?? {}))),
+    // A getter, because a stop is of the moment: a port of a module the administrator has stopped is read as `undefined` (D-296).
+    get ports(): Readonly<Record<string, object>> {
+      const held = suspension.current();
+      return Object.fromEntries(
+        modules
+          .filter((module) => !held.has(module.manifest.id))
+          .flatMap((module) => Object.entries(module.ports ?? {})),
+      );
+    },
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     workers: modules.flatMap((module) =>
       workersOf(module, facts, effectiveOfThisProcess).map((worker) => ({
@@ -457,6 +486,7 @@ export const compose = (
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
     entitlementMode,
     effectiveModules: effectiveOfThisProcess,
+    suspension,
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),
     ),
@@ -464,15 +494,13 @@ export const compose = (
       bundled.map((module) => module.manifest),
       CORE_CLAIMS,
     ),
-    closed: ownsPath(
-      bundled
-        .filter((module) => !modules.includes(module))
-        .flatMap((module) => module.manifest.routes ?? []),
-    ),
+    closed: (path) =>
+      ownsPathOfModulesNotRun(path) ||
+      stopped((module) => ownsRoute.get(module.manifest.id)?.(path) === true),
     closedJob: (name) =>
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.jobs ?? []).includes(name),
-      ),
+      ) || stopped((module) => (module.manifest.jobs ?? []).includes(name)),
     frameHandlers: modules.reduce<FrameHandlers<RouterFrameContext>>(
       (handlers, module) => ({ ...handlers, ...module.frameHandlers }),
       {},
@@ -480,11 +508,11 @@ export const compose = (
     closedFrame: (op) =>
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.frames ?? []).includes(op),
-      ),
+      ) || stopped((module) => (module.manifest.frames ?? []).includes(op)),
     closedEvent: (event) =>
       bundled.some(
         (module) => !modules.includes(module) && (module.manifest.events ?? []).includes(event),
-      ),
+      ) || stopped((module) => (module.manifest.events ?? []).includes(event)),
   };
 };
 
@@ -498,6 +526,7 @@ export const composeFor = (
   carried: readonly BundledModule[],
   setting: string | undefined,
   entitlementMode: EntitlementMode = 'open',
+  suspension: Suspension = noSuspension,
 ): Composition => {
   const carriedRegistry = moduleRegistry(
     carried.map((module) => module.manifest),
@@ -509,13 +538,16 @@ export const composeFor = (
     inResolvedOrder(carriedRegistry.resolve(setting)),
     inResolvedOrder(carriedRegistry.resolve(undefined)),
     entitlementMode,
+    FACTS,
+    suspension,
   );
 };
 
 export const compositionFor = (
   setting: string | undefined,
   entitlementMode: EntitlementMode = 'open',
-): Composition => composeFor(bundledModules, setting, entitlementMode);
+  suspension: Suspension = noSuspension,
+): Composition => composeFor(bundledModules, setting, entitlementMode, suspension);
 
 /** What a process runs when nothing says otherwise: every module this build carries. */
 export const composition: Composition = compositionFor(undefined);

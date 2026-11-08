@@ -597,6 +597,7 @@ export interface ServerAuditLog {
   actor_user_id: string | null;
   created_at: Generated<Timestamp>;
   id: string;
+  note: string | null;
   session_id: string | null;
   target_module: string | null;
   target_user_id: string | null;
@@ -675,6 +676,14 @@ export interface SetupState {
   locked_until: Timestamp | null;
   step_reached: string | null;
   step_reached_at: Timestamp | null;
+}
+
+export interface SuspendedModules {
+  module: string;
+  reason: string;
+  source: string;
+  suspended_at: Timestamp;
+  suspended_by: string | null;
 }
 
 export interface ThreadFollows {
@@ -883,6 +892,7 @@ export interface DB {
   server_settings: ServerSettings;
   sessions: Sessions;
   setup_state: SetupState;
+  suspended_modules: SuspendedModules;
   thread_follows: ThreadFollows;
   thread_reads: ThreadReads;
   two_factors: TwoFactors;
