@@ -2,8 +2,8 @@
  * Taking facts out of the outbox and running them (`MODULES.md` §4, D-288, D-283 §2), in two steps that two nodes can run at once
  * without one fact being run by both.
  *
- * **Claim.** A short transaction takes the due rows of the (consumer, type) pairs this node has a handler for, of the shapes it
- * knows, with `FOR UPDATE SKIP LOCKED`, adds one to `attempts` and puts `next_attempt_at` out by the backoff, and commits. A row
+ * **Claim.** A short transaction picks the due rows of the (consumer, type) pairs this node has a handler for, of the shapes it
+ * knows, by turns across workspaces so that none can fill every batch (`pickFairly`), takes them with `FOR UPDATE SKIP LOCKED`, adds one to `attempts` and puts `next_attempt_at` out by the backoff, and commits. A row
  * of a type or a shape this node does not know is not touched, so a rolling deploy leaves a newer node's facts for a node that can
  * read them. The attempt is counted here and not when the handler fails, so a fact whose handler hangs or kills its node still
  * reaches the ceiling and goes `dead`; the backoff is the lease, so a node that dies after the claim leaves a row that shows again.
@@ -25,7 +25,7 @@ import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { Counter } from './metrics';
 import { atomicallyOn } from './transactions';
 
-/** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about two hours (`backoffMs`). */
+/** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about twenty minutes (`backoffMs`). */
 export const OUTBOX_ATTEMPTS_MAX = 8;
 
 export const BACKOFF_FIRST_MS = 5_000;
@@ -63,6 +63,87 @@ export interface Claim {
   readonly exhausted: readonly ClaimedFact[];
 }
 
+/** An id no row has, for a pick that found nothing: `in ()` is not SQL. */
+const NO_ROW = '00000000-0000-7000-8000-000000000000';
+
+/**
+ * How many workspaces a pick looks at for each place in the batch, so that those not granted the consumer, found once the grants are
+ * read, leave room for the rest; and how many times the pick is made again without the ones found: some four hundred such
+ * workspaces are passed over in a claim, and each round past the first costs the pick again.
+ */
+const PICK_WIDTH = 4;
+const PICK_ROUNDS_MAX = 5;
+
+interface Picked {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly consumer: string;
+  readonly rank: number;
+  readonly dueAt: Date;
+}
+
+/**
+ * The rows to claim, by turns across workspaces (D-288 §11): the `batch` workspaces whose oldest due row has waited longest, then
+ * their rows oldest first, ranked within each workspace, taken by rank and then by age. A workspace with ten thousand facts has one
+ * place in a batch while others have a fact waiting, and the whole batch when none does. Nothing is locked here; the claim does that.
+ *
+ * Workspaces are found by walking the index of the consumer's pending rows from one workspace to the next (a loose scan), so the
+ * cost is a probe for each workspace that has anything pending and not a read of every row; a window over every due row is the
+ * same answer, measured at 370 ms on 500,000 rows against 45 ms for this on 5,000 workspaces (`idx_outbox_pending_by_workspace`).
+ */
+const pickFairly = async (
+  transaction: Executor,
+  handles: readonly Handled[],
+  batch: number,
+  now: Date,
+  excluded: readonly string[],
+): Promise<Picked[]> => {
+  const consumers = [...new Set(handles.map(({ consumer }) => consumer))];
+  const picks: Picked[] = [];
+  for (const consumer of consumers) {
+    const known = sql.join(
+      handles
+        .filter((handle) => handle.consumer === consumer)
+        .map((handle) => sql`(o.type = ${handle.type} and o.shape <= ${handle.shape})`),
+      sql` or `,
+    );
+    const due = sql`o.consumer = ${consumer} and o.state = 'pending' and o.next_attempt_at <= ${now}
+      and o.expires_at > ${now} and (${known}) and o.workspace_id <> all(${excluded}::uuid[])`;
+    const { rows } = await sql<{ id: string; workspace_id: string; rank: string; due_at: Date }>`
+      with recursive spaces(workspace_id) as (
+        (select workspace_id from outbox where consumer = ${consumer} and state = 'pending' order by workspace_id limit 1)
+        union all
+        select (select o.workspace_id from outbox o where o.consumer = ${consumer} and o.state = 'pending'
+                  and o.workspace_id > spaces.workspace_id order by o.workspace_id limit 1)
+        from spaces where spaces.workspace_id is not null
+      ), chosen as (
+        select s.workspace_id, head.next_attempt_at
+        from spaces s cross join lateral (
+          select o.next_attempt_at from outbox o where ${due} and o.workspace_id = s.workspace_id
+          order by o.next_attempt_at limit 1) head
+        where s.workspace_id is not null
+        order by head.next_attempt_at limit ${batch * PICK_WIDTH}
+      )
+      select r.id, c.workspace_id, r.next_attempt_at as due_at,
+             row_number() over (partition by c.workspace_id order by r.next_attempt_at, r.id) as rank
+      from chosen c cross join lateral (
+        select o.id, o.next_attempt_at from outbox o where ${due} and o.workspace_id = c.workspace_id
+        order by o.next_attempt_at, o.id limit ${batch}) r`.execute(transaction);
+    picks.push(
+      ...rows.map((row) => ({
+        id: row.id,
+        workspaceId: row.workspace_id,
+        consumer,
+        rank: Number(row.rank),
+        dueAt: row.due_at,
+      })),
+    );
+  }
+  return picks.sort(
+    (a, b) => a.rank - b.rank || a.dueAt.getTime() - b.dueAt.getTime() || (a.id < b.id ? -1 : 1),
+  );
+};
+
 /**
  * Takes up to `batch` of the due rows this node can read for one delivery each. Two nodes calling at once take different rows.
  * `effective` is the composition's function of workspace grants (D-289): a row of a workspace that is not granted the consumer
@@ -82,46 +163,45 @@ export const claimDue = async (
   if (handles.length === 0) return { claimed: [], exhausted: [] };
   return await atomicallyOn(database)(async (transaction) => {
     const now = clock.now();
-    const due = await transaction
+    // A workspace that is not granted the consumer is left out of the pick before anything is locked, so its rows, however many and
+    // however old, hold no place in a batch; they are as they were for when it is granted.
+    const granted = new Map<string, ReadonlySet<string>>();
+    const mayUse = (workspaceId: string, consumer: string): boolean =>
+      effective === undefined || (granted.get(workspaceId)?.has(consumer) ?? false);
+    let excluded: string[] = [];
+    let picked: Picked[] = [];
+    for (let round = 0; round < PICK_ROUNDS_MAX; round += 1) {
+      picked = await pickFairly(transaction, handles, batch, now, excluded);
+      if (effective === undefined) break;
+      const unknown = [...new Set(picked.map((row) => row.workspaceId))].filter(
+        (id) => !granted.has(id),
+      );
+      const grants = await readGrants(transaction, unknown);
+      for (const id of unknown) granted.set(id, effective(grants.get(id) ?? [], now));
+      const barred = picked.filter((row) => !mayUse(row.workspaceId, row.consumer));
+      picked = picked.filter((row) => mayUse(row.workspaceId, row.consumer));
+      // Enough granted rows for a batch, or no workspace left that was not looked at: the pick is as good as it will be.
+      if (barred.length === 0 || picked.length >= batch) break;
+      excluded = [...excluded, ...new Set(barred.map((row) => row.workspaceId))];
+    }
+    picked = picked.slice(0, batch);
+    const ids = picked.map((row) => row.id);
+    const locked = await transaction
       .selectFrom('outbox')
       .select(['id', 'fact_id', 'type', 'consumer', 'attempts', 'workspace_id'])
-      .where((eb) =>
-        eb.or(
-          handles.map((handle) =>
-            eb.and([
-              eb('consumer', '=', handle.consumer),
-              eb('type', '=', handle.type),
-              eb('shape', '<=', handle.shape),
-            ]),
-          ),
-        ),
-      )
+      .where('id', 'in', ids.length === 0 ? [NO_ROW] : ids)
+      // The pick took no lock, so this takes them and asks again whether they are still due: a row another node claimed in
+      // between is leased by now and drops out here, or is held and skipped. (Its expiry and its type do not change.)
       .where('state', '=', 'pending')
       .where('next_attempt_at', '<=', now)
-      .where('expires_at', '>', now)
-      .orderBy('next_attempt_at')
-      .limit(batch)
       .forUpdate()
       .skipLocked()
       .execute();
-    const grants =
-      effective === undefined
-        ? undefined
-        : await readGrants(transaction, [...new Set(due.map((row) => row.workspace_id))]);
-    const granted = new Map<string, ReadonlySet<string>>();
-    const mayUse = (workspaceId: string, consumer: string): boolean => {
-      if (effective === undefined || grants === undefined) return true;
-      let modules = granted.get(workspaceId);
-      if (modules === undefined) {
-        modules = effective(grants.get(workspaceId) ?? [], now);
-        granted.set(workspaceId, modules);
-      }
-      return modules.has(consumer);
-    };
+    const placeOf = new Map(ids.map((id, place) => [id, place]));
+    const due = locked.sort((a, b) => (placeOf.get(a.id) ?? 0) - (placeOf.get(b.id) ?? 0));
     const claimed: ClaimedFact[] = [];
     const exhausted: ClaimedFact[] = [];
     for (const row of due) {
-      if (!mayUse(row.workspace_id, row.consumer)) continue;
       const fact = { id: row.id, factId: row.fact_id, type: row.type, consumer: row.consumer };
       const spent = row.attempts >= OUTBOX_ATTEMPTS_MAX;
       await transaction

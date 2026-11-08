@@ -14257,15 +14257,35 @@ fact for each message (D-35).
     ceiling is soft, because the count takes no lock: publishes in flight at once may pass it by their number. The count stops at
     the ceiling (`LIMIT`), so it costs at most that many index entries, and it is served by `idx_outbox_pending_workspace`
     (`0091`): on a million rows a workspace with 150,000 delivered rows of history and three pending was counted in 0.06 ms with the
-    index and 130 ms without it. Over HTTP an uncaught refusal is an `INTERNAL` `500` like any defect (a new `AppError` code would
-    move the contract, and is not worth it for a state only a flood reaches). The claim's fairness across workspaces is the next item.
+    index and 130 ms without it (0093 replaces that index with the one of §11, which counts as fast). Over HTTP an uncaught refusal is an
+    `INTERNAL` `500` like any defect (a new `AppError` code would move the contract, and is not worth it for a state only a flood
+    reaches). The claim's fairness across workspaces is the next item.
+11. **A claim goes by turns across workspaces** *(added 2026-11-08)*. The claim of §4 took the oldest due rows of the consumer, so a
+    workspace whose backlog was older than everyone's filled every batch of 20 until it was empty (ten thousand facts at ten a
+    second is a quarter of an hour; the ceiling of §10 bounds it, and this keeps even that from being a wait for the rest). It now
+    picks, in one statement and without locking: the `batch` workspaces whose oldest due row has waited longest, found by walking
+    `idx_outbox_pending_by_workspace` (`0093`, on consumer, workspace and due time) from one workspace to the next; each one's due rows
+    oldest first, up to a batch, ranked within the workspace by `row_number()`; and the first `batch` of them by rank and then by age.
+    A workspace therefore has one place in a batch while another has a fact due, a larger share when fewer are waiting, and the whole
+    batch when none is, and within a workspace the order is still oldest first. The rows picked are then taken with
+    `FOR UPDATE SKIP LOCKED` and asked again whether they are due, so two nodes claiming at once still never hold one row: one that
+    picked the same rows finds them leased or held and takes none that round, which a claim of a few milliseconds every two seconds
+    makes rare. Measured on a million pending rows over 5,000 workspaces (one with 300,000): 46 to 54 ms steady (127 ms with a cold
+    cache), where the first FIFO claim took 0.4 ms and a window `row_number() over (partition by workspace_id)` over every due row took
+    830 ms. The cost is a probe for each workspace that has anything pending for the consumer, about 10 µs each, and does not grow with
+    the depth of any one. A workspace not granted the consumer (§2) is found by asking the grants of the workspaces picked, inside the claim, and is left out
+    of the pick, which is made again without it (it looks at four workspaces for each place and makes the pick five times at most, so some four hundred such workspaces are passed over): its rows are never
+    locked and hold no place in a batch, where before 50 due rows of one workspace without the grant left every granted workspace with
+    no claim at all.
+
+**Rejected.** *Counting the attempt when the handler fails*
 
 **Rejected.** *Counting the attempt when the handler fails*: a handler that hangs or kills its node is never counted and the fact is
 tried for ever. *A lease column apart from `next_attempt_at`*: the backoff is a lease already, and a second clock would have to agree
 with it. *Running the handler outside the delivery's transaction and marking after*: an effect with no mark is run twice, and a mark
 with no effect loses the fact. *Writing `dead` for every first failure of a payload that does not fit*: that one is not going to
 get better, and a retry only delays the line in the log. *Leaving rows of an earlier shape to nodes that can read them, without readers*: the node that wrote them stops when the deploy ends, so they would wait to expire; a reader is a few lines and loses nothing. *Validating every row against the newest schema*: a required field added is the very change that raises the shape, so it killed each row an older node had published (#1265). *Holding `uses` in the snapshot*: nobody is hurt by a question asked less.
-*A global ceiling per producer now*: not measured (D-283 §2); the ceiling of §10 is per workspace and consumer because that is who is harmed. *Dropping or skipping a fact whose backlog is full*: the publisher would report a thing nobody was told, silently; the refusal ends its transaction instead. *A rate in facts a second*: it needs a window and a count shared by the nodes, and what hurts a neighbour is the depth, which one indexed count reads. *A lock to make the ceiling exact*: every publish of a workspace would queue on one row, for a limit whose job is to stop a flood, not to be a count. *`LISTEN`/`NOTIFY` or Redis to wake a drain*: the poll is bounded and the correctness never rested on a wake-up.
+*A global ceiling per producer now*: not measured (D-283 §2); the ceiling of §10 is per workspace and consumer because that is who is harmed. *Dropping or skipping a fact whose backlog is full*: the publisher would report a thing nobody was told, silently; the refusal ends its transaction instead. *A rate in facts a second*: it needs a window and a count shared by the nodes, and what hurts a neighbour is the depth, which one indexed count reads. *A window over every due row, ranked by workspace* (§11): the same answer in 830 ms on a million rows, every two seconds for every consumer of every node. *A fixed share of each batch for a workspace, then the rest oldest first*: with two heavy tenants the older one takes the whole remainder, which is the flood again. *Locking the candidate rows in the pick*: it locks every row it ranks (up to a batch for each of twenty workspaces) and writes to each, to use a twentieth of them. *A lock to make the ceiling exact*: every publish of a workspace would queue on one row, for a limit whose job is to stop a flood, not to be a count. *`LISTEN`/`NOTIFY` or Redis to wake a drain*: the poll is bounded and the correctness never rested on a wake-up.
 
 **Cost of reversing.** One table of transient rows, which may be dropped once no fact is published, and a guard in `module-compat`,
 which a dated exception lifts for a fact that is removed on purpose. The facts in flight at the moment of a drop are lost.
