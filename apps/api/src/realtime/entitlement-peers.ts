@@ -11,7 +11,7 @@
 import type { Logger } from '../platform/logging';
 import type { RedisLink } from '../platform/redis';
 import { systemTimers, type Timers } from './hub';
-import { NODE_TTL_MS } from './module-set';
+import { ANNOUNCE_RETRY_MS, NODE_TTL_MS } from './module-set';
 
 const RENEW_MS = NODE_TTL_MS / 3;
 
@@ -64,6 +64,7 @@ export const advertiseEntitlements = ({
   let stopped = false;
   let next: unknown;
   const renew = async (): Promise<void> => {
+    let advertised = true;
     try {
       await link.script(
         ADVERTISE_SCRIPT,
@@ -71,9 +72,10 @@ export const advertiseEntitlements = ({
         [nodeId, String(NODE_TTL_MS)],
       );
     } catch (error) {
+      advertised = false;
       log.debug('this node could not say that it reads workspace grants', { err: error });
     }
-    if (!stopped) next = timers.set(() => void renew(), RENEW_MS);
+    if (!stopped) next = timers.set(() => void renew(), advertised ? RENEW_MS : ANNOUNCE_RETRY_MS);
   };
   void renew();
   return {

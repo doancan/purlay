@@ -8,17 +8,32 @@ import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink, type FakeLink } from '../testing/redis';
 import type { Timers } from './hub';
-import { moduleSetOf, watchModuleSet, type ModuleSetWatch } from './module-set';
+import {
+  ANNOUNCE_RETRY_MS,
+  moduleSetOf,
+  NODE_TTL_MS,
+  watchModuleSet,
+  type ModuleSetWatch,
+} from './module-set';
 
 const names = redisNames();
 
 /** Timers that run when the test says: the renewal is a turn of the loop, not a wait. */
-const manualTimers = (): { timers: Timers; tick: () => Promise<void>; pending: () => number } => {
+const manualTimers = (): {
+  timers: Timers;
+  tick: () => Promise<void>;
+  pending: () => number;
+  /** The wait each timer was set for, in the order they were set. */
+  delays: number[];
+} => {
   const waiting = new Map<number, () => void>();
+  const delays: number[] = [];
   let id = 0;
   return {
+    delays,
     timers: {
-      set: (callback): number => {
+      set: (callback, ms): number => {
+        delays.push(ms);
         id += 1;
         waiting.set(id, callback);
         return id;
@@ -119,6 +134,23 @@ describe('nodes that run different sets', () => {
 
     expect(view.said('warn')).toHaveLength(0);
     expect(view.link.scripts).toHaveLength(2);
+  });
+
+  test('a node whose first announcement could not be made asks again soon, and settles to the renewal once it is in the record', async () => {
+    let connected = false;
+    const view = aWatch(() => {
+      if (!connected) throw new Error('redis is not connected');
+      return ['chat'];
+    });
+    await settle();
+    // A process announces itself as it starts, before its Redis connection is up: the record must not wait a third of the
+    // lapse to hear of it, or a node that is behind is not seen by a restriction for that long.
+    expect(view.clock.delays).toEqual([ANNOUNCE_RETRY_MS]);
+
+    connected = true;
+    await view.clock.tick();
+    await view.clock.tick();
+    expect(view.clock.delays).toEqual([ANNOUNCE_RETRY_MS, NODE_TTL_MS / 3, NODE_TTL_MS / 3]);
   });
 
   test('a node that stops stops asking and takes its entry out', async () => {
