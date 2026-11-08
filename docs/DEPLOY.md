@@ -225,6 +225,8 @@ A page open during the roll that meets the `404 ROUTE_NOT_FOUND` of a node witho
 That line needs `REDIS_URL`; without Redis there is one node. **Finish the roll**: a set that stays mixed is a service that
 answers differently by node. A migration that a new module brings applies when the first node of the new set starts.
 
+**Limits on what one person can be told or asked (D-285, D-286).** The workspace find is 20 requests at once then 5 a second per signed-in user, and the inbox list 60 then 10 a second; past it a request is `429` with `Retry-After`, counted in `purlay_rate_limited_total`, and with `REDIS_URL` the nodes share the buckets. A person's unread notices of one module in one workspace are capped at 200: the oldest beyond are read as history, which `purlay_inbox_collapsed_total{module,kind}` counts, so a steady rate there is a module or a person looping. A person's pushes of one kind of one module are 3 at once then one a minute on each node, and the rest are counted in `purlay_push_failures_total{reason="throttled"}`. None of the numbers is configurable; they are provisional (O-4) and live next to the code (`rate-limit.ts`, `modules/push/sender.ts`, `modules/inbox/sink.ts`).
+
 **Facts between modules (the outbox, D-288).** A module that tells another something writes a row of `outbox` in its own transaction; the
 consuming module's worker (`outbox:consume`, every two seconds, in that module's share of the pool) delivers it. Nothing in the product publishes yet,
 so the numbers below are zero until a module does. `/metrics` carries, for each module that consumes a fact: `purlay_outbox_pending` (rows waiting),

@@ -48,6 +48,20 @@ export const WRITE_BUDGET: RateBudget = SOCKET_FRAME_BUDGET;
 export const COSTLY_READ_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
 
 /**
+ * The workspace find per signed-in user: twenty at once, then five a second. One find asks every running
+ * module's search source, each with two trigram scans under a deadline, so it has a bucket of its own and is
+ * dearer than a card; a person typing gets a find for each pause, not each key. Provisional (O-4).
+ */
+export const FIND_BUDGET: RateBudget = { perSecond: 5, burst: 20 };
+
+/**
+ * Listing the inbox per signed-in user: sixty at once, then ten a second. The web reads the list again on each
+ * open of the socket and each `INBOX_UPDATED`, so a reconnecting person asks for a few; a loop asks for many.
+ * Marking read is a write and spends `WRITE_BUDGET`. Provisional (O-4).
+ */
+export const INBOX_LIST_BUDGET: RateBudget = { perSecond: 10, burst: 60 };
+
+/**
  * Calls to GitHub per workspace: a hundred at once, then one a second — under the hourly quota of the
  * workspace's one token (5,000 at the time of writing), whoever is asking. Without it one member could
  * ask for links nobody wrote and spend the token for everyone (found by review). Provisional (O-4).
@@ -157,6 +171,10 @@ const COSTLY_READS: ReadonlySet<string> = new Set([
   '/api/releases/latest',
 ]);
 
+/** The reads of a workspace that fan out or run on every reconnect, each with a bucket of its own (red-team F7). */
+const FIND_ROUTE = /^\/api\/workspaces\/[^/]+\/find$/;
+const INBOX_LIST_ROUTE = /^\/api\/workspaces\/[^/]+\/inbox$/;
+
 /** The route that makes an invitation passport, charged to `PASSPORT_BUDGET`. */
 const PASSPORT_ROUTE = '/api/invitations/passport';
 
@@ -188,6 +206,8 @@ export interface HttpBudgets {
   readonly serverAdmin?: RateBudget;
   readonly serverMetadata?: RateBudget;
   readonly nativeTokens?: RateBudget;
+  readonly find?: RateBudget;
+  readonly inbox?: RateBudget;
 }
 
 export interface HttpLimitDependencies {
@@ -240,6 +260,10 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
   const serverAdmin = limiterFor('server-admin', serverAdminBudget);
   const serverMetadataBudget = budgets.serverMetadata ?? SERVER_METADATA_BUDGET;
   const serverMetadata = limiterFor('server-metadata', serverMetadataBudget);
+  const findBudget = budgets.find ?? FIND_BUDGET;
+  const finds = limiterFor('find', findBudget);
+  const inboxBudget = budgets.inbox ?? INBOX_LIST_BUDGET;
+  const inboxLists = limiterFor('inbox-list', inboxBudget);
   const byClass = {
     auth: [auth, budgets.auth],
     setup: [limiterFor('setup', setupBudget), setupBudget],
@@ -329,6 +353,17 @@ export const httpLimits = (dependencies: HttpLimitDependencies): AdmitHttp => {
       const [bucket, budget] = costly
         ? [costlyReads, budgets.costlyReads]
         : [writes, budgets.writes];
+      return (await bucket.consume(owner.userId)) ? undefined : retryAfterSeconds(budget);
+    }
+
+    // The caller's own reads that fan out: charged to the session's person, before the membership is looked
+    // at, so a workspace that does not exist costs the same as one that does.
+    if (method === 'GET' && (FIND_ROUTE.test(pathname) || INBOX_LIST_ROUTE.test(pathname))) {
+      const owner = await sessionFromHeaders(sessions, request.headers);
+      if (owner === undefined) return undefined;
+      const [bucket, budget] = FIND_ROUTE.test(pathname)
+        ? [finds, findBudget]
+        : [inboxLists, inboxBudget];
       return (await bucket.consume(owner.userId)) ? undefined : retryAfterSeconds(budget);
     }
 

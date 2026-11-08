@@ -15,7 +15,13 @@ import { SIGN_IN_CALLBACK, messageId } from '@purlay/types';
 import { createApp } from './app';
 import { NOW, testConfig, testDependencies } from '../../testing/doubles';
 import { aSignedInUser } from '../../testing/signed-in';
-import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from './rate-limit';
+import {
+  AUTH_BUDGET,
+  COSTLY_READ_BUDGET,
+  FIND_BUDGET,
+  INBOX_LIST_BUDGET,
+  WRITE_BUDGET,
+} from './rate-limit';
 import { fixedClock } from '../../platform/clock';
 import { aUniqueSlug } from '../../testing/users';
 import { STATE_COOKIE } from '../../platform/cookies';
@@ -195,6 +201,121 @@ describe('integration: the per-user write limit', () => {
       );
       for (let i = 0; i < WRITE_BUDGET.burst + 5; i += 1) {
         const response = await post(app, 'purlay_session=nope', '/api/workspaces', {});
+        expect(response.status).toBe(401);
+      }
+    });
+  });
+});
+
+/**
+ * The workspace find fans out to every module's search source and the inbox list reads the caller's
+ * notices on each socket open: neither was charged to anybody (red-team F7). Each has a bucket per user.
+ */
+describe('integration: the reads that fan out are held to a budget per user', () => {
+  const READS = [
+    {
+      name: 'find',
+      path: (id: string): string => `/api/workspaces/${id}/find?q=abc`,
+      budget: FIND_BUDGET,
+    },
+    {
+      name: 'inbox',
+      path: (id: string): string => `/api/workspaces/${id}/inbox`,
+      budget: INBOX_LIST_BUDGET,
+    },
+  ] as const;
+
+  for (const read of READS) {
+    test(`${read.name}: the default budget refuses past its burst with Retry-After, and another user is served`, async () => {
+      await withRollback(async (db) => {
+        // No `find` or `inbox` in the budgets: the defaults are what is judged.
+        const app = createApp(
+          testDependencies({
+            database: db,
+            clock,
+            rateBudgets: {
+              auth: AUTH_BUDGET,
+              writes: WRITE_BUDGET,
+              costlyReads: COSTLY_READ_BUDGET,
+            },
+          }),
+        );
+        const reader = await aSignedInUser(db, clock, `rl-${read.name}-a`);
+        const other = await aSignedInUser(db, clock, `rl-${read.name}-b`);
+        const workspaceOf = async (cookie: string): Promise<string> => {
+          const slug = aUniqueSlug(`rl-${read.name}`);
+          const made = await post(app, cookie, '/api/workspaces', { name: slug, slug });
+          return ((await made.json()) as { id: string }).id;
+        };
+        const ours = await workspaceOf(reader.cookie);
+        const theirs = await workspaceOf(other.cookie);
+        const get = async (cookie: string, workspaceId: string): Promise<Response> =>
+          await app.handle(
+            new Request(`${ORIGIN}${read.path(workspaceId)}`, { headers: { cookie } }),
+          );
+
+        for (let i = 0; i < read.budget.burst; i += 1) {
+          expect((await get(reader.cookie, ours)).status).toBe(200);
+        }
+        const refused = await get(reader.cookie, ours);
+        expect(refused.status).toBe(429);
+        expect(refused.headers.get('retry-after')).toBe(
+          String(Math.max(1, Math.ceil(1 / read.budget.perSecond))),
+        );
+        expect(await refused.json()).toEqual({
+          error: { code: 'RATE_LIMITED', message: 'Too many requests. Slow down.' },
+        });
+        // The bucket is the person's, whatever workspace they ask about, and nobody else's.
+        expect((await get(reader.cookie, theirs)).status).toBe(429);
+        expect((await get(other.cookie, theirs)).status).toBe(200);
+        // Not the writes' bucket: sending is still allowed to the one who was refused.
+        const slug = aUniqueSlug('rl-after');
+        expect(
+          (await post(app, reader.cookie, '/api/workspaces', { name: slug, slug })).status,
+        ).toBe(201);
+      });
+    });
+  }
+
+  test('marking the inbox read is a write and is held to the writes budget', async () => {
+    await withRollback(async (db) => {
+      const app = createApp(
+        testDependencies({
+          database: db,
+          clock,
+          rateBudgets: {
+            auth: AUTH_BUDGET,
+            writes: { perSecond: 0.001, burst: 2 },
+            costlyReads: COSTLY_READ_BUDGET,
+          },
+        }),
+      );
+      const user = await aSignedInUser(db, clock, 'rl-inbox-read');
+      const slug = aUniqueSlug('rl-inbox-read');
+      const made = await post(app, user.cookie, '/api/workspaces', { name: slug, slug });
+      const id = ((await made.json()) as { id: string }).id;
+      expect(
+        (await post(app, user.cookie, `/api/workspaces/${id}/inbox/read`, { all: true })).status,
+      ).toBe(204);
+      expect(
+        (await post(app, user.cookie, `/api/workspaces/${id}/inbox/read`, { all: true })).status,
+      ).toBe(429);
+    });
+  });
+
+  test('a signed-out caller is given no bucket and is answered 401 as before', async () => {
+    await withRollback(async (db) => {
+      const app = createApp(
+        testDependencies({
+          database: db,
+          clock,
+          rateBudgets: { auth: AUTH_BUDGET, writes: WRITE_BUDGET, costlyReads: COSTLY_READ_BUDGET },
+        }),
+      );
+      for (let i = 0; i < FIND_BUDGET.burst + 5; i += 1) {
+        const response = await app.handle(
+          new Request(`${ORIGIN}/api/workspaces/00000000-0000-0000-0000-000000000000/find?q=abc`),
+        );
         expect(response.status).toBe(401);
       }
     });

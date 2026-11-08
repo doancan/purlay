@@ -125,7 +125,7 @@ describe("the server's instruments", () => {
         expect(sampleOf(page, 'purlay_rate_limited_total', { door, module })).toBe(0);
       }
     }
-    for (const reason of ['refused', 'not_taken', 'error', 'dropped']) {
+    for (const reason of ['refused', 'not_taken', 'error', 'dropped', 'throttled']) {
       for (const module of owners) {
         expect(sampleOf(page, 'purlay_push_failures_total', { reason, module })).toBe(0);
       }

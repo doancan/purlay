@@ -15,7 +15,8 @@ import {
   type Config,
 } from '../platform/config';
 import type { Dependencies } from '../ingress/http/app';
-import type { RateBudget } from '../realtime/rate-limiter';
+import { inProcessRateLimiter, type RateBudget } from '../realtime/rate-limiter';
+import { NOTICE_PUSH_BUDGET, type NoticeThrottle } from '../modules/push/sender';
 import type { Timers } from '../realtime/hub';
 import { nobodyActive } from '../platform/attention';
 import { createLogger, type Logger } from '../platform/logging';
@@ -145,6 +146,10 @@ export const aMovableClock = (start: Date = NOW): Clock & { advance: (ms: number
   };
 };
 
+/** The push sender's throttle as the server makes it, on the clock a test moves. */
+export const aNoticeThrottle = (clock: Clock): NoticeThrottle =>
+  inProcessRateLimiter(clock, NOTICE_PUSH_BUDGET);
+
 const ROOMY: RateBudget = { perSecond: 1000, burst: 100_000 };
 
 /** An outbox that keeps what it was given, so a test reads a link back out of the mail. */
@@ -256,6 +261,8 @@ const defaults = (database: Executor, config: Config): Omit<Dependencies, 'auth'
     setup: ROOMY,
     setupSecrets: ROOMY,
     nativeTokens: ROOMY,
+    find: ROOMY,
+    inbox: ROOMY,
   },
   storage: aStoreThatMustNotBeTouched(),
   // An export asked for is made by nobody, unless the test is about exports and says so.

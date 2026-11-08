@@ -13953,6 +13953,11 @@ word, in anything this workspace keeps.
    workspace (`issues/0002_issues_search.sql`, built `CONCURRENTLY` outside the migrator's transaction, as chat's are), merged under
    one order and cut to the limit, each issue once. Not one `OR`, which neither index serves (#1019). The words are at least three
    characters (`SEARCH_QUERY_MIN`) for the same reason.
+6. **The find is charged to the person who asks** (an audit of 2026-11-08, red-team F7). One find is two trigram scans for each source
+   under a deadline, and nothing but the write budget stood in front of it, which a read does not spend. `FIND_BUDGET` is a bucket of
+   its own, by signed-in user and before the membership is read, so a workspace that does not exist costs what one does: twenty at once,
+   then five a second, and a refusal is `429 RATE_LIMITED` with `Retry-After` like any. Provisional (O-4); it goes through the limiter
+   every other route uses (`limiterFor`, so a cluster's shared Redis counts it once). A person's pause in typing is one find, not a key.
 
 **What holds it.** `find.integration.test.ts` of the route, of the fan-out with a fake third module's source and of issues'
 source; the cross-tenant and channel-visibility matrices; `compose` refusing a source and a manifest that disagree; and the mutations
@@ -14054,6 +14059,24 @@ an assignee, which is written in the same transaction as the assignment.
     feature's code (not its tests) is kept from importing `composition.ts` by the lint (`feature-fences.mjs`; its `http/` folder
     already was), since the composition holds every module's slot and a feature that imported it could open another's. A
     module that is handed the wrong sink is a bug of the composition root, which is one file and read by review.
+12. **What one person can be told is bounded** (an audit of 2026-11-08, red-team F8): a member could assign sixty issues to a colleague
+    and every one was a row, a badge count and a push, bounded only by the write budget. Three bounds, none of them a refusal that
+    hides what is happening now:
+    - **Unread notices of one module for one person in one workspace are at most `UNREAD_PER_MODULE_MAX` (200).** The write that would
+      make one more reads the *oldest* unread as history in the same transaction (`read_at`, never a delete, so the sweep treats it as
+      any read one and an export of the person's own notices still holds it), and the sink answers how many (`collapsed`). It is counted
+      in `purlay_inbox_collapsed_total{module,kind}`, labels the manifests declare. Per module, so one module's flood cannot read
+      another's; per workspace, because the list and its count are. Telling again of a subject raises the row as before and collapses
+      nothing. It is a bound and not a lock: two writes at once may leave one or two above it until the next write, which `OFFSET` in
+      the unread index then clears; a serialising lock on every recipient would cost every assignment for a case a person does not meet.
+    - **A person's pushes of one kind of one module are three at once, then one a minute** (`NOTICE_PUSH_BUDGET`, the sender's own,
+      kept in the node's memory like what Deep Work holds). A push past it is dropped and counted
+      (`purlay_push_failures_total{reason="throttled"}`); the notice is in the inbox in any case. Provisional (O-4).
+    - **Listing the inbox is charged to the person** (`INBOX_LIST_BUDGET`: sixty at once, then ten a second, before the membership is
+      read), as the find is (D-285 §6). Marking read is a write and spends the write budget already.
+    *Rejected:* refusing the newest notice, which hides the assignment that is happening now behind the old ones nobody read; deleting
+    the oldest, which loses a row an export holds; a per-sender rate in the sink, which an author with several accounts walks around and
+    which is the write budget's question; coalescing the held pushes into one body, a new kind of push for a case the throttle bounds.
 
 **Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
 each module, and the first one that forgot would write a stranger a notice. *The module named by the caller in each call*: a lie
@@ -14288,6 +14311,16 @@ default, every module (D-24, D-250 rule 9).
    grant `off`, or switching a server to `managed`, is refused with `409 PEERS_BEHIND` unless every live peer advertises that it
    reads grants; the roll is finished first (`DEPLOY.md`). Rolling the release back lifts every restriction, which is safe and not
    what was sold.
+9. **The hooks that bypass the routes ask the grant too** (an audit of 2026-11-08, red-team F10). A route is guarded where the
+   membership is read; a module's reader of files (`readAttachment`), its start for a new workspace (`workspaceCreated`) and the
+   pushes of what its writes told (`pushNotices`) never pass one. `compose` wraps each of a module that is a grant
+   (`entitlement` is not `always`) in the same function of the same rows (`modules/entitlements/hooks.ts`): a file of a workspace not
+   granted the module is `ATTACHMENT_NOT_FOUND`, as a file nobody answers for is, asked after the module's own reader so a file
+   nobody may read costs what it did; a new workspace is not started by a module its guard-minted context lacks; and a push for a
+   workspace that lost the module is not sent. A module that is `always` costs no query. **Not gated, on purpose:** retention,
+   erasure, the purge and both exports, which are the data's lifecycle and apply to a module's rows whoever is granted it (§6);
+   `retention` work is the process's own and `entitlement-hooks.integration.test.ts` holds it identical to the module's. *Not built:* a push
+   held in Deep Work for an inbox notice of a module the workspace has since lost is still sent when Deep Work ends.
 
 **Rejected.** *A `modules` column on `workspaces`:* a hot table for one module's concern (D-275), and a column cannot carry an end date,
 a source or a writer. *A JSON setting on the server:* not per workspace. *Environment or file with a restart:* an edition sale is

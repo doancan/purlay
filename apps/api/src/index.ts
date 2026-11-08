@@ -36,6 +36,7 @@ import { inProcessBackplane } from './realtime/bus';
 import { bunRedisClient, connectRedis } from './platform/redis';
 import { advertiseEntitlements, peersBehind } from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
+import { inProcessRateLimiter } from './realtime/rate-limiter';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
@@ -51,7 +52,7 @@ import { migrateOnStart, untilMigrated } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
 import { inMemoryAttention } from './platform/attention';
-import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
+import { NOTICE_PUSH_BUDGET, PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
 import { moduleConnections } from './platform/module-budget';
@@ -152,6 +153,7 @@ const push =
         attention,
         notices: modules.pushNotices,
         noticeWords: modules.noticeWords,
+        noticeThrottle: inProcessRateLimiter(systemClock, NOTICE_PUSH_BUDGET),
         failures: metrics.pushFailures,
         owner: modules.pushOwner,
         // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
