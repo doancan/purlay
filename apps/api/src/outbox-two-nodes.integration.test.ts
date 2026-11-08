@@ -1,8 +1,9 @@
 /**
- * Two nodes of two releases run the same consumer's worker against one table (D-288, D-283 §2): each is a composition of its
- * own over a pool of its own, as two API processes are, and the facts are those of a fake `notes` and `wiki`. The drain's
- * tests (`platform/outbox-drain.integration.test.ts`) hold the claim and the delivery; this holds what the composition does with them
- * when a rolling deploy has an older node and a newer one at the same moment.
+ * Nodes of two releases run the same consumer's worker against one table (D-288, D-283 §2): each is a composition of its own
+ * over a pool of its own, as API processes are, and the facts are those of a fake `notes` and `wiki`. The drain's tests
+ * (`platform/outbox-drain.integration.test.ts`) hold the claim and the delivery; this holds what the composition does with them
+ * in a rolling deploy: two older nodes never run a fact twice, they leave the newer shape pending with no try spent, and the
+ * newer node takes it when it arrives.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
@@ -86,12 +87,12 @@ const runWorkers = async (
   await started.stop();
 };
 
-describe('integration: two nodes of two releases run the same consumer', () => {
+describe('integration: nodes of two releases run the same consumer', () => {
   const OLDER_FACTS = [NOTE_CREATED, NOTE_PINNED];
   const NEWER_FACTS = [NOTE_CREATED_V2, NOTE_PINNED];
   const PER_SHAPE = 25;
 
-  test('deliver every fact once, the newer shape only by the node that knows it, and the older node leaves it pending until then', async () => {
+  test('deliver every fact once, the newer shape only by the node that knows it, and an older node leaves it pending until then', async () => {
     const workspaceId = await aWorkspaceRow(cloned.db);
     const { context } = aPublishWorld(workspaceId, clock);
     for (let n = 0; n < PER_SHAPE; n += 1) {
@@ -104,23 +105,32 @@ describe('integration: two nodes of two releases run the same consumer', () => {
         });
       });
     }
-    const handledBy: Record<'older' | 'newer', string[]> = { older: [], newer: [] };
-    const node = (name: 'older' | 'newer'): ReturnType<typeof compose> => {
+    type Release = 'older' | 'newer';
+    const handledBy: Record<'older' | 'olderToo' | 'newer', string[]> = {
+      older: [],
+      olderToo: [],
+      newer: [],
+    };
+    const node = (name: keyof typeof handledBy): ReturnType<typeof compose> => {
       const handle: FactConsumer = (fact) => {
         handledBy[name].push((fact.payload as { noteId: string }).noteId);
         return Promise.resolve('done');
       };
+      const release: Release = name === 'newer' ? 'newer' : 'older';
       return compose(
         [notes, wikiWith(handle)],
         undefined,
         'open',
-        name === 'older' ? OLDER_FACTS : NEWER_FACTS,
+        release === 'older' ? OLDER_FACTS : NEWER_FACTS,
       );
     };
-    const pending = async (): Promise<number> =>
-      (await rowsOf(workspaceId)).filter((row) => row.state === 'pending').length;
+    const stateOf = async (): Promise<Record<string, number>> => {
+      const counts: Record<string, number> = {};
+      for (const row of await rowsOf(workspaceId)) counts[row.state] = (counts[row.state] ?? 0) + 1;
+      return counts;
+    };
 
-    // The newer shape is published and only the older node is running: it takes what it knows and spends no try on the rest.
+    // The newer shape is published and only an older node is running: it takes what it knows and spends no try on the rest.
     for (let round = 0; round < 3; round += 1) await runWorkers(node('older'), second);
     expect(handledBy.older).toHaveLength(PER_SHAPE);
     expect(handledBy.older.every((id) => id.startsWith('v1-'))).toBe(true);
@@ -128,26 +138,35 @@ describe('integration: two nodes of two releases run the same consumer', () => {
     expect(waiting).toHaveLength(PER_SHAPE);
     expect(waiting.every((row) => row.shape === 2 && row.attempts === 0)).toBe(true);
 
-    // Then both run at the same moment, over and over, on the rows that are left and on more of both shapes.
+    // Two older nodes run at the same moment, over and over, on more of the first shape: each fact is taken by one of them.
     for (let n = PER_SHAPE; n < 2 * PER_SHAPE; n += 1) {
       await cloned.db.transaction().execute(async (tx) => {
         await publishFact(tx, context, NOTE_CREATED, { noteId: `v1-${String(n)}`, title: 't' });
       });
     }
-    for (let round = 0; round < 10 && (await pending()) > 0; round += 1) {
-      await Promise.all([runWorkers(node('older'), second), runWorkers(node('newer'), cloned.db)]);
+    for (let round = 0; round < 10 && (await stateOf())['pending'] !== PER_SHAPE; round += 1) {
+      await Promise.all([
+        runWorkers(node('older'), second),
+        runWorkers(node('olderToo'), cloned.db),
+      ]);
     }
-    expect(await pending()).toBe(0);
+    expect(await stateOf()).toEqual({ delivered: 2 * PER_SHAPE, pending: PER_SHAPE });
 
-    const everything = [...handledBy.older, ...handledBy.newer];
+    // The newer node arrives and takes what was waiting for it, by the shape it wrote.
+    for (let round = 0; round < 3; round += 1) await runWorkers(node('newer'), cloned.db);
+    expect(await stateOf()).toEqual({ delivered: 3 * PER_SHAPE });
+
+    const everything = [...handledBy.older, ...handledBy.olderToo, ...handledBy.newer];
     const published = [
       ...Array.from({ length: 2 * PER_SHAPE }, (_, n) => `v1-${String(n)}`),
       ...Array.from({ length: PER_SHAPE }, (_, n) => `v2-${String(n)}`),
     ];
-    // Nothing twice, nothing lost, and the older node never held a fact of a shape it does not know.
+    // Nothing twice, nothing lost, and the older nodes never held a fact of a shape they do not know.
     expect(new Set(everything).size).toBe(everything.length);
     expect(everything.toSorted()).toEqual(published.toSorted());
-    expect(handledBy.older.some((id) => id.startsWith('v2-'))).toBe(false);
-    expect((await rowsOf(workspaceId)).every((row) => row.state === 'delivered')).toBe(true);
+    expect([...handledBy.older, ...handledBy.olderToo].some((id) => id.startsWith('v2-'))).toBe(
+      false,
+    );
+    expect(handledBy.newer).toHaveLength(PER_SHAPE);
   });
 });
