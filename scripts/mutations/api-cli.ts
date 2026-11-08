@@ -400,6 +400,22 @@ export const API_CLI: readonly Mutation[] = [
     tests: [RESET_TESTS],
   },
   {
+    id: 'suspension-command-sends-no-force',
+    why: 'the command cannot be told that taking the product down is meant (D-296)',
+    file: 'apps/api/src/cli/module-suspension.ts',
+    find: "            force: flag('--force'),",
+    replace: '            force: false,',
+    tests: ['apps/api/src/cli/module-suspension.integration.test.ts'],
+  },
+  {
+    id: 'suspension-command-stops-a-cluster-unasked',
+    why: 'the command stops a module in a cluster whose nodes may not read the stops, which is the restriction the console refuses (D-296)',
+    file: 'apps/api/src/cli/module-suspension.ts',
+    find: "} else if (stopping && config.REDIS_URL !== undefined && !flag('--cluster-ready')) {",
+    replace: '} else if (false) {',
+    tests: ['apps/api/src/cli/module-suspension.integration.test.ts'],
+  },
+  {
     id: 'suspension-job-run-ignores-the-stop',
     why: 'the scheduler runs the jobs of a module the administrator stopped, which act for its users (D-296)',
     file: 'apps/api/src/cli/jobs.ts',
