@@ -1481,6 +1481,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/suspended-modules.test.ts'],
   },
   {
+    id: 'suspension-cache-timer-never-stopped',
+    why: 'a node that is told to stop goes on reading the table on a timer, which keeps the process from ending and the pool from closing (D-296)',
+    file: 'apps/api/src/platform/suspended-modules.ts',
+    find: '      if (timer !== undefined) clearInterval(timer);\n',
+    replace: '',
+    tests: ['apps/api/src/platform/suspended-modules.test.ts'],
+  },
+  {
     id: 'swap-letters-of-a-replaced-relay-not-in-the-ledger',
     why: 'a letter posted to a relay the settings replaced is not waited for at shutdown, and is cut off with the process',
     file: MAIL,
