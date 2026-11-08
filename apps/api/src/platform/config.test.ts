@@ -269,6 +269,19 @@ describe('loading configuration', () => {
     }
   });
 
+  /** The facts one workspace may have waiting for a consumer: zero would refuse every publish, a fraction has no count. */
+  test('OUTBOX_PENDING_MAX is a whole number from one to a million, 5000 unless set', () => {
+    expect(loadConfig(valid).OUTBOX_PENDING_MAX).toBe(5000);
+    expect(loadConfig({ ...valid, OUTBOX_PENDING_MAX: '' }).OUTBOX_PENDING_MAX).toBe(5000);
+    expect(loadConfig({ ...valid, OUTBOX_PENDING_MAX: '1' }).OUTBOX_PENDING_MAX).toBe(1);
+    expect(loadConfig({ ...valid, OUTBOX_PENDING_MAX: '1000000' }).OUTBOX_PENDING_MAX).toBe(
+      1_000_000,
+    );
+    for (const OUTBOX_PENDING_MAX of ['0', '-1', '1000001', '1.5', '5k', 'many']) {
+      expect(refusal({ ...valid, OUTBOX_PENDING_MAX })).toContain('OUTBOX_PENDING_MAX');
+    }
+  });
+
   /**
    * How many sockets replay at once. Zero would let no replay run and every subscription would wait out its deadline;
    * a fraction has no count. Both are refused where they are read.

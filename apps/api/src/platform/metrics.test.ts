@@ -173,12 +173,14 @@ describe("the server's instruments", () => {
       'purlay_outbox_delivered_total',
       'purlay_outbox_failures_total',
       'purlay_outbox_dropped_total',
+      'purlay_outbox_refused_total',
     ]) {
       expect(page.types.get(name)).toBe('counter');
       expect(page.samples.filter((sample) => sample.name === name)).toHaveLength(facts.length);
       for (const labels of facts) expect(sampleOf(page, name, labels)).toBe(0);
     }
     metrics.outboxDropped.inc({ module: 'wiki', fact: 'notes.pinned' });
+    metrics.outboxRefused.inc({ module: 'wiki', fact: 'notes.pinned' });
     expect(
       sampleOf(readExposition(renderMetrics(metrics)), 'purlay_outbox_dropped_total', {
         module: 'wiki',

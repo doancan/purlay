@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Operations** — One workspace can no longer bury the others' facts between modules: a workspace may have `OUTBOX_PENDING_MAX` (5000 unless set) facts waiting for one module, a publish past it is refused with `FactBacklogFull` and ends the publisher's transaction, and `purlay_outbox_refused_total` counts it by module and fact (D-288)
+
 ### Changed
 
 - **Operations** — A cluster whose nodes read `WORKSPACE_MODULES` differently now says so in each node's log, once and again when they agree, as it does for nodes that run different modules; the metrics table, the edition file and the command to apply it are in the operator documents (D-289, D-292). During the rolling deploy that brings this, a node of the older release logs the different set once
