@@ -28,8 +28,8 @@ import { atomicallyOn } from './transactions';
 /** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about two hours (`backoffMs`). */
 export const OUTBOX_ATTEMPTS_MAX = 8;
 
-const BACKOFF_FIRST_MS = 5_000;
-const BACKOFF_MAX_MS = 3_600_000;
+export const BACKOFF_FIRST_MS = 5_000;
+export const BACKOFF_MAX_MS = 3_600_000;
 const JITTER = 0.2;
 /** What `last_error` says of a row that ran out of tries without a handler's word: a node that died on it, or a deadline. */
 const EXHAUSTED = 'AttemptsExhausted';

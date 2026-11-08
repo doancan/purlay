@@ -234,10 +234,10 @@ const degradesProblems = ({ id, optional, degrades }: ModuleManifest): string[] 
 };
 
 /** The longest a deadline may be: past it a proxy in front of the process has given up, and a client with it. */
-const DEADLINE_MS_MAX = 120_000;
+export const DEADLINE_MS_MAX = 120_000;
 
 /** The longest a job's deadline may be: a day's jobs are an hour apart at the closest, and the scheduler runs them one after another. */
-const JOB_DEADLINE_MS_MAX = 3_600_000;
+export const JOB_DEADLINE_MS_MAX = 3_600_000;
 
 /** The longest a worker's deadline may be: the longest interval a worker may have (`WORKER_INTERVAL_MS_MAX`). */
 const WORKER_DEADLINE_MS_MAX = 3_600_000;
