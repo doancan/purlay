@@ -4,7 +4,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { Type } from '@sinclair/typebox';
-import { defineFact, messageId } from '@purlay/types';
+import { defineFact, messageId, readsEarlierShape } from '@purlay/types';
 import {
   effectiveModules,
   type EntitlementMode,
@@ -26,6 +26,9 @@ export const NOTE_CREATED = defineFact({
   }),
 });
 
+/** The folder a note written before folders had is put in. */
+export const NOTE_FOLDER_DEFAULT = 'unfiled';
+
 export const NOTE_PINNED = defineFact({
   type: 'notes.pinned',
   owner: 'notes',
@@ -33,7 +36,7 @@ export const NOTE_PINNED = defineFact({
   schema: Type.Object({ noteId: Type.String({ maxLength: 36 }) }),
 });
 
-/** `notes.created` as a newer release writes it: one more required field, which an older node's declaration refuses. */
+/** `notes.created` as a newer release writes it: one more required field, which an older node's declaration refuses, and the reader of the shape before it. */
 export const NOTE_CREATED_V2 = defineFact({
   type: 'notes.created',
   owner: 'notes',
@@ -44,6 +47,9 @@ export const NOTE_CREATED_V2 = defineFact({
     title: Type.String({ maxLength: 9000 }),
     folder: Type.String({ maxLength: 64 }),
   }),
+  reads: {
+    1: readsEarlierShape(NOTE_CREATED.schema, (note) => ({ ...note, folder: NOTE_FOLDER_DEFAULT })),
+  },
 });
 
 const base = {

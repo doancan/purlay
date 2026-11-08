@@ -158,6 +158,31 @@ const errorClass = (error: unknown): string => {
   return text.slice(0, ERROR_MAX_CHARS);
 };
 
+/**
+ * A row's payload in the declaration's current shape (D-288 §5): checked against the schema of the shape the row was written in
+ * and, when that is an earlier one, upgraded by its reader. `undefined` is a payload that is not going to get better: it does not
+ * fit its own shape, no reader describes that shape, or the upgrade throws or makes something the current shape refuses.
+ */
+const readAsCurrentShape = (
+  declaration: FactDeclaration,
+  shape: number,
+  payload: unknown,
+): { readonly payload: unknown } | undefined => {
+  if (shape === (declaration.shape ?? FACT_SHAPE_FIRST)) {
+    return Value.Check(declaration.schema, payload) ? { payload } : undefined;
+  }
+  const reader = declaration.reads?.[shape];
+  if (reader === undefined || !Value.Check(reader.schema, payload)) return undefined;
+  let upgraded: unknown;
+  try {
+    upgraded = reader.upcast(payload);
+  } catch {
+    // The same row would throw again, and the line of its death says which fact; the payload is never quoted.
+    return undefined;
+  }
+  return Value.Check(declaration.schema, upgraded) ? { payload: upgraded } : undefined;
+};
+
 /** Delivers one claimed row in the consumer's transaction, and says what came of it. A row whose handler threw is left for its backoff. */
 export const deliver = async (
   database: Executor,
@@ -197,14 +222,10 @@ export const deliver = async (
         .execute();
       return state;
     };
-    // Checked again here: a payload of a shape this node knows that does not fit it is never going to. (A shape it does not know
-    // is not claimed, so it is not here.)
-    if (
-      row.shape > (handling.declaration.shape ?? FACT_SHAPE_FIRST) ||
-      !Value.Check(handling.declaration.schema, row.payload)
-    ) {
-      return await finish('dead', 'PayloadRefused');
-    }
+    // Checked again here, against the shape the row was written in: a rolling deploy leaves a newer node rows an older one
+    // published, which only an earlier shape's schema fits. (A shape it does not know is not claimed, so it is not here.)
+    const read = readAsCurrentShape(handling.declaration, row.shape, row.payload);
+    if (read === undefined) return await finish('dead', 'PayloadRefused');
     await sql`savepoint fact_handler`.execute(transaction);
     let result: Awaited<ReturnType<FactConsumer>>;
     try {
@@ -223,7 +244,7 @@ export const deliver = async (
               factId: claimed.factId,
               workspaceId: row.workspace_id,
               correlationId,
-              payload: row.payload,
+              payload: read.payload,
             },
             transaction,
           ),

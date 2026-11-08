@@ -18,7 +18,7 @@ import {
   type Outbox,
   type Selectable,
 } from '@purlay/db';
-import { defineFact } from '@purlay/types';
+import { defineFact, readsEarlierShape, type FactDeclaration } from '@purlay/types';
 import { aMovableClock, aRecordingLogger, NOW } from '../testing/doubles';
 import {
   aGrant,
@@ -26,6 +26,7 @@ import {
   aWorkspaceRow,
   NOTE_CREATED,
   NOTE_CREATED_V2,
+  NOTE_FOLDER_DEFAULT,
   NOTE_PINNED,
   theGrants,
 } from '../testing/facts';
@@ -114,11 +115,14 @@ const deliverAll = async (
   claimed: readonly ClaimedFact[],
   handle: FactConsumer,
   clock = aMovableClock(NOW),
+  delivering: FactDeclaration = declaration,
 ): Promise<string[]> => {
   const { log } = aRecordingLogger();
   const outcomes: string[] = [];
   for (const one of claimed) {
-    outcomes.push(await deliver(database, one, { declaration, handle }, { clock, log }));
+    outcomes.push(
+      await deliver(database, one, { declaration: delivering, handle }, { clock, log }),
+    );
   }
   return outcomes;
 };
@@ -567,6 +571,60 @@ describe('integration: two nodes on two versions share one table (a rolling depl
     expect(await deliver(cloned.db, one, { declaration: broken, handle }, { clock, log })).toBe(
       'dead',
     );
+  });
+  test('the newer node reads a row the older one published in the shape before, and hands the handler the payload upgraded to its own', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await publish(workspaceId, clock, 'old-shape', 'kept');
+    const { claimed } = await claimDue(second, { handles: newer, batch: BATCH, clock });
+    expect(claimed).toHaveLength(1);
+    const payloads: unknown[] = [];
+    const handle: FactConsumer = (fact) => {
+      payloads.push(fact.payload);
+      return Promise.resolve('done');
+    };
+    expect(await deliverAll(second, claimed, handle, clock, NOTE_CREATED_V2)).toEqual([
+      'delivered',
+    ]);
+    expect(payloads).toEqual([{ noteId: 'old-shape', title: 'kept', folder: NOTE_FOLDER_DEFAULT }]);
+    expect((await rowOf(workspaceId))[0]).toMatchObject({ state: 'delivered', shape: 1 });
+  });
+
+  test('a row of an earlier shape that no reader describes, one that does not fit its own shape and an upgrade that breaks are dead, and the handler is not asked', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    const withReaders = (
+      reads: NonNullable<typeof NOTE_CREATED_V2.reads>,
+    ): typeof NOTE_CREATED_V2 => defineFact({ ...NOTE_CREATED_V2, reads });
+    const unreadable = withReaders({});
+    const wrongOutput = withReaders({ 1: readsEarlierShape(NOTE_CREATED.schema, (note) => note) });
+    const throwing = withReaders({
+      1: readsEarlierShape(NOTE_CREATED.schema, () => {
+        throw new Error('cannot upgrade');
+      }),
+    });
+    const strict = withReaders({
+      1: readsEarlierShape(
+        Type.Object({ noteId: Type.String(), colour: Type.String() }),
+        (note) => ({
+          ...note,
+          title: '',
+          folder: 'f',
+        }),
+      ),
+    });
+    for (const declaration of [unreadable, wrongOutput, throwing, strict]) {
+      await publish(workspaceId, clock);
+      const { claimed } = await claimDue(second, { handles: newer, batch: BATCH, clock });
+      let asked = false;
+      const handle: FactConsumer = () => {
+        asked = true;
+        return Promise.resolve('done');
+      };
+      expect(await deliverAll(second, claimed, handle, clock, declaration)).toEqual(['dead']);
+      expect(asked).toBe(false);
+      await sql`delete from outbox`.execute(cloned.db);
+    }
   });
 });
 
