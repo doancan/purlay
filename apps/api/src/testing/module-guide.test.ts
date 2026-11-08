@@ -60,6 +60,13 @@ describe('the module guide', () => {
     expect(guide).not.toMatch(/marks as built or not|already closed when it is off/);
   });
 
+  test('points at the glossary that says what its words mean', () => {
+    expect(guide).toContain('`MODULES.md` §12');
+    expect(readFileSync(join(ROOT, 'docs/MODULES.md'), 'utf8')).toMatch(
+      /^## 12\. Glossary[^]*\*\*module, feature, package\.\*\*/m,
+    );
+  });
+
   test('is the length of a guide, and is listed among the documents', () => {
     expect(guide.split('\n').length).toBeLessThanOrEqual(250);
     expect(readFileSync(join(ROOT, 'docs/OVERVIEW.md'), 'utf8')).toContain('MODULE-GUIDE.md');

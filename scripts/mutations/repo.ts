@@ -107,6 +107,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/production-compose.integration.test.ts'],
   },
   {
+    id: 'config-metrics-table-forgets-a-family',
+    why: 'the operator’s table of metric families omits one, so the series that says notices stopped arriving is learned of from the code',
+    file: 'docs/CONFIG.md',
+    find: '| `purlay_inbox_entries_total` |',
+    replace: '| `purlay_inbox_entries` |',
+    tests: ['apps/api/src/metrics-docs.test.ts'],
+  },
+  {
     id: 'docs-backup-cron-line-names-the-flat-layout',
     why: 'the documented nightly line looks for scripts/backup.sh in the deployment root, which a deploy replaced with releases/<commit>, and it fails only in a log nobody reads',
     file: 'docs/CONFIG.md',
@@ -121,6 +129,14 @@ export const REPO: readonly Mutation[] = [
     find: 'FROM oven/bun:1.4.4-distroless@',
     replace: 'FROM oven/bun:1.4.3-distroless@',
     tests: ['scripts/environment.test.ts'],
+  },
+  {
+    id: 'module-manifest-section-forgets-a-field',
+    why: 'the manifest section of MODULES.md says nothing of a slot of a bundled module, so an author learns of `noticeWords` from the type alone and a slot can ship undocumented',
+    file: 'docs/MODULES.md',
+    find: '`noticeWords` (what a push says',
+    replace: 'the notice words (what a push says',
+    tests: ['apps/api/src/manifest-docs.test.ts'],
   },
   {
     id: 'module-section-loses-its-removal-threshold',

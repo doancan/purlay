@@ -32,8 +32,20 @@ const settle = async (): Promise<void> => {
 
 describe('integration: the nodes that read workspace grants', () => {
   test('a node of the module set that does not say so is behind, until it does, and again when it leaves', async () => {
-    const older = watchModuleSet({ link, nodeId: 'older', set: moduleSetOf(['chat']), log });
-    const newer = watchModuleSet({ link, nodeId: 'newer', set: moduleSetOf(['chat']), log });
+    const older = watchModuleSet({
+      link,
+      nodeId: 'older',
+      set: moduleSetOf(['chat']),
+      mode: 'open',
+      log,
+    });
+    const newer = watchModuleSet({
+      link,
+      nodeId: 'newer',
+      set: moduleSetOf(['chat']),
+      mode: 'open',
+      log,
+    });
     await settle();
     expect(await peersBehind(link)).toBe(2);
 

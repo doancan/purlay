@@ -657,6 +657,33 @@ which is slow. The API's request line and its `request failed` line carry `modul
 job's lines carry it for every job. The values are the module ids the build spells, never anything a caller sent.
 With several API nodes each is its own target; Prometheus adds them up.
 
+**The families.** Every family the API serves, with its labels (`apps/api/src/metrics-docs.test.ts` fails for one this table lacks).
+Every `module` label value is a module id the build spells, `core`, or `none`, never anything a caller sent. A counter has a series
+for every value it can take from the start, at zero, so a rate over it misses nothing.
+
+| Family | Labels | What it says | Watch for |
+|---|---|---|---|
+| `purlay_process_uptime_seconds` | | seconds since this process started | a drop is a restart |
+| `purlay_process_resident_memory_bytes` | | memory the process holds, as Bun reports it | growth without load |
+| `purlay_websocket_connections` | | WebSocket connections open on this process | a fall to zero on a node that had people |
+| `purlay_http_request_duration_seconds` | `method`, `route`, `status`, `module` | requests answered, as a histogram; `_count` is the number | `status` of `5xx` by `module`; a slow p95 by `module` |
+| `purlay_rate_limited_total` | `door`, `module` | requests and socket frames refused for the rate, by the door they came through | a sustained rate for one `module` |
+| `purlay_push_failures_total` | `reason`, `module` | Web Push deliveries that did not reach their push service | a rise for one `reason` |
+| `purlay_mail_failures_total` | `module` | letters the mail relay did not accept, by the module that sent them | any rise: mail is not arriving |
+| `purlay_modules_info` | `module` | `1` for each module the process runs | `count by (module)` differing between nodes outside a rolling deploy |
+| `purlay_entitlement_refusals_total` | `module` | requests answered as a path nobody has because the workspace is not granted the module that owns the route (D-289) | a sudden rise: a client, or an edition file, that disagrees with the grants (see *Workspaces and modules* in `DEPLOY.md`) |
+| `purlay_inbox_entries_total` | `module`, `kind` | notices modules wrote to the core's inbox and committed | a module whose count stops while people use it |
+| `purlay_worker_failures_total` | `module`, `worker` | iterations of a module's background loop that threw or ran past their deadline | a rate above zero for one `worker` |
+| `purlay_outbox_pending` | `module` | facts waiting for the module that consumes them (the same on every node) | growth that does not come back down |
+| `purlay_outbox_oldest_age_seconds` | `module` | seconds the oldest fact waiting for a module has waited, `0` where none waits | a value that keeps rising: the consumer is not running anywhere |
+| `purlay_outbox_dead` | `module` | facts given up on after their tries, kept thirty days | above zero: look at them |
+| `purlay_outbox_delivered_total` | `module`, `fact` | facts delivered to a module by its worker | |
+| `purlay_outbox_failures_total` | `module`, `fact` | deliveries that threw or were given up on | a rate above zero for one `fact` |
+| `purlay_outbox_dropped_total` | `module`, `fact` | facts not written because their consumer is not run by the publishing process and the fact says to drop them | |
+| `purlay_jobs_status_readable` | | `1` when the scheduled jobs' record could be read for this scrape, `0` when not (the rest of the job families are then absent) | `0` |
+| `purlay_job_last_success_timestamp_seconds` | `job`, `module` | when each scheduled job last succeeded; absent for one that never has | `time() - …` above 172800 (two days) |
+| `purlay_job_consecutive_failures` | `job`, `module` | how many times a job has failed since it last succeeded | above zero |
+
 **Every container's log is bounded**: five files of 50 MB each per service, so the server's disk is
 never filled by its own logs. For the API that is weeks of a team's requests; the stretch `bun run
 report:frames` needs (O-4) is exported with `docker compose … logs api` before it rolls over.

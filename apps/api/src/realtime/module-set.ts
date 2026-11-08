@@ -1,5 +1,6 @@
 /**
- * Which modules each node of a cluster runs, and a line in the log when they are not the same (D-250).
+ * Which modules each node of a cluster runs, and how it reads workspace grants (`WORKSPACE_MODULES`), and a line in the log when
+ * they are not the same (D-250, D-289).
  *
  * Every node of a cluster runs one `MODULES` set (`CONFIG.md`), but a rolling deploy that changes it has
  * nodes of two sets for as long as it takes. So a mismatch is **said, never acted on**: the node keeps
@@ -15,6 +16,7 @@
  * of the rest, on Redis's clock.
  */
 import type { Logger } from '../platform/logging';
+import type { EntitlementMode } from '../platform/module-kit/entitlement';
 import type { RedisLink } from '../platform/redis';
 import { systemTimers, type Timers } from './hub';
 
@@ -57,10 +59,24 @@ export interface ModuleSetWatch {
   readonly stop: () => Promise<void>;
 }
 
+/**
+ * What a node announces: its set and its `WORKSPACE_MODULES`, as `set|mode`. A node of an earlier release announces the set alone,
+ * which is the same set and no word about the mode.
+ */
+const wordOf = (set: string, mode: EntitlementMode): string => `${set}|${mode}`;
+const parts = (word: string): { set: string; mode: string | undefined } => {
+  const at = word.indexOf('|');
+  return at === -1
+    ? { set: word, mode: undefined }
+    : { set: word.slice(0, at), mode: word.slice(at + 1) };
+};
+
 export interface ModuleSetOptions {
   readonly link: RedisLink;
   readonly nodeId: string;
   readonly set: string;
+  /** `WORKSPACE_MODULES`: a node on `open` serves a module no grant names, a node on `managed` does not, so nodes of a cluster must agree. */
+  readonly mode: EntitlementMode;
   readonly log: Logger;
   readonly timers?: Timers;
 }
@@ -69,10 +85,13 @@ export const watchModuleSet = ({
   link,
   nodeId,
   set,
+  mode,
   log,
   timers = systemTimers,
 }: ModuleSetOptions): ModuleSetWatch => {
+  const word = wordOf(set, mode);
   let mismatched = false;
+  let disagreed = false;
   let stopped = false;
   let next: unknown;
 
@@ -82,20 +101,34 @@ export const watchModuleSet = ({
       const answer = await link.script(
         ANNOUNCE_SCRIPT,
         [link.names.moduleSet],
-        [nodeId, set, String(NODE_TTL_MS)],
+        [nodeId, word, String(NODE_TTL_MS)],
       );
       if (!Array.isArray(answer)) throw new Error('the module-set script answered something else');
-      const others = (answer as unknown[]).filter((one) => one !== set);
-      if (others.length > 0 && !mismatched) {
+      const others = (answer as string[]).filter((one) => one !== word).map(parts);
+      const otherSets = others.filter((one) => one.set !== set).map((one) => one.set);
+      const otherModes = others.flatMap((one) =>
+        one.mode === undefined || one.mode === mode ? [] : [one.mode],
+      );
+      if (otherSets.length > 0 && !mismatched) {
         log.warn(
           'the nodes of this cluster do not run the same modules; serving on, as in a rolling deploy',
-          { thisNode: set, otherNodes: others, see: 'CONFIG.md, MODULES' },
+          { thisNode: set, otherNodes: otherSets, see: 'CONFIG.md, MODULES' },
         );
       }
-      if (others.length === 0 && mismatched) {
+      if (otherSets.length === 0 && mismatched) {
         log.info('the nodes of this cluster run the same modules again', { set });
       }
-      mismatched = others.length > 0;
+      mismatched = otherSets.length > 0;
+      if (otherModes.length > 0 && !disagreed) {
+        log.warn(
+          'the nodes of this cluster do not agree on WORKSPACE_MODULES; a module withheld from a workspace is served on the nodes that read it as open',
+          { thisNode: mode, otherNodes: otherModes, see: 'CONFIG.md, WORKSPACE_MODULES' },
+        );
+      }
+      if (otherModes.length === 0 && disagreed) {
+        log.info('the nodes of this cluster agree on WORKSPACE_MODULES again', { mode });
+      }
+      disagreed = otherModes.length > 0;
       return true;
     } catch (error) {
       // Redis being away is the link's to say; a node that cannot compare has nothing to warn of.
