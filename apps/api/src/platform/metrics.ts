@@ -18,6 +18,13 @@ import {
   type Sample,
 } from './exposition';
 import { CORE_OWNER, NO_OWNER } from './module-kit/ownership';
+import { OUTBOX_ATTEMPTS_MAX } from './outbox-drain';
+
+/** The gauge of open sockets: the application registers it once it has its sockets, so the catalogue needs the words from here. */
+export const WEBSOCKET_CONNECTIONS = {
+  name: 'purlay_websocket_connections',
+  help: 'WebSocket connections open on this process.',
+} as const;
 
 /** The values of a series' labels, one per name the family declared. */
 type LabelValues<L extends string> = Readonly<Record<L, string>>;
@@ -47,6 +54,8 @@ export interface MetricsRegistry {
   readonly gauge: (name: string, help: string, read: () => number) => void;
   /** Every family, in the order declared, as it stands now. */
   readonly families: () => readonly MetricFamily[];
+  /** The label names each counter and histogram declared, by metric name: what a series can be told apart by. */
+  readonly declaredLabels: () => ReadonlyMap<string, readonly string[]>;
 }
 
 interface Series {
@@ -77,7 +86,7 @@ const labelsOf = (
 
 export const createMetricsRegistry = (): MetricsRegistry => {
   const collectors: (() => MetricFamily)[] = [];
-  const declared = new Set<string>();
+  const declared = new Map<string, readonly string[]>();
 
   const declare = (name: string, labelNames: readonly string[]): void => {
     if (!isMetricName(name)) throw new Error(`not a metric name: ${name}`);
@@ -85,7 +94,7 @@ export const createMetricsRegistry = (): MetricsRegistry => {
     if (invalid.length > 0) throw new Error(`${name}: not a label name: ${invalid.join(', ')}`);
     // Two families of one name would be one Prometheus refuses to read: refused here, at start.
     if (declared.has(name)) throw new Error(`a metric is declared twice: ${name}`);
-    declared.add(name);
+    declared.set(name, labelNames);
   };
 
   return {
@@ -179,6 +188,7 @@ export const createMetricsRegistry = (): MetricsRegistry => {
     },
 
     families: () => collectors.map((collect) => collect()),
+    declaredLabels: () => declared,
   };
 };
 
@@ -322,7 +332,7 @@ export const serverMetrics = (
   );
   const outboxFailures = registry.counter(
     'purlay_outbox_failures_total',
-    'Deliveries of a fact that threw or were given up on, by the consuming module and the fact type; a fact that fails eight times is also dead (`purlay_outbox_dead`).',
+    `Deliveries of a fact that threw or were given up on, by the consuming module and the fact type; a fact that fails ${String(OUTBOX_ATTEMPTS_MAX)} times is also dead (\`purlay_outbox_dead\`).`,
     ['module', 'fact'],
   );
   const outboxDropped = registry.counter(

@@ -509,6 +509,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/features/issues/http/budget.integration.test.ts'],
   },
   {
+    id: 'metrics-registry-forgets-its-labels',
+    why: 'the catalogue lists a family without the labels its series carry',
+    file: 'apps/api/src/platform/metrics.ts',
+    find: '    declared.set(name, labelNames);\n',
+    replace: '    declared.set(name, []);\n',
+    tests: ['apps/api/src/docs-sync.test.ts'],
+  },
+  {
     id: 'metrics-token-not-secret',
     why: 'a METRICS_TOKEN that is refused at start is printed in the refusal, so the log holds the key to the metrics page (D-221)',
     file: 'apps/api/src/platform/config.ts',

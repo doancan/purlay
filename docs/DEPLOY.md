@@ -346,6 +346,36 @@ agree on WORKSPACE_MODULES` once in its log, and again when they agree; it serve
 
 **Not supported.** Third-party modules: a module is first-party code in this repository, and loading one from elsewhere is not supported.
 
+**Every metric `/metrics` carries**, written from the code (`bun run docs:sync`; `metric-catalogue.test.ts` fails a metric the code has and this table lacks, and a document or an alert rule that names one the code does not have):
+
+<!-- generated:metrics (bun run docs:sync) -->
+| Metric | Type | Labels | What it counts |
+| --- | --- | --- | --- |
+| `purlay_process_uptime_seconds` | gauge | — | Seconds since this process started. |
+| `purlay_process_resident_memory_bytes` | gauge | — | Memory this process holds, in bytes, as Bun reports it: the resident set on Linux, the physical footprint on macOS, which leaves out pages freed but not yet handed back and so reads below ps. |
+| `purlay_http_request_duration_seconds` | histogram | `method`, `route`, `status`, `module` | HTTP requests answered by this process, by method, route as registered, status class and the module that owns the route (`core`, a module id, or `none`); _count is the number of requests. |
+| `purlay_rate_limited_total` | counter | `door`, `module` | Requests and socket frames refused for the rate, by the door they came through and the module that owns the route or the frame’s operation (`core`, a module id, or `none` for a frame that names no operation). |
+| `purlay_push_failures_total` | counter | `reason`, `module` | Web Push deliveries that did not reach their push service, by reason and the module whose notice it was (`core`, or a module id). |
+| `purlay_mail_failures_total` | counter | `module` | Letters the mail relay did not accept, by the module that sent them (`core`, or a module id). |
+| `purlay_worker_failures_total` | counter | `module`, `worker` | Iterations of a module’s background loops that threw or ran past their deadline, by the module and the worker (both named by a manifest and a slot, never by a caller). |
+| `purlay_inbox_entries_total` | counter | `module`, `kind` | Notices modules wrote to the core’s inbox and committed, by the module and the kind of notice (both named by a manifest, never by a caller). |
+| `purlay_inbox_collapsed_total` | counter | `module`, `kind` | Older unread notices read as history because a person had too many unread of one module in one workspace, by the module and the kind of the notice that made them (both named by a manifest, never by a caller). A steady rate is a module or a person looping. |
+| `purlay_entitlement_refusals_total` | counter | `module` | Requests turned away as a path nobody has because the workspace is not granted the module that owns the route (D-289), by that module (named by a manifest, never by a caller). A sudden rise is a client or an edition file that disagrees with the grants. |
+| `purlay_outbox_delivered_total` | counter | `module`, `fact` | Facts delivered to a module by its outbox worker, by the consuming module and the fact type (both named by manifests, never by a caller). |
+| `purlay_outbox_failures_total` | counter | `module`, `fact` | Deliveries of a fact that threw or were given up on, by the consuming module and the fact type; a fact that fails 8 times is also dead (`purlay_outbox_dead`). |
+| `purlay_outbox_dropped_total` | counter | `module`, `fact` | Facts not written because their consumer is not run by the publishing process and the fact says to drop them, by the consuming module and the fact type. |
+| `purlay_outbox_refused_total` | counter | `module`, `fact` | Facts not published because the workspace already had the most a consumer may have waiting (`OUTBOX_PENDING_MAX`), by the consuming module and the fact type; the publisher’s transaction ended with the refusal. A rise is a consumer that is behind or a module publishing in a loop. |
+| `purlay_websocket_connections` | gauge | — | WebSocket connections open on this process. |
+| `purlay_modules_info` | gauge | `module` | The modules this process runs, one series of value 1 each. |
+| `purlay_module_suspended` | gauge | `module` | Whether the administrator has stopped the module at run time (1) or not (0), for each module this process runs. |
+| `purlay_jobs_status_readable` | gauge | — | Whether the scheduled jobs’ record could be read for this scrape (1) or not (0). |
+| `purlay_job_last_success_timestamp_seconds` | gauge | `job`, `module` | When each scheduled job last succeeded, in seconds since the epoch; absent for one that never has. |
+| `purlay_job_consecutive_failures` | gauge | `job`, `module` | How many times each scheduled job has failed since it last succeeded. |
+| `purlay_outbox_pending` | gauge | `module` | Facts waiting to be delivered to a module, by the module that consumes them; the same on every node of a cluster. |
+| `purlay_outbox_oldest_age_seconds` | gauge | `module` | Seconds the oldest fact waiting for a module has waited, 0 where none waits. |
+| `purlay_outbox_dead` | gauge | `module` | Facts given up on after their tries, kept 30 days to be looked at, by the module that was to consume them. |
+<!-- /generated:metrics -->
+
 ## Sizing an upgrade that backfills
 
 A migration file runs in one transaction, and the locks it takes are held until it commits. `chat/0001`

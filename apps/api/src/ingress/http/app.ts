@@ -190,6 +190,7 @@ import {
   moduleSuspendedFamily,
   modulesInfoFamily,
   serverMetrics,
+  WEBSOCKET_CONNECTIONS,
   type ServerMetrics,
 } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
@@ -528,8 +529,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
     closedEvent: modules.closedEvent,
   });
   metrics.registry.gauge(
-    'purlay_websocket_connections',
-    'WebSocket connections open on this process.',
+    WEBSOCKET_CONNECTIONS.name,
+    WEBSOCKET_CONNECTIONS.help,
     () => sockets.held().connections,
   );
   // The jobs run in the scheduler's container: their record is read from the database per scrape.

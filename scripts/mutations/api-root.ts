@@ -625,6 +625,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/module-upgrade.test.ts'],
   },
   {
+    id: 'metric-catalogue-passes-a-name-the-code-lacks',
+    why: 'a document or alert rule that names a metric the code no longer has is reported as fine',
+    file: 'apps/api/src/testing/metric-catalogue.ts',
+    find: '.filter((word) => !accepted(word));',
+    replace: '.filter(() => false);',
+    tests: ['apps/api/src/metric-catalogue.test.ts'],
+  },
+  {
     id: 'module-cells-without-the-full-set',
     why: 'the matrix of the lifecycle tests leaves out the cell that runs every module, the one an operator runs by default (D-250)',
     file: 'apps/api/src/testing/module-cells.ts',
