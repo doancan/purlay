@@ -366,7 +366,7 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'inbox-series-not-started-at-zero',
     why: 'a rate over the notices a module writes misses its first one, because the series appears only with it (D-286)',
     file: 'apps/api/src/platform/metrics.ts',
-    find: '  for (const { module, kind } of notices) inboxEntries.inc({ module, kind }, 0);\n',
+    find: '    inboxEntries.inc({ module, kind }, 0);\n',
     replace: '',
     tests: ['apps/api/src/platform/metrics.test.ts'],
   },

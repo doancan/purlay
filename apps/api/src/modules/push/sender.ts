@@ -21,6 +21,8 @@
  *   `HELD_CHECK_MS`; it goes once they are out of it, unless they read it meanwhile, and is dropped and counted after
  *   `HELD_PUSH_MAX_MS`, which is how long the device would keep it anyway. A restart forgets what waits; the notice is in the
  *   inbox. A person in front of the page is not told, now or later, as for a message.
+ * - **A loop cannot spam a device:** the pushes of one person for one kind of one module are held to `NOTICE_PUSH_BUDGET`; the
+ *   rest are dropped and counted (`throttled`), and the notice is in the inbox.
  * - **Detached, bounded and fair:** the write's caller does not wait. At most `POSTS_AT_ONCE` are in
  *   flight on the node and `POSTS_PER_PERSON` for any one person, so one person's slow or hostile
  *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, a push is dropped and
@@ -58,6 +60,13 @@ const PUSH_TTL_SECONDS = 24 * 60 * 60;
 const FLUSH_BOUND_MS = 3_000;
 /** How long a push held by Deep Work or quiet hours waits: as long as a push service keeps it for a device that is off. */
 export const HELD_PUSH_MAX_MS = PUSH_TTL_SECONDS * 1_000;
+/**
+ * Pushes of a module's notices one person is told of one kind: three at once, then one a minute (red-team F8). A person
+ * assigned a handful of things in a minute is told of each; a loop that assigns a thousand is told of three, and the rest
+ * are in the inbox, where they are bounded as well (`UNREAD_PER_MODULE_MAX`). Kept in this process, as what is held is, so
+ * each node of a cluster counts its own. Provisional (O-4).
+ */
+export const NOTICE_PUSH_BUDGET = { perSecond: 1 / 60, burst: 3 } as const;
 /** How often what is held is asked again whether the person is still in Deep Work or their quiet hours. */
 const HELD_CHECK_MS = 60_000;
 
@@ -78,6 +87,11 @@ export interface PushSender {
   readonly flush: (boundMs?: number) => Promise<void>;
 }
 
+/** Whether one more push of a kind may go to a person: a token bucket of `NOTICE_PUSH_BUDGET`, made where the server is composed. */
+export interface NoticeThrottle {
+  readonly consume: (key: string) => Promise<boolean>;
+}
+
 export interface PushSenderDependencies {
   readonly database: Executor;
   readonly clock: Clock;
@@ -92,6 +106,8 @@ export interface PushSenderDependencies {
   readonly attention: Attention;
   /** What the write told, from whoever owns the writes: chat's notifications, where the server is composed (D-250). */
   readonly notices: PushNotices;
+  /** Held to `NOTICE_PUSH_BUDGET` for each person, module and kind of notice (red-team F8). */
+  readonly noticeThrottle: NoticeThrottle;
   /** What a module's notice in the inbox is said as, from the modules that declare the kinds (D-286 §9). */
   readonly noticeWords: NoticeWords;
   /** Where a push that did not reach its service is counted, by why (D-221); absent, it is not. */
@@ -499,9 +515,19 @@ export const createPushSender = async (
     },
     toldInbox: (notices): void => {
       if (notices.length === 0) return;
-      follow(route(notices.map((notice) => notice.entryId)), 'finding devices for inbox notices', {
-        entries: notices.length,
-      });
+      follow(
+        (async (): Promise<void> => {
+          const toTell: string[] = [];
+          for (const notice of notices) {
+            const key = `${notice.recipientId}:${notice.module}:${notice.kind}`;
+            if (await dependencies.noticeThrottle.consume(key)) toTell.push(notice.entryId);
+            else failed('throttled', 1, notice.module);
+          }
+          if (toTell.length > 0) await route(toTell);
+        })(),
+        'finding devices for inbox notices',
+        { entries: notices.length },
+      );
     },
     releaseHeld,
     flush: async (boundMs = FLUSH_BOUND_MS): Promise<void> => {

@@ -195,9 +195,15 @@ export const HTTP_DURATION_BUCKETS: readonly number[] = [
 type RateDoor = 'http' | 'socket';
 
 /** Why a push did not reach its service (`modules/push/sender.ts`). */
-export type PushFailure = 'refused' | 'not_taken' | 'error' | 'dropped';
+export type PushFailure = 'refused' | 'not_taken' | 'error' | 'dropped' | 'throttled';
 
-const PUSH_FAILURES: readonly PushFailure[] = ['refused', 'not_taken', 'error', 'dropped'];
+const PUSH_FAILURES: readonly PushFailure[] = [
+  'refused',
+  'not_taken',
+  'error',
+  'dropped',
+  'throttled',
+];
 const RATE_DOORS: readonly RateDoor[] = ['http', 'socket'];
 
 /** What the process itself is, read when asked: the real process unless a test hands its own. */
@@ -220,6 +226,7 @@ export interface ServerMetrics {
   readonly mailFailures: Counter<'module'>;
   readonly workerFailures: Counter<'module' | 'worker'>;
   readonly inboxEntries: Counter<'module' | 'kind'>;
+  readonly inboxCollapsed: Counter<'module' | 'kind'>;
   readonly entitlementRefusals: Counter<'module'>;
   readonly outboxDelivered: Counter<'module' | 'fact'>;
   readonly outboxFailures: Counter<'module' | 'fact'>;
@@ -298,6 +305,11 @@ export const serverMetrics = (
     'Notices modules wrote to the core’s inbox and committed, by the module and the kind of notice (both named by a manifest, never by a caller).',
     ['module', 'kind'],
   );
+  const inboxCollapsed = registry.counter(
+    'purlay_inbox_collapsed_total',
+    'Older unread notices read as history because a person had too many unread of one module in one workspace, by the module and the kind of the notice that made them (both named by a manifest, never by a caller). A steady rate is a module or a person looping.',
+    ['module', 'kind'],
+  );
   const entitlementRefusals = registry.counter(
     'purlay_entitlement_refusals_total',
     'Requests turned away as a path nobody has because the workspace is not granted the module that owns the route (D-289), by that module (named by a manifest, never by a caller). A sudden rise is a client or an edition file that disagrees with the grants.',
@@ -335,7 +347,10 @@ export const serverMetrics = (
   for (const module of owners) mailFailures.inc({ module }, 0);
   for (const module of modules) entitlementRefusals.inc({ module }, 0);
   for (const { module, name } of workers) workerFailures.inc({ module, worker: name }, 0);
-  for (const { module, kind } of notices) inboxEntries.inc({ module, kind }, 0);
+  for (const { module, kind } of notices) {
+    inboxEntries.inc({ module, kind }, 0);
+    inboxCollapsed.inc({ module, kind }, 0);
+  }
   for (const { module, fact } of facts) {
     outboxDelivered.inc({ module, fact }, 0);
     outboxFailures.inc({ module, fact }, 0);
@@ -350,6 +365,7 @@ export const serverMetrics = (
     mailFailures,
     workerFailures,
     inboxEntries,
+    inboxCollapsed,
     entitlementRefusals,
     outboxDelivered,
     outboxFailures,

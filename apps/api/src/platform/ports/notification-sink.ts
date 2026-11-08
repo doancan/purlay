@@ -27,6 +27,8 @@ export interface WrittenNotice {
   readonly recipientId: string;
   readonly module: string;
   readonly kind: string;
+  /** How many older unread notices of the person's, of this module, the write read as history to keep them within the cap (0 almost always). */
+  readonly collapsed: number;
 }
 
 export interface NotificationSink {
@@ -35,7 +37,8 @@ export interface NotificationSink {
    * anyone else it writes nothing and answers `undefined`. A kind the calling module does not declare in its own
    * manifest, whether no module declares it or another does, is refused with an error: it is a mistake of the module, not of
    * the person. Telling the same person of the same subject again, while the first is
-   * unread, raises that one rather than adding another.
+   * unread, raises that one rather than adding another. A person's unread notices of one module in one workspace are bounded
+   * (`UNREAD_PER_MODULE_MAX`): past it the oldest are read as history and counted in `collapsed`, so a loop cannot flood a list.
    */
   readonly notify: (
     transaction: Transaction,

@@ -17,13 +17,18 @@ import { NO_LOG, type EventBus } from '../../platform/events';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import type { WrittenNotice } from '../../platform/ports/notification-sink';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
-import { aDatabaseThatMustNotBeTouched, aRecordingLogger, NOW } from '../../testing/doubles';
+import {
+  aDatabaseThatMustNotBeTouched,
+  aNoticeThrottle,
+  aRecordingLogger,
+  NOW,
+} from '../../testing/doubles';
 import { aBrowser, aPushService, KEYS } from '../../testing/push-service';
 import { aSession } from '../../testing/signed-in';
 import { aUniqueSlug, aUserRow } from '../../testing/users';
 import { notificationSink } from '../inbox/sink';
 import type { NoticeWords } from './notices';
-import { createPushSender, HELD_PUSH_MAX_MS } from './sender';
+import { createPushSender, HELD_PUSH_MAX_MS, NOTICE_PUSH_BUDGET } from './sender';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -93,6 +98,8 @@ const aWorld = async (db: Transaction): Promise<World> => {
     log: NO_LOG,
     written: serverMetrics(undefined, ['things'], [], [{ module: 'things', kind: KIND }])
       .inboxEntries,
+    collapsed: serverMetrics(undefined, ['things'], [], [{ module: 'things', kind: KIND }])
+      .inboxCollapsed,
     pushedKinds: new Set([KIND]),
   });
   const context = await requireWorkspaceMembership(db, bob, workspaceId);
@@ -155,6 +162,7 @@ const senderOn = async (
     attention: over.attention ?? nobodyActive,
     notices: { of: () => Promise.resolve([]) },
     noticeWords: words,
+    noticeThrottle: aNoticeThrottle(world.clock),
     post,
     ...(over.metrics === undefined ? {} : { failures: over.metrics.pushFailures, owner: 'chat' }),
   });
@@ -284,6 +292,43 @@ describe('integration: a device is told of a module’s notice', () => {
       expect(recording.lines.map((line) => line['msg'])).toContain(
         'push not sent: no words for the kind',
       );
+    });
+  });
+});
+
+describe('integration: a loop of notices cannot spam a person’s devices', () => {
+  test('past the burst the pushes of one person and kind are dropped and counted, and another person is told', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const carol = (await aUserRow(db, 'carol')).userId;
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: world.workspaceId, user_id: carol, role: 'member' })
+        .execute();
+      await subscribe(db, world.clock, world.ada, await aBrowser());
+      await subscribe(db, world.clock, carol, await aBrowser());
+      const metrics = serverMetrics(undefined, ['things'], [], []);
+      const service = aPushService();
+      const sender = await senderOn(db, world, service.post, { metrics });
+      const extra = 4;
+      for (let i = 0; i < NOTICE_PUSH_BUDGET.burst + extra; i += 1) {
+        sender.toldInbox([await world.write(world.ada)]);
+      }
+      sender.toldInbox([await world.write(carol)]);
+      await sender.flush(10_000);
+      const to = (user: string): number =>
+        service.sent.filter((push) => push.url === `https://push.example.com/send/${user}`).length;
+      expect(to(world.ada)).toBe(NOTICE_PUSH_BUDGET.burst);
+      expect(to(carol)).toBe(1);
+      expect(failuresOf(metrics)).toEqual({ throttled: extra });
+
+      // The notices are in the inbox in any case; a minute on, the person is told of the next one.
+      world.clock.to(
+        new Date(world.clock.now().getTime() + (1 / NOTICE_PUSH_BUDGET.perSecond) * 1000),
+      );
+      sender.toldInbox([await world.write(world.ada)]);
+      await sender.flush(10_000);
+      expect(to(world.ada)).toBe(NOTICE_PUSH_BUDGET.burst + 1);
     });
   });
 });
@@ -461,6 +506,7 @@ describe('integration: a push that cannot be looked up', () => {
           recipientId: crypto.randomUUID(),
           module: 'things',
           kind: KIND,
+          collapsed: 0,
         },
       ]);
     }).not.toThrow();
