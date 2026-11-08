@@ -656,6 +656,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: CLIENT_TESTS,
   },
   {
+    id: 'suspension-request-does-not-reread-the-stop',
+    why: 'a node believes a stop only when something else reads the table, so a quiet node serves a stopped module for as long as it likes (D-296)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '      await modules.suspension.fresh();\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
+  },
+  {
     id: 'swap-request-not-pinned',
     why: 'a request reads whichever instance is current at each use, so a change of the settings mid-request serves its second half by the new instance (D-179 §4)',
     file: APP,
