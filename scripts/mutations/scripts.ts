@@ -323,6 +323,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/check-pull-request.test.ts'],
   },
   {
+    id: 'feature-fences-skip-bypass-patterns',
+    why: 'the fence of a feature leaves out the patterns for the ways round it, so a relative climb into packages/ is lint-clean (the red-team review, D-250)',
+    file: 'scripts/feature-fences.mjs',
+    find: '              ...everywhere,\n',
+    replace: '',
+    tests: ['scripts/feature-fences.test.ts'],
+  },
+  {
     id: 'featured-has-no-limit',
     why: 'a release that features ten things is accepted, and Featured becomes the list it was meant to sit above',
     file: 'scripts/changelog.ts',

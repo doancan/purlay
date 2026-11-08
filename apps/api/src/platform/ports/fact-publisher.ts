@@ -10,7 +10,7 @@ import type { Static } from '@sinclair/typebox';
 import type { Transaction } from '@purlay/db';
 import type { FactDeclaration } from '@purlay/types';
 import { publishFact, type FactPublishContext } from '../outbox';
-import type { WorkspaceContext } from '../tenancy';
+import { assertMinted, type WorkspaceContext } from '../tenancy';
 
 export type FactPublisher = <Fact extends FactDeclaration>(
   transaction: Transaction,
@@ -24,6 +24,12 @@ type SharedFactContext = Omit<FactPublishContext, 'workspaceId' | 'producer'>;
 
 export const factPublisherOf =
   (producer: string, shared: SharedFactContext): FactPublisher =>
-  async (transaction, { workspaceId }, fact, payload) => {
-    await publishFact(transaction, { ...shared, workspaceId, producer }, fact, payload);
+  async (transaction, context, fact, payload) => {
+    assertMinted(context);
+    await publishFact(
+      transaction,
+      { ...shared, workspaceId: context.workspaceId, producer },
+      fact,
+      payload,
+    );
   };

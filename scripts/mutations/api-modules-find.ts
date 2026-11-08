@@ -58,4 +58,12 @@ export const API_MODULES_FIND: readonly Mutation[] = [
     replace: '            module,\n',
     tests: ['apps/api/src/modules/find/find.integration.test.ts'],
   },
+  {
+    id: 'find-trusts-any-context',
+    why: 'the find answers for a copy of a context aimed at another workspace (the red-team review, D-285)',
+    file: 'apps/api/src/modules/find/find.ts',
+    find: '  assertMinted(context);\n  // A module the workspace',
+    replace: '  // A module the workspace',
+    tests: ['apps/api/src/modules/find/find.integration.test.ts'],
+  },
 ];

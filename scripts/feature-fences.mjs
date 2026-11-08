@@ -25,6 +25,9 @@ export const featureIds = (dir) =>
  * tests stand up the whole application (`createApp`, the composition, a database of their own) and are kept from no transport
  * and from no path of the database, as the doors' tests are.
  *
+ * `everywhere` is a list of patterns every file of a feature is kept from, tests and the http folder included: the ways round
+ * the fences by a path (a relative climb into `packages/`, the module loader).
+ *
  * `noComposition` is what the feature's code is kept from besides: the composition, which holds every module's slot, so a
  * feature that imported it could open another module's (D-286). Its tests may (a block after the feature's for them, when
  * `testPathsFor` is given, restates the fence without it), and its http folder is kept from it by `httpTransportTypes`.
@@ -37,6 +40,7 @@ export const featureFences = (
   testPathsFor,
   httpTransportTypes,
   noComposition,
+  everywhere = [],
 ) =>
   ids.flatMap((id) => {
     const others = ids.filter((other) => other !== id);
@@ -49,6 +53,7 @@ export const featureFences = (
             patterns: [
               ...(transport === null ? [] : [transport]),
               ...kept,
+              ...everywhere,
               ...(others.length === 0
                 ? []
                 : [

@@ -20,7 +20,7 @@ until the new files are added. `bun test apps/api/src/testing/scaffold-leftovers
 until none is left, and `bun run check:docs` and `bun run verify` finish the check. `module:new --help` prints the usage.
 
 Flags: `--requires a,b` for modules it cannot start without, `--optional c,d` for modules it uses when they run. An id is
-lowercase letters, digits and hyphens, at most 32, and not a path the core owns. With `DATABASE_URL` set (the database named in
+lowercase letters, digits and hyphens, at most 32, and not a name the core owns (a route segment, `core`, `none`, `all`, a core service or a core table: `RESERVED_MODULE_IDS`). With `DATABASE_URL` set (the database named in
 `.env.test` will do) it also regenerates `packages/db/src/schema.ts` from a throwaway clone; without it, run `bun run db:check`
 against a database (it migrates a throwaway clone, rewrites the file and exits 1 because the file changed: commit it). A second `module:new`
 is the same as the first, however many modules there are; a second run of the same id says the module exists and changes nothing; a file it

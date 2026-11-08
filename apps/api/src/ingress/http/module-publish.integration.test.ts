@@ -17,7 +17,7 @@ import { issuesRoutes } from '../../features/issues/http/routes';
 import { issuesModule } from '../../features/issues/module';
 import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
 import { testDependencies } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
@@ -52,6 +52,18 @@ const publishing = (
     return { published: true };
   });
 
+/** A route that publishes with a copy of its context aimed at another workspace: the spread type-checks. */
+const forging = (context: ModuleRouteDependencies): AnyElysia =>
+  new Elysia().post(`${ISSUES_PATH}/forged`, async ({ request, params }) => {
+    const { userId } = await requireSession(context.auth, request);
+    const tenancy = await requireWorkspaceMembership(context.database, userId, params.workspaceId);
+    const forged: WorkspaceContext = { ...tenancy, workspaceId: crypto.randomUUID() };
+    await atomicallyOn(context.database)(async (transaction) => {
+      await context.publishFact(transaction, forged, ISSUE_TOLD, { note: 'hello' });
+    });
+    return { published: true };
+  });
+
 const publisher: BundledModule = {
   ...issuesModule,
   manifest: { ...issuesModule.manifest, publishes: ['issues.told'] },
@@ -59,7 +71,8 @@ const publisher: BundledModule = {
     new Elysia()
       .use(issuesRoutes(context))
       .use(publishing(context, 'told', ISSUE_TOLD))
-      .use(publishing(context, 'stolen', CHAT_TOLD)),
+      .use(publishing(context, 'stolen', CHAT_TOLD))
+      .use(forging(context)),
 };
 const consumer: BundledModule = {
   ...chatModule,
@@ -111,6 +124,14 @@ describe('integration: a route publishes a fact', () => {
       const { post, workspaceId } = await fixture(db);
       expect((await post('told')).status).toBe(200);
       expect(await rowsOf(db, workspaceId)).toEqual(['issues>chat issues.told']);
+    });
+  });
+
+  test('and is refused when its context is a copy aimed at another workspace, leaving no row', async () => {
+    await withRollback(async (db) => {
+      const { post, workspaceId } = await fixture(db);
+      expect((await post('forged')).status).toBe(500);
+      expect(await rowsOf(db, workspaceId)).toEqual([]);
     });
   });
 

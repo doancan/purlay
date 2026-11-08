@@ -202,6 +202,82 @@ const VIOLATIONS: readonly Violation[] = [
       "import { sql } from '@purlay/db';\n\nexport const use = (table: string): unknown => sql.lit(table);\n",
   },
   {
+    rule: 'a feature does not reach `sql.raw` through an alias of `sql` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nconst alias = sql;\n\nexport const use = (table: string): unknown => alias.raw(table);\n",
+  },
+  {
+    rule: 'a feature does not reach `sql.raw` through a renamed import (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql as query } from '@purlay/db';\n\nexport const use = (table: string): unknown => query.raw(table);\n",
+  },
+  {
+    rule: 'a feature does not reach `sql.raw` through a namespace import (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import * as db from '@purlay/db';\n\nexport const use = (table: string): unknown => db.sql.raw(table);\n",
+  },
+  {
+    rule: 'a feature asserts no table name to `never` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source: "export const use = (parts: string[]): unknown => parts.join('') as never;\n",
+  },
+  {
+    rule: 'a feature asserts no table name through `unknown` (D-271)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "export const use = (parts: string[]): unknown => parts.join('') as unknown as 'messages';\n",
+  },
+  {
+    rule: 'a feature has no dynamic `import()`, which the import fences cannot read (D-250)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source: "export const use = async (): Promise<unknown> => await import('@purlay/db');\n",
+  },
+  {
+    rule: 'a feature has no dynamic `import()` of another feature (D-250)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "export const use = async (): Promise<unknown> => await import('../../issues/module');\n",
+  },
+  {
+    rule: 'a feature has no `require()` (D-250)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "declare const require: (name: string) => unknown;\n\nexport const use = (): unknown => require('@purlay/db');\n",
+  },
+  {
+    rule: 'a feature builds no loader of its own with `createRequire` (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { createRequire } from 'node:module';\n\nexport const use = (): unknown => createRequire;\n",
+  },
+  {
+    rule: 'a feature imports a package by its name and not by a path into packages/ (D-250)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '../../../../../../packages/db/src/index';\n\nexport const use = (): unknown => sql`1`;\n",
+  },
+  {
+    rule: 'a feature may write `sql.join` and a typed `sql<number>` template (control)',
+    ruleId: 'no-restricted-syntax',
+    path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
+    source:
+      "import { sql } from '@purlay/db';\n\nexport const use = (): unknown => [sql.join([sql.ref('a.b')]), sql<number>`count(*)::int`];\n",
+    allowed: true,
+  },
+  {
     rule: 'a feature may write `sql.ref` and a `sql` template, which name what the text says (control)',
     ruleId: 'no-restricted-syntax',
     path: 'apps/api/src/features/chat/messages/__enforcement__.ts',

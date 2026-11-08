@@ -33,6 +33,26 @@ export const featuresImportedBy = (source: string): string[] => {
   return [...new Set(ids)].sort();
 };
 
+/**
+ * The ways a feature's source gets round the import fences, each as the text of it: a dynamic `import()`, `require`, a loader
+ * of its own, and a specifier that climbs into `packages/` or `apps/` instead of naming the package. The lint says the
+ * same (`eslint.config.mjs`); this reads the text as well, so the guard does not rest on one tool. Comments are not read.
+ */
+export const fenceBypassesIn = (source: string): string[] => {
+  const code = withoutComments(source);
+  const found = [
+    [/\bimport\s*\(/, 'a dynamic import()'],
+    [/\brequire\s*\(|\.require\b/, 'require'],
+    [/\bcreateRequire\b|\bfrom\s*['"](node:)?module['"]/, 'a loader of its own'],
+    [/\bfrom\s*['"][^'"]*\/(packages|apps)\/[^'"]*['"]/, 'a path into packages/ or apps/'],
+  ] as const;
+  return found.filter(([pattern]) => pattern.test(code)).map(([, name]) => name);
+};
+
+/** The production files of a feature's own folder: not the doors' files that import it. */
+export const featureSources = (id: string): string[] =>
+  production(filesUnder(join(API_SOURCE, 'features', id)));
+
 /** The folders whose files are the doors: where a request or a frame arrives and is routed. */
 const DOORS = ['ingress', 'realtime'] as const;
 

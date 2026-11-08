@@ -16,7 +16,7 @@ import type { Logger } from '../../platform/logging';
 import { currentRequest, withinRequest } from '../../platform/logging';
 import type { ModuleSearchSource } from '../../platform/ports/search-source';
 import { withDeadline } from '../../platform/request-deadline';
-import { entitledTo, type WorkspaceContext } from '../../platform/tenancy';
+import { assertMinted, entitledTo, type WorkspaceContext } from '../../platform/tenancy';
 
 /** Past a source's own query on its index, well under what a person waits at a search box. */
 const SEARCH_SOURCE_DEADLINE_MS = 1_500;
@@ -82,6 +82,7 @@ export const findAcross = async (
   query: string,
   limit: number,
 ): Promise<FindResponse> => {
+  assertMinted(context);
   // A module the workspace is not granted is not asked, and is said to be off as one the process does not run (D-289).
   const granted = dependencies.sources.filter(({ module }) => entitledTo(context, module));
   const withheld = dependencies.sources.filter(({ module }) => !entitledTo(context, module));

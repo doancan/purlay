@@ -12173,6 +12173,16 @@ there is no broker).
    the operator's grants.)* Disabling a module keeps its data for a stated period and then offers deletion, and the data stays exportable
    throughout. *(Amended D-289 §6: a downgrade hides and never deletes; the period and the offer of deletion are not built, and
    `MODULES.md` §10 says what would start them.)*
+10. **A module cannot forge the core's words, and the guards are not read round.** *Amends rule 2's "first-party code":
+    the manifest is still not a trust boundary, but a mistake or a hostile line in one module must not become another
+    tenant's data.* (a) A `WorkspaceContext` is minted only by the membership guard, frozen, and remembered by identity;
+    the notice sink, the fact publisher and the find call `assertMinted` and refuse a copy (`{ ...context, workspaceId }`
+    type-checks, so the type alone cannot). (b) One set, `RESERVED_MODULE_IDS`, holds every name a module may not take:
+    route segments, `core`, `none` and `all`, the core's services, and the name of each core table; the registry,
+    `module:new` and the contract's `ModuleId` refuse it. (c) A feature has no `import()`, `require`, loader of its
+    own or path into `packages/` or `apps/`, no `sql` that is renamed, aliased or passed on, and no assertion to `never` or
+    through `unknown`; the lint refuses each, `verify:enforcement` shows it, and `module-seams.test.ts` and
+    `module-tables.test.ts` read the same lines from the text.
 
 **Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
 chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs

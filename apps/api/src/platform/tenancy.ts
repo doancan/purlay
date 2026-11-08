@@ -35,6 +35,30 @@ import { inTheCore } from './module-budget';
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const tenancy: unique symbol = Symbol('WorkspaceContext');
 
+/**
+ * Every context the guard has minted, by identity. The brand above is a plain property, so `{ ...mine, workspaceId }` copies
+ * it and type-checks; a copy is a new object and is not in this set. Not exported: only the guard can add to it.
+ */
+const minted = new WeakSet<object>();
+
+const mint = (context: Omit<WorkspaceContext, typeof tenancy>): WorkspaceContext => {
+  const sealed: WorkspaceContext = Object.freeze({ ...context, [tenancy]: true as const });
+  minted.add(sealed);
+  return sealed;
+};
+
+/**
+ * Refuses a context the guard did not mint (a spread, a copy, a hand-made object), loudly: a port that takes a context and
+ * writes with it as its workspace and its actor calls this first, since the type cannot tell a copy from the original (D-250).
+ */
+export const assertMinted: (context: WorkspaceContext) => void = (context) => {
+  if (!minted.has(context)) {
+    throw new Error(
+      'a WorkspaceContext that the membership guard did not mint was refused: contexts are not copied or built by hand',
+    );
+  }
+};
+
 export interface WorkspaceContext {
   readonly workspaceId: string;
   readonly userId: string;
@@ -108,15 +132,14 @@ const workspaceMembership = async (
 
   const request = currentRequest();
   const policy = request?.entitlements;
-  if (policy === undefined)
-    return { workspaceId, userId, role: row.role, modules: null, [tenancy]: true };
+  if (policy === undefined) return mint({ workspaceId, userId, role: row.role, modules: null });
 
   const modules = policy.effective(asGrants(row.grants), row.read_at);
   if (request?.module !== undefined && !modules.has(request.module)) {
     policy.refused(request.module);
     throw routeNotFound();
   }
-  return { workspaceId, userId, role: row.role, modules, [tenancy]: true };
+  return mint({ workspaceId, userId, role: row.role, modules });
 };
 
 /** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-266). */
