@@ -11,7 +11,8 @@
  *   `docs/changelog/v<x.y.z>.md` and leaves Unreleased empty, and
  * - sets `"version"` in the root `package.json` — the one home of the version, and
  * - writes the manifests of the modules as this release ships them to `released-manifests.json` and clears its
- *   exceptions, which is what the next release's manifests are held against (`module-compat.test.ts`, D-250).
+ *   exceptions, which is what the next release's manifests and the schema fingerprints of its facts are held against
+ *   (`module-compat.test.ts`, D-250, D-288 §5).
  *
  * **Merging it is the release.** The `deploy` workflow deploys every commit that lands on `main`;
  * when the version in `package.json` is one with no tag yet, it also tags that commit and

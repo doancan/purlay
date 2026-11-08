@@ -88,7 +88,7 @@ route it is and for no other (`platform/ports/fact-publisher.ts`). The contract 
 that `MODULES.md` §10 says whether it has landed.
 
 **Evolving a fact.** During a rolling deploy nodes of two releases share the outbox, so a row may be read by a release that did not
-write it. Adding an optional field changes nothing. Anything an older node would refuse (a new required field, a value more in an
+write it. Adding an optional field changes nothing for the nodes. Anything an older node would refuse (a new required field, a value more in an
 enum, a narrower bound) is a new shape: set `shape: 2` and keep the old schema as a reader, which makes the old payload the new one
 before your handler sees it:
 
@@ -109,6 +109,12 @@ A row is checked against the schema of the shape it was written in; one that fit
 refuses, is dead. Your handler only ever sees the current shape. Keep a reader for every shape the last release wrote:
 `module-compat.test.ts` fails for a new shape without the reader of the one before it, and a reader is dropped only by a dated exception
 in `released-manifests.json` (D-288 §5).
+
+The release keeps a fingerprint of the schema of every shape a fact writes or reads, and the same test fails when a schema changed
+under the same `shape` (the new required field, the narrower bound, the value more in an enum with `shape` left alone) or when a reader's
+schema changed: `the fact 'acme.created' changed the schema of shape 1 without a new shape`. Raise `shape` and keep the old schema as the
+reader. An added optional field changes the fingerprint as well, though it changes nothing for a node: say so with a dated exception
+(`{ change, on, reason }` in `released-manifests.json`, `change` being the sentence the test prints), which the next release clears.
 
 ## 6. Add a worker
 

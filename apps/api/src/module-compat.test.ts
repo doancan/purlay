@@ -3,7 +3,8 @@
  * becomes required, no capability, route or job goes, no id changes — unless the break is written down as an
  * exception in `released-manifests.json`, where a reviewer sees it. The release script rewrites that file and
  * clears the exceptions (`bun run manifests:snapshot`). The same holds for a fact: every shape the last release wrote is
- * still read (D-288 §5), so a declaration cannot ship a new shape without the reader of the one before it.
+ * still read (D-288 §5), so a declaration cannot ship a new shape without the reader of the one before it, and the schema of a shape
+ * is the one the release wrote (a fingerprint of each), so a new required field cannot ship under the same shape.
  *
  * The first snapshot was taken from the manifests of the build when it was added: v0.2.0 predates modules, so
  * until the next release this holds the current manifests to themselves.
