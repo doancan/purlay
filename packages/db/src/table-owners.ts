@@ -35,6 +35,8 @@ export const TABLE_OWNERS = {
   server_operational_status: 'core',
   sessions: 'core',
   setup_state: 'core',
+  // Modules the administrator stopped at run time, for every workspace (D-296).
+  suspended_modules: 'core',
   two_factors: 'core',
   users: 'core',
   verifications: 'core',

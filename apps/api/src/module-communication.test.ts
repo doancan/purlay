@@ -11,6 +11,7 @@ import { DEFAULT_WORKER_DEADLINE_MS } from './modules/workers/module-workers';
 import { NOTE_CREATED } from './testing/facts';
 import type { FactConsumer } from './platform/fact-consumers';
 import type { Port } from './platform/ports/ports';
+import { noSuspension } from './platform/suspended-modules';
 
 interface ChannelAccess {
   readonly canPost: (channelId: string) => boolean;
@@ -97,6 +98,21 @@ describe('the port of a capability a module provides', () => {
     expect(() => compose([extra])).toThrow(
       '"notes" supplies implementations for notes.other, which its manifest does not list under provides',
     );
+  });
+});
+
+describe('what a module that uses a capability is handed while its provider is stopped (D-296)', () => {
+  test('nothing, as where the provider is not run, and the port again once the stop is lifted', () => {
+    let stopped: ReadonlySet<string> = new Set();
+    const composition = compose([notes(), wiki()], [notes(), wiki()], 'open', FACTS_OF_THE_TEST, {
+      ...noSuspension,
+      current: () => stopped,
+    });
+    expect(composition.ports['notes.channel-access']).toBe(access);
+    stopped = new Set(['notes']);
+    expect(composition.ports['notes.channel-access']).toBeUndefined();
+    stopped = new Set();
+    expect(composition.ports['notes.channel-access']).toBe(access);
   });
 });
 

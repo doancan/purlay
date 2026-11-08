@@ -108,3 +108,28 @@ describe('the modules a workspace may use', () => {
     expect(effective({ running: [], mode: 'managed', rows: [row('issues', 'on')] })).toEqual([]);
   });
 });
+
+describe('the modules the administrator has stopped (D-296)', () => {
+  const stopped = (...ids: string[]): ReadonlySet<string> => new Set(ids);
+
+  test('leave every workspace’s set, whatever it is granted and in either mode', () => {
+    expect(effective({ suspended: stopped('issues') })).toEqual(['chat']);
+    expect(
+      effective({ mode: 'managed', rows: [row('issues', 'on')], suspended: stopped('issues') }),
+    ).toEqual(['chat']);
+  });
+
+  test('take with them the modules that require them, and give them back together', () => {
+    expect(effective({ suspended: stopped('issues') })).not.toContain('tasks');
+    expect(effective({ suspended: stopped() })).toEqual(['chat', 'issues', 'tasks']);
+  });
+
+  test('do not spare a module that is always granted, which is why stopping one asks to be confirmed', () => {
+    expect(effective({ suspended: stopped('chat') })).toEqual(['issues', 'tasks']);
+  });
+
+  test('are a stop and nothing else: a name no process runs changes nothing, and an empty stop changes nothing', () => {
+    expect(effective({ suspended: stopped('mail') })).toEqual(['chat', 'issues', 'tasks']);
+    expect(effective({ suspended: stopped() })).toEqual(effective({}));
+  });
+});

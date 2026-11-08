@@ -56,6 +56,7 @@ import { checkingLookup, postExternal, systemResolver } from './modules/images/f
 import { serverMetrics } from './platform/metrics';
 import { moduleConnections } from './platform/module-budget';
 import { startWorkers, type Workers } from './modules/workers/module-workers';
+import { readSuspended, suspensionCache } from './platform/suspended-modules';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
@@ -66,11 +67,14 @@ const plainLog = createLogger({ level: config.LOG_LEVEL });
 const { tracker: errorTracker, log } = errorTrackingFor(config, plainLog, systemClock);
 // Every entry this process writes to the trail is also a line of its log, ids only (D-222).
 sendAuditLinesTo(log);
+// The modules the administrator has stopped at run time, read from the database through a cache of two seconds (D-296). The
+// pool it reads through is opened below; nothing asks before then.
+const suspension = suspensionCache({ read: async () => await readSuspended(database), log });
 // The modules this process runs, named by `MODULES` (D-250): a setting that names none the build carries stops
 // the start here, before anything listens.
 const modules = ((): Composition => {
   try {
-    return compositionFor(config.MODULES, config.WORKSPACE_MODULES);
+    return compositionFor(config.MODULES, config.WORKSPACE_MODULES, suspension);
   } catch (error) {
     if (!(error instanceof ModuleConfigError)) throw error;
     log.error('MODULES cannot be run; exiting', { problems: error.problems });
@@ -302,6 +306,7 @@ installShutdown({
   // Pushes for writes already committed, then the mail of every relay this process served with, then
   // the reports of the shutdown itself — the error tracker still has its time — then the pool.
   closeDatabase: async () => {
+    suspension.stop();
     await workers.stop();
     await closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet })();
   },
@@ -397,6 +402,8 @@ if (config.MIGRATE_ON_START === true) {
   }
 }
 services.settle(runtime);
+// From here the table exists: the stopped modules are kept within the TTL on this node whether or not anything asks.
+suspension.start();
 // What the modules that run do on a timer, each iteration held to its module's share and deadline (`modules/workers`).
 if (!workerLifecycle.stopped) {
   activeWorkers = startWorkers(modules.workers, {
