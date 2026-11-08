@@ -23,6 +23,7 @@ import { OUTBOX_PAYLOAD_BYTES_MAX } from '../platform/outbox';
 import { OUTBOX_STALE_AFTER_SECONDS } from '../platform/outbox-report';
 import { OUTBOX_DEAD_KEPT_DAYS } from '../platform/outbox-sweep';
 import { DEFAULT_DEADLINE_MS } from '../platform/request-deadline';
+import { metricCatalogue } from './metric-catalogue';
 
 /** The pool the shares are shown for: the default a developer reads about, and the size the documents' examples use. */
 const EXAMPLE_POOL = 10;
@@ -113,6 +114,17 @@ const outboxPolicy = (): string =>
     ],
   );
 
+const metricsCatalogue = (): string =>
+  table(
+    ['Metric', 'Type', 'Labels', 'What it counts'],
+    metricCatalogue().map(({ name, type, labels, help }) => [
+      `\`${name}\``,
+      type,
+      labels.length === 0 ? '—' : labels.map((label) => `\`${label}\``).join(', '),
+      help.replaceAll('|', '\\|'),
+    ]),
+  );
+
 export interface GeneratedBlock {
   readonly file: string;
   readonly name: string;
@@ -122,6 +134,7 @@ export interface GeneratedBlock {
 export const GENERATED_BLOCKS: readonly GeneratedBlock[] = [
   { file: 'docs/MODULES.md', name: 'module-limits', render: moduleLimits },
   { file: 'docs/DEPLOY.md', name: 'outbox-policy', render: outboxPolicy },
+  { file: 'docs/DEPLOY.md', name: 'metrics', render: metricsCatalogue },
 ];
 
 const markers = (name: string): RegExp =>
