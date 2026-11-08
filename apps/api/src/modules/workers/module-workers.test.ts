@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import { currentRequest } from '../../platform/logging';
+import { noPorts, type ModulePorts } from '../../platform/ports/module-ports';
+import { UNAVAILABLE_REF } from '../../platform/ports/record-ref';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import {
   DEFAULT_WORKER_DEADLINE_MS,
@@ -91,6 +93,44 @@ const harness = (
 const settle = async (): Promise<void> => {
   for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
 };
+
+describe('a worker’s ports', () => {
+  test('are its module’s, bound to the database it runs on, and none where the process has no composition', async () => {
+    const database = aDatabaseThatMustNotBeTouched();
+    const asked: [string, unknown][] = [];
+    const given = new Map<string, ModulePorts>();
+    const later = aManualTimer().later;
+    const base = {
+      database,
+      clock: fixedClock(new Date('2026-01-01T00:00:00Z')),
+      log: aRecordingLogger().log,
+      bus,
+      failures: { inc: (): void => undefined },
+      later,
+    };
+    const work =
+      (name: string): WorkerWork =>
+      (context) => {
+        given.set(name, context.ports);
+        return Promise.resolve();
+      };
+    const own: ModulePorts = { of: () => ({}), resolveRef: () => Promise.resolve(UNAVAILABLE_REF) };
+    const withComposition = startWorkers([aWorker(work('composed'))], {
+      ...base,
+      portsFor: (module, bound) => {
+        asked.push([module, bound]);
+        return own;
+      },
+    });
+    const without = startWorkers([aWorker(work('bare'))], base);
+    await settle();
+    expect(given.get('composed')).toBe(own);
+    expect(asked).toEqual([['chat', database]]);
+    expect(given.get('bare')).toBe(noPorts);
+    await withComposition.stop();
+    await without.stop();
+  });
+});
 
 describe('a worker’s iterations', () => {
   test('begin at once, then at the interval after the last one ended, and never overlap', async () => {

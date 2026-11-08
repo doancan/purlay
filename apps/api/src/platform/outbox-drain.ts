@@ -23,6 +23,7 @@ import { currentRequest, withinRequest, type Logger } from './logging';
 import { readGrants } from './grants';
 import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { Counter } from './metrics';
+import { noPorts, type ModulePorts } from './ports/module-ports';
 import { atomicallyOn } from './transactions';
 
 /** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about twenty minutes (`backoffMs`). */
@@ -268,9 +269,14 @@ export const deliver = async (
   database: Executor,
   claimed: ClaimedFact,
   handling: FactHandling,
-  dependencies: { readonly clock: Clock; readonly log: Logger },
+  dependencies: {
+    readonly clock: Clock;
+    readonly log: Logger;
+    readonly ports?: ModulePorts;
+    readonly effective?: EntitlementPolicy['effective'];
+  },
 ): Promise<Delivery> => {
-  const { clock } = dependencies;
+  const { clock, ports = noPorts, effective } = dependencies;
   let log = dependencies.log;
   const outcome = await atomicallyOn(database)(async (transaction): Promise<Delivery> => {
     const row = await transaction
@@ -306,6 +312,13 @@ export const deliver = async (
     // published, which only an earlier shape's schema fits. (A shape it does not know is not claimed, so it is not here.)
     const read = readAsCurrentShape(handling.declaration, row.shape, row.payload);
     if (read === undefined) return await finish('dead', 'PayloadRefused');
+    const modules =
+      effective === undefined
+        ? null
+        : effective(
+            (await readGrants(transaction, [row.workspace_id])).get(row.workspace_id) ?? [],
+            clock.now(),
+          );
     await sql`savepoint fact_handler`.execute(transaction);
     let result: Awaited<ReturnType<FactConsumer>>;
     try {
@@ -323,10 +336,12 @@ export const deliver = async (
               type: claimed.type,
               factId: claimed.factId,
               workspaceId: row.workspace_id,
+              modules,
               correlationId,
               payload: read.payload,
             },
             transaction,
+            ports,
           ),
       );
     } catch (error) {
@@ -371,9 +386,10 @@ export const drainOnce = async (
     readonly log: Logger;
     readonly effective?: EntitlementPolicy['effective'];
     readonly counters?: OutboxCounters;
+    readonly ports?: ModulePorts;
   },
 ): Promise<Record<Delivery | 'exhausted', number>> => {
-  const { handlers, batch, clock, log, effective, counters } = input;
+  const { handlers, batch, clock, log, effective, counters, ports } = input;
   const tally = { delivered: 0, skipped: 0, failed: 0, dead: 0, gone: 0, exhausted: 0 };
   const { claimed, exhausted } = await claimDue(database, {
     handles: handlers,
@@ -395,7 +411,12 @@ export const drainOnce = async (
       (candidate) => candidate.consumer === one.consumer && candidate.type === one.type,
     );
     if (handling === undefined) continue;
-    const outcome = await deliver(database, one, handling, { clock, log });
+    const outcome = await deliver(database, one, handling, {
+      clock,
+      log,
+      ...(ports === undefined ? {} : { ports }),
+      ...(effective === undefined ? {} : { effective }),
+    });
     tally[outcome] += 1;
     const labels = { module: one.consumer, fact: one.type };
     if (outcome === 'delivered') counters?.delivered.inc(labels);

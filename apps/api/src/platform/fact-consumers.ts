@@ -6,6 +6,7 @@
  * committed with, under the module's share and its `workerDeadline`.
  */
 import type { Transaction } from '@purlay/db';
+import type { ModulePorts } from './ports/module-ports';
 
 /** A fact as the consumer is given it: whose it is, which delivery it is, and the payload, checked against its declaration. */
 interface DeliveredFact {
@@ -14,6 +15,11 @@ interface DeliveredFact {
   readonly factId: string;
   /** The workspace the fact was published in, which a payload's own ids are checked against. */
   readonly workspaceId: string;
+  /**
+   * The modules the workspace may use as the delivery read its grants (`null` where nothing judged them): with `workspaceId`, what
+   * `ports.of(fact)` asks, so a consumer cannot reach a port of a module the workspace has lost.
+   */
+  readonly modules: ReadonlySet<string> | null;
   /** The request that published the fact (or a stand-in): the id its delivery's log lines carry, and what a fact it publishes carries on. */
   readonly correlationId: string;
   readonly payload: unknown;
@@ -29,6 +35,8 @@ interface DeliveredFact {
 export type FactConsumer = (
   fact: DeliveredFact,
   transaction: Transaction,
+  /** The consumer's ports (`uses`), reading through the consumer's own share of the pool. */
+  ports: ModulePorts,
 ) => Promise<'done' | 'skipped'>;
 
 export type FactConsumers = Readonly<Record<string, FactConsumer>>;

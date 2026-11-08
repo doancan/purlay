@@ -19,6 +19,7 @@ import type { Logger } from '../../platform/logging';
 import type { LimiterFactory } from '../../realtime/rate-limiter';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import type { OnlinePresence } from '../../realtime/online';
+import type { ModulePorts } from '../../platform/ports/module-ports';
 import type { FactPublisher } from '../../platform/ports/fact-publisher';
 import type { NotificationSink } from '../../platform/ports/notification-sink';
 import type { Atomically } from '../../platform/transactions';
@@ -39,6 +40,12 @@ export interface ModuleRouteDependencies {
   readonly bus: EventBus;
   /** Who is online on this node and across them (`realtime/online.ts`), for a module that shows presence. */
   readonly online: OnlinePresence;
+  /**
+   * The ports of the capabilities the module's manifest `uses`, for the workspace of a request: `ports.of(context)` has a port
+   * only where its provider runs and the workspace may use it, and `ports.resolveRef(ref, context)` is how a link to another
+   * module's record is shown (D-291). Reads through `database`, so in the request's own share.
+   */
+  readonly ports: ModulePorts;
   /** How a module tells a person something in the core's inbox, inside its own transaction (D-286). */
   readonly inbox: NotificationSink;
   /**
