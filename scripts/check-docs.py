@@ -266,6 +266,25 @@ else:
             if number not in sections:
                 problems["a section number disappeared"].append(f"{f} §{number} ({title})")
 
+# ---- the decision record keeps its own promises -------------------------------
+# A decision that says `amends D-x` changes what D-x says, and D-x carries a note that points back (D-255): without it a reader
+# of D-x believes a sentence that stopped being true. The module platform's decisions (D-250 on) also say what reversing them
+# costs, as the legend of the record promises, and none is filed under the open questions, which they are not.
+_records = {int(n): body for n, body in re.findall(r'^### D-(\d+)\. (.*?)(?=^### |^## |\Z)', dec, re.M | re.S)}
+for _n, _body in _records.items():
+    _header = _body.split('\n', 1)[0]
+    if 'amends' in _header:
+        _tail = re.split(r' — ', _header[_header.index('amends'):])[0].split(';')[0]
+        for _x in re.findall(r'D-(\d+)', _tail):
+            if int(_x) in _records and not re.search(rf'\bD-{_n}\b', _records[int(_x)]):
+                problems['a decision amends another that does not name it'].append(f"D-{_n} amends D-{_x}, which has no note pointing back")
+    if _n >= 250 and '**Cost of reversing' not in _body:
+        problems['a decision has no cost of reversing'].append(f"D-{_n}")
+_open = re.search(r'^## Part D .*?(?=^## )', dec, re.M | re.S)
+if _open:
+    for _n in re.findall(r'^### D-(\d+)\.', _open.group(0), re.M):
+        problems['a decision is filed under the open questions'].append(f"D-{_n}")
+
 # ---- a merge left markers behind, or the decisions are out of order -----------
 # #268 reached main with an unresolved conflict in two documents, and every gate
 # was green: nothing in this repository read for the markers, and the numbering

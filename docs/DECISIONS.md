@@ -9,11 +9,17 @@
 Legend: **D-n** = decision. Each records the choice, the reason, what was rejected, and the
 cost of reversing it later.
 
+A decision that changes an earlier one says `amends D-x` in its header, and D-x carries a note that points back to it
+(`*Amended by D-n: …*`, or at the sentence it changes); from D-250 each also has a **Cost of reversing**. `bun run check:docs`
+fails for an amendment with no note, for a decision from D-250 with no cost, and for a decision filed under the open questions.
+
 ---
 
 ## Part A — Product Identity
 
 ### D-1. Purlay ships two ways: self-hosted open source, and a cloud we operate
+
+*Amended by D-197: A phase ends on what is built and verified, not on the owner's team switching.*
 
 Amended 2026-09-09. The original decision said *not a SaaS* and ruled out billing, metering,
 trials, support and an uptime commitment. That is no longer the plan, and this decision is
@@ -366,6 +372,8 @@ reconnect) is a large, separate undertaking and is **not planned**.
 
 ### D-20. Stack confirmed, and its costs written down where they can be seen
 
+*Amended by D-219: Dependabot opens no pull requests; updates are the owner's.*
+
 Keeping Bun + ElysiaJS + Kysely + PostgreSQL + React + Vite + Tailwind + Zustand. Each is
 defensible for this project.
 
@@ -691,6 +699,8 @@ erase is not an audit trail.
 ---
 
 ### D-27. Retention, erasure and export — resolves O-3
+
+*Amended by D-225: A channel may keep its history longer than its workspace, never shorter.*
 
 "Nothing is thrown away" (D-2) is the wedge and stays the default. But an operator who is a data
 controller must be able to throw things away on request, and a product that cannot delete a
@@ -1585,6 +1595,8 @@ rests on the gate holding.
 
 ### D-47. A rule that is not mechanically enforced is not a rule
 
+*Amended by D-203: The required `verify` check is a fail-closed verdict over the static checks and the one run of every test.*
+
 This document's decisions and `SCHEMA.md`'s invariants number in the dozens. **None of them is
 currently enforced by anything but reading.** That is the mechanism by which a well-specified
 project becomes an ordinary one: the documents stay true and the code stops matching them, one
@@ -1763,6 +1775,12 @@ imports until the client store lands (#26). Each carries a reason and an issue; 
 ---
 
 ### D-49. Deterministic budgets block; noisy ones block on regression
+
+*Amended by D-196: The initial JavaScript is a backstop, not a ceiling for features.*
+
+*Amended by D-227: A budget regression is measured alone, and must happen twice.*
+
+*Amended by D-267: The latency budget judges the lowest of its trials, with the spread of the floor allowed for.*
 
 `PRD.md` §5 lists seven performance budgets and calls every one CI-enforceable. **None was being
 measured.** That is precisely the failure D-17 was written to prevent, reproduced by the document
@@ -2434,6 +2452,8 @@ moved past *T*+1 — and it costs a column and an index on the hottest table.
 
 ### D-66. The socket's two limits: a cap the server enforces, and a budget it refuses by frame
 
+*Amended by D-198: The frame budget is ten a second with a burst of sixty, decided from a measurement.*
+
 §5.5 stated both limits and nothing enforced either (#174).
 
 **The 64 KB cap is server-wide, because the per-route option is ignored.** Measured, with Elysia
@@ -2968,6 +2988,8 @@ statuses. *Rejected: also requiring `Origin`* — the same reasoning as above.
 
 ### D-81. HTTP is rate limited by client address for sign-in and by user for writes, and a client is only who the socket says
 
+*Amended by D-198: The frame budget is ten a second with a burst of sixty, decided from a measurement.*
+
 The only limiter was the socket's. `GET /auth/github` minted state cookies without limit and a valid
 state made the callback call GitHub three times; `POST /api/channels/:id/messages` reached the same
 `send()` as the socket with no budget at all; `sessions.ip_address` existed and was never written
@@ -3144,6 +3166,8 @@ subscribe.** The bus is not transactional; a commit after the read is not blocke
 
 ### D-84. A socket's frames are handled one at a time, in order, behind a bounded queue
 
+*Amended by D-198: The frame budget is ten a second with a burst of sixty, decided from a measurement.*
+
 Elysia starts a `message` handler for each frame as it arrives and does not wait for the last. A
 `SUBSCRIBE` that waits on the database was therefore overtaken by an `UNSUBSCRIBE` sent after it and
 then subscribed anyway, and a continuation that outlived `close` could add a dead socket back to the
@@ -3306,6 +3330,8 @@ read:** a second query on every subscription for a race the hub already hears ab
 ---
 
 ### D-86. A migration is one transaction unless its file says otherwise, and a file that has run cannot change
+
+*Amended by D-219: Dependabot opens no pull requests; updates are the owner's.*
 
 Kysely's migrator ran every pending migration in one transaction and recorded nothing about the file. Two
 consequences were measured on 1,000,000 messages (#240). `0007` claimed that adding a constraint `NOT VALID`
@@ -3630,6 +3656,8 @@ the point and is also what a bulk loader must be told.
 ---
 
 ### D-91. The supply chain is checked by the machine: pins, audit, scanning, licences
+
+*Amended by D-219: Dependabot opens no pull requests; updates are the owner's.*
 
 The documents claimed every image and action was pinned; the workflow named `actions/checkout@v7`,
 a tag its owner can move to code that then runs with the repository's token (#247). The dependency
@@ -4207,6 +4235,10 @@ first, which is why they are first. Pulling a Phase 1 slice forward is not rever
 exists, which is why each ships with its integration tests and its documentation in the same change.
 
 ### D-99. The wedge's backend: what a write touches, and what "needs you" means
+
+*Amended by D-212: "Mark unread from here" — the one way the read position moves backwards.*
+
+*Amended by D-282: Catch-up reads only the displayed range, with a join scope and independent thread receipts.*
 
 > **Amended 2026-10-19 by D-147.** §4: the read position reads the feed — the notifications of the roots
 > at or behind it — and never a reply's, which is read in its thread or the inbox; a reply waiting
@@ -4954,6 +4986,8 @@ sent; its answer and its failures are read by the same two functions a request's
 
 ### D-110. The interface is flat and quiet: one tone for getting around, one for the conversation
 
+*Amended by D-206: The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black.*
+
 **Amended 2026-10-12 by D-118**: navigation is dark navy in both themes and the accent is blue.
 
 D-100 gave the interface an identity, and the owner replaced it on 2026-10-12 with one of their own: a
@@ -5597,6 +5631,8 @@ schema or stored value depends on where a thread is drawn.
 
 ### D-123. Renaming, archiving and leaving a channel, and who may
 
+*Amended by D-232: An archived channel can be brought back, by an owner or an admin, as it was.*
+
 `API.md` §4 listed renaming, archiving and leaving as Phase 1 and unbuilt (D-104 left leaving for later).
 The documents disagreed on who archives — `ARCHITECTURE.md` §7.4 gave it to every member beside
 creating, `API.md` to an admin — and nothing said what the last member of a private channel leaving
@@ -5661,6 +5697,8 @@ the way they speak, and the fix it asked for was always the same one the field c
 permission table, and this paragraph; no data changes shape.
 
 ### D-124. What is the person's and what is the workspace's — #495, #496, #497
+
+*Amended by D-207: The account door reads as a menu, the menu opens with who you are, and "you are here" has one tone.*
 
 **Amended 2026-10-19 by D-146**: Settings are a page; the account menu, the workspace menu and the
 rail's foot are as D-146 §4 says.
@@ -5987,6 +6025,8 @@ matter. *Counting deleted messages' pins* — the bound would be taken by what n
 
 ### D-131. A profile: a title, a time zone and a status line, the person's own — #488
 
+*Amended by D-235: A name is the person's own to set, where it is not GitHub's.*
+
 **Context.** The Superdesign screens show, in a conversation and where people are picked, what a
 person does, the time it is where they are, and a line about what they are on. GitHub gives a name
 and an avatar, which stay GitHub's (D-11). D-125 put profiles in Phase 2.
@@ -6024,6 +6064,8 @@ itself* — a timer per person, for a feature nobody has asked to expire yet.
 **Cost of reversing:** migration 0029's columns, one route, the `profile` fields of two responses.
 
 ### D-132. Starred channels: a member's own, kept above the rest — #489
+
+*Amended by D-284: A person groups their own channels under named headings across devices — #1198.*
 
 **Context.** The Superdesign screens keep a few channels in a Starred section above Channels, and
 offer a pick of channels to join on accepting an invitation. D-125 put both in Phase 2.
@@ -6430,6 +6472,8 @@ GitHub sign-in is untouched but for the refusal of §3, which it already makes b
 
 ### D-139. Retention, account erasure and content erasure, as built — #83
 
+*Amended by D-225: A channel may keep its history longer than its workspace, never shorter.*
+
 **Context.** D-27 decided the three pieces; building them met edges it is silent on — a thread whose root
 is older than the window and whose replies are not, what of a person is theirs beyond `users`, who may
 erase, and a process that cannot reach the sockets. D-125 §4 makes them this feature's to decide. A
@@ -6764,6 +6808,8 @@ logic), and the menu items moved back.
 
 ### D-147. A reply is read in its thread, not by scrolling the feed past it — amends D-99 §4
 
+*Amended by D-282: Catch-up reads only the displayed range, with a join scope and independent thread receipts.*
+
 **Context.** An audit reproduced it twice. Bob asked in #incidents; Carol answered **in the thread**;
 Alice then wrote something unrelated in the channel. Bob opened the channel and scrolled to the bottom
 without opening the thread — and Carol's `thread_reply` went from unread to read, its badge, the tab
@@ -6927,6 +6973,8 @@ feed with a hole in it is a feed every frame handler and the read position would
 pasted would open the channel at its bottom.
 
 ### D-150. A message's actions: one bar, in the empty corner of its own row
+
+*Amended by D-209: Reactions are soft pills, and the workspace's door is a card over a vertical list.*
 
 **Amends D-119 §6 and `UX.md` §3.** The owner's audit of the message row (2026-10-19): the bar hung
 above the bubble (`-top-8`, #653) and covered the author's name and the last line or reaction of the
@@ -9025,6 +9073,8 @@ mismatch the owner saw); a pure black "OLED" ground (harsh against the indigo na
 
 ### D-184. Dark is black, and the indigo is a theme of its own, Midnight
 
+*Amended by D-206: The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black.*
+
 **Decided (the owner, 2026-10-24), refines D-183.** D-183 put the whole dark theme in the navigation's
 indigo. The owner asked for that indigo to be a theme called Midnight, and for the default dark to be a
 black one. So there are three themes — `dark`, `light`, `midnight` — and four choices (`system`, `light`,
@@ -9053,6 +9103,8 @@ Midnight from the device (no such setting exists).
 beyond the device's `purlay.theme`.
 
 ### D-185. `main` is the one branch, a merge deploys, and a release is a version someone chose
+
+*Amended by D-229: A commit deploys only after its own `ci` and `image` runs have both succeeded.*
 
 **Decided (the owner, 2026-10-26), builds on D-73, D-86, D-92, D-94 and D-95.** How a change reaches the
 team's server, and what a release is, were a list of commands run by hand: build on the server (the Mac
@@ -9516,6 +9568,8 @@ name and can be ended: the orphan D-191 accepted is now visible. `lastUsedAt` is
 
 ### D-194. A client that was away asks what changed since it last heard, by the server's clock — builds on D-65, D-82, D-33
 
+*Amended by D-268: What the person's own topic would have said is read again when the socket opens, the first time too.*
+
 **Context.** A reconnecting client is replayed the root messages above the newest id it holds (D-65). That cannot
 tell it about an edit, a deletion, a reaction taken back, a reply, a resolved thread: none makes a new id, and a
 message that arrives late sorts *below* the newest id a client holds (D-33, and D-65's "a cursor is not a watermark").
@@ -9566,6 +9620,8 @@ contract would show a deleted message for as long as it ran, and nothing in the 
 replay's budget could not carry; or if a purge that a client must see is wanted, in which case the removals are logged
 by the purge and carried on the first page of a walk.
 ### D-195. A person arranges their own sidebar, by what is shown — builds on D-110, D-118 §6, D-132, D-160
+
+*Amended by D-284: A person groups their own channels under named headings across devices — #1198.*
 
 **Context.** The sidebar listed everything the person had joined, always, in one fixed order, and the workspace's name
 at its head was a button that ran from the rail to the hairline, so its hover and its focus ring touched both. Slack,
@@ -10146,7 +10202,14 @@ Recorded so they are not silently assumed. None block Phase 0.
   left (2.1 s to come back), so a channel out of view now keeps its newest page only. `purlay:channel-switch` stays
   in the page (`apps/web/src/app/switch-timing.ts`) for anyone who wants their own numbers.
 
+## Part E — Decisions since the first release (D-203 onward)
+
+The decisions after the open questions above. Numbered on from Part C; a decision that changes an earlier one says so in its header
+(`amends D-n`) and the earlier one carries a note that points back.
+
 ### D-203. The required `verify` check is a fail-closed verdict over the static checks and the one run of every test — amends D-47; closes #791
+
+*Amended by D-226: `verify` judges the browser jobs too, and lets them skip only for a change they cannot see.*
 
 **Context.** The `verify` job ran the unit tests alone (129 s of the 271 s job on run 40642437751, 2026-10-28), and
 `schema` ran the same tests again, with the integration tests and coverage, 7 min 16 s. The first run proved nothing
@@ -10198,6 +10261,8 @@ the choices above; they do not establish a measured reduction in the whole pipel
 
 ### D-204. Questions keep their answers and decisions; search finds them
 
+*Amended by D-224: Search operators are typed filters, read on the client into the criteria search already takes.*
+
 **Context.** On 2026-10-28 the owner approved research proposals 1–3: accepted answers and decision notes, unanswered questions with ownership, and advanced search with saved searches. This explicitly expands the current phase (D-4); GitHub issue creation is planned separately.
 
 **Decision.** A root may be explicitly marked as a question before it has replies. Existing unresolved threads remain listed. Questions may name a channel member as owner; unanswered and assigned filters and oldest-first pagination expose waiting work. Assignment never sends a notification.
@@ -10227,6 +10292,8 @@ The shared Markdown engine reports whether the caret ends inside an open fenced 
 **Reversal.** Revert the client helpers and rendering classes; messages remain plain Markdown strings and require no data migration or contract change.
 
 ### D-206. The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black — amends D-110, D-184
+
+*Amended by D-209: Reactions are soft pills, and the workspace's door is a card over a vertical list.*
 
 **Decided (the owner, 2026-10-30).** Signed in, the workspace was drawn twice a hand's width apart: its tile at
 the top of the rail and its tile and name at the top of the sidebar, two doors to the same menu. A person is
@@ -10430,6 +10497,8 @@ menu, tip, dialog, toast and panel.
 
 ### D-212. "Mark unread from here" — the one way the read position moves backwards — amends D-99 §4
 
+*Amended by D-282: Catch-up reads only the displayed range, with a join scope and independent thread receipts.*
+
 **Decided (the owner, 2026-10-30).** The owner asked for the core features of Slack, Teams and Discord
 the product lacked; marking a message unread is the first. The read position only ever moved forward
 (D-99 §4), which is right for reading and leaves a person no way to say "come back to this".
@@ -10526,6 +10595,8 @@ have).
 **Cost of reversing.** `listDrafts`, the screen and its link, a route, a palette entry and the strings.
 
 ### D-216. All unreads: what is new, everywhere, read only as far as it was seen
+
+*Amended by D-282: Catch-up reads only the displayed range, with a join scope and independent thread receipts.*
 
 **Decided (the owner, 2026-10-30).** Fifth of the core features the owner asked for (Slack's "Unreads").
 
@@ -10643,6 +10714,8 @@ main is not worth a name in a list).
 on again.
 
 ### D-220. Test files have their own globals
+
+*Amended by D-228: The whole suite runs two files at a time.*
 
 **Context.** Bun 1.4.4 corrects coverage for previously unexercised branches. The runtime upgrade exposed missing failure/default-path tests, which are now exercised without lowering coverage floors. Full-suite runs also attributed another file's presence timers to the settings-swap leak probe and intermittently stalled a server-startup probe; those probes passed alone.
 
@@ -10953,6 +11026,8 @@ eight minutes for changes to documents, for nothing they could see.
 their tests and mutations.
 
 ### D-227. A budget regression is measured alone, and must happen twice — amends D-49
+
+*Amended by D-267: The latency budget judges the lowest of its trials, with the spread of the floor allowed for.*
 
 **Decided (the owner, 2026-10-31).** Since D-226 the browser jobs are part of the required verdict, so a noisy
 budget now blocks a merge, and both noisy budgets were failing on noise. On main, identical code measured the
@@ -12080,7 +12155,9 @@ there is no broker).
 7. **Isolation is by budget, not by process.** A module gets a share of the connection pool, a deadline per request and
    an error boundary around its handlers and jobs — **built before a second module ships, not after**: a cap on its
    concurrent connections with a queue timeout, and a `statement_timeout` set inside its transactions. A search source
-   takes an abort signal and a deadline, and is skipped, and said to be, when it overruns. Every log line and metric carries the module.
+   takes an abort signal and a deadline, and is skipped, and said to be, when it overruns. Every log line and metric carries the module. *(Amended D-266: the share is a lease on every connection and the statement limit is the
+   connection's, not set inside a transaction. D-270: a deadline per request and frame answers it and cancels its database work. D-274:
+   a scheduled job runs in its module's share against a deadline.)*
 8. **A cluster runs one module set.** A node records its module set in the database at boot and refuses to serve beside a
    live peer whose set differs. The release may differ, so a rolling deploy is not blocked. Nodes of different sets also
    share no channel on the bus, so a typo in `MODULES` on one node cannot make it receive another set's frames.
@@ -12092,8 +12169,10 @@ there is no broker).
    withheld from anyone who runs it themselves. A package is not sold before per-workspace enablement
    exists, because a package per instance would make the cloud one deployment per customer and end D-1's small
    operation. Until then a multi-tenant instance with mixed packages is unsupported and nothing is priced by module.
-   Disabling a module keeps its data for a stated period and then offers deletion, and the data stays exportable
-   throughout.
+   *(Amended D-289, D-292: per-workspace enablement is built, and mixed packages on one instance are supported; what a workspace has is
+   the operator's grants.)* Disabling a module keeps its data for a stated period and then offers deletion, and the data stays exportable
+   throughout. *(Amended D-289 §6: a downgrade hides and never deletes; the period and the offer of deletion are not built, and
+   `MODULES.md` §10 says what would start them.)*
 
 **Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
 chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs
@@ -12426,7 +12505,8 @@ changes carries a note that points here.
 9. **Pool isolation is wired for issues, and a gate holds chat against starvation.** *D-250 rule 7 said it would be built
    before a second module ships; the second module shipped without it, and that was recorded as a debt.* The debt is
    paid: `budgeted` (`platform/module-budget.ts`: a cap on open transactions, a queue timeout, a `statement_timeout`) is
-   handed to the issues routes (a third of the pool, never more than the pool minus one), chat is not budgeted, and
+   handed to the issues routes (a third of the pool, never more than the pool minus one), chat is not budgeted *(amended D-269: chat has a share of its own and
+   the core keeps a reserve the modules cannot take; D-266: the share is held at the connection, not as a cap on open transactions)*, and
    `budget:latency` runs the send path with issues holding its share and fails if chat's p95 passes eight times the
    quiet p95 of the same run (measured on a 2-core runner: 2.4 to 3.7 times with the budget, about twenty times
    without). What it does not hold: a busy module's CPU and event-loop cost on a shared process, which can still cost
@@ -12515,6 +12595,8 @@ a frozen background tab would stay green. *A separate heartbeat frame* — a fra
 input list.
 
 ### D-258. A one-file stack for Dockhand, behind Nginx Proxy Manager — builds on D-73, D-81, D-94
+
+*Amended by D-262: A Dockhand server follows `:release`, with a database dump every hour.*
 
 **Context.** The owner runs servers with [Dockhand](https://dockhand.pro), a web interface that deploys Compose
 stacks, behind an Nginx Proxy Manager that ends TLS — the way purlay.app itself already runs, with the API's
@@ -12608,10 +12690,10 @@ built before a module ships; nothing said how a module is made to say what it ta
 **Decision.**
 
 1. **`budget` is a required field of the manifest.** Either `{ poolShare: (poolMax) => limits }` (a cap on the open
-   transactions, a queue timeout and a statement limit, worked out from the pool the process has) or `{ none: reason }`:
+   transactions *(amended D-266: on the requests holding a connection)*, a queue timeout and a statement limit, worked out from the pool the process has) or `{ none: reason }`:
    leaving the share out is a decision with a sentence. A manifest without it does not compile, and the registry refuses
    one that does not have it at run time (a manifest that is data), a `none` with no reason, and a share that leaves a
-   module no connection or the others none, tried against pools from one to a hundred. Chat declares `none` and why;
+   module no connection or the others none, tried against pools from one to a hundred. Chat declares `none` and why *(amended D-269: chat declares a share now)*;
    issues declares its third of the pool. `createApp` applies each module's declaration to its routes through one
    function (`transactionsOfModules`) that names no module.
 2. **`retention` is a field of the manifest, beside `jobs`, and the work comes with the module.** `jobs` are the scheduled
@@ -12944,7 +13026,7 @@ The channels' lists are read again by the subscription's answer (#1043), which a
 channel added to their list in the gap waits for the next change. **Cost of reversing:** one call in `engine.ts` and
 one condition in `presence-reader.tsx`.
 
-### D-269. Chat has a share of the pool, and the core keeps a reserve the modules cannot take — builds on D-250, D-260, D-266
+### D-269. Chat has a share of the pool, and the core keeps a reserve the modules cannot take — builds on D-250, D-260, D-266; amends D-255 §9 and D-260 §1
 
 **Context.** With the share held at the connection (D-266) chat could have one, and chat declared `none`: a busy chat
 could hold every connection and queue the core's own reads. Measured on a real process at a pool of ten
@@ -13202,7 +13284,7 @@ a client takes a topic from the server, never builds one. The issues module's fo
 draws or asks for none of them where it is off.
 
 **Reverses if** the application is built in this repository (D-192's reversal): the owner maps are then read from the code.
-Cost of reversing otherwise: remove the keys and the `ModuleId` reference; nothing is stored.
+**Cost of reversing.** Cheap: remove the keys and the `ModuleId` reference; nothing is stored.
 
 ### D-274. A module's scheduled job runs in its module's share of the pool, against a deadline of its manifest, with an error boundary of its own — builds on D-30, D-266, D-269, D-270; amends D-250 rule 7
 
@@ -13423,7 +13505,7 @@ is data and one test.
 4. Overview readiness comes from the actual readiness service. Configured storage/push/shared-state are described as configuration, not proven health. Job status uses the deployed composition's catalogue and the CLI's staleness rule. Unreported backups and unverified restoration must stay explicit; no invented success state or browser restore.
 5. Existing provider configuration remains the supported live-settings seam. Infrastructure credentials and the deployment URL stay operator-managed. New admission policies must be enforced at the identity/session boundary, default off for old deployments, and cannot be merely UI switches.
 
-**Reversal.** Remove the additive routes and console. Existing accounts, quotas, settings and append-only audit records remain valid; there is no content migration.
+**Cost of reversing.** Remove the additive routes and console. Existing accounts, quotas, settings and append-only audit records remain valid; there is no content migration.
 
 **Batch approval (D-278 continued).** An administrator confirms up to 50 explicit account ids, with one transaction and audit entry per newly approved account. Each item rechecks current administration authority and the account state under the existing session/account locks. A pending-only precondition prevents a concurrently denied account from being admitted; already-approved accounts are idempotent. Replies preserve input order and distinguish approved, refused, unconfirmed and not-processed items. Cancellation/authority loss stops unstarted work, and an unexpected database failure is unconfirmed rather than a claim that nothing committed. Selection survives pages within one filter, resets on filter changes, and unsuccessful selections remain available for explicit retry. Approval never adds membership or administrator rights and never substitutes for email verification. An all-or-nothing bulk transaction and automatic write replay were rejected: one unavailable account must not undo others, and a lost reply cannot prove a write failed.
 
@@ -13446,6 +13528,8 @@ is data and one test.
 6. **Data lifecycle.** Migrations 0086–0087 are additive; 0087’s safety comment uses the existing D-86 comment-only checksum ledger because local validation had already applied its identical SQL; both tables are core-owned. Rows live with their workspace and are explicitly included in its purge. Erasure deletes received evidence by the pre-erasure verified address or attested account id; created-by references on other recipients name the anonymised creator. A personal export contains only the person's received recipient/attempt evidence (a verified address match or an attested account id; an unverified claim cannot read or erase another recipient's evidence), with workspace identity and no invitation credential. Workspace exports omit private recipient and delivery records. English/Turkish feedback distinguishes expiry, revocation, uncertainty, approval and joining.
 
 **Rejected:** one shared email link (cannot independently revoke/resend); raw SMTP diagnostics (leaks personal data and credentials); calling SMTP acceptance delivered (unprovable); looking up every typed address (account directory disclosure); a broker, saved plaintext tokens or automatic replay (new infrastructure/secret storage and duplicate-send risk without a measurement); polling the private identity endpoint (keeps idle sessions alive and violates the admission boundary).
+
+**Cost of reversing.** A forward migration. `workspace_invitation_recipients` and `workspace_invitation_mail_attempts` (0086, 0087, append-only) hold private evidence per workspace; dropping them returns every invitation to its bearer link alone, as before, and takes the invitation page's recipient list, the approval gate's passport check and the erasure, export and purge entries named above with it. Nothing else reads them.
 
 ### D-280. A module's HTTP is its folder: `features/<id>/http/` holds its handlers and its routes as one plugin, and the application uses every bundled module's plugin in one place — builds on D-250, D-254, D-255, D-276; amends `MODULES.md` §2, §3, §8 and §9
 
@@ -13629,6 +13713,8 @@ explicit historical rewind); moving the channel prefix to clear one thread (it r
 one blindly after hiding a read reply (it steals another unread); per-message receipt fan-out and a global delivery
 sequence (neither is needed for the existing UUID keyset contract).
 
+**Cost of reversing.** A forward chat migration and a recount. `channel_read_scopes` and `thread_reads` (chat/0007 to chat/0010) hold the join floor and the per-thread receipts; dropping them returns catch-up to the single feed position, and with it the failures this decision fixed (history written before a join shown as new, a thread read that clears nothing it should). Applied migrations stay (chat/0010 dropped the three prototype columns of `channel_members`, so going back is a new migration, not an edit).
+
 ### D-283. Modules tell one another things through three mechanisms, one for each kind of interaction, over a contract the core holds — builds on D-35, D-250, D-254, D-255, D-265, D-272, D-273, D-281; amends D-250 §1 and rule 4, D-254 §1, D-255 §8 and D-272; `MODULES.md` §1, §2, §4, §7, §8, §10 and §12
 
 **Context.** Two modules run and neither can say anything to the other or to a person's inbox except through the core's
@@ -13777,7 +13863,8 @@ the second writer that §10 step 5 said a generic inbox waits for.
    section; the search route and chat's source; issues' source; the web's search groups; the close. Every migration adds a
    table, an index or a `NOT VALID` check, so a node of the release before ignores the new schema; a rollback is the backup's
    (D-86). In a cluster, a node claims only the consumers it knows and leaves other rows waiting, so a rolling deploy loses
-   nothing. A payload changes only by adding; a break is a new type name.
+   nothing. A payload changes only by adding; a break is a new type name. *(Amended D-288 §5: a change an older node would refuse raises
+   the declaration's `shape` and keeps a reader for the old one, and `module-compat.test.ts` holds it; the type name stays.)*
 
 10. **Not built, and what watches for it.** Each is a sentence until its watcher exists, as D-272 requires.
     - *`AttachmentOwner`*: when the first module that is not chat attaches a file (`CORE_WRITES` already names the seams).
@@ -14286,7 +14373,8 @@ partner, and what a row that points at another module's record is when that reco
    build has **no optional edge yet** (neither chat nor issues lists a partner), so no real scenario exists; the first module that
    lists one writes its file and the case appears. Scenarios run on the composition: those that need a database or a route
    build the application from it as the integration tests do. *Not built:* the second world, a partner that runs but is not
-   entitled in a workspace, which waits for the workspace's entitlements.
+   entitled in a workspace. *(Amended D-289: the entitlements are built; the second world is still not, and `MODULES.md` §10 says what
+   would start it.)*
 3. **A reference to another module's record is opaque and carries its label.** The referring module stores, in its own table, a
    `(module, type, id)` and the short label (the title) the record had when it was linked. There is **no foreign key** to the
    other module's table (D-250 rule 5; `module-foreign-keys.integration.test.ts` holds that a key between modules is declared by
