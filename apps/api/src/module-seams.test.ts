@@ -1,8 +1,7 @@
 /**
  * The doors name a module only where its routes are (D-250, `MODULES.md` §8): `cli/`, `ingress/`, `realtime/` and the process entry `index.ts` reach a module's work
  * through the composition (`composition.ts`, whose `jobWork` is what `bun run job` runs) and name none of its files, but the
- * one file that composes the modules' routes, `ingress/http/app.ts`, and the route handlers a module has not yet moved
- * into its own folder (`features/<id>/http/`, D-280, `MODULES.md` §9 item 4). `eslint.config.mjs` keeps the core (`modules/`, `platform/`) from importing a feature at all; this
+ * one file that composes the modules' routes, `ingress/http/app.ts`. `eslint.config.mjs` keeps the core (`modules/`, `platform/`) from importing a feature at all; this
  * is the same line for the doors, which the lint cannot draw because chat's own handlers are among them: a file may import a
  * feature only if it is listed here for that feature, and the lists only shrink.
  *
@@ -20,9 +19,6 @@ const FEATURES = join(SOURCE_ROOT, 'features');
 /** The one file of the doors that registers every module's routes: the composition root's other half. */
 const COMPOSITION_ROOTS: readonly string[] = [join('ingress', 'http', 'app.ts')];
 
-/** The route handlers of chat, and the doors that still read it, by feature: `ingress/http/<file>.ts` and no other file. */
-const CHAT_HANDLERS = ['missed-mail'].map((name) => join('ingress', 'http', `${name}.ts`));
-
 /**
  * What a door may import of a feature, with why. **Only shrinks**: an entry that no longer imports its feature fails the
  * test, and a new file that imports one is refused with it. Not a way to add a module's file to the core's doors: a module
@@ -31,15 +27,6 @@ const CHAT_HANDLERS = ['missed-mail'].map((name) => join('ingress', 'http', `${n
 const ALLOWED: Readonly<
   Record<string, { readonly features: readonly string[]; readonly why: string }>
 > = {
-  ...Object.fromEntries(
-    CHAT_HANDLERS.map((file) => [
-      file,
-      {
-        features: ['chat'],
-        why: 'a route handler of chat, kept in ingress (MODULES.md §9 item 4)',
-      },
-    ]),
-  ),
   [join('ingress', 'http', 'releases.ts')]: {
     features: ['chat'],
     why: 'the release route takes the type of chat’s release check',
@@ -59,7 +46,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 4;
+const MAX_ALLOWED = 3;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
@@ -145,6 +132,18 @@ describe('the doors name no module’s files outside its routes and the composit
     expect(files.length).toBeLessThanOrEqual(MAX_ALLOWED);
     expect(files.filter((file) => file.startsWith(`cli${sep}`)).length).toBeLessThanOrEqual(
       MAX_ALLOWED_IN_CLI,
+    );
+  });
+
+  test('a module’s route handler is not a door: chat’s missed-mail routes are in its folder, and no ingress file is listed for it', () => {
+    expect(existsSync(join(SOURCE_ROOT, 'ingress', 'http', 'missed-mail.ts'))).toBe(false);
+    expect(existsSync(join(FEATURES, 'chat', 'http', 'missed-mail.ts'))).toBe(true);
+    expect(Object.keys(ALLOWED).sort()).toEqual(
+      [
+        join('cli', 'erase-content.ts'),
+        join('ingress', 'http', 'releases.ts'),
+        join('ingress', 'ws', 'socket.ts'),
+      ].sort(),
     );
   });
 

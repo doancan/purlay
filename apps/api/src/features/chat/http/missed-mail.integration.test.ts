@@ -1,3 +1,4 @@
+// @needs-modules chat
 /**
  * Email about what a person missed (D-240) through real requests: the caller's own setting, offered only where
  * the server has a relay and the address was verified; and the stop link's route, public, which turns the
@@ -6,12 +7,12 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import type { MissedMailSetting } from '@purlay/types';
-import { createApp } from './app';
-import { aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
-import { fixedClock } from '../../platform/clock';
-import { randomToken, tokenDigest } from '../../platform/tokens';
-import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { testNeeding } from '../../testing/needs';
+import { createApp } from '../../../ingress/http/app';
+import { aRecordingOutbox, NOW, testDependencies } from '../../../testing/doubles';
+import { fixedClock } from '../../../platform/clock';
+import { randomToken, tokenDigest } from '../../../platform/tokens';
+import { aSignedInUser, type SignedInUser } from '../../../testing/signed-in';
+import { testNeeding } from '../../../testing/needs';
 
 afterAll(async () => {
   await closeIntegrationDatabase();

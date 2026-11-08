@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **Notifications** — The setting for emailing you about what you missed is part of chat: on a server that does not run chat, `/api/me/missed-mail` answers like any unknown path, and where chat runs nothing is different (D-280)
 
 ---

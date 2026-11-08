@@ -223,7 +223,6 @@ import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-dead
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
-import { readMyMissedMail, setMyMissedMail } from './missed-mail';
 import { runningModuleIds, type Composition } from '../../composition';
 import { notificationSink } from '../../modules/inbox/sink';
 import { factRoutingOf } from '../../platform/outbox';
@@ -1235,15 +1234,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
       '/api/me/quiet-hours',
       async ({ request, body }) => await setMyQuietHours(dependencies, request, body),
     )
-    .get(
-      '/api/me/missed-mail',
-      async ({ request }) => await readMyMissedMail(dependencies, request),
-    )
-    .put(
-      '/api/me/missed-mail',
-      async ({ request, body }) => await setMyMissedMail(dependencies, request, body),
-    )
-    // Public: a letter's link, opened in whichever browser, signed in or not (D-240).
     // Away by choice (D-257): stored, then told again through the presence this node keeps.
     .put(
       '/api/me/away',

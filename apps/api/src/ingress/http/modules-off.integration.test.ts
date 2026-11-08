@@ -57,6 +57,9 @@ const CHAT_PATHS: readonly (readonly [string, string])[] = [
   ['POST', '/api/channels/c1/messages'],
   ['DELETE', '/api/messages/m1'],
   ['GET', '/api/notifications'],
+  ['GET', '/api/me/missed-mail'],
+  ['PUT', '/api/me/missed-mail'],
+  ['POST', '/api/missed-mail/stop'],
   ['PUT', '/api/notifications/read'],
   ['POST', '/api/workspaces/w1/channels'],
   ['GET', '/api/workspaces/w1/search'],
@@ -116,6 +119,27 @@ describe('integration: an application with no module is the core alone', () => {
         }
       }
       expect(JSON.stringify(unknown.body)).not.toMatch(/disabled|module/i);
+    });
+  });
+
+  test('with only issues run, chat’s missed-mail setting is the unknown path’s 404, and the core’s own /api/me/* still answers', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db, compose([issuesModule]));
+      const ada = await aSignedInUser(db, clock, 'issues-only');
+      const unknown = await call('GET', '/api/no-such-thing/x', ada);
+      for (const [method, body] of [
+        ['GET', undefined],
+        ['PUT', { on: false }],
+      ] as const) {
+        const answer = await call(method, '/api/me/missed-mail', ada, body);
+        expect({ method, status: answer.status, body: answer.body }).toEqual({
+          method,
+          status: 404,
+          body: unknown.body,
+        });
+      }
+      expect(unknown.body).toMatchObject({ error: { code: 'ROUTE_NOT_FOUND' } });
+      expect((await call('GET', '/api/me/quiet-hours', ada)).status).toBe(200);
     });
   });
 
