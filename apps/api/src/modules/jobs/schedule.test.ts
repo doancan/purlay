@@ -70,6 +70,7 @@ describe('the next run of a slot', () => {
       'sweep:inbox',
       'sweep:link-previews',
       'sweep:orphans',
+      'sweep:outbox',
       'sweep:sessions',
     ]);
   });

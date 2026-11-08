@@ -65,6 +65,9 @@ export const ADMIN_OVERVIEW: ServerOverview = {
   pushConfigured: false,
   sharedStateConfigured: false,
   exportFailures: 0,
+  outboxDeadFacts: 0,
+  outboxOldestPendingSeconds: 0,
+  outboxStaleAfterSeconds: 900,
 };
 export const ADMIN_SETTINGS: ServerSettingsAnswer = {
   settings: {

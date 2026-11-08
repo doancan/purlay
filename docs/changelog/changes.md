@@ -41,6 +41,7 @@ have it.
 - **Inbox** — A new `GET` and `POST` of `/api/workspaces/:workspaceId/inbox` list and read the notices modules write to a person, from the modules the server runs, and their other tabs are told with `INBOX_UPDATED`; `purlay_inbox_entries_total` counts them by module and kind (D-286)
 - **Operations** — The core keeps an inbox table for what modules tell a person, swept daily by `sweep:inbox` (read notices after 30 days, all after 180) and included in a person's own export as `inbox_entries.ndjson`; nothing writes to it yet (D-286)
 - **Operations** — The core keeps an outbox table for the facts one module tells another, one row for each module that consumes it, written in the publisher's transaction and gone with it if that is rolled back; a fact whose consumer is off is dropped or held for up to 14 days as it declares, and a deleted workspace's rows go with its purge; nothing publishes yet (D-288)
+- **Operations** — Facts between modules are swept hourly by `sweep:outbox`, counted in `purlay_outbox_pending`, `purlay_outbox_oldest_age_seconds`, `purlay_outbox_dead` and `purlay_outbox_delivered_total`, `purlay_outbox_failures_total`, `purlay_outbox_dropped_total` by module, and the server overview names dead facts and one that has waited over 15 minutes (D-288)
 
 ### Fixed
 

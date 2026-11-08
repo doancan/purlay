@@ -495,8 +495,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'metrics-modules-info-left-off-the-page',
     why: '/metrics carries no purlay_modules_info, so no metric says which modules a node runs (O2)',
     file: 'apps/api/src/ingress/http/app.ts',
-    find: 'read: async () => [modulesInfoFamily(moduleIds), ...(await readJobs())],',
-    replace: 'read: readJobs,',
+    find: '            modulesInfoFamily(moduleIds),\n',
+    replace: '',
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
   },
   {

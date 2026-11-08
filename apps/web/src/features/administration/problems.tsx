@@ -105,6 +105,25 @@ export const ServerProblems = ({
       overview.data.exportFailures,
     );
   }
+  if (overview.data !== undefined) {
+    const { outboxDeadFacts: dead, outboxOldestPendingSeconds: waited } = overview.data;
+    const stale = waited > overview.data.outboxStaleAfterSeconds;
+    if (dead > 0 || stale) {
+      entry(
+        'outbox',
+        t('admin.problems.outbox'),
+        <>
+          {dead > 0 ? <p>{t('admin.problems.outboxDead', { count: dead })}</p> : null}
+          {stale ? (
+            <p>{t('admin.problems.outboxStale', { minutes: Math.floor(waited / 60) })}</p>
+          ) : null}
+        </>,
+        'operations',
+        t('admin.problems.openOperations'),
+        dead + (stale ? 1 : 0),
+      );
+    }
+  }
   return (
     <SettingsCard
       title={t('admin.problems.title')}

@@ -4,6 +4,11 @@ import type { ServerAdminSession } from '../setup/setup';
 import { jobStatus, STALE_AFTER_MS } from '../jobs/report';
 import { SERVER_VERSION } from '../../platform/server-version';
 import type { Config } from '../../platform/config';
+import {
+  OUTBOX_STALE_AFTER_SECONDS,
+  outboxOverview,
+  readOutbox,
+} from '../../platform/outbox-report';
 
 export const serverOperations = async (
   db: Executor,
@@ -46,6 +51,7 @@ export const serverOverview = async (
   modules: readonly string[],
   ready: boolean,
   now: Date,
+  outboxConsumers: readonly string[] = [],
 ): Promise<ServerOverview> => {
   const users = await db
     .selectFrom('users')
@@ -73,6 +79,7 @@ export const serverOverview = async (
     .select((eb) => eb.fn.countAll<string>().as('count'))
     .where('status', '=', 'failed')
     .executeTakeFirstOrThrow();
+  const outbox = outboxOverview(await readOutbox(db, outboxConsumers, now));
   return {
     checkedAt: now.toISOString(),
     version: SERVER_VERSION,
@@ -94,6 +101,9 @@ export const serverOverview = async (
     pushConfigured: config.VAPID_PUBLIC_KEY !== undefined,
     sharedStateConfigured: config.REDIS_URL !== undefined,
     exportFailures: Number(failedExports.count),
+    outboxDeadFacts: outbox.deadFacts,
+    outboxOldestPendingSeconds: outbox.oldestPendingSeconds,
+    outboxStaleAfterSeconds: OUTBOX_STALE_AFTER_SECONDS,
   };
 };
 

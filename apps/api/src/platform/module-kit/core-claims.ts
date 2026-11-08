@@ -129,6 +129,7 @@ export const CORE_JOBS = [
   'purge:workspaces',
   'sweep:deletions',
   'sweep:inbox',
+  'sweep:outbox',
 ] as const;
 export type CoreJobName = (typeof CORE_JOBS)[number];
 

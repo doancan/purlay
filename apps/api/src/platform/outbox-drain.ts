@@ -22,6 +22,7 @@ import type { FactConsumer } from './fact-consumers';
 import { currentRequest, withinRequest, type Logger } from './logging';
 import { readGrants } from './grants';
 import type { EntitlementPolicy } from './module-kit/entitlement';
+import type { Counter } from './metrics';
 import { atomicallyOn } from './transactions';
 
 /** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about two hours (`backoffMs`). */
@@ -253,6 +254,12 @@ export const deliver = async (
   return outcome;
 };
 
+/** What a drain counts: the facts delivered and the deliveries that failed or were given up on, by module and fact type. */
+export interface OutboxCounters {
+  readonly delivered: Counter<'module' | 'fact'>;
+  readonly failures: Counter<'module' | 'fact'>;
+}
+
 /** One drain: a claim and the delivery of what it took, in the order claimed. The work of a consumer's worker. */
 export const drainOnce = async (
   database: Executor,
@@ -262,9 +269,10 @@ export const drainOnce = async (
     readonly clock: Clock;
     readonly log: Logger;
     readonly effective?: EntitlementPolicy['effective'];
+    readonly counters?: OutboxCounters;
   },
 ): Promise<Record<Delivery | 'exhausted', number>> => {
-  const { handlers, batch, clock, log, effective } = input;
+  const { handlers, batch, clock, log, effective, counters } = input;
   const tally = { delivered: 0, skipped: 0, failed: 0, dead: 0, gone: 0, exhausted: 0 };
   const { claimed, exhausted } = await claimDue(database, {
     handles: handlers,
@@ -279,13 +287,18 @@ export const drainOnce = async (
       factId: one.factId,
       consumer: one.consumer,
     });
+    counters?.failures.inc({ module: one.consumer, fact: one.type });
   }
   for (const one of claimed) {
     const handling = handlers.find(
       (candidate) => candidate.consumer === one.consumer && candidate.type === one.type,
     );
     if (handling === undefined) continue;
-    tally[await deliver(database, one, handling, { clock, log })] += 1;
+    const outcome = await deliver(database, one, handling, { clock, log });
+    tally[outcome] += 1;
+    const labels = { module: one.consumer, fact: one.type };
+    if (outcome === 'delivered') counters?.delivered.inc(labels);
+    if (outcome === 'failed' || outcome === 'dead') counters?.failures.inc(labels);
   }
   return tally;
 };

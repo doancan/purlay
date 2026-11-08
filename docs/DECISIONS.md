@@ -14049,7 +14049,7 @@ fact for each message (D-35).
    (fact, consumer), `UNIQUE (fact_id, consumer)`. Times are the application's clock's, as in the core's other tables, so a test moves
    them. `finished_at` is set exactly when `state` is not `pending`, by a `CHECK`. The table is never exported. Its erasure decision is
    `nobody`, since no column names a person and an id in a payload names the anonymised account after an erasure (D-256); its
-   retention is `kept` until the sweep of step 14e makes it `swept` (§9), which that step's change decides in the same commit as it probes.
+   retention is `swept` by `sweep:outbox` (§9), probed by `table-lifecycle.integration.test.ts`.
    A deleted workspace's rows are taken by the purge, since its tombstone's key never cascades (D-242).
 2. **`publishFact(transaction, context, fact, payload)`** writes a row for each module of the build that consumes the type, in the
    caller's transaction. It takes `Transaction` and not an executor, and checks at run time that it is one, since a cast could unsay

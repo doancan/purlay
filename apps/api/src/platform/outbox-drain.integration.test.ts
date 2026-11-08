@@ -30,14 +30,19 @@ import {
   theGrants,
 } from '../testing/facts';
 import { currentRequest, withinRequest } from './logging';
+import { renderMetrics, serverMetrics } from './metrics';
+import { readExposition, sampleOf } from '../testing/exposition';
 import type { FactConsumer } from './fact-consumers';
 import {
   backoffMs,
   claimDue,
   deliver,
+  drainOnce,
   OUTBOX_ATTEMPTS_MAX,
   type ClaimedFact,
+  type FactHandling,
   type Handled,
+  type OutboxCounters,
 } from './outbox-drain';
 import { publishFact } from './outbox';
 
@@ -627,5 +632,75 @@ describe('integration: the chain from a request to its delivery', () => {
       consumer: 'wiki',
       fact: 'notes.created',
     });
+  });
+});
+
+describe('integration: what a drain counts', () => {
+  const counted = (): {
+    readonly counters: OutboxCounters;
+    readonly read: (name: 'delivered' | 'failures') => number;
+  } => {
+    const metrics = serverMetrics(
+      undefined,
+      [],
+      [],
+      [],
+      [{ module: 'wiki', fact: 'notes.created' }],
+    );
+    return {
+      counters: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
+      read: (name) =>
+        sampleOf(
+          readExposition(renderMetrics(metrics)),
+          name === 'delivered' ? 'purlay_outbox_delivered_total' : 'purlay_outbox_failures_total',
+          { module: 'wiki', fact: 'notes.created' },
+        ) ?? Number.NaN,
+    };
+  };
+  const handlers = (handle: FactConsumer): readonly (Handled & FactHandling)[] => [
+    { ...wiki[0]!, declaration, handle },
+  ];
+
+  test('the facts it delivered and the deliveries that failed, by module and fact type', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await publish(workspaceId, clock, 'ok');
+    await publish(workspaceId, clock, 'bad');
+    const handle: FactConsumer = (fact, transaction) =>
+      (fact.payload as { noteId: string }).noteId === 'bad'
+        ? Promise.reject(new Error('no'))
+        : recording(fact, transaction);
+    const { counters, read } = counted();
+    const { log } = aRecordingLogger();
+    const tally = await drainOnce(cloned.db, {
+      handlers: handlers(handle),
+      batch: BATCH,
+      clock,
+      log,
+      counters,
+    });
+    expect(tally).toMatchObject({ delivered: 1, failed: 1, dead: 0 });
+    expect([read('delivered'), read('failures')]).toEqual([1, 1]);
+  });
+
+  test('a fact that used every try as a failure, though its handler is not asked again', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await publish(workspaceId, clock);
+    for (let round = 0; round < OUTBOX_ATTEMPTS_MAX; round += 1) {
+      await claimDue(cloned.db, { handles: wiki, batch: BATCH, clock });
+      clock.advance(3_700_000);
+    }
+    const { counters, read } = counted();
+    const { log } = aRecordingLogger();
+    const tally = await drainOnce(cloned.db, {
+      handlers: handlers(recording),
+      batch: BATCH,
+      clock,
+      log,
+      counters,
+    });
+    expect(tally.exhausted).toBe(1);
+    expect([read('delivered'), read('failures')]).toEqual([0, 1]);
   });
 });

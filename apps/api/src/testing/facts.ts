@@ -4,7 +4,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { Type } from '@sinclair/typebox';
-import { defineFact } from '@purlay/types';
+import { defineFact, messageId } from '@purlay/types';
 import {
   effectiveModules,
   type EntitlementMode,
@@ -139,6 +139,38 @@ export const aGrant = async (
       valid_until: validUntil,
       source: 'test',
       changed_at: new Date(0),
+    })
+    .execute();
+};
+
+/** A row of the outbox as a test needs one: pending and due at `NOW`-ish unless it says otherwise. */
+export const anOutboxRow = async (
+  executor: Executor,
+  workspaceId: string,
+  row: {
+    readonly consumer?: string;
+    readonly state?: 'pending' | 'delivered' | 'dead' | 'skipped';
+    readonly at: Date;
+    readonly finishedAt?: Date;
+    readonly expiresAt?: Date;
+  },
+): Promise<void> => {
+  const state = row.state ?? 'pending';
+  await executor
+    .insertInto('outbox')
+    .values({
+      id: messageId(row.at),
+      fact_id: messageId(row.at),
+      workspace_id: workspaceId,
+      type: 'notes.created',
+      producer: 'notes',
+      consumer: row.consumer ?? 'wiki',
+      payload: JSON.stringify({ noteId: 'n', title: 't' }),
+      state,
+      next_attempt_at: row.at,
+      created_at: row.at,
+      finished_at: state === 'pending' ? null : (row.finishedAt ?? row.at),
+      expires_at: row.expiresAt ?? new Date(row.at.getTime() + 86_400_000),
     })
     .execute();
 };

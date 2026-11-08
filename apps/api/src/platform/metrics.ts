@@ -221,6 +221,9 @@ export interface ServerMetrics {
   readonly workerFailures: Counter<'module' | 'worker'>;
   readonly inboxEntries: Counter<'module' | 'kind'>;
   readonly entitlementRefusals: Counter<'module'>;
+  readonly outboxDelivered: Counter<'module' | 'fact'>;
+  readonly outboxFailures: Counter<'module' | 'fact'>;
+  readonly outboxDropped: Counter<'module' | 'fact'>;
 }
 
 /** A background loop a module declares: the pair that labels its failures (`MODULES.md` §7). */
@@ -235,6 +238,12 @@ export interface NoticeSeries {
   readonly kind: string;
 }
 
+/** A fact a module consumes, by its manifest: the pair that labels what the outbox counts (D-288). */
+export interface FactSeries {
+  readonly module: string;
+  readonly fact: string;
+}
+
 /**
  * `modules` are the ids of the modules the build carries: the `module` label of the counters below is one of them, `core`,
  * or `none` (`platform/module-kit/ownership.ts`), so the series each can have are known from the start and are made at zero.
@@ -244,6 +253,7 @@ export const serverMetrics = (
   modules: readonly string[] = [],
   workers: readonly WorkerSeries[] = [],
   notices: readonly NoticeSeries[] = [],
+  facts: readonly FactSeries[] = [],
 ): ServerMetrics => {
   const registry = createMetricsRegistry();
   registry.gauge(
@@ -292,6 +302,21 @@ export const serverMetrics = (
     'Requests turned away as a path nobody has because the workspace is not granted the module that owns the route (D-289), by that module (named by a manifest, never by a caller). A sudden rise is a client or an edition file that disagrees with the grants.',
     ['module'],
   );
+  const outboxDelivered = registry.counter(
+    'purlay_outbox_delivered_total',
+    'Facts delivered to a module by its outbox worker, by the consuming module and the fact type (both named by manifests, never by a caller).',
+    ['module', 'fact'],
+  );
+  const outboxFailures = registry.counter(
+    'purlay_outbox_failures_total',
+    'Deliveries of a fact that threw or were given up on, by the consuming module and the fact type; a fact that fails eight times is also dead (`purlay_outbox_dead`).',
+    ['module', 'fact'],
+  );
+  const outboxDropped = registry.counter(
+    'purlay_outbox_dropped_total',
+    'Facts not written because their consumer is not run by the publishing process and the fact says to drop them, by the consuming module and the fact type.',
+    ['module', 'fact'],
+  );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
   const owners = [CORE_OWNER, ...modules];
@@ -305,6 +330,11 @@ export const serverMetrics = (
   for (const module of modules) entitlementRefusals.inc({ module }, 0);
   for (const { module, name } of workers) workerFailures.inc({ module, worker: name }, 0);
   for (const { module, kind } of notices) inboxEntries.inc({ module, kind }, 0);
+  for (const { module, fact } of facts) {
+    outboxDelivered.inc({ module, fact }, 0);
+    outboxFailures.inc({ module, fact }, 0);
+    outboxDropped.inc({ module, fact }, 0);
+  }
   return {
     registry,
     httpDuration,
@@ -314,6 +344,9 @@ export const serverMetrics = (
     workerFailures,
     inboxEntries,
     entitlementRefusals,
+    outboxDelivered,
+    outboxFailures,
+    outboxDropped,
   };
 };
 
