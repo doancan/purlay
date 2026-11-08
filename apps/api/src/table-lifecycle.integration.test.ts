@@ -601,6 +601,18 @@ const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  suspended_modules: by('suspended_modules', 'suspended_by', adas, async (db, world) => {
+    await db
+      .insertInto('suspended_modules')
+      .values({
+        module: 'issues',
+        reason: 'misbehaving',
+        source: 'operator',
+        suspended_by: world.adaId,
+        suspended_at: NOW,
+      })
+      .execute();
+  }),
   channel_bookmarks: by('channel_bookmarks', 'added_by', adas, async (db, world) => {
     await db
       .insertInto('channel_bookmarks')

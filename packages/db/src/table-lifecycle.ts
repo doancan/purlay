@@ -113,6 +113,10 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   workspace_modules: decided('anonymised', {
     kept: 'the grant stays until the operator changes it, and past its end it is read as none; a purged workspace’s rows go with the purge (D-289)',
   }),
+  // The row names the administrator who stopped the module, and lives until they lift it (D-296).
+  suspended_modules: decided('anonymised', {
+    kept: 'the stop stays until the administrator lifts it, which deletes the row; the trail keeps who stopped it and why (D-296)',
+  }),
   workspace_members: decided('anonymised', 'until-removed'),
   workspaces: decided('anonymised', {
     kept: 'the row stays, with its name, as what the trails refer to',

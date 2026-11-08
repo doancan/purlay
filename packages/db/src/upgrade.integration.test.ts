@@ -317,6 +317,7 @@ describe('integration: upgrading from the previous release', () => {
         '0089_outbox',
         '0090_workspace_modules',
         '0091_outbox_pending_by_workspace',
+        '0092_suspended_modules',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

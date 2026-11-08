@@ -163,6 +163,7 @@ export type CorePersonalExcluded =
   | 'audit_log'
   | 'server_audit_log'
   | 'workspace_modules'
+  | 'suspended_modules'
   | 'workspace_invitations'
   | 'job_runs'
   | 'object_deletions'
@@ -187,6 +188,8 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   server_audit_log: 'the server’s trail: the operator’s record',
   workspace_modules:
     'which modules the operator granted a workspace: the server’s record, naming at most the administrator who wrote it (D-289)',
+  suspended_modules:
+    'which modules the operator stopped for the whole server: the server’s record, naming at most the administrator who wrote it (D-296)',
   workspace_invitations: 'a workspace’s links and their digests: the workspace’s, and credentials',
   job_runs: 'the scheduler’s own record',
   object_deletions: 'storage keys waiting to be deleted: keys never leave',
