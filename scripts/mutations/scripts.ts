@@ -155,6 +155,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
+    id: 'check-docs-passes-a-path-that-does-not-exist',
+    why: 'a document that names a file that was moved or deleted sends a reader nowhere and every gate is green',
+    file: 'scripts/check-docs.py',
+    find: "        if '*' not in named and not pathlib.Path(named).exists():\n",
+    replace: '        if False:\n',
+    tests: ['scripts/check-docs.test.ts'],
+  },
+  {
     id: 'ci-gate-accepts-a-skipped-modules-job-whatever-changed',
     why: 'the required check passes with the module matrix skipped for a change that can move what a process answers (D-250)',
     file: 'scripts/ci-gate.ts',

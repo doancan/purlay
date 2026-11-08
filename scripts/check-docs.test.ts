@@ -93,6 +93,19 @@ describe('the document check', () => {
     expect(output).toContain(missing);
   });
 
+  test('fails on a path a document names that does not exist', () => {
+    const root = aCopy();
+    edit(
+      root,
+      'docs/OVERVIEW.md',
+      (text) => `${text}\nSee \`apps/api/src/ingress/http/messages.ts\`.\n`,
+    );
+    const { status, output } = run(root);
+    expect(status).toBe(1);
+    expect(output).toContain('a document names a path that does not exist');
+    expect(output).toContain('apps/api/src/ingress/http/messages.ts');
+  });
+
   test('fails on a gap in decision numbering', () => {
     const root = aCopy();
     edit(root, 'docs/DECISIONS.md', (text) => text.replace(/^### D-2\. /m, '### Formerly D-2. '));

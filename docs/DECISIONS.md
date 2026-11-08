@@ -429,8 +429,8 @@ trigger is unchanged and now has a real data point beside it rather than an intu
 (upstream issue 10940). At that point the alias, the second typecheck and this paragraph all go.
 
 **Something has to watch for that.** A written trigger nobody checks is a wish, so dependency
-updates arrive weekly as grouped pull requests that pass the same gate as everything else
-(`.github/dependabot.yml`). That is also what keeps *target the latest stable major* true six
+updates arrived weekly as grouped pull requests that passed the same gate as everything else
+(`.github/dependabot.yml`; D-219 ended them and removed the file, so the owner's own update commits take that place). That is also what keeps *target the latest stable major* true six
 months from now rather than only on the day it was written.
 
 *Noted, not adopted:* PostgreSQL 18 ships a native `uuidv7()`. D-8 requires the **client** to
@@ -885,7 +885,7 @@ the linking rule and the checks that make a provider's word believable. SAML sta
 **Decided: GitHub Issues for the unit of work, a GitHub Project board for the view.** One issue
 per task; the milestone is the version it ships in, and carries that version's exit criterion.
 
-**`docs/ROADMAP.md` is retired.** It held the same task list the issues now hold, and keeping
+**`ROADMAP.md` is retired (the file is deleted).** It held the same task list the issues now hold, and keeping
 both would have been the duplication `OVERVIEW.md`'s ownership rule exists to prevent — the copy
 that drifts is always the one nobody is looking at. Its two unique facts moved: the *working
 rule* (a task is done when typed, tested and documented; a milestone is done when its exit
@@ -1640,7 +1640,7 @@ signature.
 *Amended 2026-10-09 (#246): mutation testing was rejected as costing more than it bought, and the
 audit then ran 110 hand-written mutations and found 23 that no test noticed — among them the
 OAuth state's length check, which, removed, accepts an empty signature. A mutation tool with a
-generator is still the wrong size; a **list** of mutations is not. `scripts/mutations.ts` holds
+generator is still the wrong size; a **list** of mutations is not. `scripts/mutations/` holds
 each as `{file, find, replace, tests}`, `bun run mutate` applies them one at a time to a copy of
 the repository (never the working tree) and reports caught or survived, a mutation whose `find`
 no longer occurs once is reported stale rather than skipped, and `scripts/mutate.test.ts` proves
@@ -2122,7 +2122,7 @@ changelog by definition.
 *I do not know which version this is*; the lockfile knows, but a lockfile is a consequence, and a
 pass from a differently-resolved tree is "green in one state is not green" one layer down. An exact
 pin turns an upgrade into a commit CI judges — which is what the weekly grouped Dependabot pull
-requests already are. `workspace:*` is exempt: it is not a range, it names a package in this
+requests were (D-219 ended them; the owner's update commits are judged the same way). `workspace:*` is exempt: it is not a range, it names a package in this
 repository and cannot resolve to anything else.
 
 **Rejected: generating the table from the manifests.** It would be accurate, and it would still be
@@ -3641,8 +3641,8 @@ true only while somebody remembered it.
 
 - **Actions are pinned to a full commit SHA with a trailing `# vX.Y.Z` comment.**
   `scripts/workflow-pins.test.ts` fails any `uses:` that is not 40 hex digits plus a version
-  comment, so it fails in the pull request. Dependabot's github-actions ecosystem stays on, so a
-  new SHA arrives as a reviewable bump instead of a silent tag move. The repository setting
+  comment, so it fails in the pull request. Dependabot's github-actions ecosystem was on (D-219 turned it off), so a
+  new SHA arrives as the owner's reviewable bump instead of a silent tag move. The repository setting
   `sha_pinning_required` is the second lock, applied by the maintainer, not by a pull request.
 - **`bun audit` blocks at high severity** (`scripts/audit-gate.ts`, run by `bun run audit:gate` in a
   job of its own). A finding that cannot be fixed goes in `scripts/audit-allowlist.json` with an
@@ -3696,7 +3696,7 @@ the sources of the API and the two packages it uses, and runs as the numeric use
 no shell, no package manager and no `curl` in it; the container's `HEALTHCHECK` is the Bun runtime
 asking `/health/ready`, so a process that is up but not ready — database away, migration pending,
 draining (D-72) — is reported unhealthy. Both bases are pinned by digest with the tag beside it, and
-Dependabot's docker ecosystem proposes the next digest, for the reason pins are CI-checked (D-91).
+Dependabot's docker ecosystem proposed the next digest (D-219 ended that; the owner moves it), for the reason pins are CI-checked (D-91).
 It starts with `--read-only --cap-drop ALL --security-opt no-new-privileges`, which
 `scripts/image-smoke.sh` does on every pull request that touches it.
 
@@ -8192,7 +8192,7 @@ nothing merged; its report is the record of every number below).
    - *A session-hash plugin* on the Kysely instance handed to Better Auth: every value bound to
      `sessions.token_hash` is SHA-256ed on the way in, and a result row keyed by the raw token gets the
      raw token back. D-11's property — a dump is not a session — holds with the secret too. The plugin
-     has its own tests and an entry in `scripts/mutations.ts`. **The plugin is scoped to the `sessions`
+     has its own tests and an entry in `scripts/mutations/`. **The plugin is scoped to the `sessions`
      table**, and alone it broke the library's `revoke-other-sessions` into a silent no-op (reproduced
      in the spike's fix round 1), so that route is answered by an endpoint of ours: it deletes the user's
      other sessions by row `id` and never accepts a digest as a token. A session list or a revoke by row
@@ -9778,7 +9778,7 @@ four times the budget at five hundred messages and twenty times at two thousand.
    position names, and what a message that arrives meanwhile is written into. The way back is the window's, 50 ms,
    whatever was read before.
 3. **Held by a test and by the budget.** A unit test and the feed's test hold the trim (two mutations in
-   `scripts/mutations.ts`). The browser test holds a *count*, which a shared runner cannot excuse — what a channel
+   `scripts/mutations/`). The browser test holds a *count*, which a shared runner cannot excuse — what a channel
    draws on return is at most two pages — and its times join the existing mechanism: `bun run budget:browser` reads
    the median switch back after 2,000 messages from the same `test-results/performance` files as the rest, and
    blocks on a regression against main's last runs (D-49). On a person's machine the switch back is held to 100 ms
@@ -12849,7 +12849,7 @@ membership, was outside the share only because one handler happened to put it be
 3. **The core stays outside every share.** A route the core owns is noted as nobody's; the sign-in library holds the
    unleased database; and the guards that decide whether a module's request may be made (`requireWorkspaceMembership`,
    `requireDeletionMembership`) are the core's whichever module asks (`inTheCore`), so a person who is not in a workspace
-   holds no slot of a module they have no part in — what `issues-budget.integration.test.ts` held before and still holds.
+   holds no slot of a module they have no part in — what `features/issues/http/budget.integration.test.ts` held before and still holds.
 4. **The share's time limit is the connection's.** The lease sets `statement_timeout` when the share's differs from the
    pool's, and only then, remembered for the connection so that one a share set to five seconds is not found so by
    the next holder; a transaction no longer sets it itself. A statement past it is cancelled by the database (`57014`) and
@@ -13762,7 +13762,7 @@ the second writer that §10 step 5 said a generic inbox waits for.
       the first feature that needs one**, and the outbox is proven by the fake third module's test and not by a real consumer.
       The consequence, stated plainly: **this ships infrastructure with no production consumer of the outbox**, against
       D-272 §1, which built things with the first module that needs them, and the owner chose that on purpose; it is a table, a
-      worker for a module that consumes (none) and a sweep, kept honest by the tests above and by `purlay_outbox_rows`. The
+      worker for a module that consumes (none) and a sweep, kept honest by the tests above and by `purlay_outbox_pending`. The
       consumers that are real are the notification port (an assignment notice) and the search source (issues' and chat's).
       Until the first real publisher, the outbox is the part of this most likely to need change, and the decision for it
       is the owner's to revisit then.
@@ -13787,7 +13787,7 @@ the second writer that §10 step 5 said a generic inbox waits for.
       opened union; until then it is this sentence.
     - *A wake-up for the drain* (a `DomainBus` hint to the local worker): when the measured delivery delay is a problem; the
       delay is two seconds and a run, and 14e reports it.
-    - *Partitioning the outbox*: past a million rows a day or a vacuum that lags; watched by `purlay_outbox_rows` and a sentence in
+    - *Partitioning the outbox*: past a million rows a day or a vacuum that lags; watched by `n_dead_tup` of the table and a sentence in
       `DEPLOY.md`, both of step 14e.
     - *Requeueing a dead row by a command, a ceiling per producer*: when a dead row has to be retried by hand, or a producer is
       measured filling the table; for now a dead row is seen and not retried.
