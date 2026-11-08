@@ -15,6 +15,7 @@ export * from './errors';
 export * from './models';
 export * from './web-link-previews';
 export * from './modules';
+export * from './fact-declaration';
 export * from './facts';
 export * from './events';
 export * from './realtime';
