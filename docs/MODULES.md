@@ -1,7 +1,7 @@
 # Purlay — Modules (`MODULES.md`)
 
 > Authority: `DECISIONS.md` D-250 is binding on *why*, and D-255 on what was decided in practice. This file is
-> binding on *how a module is built, loaded, kept apart and removed*. **Status: built for two modules, not
+> binding on *how a module is built, loaded, kept apart and removed*. To add one, run the steps of `MODULE-GUIDE.md`; §9 is the checklist a reviewer holds it to. **Status: built for two modules, not
 > complete.** Chat (`features/chat`) and issues (`features/issues`, D-254) are the modules, and the core runs
 > without either: `MODULES` is read at boot, a module's routes, frames, events and jobs are closed when it is not
 > run, the web draws only the modules `GET /api/me` lists (the public `GET /api/client` does not name them, §3),
@@ -812,9 +812,12 @@ the removal threshold, the behaviour, the hot path of `HOT_PATHS`, and the web f
   with a case (what it answers for a workspace the caller is not in, `WORKSPACE_NOT_FOUND`, and how channel visibility
   applies: `none`, with the reason, for a route that names no channel) or among the unscoped with the reason it has no
   tenant to cross; `cross-tenant.test.ts` fails for one that is in neither, and `cross-tenant.integration.test.ts` runs
-  the crossings. A new path parameter name needs its id there too, and the module's own row needs a seeded id: add its field to `Ids`
-  and seed it in `aTenant` (`ingress/http/cross-tenant.integration.test.ts`). Without the seed, the same-member
-  two-workspace list check passes vacuously for the module's lists.
+  the crossings. `module:new` writes the two rows of its routes. A new path parameter name needs its id in `Ids`
+  (`testing/cross-tenant.ts`) by hand. The module's rows are seeded by its `seedLifecycle` (`features/<id>/testing.ts`), which `aTenant`
+  (`ingress/http/cross-tenant.integration.test.ts`) runs for every module through `moduleSeeders()`, so there is nothing to add to `aTenant`.
+  A list that answers no rows for the seed fails the same-member two-workspace check (`EMPTY_FOR_THE_SEED` is the only exception, capped
+  by `MAX_EMPTY_FOR_THE_SEED`); the other workspace's answer is searched for the ids of `Ids` only, so an id of the module that should be
+  proved absent from it is a field of `Ids` too.
 - `bundledModules` gets the module (one line in `composition.ts`), and `compose` does the rest.
 - **The share of the pool**: nothing to write in a handler. The handler is given the application's one database, whose
   every connection is leased by the module the request belongs to (D-266), so there is no boundary to ask for and no raw
@@ -909,10 +912,9 @@ the removal threshold, the behaviour, the hot path of `HOT_PATHS`, and the web f
   A break is a dated entry under `exceptions` in that file, where a reviewer sees it; the release clears them. Until a
   release carries the module the snapshot does not name it.
 - `docs/changelog/changes.md` gets an entry under **Added** when the module is something a person can use (a module with
-  no user-visible effect has none: `CONTRIBUTING.md` §6.6 says what is notable), and the decision count in `README.md`
-  follows the new D-number. **Nothing holds either, and neither is worth a guard:** what is user-visible is a judgement a
-  test would have to make for the author, and the README's count changes with every decision, not with modules, so a
-  test of it would fail unrelated changes. A reviewer reads both.
+  no user-visible effect has none; the shape of an entry is in that file's header, `CONTRIBUTING.md` §7 item 6). The decision count in
+  `README.md` follows the new D-number: `module:new` writes it and `bun run check:docs` fails when it is wrong. **The changelog entry is
+  not held by a guard**, and not worth one: what is user-visible is a judgement a test would have to make for the author. A reviewer reads it.
 
 **8. The documents.** `MODULES.md` (§11 row and section, §8 if a rule is now held), `DECISIONS.md`, `SCHEMA.md` (the
 migration and the table), `DATA.md` (what personal data it holds and how it is erased and exported), `API.md`
@@ -941,10 +943,9 @@ these files is stated: the table is the list, and a number beside it was stale e
 **The tests a new module edits.** Item 6's cells are automatic now: the smoke and migration-set tests, the CI matrix and the lifecycle
 seed read the bundle or the module's folder. What is left hard-codes the module list or needs a fixture
 (`module-seams.test.ts` is not one, the handlers being in the module's folder):
-`scripts/check-docs.test.ts` (it uses `notesModule` as its
-unknown-module name, so a real module of that name breaks it), and the modules-off, export, personal and upgrade
+the modules-off, export, personal and upgrade
 integration tests (a seeded row, a file list or a snapshot for the new table), plus the fixtures: `testing/cross-tenant.ts`
-(the `Ids` field, item 4), the seed in `cross-tenant.integration.test.ts`, and the `channel-visibility.integration` and
+(the `Ids` field, item 4), the module's `seedLifecycle` (item 4), and the `channel-visibility.integration` and
 `upgrade.integration` fixtures that need a seeded row or field; and the lifecycle seed (`module-lifecycle.integration.test.ts`, item 6).
 What grows by itself: the `modules:smoke` cells, the lifecycle matrix, the migration cells, the real process per cell of
 `migrate-on-start.integration.test.ts`, the cells of `composition.test.ts` and of both metrics tests, the `MODULES` value

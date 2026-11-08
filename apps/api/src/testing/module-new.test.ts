@@ -60,6 +60,14 @@ describe('the arguments', () => {
     expect(parseArguments(['zz', '--wat'])).toBe('unknown flag --wat');
     expect(parseArguments([])).toContain('usage');
   });
+
+  test('--help prints the usage and succeeds, wherever it stands', () => {
+    for (const argv of [['--help'], ['zz', '--help'], ['-h']]) {
+      const said: string[] = [];
+      expect(main(argv, ROOT, (line) => said.push(line))).toBe(0);
+      expect(said.join('\n')).toContain('usage: bun run module:new <id>');
+    }
+  });
 });
 
 describe('against the repository as it is', () => {

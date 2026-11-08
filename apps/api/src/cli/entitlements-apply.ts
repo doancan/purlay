@@ -18,6 +18,14 @@ import { createLogger } from '../platform/logging';
 import { sendAuditLinesTo } from '../modules/audit/lines';
 import { AppError } from '../platform/errors';
 
+const USAGE =
+  'usage: bun run entitlements:apply --file <editions.json> [--dry-run] [--cluster-ready]\nexit codes: 0 applied (or nothing to do), 1 the file takes grants away on a clustered server without --cluster-ready, 2 the file or a workspace cannot be used';
+// Before the configuration is read: asking for usage must not need a database.
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  process.stdout.write(`${USAGE}\n`);
+  process.exit(0);
+}
+
 const config = loadConfig(process.env);
 const log = createLogger({ level: config.LOG_LEVEL });
 const composition = compositionFor(config.MODULES, config.WORKSPACE_MODULES);
@@ -41,7 +49,7 @@ if (
   path === undefined ||
   args.filter((arg) => arg !== '--dry-run' && arg !== '--cluster-ready').length !== 2
 ) {
-  fail('usage: bun run entitlements:apply --file <editions.json> [--dry-run] [--cluster-ready]');
+  fail(USAGE);
 } else {
   const database = createDatabase({ ...databaseConnection(config, log), poolSize: 2 });
   try {

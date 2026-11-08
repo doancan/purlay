@@ -37,6 +37,7 @@ have it.
 
 ### Fixed
 
+- **Operations** — `bun run entitlements:apply --help` and `bun run module:new --help` print their usage and succeed; the first used to stop with a configuration error before reading its arguments (D-292, D-294)
 - **Operations** — A server that starts now joins its cluster's record within about a second instead of ten, so a restriction of a workspace's modules is not written beside a server that does not read grants and has only just started (D-292)
 
 ---

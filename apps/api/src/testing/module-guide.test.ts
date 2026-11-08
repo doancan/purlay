@@ -9,13 +9,16 @@ import { describe, expect, test } from 'bun:test';
 const ROOT = join(import.meta.dir, '../../../..');
 const guide = readFileSync(join(ROOT, 'docs/MODULE-GUIDE.md'), 'utf8');
 const quoted = [...guide.matchAll(/`([^`\n]+)`/g)].map((match) => match[1] ?? '');
+/** The module id the guide's commands and tables use: the first `module:new <id>` it shows. */
+const EXAMPLE_ID = /bun run module:new ([a-z][a-z0-9-]*)/.exec(guide)?.[1] ?? '';
 
 describe('the module guide', () => {
   test('names only paths that exist', () => {
     const paths = quoted.filter(
       (token) =>
         /^(apps|packages|scripts|docs|\.github)\//.test(token) &&
-        !/[<>*]|notes|zz/.test(token) &&
+        !/[<>*]|zz/.test(token) &&
+        !token.includes(EXAMPLE_ID) &&
         !token.includes(' '),
     );
     expect(paths.length).toBeGreaterThan(5);
@@ -31,6 +34,30 @@ describe('the module guide', () => {
     const commands = [...guide.matchAll(/bun run ([a-z:-]+)/g)].map((match) => match[1] ?? '');
     expect(commands).toContain('module:new');
     expect(commands.filter((command) => !(command in scripts))).toEqual([]);
+  });
+
+  test('uses an example id that no test of the repository uses as a fixture', () => {
+    expect(EXAMPLE_ID).not.toBe('');
+    const tests = Bun.spawnSync(['git', 'ls-files', '*.test.ts', '*.test.tsx'], { cwd: ROOT })
+      .stdout.toString()
+      .trim()
+      .split('\n');
+    // A module id as a test names one (`id: 'x'`, `optional: ['x']`, `xModule`), not any string that spells it.
+    const quotedId = new RegExp(
+      `\\b(?:id|producer|module|requires|optional)\\s*[:=]\\s*\\[?\\s*['"]${EXAMPLE_ID}['"]|\\b${EXAMPLE_ID}Module\\b`,
+    );
+    const users = tests.filter(
+      (file) =>
+        file !== 'apps/api/src/testing/module-guide.test.ts' &&
+        quotedId.test(readFileSync(join(ROOT, file), 'utf8')),
+    );
+    expect(users).toEqual([]);
+  });
+
+  test('tells the author of a grant what the build refuses, and does not say it is closed already', () => {
+    expect(guide).toContain("entitlement: 'always'");
+    expect(guide).toContain('unguardedWorkProblem');
+    expect(guide).not.toMatch(/marks as built or not|already closed when it is off/);
   });
 
   test('is the length of a guide, and is listed among the documents', () => {
