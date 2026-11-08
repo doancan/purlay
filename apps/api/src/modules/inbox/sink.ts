@@ -3,9 +3,10 @@
  * caller's transaction (`platform/ports/notification-sink.ts`).
  *
  * What it refuses and what it passes over:
- * - **A kind no running module declares** is a mistake of the module and throws, so the caller's transaction rolls back and
- *   the mistake is seen, not swallowed. The module a row belongs to is the module that declares its kind (a kind is
- *   declared once across the build, `registry.ts`), never a word the caller passes.
+ * - **A kind the calling module does not declare** is a mistake of the module and throws, so the caller's transaction rolls
+ *   back and the mistake is seen, not swallowed: a kind no running module declares, and one another module declares, alike.
+ *   A sink is made for one module (`module`, bound where the module's routes are made, never a word the caller passes), and
+ *   the row is written as that module: a module cannot write a notice as another, or list one under another's name.
  * - **A person who is not a current member** of the workspace, or is the one acting, is told nothing: nobody is owed a notice
  *   of what they did themselves or of a workspace they have left. The membership is read under a share lock, so a member
  *   removed at that moment is not told.
@@ -64,6 +65,8 @@ const problemWith = (notice: ModuleNotice): string | undefined => {
 };
 
 export const notificationSink = (dependencies: {
+  /** The module this sink is handed to: the one every notice it writes is written as, and the one that must declare its kind. */
+  readonly module: string;
   readonly clock: Clock;
   readonly kinds: KindOwners;
   readonly bus: EventBus;
@@ -76,9 +79,15 @@ export const notificationSink = (dependencies: {
   readonly push?: Pick<PushSender, 'toldInbox'>;
 }): NotificationSink => ({
   notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
-    const module = dependencies.kinds.get(notice.kind);
-    if (module === undefined) {
+    const { module } = dependencies;
+    const declaredBy = dependencies.kinds.get(notice.kind);
+    if (declaredBy === undefined) {
       throw new Error(`no running module declares the notification kind "${notice.kind}"`);
+    }
+    if (declaredBy !== module) {
+      throw new Error(
+        `the module "${module}" cannot write the notification kind "${notice.kind}": it is declared by "${declaredBy}"`,
+      );
     }
     const problem = problemWith(notice);
     if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);

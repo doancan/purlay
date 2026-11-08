@@ -12,7 +12,7 @@ import type { WorkspaceContext } from '../tenancy';
 type NoticeParams = Readonly<Record<string, string | number | boolean | null>>;
 
 export interface ModuleNotice {
-  /** A `type` of the `notifications` of a module's manifest: the module is the one that declares it. */
+  /** A `type` of the `notifications` of the calling module's own manifest: the sink it is handed is bound to that module. */
   readonly kind: string;
   readonly recipientId: string;
   /** What the notice is about, by the module's own word for it and its id. */
@@ -32,8 +32,9 @@ export interface WrittenNotice {
 export interface NotificationSink {
   /**
    * Writes the notice in `transaction` for a person who is a current member of the workspace and is not the one acting; for
-   * anyone else it writes nothing and answers `undefined`. A kind no running module declares is refused with an error: it is
-   * a mistake of the module, not of the person. Telling the same person of the same subject again, while the first is
+   * anyone else it writes nothing and answers `undefined`. A kind the calling module does not declare in its own
+   * manifest, whether no module declares it or another does, is refused with an error: it is a mistake of the module, not of
+   * the person. Telling the same person of the same subject again, while the first is
    * unread, raises that one rather than adding another.
    */
   readonly notify: (

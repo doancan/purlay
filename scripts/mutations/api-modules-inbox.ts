@@ -81,9 +81,12 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     id: 'sink-accepts-an-undeclared-kind',
     why: 'a module writes a notice of a kind no manifest declares, and a person is told something no screen can say (D-286)',
     file: 'apps/api/src/modules/inbox/sink.ts',
-    find: '    if (module === undefined) {\n',
-    replace: '    if (module === undefined && false) {\n',
-    tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+    find: '    if (declaredBy === undefined) {\n',
+    replace: '    if (declaredBy === undefined && false) {\n',
+    tests: [
+      'apps/api/src/modules/inbox/sink.test.ts',
+      'apps/api/src/modules/inbox/sink.integration.test.ts',
+    ],
   },
   {
     id: 'sink-adds-a-second-unread-notice',
@@ -180,6 +183,17 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
     find: '        module,\n        kind: notice.kind,\n        actor_id',
     replace: "        module: 'chat',\n        kind: notice.kind,\n        actor_id",
     tests: ['apps/api/src/modules/inbox/sink.integration.test.ts'],
+  },
+  {
+    id: 'sink-writes-a-kind-another-module-declares',
+    why: 'a module writes a notice of a kind another module declares, and the person is told in the name of a module that never said it (D-286)',
+    file: 'apps/api/src/modules/inbox/sink.ts',
+    find: '    if (declaredBy !== module) {\n',
+    replace: '    if (declaredBy !== module && false) {\n',
+    tests: [
+      'apps/api/src/modules/inbox/sink.test.ts',
+      'apps/api/src/modules/inbox/sink.integration.test.ts',
+    ],
   },
   {
     id: 'sweep-inbox-keeps-the-oldest',

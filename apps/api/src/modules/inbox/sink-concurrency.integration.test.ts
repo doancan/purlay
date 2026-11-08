@@ -93,6 +93,7 @@ describe('integration: notification and account erasure lock ordering', () => {
           0;
         await sql`set local deadlock_timeout = '100ms'`.execute(tx);
         return await notificationSink({
+          module: 'things',
           clock,
           bus: idleBus,
           log: NO_LOG,

@@ -33,6 +33,7 @@ afterAll(async () => {
 }, DROP_HOOK_MS);
 
 const sink: NotificationSink = notificationSink({
+  module: 'issues',
   clock: fixedClock(NOW),
   kinds: new Map([['issue_assigned', 'issues']]),
   pushedKinds: new Set(),

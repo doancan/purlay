@@ -86,6 +86,7 @@ const aWorld = async (db: Transaction): Promise<World> => {
   const ada = await member('ada');
   const bob = await member('bob');
   const sink = notificationSink({
+    module: 'things',
     clock,
     kinds: new Map([[KIND, 'things']]),
     bus: quietBus,

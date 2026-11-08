@@ -56,8 +56,10 @@ const sinkOn = (
   kinds: KindOwners = KINDS,
   bus: EventBus = recordingBus,
   push?: Pick<PushSender, 'toldInbox'>,
+  module = 'things',
 ): ReturnType<typeof notificationSink> =>
   notificationSink({
+    module,
     clock: later(),
     kinds,
     bus,
@@ -165,6 +167,23 @@ describe('integration: the notification sink', () => {
         await failureOf(sinkOn(new Map()).notify(db, bob.context, noticeFor(ada.userId))),
       ).toMatch(/thing_assigned/);
       expect(await entriesOf(db, ada.userId)).toEqual([]);
+    });
+  });
+
+  test('a module cannot write a kind another module declares: the sink is the caller’s, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      // `zz` is a second module in the process; `thing_assigned` is declared by `things`, not by it.
+      const zz = sinkOn(KINDS, recordingBus, undefined, 'zz');
+      expect(await failureOf(zz.notify(db, bob.context, noticeFor(ada.userId)))).toMatch(
+        /"zz".*"thing_assigned".*"things"/,
+      );
+      expect(await entriesOf(db, ada.userId)).toEqual([]);
+      // The module that declares the kind still writes it, as its own.
+      const written = await sinkOn().notify(db, bob.context, noticeFor(ada.userId));
+      expect(written?.module).toBe('things');
     });
   });
 
