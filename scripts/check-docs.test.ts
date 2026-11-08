@@ -153,6 +153,37 @@ describe('the document check', () => {
     expect(named.output).toContain('chat/0002_a_file_nobody_wrote.sql');
   });
 
+  describe('links', () => {
+    const plant = (file: string, link: string): ReturnType<typeof run> => {
+      const root = aCopy();
+      edit(root, file, (text) => `${text}\n${link}\n`);
+      return run(root);
+    };
+
+    test('fails on a link to a heading that is not in the document it names', () => {
+      const { status, output } = plant('docs/OVERVIEW.md', '[x](MODULES.md#no-such-heading)');
+      expect(status).toBe(1);
+      expect(output).toContain('a link names a heading that is not there');
+      expect(output).toContain('MODULES.md#no-such-heading');
+    });
+
+    test('fails on an anchor in the same document that is not a heading', () => {
+      const { output } = plant('docs/OVERVIEW.md', '[x](#no-such-heading)');
+      expect(output).toContain('a link names a heading that is not there');
+    });
+
+    test('passes a link to a heading, as GitHub spells it, and to the split-off history', () => {
+      const { status, output } = plant(
+        'docs/OVERVIEW.md',
+        '[a](MODULES.md#8-what-holds-each-rule) [b](MODULES-HISTORY.md#measurements-behind-the-rules-of-7) [c](#read-in-this-order)',
+      );
+      expect({ status, output: output.includes('a link names') }).toEqual({
+        status: 0,
+        output: false,
+      });
+    });
+  });
+
   describe('retired claims (D-255)', () => {
     const plant = (file: string, sentence: string): ReturnType<typeof run> => {
       const root = aCopy();
@@ -175,6 +206,8 @@ describe('the document check', () => {
       ['so the public handshake adds nothing to what a closed route’s 404 hides', 'docs/API.md'],
       ['until then isolation by budget is intent', 'docs/MODULES.md'],
       ['nothing outside its tests imports it, so no process takes it', 'docs/MODULES.md'],
+      ['rows below are not built until the step named', 'docs/MODULES.md'],
+      ['Nothing holds either, and neither is worth a guard', 'docs/MODULES.md'],
     ])('fails on %s', (sentence, file) => {
       const { status, output } = plant(file, sentence);
       expect(status).toBe(1);
