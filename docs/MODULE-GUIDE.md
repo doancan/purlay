@@ -16,8 +16,9 @@ bun run module:new notes               # a module that compiles and passes the g
 Flags: `--requires a,b` for modules it cannot start without, `--optional c,d` for modules it uses when they run. An id is
 lowercase letters, digits and hyphens, at most 32, and not a path the core owns. With `DATABASE_URL` set (the database named in
 `.env.test` will do) it also regenerates `packages/db/src/schema.ts` from a throwaway clone; without it, run `bun run db:check`
-against a database. A second run says the module exists and changes nothing; a file it needs to edit that has moved stops the run
-before anything is written.
+against a database (it migrates a throwaway clone, rewrites the file and exits 1 because the file changed: commit it). A second `module:new`
+is the same as the first, however many modules there are; a second run of the same id says the module exists and changes nothing; a file it
+needs to edit that has moved stops the run before anything is written.
 
 **What it makes** (`apps/api/src/testing/module-new/templates/` is the text; the module is `notes` below):
 
@@ -26,7 +27,7 @@ before anything is written.
 | `apps/api/src/features/notes/` | `module.ts` (the manifest: `budget`, `routes`, `degrades`), `budget.ts`, `schema.ts` (the tables it may name), `items.ts` (a list and a create), `export.ts` and `personal-export.ts` (the data hooks), `workers.ts` (none yet), `testing.ts` (the lifecycle seed), `degradation.testing.ts` with `--optional` |
 | `apps/api/src/features/notes/http/` | `routes.ts` (the plugin), `handlers.ts`, the pool-share test `budget.integration.test.ts` and the route test |
 | `packages/db/migrations/notes/0001_notes.sql` | the table: `workspace_id` with a cascade, bounds in `CHECK`s, the list's index |
-| `packages/types/src/notes.ts` | the wire types; the two endpoints are in `endpoints.ts`, the id in `modules.ts` |
+| `packages/types/src/notes.ts` | the wire types and `NOTES_FACTS`, an empty list already joined to `FACTS` in `facts.ts`; the two endpoints are in `endpoints.ts`, the id in `modules.ts` |
 | the registries | `apps/api/src/composition.ts` (`bundledModules`), `packages/db/src/migrator.ts` (the set and its requirements), `packages/db/src/table-owners.ts`, `packages/db/src/table-lifecycle.ts`, `HOT_PATHS` in `apps/api/src/cli/budget-latency.ts` |
 | the documents | `MODULES.md` §11 (row and section), `SCHEMA.md` (the table and §12), `DATA.md`, `API.md`, `CONFIG.md`, `ARCHITECTURE.md`, a skeleton decision in `DECISIONS.md`, the decision count in `README.md` |
 
@@ -36,8 +37,10 @@ is off, what reversing costs), the removal threshold of its section, and the sen
 scaffold: the table and the routes are a title and a list; give the module its own shape, and its own web feature when it has a screen.
 The hot path is declared as having none, with a reason, until you give it a measured one (`HOT_PATHS`: copy issues').
 
-**What proves it.** `module-new.integration.test.ts` runs exactly this on a copy of the repository: the generator, the compilers, the
-guards of the seams (`MODULES.md` §8) and the documents. A guard that starts to want a hand edit fails there first.
+**What proves it.** `module-new.integration.test.ts` runs exactly this on a copy of the repository: the generator twice (a module and a
+second that consumes a fact of the first), the declarations an author writes (a fact, a kind of notice, a search source), the schema held
+to the migrations, the compilers, the guards of the seams (`MODULES.md` §8), the tests that list facts, kinds and sources, and the
+documents. A guard that starts to want a hand edit fails there first.
 
 Then add the mutations for the rules only your tests guard (`CONTRIBUTING.md` §5), a changelog entry when a person can use the
 module, and run `bun run verify`.
@@ -70,10 +73,14 @@ module, and a missing target is a view.
 
 ## 5. Publish a fact
 
-Name it `<id>.<what>`, declare it with `defineFact` in `packages/types/src/<id>.ts` as `<ID>_FACTS` joined to `FACTS` in `packages/types/src/facts.ts`,
-and list it in the manifest's `publishes`; a consumer lists it in `consumes` and supplies a handler in `factConsumers` of its slot
-(`MODULES.md` §4, `fact-owners.test.ts`, `module-communication.test.ts`). The contract is built; the delivery by the outbox is the
-part of D-283 §1 that `MODULES.md` §10 says whether it has landed.
+Name it `<id>.<what>` and declare it with `defineFact` in the `<ID>_FACTS` of `packages/types/src/<id>.ts`, which the generator made and
+already joined to `FACTS` in `packages/types/src/facts.ts`. Import `defineFact` from `./fact-declaration`, never from `./facts`: that file
+imports your list, so a value taken from it is a cycle that fails at load. List the type in the manifest's `publishes`; a consumer lists it
+in `consumes` and supplies a handler in `factConsumers` of its slot (`MODULES.md` §4, `fact-owners.test.ts`,
+`module-communication.test.ts`). A route publishes with `publishFact` of the dependencies it is handed (`ModuleRouteDependencies`), inside
+`atomicallyOn(database)`: `publishFact(transaction, workspaceContext, FACT, payload)` writes the rows in that transaction, as the module whose
+route it is and for no other (`platform/ports/fact-publisher.ts`). The contract is built; the delivery by the outbox is the part of D-283 §1
+that `MODULES.md` §10 says whether it has landed.
 
 ## 6. Add a worker
 
@@ -94,5 +101,7 @@ data decisions for erasure and export that hold whether or not it runs, and a `d
 ## 8. What stays by hand
 
 The list a reviewer reads, and the only edits a new module makes outside its folder that the generator does not: a hot path of its own
-in `HOT_PATHS` and the web feature (`apps/web/src/features/<id>/`, its line in `modules/registry.ts`, the catalogue words). Everything
-else is derived from the bundle, or made by `module:new`.
+in `HOT_PATHS` and the web feature (`apps/web/src/features/<id>/`, its line in `modules/registry.ts`, the catalogue words), and, for a
+search source, the member of `FindTarget` (`packages/types/src/find.ts`) that says where a hit leads: it is the wire's, and a client that
+does not know it ignores it. Everything else is derived from the bundle, or made by `module:new`: the tests that list modules, facts,
+kinds and sources read them from the manifests.
