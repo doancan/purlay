@@ -161,11 +161,13 @@ describe('integration: the notification sink', () => {
       const ada = await aMember(db, workspaceId, 'ada');
       const bob = await aMember(db, workspaceId, 'bob');
       const notice = { ...noticeFor(ada.userId), kind: 'other_thing' };
-      expect(await failureOf(sinkOn().notify(db, bob.context, notice))).toMatch(/other_thing/);
+      expect(await failureOf(sinkOn().notify(db, bob.context, notice))).toMatch(
+        /no running module declares the notification kind "other_thing"/,
+      );
       // The module that declares the kind is off in this process: its kind is not in the map.
       expect(
         await failureOf(sinkOn(new Map()).notify(db, bob.context, noticeFor(ada.userId))),
-      ).toMatch(/thing_assigned/);
+      ).toMatch(/no running module declares the notification kind "thing_assigned"/);
       expect(await entriesOf(db, ada.userId)).toEqual([]);
     });
   });

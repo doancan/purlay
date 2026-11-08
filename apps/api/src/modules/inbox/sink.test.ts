@@ -63,7 +63,7 @@ describe('the notification sink is the caller’s', () => {
     const message = await failureOf(
       sinkFor('things').notify(untouched, noContext, { ...notice, kind: 'unheard_of' }),
     );
-    expect(message).toMatch(/"unheard_of"/);
+    expect(message).toMatch(/no running module declares the notification kind "unheard_of"/);
   });
 
   test('the module that declares the kind is not refused', async () => {
