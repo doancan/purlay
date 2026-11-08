@@ -2,7 +2,9 @@
  * Which modules a process runs, and the ways a setting or a bundle cannot start (D-250).
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { TABLE_OWNERS } from '@purlay/db';
+import { MODULE_IDS } from '@purlay/types';
 import type { ModuleManifest } from './manifest';
 import { CORE_CLAIMS } from './core-claims';
 import { ModuleConfigError, RESERVED_MODULE_IDS, moduleRegistry } from './registry';
@@ -261,6 +263,41 @@ describe('the ids the core owns', () => {
   test('include the first path segment of every route API.md documents', () => {
     const missing = [...documented()].filter((segment) => !RESERVED_MODULE_IDS.has(segment));
     expect(missing).toEqual([]);
+  });
+
+  test('include the words the build uses for no module and every module, whatever the manifest says', () => {
+    for (const id of ['core', 'none', 'all']) {
+      expect(RESERVED_MODULE_IDS.has(id)).toBe(true);
+      expect(problemsOf(() => moduleRegistry([module(id)]))).toEqual([
+        `"${id}" is a path the core owns and cannot be a module id`,
+      ]);
+    }
+  });
+
+  test('include the name of every table the core owns and every folder of modules/, so a module cannot be mistaken for one', () => {
+    const tables = Object.entries(TABLE_OWNERS)
+      .filter(([, owner]) => owner === 'core')
+      .map(([table]) => table.replaceAll('_', '-'))
+      .filter((id) => id.length <= 32);
+    const services = readdirSync('apps/api/src/modules', { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    expect(
+      [...tables, ...services, 'search', 'users', 'outbox'].filter(
+        (id) => !RESERVED_MODULE_IDS.has(id),
+      ),
+    ).toEqual([]);
+  });
+
+  test('are the names MODULES.md §1 says the core owns, and no module of the build has one', () => {
+    const section =
+      /An id may not be a name the core owns:([^]*?)`RESERVED_MODULE_IDS` is the one list/.exec(
+        readFileSync('docs/MODULES.md', 'utf8'),
+      )?.[1];
+    const named = [...(section ?? '').matchAll(/`([a-z-]+)`/g)].map((match) => match[1] ?? '');
+    expect(named.length).toBeGreaterThan(8);
+    expect(named.filter((id) => !RESERVED_MODULE_IDS.has(id))).toEqual([]);
+    expect(MODULE_IDS.filter((id) => RESERVED_MODULE_IDS.has(id))).toEqual([]);
   });
 
   test('are themselves well formed, so a reserved id is never refused for the wrong reason', () => {

@@ -11,6 +11,7 @@
 import {
   MODULE_ID,
   ModulesSettingError,
+  TABLE_OWNERS,
   parseModulesSetting,
   unmetRequirements,
   type ModulesSetting,
@@ -26,7 +27,7 @@ import { templatesOverlap } from './routes';
  * to the core's address. `registry.test.ts` holds this list to `API.md`, so a route added there without
  * being added here fails a test instead of waiting for a collision.
  */
-export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
+const CORE_ROUTE_SEGMENTS: readonly string[] = [
   'admin',
   'admission',
   'api',
@@ -54,6 +55,51 @@ export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
   'webhooks',
   'workspaces',
   'ws',
+];
+
+/**
+ * The words the build itself uses for "no module" and "every module": the owner label of a route the core answers for
+ * (`CORE_OWNER`), of one nothing claims (`NO_OWNER`), and the `all` of a setting. A module with one of these as its id is
+ * mistaken, by the entitlement check, the pool lease and the outbox's publisher test, for the core or for nobody.
+ */
+const CORE_WORDS: readonly string[] = ['core', 'none', 'all'];
+
+/**
+ * The core's own services and ports, which are not route segments and which a module could still be mistaken for: a folder
+ * of `modules/` (held to the disk by `registry.test.ts`) and the names the documents give the core's surfaces.
+ */
+const CORE_AREAS: readonly string[] = [
+  'administration',
+  'audit',
+  'entitlements',
+  'export',
+  'find',
+  'inbox',
+  'jobs',
+  'modules',
+  'search',
+  'suspension',
+  'users',
+  'workers',
+];
+
+/** A table name as a module id: `audit_log` is `audit-log`. */
+const kebab = (table: string): string => table.replaceAll('_', '-');
+
+/**
+ * Every id a module may not take, from the one place each kind is owned: the core's tables (a module's tables are named
+ * from its id, so `users` would make `CREATE TABLE users`), `CORE_WORDS`, `CORE_AREAS` and the route segments. `module:new`
+ * reads this set too, and `registry.test.ts` holds it to `MODULES.md`, the disk and the schema's owners.
+ */
+export const RESERVED_MODULE_IDS: ReadonlySet<string> = new Set([
+  ...CORE_ROUTE_SEGMENTS,
+  ...CORE_WORDS,
+  ...CORE_AREAS,
+  ...Object.entries(TABLE_OWNERS)
+    .filter(([, owner]) => owner === 'core')
+    .map(([table]) => kebab(table))
+    // A name too long to be an id needs no reserving.
+    .filter((id) => MODULE_ID.test(id)),
 ]);
 
 const MODULES_SUBJECT = 'MODULES cannot start this process';

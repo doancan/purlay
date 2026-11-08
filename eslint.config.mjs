@@ -74,15 +74,85 @@ const NO_RAW_SQL = ['@purlay/db', 'kysely'].map((name) => ({
     'A module does not write raw SQL: it names a table only in its data hooks, and the typed query builder keeps it to its own tables. (D-250, MODULES.md §4)',
 }));
 
+// The ways round the import fences by a path or at run time (the red-team review of the module platform): a relative climb
+// into `packages/` never spells `@purlay/db`, and the module loader takes any string. Every file of a feature is kept from
+// both, tests and the http folder included.
+const NO_FENCE_BYPASS = [
+  {
+    group: ['**/packages/**', '**/apps/**'],
+    message:
+      'A module imports a package by its name (`@purlay/...`), never by a path: a relative climb into packages/ or apps/ skips the fences that name them. (D-250, MODULES.md §4)',
+  },
+  {
+    regex: '^(node:)?module$',
+    message:
+      'A module does not build a loader of its own: `createRequire` takes any path and skips the import fences. (D-250, MODULES.md §4)',
+  },
+];
+
+// `import()` and `require()` take a string built at run time, so the static fences above (which read the import
+// declarations) cannot see where they lead. A module imports statically, or not at all.
+const NO_DYNAMIC_LOADING = [
+  {
+    selector: 'ImportExpression',
+    message:
+      'A module has no dynamic `import()`: the import fences read declarations, and a path built at run time skips them. Import statically. (D-250, MODULES.md §4)',
+  },
+  {
+    selector: "CallExpression[callee.name='require']",
+    message:
+      'A module has no `require()`: the import fences read declarations. Import statically. (D-250, MODULES.md §4)',
+  },
+  {
+    selector: "CallExpression[callee.property.name='require']",
+    message:
+      'A module has no `module.require()`: the import fences read declarations. Import statically. (D-250, MODULES.md §4)',
+  },
+];
+
 // A table is also named by `sql.raw`, `sql.table`, `sql.id` and `sql.lit`, which build a name at run time and so are
 // invisible to the compiler and to `module-tables.test.ts`, which reads the text. `sql.ref` and `sql.join` name nothing
 // that is not in the text, and stay. (D-271)
+const SQL_USE_MESSAGE =
+  '`sql` is written as a template tag, `sql.ref` or `sql.join` only: renaming, aliasing or passing it on reaches `sql.raw` by a way the lint and `module-tables.test.ts` do not read. (D-271, MODULES.md §4)';
+const HANDLE_ASSERTION_MESSAGE =
+  'A module does not assert to `never` or through `unknown`: that is how a table name built at run time is made to fit the typed handle, and neither the compiler nor `module-tables.test.ts` reads it. (D-271, MODULES.md §4)';
 const NO_RUNTIME_TABLE_NAMES = [
   {
     selector:
       "CallExpression[callee.type='MemberExpression'][callee.object.name='sql'][callee.property.name=/^(raw|table|id|lit)$/]",
     message:
       'A table is not named at run time: `sql.raw`, `sql.table`, `sql.id` and `sql.lit` build a name that neither the compiler nor `module-tables.test.ts` can read. Write the statement with a name in the text, or use the builder. (D-271, MODULES.md §4)',
+  },
+  // The same call through a name the selector above does not read: `sql` is a template tag, or the object of `sql.ref` and
+  // `sql.join`, and nothing else. It is not renamed, aliased, passed on, or read by a computed key.
+  {
+    selector: "ImportSpecifier[imported.name='sql'][local.name!='sql']",
+    message: SQL_USE_MESSAGE,
+  },
+  {
+    selector:
+      'ImportDeclaration[source.value=/^(@purlay\\/db|kysely)$/] > ImportNamespaceSpecifier',
+    message: SQL_USE_MESSAGE,
+  },
+  {
+    selector:
+      "Identifier[name='sql']:not(TaggedTemplateExpression > Identifier.tag):not(MemberExpression[computed=false][property.name=/^(ref|join)$/] > Identifier.object):not(ImportSpecifier > Identifier)",
+    message: SQL_USE_MESSAGE,
+  },
+  // A handle is typed with the module's own tables; an assertion to `never` or through `unknown` is how a name built at run
+  // time is made to fit it.
+  {
+    selector: "TSAsExpression[typeAnnotation.type='TSNeverKeyword']",
+    message: HANDLE_ASSERTION_MESSAGE,
+  },
+  {
+    selector: "TSTypeAssertion[typeAnnotation.type='TSNeverKeyword']",
+    message: HANDLE_ASSERTION_MESSAGE,
+  },
+  {
+    selector: "TSAsExpression > TSAsExpression.expression[typeAnnotation.type='TSUnknownKeyword']",
+    message: HANDLE_ASSERTION_MESSAGE,
   },
 ];
 
@@ -703,6 +773,7 @@ export default defineConfig([
     (id) => (id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL]),
     NO_COMPOSITION_FROM_HTTP,
     NO_COMPOSITION,
+    NO_FENCE_BYPASS,
   ),
   // Repeats the clock and brand selectors, since a `no-restricted-syntax` replaces the one before it; tests are left to
   // the block below that gives them their own.
@@ -715,6 +786,7 @@ export default defineConfig([
         ...CLOCK_SELECTORS,
         ...BRAND_SELECTORS,
         ...NO_RUNTIME_TABLE_NAMES,
+        ...NO_DYNAMIC_LOADING,
       ],
     },
   },

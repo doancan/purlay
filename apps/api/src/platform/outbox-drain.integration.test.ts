@@ -18,7 +18,7 @@ import {
   type Outbox,
   type Selectable,
 } from '@purlay/db';
-import { defineFact, readsEarlierShape, type FactDeclaration } from '@purlay/types';
+import { defineFact, messageId, readsEarlierShape, type FactDeclaration } from '@purlay/types';
 import { aMovableClock, aRecordingLogger, NOW } from '../testing/doubles';
 import {
   aGrant,
@@ -628,6 +628,33 @@ describe('integration: two nodes on two versions share one table (a rolling depl
   });
 });
 
+/** `count` pending wiki rows of a workspace, due one millisecond apart from `from`: written straight, as a ceiling would refuse them. */
+const backlog = async (workspaceId: string, count: number, from: Date): Promise<void> => {
+  const CHUNK = 1000;
+  for (let start = 0; start < count; start += CHUNK) {
+    await cloned.db
+      .insertInto('outbox')
+      .values(
+        Array.from({ length: Math.min(CHUNK, count - start) }, (_, index) => {
+          const at = new Date(from.getTime() + start + index);
+          return {
+            id: messageId(at),
+            fact_id: messageId(at),
+            workspace_id: workspaceId,
+            type: 'notes.created',
+            producer: 'notes',
+            consumer: 'wiki',
+            payload: JSON.stringify({ noteId: 'n', title: 't' }),
+            next_attempt_at: at,
+            created_at: at,
+            expires_at: new Date(at.getTime() + 86_400_000),
+          };
+        }),
+      )
+      .execute();
+  }
+};
+
 describe('integration: what a claim leaves', () => {
   test('a row of a workspace that is not granted the consumer stays as it was, and the others are taken', async () => {
     const clock = aMovableClock(NOW);
@@ -655,6 +682,33 @@ describe('integration: what a claim leaves', () => {
     });
     expect(again.claimed.map((one) => one.type)).toEqual(['notes.created']);
     expect((await rowOf(barred))[0]).toMatchObject({ attempts: 1 });
+  });
+
+  test('workspaces that are not granted the consumer, older than everyone, do not hold back the granted ones', async () => {
+    const clock = aMovableClock(NOW);
+    const early = new Date(NOW.getTime() - 3_600_000);
+    const barred: string[] = [];
+    for (let n = 0; n < 6 * BATCH + 1; n += 1) {
+      const workspaceId = await aWorkspaceRow(cloned.db);
+      await aGrant(cloned.db, workspaceId, 'wiki', 'off');
+      await backlog(workspaceId, 2, new Date(early.getTime() + n * 100));
+      barred.push(workspaceId);
+    }
+    const allowed = await aWorkspaceRow(cloned.db);
+    await backlog(allowed, 2, new Date(NOW.getTime() - 1000));
+    const { claimed } = await claimDue(cloned.db, {
+      handles: wiki,
+      batch: BATCH,
+      clock,
+      effective: theGrants(),
+    });
+    expect(claimed).toHaveLength(2);
+    const untouched = await cloned.db
+      .selectFrom('outbox')
+      .select('attempts')
+      .where('workspace_id', 'in', barred)
+      .execute();
+    expect(untouched.every((row) => row.attempts === 0)).toBe(true);
   });
 
   test('a row past its expiry is not claimed', async () => {
@@ -760,5 +814,129 @@ describe('integration: what a drain counts', () => {
     });
     expect(tally.exhausted).toBe(1);
     expect([read('delivered'), read('failures')]).toEqual([0, 1]);
+  });
+});
+
+describe('integration: one workspace in a flood does not make the others wait (D-288 §11)', () => {
+  const workspaceOf = async (id: string): Promise<string> =>
+    (
+      await cloned.db
+        .selectFrom('outbox')
+        .select('workspace_id')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+    ).workspace_id;
+  const HOT_FACTS = 10_000;
+  const OTHERS = 20;
+
+  test('a tenant with ten thousand facts takes one place in a batch while twenty others wait with one each, and every one of them is delivered within the first batches', async () => {
+    const hot = await aWorkspaceRow(cloned.db);
+    // The flood is older than everything the others say: first in line by the clock, as a flood is.
+    await backlog(hot, HOT_FACTS, new Date(NOW.getTime() - 3_600_000));
+    const others: string[] = [];
+    for (let n = 0; n < OTHERS; n += 1) {
+      const workspaceId = await aWorkspaceRow(cloned.db);
+      others.push(workspaceId);
+      await backlog(workspaceId, 1, new Date(NOW.getTime() - 1000 + n));
+    }
+    const clock = aMovableClock(NOW);
+
+    const first = await claimDue(cloned.db, { handles: wiki, batch: BATCH, clock });
+    const firstTenants = await Promise.all(first.claimed.map((one) => workspaceOf(one.id)));
+    expect(firstTenants).toHaveLength(BATCH);
+    expect(firstTenants.filter((one) => one === hot)).toHaveLength(1);
+
+    // Four other tenants a batch once the flood has its one place: all twenty within five batches, however long the flood is.
+    const served = new Set(firstTenants.filter((one) => one !== hot));
+    for (let batch = 1; batch < 5; batch += 1) {
+      const next = await claimDue(cloned.db, { handles: wiki, batch: BATCH, clock });
+      for (const one of next.claimed) served.add(await workspaceOf(one.id));
+    }
+    expect(others.every((workspaceId) => served.has(workspaceId))).toBe(true);
+  });
+
+  test('the flood has the whole batch when nobody else is waiting, and its facts go oldest first', async () => {
+    const hot = await aWorkspaceRow(cloned.db);
+    await backlog(hot, 12, NOW);
+    const { claimed } = await claimDue(cloned.db, {
+      handles: wiki,
+      batch: BATCH,
+      clock: aMovableClock(new Date(NOW.getTime() + 1000)),
+    });
+    expect(claimed).toHaveLength(BATCH);
+    const ids = claimed.map((one) => one.id);
+    expect(ids).toEqual([...ids].sort());
+    const oldestLeft = await cloned.db
+      .selectFrom('outbox')
+      .select('id')
+      .where('attempts', '=', 0)
+      .orderBy('id')
+      .limit(1)
+      .executeTakeFirstOrThrow();
+    expect(ids.every((id) => id < oldestLeft.id)).toBe(true);
+  });
+
+  test('stays fair after retries: a flood whose facts keep failing does not hold back a tenant that speaks later', async () => {
+    const clock = aMovableClock(NOW);
+    const { log } = aRecordingLogger();
+    const hot = await aWorkspaceRow(cloned.db);
+    await backlog(hot, 30, new Date(NOW.getTime() - 3_600_000));
+    const failsForHot: FactConsumer = (fact, transaction) =>
+      fact.workspaceId === hot ? Promise.reject(new Error('down')) : recording(fact, transaction);
+    const handlers = [{ ...wiki[0]!, declaration, handle: failsForHot }];
+    const drain = async (): Promise<void> => {
+      await drainOnce(cloned.db, { handlers, batch: BATCH, clock, log });
+    };
+    // Every one of the flood's facts has failed and sits in its backoff, except those the later rounds bring back.
+    for (let round = 0; round < 6; round += 1) await drain();
+    clock.advance(7000);
+
+    const late = await aWorkspaceRow(cloned.db);
+    await backlog(late, 1, clock.now());
+    clock.advance(1);
+    // The retried flood is due again and older than the newcomer, which is served in the very next batch all the same.
+    await drain();
+    expect(
+      (
+        await cloned.db
+          .selectFrom('outbox')
+          .select('state')
+          .where('workspace_id', '=', late)
+          .execute()
+      )[0]?.state,
+    ).toBe('delivered');
+  });
+
+  test('two nodes draining many tenants run every fact once', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaces = await Promise.all(
+      Array.from({ length: 8 }, async () => await aWorkspaceRow(cloned.db)),
+    );
+    for (const [index, workspaceId] of workspaces.entries()) {
+      await backlog(
+        workspaceId,
+        index === 0 ? 40 : 3,
+        new Date(NOW.getTime() - 1000 * (8 - index)),
+      );
+    }
+    const { log } = aRecordingLogger();
+    const handlers = [{ ...wiki[0]!, declaration, handle: recording }];
+    const drain = async (database: Executor): Promise<void> => {
+      for (let idle = 0; idle < 3;) {
+        const tally = await drainOnce(database, { handlers, batch: BATCH, clock, log });
+        idle = tally.delivered === 0 ? idle + 1 : 0;
+      }
+    };
+    await Promise.all([drain(cloned.db), drain(second)]);
+    clock.advance(3_700_000);
+    await drain(cloned.db);
+
+    const effects = await sql<{
+      n: string;
+    }>`select count(*) as n from handled where workspace_id = any(${workspaces}::uuid[]) group by fact_id`.execute(
+      cloned.db,
+    );
+    expect(effects.rows).toHaveLength(40 + 7 * 3);
+    expect(effects.rows.every((row) => row.n === '1')).toBe(true);
   });
 });

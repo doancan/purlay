@@ -552,6 +552,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'contract-accepts-a-reserved-module-id',
+    why: 'the contract bundle is made for a module whose id is a name the core owns (the red-team review, D-273)',
+    file: 'apps/api/src/contract/bundle.ts',
+    find: '.filter((id) => RESERVED_MODULE_IDS.has(id))',
+    replace: '.filter(() => false)',
+    tests: ['apps/api/src/contract/bundle.test.ts'],
+  },
+  {
     id: 'cross-tenant-excuses-another-list',
     why: 'a list is added to those the seed may leave empty, so the one-member-two-workspaces check proves nothing about it and nothing has said the allow-list grew',
     file: 'apps/api/src/testing/cross-tenant.ts',
@@ -641,6 +649,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/module-cells.test.ts'],
   },
   {
+    id: 'module-new-help-not-recognised',
+    why: '`module:new --help` answers `unknown flag --help` (D-294)',
+    file: 'apps/api/src/testing/module-new.ts',
+    find: "  if (argv.includes('--help') || argv.includes('-h')) {",
+    replace: '  if (false as boolean) {',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
     id: 'module-new-ignores-a-missing-anchor',
     why: 'an anchor that is not found exactly once is edited anyway, so a moved line is changed wrongly and quietly (CONTRIBUTING.md §6.3)',
     file: 'apps/api/src/testing/module-new/plan.ts',
@@ -663,6 +679,14 @@ export const API_ROOT: readonly Mutation[] = [
     find: ' * @needs-modules chat, __ID__\n',
     replace: ' * @needs-modules __ID__\n',
     tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
+    id: 'module-seams-scan-misses-dynamic-import',
+    why: 'a feature loads another module, the database package or the composition with `import()`, and the text scan finds nothing (the red-team review, D-250)',
+    file: 'apps/api/src/testing/module-sources.ts',
+    find: "[/\\bimport\\s*\\(/, 'a dynamic import()'],",
+    replace: "[/\\bimportx\\s*\\(/, 'a dynamic import()'],",
+    tests: ['apps/api/src/module-seams.test.ts'],
   },
   {
     id: 'module-smoke-ignores-a-module-left-out-that-answers',
@@ -750,6 +774,14 @@ export const API_ROOT: readonly Mutation[] = [
     file: 'apps/api/src/testing/module-tables.ts',
     find: '  for (const template of sqlTemplates(code)) {',
     replace: '  for (const template of sqlTemplates(code).slice(0, 0)) {',
+    tests: ['apps/api/src/module-tables.test.ts'],
+  },
+  {
+    id: 'module-tables-scan-misses-built-names',
+    why: 'a table name made to fit the typed handle with `as never` is not found in a feature’s source (the red-team review, D-271)',
+    file: 'apps/api/src/testing/module-tables.ts',
+    find: '    /\\bas\\s+never\\b/g,',
+    replace: '    /\\bas\\s+neverx\\b/g,',
     tests: ['apps/api/src/module-tables.test.ts'],
   },
   {

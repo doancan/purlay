@@ -11,7 +11,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { featuresImportedBy } from './testing/module-sources';
+import { featureSources, featuresImportedBy, fenceBypassesIn } from './testing/module-sources';
 
 const SOURCE_ROOT = import.meta.dir;
 const FEATURES = join(SOURCE_ROOT, 'features');
@@ -223,5 +223,42 @@ describe('the process entry starts the modules’ workers over the shares of the
 
   test('it stops them when the process is crashing and when it is shut down', () => {
     expect(entry.match(/\bworkers\.stop\(\)/g)).toHaveLength(2);
+  });
+});
+
+describe('a feature gets round the import fences in no way the lint reads and the text does not', () => {
+  test('it sees each way, and nothing in a comment or a string that only mentions one', () => {
+    for (const bypass of [
+      "const { sql } = await import('@purlay/db');",
+      "const later = await import(\n  '../chat/module');",
+      "const db = require('@purlay/db');",
+      "import { createRequire } from 'node:module';",
+      "import { sql } from '../../../../../packages/db/src/index';",
+      "export { sql } from '../../../../apps/api/src/composition';",
+    ]) {
+      expect(fenceBypassesIn(bypass), bypass).not.toEqual([]);
+    }
+    for (const fine of [
+      "// const { sql } = await import('@purlay/db');",
+      "/* require('x') */",
+      "import { sql } from '@purlay/db';",
+      "const note = 'a dynamic importer';",
+      "import { thing } from '../../platform/tenancy';",
+    ]) {
+      expect(fenceBypassesIn(fine), fine).toEqual([]);
+    }
+  });
+
+  test('no production file of a feature uses one', () => {
+    const ids = readdirSync(FEATURES, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    expect(ids.length).toBeGreaterThan(1);
+    const used = ids.flatMap((id) =>
+      featureSources(id).flatMap((file) =>
+        fenceBypassesIn(readFileSync(file, 'utf8')).map((way) => `${file}: ${way}`),
+      ),
+    );
+    expect(used).toEqual([]);
   });
 });

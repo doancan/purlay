@@ -97,6 +97,29 @@ describe('integration: find fan-out', () => {
     });
   });
 
+  test('a context the guard did not mint is refused before any source is asked', async () => {
+    await withRollback(async (db) => {
+      const context = await asAlice(db);
+      let asked = 0;
+      const notes = aNotesModule({
+        id: 'notes',
+        search: () => {
+          asked += 1;
+          return Promise.resolve([]);
+        },
+      });
+      const forged = { ...context, workspaceId: crypto.randomUUID() };
+      let refusal: unknown;
+      try {
+        await findAcross(dependenciesFor(db, notes), forged, 'deploy', 7);
+      } catch (error) {
+        refusal = error;
+      }
+      expect(String(refusal)).toContain('did not mint');
+      expect(asked).toBe(0);
+    });
+  });
+
   test('a source of a module that is off is answered off and never asked', async () => {
     await withRollback(async (db) => {
       const context = await asAlice(db);
