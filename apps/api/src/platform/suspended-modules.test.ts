@@ -131,9 +131,45 @@ describe('a change made on this node', () => {
   });
 });
 
+describe('a node that nothing asks', () => {
+  const untilTrue = async (holds: () => boolean): Promise<void> => {
+    for (let waited = 0; !holds(); waited += 10) {
+      if (waited > 3_000) throw new Error('never');
+      await Bun.sleep(10);
+    }
+  };
+
+  test('keeps its set within the TTL on a timer of its own, once however often it is started, until it is stopped', async () => {
+    let reads = 0;
+    const cache = suspensionCache({
+      read: () => {
+        reads += 1;
+        return Promise.resolve(set('chat'));
+      },
+      log: aRecordingLogger().log,
+      ttlMs: 20,
+    });
+    cache.start();
+    cache.start();
+    await untilTrue(() => reads >= 3);
+    expect([...cache.current()]).toEqual(['chat']);
+
+    cache.stop();
+    cache.stop();
+    await Bun.sleep(30);
+    const settled = reads;
+    await Bun.sleep(100);
+    expect(reads).toBe(settled);
+  });
+});
+
 describe('without a database', () => {
-  test('nothing is ever stopped', async () => {
+  test('nothing is ever stopped, and what a node does to keep the set is nothing', async () => {
     expect(noSuspension.current().size).toBe(0);
     expect((await noSuspension.fresh()).size).toBe(0);
+    noSuspension.replace(set('chat'));
+    noSuspension.start();
+    noSuspension.stop();
+    expect(noSuspension.current().size).toBe(0);
   });
 });
