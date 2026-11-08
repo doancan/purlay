@@ -83,6 +83,41 @@ describe('what a release promised of a manifest', () => {
   });
 });
 
+describe('what a release promised of who may have a module and what keeps its rows', () => {
+  const promised = manifest({ id: 'notes', entitlement: 'always', retention: ['notes:purge'] });
+
+  test('a module that was in every workspace and becomes a grant is said, as is the other way', () => {
+    expect(incompatibilities([releasedFrom(promised)], [manifest({ id: 'notes' })])).toContain(
+      "module 'notes' is now a grant of the workspace: the last release served it to every workspace",
+    );
+    expect(
+      incompatibilities(
+        [releasedFrom(manifest({ id: 'notes' }))],
+        [manifest({ id: 'notes', entitlement: 'always' })],
+      ),
+    ).toEqual([
+      "module 'notes' is now in every workspace: the last release let an operator withhold it",
+    ]);
+  });
+
+  test('a manifest that says grant and one that says nothing are the same promise', () => {
+    const explicit = manifest({ id: 'notes', entitlement: 'grant' });
+    expect(incompatibilities([releasedFrom(explicit)], [manifest({ id: 'notes' })])).toEqual([]);
+  });
+
+  test('a retention job that went is said: its rows are kept for ever', () => {
+    expect(incompatibilities([releasedFrom(promised)], [{ ...promised, retention: [] }])).toEqual([
+      "module 'notes' no longer runs the retention job 'notes:purge'",
+    ]);
+  });
+
+  test('a snapshot written before these were kept promised neither', () => {
+    const { id, requires, optional, provides, routes, jobs, frames } = releasedFrom(promised);
+    const old = [{ id, requires, optional, provides, routes, jobs, frames }];
+    expect(incompatibilities(old, [manifest({ id: 'notes' })])).toEqual([]);
+  });
+});
+
 describe('the facts a release promised', () => {
   const telling = manifest({
     id: 'notes',
@@ -155,12 +190,70 @@ describe('the shapes of a fact a release wrote', () => {
     ]);
   });
 
-  test('is kept for the release as the shape and the sorted shapes read', () => {
-    expect(releasedFactFrom(declared(2, [1]))).toEqual({
+  test('is kept for the release as the shape, the sorted shapes read and a digest of each schema', () => {
+    const kept = releasedFactFrom(declared(2, [1]));
+    expect(kept).toMatchObject({ type: 'notes.created', shape: 2, reads: [1] });
+    expect(Object.keys(kept.schemas ?? {})).toEqual(['1', '2']);
+    expect(kept.schemas?.['1']).toMatch(/^[0-9a-f]{64}$/);
+    expect(kept.schemas?.['1']).not.toBe(kept.schemas?.['2']);
+  });
+});
+
+describe('the schema of a fact a release wrote', () => {
+  const written = Type.Object({ id: Type.String() });
+  const fact = (
+    schema: ReturnType<typeof Type.Object>,
+    shape?: number,
+    reader?: ReturnType<typeof Type.Object>,
+  ): ReturnType<typeof defineFact> =>
+    defineFact({
       type: 'notes.created',
-      shape: 2,
-      reads: [1],
+      owner: 'notes',
+      absent: 'drop',
+      schema,
+      ...(shape === undefined ? {} : { shape }),
+      ...(reader === undefined ? {} : { reads: { 1: readsEarlierShape(reader, (note) => note) } }),
     });
+  const released = [releasedFactFrom(fact(written))];
+
+  test('a new required field at the same shape is said: the older node refuses the row', () => {
+    const wider = Type.Object({ id: Type.String(), folder: Type.String() });
+    expect(factIncompatibilities(released, [fact(wider)])).toEqual([
+      "the fact 'notes.created' changed the schema of shape 1 without a new shape",
+    ]);
+  });
+
+  test('a narrower bound and a value more in an enum at the same shape are said too', () => {
+    const bound = Type.Object({ id: Type.String({ maxLength: 10 }) });
+    expect(factIncompatibilities(released, [fact(bound)])).toHaveLength(1);
+    const before = [releasedFactFrom(fact(Type.Object({ kind: Type.Union([Type.Literal('a')]) })))];
+    const after = fact(Type.Object({ kind: Type.Union([Type.Literal('a'), Type.Literal('b')]) }));
+    expect(factIncompatibilities(before, [after])).toHaveLength(1);
+  });
+
+  test('the same schema written with its keys in another order is the same schema', () => {
+    const reordered = Type.Object({ b: Type.String(), a: Type.String() });
+    const first = Type.Object({ a: Type.String(), b: Type.String() });
+    expect(factIncompatibilities([releasedFactFrom(fact(first))], [fact(reordered)])).toEqual([]);
+  });
+
+  test('a new shape that keeps the old schema as its reader is not a break', () => {
+    const wider = Type.Object({ id: Type.String(), folder: Type.String() });
+    expect(factIncompatibilities(released, [fact(wider, 2, written)])).toEqual([]);
+  });
+
+  test('a reader that no longer accepts what the release wrote is said', () => {
+    const wider = Type.Object({ id: Type.String(), folder: Type.String() });
+    const changed = Type.Object({ id: Type.String(), folder: Type.String() });
+    expect(factIncompatibilities(released, [fact(wider, 2, changed)])).toEqual([
+      "the fact 'notes.created' changed what its reader of shape 1 accepts",
+    ]);
+  });
+
+  test('a snapshot written before schemas were kept promised none', () => {
+    const { type, shape, reads } = releasedFactFrom(fact(written));
+    const wider = Type.Object({ id: Type.String(), folder: Type.String() });
+    expect(factIncompatibilities([{ type, shape, reads }], [fact(wider)])).toEqual([]);
   });
 });
 

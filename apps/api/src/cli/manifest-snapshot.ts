@@ -1,7 +1,8 @@
 /**
  * `bun run manifests:snapshot`: writes the manifests of the build as the release being cut ships them, to the file
  * `module-compat.test.ts` holds the next release's manifests against (D-250, `MODULES.md` §8). The release script
- * runs it (`scripts/release-prepare.ts`); a release is the only time it is run, and it clears the exceptions.
+ * runs it (`scripts/release-prepare.ts`); a release is the only time it is run, and it clears the exceptions. It writes, with the manifests,
+ * each fact's shape, the shapes it reads and the digest of the schema of each (`releasedFactFrom`).
  */
 import { writeFileSync } from 'node:fs';
 import { FACTS } from '@purlay/types';

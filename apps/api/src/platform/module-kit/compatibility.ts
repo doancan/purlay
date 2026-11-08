@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { FACT_SHAPE_FIRST, type FactDeclaration } from '@purlay/types';
 import type { ModuleManifest } from './manifest';
 
@@ -16,6 +17,9 @@ export interface ReleasedManifest {
   /** Absent from a snapshot written before facts existed (D-288): such a release promised none. */
   readonly publishes?: readonly string[];
   readonly consumes?: readonly string[];
+  /** Absent from a snapshot written before these were kept: such a release promised nothing of them. `grant` is what a manifest that says nothing means. */
+  readonly entitlement?: 'always' | 'grant';
+  readonly retention?: readonly string[];
 }
 
 /** A deliberate break, said where a reviewer reads it. `change` is the sentence `incompatibilities` gives. */
@@ -26,11 +30,17 @@ interface CompatibilityException {
   readonly reason: string;
 }
 
-/** What a release promised of one fact: the shape it writes and the earlier shapes it still reads (D-288 §5). */
+/**
+ * What a release promised of one fact: the shape it writes, the earlier shapes it still reads and, for each of those shapes, a digest
+ * of the schema (D-288 §5). The digest is what makes "a shape is one schema" a thing a test can hold: a schema changed under the same
+ * shape number is a row an older node refuses.
+ */
 export interface ReleasedFact {
   readonly type: string;
   readonly shape: number;
   readonly reads: readonly number[];
+  /** By shape number, as text. Absent from a snapshot written before digests were kept: such a release promised none. */
+  readonly schemas?: Readonly<Record<string, string>>;
 }
 
 /** The file the release script writes (`released-manifests.json`): the manifests as the last release shipped them. */
@@ -41,6 +51,27 @@ export interface ReleasedSnapshot {
   /** Cleared by the release script: an exception holds for the release being worked towards, not for ever. */
   readonly exceptions: readonly CompatibilityException[];
 }
+
+/**
+ * JSON with the keys of every object in order, and the names a schema calls `required` in order (a set, written in the order the
+ * properties were), so two schemas that say the same thing are the same bytes.
+ */
+const canonical = (value: unknown, key?: string): string => {
+  if (Array.isArray(value)) {
+    const members = value.map((member) => canonical(member));
+    return `[${(key === 'required' ? members.sort() : members).join(',')}]`;
+  }
+  if (typeof value !== 'object' || value === null) return JSON.stringify(value);
+  const entries = Object.entries(value).filter(([, member]) => member !== undefined);
+  return `{${entries
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([name, member]) => `${JSON.stringify(name)}:${canonical(member, name)}`)
+    .join(',')}}`;
+};
+
+/** The digest of a payload schema: the canonical JSON of the TypeBox schema, hashed. */
+const schemaDigest = (schema: unknown): string =>
+  createHash('sha256').update(canonical(schema)).digest('hex');
 
 const sorted = (names: readonly string[] | undefined): string[] => [...(names ?? [])].sort();
 
@@ -54,18 +85,39 @@ export const releasedFrom = (manifest: ModuleManifest): ReleasedManifest => ({
   frames: sorted(manifest.frames),
   publishes: sorted(manifest.publishes),
   consumes: sorted(manifest.consumes),
+  entitlement: manifest.entitlement ?? 'grant',
+  retention: sorted(manifest.retention),
 });
 
-export const releasedFactFrom = (fact: FactDeclaration): ReleasedFact => ({
-  type: fact.type,
-  shape: fact.shape ?? FACT_SHAPE_FIRST,
-  reads: Object.keys(fact.reads ?? {})
+export const releasedFactFrom = (fact: FactDeclaration): ReleasedFact => {
+  const reads = Object.keys(fact.reads ?? {})
     .map(Number)
-    .sort((a, b) => a - b),
-});
+    .sort((a, b) => a - b);
+  const shape = fact.shape ?? FACT_SHAPE_FIRST;
+  const digests = new Map<number, string>(
+    reads.map((read) => [read, schemaDigest(fact.reads?.[read]?.schema)]),
+  );
+  digests.set(shape, schemaDigest(fact.schema));
+  return {
+    type: fact.type,
+    shape,
+    reads,
+    schemas: Object.fromEntries([...digests].sort(([a], [b]) => a - b)),
+  };
+};
 
 const missing = (released: readonly string[], current: readonly string[]): string[] =>
   released.filter((name) => !current.includes(name));
+
+/** Who may have the module changed: a module served to every workspace that is now withheld, or a withheld one that now is served. */
+const entitlementChange = (before: ReleasedManifest, after: ReleasedManifest): string[] => {
+  if (before.entitlement === undefined || before.entitlement === after.entitlement) return [];
+  return [
+    before.entitlement === 'always'
+      ? `module '${before.id}' is now a grant of the workspace: the last release served it to every workspace`
+      : `module '${before.id}' is now in every workspace: the last release let an operator withhold it`,
+  ];
+};
 
 /**
  * Each way the current manifests break what the last release promised, as a sentence. Not breaks: a new module, a
@@ -109,6 +161,10 @@ export const incompatibilities = (
       ...missing(before.consumes ?? [], after.consumes ?? []).map(
         (type) => `module '${before.id}' no longer consumes the fact '${type}'`,
       ),
+      ...entitlementChange(before, after),
+      ...missing(before.retention ?? [], after.retention ?? []).map(
+        (job) => `module '${before.id}' no longer runs the retention job '${job}'`,
+      ),
     ];
   });
 };
@@ -143,8 +199,19 @@ export const factIncompatibilities = (
   return released.flatMap((before) => {
     const after = now.get(before.type);
     if (after === undefined) return [];
-    return [before.shape, ...before.reads]
+    const unread = [before.shape, ...before.reads]
       .filter((shape) => shape !== after.shape && !after.reads.includes(shape))
       .map((shape) => `the fact '${before.type}' no longer reads the shape ${String(shape)}`);
+    const changed = Object.entries(before.schemas ?? {})
+      .filter(([shape, digest]) => {
+        const now = after.schemas?.[shape];
+        return now !== undefined && now !== digest;
+      })
+      .map(([shape]) =>
+        Number(shape) === after.shape
+          ? `the fact '${before.type}' changed the schema of shape ${shape} without a new shape`
+          : `the fact '${before.type}' changed what its reader of shape ${shape} accepts`,
+      );
+    return [...unread, ...changed];
   });
 };
