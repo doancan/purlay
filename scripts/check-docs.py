@@ -8,7 +8,7 @@ a valid section with the wrong meaning, which no link checker would have caught.
 `docs/OVERVIEW.md` makes the ownership rule normative; this makes it enforceable.
 (D-47)
 """
-import json, re, pathlib, collections, sys
+import json, os, re, pathlib, collections, sys
 
 # A person's own tooling lives in directories no clone has and no commit carries (`.git/info/exclude`
 # names them on one machine). Reading them would fail the check here for a file CI never sees.
@@ -78,6 +78,36 @@ for f, s in docs.items():
     for text, tgt in re.findall(r'\[([^\]]+)\]\(([^)#\s]+)\)', s):
         if not tgt.startswith(('http', 'mailto')) and not (base / tgt).exists():
             problems['kırık link'].append(f"{f}: [{text}]({tgt})")
+
+# A link to a heading (`doc.md#the-heading`, or `#the-heading` in the same document) must name a heading that is there: the file
+# check above stops at the `#`, so a heading renamed or moved to another file left every link to it pointing at the top of the page.
+# The name is the one GitHub makes of the heading's text.
+def slug(heading):
+    heading = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', heading.replace('`', ''))
+    return re.sub(r'[^\w\- ]', '', heading.strip().lower()).replace(' ', '-')
+
+def headings_of(text):
+    text = re.sub(r'^(```|~~~).*?^\1', '', text, flags=re.M | re.S)
+    seen, found = collections.Counter(), set()
+    for h in re.findall(r'^#{1,6}\s+(.+?)\s*#*\s*$', text, re.M):
+        name = slug(h)
+        found.add(name if seen[name] == 0 else f'{name}-{seen[name]}')
+        seen[name] += 1
+    return found
+
+HEADINGS = {f: headings_of(s) for f, s in docs.items()}
+checked_links = []
+for f, s in docs.items():
+    prose = re.sub(r'^(```|~~~).*?^\1', '', s, flags=re.M | re.S)
+    prose = re.sub(r'`[^`\n]*`', '', prose)
+    for text, tgt in re.findall(r'\[([^\]]*)\]\(([^)\s]+)\)', prose):
+        if tgt.startswith(('http', 'mailto')) or '#' not in tgt:
+            continue
+        path, _, fragment = tgt.partition('#')
+        target = f if path == '' else os.path.normpath(pathlib.PurePosixPath(f).parent / path)
+        checked_links.append(tgt)
+        if target in HEADINGS and fragment not in HEADINGS[target]:
+            problems['a link names a heading that is not there'].append(f"{f}: [{text}]({tgt})")
 
 # The migrations that exist are the files, not what a document says about them —
 # reading the list from SCHEMA.md compared the document to itself.
@@ -277,6 +307,10 @@ RETIRED_CLAIMS = [
      'the compose simplification merged: there is no `dataInCore` flag'),
     (r'no oracle\b[^.\n]*exact for paths|adds nothing to what a closed route', {'docs/DECISIONS.md'},
      'a closed route hides body and code, not status: an anonymous caller sees 401 or 404 (MODULES.md §3, D-255 §5)'),
+    (r'not built until the step named', {'docs/DECISIONS.md'},
+     'the steps of D-283 §1 are built; what is not built is the table at the end of MODULES.md §10 (D-295)'),
+    (r'Nothing holds either', set(),
+     'the README'"'"'s decision count is held by `check:docs`; the changelog entry is the only one a reviewer reads (MODULES.md §9 item 7)'),
     (r'isolation by budget is intent|no process takes it|nothing outside its tests imports it', set(),
      'the module budget is wired for issues, and `budget:latency` holds chat against starvation (D-255 §9)'),
 ]
@@ -335,7 +369,8 @@ for _id in _bundled_ids:
 
 print(f"decisions D-1..D-{max(defined['D'])} · invariants I-1..I-{max(defined['I'])} · open questions O-1..O-{max(defined['O'])}")
 print(f"migrations {mig[0]}..{mig[-1]}")
-print(f"{len(resolved)} cross-document references resolved\n")
+print(f"{len(resolved)} cross-document references resolved, {len(checked_links)} links to a heading")
+print()
 for k, v in problems.items():
     print(f"[!] {k} ({len(v)})")
     for i in v[:15]: print(f"      {i}")

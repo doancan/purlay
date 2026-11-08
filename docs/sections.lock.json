@@ -123,12 +123,6 @@
   "docs/MODULES.md": {
     "1": "What a module is",
     "10": "Order of work",
-    "10.1": "`WorkspaceChannels`",
-    "10.2": "`userErased`",
-    "10.3": "The workspace export as contributions",
-    "10.4": "The personal export",
-    "10.5": "`COLLATED_COLUMNS`",
-    "10.6": "`platform/channels.ts`",
     "11": "The modules this build carries",
     "12": "Glossary",
     "2": "The manifest",
