@@ -10,7 +10,14 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { tlsFromEnvironment } from '@purlay/db';
 import { CONTRACT_VERSION } from '@purlay/types';
-import { CONFIGURED, ConfigurationError, DEVELOPMENT_ENCRYPTION_KEY, loadConfig } from './config';
+import {
+  CONFIGURED,
+  ConfigurationError,
+  DEVELOPMENT_ENCRYPTION_KEY,
+  Environment,
+  loadConfig,
+} from './config';
+import { DEFAULT_REDIS_NAMESPACE } from './redis-names';
 
 const valid = {
   APP_URL: 'http://localhost:5173',
@@ -490,17 +497,61 @@ describe('integers are integers', () => {
 });
 
 describe('the loader and the document agree', () => {
-  /**
-   * One direction only. `CONFIG.md` publishes every variable the product will
-   * ever read, including the ones whose features are later phases; the loader
-   * reads the ones that exist today. What must never happen is the loader
-   * reading something the document does not describe.
-   */
-  test('every variable the loader reads is described in CONFIG.md', () => {
-    const document = readFileSync('docs/CONFIG.md', 'utf8');
-    for (const name of CONFIGURED) {
-      expect(document).toContain(`\`${name}\``);
-    }
+  const document = readFileSync('docs/CONFIG.md', 'utf8');
+  /** The rows of CONFIG.md's tables: `| \`NAME\` | required | default | notes |`. A name in a sentence is not a row. */
+  const rows = [
+    ...document.matchAll(/^\| `([A-Z][A-Z0-9_]+)` \| ([^|]*) \| ([^|]*) \|(.*)$/gm),
+  ].map(([line = '', name = '', required = '', fallback = '']) => ({
+    line,
+    name,
+    required: required.trim(),
+    fallback: fallback.trim(),
+  }));
+  const appliedLater: Record<string, string> = { REDIS_KEY_PREFIX: DEFAULT_REDIS_NAMESPACE };
+  const schema = Environment.properties as Record<string, { default?: string | number | boolean }>;
+  /** Variables the compose files read for the stack and the application never sees. */
+  const stackFiles = [
+    'docker-compose.yml',
+    'docker-compose.production.yml',
+    'docker-compose.dockhand.yml',
+    'docker/production.env.example',
+  ]
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+
+  test('every variable the loader reads has a row in a CONFIG.md table, not only a mention', () => {
+    const named = new Set(rows.map(({ name }) => name));
+    expect(CONFIGURED.filter((name) => !named.has(name))).toEqual([]);
+  });
+
+  test('a row says what the loader does: required exactly when there is no default, and the default it has', () => {
+    const wrong = rows.flatMap(({ name, required, fallback }) => {
+      const property = schema[name];
+      // The `required` column of a variable that is only needed in production or the cloud is a sentence, not a ✅.
+      if (property === undefined || !['✅', '—'].includes(required)) return [];
+      // A default the loader leaves to the code that uses the variable (the schema takes any value, and unset is a name there).
+      const has = property.default ?? appliedLater[name];
+      const wantedRequired =
+        has === undefined && (Environment.required as readonly string[]).includes(name)
+          ? '✅'
+          : '—';
+      const defaultOk =
+        has === undefined ? /^(—|unset)/.test(fallback) : fallback === `\`${String(has)}\``;
+      return required === wantedRequired && defaultOk
+        ? []
+        : [
+            `${name}: the document says required ${required}, default ${fallback}; the loader says ${wantedRequired}, ${String(has)}`,
+          ];
+    });
+    expect(wrong).toEqual([]);
+  });
+
+  test('a row for a variable nothing reads says so ("Not read yet"), unless the compose files read it', () => {
+    const unmarked = rows
+      .filter(({ name }) => schema[name] === undefined && !stackFiles.includes(name))
+      .filter(({ line }) => !line.includes('Not read yet'))
+      .map(({ name }) => name);
+    expect(unmarked).toEqual([]);
   });
 
   test('the example file lists exactly what the loader reads', () => {

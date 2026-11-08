@@ -104,11 +104,17 @@ const indexesIn = (sql: string): Map<string, Set<string>> => {
 };
 
 const MIGRATIONS = 'packages/db/migrations';
-const migrationsSql = readdirSync(MIGRATIONS)
-  .filter((file) => file.endsWith('.sql'))
-  .sort()
-  .map((file) => readFileSync(join(MIGRATIONS, file), 'utf8'))
-  .join('\n');
+const sqlFilesIn = (directory: string): string[] =>
+  readdirSync(directory)
+    .filter((file) => file.endsWith('.sql'))
+    .sort()
+    .map((file) => readFileSync(join(directory, file), 'utf8'));
+/** The core's migrations, then each module's own set (`chat/`, `issues/`, and any module added later): the tables a module owns are described here too. */
+const setDirectories = readdirSync(MIGRATIONS, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => join(MIGRATIONS, entry.name))
+  .sort();
+const migrationsSql = [MIGRATIONS, ...setDirectories].flatMap(sqlFilesIn).join('\n');
 const documentSql = [...readFileSync('docs/SCHEMA.md', 'utf8').matchAll(/```sql\n([\s\S]*?)```/g)]
   .map((match) => match[1] ?? '')
   .join('\n');
@@ -125,13 +131,15 @@ for (const change of constraintChanges(migrationsSql)) {
 // A column a later migration adds (0015) is part of the table from then on, and one it drops (0022)
 // is not; the re-runnable forms (`IF NOT EXISTS`, `IF EXISTS`) are read the same, and in the order
 // they are written, because a re-runnable migration drops what it adds before adding it.
-for (const match of withoutComments(migrationsSql).matchAll(
-  /ALTER TABLE (\w+)\s+(ADD|DROP) COLUMN (?:IF (?:NOT )?EXISTS )?(\w+)/g,
-)) {
-  const [, table = '', change = '', column = ''] = match;
+// One statement may do several (`ALTER TABLE t DROP COLUMN a, DROP COLUMN b`, chat's 0010), so each action of it is read.
+for (const statement of withoutComments(migrationsSql).matchAll(/ALTER TABLE (\w+)\s+([^;]*);/g)) {
+  const [, table = '', actions = ''] = statement;
   const columns = applied.get(table)?.columns as Set<string> | undefined;
-  if (change === 'ADD') columns?.add(column);
-  else columns?.delete(column);
+  for (const action of actions.matchAll(/(ADD|DROP) COLUMN (?:IF (?:NOT )?EXISTS )?(\w+)/g)) {
+    const [, change = '', column = ''] = action;
+    if (change === 'ADD') columns?.add(column);
+    else columns?.delete(column);
+  }
 }
 // A table a later migration drops (0048) is not one any more, and its indexes went with it.
 const droppedTables = [
@@ -150,6 +158,9 @@ describe('SCHEMA.md describes the applied tables exactly', () => {
     expect(applied.size).toBeGreaterThan(5);
     expect(documented.size).toBeGreaterThanOrEqual(applied.size);
     expect(sorted(applied.get('messages')?.columns)).toContain('content');
+    // The sets' tables count (D09 of the audit: a document's `issues` could drift unseen), and a column a set drops is gone.
+    expect([...applied.keys()]).toContain('issues');
+    expect(sorted(applied.get('channel_members')?.columns)).not.toContain('unread_since');
   });
 
   for (const [table, shape] of applied) {
