@@ -4,6 +4,7 @@
 > do I write, what will fail*. It repeats no rule: `MODULES.md` §9 is the checklist a reviewer holds a module to, and each task
 > below names the part of it that applies. Every `bun run` command it names is a script of the root `package.json` and every path at the
 > repository's root exists; `module-guide.test.ts` fails when one stops. The example module is `acme`: an id no test of this repository uses as a fixture.
+> The words *module*, *fact*, *notice*, *grant*, *edition* and *capability* mean one thing each: `MODULES.md` §12.
 
 ---
 

@@ -94,7 +94,7 @@ const nodeOn = (database: Executor, id: string): Node => {
       peersBehind: async () => await peersBehind(link),
     }),
   );
-  const present = watchModuleSet({ link, nodeId: id, set: MODULE_SET, log });
+  const present = watchModuleSet({ link, nodeId: id, set: MODULE_SET, mode: 'open', log });
   let reading: { stop: () => Promise<void> } | undefined;
   const stopReadingGrants = async (): Promise<void> => {
     await reading?.stop();

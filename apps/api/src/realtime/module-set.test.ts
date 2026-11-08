@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { redisNames } from '../platform/redis-names';
 import { aRecordingLogger } from '../testing/doubles';
 import { aFakeLink, type FakeLink } from '../testing/redis';
+import type { EntitlementMode } from '../platform/module-kit/entitlement';
 import type { Timers } from './hub';
 import {
   ANNOUNCE_RETRY_MS,
@@ -60,6 +61,7 @@ const settle = async (): Promise<void> => {
 const aWatch = (
   answers: () => unknown,
   set = 'chat',
+  mode: EntitlementMode = 'open',
 ): {
   link: FakeLink;
   watch: ModuleSetWatch;
@@ -71,11 +73,43 @@ const aWatch = (
   link.behaviour.send = (): number => 1;
   const { log, lines } = aRecordingLogger();
   const clock = manualTimers();
-  const watch = watchModuleSet({ link, nodeId: 'node-a', set, log, timers: clock.timers });
+  const watch = watchModuleSet({ link, nodeId: 'node-a', set, mode, log, timers: clock.timers });
   const said = (level: string): Record<string, unknown>[] =>
     lines.filter((line) => line['level'] === level);
   return { link, watch, clock, said };
 };
+
+describe('nodes that run one set but not one WORKSPACE_MODULES', () => {
+  test('a node that finds another mode says so once, and says when they agree again', async () => {
+    let live: string[] = ['chat|open', 'chat|managed'];
+    const view = aWatch(() => live);
+    await settle();
+
+    expect(view.said('warn')).toHaveLength(1);
+    expect(view.said('warn')[0]).toMatchObject({
+      msg: 'the nodes of this cluster do not agree on WORKSPACE_MODULES; a module withheld from a workspace is served on the nodes that read it as open',
+      thisNode: 'open',
+      otherNodes: ['managed'],
+    });
+    await view.clock.tick();
+    expect(view.said('warn')).toHaveLength(1);
+
+    live = ['chat|open'];
+    await view.clock.tick();
+    expect(view.said('info').map((line) => line['msg'])).toEqual([
+      'the nodes of this cluster agree on WORKSPACE_MODULES again',
+    ]);
+  });
+
+  test('a different set with the same mode is the module set’s warning alone', async () => {
+    const view = aWatch(() => ['chat|open', 'none|open']);
+    await settle();
+
+    expect(view.said('warn').map((line) => line['msg'])).toEqual([
+      'the nodes of this cluster do not run the same modules; serving on, as in a rolling deploy',
+    ]);
+  });
+});
 
 describe('a set as one word', () => {
   test('the same modules are the same word, whatever their order, and the core alone is none', () => {
@@ -86,14 +120,14 @@ describe('a set as one word', () => {
 
 describe('nodes that run different sets', () => {
   test('a node that finds another set says so once, naming both, and keeps asking', async () => {
-    const view = aWatch(() => ['chat', 'none']);
+    const view = aWatch(() => ['chat|open', 'none|open']);
     await settle();
 
     const warnings = view.said('warn');
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatchObject({ thisNode: 'chat', otherNodes: ['none'] });
     expect(view.link.scripts[0]?.keys).toEqual([names.moduleSet]);
-    expect(view.link.scripts[0]?.args.slice(0, 2)).toEqual(['node-a', 'chat']);
+    expect(view.link.scripts[0]?.args.slice(0, 2)).toEqual(['node-a', 'chat|open']);
 
     await view.clock.tick();
     await view.clock.tick();
@@ -102,12 +136,12 @@ describe('nodes that run different sets', () => {
   });
 
   test('when the nodes agree again it says so, and says the next mismatch again', async () => {
-    let live: string[] = ['chat', 'none'];
+    let live: string[] = ['chat|open', 'none|open'];
     const view = aWatch(() => live);
     await settle();
-    live = ['chat'];
+    live = ['chat|open'];
     await view.clock.tick();
-    live = ['chat', 'none'];
+    live = ['chat|open', 'none|open'];
     await view.clock.tick();
 
     expect(view.said('info').map((line) => line['msg'])).toEqual([
@@ -116,8 +150,15 @@ describe('nodes that run different sets', () => {
     expect(view.said('warn')).toHaveLength(2);
   });
 
+  test('a node of an older release, which announces its set alone, is the same set and no disagreement', async () => {
+    const view = aWatch(() => ['chat|open', 'chat']);
+    await settle();
+
+    expect(view.said('warn')).toHaveLength(0);
+  });
+
   test('nodes of one set say nothing', async () => {
-    const view = aWatch(() => ['chat']);
+    const view = aWatch(() => ['chat|open']);
     await settle();
     await view.clock.tick();
 
@@ -140,7 +181,7 @@ describe('nodes that run different sets', () => {
     let connected = false;
     const view = aWatch(() => {
       if (!connected) throw new Error('redis is not connected');
-      return ['chat'];
+      return ['chat|open'];
     });
     await settle();
     // A process announces itself as it starts, before its Redis connection is up: the record must not wait a third of the
@@ -154,7 +195,7 @@ describe('nodes that run different sets', () => {
   });
 
   test('a node that stops stops asking and takes its entry out', async () => {
-    const view = aWatch(() => ['chat']);
+    const view = aWatch(() => ['chat|open']);
     await settle();
     await view.watch.stop();
 
@@ -163,7 +204,7 @@ describe('nodes that run different sets', () => {
   });
 
   test('a node that cannot take its entry out says so at debug and still stops', async () => {
-    const view = aWatch(() => ['chat']);
+    const view = aWatch(() => ['chat|open']);
     view.link.behaviour.send = (): number => {
       throw new Error('redis is gone');
     };

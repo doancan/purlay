@@ -33,6 +33,7 @@ have it.
 
 ### Changed
 
+- **Operations** — A cluster whose nodes read `WORKSPACE_MODULES` differently now says so in each node's log, once and again when they agree, as it does for nodes that run different modules; the metrics table, the edition file and the command to apply it are in the operator documents (D-289, D-292). During the rolling deploy that brings this, a node of the older release logs the different set once
 - **Notifications** — The setting for emailing you about what you missed is part of chat: on a server that does not run chat, `/api/me/missed-mail` answers like any unknown path, and where chat runs nothing is different (D-280)
 
 ### Fixed

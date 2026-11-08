@@ -63,6 +63,10 @@ declares:
 - `deadline` (optional, D-270): how long a request or frame of the module may take before it is answered `504` and its database
   work cancelled: `{ ms }` (a whole number from 1000 to 120000) or `{ none: reason }`, which `module-deadlines.test.ts` lists too;
   left out, 20 s (§7);
+- `jobDeadline` (optional, D-274): how long one run of one of its `jobs` or `retention` may take before the run is cancelled and
+  recorded as a failure: `{ ms }` (1000 to 3 600 000) or `{ none: reason }`; left out, ten minutes. `workerDeadline` (optional, D-281):
+  the same for one iteration of one of its workers: `{ ms }` (1000 to 3 600 000) or `{ none: reason }`; left out, 60 s. Both lists of
+  `none` are in `module-deadlines.test.ts` (§7);
 - `retention`: the scheduled jobs that keep its rows within their retention — a purge past the days kept, a sweep of a
   cache. Unlike `jobs` they run in every process, whichever modules it runs, because the rows are there (§3);
 - `permissions` (D-265): what a role may do in the module that is more than being a member, each as `{ name, minimumRole }`
@@ -95,6 +99,7 @@ each job its manifest names under `jobs` or `retention` and of no other (a build
 not start; `bun run job` takes the work from the composition and names no module, D-260),
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
 of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
+`noticeWords` (what a push says of each kind of notice the manifest declares `pushed`, in the person's language, D-286 §9)
 and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
 anything:** the role rules that are not yet a named permission, which are in each service (D-265 §3).
 
@@ -635,6 +640,15 @@ requires every selected entry to be caught, even if it declares equivalence.
 | A restriction is not written while a node would not honour it | `requirePeersReady` (`modules/entitlements/peers.ts`) refuses `409 PEERS_BEHIND` a withdrawal, or the removal of a grant on a `managed` server, while a live node of the module-set record has no live field in the record of the nodes that read grants (`realtime/entitlement-peers.ts`, one Lua script on Redis's clock), and when Redis cannot say; renewal prunes expired capability fields left by crashed nodes, preserving live peers, so the record stays bounded across restarts; a server with no Redis is one node; the administrator's workspace list shows each workspace's grants and what they come to — **built** (D-292); `peers.test.ts`, `entitlement-peers.redis.integration.test.ts`, `server.integration.test.ts`; mutations `entitlement-restriction-ignores-the-cluster`, `entitlement-restriction-allowed-while-a-peer-is-behind`, `entitlement-restriction-guessed-when-the-cluster-cannot-be-asked`, `entitlement-peers-script-counts-nobody`, `entitlement-capability-keeps-expired-nodes` and `workspace-list-shows-a-row-that-has-run-out` | 12 |
 | An edition file is applied whole or not at all, and again is the same | `readEditionFile` and `planEdition` (`modules/entitlements/edition.ts`) refuse a file, an edition, a module or a workspace they cannot use before anything is written; `applyEdition` runs the writes in one transaction through `applyEntitlements`, or makes and undoes it for `--dry-run`; the command (`cli/entitlements-apply.ts`) labels the rows `file:<name>` and, on a server with `REDIS_URL`, asks the operator to say `--cluster-ready` before it takes anything away — **built** (D-292); `edition.test.ts`, `edition.integration.test.ts`, `cli/entitlements-apply.integration.test.ts`; mutations `entitlements-apply-applies-a-file-with-a-problem`, `entitlements-apply-source-is-not-the-file`, `entitlement-dry-run-writes`, `entitlement-edition-grants-chat` and `entitlement-edition-leaves-a-module-out-unsaid`; the console's **Modules** dialog on each workspace of Settings → Server → Workspaces says `inherit`, `on` or `off` for each module and sends only what changed (`workspaces.test.tsx`; mutation `console-sends-modules-that-did-not-change`) | 12 |
 | This file lists the manifests | a test of §11 against `bundledModules` (`module-listing.test.ts`) — **built** | 9 |
+| Every optional partner has a sentence and a case | the registry refuses a partner with no `degrades` sentence, an empty one and a sentence for a module not `optional`; `degradation.test.ts` composes the build without the partner and runs the scenario of `features/<id>/degradation.testing.ts`, and fails for an edge with no scenario and a scenario with no edge — **built** (D-291). Not covered: a partner that runs but is not granted to the workspace is not exercised (§10); mutations `registry-accepts-an-optional-edge-without-degrades`, `degradation-gaps-ignore-an-edge-without-a-scenario` and `degradation-setting-keeps-what-requires-the-partner` | D-291 |
+| A scheduled job and a worker are bounded | `jobDeadline` and `workerDeadline` are `{ ms }` within bounds or `{ none: reason }`, which `module-deadlines.test.ts` lists; the job command and the worker loop cancel at the deadline (`module-shares`, `module-workers`) — **built** (D-274, D-281); mutations `job-deadline-default-dropped`, `job-deadline-exemption-not-listed`, `job-deadline-ignored`, `job-deadline-longer-than-an-hour-accepted`, `job-deadline-statement-not-cancelled`, `worker-deadline-default-dropped`, `worker-deadline-ignored`, `worker-deadline-longer-than-an-hour-accepted`, `worker-deadline-signal-not-passed` and `composition-worker-deadline-of-manifest-ignored` | 12 |
+| A module's hot path is measured against the others' load | `HOT_PATHS` in `cli/budget-latency.ts` has a line for every bundled module or `{ none: reason }` listed in `WITHOUT_A_HOT_PATH`; `budget-latency.test.ts` fails for a module with no line, for a `none` that is not listed and for one listed that has a path, and `budget:latency` times it — **built**; what the line measures is for a reviewer (§9); mutations `latency-hot-path-judged-against-nothing` and `latency-hot-path-table-skipped` | 12 |
+| A migration is written for a table that has rows | `migration-safety.test.ts` reads the statements of each file after the baseline (`DATA.md` §5); the shipped files that break it are grandfathered with a reason and the list is capped. Not covered: the table's size, a table named through a variable in a `DO` block, `SET NOT NULL` and `ADD UNIQUE` — **built**; mutations `migration-guard-accepts-a-constraint-without-not-valid`, `migration-guard-baseline-moved-back`, `migration-guard-covers-a-swept-table`, `migration-guard-lets-an-index-build-in-the-transaction` and `migration-guard-sees-no-unbatched-update` | 5 |
+| Every endpoint says what it answers for a workspace the caller is not in | the endpoints are read from `API.md` and each must have a case in `testing/cross-tenant.ts` or be among the unscoped with the reason; `cross-tenant.test.ts` fails for one in neither and `cross-tenant.integration.test.ts` runs the crossings, with every list proved to show a row of its own — **built**; mutation `cross-tenant-excuses-another-list` | 12 |
+| The contract bundle lists the modules, what each owns and what it publishes, consumes and uses | `contract/bundle.test.ts` against the manifests: the module ids are `ModuleId`, routes overlap nowhere, a core claim is checked, and the digest is of the text a client reads — **built** (D-273); mutations `bundle-core-claims-not-checked`, `bundle-hides-what-a-module-consumes`, `bundle-hides-what-a-module-publishes`, `bundle-hides-what-a-module-uses`, `bundle-lists-no-modules`, `bundle-module-id-check-passes-a-stale-type`, `bundle-module-overlap-not-checked` and `bundle-route-overlap-only-when-equal` | D-273 |
+| A module made by `module:new` passes every guard with no hand edit | `module-new.integration.test.ts` runs the generator twice on a copy of the repository (a module and one that consumes its fact) and then the compilers, the guards and the documents; `module-new.test.ts` holds every edit to its anchor; `scaffold-leftovers.test.ts` fails until each placeholder is filled; `module-guide.test.ts` holds the guide to the files, commands and example id — **built** (D-294); mutations `module-new-ignores-a-missing-anchor`, `module-new-skips-the-docs-row` and `module-new-skips-the-pool-share-test` | D-294 |
+| A field of the manifest or a slot of a bundled module is described | `manifest-docs.test.ts` reads the names of `ModuleManifest` and `BundledModule` and fails for one that §2 and §12 do not name — **built**; mutation `module-manifest-section-forgets-a-field` | D-294 |
+| The nodes of a cluster agree on `WORKSPACE_MODULES` | each node announces its mode with its set in the shared record, and a node that finds another mode says so once in the log (`the nodes of this cluster do not agree on WORKSPACE_MODULES`) and again when they agree; said, never acted on — **built** (D-289); `module-set.test.ts`; mutation `module-set-mode-mismatch-unsaid` | D-289 |
 
 **The matrix** — the core alone, each module alone with what it requires, everything — is the set of cells the
 tests build: `module-lifecycle.integration.test.ts` (the database as each valid `MODULES` value leaves it, against a process
@@ -1289,12 +1303,34 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
 The terms of this file and of the code that carries it, as they are **now**. A line says where the word lives. Not a
 table, so that §11's listing test reads only the modules.
 
+**Words that look alike, and the one each means.** The guide (`MODULE-GUIDE.md`) and the code use these and no others for these things.
+
+- **module, feature, package.** A *module* is the unit of this file: a manifest, a migration set, data hooks, optionally a web chunk. Its
+  folder is `apps/api/src/features/<id>/` and, when it has a screen, `apps/web/src/features/<id>/`: in a path, `features/` holds modules,
+  and the core's own layered code is `modules/` and `platform/` (so a folder named `modules/` is the core, not a module). Prose says
+  *module*, never *feature*, for this; a *feature* is what a person can do. A *package* is a workspace package of the repository
+  (`packages/*`); the commercial word D-250 used for what is sold is *edition*.
+- **fact, event, hint.** A *fact* is a type one module tells the build through the outbox (`FactDeclaration`, §4): it must not be lost. An
+  *event* of the manifest is a server event sent over the socket, and a *hint* is a nudge that may be lost (the domain bus, the socket
+  bus). A row the core keeps for a module's user, such as an inbox line, is a *notice*, not a fact.
+- **notice, notification.** A *notice* is a row of `inbox_entries`, written through the `NotificationSink` (D-286). A *notification* is a row
+  of chat's `notifications`, bound to a message. The manifest's `notifications` declares the kinds of both: a kind is one of chat's
+  (held to the wire's `NotificationType` and the database enum) or a core inbox notice (text, which the sink checks against the
+  running modules' declarations).
+- **entitlement, grant, edition.** *Entitlement* is the manifest field (`always` or `grant`): whether a workspace's grant can take the
+  module away. A *grant* is a row of `workspace_modules` saying one workspace may, or may not, use one module. An *edition* is a name in
+  the operator's file that expands to grants; nothing stores it (`DEPLOY.md`, *Editions*).
+- **capability.** Only a name in `provides` or `uses`. (`GET /api/client` also answers some flags it calls `capabilities`: they are client
+  flags, true when chat runs.)
+- **bundled, run, granted.** *Bundled*: carried by the build. *Run*: named by this process's `MODULES`. *Granted*: usable by this
+  workspace (`effectiveModules`). *Off* means not run.
+
 - **Core** — what knows no module by name: identity, workspaces and tenancy, permissions, audit, the domain bus,
   attachments, the registry, the erasure and export catalogues. `modules/` and `platform/`.
 - **Module** — a unit of product with a manifest, a migration set of its own, data hooks and a web chunk (§1).
-- **Manifest** — what a module says of itself to the registry: `id`, `requires`, `optional`, `provides`, `routes`,
-  `frames`, `events`, `jobs`, `budget`, `deadline`, `retention`, `permissions`, `auditActions`, `notifications`,
-  `searchSources`, `publishes`, `consumes`, `uses` (`platform/module-kit/manifest.ts`, §2). It is not a trust boundary.
+- **Manifest** (`manifest` of a `BundledModule`) — what a module says of itself to the registry: `id`, `requires`, `optional`, `degrades`, `provides`,
+  `entitlement`, `routes`, `frames`, `events`, `jobs`, `budget`, `deadline`, `jobDeadline`, `workerDeadline`, `retention`, `permissions`,
+  `auditActions`, `notifications`, `searchSources`, `publishes`, `consumes`, `uses` (`platform/module-kit/manifest.ts`, §2). It is not a trust boundary.
 - **`BundledModule`** — a manifest plus what the module contributes to the places the core leaves open: the slots in
   `composition.ts` (`userErased`, `workspacePurge`, `export`, `personalExport`, `workspaceCreated`, `workspaceChannels`,
   `readAttachment`, `pushNotices`, `collatedColumns`, `jobWork`, `workers`, `frameHandlers`, `routes`, `factConsumers`, `ports`).
