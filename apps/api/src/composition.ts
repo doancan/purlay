@@ -11,6 +11,7 @@
 import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
 import { FACTS, isModuleId, type FactDeclaration, type ModuleId } from '@purlay/types';
 import { chatModule } from './features/chat/module';
+import { entitledNotices, entitledReader, entitledStart } from './modules/entitlements/hooks';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
 import { AppError, attachmentNotFound } from './platform/errors';
 import { issuesModule } from './features/issues/module';
@@ -257,6 +258,9 @@ const unguardedWorkProblem = ({ manifest, workers = [] }: BundledModule): string
     ? undefined
     : `"${manifest.id}" is a grant of the workspace and declares jobs or workers, whose work is not given the workspace's grant: it must say entitlement: 'always'`;
 
+/** Whether a workspace is granted the module and may lose it (`entitlement: 'always'` is the other kind, which no row can take away). */
+const isGrant = ({ manifest }: BundledModule): boolean => manifest.entitlement !== 'always';
+
 /** Every module this build carries. A new one is added here and nowhere else in the core's wiring. */
 export const bundledModules = [
   chatModule,
@@ -357,7 +361,13 @@ export const compose = (
   // order whichever of them run (a module given that the build does not carry follows the build's).
   const holding = [...bundled, ...modules.filter((module) => !bundled.includes(module))];
   for (const module of modules) {
-    if (module.workspaceCreated !== undefined) workspaceCreated.register(module.workspaceCreated);
+    if (module.workspaceCreated !== undefined) {
+      workspaceCreated.register(
+        isGrant(module)
+          ? entitledStart(module.manifest.id, module.workspaceCreated)
+          : module.workspaceCreated,
+      );
+    }
   }
   for (const module of holding) {
     if (module.userErased !== undefined) userErased.register(module.userErased);
@@ -406,6 +416,16 @@ export const compose = (
   );
   const deadlineOf = workerDeadlinesOf(holding.map((module) => module.manifest));
   const noticing = modules.find((module) => module.pushNotices !== undefined);
+  // A reader of a module a workspace is granted also asks the grant of the workspace the file is in (`entitlements/hooks.ts`).
+  const readers = modules.flatMap((module) =>
+    module.readAttachment === undefined
+      ? []
+      : [
+          isGrant(module)
+            ? entitledReader(module.manifest.id, module.readAttachment, effectiveOfThisProcess)
+            : module.readAttachment,
+        ],
+  );
   return {
     modules,
     bundled,
@@ -461,11 +481,13 @@ export const compose = (
         deadlineMs: deadlineOf(module.manifest.id),
       })),
     ),
-    readAttachment: anyReader([
-      ...modules.flatMap((module) => module.readAttachment ?? []),
-      requireOwnUpload,
-    ]),
-    pushNotices: noticing?.pushNotices ?? noPushNotices,
+    readAttachment: anyReader([...readers, requireOwnUpload]),
+    pushNotices:
+      noticing?.pushNotices === undefined
+        ? noPushNotices
+        : isGrant(noticing)
+          ? entitledNotices(noticing.manifest.id, noticing.pushNotices, effectiveOfThisProcess)
+          : noticing.pushNotices,
     pushOwner: noticing?.manifest.id ?? CORE_OWNER,
     workspaceCreated,
     userErased,

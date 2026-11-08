@@ -77,6 +77,8 @@ const moduleReading = (id: string, reader: AttachmentReader): BundledModule => (
     optional: [],
     degrades: {},
     provides: [],
+    // Not a grant of the workspace: the grant's own hooks are held by `ingress/http/entitlement-hooks.integration.test.ts`.
+    entitlement: 'always',
     budget: { none: 'a test module' },
   },
   readAttachment: reader,
@@ -208,6 +210,7 @@ describe('the application as its modules make it', () => {
         optional: [],
         degrades: {},
         provides: [],
+        entitlement: 'always',
         budget: { none: 'a test module' },
       },
       pushNotices: notices,

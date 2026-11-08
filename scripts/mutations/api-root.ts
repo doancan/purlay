@@ -9,8 +9,8 @@ export const API_ROOT: readonly Mutation[] = [
     id: 'attached-file-read-whether-or-not-its-module-runs',
     why: 'a file attached to a message is still read through the channel with chat not run, a door the module list says is shut (D-250)',
     file: 'apps/api/src/composition.ts',
-    find: '      ...modules.flatMap((module) => module.readAttachment ?? []),\n',
-    replace: '      ...bundled.flatMap((module) => module.readAttachment ?? []),\n',
+    find: '  const readers = modules.flatMap((module) =>\n',
+    replace: '  const readers = bundled.flatMap((module) =>\n',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
   },
   {
@@ -318,8 +318,8 @@ export const API_ROOT: readonly Mutation[] = [
     id: 'composition-attachment-first-reader-only',
     why: 'a second running module’s attachments are unreadable: only the first reader is asked (D-250)',
     file: 'apps/api/src/composition.ts',
-    find: '      ...modules.flatMap((module) => module.readAttachment ?? []),\n',
-    replace: '      ...modules.flatMap((module) => module.readAttachment ?? []).slice(0, 1),\n',
+    find: 'anyReader([...readers, requireOwnUpload])',
+    replace: 'anyReader([...readers.slice(0, 1), requireOwnUpload])',
     tests: ['apps/api/src/composition.test.ts'],
   },
   {
@@ -411,6 +411,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
+    id: 'composition-push-notices-of-a-lost-grant-sent',
+    why: 'the module’s push notices are asked as they are, without the grant of the workspace each tells (D-289, red-team F10)',
+    file: 'apps/api/src/composition.ts',
+    find: '        : isGrant(noticing)\n',
+    replace: '        : false\n',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
+  },
+  {
     id: 'composition-push-notices-of-a-module-not-run',
     why: 'the push sender asks a module the process does not run for its notices, and reads its tables (D-250)',
     file: 'apps/api/src/composition.ts',
@@ -425,6 +433,14 @@ export const API_ROOT: readonly Mutation[] = [
     find: '    searchSources: modules.flatMap((module) => module.manifest.searchSources ?? []),',
     replace: '    searchSources: holding.flatMap((module) => module.manifest.searchSources ?? []),',
     tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-reader-of-a-lost-grant-answers',
+    why: 'a module’s reader of files is registered without the grant of the file’s workspace (D-289, red-team F10)',
+    file: 'apps/api/src/composition.ts',
+    find: '          isGrant(module)\n            ? entitledReader(',
+    replace: '          false\n            ? entitledReader(',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
   },
   {
     id: 'composition-registry-without-core-claims',
@@ -470,6 +486,14 @@ export const API_ROOT: readonly Mutation[] = [
     replace:
       '    carried.filter((module) => carriedRegistry.resolve(setting).includes(module.manifest)),\n',
     tests: ['apps/api/src/composition.test.ts'],
+  },
+  {
+    id: 'composition-start-of-a-lost-grant-runs',
+    why: 'a module’s start for a new workspace is registered without the grant (D-289, red-team F10)',
+    file: 'apps/api/src/composition.ts',
+    find: '        isGrant(module)\n          ? entitledStart(',
+    replace: '        false\n          ? entitledStart(',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
   },
   {
     id: 'composition-tells-a-client-an-id-it-cannot-decode',
@@ -523,8 +547,8 @@ export const API_ROOT: readonly Mutation[] = [
     id: 'composition-workspace-hook-not-registered',
     why: "a module that runs starts no workspace with what it makes: chat's first channel is never made (D-174, D-250)",
     file: 'apps/api/src/composition.ts',
-    find: 'if (module.workspaceCreated !== undefined) workspaceCreated.register(module.workspaceCreated);',
-    replace: 'void workspaceCreated;',
+    find: '    if (module.workspaceCreated !== undefined) {\n',
+    replace: '    if (false as boolean) {\n',
     tests: ['apps/api/src/composition.test.ts', 'apps/api/src/composition.integration.test.ts'],
   },
   {
