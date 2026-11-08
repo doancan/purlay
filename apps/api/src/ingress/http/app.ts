@@ -605,6 +605,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
       modules.modules.map((module) => module.manifest),
     ),
     dropped: metrics.outboxDropped,
+    refused: metrics.outboxRefused,
+    pendingMax: dependencies.config.OUTBOX_PENDING_MAX,
     effective: modules.effectiveModules,
   };
   // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its

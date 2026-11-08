@@ -11,6 +11,7 @@ import {
   DEVELOPMENT_ENCRYPTION_KEY,
   GITHUB_API_URL_DEFAULT,
   GITHUB_URL_DEFAULT,
+  OUTBOX_PENDING_MAX_DEFAULT,
   type Config,
 } from '../platform/config';
 import type { Dependencies } from '../ingress/http/app';
@@ -111,6 +112,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   APP_URL: 'https://purlay.test',
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
+  OUTBOX_PENDING_MAX: OUTBOX_PENDING_MAX_DEFAULT,
   SOCKET_MAX_CONNECTIONS: 2_000,
   SOCKET_REPLAY_CONCURRENCY: 50,
   TRUST_PROXY: false,

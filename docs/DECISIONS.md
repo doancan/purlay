@@ -14124,13 +14124,28 @@ fact for each message (D-35).
    of the oldest and dead rows by module, and counters for deliveries, failures and drops by module and fact, whose labels are the
    closed sets of the manifests. The overview of the server lists a module with dead rows or a pending row older than fifteen minutes.
    `DEPLOY.md` names the volume at which the table should be partitioned: more than a million rows a day, or vacuum that falls behind.
+10. **A workspace may have only so many facts waiting for one consumer** *(added 2026-11-08, after the enterprise review's third
+    blocker: one workspace publishing a flood delayed every other's facts for hours).* `publishFact` counts, in the publisher's
+    transaction, the pending rows of the workspace for each consumer it is about to write, and when any is at `OUTBOX_PENDING_MAX`
+    (5000 unless set, from 1 to 1,000,000; `CONFIG.md`) it refuses the **whole** fact with `FactBacklogFull`, which names the fact type,
+    the workspace and the consumer, writes a row for no consumer, and counts `purlay_outbox_refused_total{module,fact}` (the consuming
+    module and the fact type, both from manifests). A refusal is an error and never a drop: uncaught it ends the publisher's
+    transaction, so what the fact reports is not committed either and a fact is never lost while its cause stays; a module that
+    catches it holds a transaction that is still usable and decides for itself (refusing its own request, as a rule). It applies to
+    every fact, since the outbox is for facts of human scale (§2) and 5000 waiting for one consumer in one workspace is a hundred
+    times that rule, a defect or an attack and not a use. Only pending rows count: delivered, skipped and dead rows are room. The
+    ceiling is soft, because the count takes no lock: publishes in flight at once may pass it by their number. The count stops at
+    the ceiling (`LIMIT`), so it costs at most that many index entries, and it is served by `idx_outbox_pending_workspace`
+    (`0091`): on a million rows a workspace with 150,000 delivered rows of history and three pending was counted in 0.06 ms with the
+    index and 130 ms without it. Over HTTP an uncaught refusal is an `INTERNAL` `500` like any defect (a new `AppError` code would
+    move the contract, and is not worth it for a state only a flood reaches). The claim's fairness across workspaces is the next item.
 
 **Rejected.** *Counting the attempt when the handler fails*: a handler that hangs or kills its node is never counted and the fact is
 tried for ever. *A lease column apart from `next_attempt_at`*: the backoff is a lease already, and a second clock would have to agree
 with it. *Running the handler outside the delivery's transaction and marking after*: an effect with no mark is run twice, and a mark
 with no effect loses the fact. *Writing `dead` for every first failure of a payload that does not fit*: that one is not going to
 get better, and a retry only delays the line in the log. *Leaving rows of an earlier shape to nodes that can read them, without readers*: the node that wrote them stops when the deploy ends, so they would wait to expire; a reader is a few lines and loses nothing. *Validating every row against the newest schema*: a required field added is the very change that raises the shape, so it killed each row an older node had published (#1265). *Holding `uses` in the snapshot*: nobody is hurt by a question asked less.
-*A global ceiling per producer now*: not measured (D-283 §2). *`LISTEN`/`NOTIFY` or Redis to wake a drain*: the poll is bounded and the correctness never rested on a wake-up.
+*A global ceiling per producer now*: not measured (D-283 §2); the ceiling of §10 is per workspace and consumer because that is who is harmed. *Dropping or skipping a fact whose backlog is full*: the publisher would report a thing nobody was told, silently; the refusal ends its transaction instead. *A rate in facts a second*: it needs a window and a count shared by the nodes, and what hurts a neighbour is the depth, which one indexed count reads. *A lock to make the ceiling exact*: every publish of a workspace would queue on one row, for a limit whose job is to stop a flood, not to be a count. *`LISTEN`/`NOTIFY` or Redis to wake a drain*: the poll is bounded and the correctness never rested on a wake-up.
 
 **Cost of reversing.** One table of transient rows, which may be dropped once no fact is published, and a guard in `module-compat`,
 which a dated exception lifts for a fact that is removed on purpose. The facts in flight at the moment of a drop are lost.

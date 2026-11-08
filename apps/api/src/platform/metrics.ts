@@ -224,6 +224,7 @@ export interface ServerMetrics {
   readonly outboxDelivered: Counter<'module' | 'fact'>;
   readonly outboxFailures: Counter<'module' | 'fact'>;
   readonly outboxDropped: Counter<'module' | 'fact'>;
+  readonly outboxRefused: Counter<'module' | 'fact'>;
 }
 
 /** A background loop a module declares: the pair that labels its failures (`MODULES.md` §7). */
@@ -317,6 +318,11 @@ export const serverMetrics = (
     'Facts not written because their consumer is not run by the publishing process and the fact says to drop them, by the consuming module and the fact type.',
     ['module', 'fact'],
   );
+  const outboxRefused = registry.counter(
+    'purlay_outbox_refused_total',
+    'Facts not published because the workspace already had the most a consumer may have waiting (`OUTBOX_PENDING_MAX`), by the consuming module and the fact type; the publisher’s transaction ended with the refusal. A rise is a consumer that is behind or a module publishing in a loop.',
+    ['module', 'fact'],
+  );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
   const owners = [CORE_OWNER, ...modules];
@@ -334,6 +340,7 @@ export const serverMetrics = (
     outboxDelivered.inc({ module, fact }, 0);
     outboxFailures.inc({ module, fact }, 0);
     outboxDropped.inc({ module, fact }, 0);
+    outboxRefused.inc({ module, fact }, 0);
   }
   return {
     registry,
@@ -347,6 +354,7 @@ export const serverMetrics = (
     outboxDelivered,
     outboxFailures,
     outboxDropped,
+    outboxRefused,
   };
 };
 

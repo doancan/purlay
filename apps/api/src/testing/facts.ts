@@ -14,6 +14,7 @@ import type { ModuleManifest } from '../platform/module-kit/manifest';
 import { createMetricsRegistry } from '../platform/metrics';
 import { factRoutingOf, type FactPublishContext } from '../platform/outbox';
 import type { Clock } from '../platform/clock';
+import { OUTBOX_PENDING_MAX_DEFAULT } from '../platform/config';
 import { aUniqueSlug } from './users';
 
 export const NOTE_CREATED = defineFact({
@@ -90,9 +91,20 @@ export const aPublishWorld = (
   clock: Clock,
   running: readonly ModuleManifest[] = [NOTES, WIKI, SHELF],
   producer = 'notes',
-): { readonly context: FactPublishContext; readonly droppedCount: (module: string) => number } => {
+): {
+  readonly context: FactPublishContext;
+  readonly droppedCount: (module: string) => number;
+  readonly refusedCount: (module: string) => number;
+} => {
   const registry = createMetricsRegistry();
   const dropped = registry.counter('test_dropped_total', 'dropped', ['module', 'fact']);
+  const refused = registry.counter('test_refused_total', 'refused', ['module', 'fact']);
+  const countOf = (name: string, module: string): number =>
+    registry
+      .families()
+      .filter((family) => family.name === name)
+      .flatMap((family) => family.samples)
+      .find((sample) => sample.labels['module'] === module)?.value ?? 0;
   return {
     context: {
       workspaceId,
@@ -100,12 +112,11 @@ export const aPublishWorld = (
       producer,
       routing: factRoutingOf([NOTES, WIKI, SHELF], running),
       dropped,
+      refused,
+      pendingMax: OUTBOX_PENDING_MAX_DEFAULT,
     },
-    droppedCount: (module) =>
-      registry
-        .families()
-        .flatMap((family) => family.samples)
-        .find((sample) => sample.labels['module'] === module)?.value ?? 0,
+    droppedCount: (module) => countOf('test_dropped_total', module),
+    refusedCount: (module) => countOf('test_refused_total', module),
   };
 };
 

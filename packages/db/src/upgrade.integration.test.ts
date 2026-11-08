@@ -316,6 +316,7 @@ describe('integration: upgrading from the previous release', () => {
         '0088_inbox_entries',
         '0089_outbox',
         '0090_workspace_modules',
+        '0091_outbox_pending_by_workspace',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

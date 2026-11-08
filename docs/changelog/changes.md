@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Operations** — One workspace can no longer bury the others' facts between modules: a workspace may have `OUTBOX_PENDING_MAX` (5000 unless set) facts waiting for one module, a publish past it is refused with `FactBacklogFull` and ends the publisher's transaction, and `purlay_outbox_refused_total` counts it by module and fact (D-288)
+
 ### Changed
 
 - **Notifications** — The setting for emailing you about what you missed is part of chat: on a server that does not run chat, `/api/me/missed-mail` answers like any unknown path, and where chat runs nothing is different (D-280)
