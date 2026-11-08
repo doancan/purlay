@@ -45,6 +45,7 @@ const sink: NotificationSink = notificationSink({
   },
   log: NO_LOG,
   written: serverMetrics().inboxEntries,
+  collapsed: serverMetrics().inboxCollapsed,
 });
 
 const aWorkspaceOf = async (): Promise<{ workspaceId: string; ada: string; bob: string }> => {

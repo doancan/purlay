@@ -12,11 +12,17 @@
  *   removed at that moment is not told.
  * - **A kind declared `pushed`** is also pushed to the person's devices once the notice has committed (`announce`), by the push
  *   sender, which holds it for Deep Work and quiet hours (`modules/push/sender.ts`, D-286 §9).
+ * - **Too many unread**: a person has at most `UNREAD_PER_MODULE_MAX` unread notices of one module in one workspace. The notice
+ *   that would make one more reads the oldest unread as history in the same statement chain (never deleted: the sweep keeps it
+ *   as it keeps any read one), and the count is `collapsed` on what is answered and in `purlay_inbox_collapsed_total`. Refusing
+ *   the new notice would hide the thing happening now; a loop of notices can no longer grow a person's list or badge. It is a
+ *   bound and not a lock: two writes at once may leave a notice or two above it until the next one.
  * - **Another notice of the same subject**, while the first is unread, is raised to the top and takes the newer words, not added
  *   (`uq_inbox_unread_subject`): a retried request leaves one row.
  */
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
+import type { Transaction } from '@purlay/db';
 import { messageId, Uuid } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { inboxUpdatedPublications, publishAfterCommit, type EventBus } from '../../platform/events';
@@ -33,6 +39,13 @@ import type { PushSender } from '../push/sender';
 const PARAMS_MAX_BYTES = 1024;
 const PARAMS_MAX_ENTRIES = 8;
 const SUBJECT_TYPE_MAX = 32;
+
+/**
+ * Unread notices of one module a person may have in one workspace (red-team F8): a page of the list is 50, so this is four
+ * pages nobody reads through. A module's sender is bounded by the write budget and its own limits, not by this: the person who
+ * is told is the one it protects.
+ */
+export const UNREAD_PER_MODULE_MAX = 200;
 
 /** A key is a name of at most 24 characters, checked apart: TypeBox reads no pattern or length off a record's key. */
 const PARAM_KEY = /^[A-Za-z][A-Za-z0-9_]{0,23}$/;
@@ -64,6 +77,37 @@ const problemWith = (notice: ModuleNotice): string | undefined => {
   return undefined;
 };
 
+/**
+ * Reads, as of `now`, every unread notice of the person's module beyond the newest `UNREAD_PER_MODULE_MAX`, and answers how many.
+ * The newest are by `id`, the order the list shows (a raised notice has a new id), and the notice just written is among them.
+ * Uses the unread index (`uq_inbox_unread_subject`'s prefix), so it looks at the unread rows and no read one.
+ */
+const collapseOldestUnread = async (
+  transaction: Transaction,
+  {
+    workspaceId,
+    userId,
+    module,
+    now,
+  }: { workspaceId: string; userId: string; module: string; now: Date },
+): Promise<number> => {
+  const beyond = transaction
+    .selectFrom('inbox_entries')
+    .select('id')
+    .where('user_id', '=', userId)
+    .where('workspace_id', '=', workspaceId)
+    .where('module', '=', module)
+    .where('read_at', 'is', null)
+    .orderBy('id', 'desc')
+    .offset(UNREAD_PER_MODULE_MAX);
+  const collapsed = await transaction
+    .updateTable('inbox_entries')
+    .set({ read_at: now })
+    .where('id', 'in', beyond)
+    .executeTakeFirst();
+  return Number(collapsed.numUpdatedRows);
+};
+
 export const notificationSink = (dependencies: {
   /** The module this sink is handed to: the one every notice it writes is written as, and the one that must declare its kind. */
   readonly module: string;
@@ -73,6 +117,8 @@ export const notificationSink = (dependencies: {
   readonly log: Logger;
   /** Notices written, by module and kind: counted once they have committed, so a rolled-back one is never counted. */
   readonly written: Counter<'module' | 'kind'>;
+  /** Older unread notices read as history to stay within `UNREAD_PER_MODULE_MAX`, by module and kind: counted once they have committed. */
+  readonly collapsed: Counter<'module' | 'kind'>;
   /** The kinds the manifests declare `pushed`: the others are only listed. */
   readonly pushedKinds: ReadonlySet<string>;
   /** Tells the devices of a pushed kind; absent where web push is off. */
@@ -140,16 +186,26 @@ export const notificationSink = (dependencies: {
       )
       .returning('id')
       .executeTakeFirstOrThrow();
+    const collapsed = await collapseOldestUnread(transaction, {
+      workspaceId: context.workspaceId,
+      userId: notice.recipientId,
+      module,
+      now,
+    });
     return {
       entryId: written.id,
       workspaceId: context.workspaceId,
       recipientId: notice.recipientId,
       module,
       kind: notice.kind,
+      collapsed,
     };
   },
   announce: async (written): Promise<void> => {
-    for (const { module, kind } of written) dependencies.written.inc({ module, kind });
+    for (const { module, kind, collapsed } of written) {
+      dependencies.written.inc({ module, kind });
+      dependencies.collapsed.inc({ module, kind }, collapsed);
+    }
     dependencies.push?.toldInbox(
       written.filter((notice) => dependencies.pushedKinds.has(notice.kind)),
     );

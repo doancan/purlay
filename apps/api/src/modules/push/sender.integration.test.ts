@@ -13,7 +13,11 @@ import { atomicallyOn } from '../../platform/transactions';
 import { aSession } from '../../testing/signed-in';
 import { aPushService, aBrowser, KEYS } from '../../testing/push-service';
 import { aRoom, type Room } from '../../testing/rooms';
-import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
+import {
+  aDatabaseThatMustNotBeTouched,
+  aNoticeThrottle,
+  aRecordingLogger,
+} from '../../testing/doubles';
 import { edit } from '../../features/chat/messages/edit';
 import { send } from '../../features/chat/messages/messages';
 import { chatPushNotices } from '../../features/chat/notifications/push-notices';
@@ -90,6 +94,7 @@ const sending = async (
     attention: heard,
     notices: chatPushNotices,
     noticeWords: noNoticeWords,
+    noticeThrottle: aNoticeThrottle(clock),
     post,
     // The notices are chat's, so the failures of what they told are chat's.
     ...(metrics === undefined ? {} : { failures: metrics.pushFailures, owner: 'chat' }),
@@ -238,6 +243,7 @@ describe('integration: a device is told', () => {
         attention,
         notices: chatPushNotices,
         noticeWords: noNoticeWords,
+        noticeThrottle: aNoticeThrottle(clock),
         post: service.post,
       });
       const { say } = await sending(db, service.post);
@@ -423,6 +429,7 @@ describe('integration: what the push service answers', () => {
         not_taken: 0,
         error: 0,
         dropped: 0,
+        throttled: 0,
         ...counted,
       });
       // What chat's notices could not deliver is not the core's: nothing is counted under any other owner.
@@ -582,6 +589,7 @@ describe('integration: what the push service answers', () => {
       attention,
       notices: chatPushNotices,
       noticeWords: noNoticeWords,
+      noticeThrottle: aNoticeThrottle(clock),
       post: () => Promise.reject(new Error('nothing is posted')),
       failures: metrics.pushFailures,
       owner: 'chat',
@@ -640,6 +648,7 @@ describe('integration: what the push service answers', () => {
         attention,
         notices: chatPushNotices,
         noticeWords: noNoticeWords,
+        noticeThrottle: aNoticeThrottle(clock),
         post: () => new Promise(() => undefined),
       });
       const context = room.members['alice']?.context;

@@ -41,6 +41,7 @@ const sinkFor = (module: string): ReturnType<typeof notificationSink> =>
     },
     log: NO_LOG,
     written: serverMetrics().inboxEntries,
+    collapsed: serverMetrics().inboxCollapsed,
     pushedKinds: new Set(),
   });
 

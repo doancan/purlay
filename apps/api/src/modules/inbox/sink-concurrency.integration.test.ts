@@ -98,6 +98,7 @@ describe('integration: notification and account erasure lock ordering', () => {
           bus: idleBus,
           log: NO_LOG,
           written: serverMetrics().inboxEntries,
+          collapsed: serverMetrics().inboxCollapsed,
           kinds: new Map([['thing_assigned', 'things']]),
           pushedKinds: new Set(),
         }).notify(tx.withPlugin(barrier), world.context, {
