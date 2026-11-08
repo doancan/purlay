@@ -339,6 +339,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/enforcement.test.ts'],
   },
   {
+    id: 'module-code-may-import-the-composition',
+    why: 'a feature’s code is no longer kept from the composition, so a module opens another module’s slot by importing the file that holds them all (D-286)',
+    file: 'scripts/feature-fences.mjs',
+    find: '        noComposition === undefined ? [] : [noComposition],\n',
+    replace: '        [],\n',
+    tests: ['scripts/feature-fences.test.ts'],
+  },
+  {
     id: 'module-http-folder-keeps-the-transport-fence',
     why: 'a module’s http folder is held to the fence of the rest of the module, so it cannot import the framework it registers its routes with (D-280)',
     file: 'scripts/feature-fences.mjs',

@@ -45,6 +45,8 @@ have it.
 
 ### Fixed
 
+- **Operations** — A module can no longer write a notice of a kind another module declares, or have its notice listed under another module's name: the inbox's sink is made for each module and refuses a kind that module does not declare (D-286)
+
 - **Notifications** — Writing a notice and erasing its reader use the same lock order, so concurrent actions finish without a deadlock; an earlier context cannot notify a deleted workspace
 
 - **Unread conversations** — Catch up from the oldest unread messages, read only the page shown, and open waiting threads at their first unread reply; joining a channel keeps its old history read and thread reads leave other conversations waiting (D-282)

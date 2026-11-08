@@ -606,6 +606,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
             ...dependencies,
             permissions: modules.permissions,
             inbox: notificationSink({
+              module: module.manifest.id,
               clock: dependencies.clock,
               kinds: modules.noticeOwners,
               bus: sockets.bus,

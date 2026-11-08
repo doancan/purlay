@@ -27,6 +27,14 @@ const NO_COMPOSITION_FROM_HTTP = {
     'A module’s HTTP folder is below the application that composes it: it does not import the socket door, `ingress/http/app` or the composition. (D-280, MODULES.md §4)',
 };
 
+// A feature's code does not import the composition: it holds every module's slot, and the one a feature is handed is its own.
+// Its tests may (they stand the application up), and its http folder is kept from it by the fence above.
+const NO_COMPOSITION = {
+  group: ['**/composition'],
+  message:
+    'A module does not import the composition: it holds every module’s slot, and a module is handed only its own through its manifest and its ports. (D-286, MODULES.md §4)',
+};
+
 // What every file of the web client may not import, named once: ESLint replaces a rule rather than merging it, so the
 // module fences below restate it. (D-277)
 const WEB_RESTRICTED_IMPORTS = [
@@ -694,6 +702,7 @@ export default defineConfig([
         : [NO_CREATE_DATABASE, ...NO_RAW_SQL, NO_WHOLE_DATABASE],
     (id) => (id === 'chat' ? [NO_CREATE_DATABASE] : [NO_CREATE_DATABASE, ...NO_RAW_SQL]),
     NO_COMPOSITION_FROM_HTTP,
+    NO_COMPOSITION,
   ),
   // Repeats the clock and brand selectors, since a `no-restricted-syntax` replaces the one before it; tests are left to
   // the block below that gives them their own.

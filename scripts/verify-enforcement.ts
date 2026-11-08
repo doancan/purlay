@@ -84,6 +84,29 @@ const VIOLATIONS: readonly Violation[] = [
       "import { systemClock } from '../../platform/clock';\nimport { thing } from './thing';\n\nexport const use = (): unknown => [systemClock, thing];\n",
     allowed: true,
   },
+  // The composition holds every module's slot; a feature that imported it could open another module's (D-286).
+  {
+    rule: 'a feature does not import the composition, which holds every module’s slot (D-286)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import { composition } from '../../composition';\n\nexport const use = (): unknown => composition;\n",
+  },
+  {
+    rule: 'a feature’s http folder does not import the composition either (D-280)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/http/__enforcement__.ts',
+    source:
+      "import { composition } from '../../../composition';\n\nexport const use = (): unknown => composition;\n",
+  },
+  {
+    rule: 'a feature’s tests may import the composition, to stand the application up (control)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-b/__enforcement__.test.ts',
+    source:
+      "import { composition } from '../../composition';\n\nexport const use = (): unknown => composition;\n",
+    allowed: true,
+  },
   {
     rule: 'a feature writes no raw SQL: the tag from the database package (D-250)',
     ruleId: 'no-restricted-imports',
@@ -681,7 +704,8 @@ try {
   const planted = new Set(
     placed.map((violation) => dirname(violation.file)).filter((dir) => dir.startsWith(FEATURES)),
   );
-  for (const dir of planted) removeIfEmpty(dir);
+  // The deepest first, or a folder that holds another is still not empty when it is looked at.
+  for (const dir of [...planted].sort((a, b) => b.length - a.length)) removeIfEmpty(dir);
   removeIfEmpty(FEATURES);
 }
 
