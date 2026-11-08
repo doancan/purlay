@@ -19,6 +19,18 @@ const palette = async (page: Page, choose: string): Promise<void> => {
   await dialog.getByRole('option', { name: new RegExp(`(^|: )${choose}$`) }).click();
 };
 
+/**
+ * The server's own clock, from the `Date` header of its answer (whole seconds, so the true instant is
+ * up to a second later). Deep Work is judged against this clock alone: the test process's clock is
+ * a monotonic one added to its start time, which drifts from the wall clock over a long run.
+ */
+const serverClock = async (page: Page): Promise<number> => {
+  const response = await page.request.get('/api/me');
+  const stamp = response.headers()['date'];
+  expect(stamp, 'the API answers with a Date header').toBeTruthy();
+  return Date.parse(stamp ?? '');
+};
+
 test.describe('Deep Work', () => {
   test('for two hours is kept by the server, said in the header, and ends when asked', async ({
     asOutsider,
@@ -29,7 +41,7 @@ test.describe('Deep Work', () => {
     await page.goto(`/w/${workspace.slug}`);
     await shellReady(page);
 
-    const started = performance.timeOrigin + performance.now();
+    const before = await serverClock(page);
     await palette(page, 'For 2 hours');
     const bar = page.getByRole('status').filter({ hasText: /Deep Work until/ });
     await expect(bar).toBeVisible();
@@ -39,9 +51,10 @@ test.describe('Deep Work', () => {
       memberships: { workspace: { id: string }; deepWorkUntil: string | null }[];
     };
     const until = me.memberships.find((m) => m.workspace.id === workspace.id)?.deepWorkUntil;
-    const ahead = Date.parse(until ?? '') - started;
-    expect(ahead).toBeGreaterThan(119 * 60_000);
-    expect(ahead).toBeLessThan(121 * 60_000);
+    const after = await serverClock(page);
+    const kept = Date.parse(until ?? '');
+    expect(kept).toBeGreaterThan(before + 119 * 60_000);
+    expect(kept).toBeLessThan(after + 121 * 60_000);
 
     await page.reload();
     await shellReady(page);
