@@ -11,7 +11,7 @@ import { SESSION_COOKIE } from '../../../platform/cookies';
 import { userTopic, type EventBus } from '../../../platform/events';
 import { atomicallyOn } from '../../../platform/transactions';
 import { aRoom, type Room } from '../../../testing/rooms';
-import { aSession, aTestAuth } from '../../../testing/signed-in';
+import { aTestSessionAuth, aSession } from '../../../testing/signed-in';
 import { sendMessage } from '../messages/messages';
 import { hideMessage } from '../messages/hide';
 import { removeMessage } from '../messages/delete';
@@ -70,7 +70,7 @@ describe('integration: private deletion across sessions', () => {
       forget: () => undefined,
     };
     const response = await hideMyMessage(
-      { database: db, clock, bus, auth: aTestAuth(db, { clock }) },
+      { database: db, clock, bus, auth: aTestSessionAuth(db, { clock }) },
       new Request(`https://purlay.test/api/messages/${message}/hidden`, {
         method: 'PUT',
         headers: { cookie: `${SESSION_COOKIE}=${session.token}` },

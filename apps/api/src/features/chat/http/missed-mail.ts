@@ -8,17 +8,17 @@
  */
 import { Elysia, type AnyElysia } from 'elysia';
 import { SetMissedMailRequest, StopMissedMailRequest, type MissedMailSetting } from '@purlay/types';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
-import type { Auth } from '../../../modules/auth/better-auth';
+import type { SessionAuth } from '../../../modules/auth/sessions';
 import { readMissedMail, setMissedMail, stopMissedMail } from '../notifications/missed-mail';
 
-const mailOn = (auth: Auth): boolean => auth.signInLinks !== undefined;
+const mailOn = (auth: SessionAuth): boolean => auth.signInLinksOn;
 
 /** `GET /api/me/missed-mail` — whether the caller asked to be mailed, and whether this server can. */
 const readMyMissedMail = async (
-  dependencies: Pick<ModuleRouteDependencies, 'auth' | 'database'>,
+  dependencies: Pick<ChatRouteDependencies, 'auth' | 'database'>,
   request: Request,
 ): Promise<MissedMailSetting> => {
   const { userId } = await requireSession(dependencies.auth, request);
@@ -27,7 +27,7 @@ const readMyMissedMail = async (
 
 /** `PUT /api/me/missed-mail` — turns the caller's own letters on or off. */
 const setMyMissedMail = async (
-  dependencies: Pick<ModuleRouteDependencies, 'auth' | 'database' | 'clock'>,
+  dependencies: Pick<ChatRouteDependencies, 'auth' | 'database' | 'clock'>,
   request: Request,
   body: unknown,
 ): Promise<MissedMailSetting> => {
@@ -43,7 +43,7 @@ const setMyMissedMail = async (
 
 /** `POST /api/missed-mail/stop` — public: `204`, or one `404` for every link that does not open. */
 const stopMissedMailByLink = async (
-  dependencies: Pick<ModuleRouteDependencies, 'database' | 'clock'>,
+  dependencies: Pick<ChatRouteDependencies, 'database' | 'clock'>,
   body: unknown,
 ): Promise<void> => {
   await stopMissedMail(
@@ -54,7 +54,7 @@ const stopMissedMailByLink = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const missedMailRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const missedMailRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get('/api/me/missed-mail', async ({ request }) => await readMyMissedMail(context, request))
     .put(

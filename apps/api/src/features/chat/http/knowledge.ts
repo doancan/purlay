@@ -1,5 +1,5 @@
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   OlderPageQuery,
   SaveSearchRequest,
@@ -80,7 +80,7 @@ const deleteSavedSearch = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const knowledgeRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const knowledgeRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .put(
       '/api/messages/:messageId/knowledge',

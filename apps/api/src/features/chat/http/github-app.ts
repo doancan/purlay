@@ -4,7 +4,7 @@
  * `features/chat/integrations/github-app*.ts`, and answers; the App is the settings' as this request pinned them.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { GitHubWiring } from './wiring';
 import { limitKeyFor } from '../../../platform/client-key';
 import { clientAddress, peerOf } from '../../../ingress/http/client-address';
@@ -13,7 +13,7 @@ import {
   type GitHubAppRedirect,
   type GitHubAppStatus,
 } from '@purlay/types';
-import type { Auth } from '../../../modules/auth/better-auth';
+import type { SessionAuth } from '../../../modules/auth/sessions';
 import {
   completeCallback,
   disconnectInstallation,
@@ -36,7 +36,7 @@ import { validated } from '../../../ingress/http/validate';
 import { DELIVERIES_AT_ONCE, DELIVERY_READ_MS, readWithin } from './webhooks';
 
 export interface GitHubAppRouteDependencies extends GitHubAppDependencies {
-  readonly auth: Auth;
+  readonly auth: SessionAuth;
 }
 
 /** `GET /api/workspaces/:workspaceId/github-app` — any member. */
@@ -163,10 +163,7 @@ export const receiveAppWebhook = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const githubAppRoutes = (
-  context: ModuleRouteDependencies,
-  wiring: GitHubWiring,
-): AnyElysia =>
+export const githubAppRoutes = (context: ChatRouteDependencies, wiring: GitHubWiring): AnyElysia =>
   new Elysia()
     .get(
       '/api/workspaces/:workspaceId/github-app',

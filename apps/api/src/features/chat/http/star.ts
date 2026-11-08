@@ -4,7 +4,7 @@
  * written; nobody else hears anything.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { requireChannelById } from '../channels/guard';
 import {
   NO_LOG,
@@ -42,7 +42,7 @@ export const starChannel = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const starRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const starRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .put('/api/channels/:channelId/star', async ({ request, params, set }) => {
       await starChannel(context, request, params.channelId, true);

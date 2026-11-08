@@ -20,7 +20,7 @@ import { markNotificationsRead } from './notifications';
 import { NOW, testDependencies } from '../../../testing/doubles';
 import { fixedClock } from '../../../platform/clock';
 import { userTopic, type EventBus } from '../../../platform/events';
-import { aTestAuth, aSignedInUser } from '../../../testing/signed-in';
+import { aTestSessionAuth, aSignedInUser } from '../../../testing/signed-in';
 import { aUniqueSlug } from '../../../testing/users';
 
 afterAll(async () => {
@@ -344,7 +344,7 @@ describe('integration: PUT /api/notifications/read', () => {
         });
       const body = { ids: page.data.map((n) => n.id) };
       await markNotificationsRead(
-        { auth: aTestAuth(db), database: db, clock, bus },
+        { auth: aTestSessionAuth(db), database: db, clock, bus },
         request(),
         body,
       );
@@ -353,7 +353,7 @@ describe('integration: PUT /api/notifications/read', () => {
       ]);
       // Read again: nothing moved, so nothing is said.
       await markNotificationsRead(
-        { auth: aTestAuth(db), database: db, clock, bus },
+        { auth: aTestSessionAuth(db), database: db, clock, bus },
         request(),
         body,
       );

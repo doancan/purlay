@@ -530,6 +530,14 @@ export const API_MODULES_AUTH: readonly Mutation[] = [
     tests: [SESSIONS_TESTS],
   },
   {
+    id: 'session-auth-accepts-a-copy',
+    why: 'a copy of a handle that sessionAuthOf did not make is read as the Better Auth instance, so a module can hand the session readers an object of its own (the red-team review, D-250 rule 10)',
+    file: 'apps/api/src/modules/auth/sessions.ts',
+    find: '  if (opens in auth) throw new Error(',
+    replace: '  if (false as boolean) throw new Error(',
+    tests: ['apps/api/src/ingress/http/module-routes.test.ts'],
+  },
+  {
     id: 'session-database-failure-hidden-in-the-library-error',
     why: 'a pool out of connections reaches the caller as the library’s 500, not the 503 that says try again',
     file: SESSIONS,

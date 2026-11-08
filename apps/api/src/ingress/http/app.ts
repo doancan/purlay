@@ -67,6 +67,7 @@ import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
 import { leasingExecutor, type Executor, type LeaseConnection } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
+import { sessionAuthOf } from '../../modules/auth/sessions';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
 import type { ServicesPin, SettingsChange } from '../../modules/setup/runtime';
 import type { WorkspaceCreators } from '../../modules/workspaces/creators';
@@ -637,7 +638,17 @@ export const createApp = (given: Dependencies): HttpApplication => {
       ? []
       : [
           module.routes({
-            ...dependencies,
+            auth: sessionAuthOf(dependencies.auth),
+            database: dependencies.database,
+            clock: dependencies.clock,
+            log,
+            config: {
+              APP_URL: dependencies.config.APP_URL,
+              GITHUB_API_URL: dependencies.config.GITHUB_API_URL,
+              TRUST_PROXY: dependencies.config.TRUST_PROXY,
+            },
+            ...(dependencies.githubApi === undefined ? {} : { githubApi: dependencies.githubApi }),
+            ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
             permissions: modules.permissions,
             inbox: notificationSink({
               module: module.manifest.id,

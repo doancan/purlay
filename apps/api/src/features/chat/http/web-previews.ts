@@ -1,14 +1,14 @@
 /** A preview is requested for a currently readable message and its selected rendered link. */
 import { Elysia, type AnyElysia } from 'elysia';
 import { WebLinkPreviewRequest } from '@purlay/types';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
 import type { ExternalFetch } from '../../../modules/images/proxy';
 import { requireMessageById } from '../channels/guard';
 import { externalPageFetch, webPreviews } from '../integrations/web-previews';
 
-export type PreviewRouteDependencies = ModuleRouteDependencies & {
+export type PreviewRouteDependencies = ChatRouteDependencies & {
   readonly previewFetch?: ExternalFetch;
 };
 

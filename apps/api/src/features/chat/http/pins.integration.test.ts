@@ -9,7 +9,7 @@ import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import { channelTopic, NO_LOG, type EventBus } from '../../../platform/events';
 import { SESSION_COOKIE } from '../../../platform/cookies';
-import { aTestAuth, aSession } from '../../../testing/signed-in';
+import { aTestSessionAuth, aSession } from '../../../testing/signed-in';
 import { aRoom } from '../../../testing/rooms';
 import { testDependencies } from '../../../testing/doubles';
 import { createApp } from '../../../ingress/http/app';
@@ -56,7 +56,7 @@ describe('integration: who is told of a pin', () => {
         unsubscribe: () => undefined,
         forget: () => undefined,
       };
-      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestSessionAuth(db), database: db, clock, bus, log: NO_LOG };
 
       await putPin(dependencies, alice(), message);
       await putPin(dependencies, alice(), message);

@@ -389,8 +389,8 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'missed-mail-http-relay-assumed',
     why: 'the setting is offered, and turned on, whether or not the server has a relay to send through (D-240)',
     file: 'apps/api/src/features/chat/http/missed-mail.ts',
-    find: 'const mailOn = (auth: Auth): boolean => auth.signInLinks !== undefined;\n',
-    replace: 'const mailOn = (auth: Auth): boolean => true;\n',
+    find: 'const mailOn = (auth: SessionAuth): boolean => auth.signInLinksOn;\n',
+    replace: 'const mailOn = (auth: SessionAuth): boolean => true;\n',
     tests: ['apps/api/src/features/chat/http/missed-mail.integration.test.ts'],
   },
   {

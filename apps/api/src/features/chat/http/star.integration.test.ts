@@ -10,7 +10,7 @@ import type { Channel, ServerFrame } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { SESSION_COOKIE } from '../../../platform/cookies';
 import { NO_LOG, userTopic, type EventBus } from '../../../platform/events';
-import { aTestAuth, aSession } from '../../../testing/signed-in';
+import { aTestSessionAuth, aSession } from '../../../testing/signed-in';
 import { testDependencies } from '../../../testing/doubles';
 import { aRoom } from '../../../testing/rooms';
 import { createApp } from '../../../ingress/http/app';
@@ -123,7 +123,7 @@ describe('integration: a star', () => {
         unsubscribe: () => undefined,
         forget: () => undefined,
       };
-      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestSessionAuth(db), database: db, clock, bus, log: NO_LOG };
       const request = (): Request =>
         new Request('https://purlay.test/', { headers: { cookie: `${SESSION_COOKIE}=${token}` } });
 

@@ -6,7 +6,8 @@
  */
 import type { GitHubAppRouteDependencies } from './github-app';
 import type { GitHubIssueRouteDependencies } from './github-issues';
-import type { ModuleRouteDependencies, RouteLimiter } from '../../../ingress/http/module-routes';
+import type { RouteLimiter } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   GITHUB_CALL_BUDGET,
   INCOMING_WEBHOOK_BUDGET,
@@ -32,7 +33,7 @@ export interface GitHubWiring {
   readonly delivering: { count: number };
 }
 
-export const githubWiring = (context: ModuleRouteDependencies): GitHubWiring => {
+export const githubWiring = (context: ChatRouteDependencies): GitHubWiring => {
   // GitHub's API at the address the sign-in uses (D-23, amended), unless a test hands its own.
   const github =
     context.githubApi ??

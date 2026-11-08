@@ -516,6 +516,31 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/errors.test.ts'],
   },
   {
+    id: 'module-context-hands-the-auth-instance',
+    why: 'a module is handed the Better Auth instance itself, whose context holds the cookie secret (the red-team review, D-250 rule 10)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '            auth: sessionAuthOf(dependencies.auth),',
+    replace: '            auth: dependencies.auth,',
+    tests: ['apps/api/src/ingress/http/module-routes.test.ts'],
+  },
+  {
+    id: 'module-context-hands-the-whole-config',
+    why: 'a module is handed the whole configuration, `ENCRYPTION_KEY` and `DATABASE_URL` with it (the red-team review, D-250 rule 10)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '            config: {\n              APP_URL: dependencies.config.APP_URL,\n              GITHUB_API_URL: dependencies.config.GITHUB_API_URL,\n              TRUST_PROXY: dependencies.config.TRUST_PROXY,\n            },',
+    replace: '            config: dependencies.config,',
+    tests: ['apps/api/src/ingress/http/module-routes.test.ts'],
+  },
+  {
+    id: 'module-context-spreads-the-dependencies',
+    why: 'a module is handed every field of the application’s dependencies again, the encryption key and the Better Auth instance among them (the red-team review, D-250 rule 10)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: '          module.routes({\n            auth: sessionAuthOf(dependencies.auth),',
+    replace:
+      '          module.routes({\n            ...dependencies,\n            auth: sessionAuthOf(dependencies.auth),',
+    tests: ['apps/api/src/ingress/http/module-routes.test.ts'],
+  },
+  {
     id: 'module-requests-have-no-deadline',
     why: 'a module’s request that waits on a lock or a slow service hangs for as long as it waits instead of being answered at its deadline (D-270)',
     file: 'apps/api/src/ingress/http/app.ts',

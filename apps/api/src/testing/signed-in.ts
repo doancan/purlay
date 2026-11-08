@@ -21,7 +21,13 @@ import {
   type AuthDependencies,
 } from '../modules/auth/better-auth';
 import { inProcessEventBus } from '../realtime/bus';
-import { issueSession, type IssueOptions, type IssuedSession } from '../modules/auth/sessions';
+import {
+  issueSession,
+  sessionAuthOf,
+  type IssueOptions,
+  type IssuedSession,
+  type SessionAuth,
+} from '../modules/auth/sessions';
 import { aUserRow, type TestUser } from './users';
 import { SESSION_COOKIE } from '../platform/cookies';
 
@@ -54,6 +60,12 @@ export const aTestAuth = (
     checkSchema: !isTransaction(database),
     ...options,
   });
+
+/** `aTestAuth` as a module's routes are handed it: the handle that only the session readers open. */
+export const aTestSessionAuth = (
+  database: Executor,
+  options: Partial<Omit<AuthDependencies, 'database'>> = {},
+): SessionAuth => sessionAuthOf(aTestAuth(database, options));
 
 /** A session for an existing user, signed as a test's instance accepts it. */
 export const aSession = async (

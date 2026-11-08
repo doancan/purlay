@@ -1,5 +1,5 @@
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   ScheduleMessageRequest,
   type ScheduledMessage,
@@ -52,7 +52,7 @@ const listScheduled = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const scheduledRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const scheduledRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/workspaces/:workspaceId/scheduled',

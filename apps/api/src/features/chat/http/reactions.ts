@@ -7,7 +7,7 @@
  * one emoji, not text — before anything reads it.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { Type } from '@sinclair/typebox';
 import { Reaction, type ReactionsResponse } from '@purlay/types';
 import { setReaction, type ReactionDependencies } from '../reactions/reactions';
@@ -16,7 +16,7 @@ import { validated } from '../../../ingress/http/validate';
 
 /** What the module's routes are handed, as far as a reaction needs it: who is calling, the database and the clock. */
 interface ReactionRouteDependencies
-  extends ReactionDependencies, Pick<ModuleRouteDependencies, 'auth' | 'database' | 'clock'> {}
+  extends ReactionDependencies, Pick<ChatRouteDependencies, 'auth' | 'database' | 'clock'> {}
 
 const EmojiParameter = Type.Object({ emoji: Reaction.properties.emoji });
 
@@ -33,7 +33,7 @@ const changeReaction = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const reactionRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const reactionRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .put(
       '/api/messages/:messageId/reactions/:emoji',

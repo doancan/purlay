@@ -8,8 +8,8 @@
  * its own derives the workspace from the resource and does both (D-34).
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
-import type { Auth } from '../../../modules/auth/better-auth';
+import type { ChatRouteDependencies } from './dependencies';
+import type { SessionAuth } from '../../../modules/auth/sessions';
 import {
   AddChannelMemberRequest,
   CreateChannelRequest,
@@ -64,8 +64,8 @@ import { validated } from '../../../ingress/http/validate';
 
 export interface ChannelDependencies {
   /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
-  readonly auth: Auth;
-  readonly database: ModuleRouteDependencies['database'];
+  readonly auth: SessionAuth;
+  readonly database: ChatRouteDependencies['database'];
   readonly clock: Clock;
 }
 
@@ -525,7 +525,7 @@ const updateChannelRetentionSetting = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const channelRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const channelRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/workspaces/:workspaceId/channels',

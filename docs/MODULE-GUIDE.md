@@ -183,7 +183,14 @@ list, search, notice and fact; your code does not. What it costs you:
 Owed either way: a name and a removal threshold (`MODULES.md` §11), a `degrades` for every partner, and data decisions for erasure and
 export that hold whether or not the module is granted, because taking a grant away hides the module's rows and keeps them (D-289 §6).
 
-## 8. What stays by hand
+## 8. What a route is handed
+
+A route's context is built for it (`ModuleRouteDependencies<Db>`, D-250 rule 10), not spread from the application's: `config` has
+three settings (`APP_URL`, `GITHUB_API_URL`, `TRUST_PROXY`) and no secret, `auth` is a `SessionAuth` handle that `requireSession`
+opens and nothing else does, and `database` is your `<Id>Db`, so `context.database.selectFrom('channels')` does not compile in a
+module that does not read `channels`. A setting a route needs is a line in `ModuleConfig`, in the pull request that needs it.
+
+## 9. What stays by hand
 
 The list a reviewer reads, and the only edits a new module makes outside its folder that the generator does not: a hot path of its own
 in `HOT_PATHS` and the web feature (`apps/web/src/features/<id>/`, its line in `modules/registry.ts`, the catalogue words), and, for a

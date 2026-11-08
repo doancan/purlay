@@ -13,6 +13,7 @@ import { requireLiveSession } from '../../../modules/auth/sessions';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';
 import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { IssuesDb } from '../schema';
 import { requireSession } from '../../../ingress/http/session';
 import { queryOf, validated } from '../../../ingress/http/validate';
 import { createIssue, deleteIssue, issuePage, updateIssue } from '../issues';
@@ -23,7 +24,7 @@ import { createIssue, deleteIssue, issuePage, updateIssue } from '../issues';
 
 /** `GET /api/workspaces/:workspaceId/issues?status=&before=&limit=` — newest first. */
 export const listIssues = async (
-  { auth, database }: ModuleRouteDependencies,
+  { auth, database }: ModuleRouteDependencies<IssuesDb>,
   request: Request,
   workspaceId: string,
 ): Promise<IssuePage> => {
@@ -37,7 +38,7 @@ export const listIssues = async (
 
 /** `POST /api/workspaces/:workspaceId/issues` — `201` with the issue, open. */
 export const postIssue = async (
-  { auth, database, clock, inbox }: ModuleRouteDependencies,
+  { auth, database, clock, inbox }: ModuleRouteDependencies<IssuesDb>,
   request: Request,
   workspaceId: string,
   body: unknown,
@@ -55,7 +56,7 @@ export const postIssue = async (
 
 /** `PATCH /api/workspaces/:workspaceId/issues/:issueId` — the issue as it is now. */
 export const patchIssue = async (
-  { auth, database, clock, inbox }: ModuleRouteDependencies,
+  { auth, database, clock, inbox }: ModuleRouteDependencies<IssuesDb>,
   request: Request,
   workspaceId: string,
   issueId: string,
@@ -74,7 +75,7 @@ export const patchIssue = async (
 
 /** `DELETE /api/workspaces/:workspaceId/issues/:issueId` — `204`; for its creator, or an owner or an admin. */
 export const removeIssue = async (
-  { auth, database, clock, permissions }: ModuleRouteDependencies,
+  { auth, database, clock, permissions }: ModuleRouteDependencies<IssuesDb>,
   request: Request,
   workspaceId: string,
   issueId: string,

@@ -3,7 +3,7 @@
  * the channel (`BOOKMARKS_UPDATED`), after the commit, and only when it was one.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { BookmarkList, ChannelBookmark } from '@purlay/types';
 import { AddBookmarkRequest } from '@purlay/types';
 import { requireChannelById } from '../channels/guard';
@@ -80,7 +80,7 @@ const deleteBookmark = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const bookmarkRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const bookmarkRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/channels/:channelId/bookmarks',
