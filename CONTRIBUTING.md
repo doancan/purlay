@@ -280,6 +280,20 @@ the types, generate the example file, compute the queue.
 useful — one place *does* the thing and another *explains* it. That is fine when a check fails if
 they disagree. A comment asking the reader to keep them in sync is not a mechanism.
 
+**How to add a number to a document.** The code owns it; the document shows it. In this order:
+
+1. **A table of values the code holds** (a module's deadlines, the outbox's limits, the metrics, the defaults): write it
+   between `<!-- generated:name -->` markers with `bun run docs:sync` (`apps/api/src/testing/docs-sync.ts`, a new block is a
+   function that reads the constant); `docs-sync.test.ts` fails the document that is not what the code makes of it.
+2. **A sentence that states a number**: add a claim to `apps/api/src/stated-numbers.test.ts` (the sentence as a pattern, the
+   constant as the expected value). The test fails when the sentence says another number and when it no longer matches,
+   so a reworded sentence takes its claim along. Export the constant rather than copying it into the test.
+3. **A figure of seven digits or more** (bytes, milliseconds) lives in one document; `check-docs.py` fails a second.
+4. **A name or a path in prose** is checked as it is written: a path in backticks must exist, a `purlay_…` metric must be
+   in the catalogue, a variable in `CONFIG.md` must have its row and say what the loader says.
+
+Do not write a number whose home is none of these; make it one of these first.
+
 **A conflict rule is not single ownership.** "If these two disagree, that one wins" is an
 admission that drift is expected. Remove the copy or bind it.
 

@@ -106,6 +106,22 @@ describe('the document check', () => {
     expect(output).toContain('apps/api/src/ingress/http/messages.ts');
   });
 
+  test('fails on a figure of seven digits stated in a second document, whichever figure it is', () => {
+    const root = aCopy();
+    // 26214400 is the attachment cap SCHEMA.md owns; 99999999 is one no document has, stated twice.
+    edit(
+      root,
+      'docs/API.md',
+      (text) => `${text}\nThe cap is 26214400 bytes, and 99999999 is another.\n`,
+    );
+    edit(root, 'docs/UX.md', (text) => `${text}\nAnd 99999999 again.\n`);
+    const { status, output } = run(root);
+    expect(status).toBe(1);
+    expect(output).toContain('a figure is stated in more than one document');
+    expect(output).toContain('26214400');
+    expect(output).toContain('99999999');
+  });
+
   test('fails on a gap in decision numbering', () => {
     const root = aCopy();
     edit(root, 'docs/DECISIONS.md', (text) => text.replace(/^### D-2\. /m, '### Formerly D-2. '));
