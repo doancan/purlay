@@ -95,6 +95,8 @@ export interface CreatorDependencies extends WorkspaceDependencies {
   readonly workspaceCreated: WorkspaceCreated;
   /** The ids of the modules this process runs, which `GET /api/me` tells the client. */
   readonly modules: readonly ModuleId[];
+  /** The modules the administrator has stopped at run time, which `GET /api/me` no longer lists (D-296). */
+  readonly suspended?: () => ReadonlySet<string>;
 }
 
 /**
@@ -120,7 +122,7 @@ export const readMe = async (
   return {
     ...me,
     mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId),
-    modules: [...dependencies.modules],
+    modules: dependencies.modules.filter((id) => dependencies.suspended?.().has(id) !== true),
   };
 };
 

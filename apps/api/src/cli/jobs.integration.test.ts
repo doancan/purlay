@@ -1,10 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { cloneIntegrationDatabase, closeIntegrationDatabase } from '@purlay/db';
 
 /** Runs `bun run job <name>` as a scheduler does, with the test database and this `MODULES`. */
 const job = async (
   name: string,
   modules: string | undefined,
+  databaseUrl = process.env['DATABASE_URL'] ?? '',
 ): Promise<{ code: number; said: string }> => {
   const process_ = Bun.spawn(['bun', '--no-env-file', join(import.meta.dir, 'jobs.ts'), name], {
     stdout: 'pipe',
@@ -13,7 +15,7 @@ const job = async (
       PATH: process.env['PATH'] ?? '',
       NODE_ENV: 'development',
       APP_URL: 'http://localhost:3000',
-      DATABASE_URL: process.env['DATABASE_URL'] ?? '',
+      DATABASE_URL: databaseUrl,
       ENCRYPTION_KEY: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
       ...(modules === undefined ? {} : { MODULES: modules }),
     },
@@ -22,6 +24,37 @@ const job = async (
   const said = `${await new Response(process_.stdout).text()}${await new Response(process_.stderr).text()}`;
   return { code, said };
 };
+
+afterAll(async () => {
+  await closeIntegrationDatabase();
+});
+
+describe('integration: the scheduled jobs of a module the administrator has stopped (D-296)', () => {
+  test('are not run, say why, and are not overdue; its retention goes on, and a resume brings the job back', async () => {
+    const cloned = await cloneIntegrationDatabase();
+    try {
+      await cloned.db
+        .insertInto('suspended_modules')
+        .values({ module: 'chat', reason: 'misbehaving', source: 'test', suspended_at: new Date() })
+        .execute();
+      const left = await job('mail:missed', undefined, cloned.connectionString);
+      expect(left.code).toBe(0);
+      expect(left.said).toContain('the job belongs to a module that is not run');
+      expect(left.said).toContain('"stopped":true');
+      const retained = await job('purge:retention', undefined, cloned.connectionString);
+      expect(retained.said).toContain('a scheduled job finished');
+      const status = await job('jobs:status', undefined, cloned.connectionString);
+      expect(status.said).not.toContain('mail:missed');
+      expect(status.said).toContain('purge:retention');
+
+      await cloned.db.deleteFrom('suspended_modules').execute();
+      const back = await job('mail:missed', undefined, cloned.connectionString);
+      expect(back.said).toContain('a scheduled job finished');
+    } finally {
+      await cloned.drop();
+    }
+  }, 60_000);
+});
 
 describe('integration: the scheduled jobs of the modules a process runs', () => {
   test('a job of a module that is not run exits 0 and says there was nothing to do', async () => {
