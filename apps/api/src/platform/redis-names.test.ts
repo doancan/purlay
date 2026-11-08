@@ -17,6 +17,7 @@ describe('the names in a namespace', () => {
       bus: 'purlay:bus',
       moduleSet: 'purlay:modules',
       entitlementNodes: 'purlay:entitlement-nodes',
+      suspensionNodes: 'purlay:suspension-nodes',
       typingPrefix: 'purlay:typing:',
       onlinePrefix: 'purlay:online:',
       lapseIndex: 'purlay:online-lapse',

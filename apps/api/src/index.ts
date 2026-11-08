@@ -34,7 +34,11 @@ import type { SealedSetting, ServerSettings } from './modules/setup/settings';
 import { credentialCipher } from './platform/crypto';
 import { inProcessBackplane } from './realtime/bus';
 import { bunRedisClient, connectRedis } from './platform/redis';
-import { advertiseEntitlements, peersBehind } from './realtime/entitlement-peers';
+import {
+  advertiseEntitlements,
+  advertiseSuspension,
+  peersBehind,
+} from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
@@ -216,8 +220,12 @@ const moduleSetWatch =
 // And of which of them read a workspace's grants, so that a restriction is not written beside one that does not (D-292).
 const grantsAdvertised =
   redis === undefined ? undefined : advertiseEntitlements({ link: redis, nodeId, log });
+// And of which of them read the modules the administrator has stopped, so that a stop is not written beside one that does not (D-296).
+const suspensionAdvertised =
+  redis === undefined ? undefined : advertiseSuspension({ link: redis, nodeId, log });
 const moduleSet = {
   stop: async (): Promise<void> => {
+    await suspensionAdvertised?.stop();
     await grantsAdvertised?.stop();
     await moduleSetWatch?.stop();
   },
