@@ -2,16 +2,21 @@
 
 > Authority: `DECISIONS.md` D-294 (and D-250, D-283, D-291 for the rules it points at). This guide is by task: *what do I run, what
 > do I write, what will fail*. It repeats no rule: `MODULES.md` §9 is the checklist a reviewer holds a module to, and each task
-> below names the part of it that applies. Every file and command it names exists, and `module-guide.test.ts` fails when one stops.
+> below names the part of it that applies. Every `bun run` command it names is a script of the root `package.json` and every path at the
+> repository's root exists; `module-guide.test.ts` fails when one stops. The example module is `acme`: an id no test of this repository uses as a fixture.
 
 ---
 
 ## 1. Add a module
 
 ```
-bun run module:new notes --dry-run     # what would be made and changed, nothing written
-bun run module:new notes               # a module that compiles and passes the guards
+bun run module:new acme --dry-run     # what would be made and changed, nothing written
+bun run module:new acme               # a module that compiles and passes the guards
 ```
+
+Then `git add -A`: `scripts/check-docs.test.ts` works from the tracked files and fails with `SCHEMA.md names a migration that is not a file`
+until the new files are added. `bun test apps/api/src/testing/scaffold-leftovers.test.ts` lists each placeholder you still owe and fails
+until none is left, and `bun run check:docs` and `bun run verify` finish the check. `module:new --help` prints the usage.
 
 Flags: `--requires a,b` for modules it cannot start without, `--optional c,d` for modules it uses when they run. An id is
 lowercase letters, digits and hyphens, at most 32, and not a path the core owns. With `DATABASE_URL` set (the database named in
@@ -20,14 +25,14 @@ against a database (it migrates a throwaway clone, rewrites the file and exits 1
 is the same as the first, however many modules there are; a second run of the same id says the module exists and changes nothing; a file it
 needs to edit that has moved stops the run before anything is written.
 
-**What it makes** (`apps/api/src/testing/module-new/templates/` is the text; the module is `notes` below):
+**What it makes** (`apps/api/src/testing/module-new/templates/` is the text; the module is `acme` below):
 
 | Where | What |
 |---|---|
-| `apps/api/src/features/notes/` | `module.ts` (the manifest: `budget`, `routes`, `degrades`), `budget.ts`, `schema.ts` (the tables it may name), `items.ts` (a list and a create), `export.ts` and `personal-export.ts` (the data hooks), `workers.ts` (none yet), `testing.ts` (the lifecycle seed), `degradation.testing.ts` with `--optional` |
-| `apps/api/src/features/notes/http/` | `routes.ts` (the plugin), `handlers.ts`, the pool-share test `budget.integration.test.ts` and the route test |
-| `packages/db/migrations/notes/0001_notes.sql` | the table: `workspace_id` with a cascade, bounds in `CHECK`s, the list's index |
-| `packages/types/src/notes.ts` | the wire types and `NOTES_FACTS`, an empty list already joined to `FACTS` in `facts.ts`; the two endpoints are in `endpoints.ts`, the id in `modules.ts` |
+| `apps/api/src/features/acme/` | `module.ts` (the manifest: `budget`, `routes`, `degrades`), `budget.ts`, `schema.ts` (the tables it may name), `items.ts` (a list and a create), `export.ts` and `personal-export.ts` (the data hooks), `workers.ts` (none yet), `testing.ts` (the lifecycle seed), `degradation.testing.ts` with `--optional` |
+| `apps/api/src/features/acme/http/` | `routes.ts` (the plugin), `handlers.ts`, the pool-share test `budget.integration.test.ts` and the route test |
+| `packages/db/migrations/acme/0001_acme.sql` | the table: `workspace_id` with a cascade, bounds in `CHECK`s, the list's index |
+| `packages/types/src/acme.ts` | the wire types and `ACME_FACTS`, an empty list already joined to `FACTS` in `facts.ts`; the two endpoints are in `endpoints.ts`, the id in `modules.ts` |
 | the registries | `apps/api/src/composition.ts` (`bundledModules`), `packages/db/src/migrator.ts` (the set and its requirements), `packages/db/src/table-owners.ts`, `packages/db/src/table-lifecycle.ts`, `HOT_PATHS` in `apps/api/src/cli/budget-latency.ts` |
 | the documents | `MODULES.md` §11 (row and section), `SCHEMA.md` (the table and §12), `DATA.md`, `API.md`, `CONFIG.md`, `ARCHITECTURE.md`, a skeleton decision in `DECISIONS.md`, the decision count in `README.md` |
 
@@ -88,15 +93,15 @@ enum, a narrower bound) is a new shape: set `shape: 2` and keep the old schema a
 before your handler sees it:
 
 ```ts
-const NOTE_CREATED_V1 = Type.Object({ noteId: Type.String(), title: Type.String() });
+const ACME_CREATED_V1 = Type.Object({ recordId: Type.String(), title: Type.String() });
 
-export const NOTE_CREATED = defineFact({
-  type: 'notes.created',
-  owner: 'notes',
+export const ACME_CREATED = defineFact({
+  type: 'acme.created',
+  owner: 'acme',
   absent: 'drop',
   shape: 2,
-  schema: Type.Object({ noteId: Type.String(), title: Type.String(), folder: Type.String() }),
-  reads: { 1: readsEarlierShape(NOTE_CREATED_V1, (note) => ({ ...note, folder: 'unfiled' })) },
+  schema: Type.Object({ recordId: Type.String(), title: Type.String(), folder: Type.String() }),
+  reads: { 1: readsEarlierShape(ACME_CREATED_V1, (record) => ({ ...record, folder: 'unfiled' })) },
 });
 ```
 
@@ -113,13 +118,32 @@ and opens no connection of its own (D-281). It runs only where the module runs, 
 A scheduled job is not a worker: it is `jobs` or `retention` in the manifest, `jobWork` in the slot and a place in `PLAN`
 (`apps/api/src/modules/jobs/schedule.ts`).
 
+**The module `module:new` makes is a grant, and a grant cannot declare `jobs` or `workers`.** Add one and the build stops:
+`"acme" is a grant of the workspace and declares jobs or workers ... it must say entitlement: 'always'` (`unguardedWorkProblem` in
+`composition.ts`, held by `composition.test.ts`). The reason: a loop or a job acts for workspaces with no request to carry the
+workspace's grant, so it would go on serving a workspace that lost it. So, before you write the loop, choose (the table is in §7):
+
+- Say `entitlement: 'always'` in the manifest. The module is then part of every workspace that runs it and is not sold per workspace.
+  This is what chat does.
+- Or keep the module a grant and do the work without a loop: a purge or a sweep that only keeps rows tidy is `retention`, which is
+  allowed on a grant (it runs in every process, whether the module runs or not). A loop that must act for a workspace waits for the SQL
+  form of `effectiveModules` (`MODULES.md` §10, the table of what is not built); the first module that needs it brings it.
+
 ## 7. Make it sellable
 
-A module is on or off for a whole process by `MODULES` (D-250). Whether a workspace is entitled to it is the workspace-level
-enablement of D-250 rule 9, which `MODULES.md` §10 marks as built or not: until it is, "sellable" means what the process runs, and a
-module written for it needs nothing more than the rules above, because everything it does is already closed when it is off (routes,
-frames, events, jobs, workers, search, notifications). What it must get right now: a name and a removal threshold (`MODULES.md` §11),
-data decisions for erasure and export that hold whether or not it runs, and a `degrades` for every partner.
+A module is on or off for a whole process by `MODULES` (D-250). It is on or off for each workspace of a process that runs it by the
+operator's grant: the table `workspace_modules`, written by `bun run entitlements:apply` from an edition file and by the console
+(D-289, D-292; the mode is `WORKSPACE_MODULES`, `DEPLOY.md` "Workspaces and modules"). The framework asks the grant for every route,
+list, search, notice and fact; your code does not. What it costs you:
+
+| Your module has | Say | Because |
+|---|---|---|
+| none of `frames`, `events`, `jobs`, `workers` | nothing: `entitlement` defaults to `grant` | the framework closes it per workspace |
+| any of `frames`, `events` | `entitlement: 'always'` | a frame or an event is closed per process, never per workspace (`registry` refuses a grant with them) |
+| any of `jobs`, `workers` | `entitlement: 'always'`, or no loop (§6) | their work is not given the workspace's grant (`compose` refuses it) |
+
+Owed either way: a name and a removal threshold (`MODULES.md` §11), a `degrades` for every partner, and data decisions for erasure and
+export that hold whether or not the module is granted, because taking a grant away hides the module's rows and keeps them (D-289 §6).
 
 ## 8. What stays by hand
 

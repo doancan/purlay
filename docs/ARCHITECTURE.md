@@ -540,7 +540,7 @@ These are the only pieces of node-local state whose *correctness* changes under 
 Everything else in the process — connection registry, caches, the config object — is either
 derived from the database or genuinely per-node. Declaring an interface costs a file; retrofitting
 one costs a refactor, which is the whole argument. Adding a fourth seam "just in case" is the
-speculative generality this project rejects (`CONTRIBUTING.md` §1.11).
+speculative generality this project rejects (`CONTRIBUTING.md` §6.8).
 
 ---
 

@@ -13,6 +13,8 @@ import { applyEdit, idProblem, namesOf, templateFiles, type Options } from './mo
 const list = (value: string | undefined): string[] =>
   value === undefined || value === '' ? [] : value.split(',').map((item) => item.trim());
 
+const USAGE = 'usage: bun run module:new <id> [--requires a,b] [--optional c,d] [--dry-run]';
+
 /** The command's words: `<id>` and the flags it knows; anything else is refused. */
 export const parseArguments = (
   argv: readonly string[],
@@ -28,8 +30,7 @@ export const parseArguments = (
     else words.push(word);
   }
   const [id, ...extra] = words;
-  if (id === undefined || extra.length > 0)
-    return 'usage: bun run module:new <id> [--requires a,b] [--optional c,d] [--dry-run]';
+  if (id === undefined || extra.length > 0) return USAGE;
   return {
     id,
     dryRun,
@@ -82,6 +83,10 @@ export const main = (
   root: string,
   say: (line: string) => void,
 ): number => {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    say(USAGE);
+    return 0;
+  }
   const parsed = parseArguments(argv);
   if (typeof parsed === 'string') {
     say(parsed);
