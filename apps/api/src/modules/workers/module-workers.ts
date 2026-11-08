@@ -134,6 +134,8 @@ export interface WorkersDependencies {
   readonly outbox?: OutboxCounters;
   /** `purlay_worker_failures_total`: one series for each worker the build carries, made at zero by `serverMetrics`. */
   readonly failures: Counter<'module' | 'worker'>;
+  /** The modules the administrator has stopped (D-296), as fresh as the TTL: a worker of one of them does not run its iteration. */
+  readonly suspended?: () => Promise<ReadonlySet<string>>;
   readonly later?: Later;
 }
 
@@ -150,12 +152,23 @@ export const startWorkers = (
   workers: readonly RunningWorker[],
   dependencies: WorkersDependencies,
 ): Workers => {
-  const { database, clock, bus, push, outbox, failures, later = timeoutLater } = dependencies;
+  const {
+    database,
+    clock,
+    bus,
+    push,
+    outbox,
+    failures,
+    suspended,
+    later = timeoutLater,
+  } = dependencies;
   let stopped = false;
   const loops = workers.map((worker) => {
     const { module, name, work, deadlineMs } = worker;
     const log = dependencies.log.child({ module, worker: name });
     const iteration = async (): Promise<void> => {
+      // A stopped module claims nothing and sweeps nothing; its rows wait for it (D-296).
+      if ((await suspended?.())?.has(module) === true) return;
       const run = async (signal?: AbortSignal): Promise<void> => {
         await withinRequest(
           {
