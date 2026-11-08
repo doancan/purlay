@@ -258,6 +258,10 @@ The limits of the outbox, written from the code (`bun run docs:sync`):
 `purlay_outbox_refused_total{module,fact}`. A rising count means a consumer that is behind (look at `purlay_outbox_pending` and `purlay_outbox_oldest_age_seconds` of
 that module first) or a module publishing in a loop; raising the ceiling only moves the point at which the other workspaces' facts wait behind it, so raise it for a
 measured, legitimate burst and not to silence the counter. The ceiling is per workspace and consumer and soft by the publishes in flight at once.
+A drain takes its batch of 20 by turns across workspaces (D-288 §11), so a workspace with a long backlog has one place in a batch while others have
+facts due, and the others' wait is about the number of workspaces with facts due divided by twenty, times the two seconds between drains. The pick costs about 10 µs for each
+workspace that has anything pending for the consumer (46 to 54 ms for 5,000 workspaces and a million pending rows, measured): if `pg_stat_statements` shows it
+dominating, it is the number of workspaces with pending facts that grew, and the fix is a consumer that keeps up, not a larger batch.
 
 **Backup evidence in server administration (D-278).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
 
