@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { incompatibilities, releasedFrom, unexcused, type ReleasedSnapshot } from './compatibility';
+import { Type } from '@sinclair/typebox';
+import { defineFact, readsEarlierShape } from '@purlay/types';
+import {
+  factIncompatibilities,
+  incompatibilities,
+  releasedFactFrom,
+  releasedFrom,
+  unexcused,
+  type ReleasedSnapshot,
+} from './compatibility';
 import type { ModuleManifest } from './manifest';
 
 const manifest = (overrides: Partial<ModuleManifest> & { id: string }): ModuleManifest => ({
@@ -104,6 +113,54 @@ describe('the facts a release promised', () => {
     const { id, requires, optional, provides, routes, jobs, frames } = releasedFrom(telling);
     const old = [{ id, requires, optional, provides, routes, jobs, frames }];
     expect(incompatibilities(old, [manifest({ id: 'notes' })])).toEqual([]);
+  });
+});
+
+describe('the shapes of a fact a release wrote', () => {
+  const first = Type.Object({ id: Type.String() });
+  const second = Type.Object({ id: Type.String(), folder: Type.String() });
+  const declared = (
+    shape: number | undefined,
+    reads: readonly number[] = [],
+  ): ReturnType<typeof defineFact> =>
+    defineFact({
+      type: 'notes.created',
+      owner: 'notes',
+      absent: 'drop',
+      schema: shape === 2 ? second : first,
+      ...(shape === undefined ? {} : { shape }),
+      reads: Object.fromEntries(reads.map((n) => [n, readsEarlierShape(first, (note) => note)])),
+    });
+  const released = [releasedFactFrom(declared(undefined))];
+
+  test('a fact unchanged, with an optional field added or with a new shape that reads the old, is not a break', () => {
+    expect(factIncompatibilities(released, [declared(undefined)])).toEqual([]);
+    expect(factIncompatibilities(released, [declared(2, [1])])).toEqual([]);
+    expect(factIncompatibilities(released, [])).toEqual([]);
+  });
+
+  test('a new shape that does not read the one the release wrote is said', () => {
+    expect(factIncompatibilities(released, [declared(2)])).toEqual([
+      "the fact 'notes.created' no longer reads the shape 1",
+    ]);
+  });
+
+  test('a reader the release kept and this build drops is said, as is a shape that went back', () => {
+    const wrote = [releasedFactFrom(declared(2, [1]))];
+    expect(factIncompatibilities(wrote, [declared(2)])).toEqual([
+      "the fact 'notes.created' no longer reads the shape 1",
+    ]);
+    expect(factIncompatibilities(wrote, [declared(undefined)])).toEqual([
+      "the fact 'notes.created' no longer reads the shape 2",
+    ]);
+  });
+
+  test('is kept for the release as the shape and the sorted shapes read', () => {
+    expect(releasedFactFrom(declared(2, [1]))).toEqual({
+      type: 'notes.created',
+      shape: 2,
+      reads: [1],
+    });
   });
 });
 

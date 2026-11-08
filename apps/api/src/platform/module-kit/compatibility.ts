@@ -1,3 +1,4 @@
+import { FACT_SHAPE_FIRST, type FactDeclaration } from '@purlay/types';
 import type { ModuleManifest } from './manifest';
 
 /**
@@ -25,9 +26,18 @@ interface CompatibilityException {
   readonly reason: string;
 }
 
+/** What a release promised of one fact: the shape it writes and the earlier shapes it still reads (D-288 §5). */
+export interface ReleasedFact {
+  readonly type: string;
+  readonly shape: number;
+  readonly reads: readonly number[];
+}
+
 /** The file the release script writes (`released-manifests.json`): the manifests as the last release shipped them. */
 export interface ReleasedSnapshot {
   readonly manifests: readonly ReleasedManifest[];
+  /** Absent from a snapshot written before facts had readers: such a release promised none. Sorted by type. */
+  readonly facts?: readonly ReleasedFact[];
   /** Cleared by the release script: an exception holds for the release being worked towards, not for ever. */
   readonly exceptions: readonly CompatibilityException[];
 }
@@ -44,6 +54,14 @@ export const releasedFrom = (manifest: ModuleManifest): ReleasedManifest => ({
   frames: sorted(manifest.frames),
   publishes: sorted(manifest.publishes),
   consumes: sorted(manifest.consumes),
+});
+
+export const releasedFactFrom = (fact: FactDeclaration): ReleasedFact => ({
+  type: fact.type,
+  shape: fact.shape ?? FACT_SHAPE_FIRST,
+  reads: Object.keys(fact.reads ?? {})
+    .map(Number)
+    .sort((a, b) => a - b),
 });
 
 const missing = (released: readonly string[], current: readonly string[]): string[] =>
@@ -110,3 +128,23 @@ export const unexcused = (changes: readonly string[], snapshot: ReleasedSnapshot
     .filter((exception) => !changes.includes(exception.change))
     .map((exception) => `the exception "${exception.change}" excuses nothing now: remove it`),
 ];
+
+/**
+ * Each shape of a fact that the last release could have written and this build cannot read, as a sentence: a rolling deploy leaves
+ * this build's nodes rows of those shapes, and a row no reader describes is dead (D-288 §5). A new current shape therefore keeps the
+ * reader of the one before it, and a reader is dropped only by an exception. A fact the build no longer declares is not said
+ * here: the manifests' `publishes` and `consumes` hold that.
+ */
+export const factIncompatibilities = (
+  released: readonly ReleasedFact[],
+  current: readonly FactDeclaration[],
+): string[] => {
+  const now = new Map(current.map((fact) => [fact.type, releasedFactFrom(fact)]));
+  return released.flatMap((before) => {
+    const after = now.get(before.type);
+    if (after === undefined) return [];
+    return [before.shape, ...before.reads]
+      .filter((shape) => shape !== after.shape && !after.reads.includes(shape))
+      .map((shape) => `the fact '${before.type}' no longer reads the shape ${String(shape)}`);
+  });
+};
