@@ -225,6 +225,17 @@ A page open during the roll that meets the `404 ROUTE_NOT_FOUND` of a node witho
 That line needs `REDIS_URL`; without Redis there is one node. **Finish the roll**: a set that stays mixed is a service that
 answers differently by node. A migration that a new module brings applies when the first node of the new set starts.
 
+**Facts between modules (the outbox, D-288).** A module that tells another something writes a row of `outbox` in its own transaction; the
+consuming module's worker (`outbox:consume`, every two seconds, in that module's share of the pool) delivers it. Nothing in the product publishes yet,
+so the numbers below are zero until a module does. `/metrics` carries, for each module that consumes a fact: `purlay_outbox_pending` (rows waiting),
+`purlay_outbox_oldest_age_seconds` (how long the oldest has waited) and `purlay_outbox_dead` (rows given up on after eight tries, kept thirty days),
+all read from the table, so every node of a cluster reports the same value (alert on `max`); and `purlay_outbox_delivered_total`,
+`purlay_outbox_failures_total` and `purlay_outbox_dropped_total` by module and fact type, counted in the process. The server's overview lists a
+module with dead rows, or a fact that has waited more than 15 minutes. A fact whose consumer is off waits for it as its declaration says (a day, or the
+days it holds) and is then swept by `sweep:outbox`, hourly. The table is meant for facts of human scale, an assignment or a link, and never one for each
+message. **When to look again:** more than a million rows a day, or vacuum that falls behind on `outbox` (`pg_stat_user_tables.n_dead_tup`), is the point at
+which to partition it by day; below that it is not worth the complexity, and nothing in this change measures it yet.
+
 **Backup evidence in server administration (D-278).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
 
 The production Compose stack passes this optional variable but does not mount a host directory by default. Add the metadata-only read-only API volume through a Compose override and set the container path in `production.env`; setting a path alone does not provide evidence.

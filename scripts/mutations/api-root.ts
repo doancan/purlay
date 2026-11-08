@@ -507,7 +507,7 @@ export const API_ROOT: readonly Mutation[] = [
     id: 'composition-workers-accepted-unchecked',
     why: 'a module declares two workers of one name, or one that runs every millisecond, and the build starts',
     file: 'apps/api/src/composition.ts',
-    find: '      workerProblem(module.manifest.id, module.workers ?? []);',
+    find: '      workerProblem(module.manifest.id, workersOf(module, facts));',
     replace: '      undefined;',
     tests: ['apps/api/src/composition.test.ts'],
   },

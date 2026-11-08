@@ -73,6 +73,8 @@ export interface AdministrationDependencies extends AccountDependencies {
   readonly config: Config;
   readonly modules: readonly string[];
   readonly jobs: readonly string[];
+  /** The modules the build carries that consume a fact: whose outbox the overview reports (D-288). */
+  readonly outboxConsumers: readonly string[];
   readonly readiness: () => Promise<Readiness>;
 }
 const guard = async (
@@ -176,6 +178,7 @@ export const readAdministrationOverview = async (
     deps.modules,
     ready.ready,
     deps.clock.now(),
+    deps.outboxConsumers,
   );
 };
 export const writeAdministrationRole = async (

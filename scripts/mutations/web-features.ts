@@ -615,6 +615,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/shell/presence-reader.test.tsx'],
   },
   {
+    id: 'problems-ignore-dead-facts',
+    why: 'the overview names no problem for facts given up on between modules, so a consumer losing facts looks healthy (D-288)',
+    file: 'apps/web/src/features/administration/problems.tsx',
+    find: '    if (dead > 0 || stale) {',
+    replace: '    if (stale) {',
+    tests: ['apps/web/src/features/administration/problems.test.tsx'],
+  },
+  {
     id: 'quiet-page-speaks-anyway',
     why: 'the open page still pops a notice in the person’s quiet hours (D-234)',
     file: 'apps/web/src/features/alerts/background-alerts.tsx',

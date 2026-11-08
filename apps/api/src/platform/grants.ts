@@ -3,7 +3,7 @@
  * statement that already finds the workspace, so the grants are of the snapshot the membership is and no node holds them stale.
  * The two statements that need them (the membership guard and the person's list of workspaces) share it.
  */
-import { sql } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import type { EntitlementRow } from './module-kit/entitlement';
 
 interface RawGrant {
@@ -24,6 +24,26 @@ export const grantColumns = [
   ),
   sql<Date>`now()`.as('read_at'),
 ] as const;
+
+/** The grants of some workspaces, by workspace: a workspace with none has no entry, which the server's mode reads as its default. */
+export const readGrants = async (
+  executor: Executor,
+  workspaceIds: readonly string[],
+): Promise<ReadonlyMap<string, readonly EntitlementRow[]>> => {
+  if (workspaceIds.length === 0) return new Map();
+  const rows = await executor
+    .selectFrom('workspace_modules')
+    .select(['workspace_id', 'module', 'state', 'valid_until'])
+    .where('workspace_id', 'in', workspaceIds)
+    .execute();
+  const byWorkspace = new Map<string, EntitlementRow[]>();
+  for (const row of rows) {
+    const [grant] = asGrants([row]);
+    if (grant !== undefined)
+      byWorkspace.set(row.workspace_id, [...(byWorkspace.get(row.workspace_id) ?? []), grant]);
+  }
+  return byWorkspace;
+};
 
 export const asGrants = (raw: readonly RawGrant[]): EntitlementRow[] =>
   raw.map((grant) => ({

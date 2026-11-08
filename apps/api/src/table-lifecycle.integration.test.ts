@@ -37,6 +37,7 @@ import { recordAudit } from './modules/audit/audit';
 import { addressCounterKey } from './modules/auth/magic-link';
 import { sweepEmailSignIns } from './modules/jobs/jobs';
 import { sweepInbox } from './modules/inbox/sweep';
+import { sweepOutbox } from './platform/outbox-sweep';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
 import { makeAndMailInvitation } from './modules/workspaces/invitation-mail';
@@ -876,6 +877,9 @@ const SWEEPS = {
   'sweep:inbox': async (db: Transaction) => {
     await sweepInbox({ database: db, clock });
   },
+  'sweep:outbox': async (db: Transaction) => {
+    await sweepOutbox({ database: db, clock });
+  },
   'sweep:sessions': async (db: Transaction) => {
     await purgeDeadSessions(db, NOW, 1_000);
   },
@@ -998,6 +1002,30 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
       await anInboxEntry(db, world, { read: true, at: row.at, subjectId: row.id });
     },
     rows: async (db, row) => await countWhere(db, 'inbox_entries', 'subject_id', row.id),
+  },
+  // Delivered long ago, past the day a finished fact is kept, against one delivered an hour ago (`platform/outbox-sweep.ts`).
+  outbox: {
+    job: 'sweep:outbox',
+    seed: async (db, world, row) => {
+      await db
+        .insertInto('outbox')
+        .values({
+          id: row.id,
+          fact_id: anId(row.at),
+          workspace_id: world.workspaceId,
+          type: 'notes.created',
+          producer: 'notes',
+          consumer: 'wiki',
+          payload: JSON.stringify({ noteId: 'n', title: 't' }),
+          state: 'delivered',
+          next_attempt_at: row.at,
+          created_at: row.at,
+          finished_at: row.at,
+          expires_at: row.at,
+        })
+        .execute();
+    },
+    rows: async (db, row) => await countWhere(db, 'outbox', 'id', row.id),
   },
   // The setup's one address link: one row, which is why the kept row is seeded in a world of its own.
   admin_email_verification: marked(

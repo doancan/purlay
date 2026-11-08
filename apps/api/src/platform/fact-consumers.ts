@@ -14,6 +14,8 @@ interface DeliveredFact {
   readonly factId: string;
   /** The workspace the fact was published in, which a payload's own ids are checked against. */
   readonly workspaceId: string;
+  /** The request that published the fact (or a stand-in): the id its delivery's log lines carry, and what a fact it publishes carries on. */
+  readonly correlationId: string;
   readonly payload: unknown;
 }
 

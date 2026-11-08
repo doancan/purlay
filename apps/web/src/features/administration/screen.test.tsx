@@ -35,6 +35,9 @@ const overview: ServerOverview = {
   pushConfigured: false,
   sharedStateConfigured: false,
   exportFailures: 0,
+  outboxDeadFacts: 0,
+  outboxOldestPendingSeconds: 0,
+  outboxStaleAfterSeconds: 900,
 };
 const admin = aSession();
 const user: ServerUserPage['data'][number] = {

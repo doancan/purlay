@@ -14049,7 +14049,7 @@ fact for each message (D-35).
    (fact, consumer), `UNIQUE (fact_id, consumer)`. Times are the application's clock's, as in the core's other tables, so a test moves
    them. `finished_at` is set exactly when `state` is not `pending`, by a `CHECK`. The table is never exported. Its erasure decision is
    `nobody`, since no column names a person and an id in a payload names the anonymised account after an erasure (D-256); its
-   retention is `kept` until the sweep of step 14e makes it `swept` (§9), which that step's change decides in the same commit as it probes.
+   retention is `swept` by `sweep:outbox` (§9), probed by `table-lifecycle.integration.test.ts`.
    A deleted workspace's rows are taken by the purge, since its tombstone's key never cascades (D-242).
 2. **`publishFact(transaction, context, fact, payload)`** writes a row for each module of the build that consumes the type, in the
    caller's transaction. It takes `Transaction` and not an executor, and checks at run time that it is one, since a cast could unsay
@@ -14057,8 +14057,9 @@ fact for each message (D-35).
    not the fact's owner or does not list the type under `publishes`; a request of another module than the publisher's (`currentRequest`);
    a payload that does not fit the declaration, saying where and never what; a payload past 8192 bytes of compact JSON. The table's own
    check is 16384, since `jsonb` writes a space after each separator, and is the backstop and not the rule. A fact nobody consumes writes
-   nothing. A consumer the workspace is not entitled to gets no row either: `entitled(workspaceId, module)` is an injected seam, true
-   always until workspace-level enablement (D-250 rule 9) is built, and no policy of its own.
+   nothing. A consumer the workspace is not granted (D-289) gets no row either, judged by the composition's function of the grants
+   (`effective`) for the consumers this process runs; one it does not run is judged where it is run, at its delivery, and the claim
+   leaves a row of a workspace that is not granted its consumer as it is, untouched, so a grant given later finds it.
 3. **`absent` is in the declaration.** `'drop'` writes no row for a consumer the publishing process does not run and counts it
    (`purlay_outbox_dropped_total`); `{ holdDays: n }`, `n` a whole number from 1 to 14 (`FACT_HOLD_DAYS_MAX`, held by
    `factOwnerProblems`), writes it and expires it after `n` days. A row for a consumer that is run and whose fact is `drop` expires after

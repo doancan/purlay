@@ -161,6 +161,38 @@ describe("the server's instruments", () => {
     ).toBe(1);
   });
 
+  test('count the facts between modules by the module and fact type, each at zero from the start and no other series', () => {
+    const facts = [
+      { module: 'wiki', fact: 'notes.created' },
+      { module: 'wiki', fact: 'notes.pinned' },
+      { module: 'shelf', fact: 'notes.created' },
+    ];
+    const metrics = serverMetrics(fixedProcess, [], [], [], facts);
+    const page = readExposition(renderMetrics(metrics));
+    for (const name of [
+      'purlay_outbox_delivered_total',
+      'purlay_outbox_failures_total',
+      'purlay_outbox_dropped_total',
+    ]) {
+      expect(page.types.get(name)).toBe('counter');
+      expect(page.samples.filter((sample) => sample.name === name)).toHaveLength(facts.length);
+      for (const labels of facts) expect(sampleOf(page, name, labels)).toBe(0);
+    }
+    metrics.outboxDropped.inc({ module: 'wiki', fact: 'notes.pinned' });
+    expect(
+      sampleOf(readExposition(renderMetrics(metrics)), 'purlay_outbox_dropped_total', {
+        module: 'wiki',
+        fact: 'notes.pinned',
+      }),
+    ).toBe(1);
+    expect(
+      sampleOf(readExposition(renderMetrics(metrics)), 'purlay_outbox_delivered_total', {
+        module: 'wiki',
+        fact: 'notes.pinned',
+      }),
+    ).toBe(0);
+  });
+
   test('count the notices of the inbox by the module and kind a manifest declares, each at zero from the start and no other series', () => {
     const carried: readonly BundledModule[] = bundledModules;
     const notices = carried.flatMap((module) =>

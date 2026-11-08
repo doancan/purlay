@@ -188,6 +188,7 @@ import {
 import { modulesInfoFamily, serverMetrics, type ServerMetrics } from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
+import { outboxMetrics, readOutbox } from '../../platform/outbox-report';
 import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
 import { PLAN } from '../../modules/jobs/schedule';
 import { EDGE_ROUTE, answerMetrics, methodLabel, routeLabel, statusLabel } from './metrics';
@@ -527,6 +528,15 @@ export const createApp = (given: Dependencies): HttpApplication => {
     moduleOf: modules.owner.ofJob,
     log,
   });
+  // The modules the build carries that consume a fact, whether this process runs them or not: the rows wait for any node that does.
+  const outboxConsumers = modules.bundled
+    .filter((module) => (module.manifest.consumes ?? []).length > 0)
+    .map((module) => module.manifest.id);
+  const readOutboxMetrics = outboxMetrics({
+    read: async () =>
+      await readOutbox(dependencies.database, outboxConsumers, dependencies.clock.now()),
+    log,
+  });
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
@@ -641,6 +651,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       mode: modules.entitlementMode,
     },
     peersBehind: dependencies.peersBehind,
+    outboxConsumers,
     jobs: [
       ...CORE_JOBS,
       ...Object.keys(modules.jobWork).filter((name) => !modules.closedJob(name)),
@@ -873,7 +884,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
         {
           token: dependencies.config.METRICS_TOKEN,
           metrics,
-          read: async () => [modulesInfoFamily(moduleIds), ...(await readJobs())],
+          read: async () => [
+            modulesInfoFamily(moduleIds),
+            ...(await readJobs()),
+            ...(await readOutboxMetrics()),
+          ],
           log,
         },
         request,
