@@ -22,6 +22,9 @@ import {
   ServerAuditExportQuery,
   ServerQuotaRequest,
   ServerWorkspaceModuleRequest,
+  ServerModuleId,
+  ServerModuleSuspensionRequest,
+  type ServerModuleSuspensionResult,
   ServerUsersQuery,
   ServerWorkspacesQuery,
   ServerEmptyRequest,
@@ -49,10 +52,17 @@ import {
   changeServerAdministrator,
   changeServerQuota,
   changeWorkspaceModule,
+  lockServerAdministrator,
   revokeServerUserSessions,
 } from '../../modules/administration/changes';
 import type { EntitlementCatalogue } from '../../modules/entitlements/apply';
-import { requirePeersReady, type PeersBehind } from '../../modules/entitlements/peers';
+import {
+  requirePeersReady,
+  requireStopPeersReady,
+  type PeersBehind,
+} from '../../modules/entitlements/peers';
+import { applySuspension } from '../../modules/suspension/apply';
+import type { Suspension } from '../../platform/suspended-modules';
 import {
   serverMailStatus,
   serverOperations,
@@ -118,6 +128,46 @@ export interface ModuleGrantDependencies extends AccountDependencies {
   /** The modules this process runs. */
   readonly modules: readonly string[];
 }
+
+/** What stopping a module needs: the build's modules, the cluster's readiness for it and this node's view of the stops (D-296). */
+export interface ModuleSuspensionDependencies extends AccountDependencies {
+  readonly entitlements: EntitlementCatalogue;
+  readonly suspensionPeersBehind?: PeersBehind | undefined;
+  readonly suspension: Suspension;
+  /** The modules this process runs. */
+  readonly modules: readonly string[];
+}
+
+/** `POST /api/server/modules/:moduleId/suspension` — only the server's administrator stops a module for every workspace, or lets it run again (D-296). */
+export const writeAdministrationModuleSuspension = async (
+  deps: ModuleSuspensionDependencies,
+  request: Request,
+  moduleId: string,
+  body: unknown,
+): Promise<ServerModuleSuspensionResult> => {
+  const admin = await guard(deps, request);
+  const module = validated(ServerModuleId, moduleId);
+  const input = validated(ServerModuleSuspensionRequest, body);
+  await requireStopPeersReady(deps.suspensionPeersBehind, input);
+  const result = await atomicallyOn(deps.database)(async (tx) => {
+    await lockServerAdministrator(tx, admin);
+    return await applySuspension(
+      tx,
+      deps.clock,
+      deps.entitlements,
+      { source: 'operator', userId: admin.userId },
+      { module, ...input },
+    );
+  });
+  // This node believes it at once; the others within the TTL, by reading the table.
+  deps.suspension.replace(result.suspended);
+  return {
+    module,
+    state: input.state,
+    changed: result.changed,
+    alsoAffected: [...result.alsoAffected],
+  };
+};
 
 export const readAdministrationWorkspaces = async (
   deps: ModuleGrantDependencies,

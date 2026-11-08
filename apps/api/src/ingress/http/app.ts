@@ -18,6 +18,7 @@ import {
   readAdministrationOutbox,
   readAdministrationOutboxFact,
   writeAdministrationModule,
+  writeAdministrationModuleSuspension,
   writeAdministrationQuota,
   writeAdministrationSessions,
 } from './server-administration';
@@ -340,6 +341,8 @@ export interface Dependencies {
   readonly composition: Composition;
   /** How many live nodes of the cluster do not read workspace grants (D-292); absent where there is one node. */
   readonly peersBehind?: PeersBehind;
+  /** How many live nodes of the cluster do not read the modules the administrator has stopped (D-296); absent where there is one node. */
+  readonly suspensionPeersBehind?: PeersBehind;
   /** What `find` holds a search source to, where a test wants less than `SEARCH_SOURCE_DEADLINE_MS`; a module's own shorter deadline always wins. */
   readonly findDeadlineMs?: number;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */
@@ -685,6 +688,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
       mode: modules.entitlementMode,
     },
     peersBehind: dependencies.peersBehind,
+    suspensionPeersBehind: dependencies.suspensionPeersBehind,
+    suspension: modules.suspension,
     outboxConsumers,
     jobs: [
       ...CORE_JOBS,
@@ -1133,6 +1138,11 @@ export const createApp = (given: Dependencies): HttpApplication => {
       set.status = 204;
       return '';
     })
+    .post(
+      '/api/server/modules/:moduleId/suspension',
+      async ({ request, params, body }) =>
+        await writeAdministrationModuleSuspension(administration, request, params.moduleId, body),
+    )
     .post('/api/server/workspaces/:workspaceId/modules', async ({ request, params, body, set }) => {
       await writeAdministrationModule(administration, request, params.workspaceId, body);
       set.status = 204;

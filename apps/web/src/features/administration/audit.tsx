@@ -202,6 +202,9 @@ const AuditList = ({
                           {entry.targetModule}
                         </p>
                       )}
+                      {entry.note !== null && (
+                        <p className="text-caption text-ink-muted break-words">{entry.note}</p>
+                      )}
                     </details>
                   </li>
                 ))}

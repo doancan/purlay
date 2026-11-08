@@ -38,6 +38,7 @@ import {
   advertiseEntitlements,
   advertiseSuspension,
   peersBehind,
+  suspensionPeersBehind,
 } from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { inProcessRateLimiter } from './realtime/rate-limiter';
@@ -274,7 +275,10 @@ const app = createApp({
   moduleShares,
   ...(redis === undefined
     ? {}
-    : { peersBehind: async (): Promise<number> => await peersBehind(redis) }),
+    : {
+        peersBehind: async (): Promise<number> => await peersBehind(redis),
+        suspensionPeersBehind: async (): Promise<number> => await suspensionPeersBehind(redis),
+      }),
   auth: services.auth,
   services,
   // The setup's steps and, later, Administration → Server change the settings through this (D-179 §4.9).
