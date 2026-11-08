@@ -577,6 +577,22 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/degradation.test.ts'],
   },
   {
+    id: 'docs-sync-ignores-a-hand-edit',
+    why: 'a table edited by hand inside its markers is reported as what the code makes of it',
+    file: 'apps/api/src/testing/docs-sync.ts',
+    find: '({ name, render }) => withBlock(text, name, render()) !== text,',
+    replace: '() => false,',
+    tests: ['apps/api/src/docs-sync.test.ts'],
+  },
+  {
+    id: 'docs-sync-skips-a-document-without-markers',
+    why: 'a document that lost its markers is passed over, so its table is no longer held to the code',
+    file: 'apps/api/src/testing/docs-sync.ts',
+    find: '  if (!pattern.test(text)) throw new Error(`no <!-- generated:${name} --> markers`);\n',
+    replace: '  if (!pattern.test(text)) return text;\n',
+    tests: ['apps/api/src/docs-sync.test.ts'],
+  },
+  {
     id: 'export-excluded-of-modules-not-read',
     why: 'the tables the modules leave out of an export are not read off the build’s modules, so the check that every table of the database is decided fails for them, or a new module’s are never counted (D-250)',
     file: 'apps/api/src/export-catalogue.ts',

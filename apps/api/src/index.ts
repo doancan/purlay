@@ -414,6 +414,7 @@ if (!workerLifecycle.stopped) {
     log,
     bus: runtimeBase.bus,
     failures: metrics.workerFailures,
+    suspended: modules.suspension.fresh,
     outbox: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
     ...(push === undefined ? {} : { push }),
   });

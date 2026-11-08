@@ -22,6 +22,14 @@ export const API_MODULES_WORKERS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workers/outbox-consumer.integration.test.ts'],
   },
   {
+    id: 'suspension-worker-runs-while-stopped',
+    why: 'a stopped module’s worker goes on claiming and sweeping, so a misbehaving consumer keeps working through an incident (D-296)',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: '      if ((await suspended?.())?.has(module) === true) return;\n',
+    replace: '',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
     id: 'worker-deadline-default-dropped',
     why: 'a module that says nothing of its workers’ deadline has none, so a loop that hangs is never tried again',
     file: 'apps/api/src/modules/workers/module-workers.ts',

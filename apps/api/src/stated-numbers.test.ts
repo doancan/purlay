@@ -8,9 +8,27 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { TABLE_LIFECYCLE } from '@purlay/db';
+import { CORE_COLUMNS_FOR_A_MODULE, TABLE_LIFECYCLE } from '@purlay/db';
 import { MAX_FRAME_BYTES, PAGE_LIMIT } from '@purlay/types';
 import { STARVATION_FACTOR } from './cli/budget-latency';
+import { bundledModules } from './composition';
+import {
+  ISSUES_QUEUE_TIMEOUT_MS,
+  ISSUES_STATEMENT_TIMEOUT_MS,
+  POOL_SHARE_DIVISOR,
+} from './features/issues/budget';
+import { AUTH_BUDGET, WRITE_BUDGET } from './ingress/http/rate-limit';
+import { JSON_BODY_MAX_BYTES } from './ingress/http/edge';
+import { OUTBOX_PENDING_MAX_DEFAULT } from './platform/config';
+import { DEFAULT_JOB_DEADLINE_MS } from './modules/jobs/module-shares';
+import { OUTBOX_CONSUME_INTERVAL_MS } from './modules/workers/outbox-consumer';
+import { CORE_RESERVE_DIVISOR } from './platform/module-budget';
+import type { BudgetLimits, ModuleManifest } from './platform/module-kit/manifest';
+import { DEADLINE_MS_MAX, JOB_DEADLINE_MS_MAX } from './platform/module-kit/registry';
+import { OUTBOX_ATTEMPTS_MAX } from './platform/outbox-drain';
+import { OUTBOX_STALE_AFTER_SECONDS } from './platform/outbox-report';
+import { OUTBOX_DEAD_KEPT_DAYS } from './platform/outbox-sweep';
+import { DEFAULT_DEADLINE_MS } from './platform/request-deadline';
 import { SOCKET_FRAME_BUDGET } from './realtime/rate-limiter';
 
 /** As prose: a line break in Markdown is a space, and rewrapping a paragraph changes nothing. */
@@ -105,5 +123,208 @@ describe('numbers the documents state', () => {
     expect(modules).toContain(
       `${NUMBER_WORDS[writes] ?? '?'} writes of a core table (\`CORE_WRITES\` in`,
     );
+  });
+});
+
+const WORD_VALUES: Readonly<Record<string, number>> = {
+  ...Object.fromEntries(NUMBER_WORDS.map((word, value) => [word, value])),
+  twenty: 20,
+  thirty: 30,
+  third: 3,
+  fifth: 5,
+};
+
+/** A number as a document writes it: `8`, `3 600 000`, `64`, or a word (`eight`, `thirty`, `third`). */
+const valueOf = (written: string): number =>
+  WORD_VALUES[written.toLowerCase()] ?? Number(written.replace(/[ ,]/g, ''));
+
+const seconds = (ms: number): number => ms / 1000;
+const manifests: readonly ModuleManifest[] = bundledModules.map(({ manifest }) => manifest);
+const manifestOf = (id: string): ModuleManifest => {
+  const found = manifests.find((manifest) => manifest.id === id);
+  if (found === undefined) throw new Error(`no module ${id}`);
+  return found;
+};
+const issuesDeadline = manifestOf('issues').deadline;
+const issuesDeadlineMs =
+  issuesDeadline !== undefined && 'ms' in issuesDeadline ? issuesDeadline.ms : -1;
+const poolOfTen = (id: string): BudgetLimits => {
+  const { budget } = manifestOf(id);
+  if ('none' in budget) throw new Error(`${id} has no pool share`);
+  return budget.poolShare(10);
+};
+
+interface Claim {
+  readonly doc: 'api' | 'architecture' | 'modules' | 'config' | 'deploy' | 'contributing';
+  /** One capture group for each number of `expected`, in order. */
+  readonly pattern: RegExp;
+  readonly expected: readonly number[];
+  readonly what: string;
+}
+
+const deploy = prose('docs/DEPLOY.md');
+const config = prose('docs/CONFIG.md').replace(/ > /g, ' ');
+const texts = {
+  api,
+  architecture,
+  modules,
+  config,
+  deploy,
+  contributing: prose('CONTRIBUTING.md'),
+};
+
+/**
+ * Every sentence of a document that states a number about the module platform, with the constant that owns it. A claim
+ * fails when the document says another number, and when no sentence matches any more (the sentence moved or was reworded:
+ * move the claim with it, so the number stays held). A table is better than a sentence: `docs-sync.ts` writes those.
+ */
+const CLAIMS: readonly Claim[] = [
+  {
+    doc: 'api',
+    pattern: /\((\d+) s by default, (\d+) s for issues\)/,
+    expected: [seconds(DEFAULT_DEADLINE_MS), seconds(issuesDeadlineMs)],
+    what: 'API.md 504: the default deadline and the issues deadline',
+  },
+  {
+    doc: 'modules',
+    pattern: /`deadline` in the manifest: (\d+) s by default, (\d+) s for issues/,
+    expected: [seconds(DEFAULT_DEADLINE_MS), seconds(issuesDeadlineMs)],
+    what: 'MODULES.md §7: the default deadline and the issues deadline',
+  },
+  {
+    doc: 'modules',
+    pattern: /left out, (\d+) s \(§7\)/,
+    expected: [seconds(DEFAULT_DEADLINE_MS)],
+    what: 'MODULES.md §2: the default deadline',
+  },
+  {
+    doc: 'modules',
+    pattern: /answered `504 REQUEST_TIMEOUT` after (\d+) s/,
+    expected: [seconds(DEFAULT_DEADLINE_MS)],
+    what: 'MODULES.md §9: the default deadline',
+  },
+  {
+    doc: 'modules',
+    pattern: /a whole number from (\d+) to (\d+)\) or `\{ none/,
+    expected: [1000, DEADLINE_MS_MAX],
+    what: 'MODULES.md §2: the range of a request deadline',
+  },
+  {
+    doc: 'modules',
+    pattern: /refuses a deadline under a second, over (\w+) minutes/,
+    expected: [DEADLINE_MS_MAX / 60_000],
+    what: 'MODULES.md §9: the longest request deadline, in minutes',
+  },
+  {
+    doc: 'modules',
+    pattern: /`jobDeadline` in the manifest \(`\{ ms \}` from (\d+) to (\d[\d ]*\d),/,
+    expected: [1000, JOB_DEADLINE_MS_MAX],
+    what: 'MODULES.md §7: the range of a job deadline',
+  },
+  {
+    doc: 'modules',
+    pattern: /(\w+) minutes when left out, `DEFAULT_JOB_DEADLINE_MS`/,
+    expected: [DEFAULT_JOB_DEADLINE_MS / 60_000],
+    what: 'MODULES.md §7: the default job deadline, in minutes',
+  },
+  {
+    doc: 'modules',
+    pattern: /`features\/issues\/budget.ts`\): a (\w+) of `DATABASE_POOL_MAX`/,
+    expected: [POOL_SHARE_DIVISOR],
+    what: 'MODULES.md §7: issues take 1/n of the pool',
+  },
+  {
+    doc: 'modules',
+    pattern: /a queue timeout of (\w+) second and a statement limit of (\w+)\./,
+    expected: [ISSUES_QUEUE_TIMEOUT_MS / 1000, ISSUES_STATEMENT_TIMEOUT_MS / 1000],
+    what: 'MODULES.md §7: issues queue timeout and statement limit, in seconds',
+  },
+  {
+    doc: 'modules',
+    pattern: /`coreReserve`: a (\w+), at least one/,
+    expected: [CORE_RESERVE_DIVISOR],
+    what: 'MODULES.md §7: the core keeps 1/n of the pool',
+  },
+  {
+    doc: 'modules',
+    pattern: /(\w+) of a pool of (\w+), a queue\s+timeout of (\w+) seconds/,
+    expected: [poolOfTen('chat').maxConcurrent, 10, poolOfTen('chat').queueTimeoutMs / 1000],
+    what: 'MODULES.md §7: chat share of a pool of ten and its queue timeout',
+  },
+  {
+    doc: 'modules',
+    pattern:
+      /names each as `table.column` with the module and why, and the core's files that may name it \(the route that sets it, the erasure that clears it, the export that lists it\)\. (\w+) today/,
+    expected: [Object.keys(CORE_COLUMNS_FOR_A_MODULE).length],
+    what: 'MODULES.md §5: how many core columns exist for a module',
+  },
+  {
+    doc: 'config',
+    pattern: /takes at most a (\w+) of it/,
+    expected: [POOL_SHARE_DIVISOR],
+    what: 'CONFIG.md DATABASE_POOL_MAX: issues take 1/n of the pool',
+  },
+  {
+    doc: 'config',
+    pattern:
+      /Sign-in: (\d+) requests per client address at once, then one every (\w+) seconds\. Writes: (\d+) a second with a burst of (\d+)/,
+    expected: [
+      AUTH_BUDGET.burst,
+      1 / AUTH_BUDGET.perSecond,
+      WRITE_BUDGET.perSecond,
+      WRITE_BUDGET.burst,
+    ],
+    what: 'CONFIG.md: the HTTP rate limits',
+  },
+  {
+    doc: 'config',
+    pattern: /The largest JSON body is (\d+) KiB/,
+    expected: [JSON_BODY_MAX_BYTES / 1024],
+    what: 'CONFIG.md: the largest JSON body',
+  },
+  {
+    doc: 'api',
+    pattern: /a JSON body over (\d+) KiB \(`JSON_BODY_MAX_BYTES`/,
+    expected: [JSON_BODY_MAX_BYTES / 1024],
+    what: 'API.md 413: the largest JSON body',
+  },
+  {
+    doc: 'deploy',
+    pattern: /\(`outbox:consume`, every (\w+) seconds,/,
+    expected: [OUTBOX_CONSUME_INTERVAL_MS / 1000],
+    what: 'DEPLOY.md: the outbox worker interval',
+  },
+  {
+    doc: 'deploy',
+    pattern: /given up on after (\w+) tries, kept (\w+) days\)/,
+    expected: [OUTBOX_ATTEMPTS_MAX, OUTBOX_DEAD_KEPT_DAYS],
+    what: 'DEPLOY.md: the outbox attempts and how long dead rows are kept',
+  },
+  {
+    doc: 'deploy',
+    pattern: /One workspace may have `OUTBOX_PENDING_MAX` \((\d+)\) facts waiting/,
+    expected: [OUTBOX_PENDING_MAX_DEFAULT],
+    what: 'DEPLOY.md: the backlog ceiling of a workspace for one module',
+  },
+  {
+    doc: 'deploy',
+    pattern: /a fact that has waited more than (\d+) minutes/,
+    expected: [OUTBOX_STALE_AFTER_SECONDS / 60],
+    what: 'DEPLOY.md: when the overview calls a fact stale',
+  },
+];
+
+describe('numbers the documents state about the module platform', () => {
+  test.each(CLAIMS.map((claim) => [claim.what, claim] as const))('%s', (_what, claim) => {
+    const found = [...texts[claim.doc].matchAll(new RegExp(claim.pattern, 'g'))];
+    expect({ sentences: found.length > 0, pattern: String(claim.pattern) }).toEqual({
+      sentences: true,
+      pattern: String(claim.pattern),
+    });
+    for (const match of found) {
+      expect(match.slice(1).map(valueOf), `${claim.what}: the document says ${match[0]}`).toEqual(
+        claim.expected as number[],
+      );
+    }
   });
 });

@@ -399,4 +399,12 @@ export const API_CLI: readonly Mutation[] = [
     replace: 'if (args.length < 1) fail(USAGE, 2);',
     tests: [RESET_TESTS],
   },
+  {
+    id: 'suspension-job-run-ignores-the-stop',
+    why: 'the scheduler runs the jobs of a module the administrator stopped, which act for its users (D-296)',
+    file: 'apps/api/src/cli/jobs.ts',
+    find: 'await suspension.fresh();\n',
+    replace: '',
+    tests: ['apps/api/src/cli/jobs.integration.test.ts'],
+  },
 ];

@@ -123,6 +123,8 @@ export const notificationSink = (dependencies: {
   readonly pushedKinds: ReadonlySet<string>;
   /** Tells the devices of a pushed kind; absent where web push is off. */
   readonly push?: Pick<PushSender, 'toldInbox'>;
+  /** Whether the administrator has stopped the module at run time (D-296): its notices are not written. Absent, never. */
+  readonly suspended?: () => boolean;
 }): NotificationSink => ({
   notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
     const { module } = dependencies;
@@ -137,6 +139,8 @@ export const notificationSink = (dependencies: {
     }
     const problem = problemWith(notice);
     if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);
+    // A stopped module tells nobody anything, and what it would have said is not kept for later (D-296).
+    if (dependencies.suspended?.() === true) return undefined;
     if (notice.recipientId === context.userId) return undefined;
     // Erasure locks the workspace before its user; take the insert's foreign-key lock in that order.
     const workspace = await transaction

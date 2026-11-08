@@ -21,7 +21,7 @@ unchanged and proved so:
 1. leaf moves — the GitHub client and the `ILIKE` escape to `platform/` (**built**);
 2. a `workspaceCreated` hook list; chat registers the creation of the default channel, and a hook that throws
    rolls the whole workspace back (**built**);
-3. `dropFiles` to `attachments`, taking the ids of the messages it drops (**built**); split in step 8 below into the
+3. The dropping of a message's files to `attachments`, taking the ids of the messages it drops (**built**); split in step 8 below into the
    core's `dropFilesById` and chat's `dropMessageFiles`, which finds the files through the link;
 4. erasure and retention: both turned out to be whole commands about messages that nothing in the core calls, so
    they moved to `messages/` and no hook was needed (**built**);
@@ -45,7 +45,7 @@ unchanged and proved so:
    *expand* (**built**: `claimed_at`, `message_attachments` backfilled, and a send writing the old columns and the
    link together); *the readers move* (**built**: the core says unsent and sent with `claimed_at`, chat finds a file's
    message and channel through `message_attachments`, the workspace export's and the person's export's bounds read
-   through the link, and `dropFiles` is the core's `dropFilesById` and chat's `dropMessageFiles`; a test,
+   through the link, and the dropping is the core's `dropFilesById` and chat's `dropMessageFiles`; a test,
    `attachment-readers.test.ts`, fails if production code reads `attachments.message_id` or `channel_id` again,
    with an allow-list of the one place that still writes them); *contract* (**built, ships in the release after the expand** — `v0.3.0` contains `0079`, so it is the next
    release's: `chat/0005` drops the columns, their keys and indexes, the dual write and the allow-list go,
@@ -91,7 +91,7 @@ request with behaviour unchanged:
    and chat's (`features/chat/personal-export.ts`: channels, messages, reactions, saved items and the rest) in
    the order the files have always been written; the composition root holds the sum to the schema at compile
    time, and a frozen shape of the files, rows and columns, written first, passed unchanged through the move;
-5. **`COLLATED_COLUMNS`** in the readiness check (**built**): the core keeps `CORE_COLLATED_COLUMNS` (`users.email`,
+5. **The collated columns** in the readiness check (**built**): the core keeps `CORE_COLLATED_COLUMNS` (`users.email`,
    `users.username`, `workspaces.slug`); chat's list (`features/chat/collated-columns.ts`: `channels.name` and the
    `github_*` digests) is handed in where the application is put together, `createApp`'s `collatedColumns`, defaulting
    to chat's. The check and its message are unchanged; the test that scans the migrations for the collation compares

@@ -28,8 +28,9 @@ const notice: ModuleNotice = {
   params: {},
 };
 
-const sinkFor = (module: string): ReturnType<typeof notificationSink> =>
+const sinkFor = (module: string, suspended?: () => boolean): ReturnType<typeof notificationSink> =>
   notificationSink({
+    ...(suspended === undefined ? {} : { suspended }),
     module,
     clock: fixedClock(NOW),
     kinds: new Map([['thing_assigned', 'things']]),
@@ -70,5 +71,25 @@ describe('the notification sink is the caller’s', () => {
   test('the module that declares the kind is not refused', async () => {
     const message = await failureOf(sinkFor('things').notify(untouched, noContext, notice));
     expect(message).not.toMatch(/cannot write|declares the notification kind/);
+  });
+});
+
+describe('the notification sink of a module the administrator has stopped (D-286, D-296)', () => {
+  test('writes nothing and reads nothing: the notice is not kept for the day the module returns', async () => {
+    const written = await sinkFor('things', () => true).notify(untouched, noContext, notice);
+    expect(written).toBeUndefined();
+  });
+
+  test('asks whether it is stopped at each notice, so the stop and its lifting are believed at once', async () => {
+    let stopped = true;
+    const sink = sinkFor('things', () => stopped);
+    expect(await sink.notify(untouched, noContext, notice)).toBeUndefined();
+    stopped = false;
+    expect(await failureOf(sink.notify(untouched, noContext, notice))).toBeDefined();
+  });
+
+  test('still refuses a notice that is a programming error, stopped or not', async () => {
+    const message = await failureOf(sinkFor('zz', () => true).notify(untouched, noContext, notice));
+    expect(message).toMatch(/"zz".*"thing_assigned".*"things"/);
   });
 });

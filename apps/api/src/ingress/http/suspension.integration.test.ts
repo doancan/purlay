@@ -1,13 +1,21 @@
 /**
  * A module the administrator has stopped is no route on any node, for any workspace, within the TTL (D-296): every endpoint of it
- * answers a member, a stranger and a caller with no session as a process that does not run the module does, byte for byte; nothing
- * it holds is deleted; and lifting the stop brings everything back. The stop is read through the real cache over the real table, so
- * what is shown is what a second node would do, which asks the same table.
+ * answers a member, a stranger and a caller with no session as a process that does not run the module does, byte for byte; the
+ * session and the search stop naming it; nothing it holds is deleted; and lifting the stop brings everything back. The stop is
+ * read through the real cache over the real table, so what is shown is what a second node would do, which asks the same table.
  *
  * @needs-modules chat, issues
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { Type } from '@sinclair/typebox';
+import { defineFact } from '@purlay/types';
+import { Elysia } from 'elysia';
+import {
+  closeIntegrationDatabase,
+  withRollback,
+  type Executor,
+  type Transaction,
+} from '@purlay/db';
 import {
   bundledModules,
   compose,
@@ -15,9 +23,11 @@ import {
   type BundledModule,
   type Composition,
 } from '../../composition';
+import { chatModule } from '../../features/chat/module';
+import { issuesModule } from '../../features/issues/module';
 import { fixedClock } from '../../platform/clock';
 import { createLogger } from '../../platform/logging';
-import { serverMetrics } from '../../platform/metrics';
+import { renderMetrics, serverMetrics, moduleSuspendedFamily } from '../../platform/metrics';
 import { ownsPath } from '../../platform/module-kit/routes';
 import {
   SUSPENSION_TTL_MS,
@@ -28,8 +38,11 @@ import {
 import { CROSS_TENANT, pathFor, requestInit, type Ids } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
+import { aUniqueSlug, aUserRow } from '../../testing/users';
+import { aWorkspaceRow } from '../../testing/facts';
+import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { createApp } from './app';
+import type { ModuleRouteDependencies } from './module-routes';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -243,6 +256,209 @@ describe('integration: a change reaches a node by itself, within the TTL', () =>
       const path = `/api/workspaces/${workspaceId}/issues`;
       expect((await one.call('GET', path, owner)).status).toBe(404);
       expect((await two.call('GET', path, owner)).status).toBe(404);
+    });
+  });
+});
+
+describe('integration: what a client is told while a module is stopped', () => {
+  interface Listed {
+    readonly workspace: { readonly id: string };
+    readonly modules?: readonly string[];
+  }
+
+  test('is the session without it, per workspace and for the server, and the search says it is off', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(node, owner);
+      const before = (await node.call('GET', '/api/me', owner)).body as {
+        modules: string[];
+        memberships: Listed[];
+      };
+      expect(before.modules).toContain('issues');
+
+      await stop(db, 'issues');
+      node.advance(SUSPENSION_TTL_MS);
+      await node.suspension.fresh();
+      const me = (await node.call('GET', '/api/me', owner)).body as typeof before;
+      expect(me.modules).not.toContain('issues');
+      expect(me.modules).toContain('chat');
+      expect(me.memberships.find(({ workspace }) => workspace.id === workspaceId)?.modules).toEqual(
+        ['chat'],
+      );
+      const listed = (await node.call('GET', '/api/workspaces', owner)).body as Listed[];
+      expect(listed.find(({ workspace }) => workspace.id === workspaceId)?.modules).toEqual([
+        'chat',
+      ]);
+
+      const found = await node.call('GET', `/api/workspaces/${workspaceId}/find?q=anything`, owner);
+      expect(found.status).toBe(200);
+      const skipped = (found.body as { skipped: { source: string; reason: string }[] }).skipped;
+      for (const source of issuesModule.manifest.searchSources) {
+        expect(skipped).toContainEqual({ source, reason: 'off' });
+      }
+    });
+  });
+
+  test('is the client capabilities without chat’s, while chat is stopped, and the metric says which is stopped', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const capabilities = async (): Promise<Record<string, boolean>> =>
+        (
+          (await node.call('GET', '/api/client', null)).body as {
+            capabilities: Record<string, boolean>;
+          }
+        ).capabilities;
+      expect((await capabilities())['scheduledMessages']).toBe(true);
+      await stop(db, 'chat');
+      node.advance(SUSPENSION_TTL_MS);
+      await node.suspension.fresh();
+      expect((await capabilities())['scheduledMessages']).toBe(false);
+      const page = renderMetrics(node.metrics, [
+        moduleSuspendedFamily(['chat', 'issues'], node.suspension.current()),
+      ]);
+      expect(page).toContain('purlay_module_suspended{module="chat"} 1');
+      expect(page).toContain('purlay_module_suspended{module="issues"} 0');
+    });
+  });
+});
+
+describe('integration: the core goes on', () => {
+  test('with every module stopped the session, the workspaces and the members are served', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(node, owner);
+      for (const module of [chatModule, issuesModule]) await stop(db, module.manifest.id);
+      node.advance(SUSPENSION_TTL_MS);
+      expect((await node.call('GET', '/api/me', owner)).status).toBe(200);
+      expect((await node.call('GET', `/api/workspaces/${workspaceId}/members`, owner)).status).toBe(
+        200,
+      );
+      expect(
+        ((await node.call('GET', '/api/me', owner)).body as { modules: string[] }).modules,
+      ).toEqual([]);
+    });
+  });
+});
+
+describe('integration: what the application hands a module while it is stopped', () => {
+  // Fake modules under the two ids the contract knows: the application only draws the ids it can name to a client.
+  const base = {
+    requires: [],
+    optional: [],
+    degrades: {},
+    provides: [],
+    budget: { none: 'a test module' },
+    entitlement: 'always' as const,
+  };
+  const DROPPED = defineFact({
+    type: 'issues.dropped',
+    owner: 'issues',
+    absent: 'drop',
+    schema: Type.Object({ id: Type.String() }),
+  });
+  const HELD = defineFact({
+    type: 'issues.held',
+    owner: 'issues',
+    absent: { holdDays: 3 },
+    schema: Type.Object({ id: Type.String() }),
+  });
+  let handed: ModuleRouteDependencies | undefined;
+  const publisher: BundledModule = {
+    manifest: {
+      ...base,
+      id: 'issues',
+      publishes: ['issues.dropped', 'issues.held'],
+      notifications: [{ type: 'issue_made', needsYou: false, pushed: false, mailed: false }],
+    },
+    routes: (dependencies) => {
+      handed = dependencies;
+      return new Elysia();
+    },
+  };
+  const consumer: BundledModule = {
+    manifest: {
+      ...base,
+      id: 'chat',
+      optional: ['issues'],
+      degrades: { issues: 'it shows nothing of the issues' },
+      consumes: ['issues.dropped', 'issues.held'],
+    },
+    factConsumers: {
+      'issues.dropped': () => Promise.resolve('done'),
+      'issues.held': () => Promise.resolve('done'),
+    },
+  };
+  const aMember = async (db: Transaction): Promise<{ context: WorkspaceContext }> => {
+    const workspaceId = await aWorkspaceRow(db);
+    const { userId } = await aUserRow(db, 'Member');
+    await db
+      .insertInto('workspace_members')
+      .values({ workspace_id: workspaceId, user_id: userId, role: 'member' })
+      .execute();
+    return { context: await requireWorkspaceMembership(db, userId, workspaceId) };
+  };
+  const appWithout = (db: Executor, stopped: string): void => {
+    const suspension: Suspension = {
+      current: () => new Set([stopped]),
+      fresh: () => Promise.resolve(new Set([stopped])),
+      replace: () => undefined,
+      start: () => undefined,
+      stop: () => undefined,
+    };
+    const modules = [publisher, consumer];
+    createApp(
+      testDependencies({
+        database: db,
+        clock,
+        composition: compose(modules, modules, 'open', [DROPPED, HELD], suspension),
+      }),
+    );
+  };
+
+  test('a notice of a stopped module is not written, and the same notice of a module that runs is', async () => {
+    await withRollback(async (db) => {
+      const { context } = await aMember(db);
+      const { userId: recipientId } = await aUserRow(db, 'Recipient');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: context.workspaceId, user_id: recipientId, role: 'member' })
+        .execute();
+      const notice = {
+        kind: 'issue_made',
+        recipientId,
+        subject: { type: 'issue', id: crypto.randomUUID() },
+        params: {},
+      };
+      appWithout(db, 'chat');
+      expect(await handed?.inbox.notify(db, context, notice)).toMatchObject({ recipientId });
+      appWithout(db, 'issues');
+      expect(await handed?.inbox.notify(db, context, notice)).toBeUndefined();
+      const kept = await db
+        .selectFrom('inbox_entries')
+        .select('module')
+        .where('workspace_id', '=', context.workspaceId)
+        .execute();
+      expect(kept).toEqual([{ module: 'issues' }]);
+    });
+  });
+
+  test('a fact for a stopped consumer follows the fact’s own word: dropped, or held for the days it says', async () => {
+    await withRollback(async (db) => {
+      const { context } = await aMember(db);
+      const { workspaceId } = context;
+      appWithout(db, 'chat');
+      await handed?.publishFact(db, context, DROPPED, { id: 'a' });
+      const rows = (): Promise<{ consumer: string; type: string; state: string }[]> =>
+        db
+          .selectFrom('outbox')
+          .select(['consumer', 'type', 'state'])
+          .where('workspace_id', '=', workspaceId)
+          .execute();
+      expect(await rows()).toEqual([]);
+      await handed?.publishFact(db, context, HELD, { id: 'a' });
+      expect(await rows()).toEqual([{ consumer: 'chat', type: 'issues.held', state: 'pending' }]);
     });
   });
 });

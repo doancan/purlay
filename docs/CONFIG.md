@@ -677,6 +677,7 @@ for every value it can take from the start, at zero, so a rate over it misses no
 | `purlay_push_failures_total` | `reason`, `module` | Web Push deliveries that did not reach their push service, and (`throttled`) those held back because a person had three of one kind at once (D-286 §12) | a rise for one `reason` |
 | `purlay_mail_failures_total` | `module` | letters the mail relay did not accept, by the module that sent them | any rise: mail is not arriving |
 | `purlay_modules_info` | `module` | `1` for each module the process runs | `count by (module)` differing between nodes outside a rolling deploy |
+| `purlay_module_suspended` | `module` | `1` for a module the process runs and the administrator has stopped, `0` for one it has not (D-296) | `1` for longer than an incident: a stop left on |
 | `purlay_entitlement_refusals_total` | `module` | requests answered as a path nobody has because the workspace is not granted the module that owns the route (D-289) | a sudden rise: a client, or an edition file, that disagrees with the grants (see *Workspaces and modules* in `DEPLOY.md`) |
 | `purlay_inbox_entries_total` | `module`, `kind` | notices modules wrote to the core's inbox and committed | a module whose count stops while people use it |
 | `purlay_inbox_collapsed_total` | `module`, `kind` | older unread notices read as history because a person had 200 unread of one module in one workspace (D-286 §12) | a steady rate: a module or a person looping |

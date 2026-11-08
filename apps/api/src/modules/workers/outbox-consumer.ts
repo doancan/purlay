@@ -14,7 +14,7 @@ import type { ModuleWorker } from './module-workers';
 const OUTBOX_CONSUME_WORKER = 'outbox:consume';
 
 /** Between the end of one drain and the start of the next: a fact waits this and the time of the work (measured, D-288 §8). */
-const OUTBOX_CONSUME_INTERVAL_MS = 2_000;
+export const OUTBOX_CONSUME_INTERVAL_MS = 2_000;
 
 /** Rows a drain takes: the handlers run one after another, and a module's deadline bounds the whole. */
 const OUTBOX_CONSUME_BATCH = 20;

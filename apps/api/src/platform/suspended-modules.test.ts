@@ -4,8 +4,14 @@
  * a read that began before it.
  */
 import { describe, expect, test } from 'bun:test';
+import type { FactRouting } from './outbox';
 import { aRecordingLogger } from '../testing/doubles';
-import { SUSPENSION_TTL_MS, noSuspension, suspensionCache } from './suspended-modules';
+import {
+  SUSPENSION_TTL_MS,
+  noSuspension,
+  suspensionCache,
+  withoutStopped,
+} from './suspended-modules';
 
 const set = (...ids: string[]): ReadonlySet<string> => new Set(ids);
 
@@ -171,5 +177,30 @@ describe('without a database', () => {
     noSuspension.start();
     noSuspension.stop();
     expect(noSuspension.current().size).toBe(0);
+  });
+});
+
+describe('a fact for a stopped module', () => {
+  const routing: FactRouting = {
+    consumersOf: () => ['issues', 'chat'],
+    runs: (module) => module !== 'mail',
+    mayPublish: () => true,
+  };
+
+  test('is a fact for a module this process does not run, and every other answer of the routing is the same', () => {
+    const judged = withoutStopped(routing, () => set('issues'));
+    expect(judged.runs('issues')).toBe(false);
+    expect(judged.runs('chat')).toBe(true);
+    expect(judged.runs('mail')).toBe(false);
+    expect(judged.consumersOf('x')).toEqual(['issues', 'chat']);
+    expect(judged.mayPublish('chat', 'x')).toBe(true);
+  });
+
+  test('asks the set as it is when the fact is published, not as it was when the routing was made', () => {
+    let stopped = set();
+    const judged = withoutStopped(routing, () => stopped);
+    expect(judged.runs('issues')).toBe(true);
+    stopped = set('issues');
+    expect(judged.runs('issues')).toBe(false);
   });
 });

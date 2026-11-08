@@ -86,6 +86,7 @@ import {
   GOOGLE_CALLBACK,
   OIDC_CALLBACK,
   SIGN_IN_CALLBACK,
+  type ModuleId,
 } from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
@@ -185,7 +186,12 @@ import {
   type CollatedColumn,
   type Readiness,
 } from '../../platform/readiness';
-import { modulesInfoFamily, serverMetrics, type ServerMetrics } from '../../platform/metrics';
+import {
+  moduleSuspendedFamily,
+  modulesInfoFamily,
+  serverMetrics,
+  type ServerMetrics,
+} from '../../platform/metrics';
 import { EXPOSITION_CONTENT_TYPE } from '../../platform/exposition';
 import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
 import { outboxMetrics, readOutbox } from '../../platform/outbox-report';
@@ -227,6 +233,7 @@ import { runningModuleIds, type Composition } from '../../composition';
 import { notificationSink } from '../../modules/inbox/sink';
 import { factRoutingOf } from '../../platform/outbox';
 import { factPublisherOf } from '../../platform/ports/fact-publisher';
+import { withoutStopped } from '../../platform/suspended-modules';
 import { listInbox, readInbox } from './inbox';
 
 export interface Dependencies {
@@ -499,6 +506,9 @@ export const createApp = (given: Dependencies): HttpApplication => {
   let saidNotReady: Readiness | null = null;
   /** The words an operator writes in `MODULES` for the modules this process runs. */
   const moduleIds = runningModuleIds(modules);
+  /** The same, less those the administrator has stopped at run time (D-296): what a client may draw. */
+  const runningNow = (): readonly ModuleId[] =>
+    moduleIds.filter((id) => !modules.suspension.current().has(id));
   // One bucket per user for writes, charged by both doors to `send()`.
   const limiterFor = dependencies.shared?.limiters ?? inProcessLimiters(dependencies.clock);
   const userWrites = limiterFor('writes', dependencies.rateBudgets?.writes ?? WRITE_BUDGET);
@@ -570,6 +580,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     ...dependencies,
     workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,
     modules: moduleIds,
+    suspended: modules.suspension.current,
     effectiveModules: modules.effectiveModules,
   };
   // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
@@ -600,9 +611,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
   // Who consumes what over the whole build, and which of it this process runs: what a publish writes a row for (D-288).
   const factContext = {
     clock: dependencies.clock,
-    routing: factRoutingOf(
-      modules.bundled.map((module) => module.manifest),
-      modules.modules.map((module) => module.manifest),
+    routing: withoutStopped(
+      factRoutingOf(
+        modules.bundled.map((module) => module.manifest),
+        modules.modules.map((module) => module.manifest),
+      ),
+      modules.suspension.current,
     ),
     dropped: metrics.outboxDropped,
     refused: metrics.outboxRefused,
@@ -627,6 +641,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
               written: metrics.inboxEntries,
               collapsed: metrics.inboxCollapsed,
               pushedKinds: modules.pushedKinds,
+              suspended: () => modules.suspension.current().has(module.manifest.id),
               ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
             }),
             publishFact: factPublisherOf(module.manifest.id, factContext),
@@ -904,6 +919,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
           metrics,
           read: async () => [
             modulesInfoFamily(moduleIds),
+            moduleSuspendedFamily(moduleIds, modules.suspension.current()),
             ...(await readJobs()),
             ...(await readOutboxMetrics()),
           ],
@@ -920,7 +936,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get('/auth/oidc', async ({ set }) => respond(set, await startSignIn(dependencies, 'oidc')))
     .get('/auth/google', async ({ set }) => respond(set, await startSignIn(dependencies, 'google')))
     .get('/api/auth/methods', () => authMethods(dependencies.auth))
-    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth, moduleIds))
+    .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth, runningNow()))
     // The native application's way in (D-191): the browser's page says yes, the application spends the code.
     .post(
       '/api/native/authorize',
