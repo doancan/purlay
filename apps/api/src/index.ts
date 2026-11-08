@@ -206,6 +206,7 @@ const moduleSetWatch =
         link: redis,
         nodeId,
         set: moduleSetOf(modules.modules.map((module) => module.manifest.id)),
+        mode: modules.entitlementMode,
         log,
       });
 // And of which of them read a workspace's grants, so that a restriction is not written beside one that does not (D-292).

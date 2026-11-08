@@ -195,7 +195,7 @@ value.
   true only when chat runs, and a caller with no session gets `401` from a route of a module that runs and `404`
   from one that does not (`MODULES.md` §3);
 - the value the container was started with: `docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" exec api printenv MODULES` (nothing printed is every module);
-- with `REDIS_URL`, each live node's set is in the hash `<REDIS_KEY_PREFIX>:modules` (`HGETALL`; `purlay:modules` when it is unset), one field per node.
+- with `REDIS_URL`, each live node's set is in the hash `<REDIS_KEY_PREFIX>:modules` (`HGETALL`; `purlay:modules` when it is unset), one field per node, whose value is `<lapse time>|<set>|<WORKSPACE_MODULES>`.
 
 **Turn a module off or on.** Change `MODULES` and restart the API (`up -d --wait`). Off: its routes, socket operations
 and events, and the jobs that act for its users, are closed and its screens are gone from the page. **Its rows stay**,
@@ -273,8 +273,53 @@ use of it, by `POST /api/server/workspaces/:workspaceId/modules`. `WORKSPACE_MOD
 gets: `open` (the default; a server you run yourself has every module it runs) or `managed` (only what is granted, for a server that
 sells modules). A workspace that may not use a module answers its paths as a module that is not run, shows no rail place, search
 result or inbox line for it, and keeps every row, which is still exported, erased and purged. Granting it back brings everything
-back. A file of editions (`{ "editions": { "team": ["chat", "issues"] }, "workspaces": { "acme": { "edition": "team" } } }`, `validUntil` optional) is applied by `bun run entitlements:apply --file editions.json`, `--dry-run` first (on a server with `REDIS_URL`, a file that takes grants away also needs `--cluster-ready`, said once every node runs a release that reads grants). Chat is not a grant yet. Turn on `managed`, or withdraw a module, only after every node runs a release that has the table: a
+back. The only module that can be withheld from a workspace today is `issues`: chat is part of every workspace that runs it (`entitlement: 'always'`). A file of editions applies the grants of many workspaces at once (below). Turn on `managed`, or withdraw a module, only after every node runs a release that has the table: a
 node that predates it serves the module to every workspace, and rolling back lifts every restriction (data is not lost).
+
+**Editions: selling modules per workspace.** An edition is a name in a file you keep (nothing stores it); the database holds only the
+grants it expands to. The file is JSON and is checked whole before anything is written (`readEditionFile`, `apps/api/src/modules/entitlements/edition.ts`):
+
+```json
+{
+  "editions": { "team": ["chat", "issues"], "starter": ["chat"] },
+  "workspaces": {
+    "acme": { "edition": "team", "validUntil": "2026-12-31T00:00:00Z" },
+    "globex": { "edition": "starter" }
+  }
+}
+```
+
+- `editions`: a name (1 to 48 characters) and the module ids it includes, each a module this build carries.
+- `workspaces`: the workspace's **slug** and the edition it gets. `validUntil` is optional, a timestamp in the future; when it passes the
+  grant counts as no word at all and the server's `WORKSPACE_MODULES` decides again. No other key is accepted.
+- A workspace the file lists gets each module it can be granted: `on` if its edition includes it and `off` if not, so what the file says is
+  what the workspace has in either mode. A workspace the file does not list is left as it is. Chat is not in the grants: it is in every workspace.
+
+The container's filesystem is read-only except `/tmp`, so the file goes in on standard input. Look first, then apply:
+
+```
+docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" \
+  exec -T api bun run entitlements:apply --file /dev/stdin --dry-run < editions.json
+docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" \
+  exec -T api bun run entitlements:apply --file /dev/stdin < editions.json
+```
+
+Where the repository is checked out, `bun run entitlements:apply --file editions.json` with `DATABASE_URL` set is the same command. The
+dry run makes the writes in a transaction and undoes them, so it refuses what the real run would (a module whose requirement the workspace lacks); run
+again, the real command changes nothing. It prints `changed N of M grants` and a count for each module and state, never a person's words.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | applied, or nothing to change |
+| `1` | the server is clustered (`REDIS_URL`) and the file takes grants away: say `--cluster-ready` once every node runs a release that reads grants |
+| `2` | the file or a workspace in it cannot be used: not JSON, an unknown edition or module, a slug with no workspace, a `validUntil` that has passed; nothing was applied |
+
+Read it back. `GET /api/server/workspaces` (server administrator) lists for each workspace what it was told (`on`, `off`, `inherit`), what
+that comes to now (`effective`), `validUntil` and `source`, which for a file is `file:<name>` (`file:stdin` when it came on standard input).
+`GET /api/server/audit` shows each change as `server.module_granted`, `server.module_withdrawn` or `server.module_reset`, with the
+workspace and the module. A workspace that is refused a module it should have shows as `purlay_entitlement_refusals_total{module}` (`CONFIG.md`, *The families*).
+Every node of a cluster should have the same `WORKSPACE_MODULES`: a node that finds another says `the nodes of this cluster do not
+agree on WORKSPACE_MODULES` once in its log, and again when they agree; it serves on.
 
 **Not supported.** Third-party modules: a module is first-party code in this repository, and loading one from elsewhere is not supported.
 

@@ -108,6 +108,7 @@ describe('the adapters of a namespaced link', () => {
       link,
       nodeId: 'node-a',
       set: 'chat',
+      mode: 'open',
       log: aRecordingLogger().log,
       timers: inertTimers,
     });
