@@ -153,6 +153,51 @@ describe('the document check', () => {
     expect(named.output).toContain('chat/0002_a_file_nobody_wrote.sql');
   });
 
+  describe('the decision record', () => {
+    // One past the last decision, spelled so that the source citation check does not read it as a citation of one that is not there.
+    const NEXT = 296;
+    const append = (text: string): ReturnType<typeof run> => {
+      const root = aCopy();
+      edit(root, 'docs/DECISIONS.md', (before) => `${before}\n${text}\n`);
+      return run(root);
+    };
+    const decision = (header: string, body = '**Cost of reversing.** None.'): string =>
+      `### D-${String(NEXT)}. ${header}\n\n${body}`;
+
+    test('fails when a decision amends another that does not point back', () => {
+      const { status, output } = append(decision('A change — amends D-5'));
+      expect(status).toBe(1);
+      expect(output).toContain('a decision amends another that does not name it');
+    });
+
+    test('passes an amendment the amended decision names', () => {
+      const root = aCopy();
+      edit(
+        root,
+        'docs/DECISIONS.md',
+        (text) =>
+          `${text.replace(/(^### D-5\. .*$)/m, `$1\n\n*Amended by D-${String(NEXT)}: x.*`)}\n${decision('A change — amends D-5')}\n`,
+      );
+      expect(run(root).output).not.toContain('does not name it');
+    });
+
+    test('fails when a decision since the platform began has no cost of reversing', () => {
+      const { status, output } = append(decision('A change', '**Context.** It happened.'));
+      expect(status).toBe(1);
+      expect(output).toContain('a decision has no cost of reversing');
+    });
+
+    test('fails when a decision sits under the open questions', () => {
+      const root = aCopy();
+      edit(root, 'docs/DECISIONS.md', (text) =>
+        text.replace('## Part E — ', `${decision('Misplaced')}\n\n## Part E — `),
+      );
+      const { status, output } = run(root);
+      expect(status).toBe(1);
+      expect(output).toContain('a decision is filed under the open questions');
+    });
+  });
+
   describe('links', () => {
     const plant = (file: string, link: string): ReturnType<typeof run> => {
       const root = aCopy();
