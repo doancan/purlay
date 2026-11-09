@@ -595,8 +595,12 @@ export interface ScheduledMessages {
 export interface ServerAuditLog {
   action: string;
   actor_user_id: string | null;
+  cluster_ready_asserted: boolean | null;
   created_at: Generated<Timestamp>;
   id: string;
+  module_state_before: string | null;
+  module_valid_until: Timestamp | null;
+  module_valid_until_before: Timestamp | null;
   note: string | null;
   session_id: string | null;
   target_fact_id: string | null;

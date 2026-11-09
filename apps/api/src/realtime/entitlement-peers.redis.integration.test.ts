@@ -7,7 +7,9 @@ import { bunRedisClient, connectRedis, type RedisLink } from '../platform/redis'
 import { createLogger } from '../platform/logging';
 import { redisUrlForTests } from '../testing/redis';
 import { advertiseEntitlements, peersBehind } from './entitlement-peers';
-import { moduleSetOf, watchModuleSet } from './module-set';
+import { NODE_TTL_MS, moduleSetOf, watchModuleSet } from './module-set';
+import { requirePeersReady } from '../modules/entitlements/peers';
+import { aRecordingLogger } from '../testing/doubles';
 
 const log = createLogger({ level: 'silent' });
 const namespace = `peers-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
@@ -78,7 +80,7 @@ describe('integration: the nodes that read workspace grants', () => {
       `local time = redis.call('TIME')
 local now = time[1] * 1000 + math.floor(time[2] / 1000)
 for i = 1, 64 do redis.call('HSET', KEYS[1], 'crashed-' .. i, now) end
-redis.call('HSET', KEYS[1], 'live-peer', now + 60000)
+redis.call('HSET', KEYS[1], 'live-peer', now + 30000)
 return 1`,
       [link.names.entitlementNodes],
       [],
@@ -95,4 +97,73 @@ return 1`,
       await link.send('HDEL', [link.names.entitlementNodes, 'live-peer']);
     }
   });
+});
+
+/** What anyone who can write the Redis can put in the records, and what a node does with it (red-team F6). */
+describe('integration: a hostile peer cannot freeze the cluster’s restrictions', () => {
+  const FAR_FUTURE = Date.now() + 10 * 365 * 86_400_000;
+  const fields = async (key: string): Promise<string[]> =>
+    (await link.send('HKEYS', [key])) as string[];
+
+  test('a field with no lapse, a lapse that is not a number and a lapse further ahead than a node writes are ignored and removed, and peersBehind still answers', async () => {
+    const recording = aRecordingLogger();
+    const node = watchModuleSet({
+      link,
+      nodeId: 'honest',
+      set: moduleSetOf(['chat']),
+      mode: 'managed',
+      log: recording.log,
+    });
+    const reads = advertiseEntitlements({ link, nodeId: 'honest', log });
+    await settle();
+    expect(await peersBehind(link)).toBe(0);
+    await link.send('HSET', [link.names.moduleSet, 'evil', 'garbage-without-a-separator']);
+    await link.send('HSET', [link.names.moduleSet, 'worse', 'soon|chat|open']);
+    await link.send('HSET', [link.names.moduleSet, 'ghost', `${String(FAR_FUTURE)}|chat|managed`]);
+    await link.send('HSET', [
+      link.names.moduleSet,
+      'huge',
+      `${String(Date.now() + 25_000)}|${'x'.repeat(9000)}`,
+    ]);
+    await link.send('HSET', [link.names.entitlementNodes, 'garbled', 'not-a-number']);
+    await link.send('HSET', [link.names.entitlementNodes, 'ghost', String(FAR_FUTURE)]);
+
+    // Not rejected, and the ghost is not a peer that never reads grants: the honest node is the only live one.
+    expect(await peersBehind(link)).toBe(0);
+    // Does not throw: a restriction is writable.
+    await requirePeersReady(() => peersBehind(link), { carried: [], mode: 'managed' }, [
+      { workspaceId: 'w', module: 'issues', state: 'off' },
+    ]);
+
+    // The next announcement and the next advertisement take the fields out, so nothing needs deleting by hand, and say so.
+    await Bun.sleep(NODE_TTL_MS / 3 + 500);
+    expect((await fields(link.names.moduleSet)).sort()).toEqual(['honest']);
+    expect((await fields(link.names.entitlementNodes)).sort()).toEqual(['honest']);
+    expect(
+      recording.lines.some((line) => String(line['msg']).includes('held fields no node writes')),
+    ).toBe(true);
+    await node.stop();
+    await reads.stop();
+  }, 20_000);
+
+  test('a field that is a real peer’s own is overwritten by its next renewal and never stops a restriction for good', async () => {
+    const node = watchModuleSet({
+      link,
+      nodeId: 'honest-2',
+      set: moduleSetOf(['chat']),
+      mode: 'open',
+      log,
+    });
+    const reads = advertiseEntitlements({ link, nodeId: 'honest-2', log });
+    await settle();
+    await link.send('HSET', [link.names.entitlementNodes, 'honest-2', 'forged']);
+    expect(await peersBehind(link)).toBe(1);
+    await link.send('HSET', [link.names.entitlementNodes, 'honest-2', String(FAR_FUTURE)]);
+    // A capability that lapses in ten years is not one a node writes: the node is behind until its own renewal says otherwise.
+    expect(await peersBehind(link)).toBe(1);
+    await Bun.sleep(NODE_TTL_MS / 3 + 500);
+    expect(await peersBehind(link)).toBe(0);
+    await node.stop();
+    await reads.stop();
+  }, 20_000);
 });

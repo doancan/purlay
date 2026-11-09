@@ -29,6 +29,8 @@ const node = async (url?: string, keepaliveMs?: number): Promise<RedisLink> => {
   return link;
 };
 const unique = (word: string): string => `${word}-${crypto.randomUUID()}`;
+/** A topic's id is a UUID, as the contract's are: the bus refuses one that is not. */
+const aUuid = (): string => crypto.randomUUID();
 
 afterAll(() => {
   for (const link of links) link.close();
@@ -418,7 +420,7 @@ describe('integration: who is idle across nodes (D-257)', () => {
 
 describe('integration: a connection that is alive stays alive', () => {
   test('a link idle past its keepalive, subscribed, is still connected and still hears', async () => {
-    const topic = channelTopic(unique('idle'));
+    const topic = channelTopic(aUuid());
     // Pinged every 200 ms, for a second and a half: seven or eight pings in a subscribed connection.
     const idle = await busNode(topic, undefined, 200);
     const other = await busNode(topic);
@@ -536,7 +538,7 @@ const allListening = async (
 
 const frame = (ts: number): ServerFrame => ({
   event: 'PINS_UPDATED',
-  data: { channelId: 'c' },
+  data: { channelId: '00000000-0000-4000-8000-000000000001' },
   ts,
 });
 
@@ -552,7 +554,7 @@ describe('integration: the bus across nodes', () => {
   // Order and exactly-once, not speed: two hundred awaited publishes and their delivery to three nodes
   // outlived the five seconds a test is given while the suite's other files ran beside it (D-228).
   test('each frame reaches every node exactly once, each publisher’s in its order, all nodes in one order', async () => {
-    const topic = channelTopic(unique('c'));
+    const topic = channelTopic(aUuid());
     const [a, b, c] = [await busNode(topic), await busNode(topic), await busNode(topic)];
     await allListening([a, b, c]);
     // A and B publish at once, a hundred each, a frame's `ts` saying who sent it and which.
@@ -575,7 +577,7 @@ describe('integration: the bus across nodes', () => {
   }, 30_000);
 
   test('a node that listens to another topic hears nothing of this one', async () => {
-    const topic = channelTopic(unique('c'));
+    const topic = channelTopic(aUuid());
     const a = await busNode(topic);
     const bystander = await busNode(channelTopic(unique('other')));
     await a.publish(frame(1));
@@ -610,8 +612,8 @@ describe('integration: a Redis that is away, or comes and goes', () => {
     });
     const heard: ServerFrame[] = [];
     const bus = redisBackplane(link, silent).node((_id, f) => heard.push(f), silent);
-    bus.subscribe('channel:t', 's');
-    await bus.publish('channel:t', frame(1));
+    bus.subscribe('channel:00000000-0000-4000-8000-000000000001', 's');
+    await bus.publish('channel:00000000-0000-4000-8000-000000000001', frame(1));
     expect(heard).toEqual([frame(1)]);
     link.close();
   });
@@ -621,7 +623,7 @@ describe('integration: a Redis that is away, or comes and goes', () => {
   test('a connection that is cut is made again, subscribed again, and the node is told it may have missed frames', async () => {
     const proxy = await aDroppableProxy(redisUrlForTests());
     try {
-      const topic = channelTopic(unique('c'));
+      const topic = channelTopic(aUuid());
       const behind = await busNode(topic, proxy.url);
       const direct = await busNode(topic);
       await allListening([behind, direct]);

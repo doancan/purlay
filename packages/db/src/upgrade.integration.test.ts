@@ -321,6 +321,7 @@ describe('integration: upgrading from the previous release', () => {
         '0093_outbox_fair_claim',
         '0094_audit_target_fact',
         '0095_outbox_discarded',
+        '0096_server_audit_grant_detail',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

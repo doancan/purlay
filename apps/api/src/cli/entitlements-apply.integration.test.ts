@@ -7,7 +7,12 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, DROP_HOOK_MS } from '@purlay/db';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  DROP_HOOK_MS,
+  type ClonedDatabase,
+} from '@purlay/db';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../platform/config';
 import { aUniqueSlug } from '../testing/users';
 
@@ -50,7 +55,12 @@ const aFile = (content: unknown): string => {
   return path;
 };
 
-const aServer = async (): Promise<{ url: string; slug: string; rows: () => Promise<string[]> }> => {
+const aServer = async (): Promise<{
+  url: string;
+  slug: string;
+  db: ClonedDatabase['db'];
+  rows: () => Promise<string[]>;
+}> => {
   const cloned = await cloneIntegrationDatabase();
   clones.push(cloned.drop);
   const slug = aUniqueSlug('edition');
@@ -58,6 +68,7 @@ const aServer = async (): Promise<{ url: string; slug: string; rows: () => Promi
   return {
     url: cloned.connectionString,
     slug,
+    db: cloned.db,
     rows: async () =>
       (
         await cloned.db
@@ -103,8 +114,12 @@ describe('integration: bun run entitlements:apply', () => {
       editions: { free: ['chat'] },
       workspaces: { [server.slug]: { edition: 'free' } },
     });
-    expect(run(server.url, ['--file', path, '--dry-run']).out).toBe(
-      'would change 1 of 1 grants\n  issues off: 1\n',
+    const dry = run(server.url, ['--file', path, '--dry-run']);
+    // Each address in the file is said with the workspace it found, for the operator to read against their customers.
+    expect(dry.out).toMatch(
+      new RegExp(
+        `^workspace ${server.slug} = [0-9a-f-]{36}\\nwould change 1 of 1 grants\\n  issues off: 1\\n$`,
+      ),
     );
     expect(await server.rows()).toEqual([]);
   });
@@ -149,5 +164,35 @@ describe('integration: bun run entitlements:apply', () => {
     expect(run(server.url, ['--file', aFile('{')]).code).toBe(2);
     expect(run(server.url, []).code).toBe(2);
     expect(run(server.url, ['--file', join(tmpdir(), 'does-not-exist.json')]).code).not.toBe(0);
+  });
+
+  test('a workspace written twice in one file is refused with nothing applied, since the parser would keep the last and say nothing', async () => {
+    const server = await aServer();
+    const twice = `{"editions":{"free":["chat"],"team":["chat","issues"]},"workspaces":{"${server.slug}":{"edition":"free"},"${server.slug}":{"edition":"team"}}}`;
+    const refused = run(server.url, ['--file', aFile(twice)]);
+    expect(refused.code).toBe(2);
+    expect(refused.err).toContain(`"${server.slug}" is written more than once`);
+    expect(await server.rows()).toEqual([]);
+  });
+
+  test('--cluster-ready is warned of and recorded with the grants it let through; without it nothing is recorded', async () => {
+    const server = await aServer();
+    const clustered = { REDIS_URL: 'redis://127.0.0.1:1' };
+    const takes = aFile({
+      editions: { free: ['chat'] },
+      workspaces: { [server.slug]: { edition: 'free' } },
+    });
+    const said = run(server.url, ['--file', takes, '--cluster-ready'], clustered);
+    expect(said.code).toBe(0);
+    expect(said.out).toContain('"level":"warn"');
+    expect(said.out).toContain(
+      '--cluster-ready is the operator’s word that every node reads workspace grants',
+    );
+    const entry = await server.db
+      .selectFrom('server_audit_log')
+      .select(['module_state_before', 'cluster_ready_asserted'])
+      .where('action', '=', 'server.module_withdrawn')
+      .executeTakeFirstOrThrow();
+    expect(entry).toEqual({ module_state_before: null, cluster_ready_asserted: true });
   });
 });

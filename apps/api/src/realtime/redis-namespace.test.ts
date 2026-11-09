@@ -17,7 +17,11 @@ import { redisBackplane } from './redis-bus';
 import { redisRateLimiter } from './redis-limiter';
 import { redisPresenceDirectory, redisPresenceRegistry } from './redis-presence';
 
-const frame: ServerFrame = { event: 'PINS_UPDATED', data: { channelId: 'c' }, ts: 1 };
+const frame: ServerFrame = {
+  event: 'PINS_UPDATED',
+  data: { channelId: '00000000-0000-4000-8000-000000000001' },
+  ts: 1,
+};
 const inertTimers: Timers = { set: () => 0, clear: () => undefined };
 
 /** Every key an adapter sent to Redis, in the scripts and in the commands. */
@@ -31,7 +35,7 @@ describe('the adapters of a namespaced link', () => {
     const link = aFakeLink('staging');
     link.behaviour.send = (): number => 1;
     const heard: ServerFrame[] = [];
-    const topic = channelTopic('c');
+    const topic = channelTopic('00000000-0000-4000-8000-000000000001');
     const log = aRecordingLogger().log;
     const bus = redisBackplane(link, log).node((_socket, delivered) => heard.push(delivered), log);
     bus.subscribe(topic, 'socket');

@@ -62,6 +62,7 @@ const aWatch = (
   answers: () => unknown,
   set = 'chat',
   mode: EntitlementMode = 'open',
+  ignored: () => unknown = (): number => 0,
 ): {
   link: FakeLink;
   watch: ModuleSetWatch;
@@ -69,7 +70,8 @@ const aWatch = (
   said: (level: string) => Record<string, unknown>[];
 } => {
   const link = aFakeLink();
-  link.behaviour.script = answers;
+  // The script answers the distinct words and how many fields of the record it ignored (red-team F6).
+  link.behaviour.script = (): unknown => [answers(), ignored()];
   link.behaviour.send = (): number => 1;
   const { log, lines } = aRecordingLogger();
   const clock = manualTimers();
@@ -108,6 +110,41 @@ describe('nodes that run one set but not one WORKSPACE_MODULES', () => {
     expect(view.said('warn').map((line) => line['msg'])).toEqual([
       'the nodes of this cluster do not run the same modules; serving on, as in a rolling deploy',
     ]);
+  });
+});
+
+describe('a record that holds what no node wrote (red-team F6)', () => {
+  test('is said once with how many fields were ignored, and the node goes on with the nodes the script found', async () => {
+    let ignored = 2;
+    const view = aWatch(
+      () => ['chat|open'],
+      'chat',
+      'open',
+      () => ignored,
+    );
+    await settle();
+    expect(view.said('warn')).toHaveLength(1);
+    expect(view.said('warn')[0]).toMatchObject({ fields: 2 });
+    await view.clock.tick();
+    expect(view.said('warn')).toHaveLength(1);
+    ignored = 0;
+    await view.clock.tick();
+    ignored = 1;
+    await view.clock.tick();
+    expect(view.said('warn')).toHaveLength(2);
+    expect(view.link.scripts[0]?.args.slice(2)).toEqual([String(NODE_TTL_MS), '4096']);
+  });
+
+  test('an answer that is not the words and a count is a failure, so the node asks again', async () => {
+    const view = aWatch(
+      () => ['chat|open'],
+      'chat',
+      'open',
+      () => 'many',
+    );
+    await settle();
+    expect(view.said('warn')).toHaveLength(0);
+    expect(view.clock.delays).toEqual([ANNOUNCE_RETRY_MS]);
   });
 });
 

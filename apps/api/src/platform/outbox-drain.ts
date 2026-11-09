@@ -37,6 +37,8 @@ export const BACKOFF_MAX_MS = 3_600_000;
 const JITTER = 0.2;
 /** What `last_error` says of a row that ran out of tries without a handler's word: a node that died on it, or a deadline. */
 const EXHAUSTED = 'AttemptsExhausted';
+/** What `last_error` says of a row whose producer is not the owner of its fact type: written outside `publishFact`. */
+const PRODUCER_REFUSED = 'ProducerRefused';
 const ERROR_MAX_CHARS = 300;
 
 /** The wait before attempt `attempt` (the first is 1): doubling from five seconds to an hour, within 20% either way. */
@@ -283,10 +285,11 @@ export const deliver = async (
   const { clock, ports = noPorts, seams = noSeams, effective } = dependencies;
   let told: readonly WrittenNotice[] = [];
   let log = dependencies.log;
+  let forged: { readonly producer: string; readonly owner: string } | undefined;
   const outcome = await atomicallyOn(database)(async (transaction): Promise<Delivery> => {
     const row = await transaction
       .selectFrom('outbox')
-      .select(['workspace_id', 'payload', 'attempts', 'shape', 'correlation_id'])
+      .select(['workspace_id', 'payload', 'attempts', 'shape', 'correlation_id', 'producer'])
       .where('id', '=', claimed.id)
       .where('state', '=', 'pending')
       .forUpdate()
@@ -313,6 +316,12 @@ export const deliver = async (
         .execute();
       return state;
     };
+    // The publish side checks who may publish a type; a row written by any other path (SQL of a module's own, a restored backup)
+    // is not taken on trust here either: only the type's owner produces it (red-team F9).
+    if (row.producer !== handling.declaration.owner) {
+      forged = { producer: row.producer, owner: handling.declaration.owner };
+      return await finish('dead', PRODUCER_REFUSED);
+    }
     // Checked again here, against the shape the row was written in: a rolling deploy leaves a newer node rows an older one
     // published, which only an earlier shape's schema fits. (A shape it does not know is not claimed, so it is not here.)
     const read = readAsCurrentShape(handling.declaration, row.shape, row.payload);
@@ -379,7 +388,11 @@ export const deliver = async (
   });
   // After the commit: a notice is told only if what it is about is, and a line about a death is not said for a transaction that then fails.
   if (outcome === 'delivered' || outcome === 'skipped') await seams.announce(told);
-  if (outcome === 'dead') log.error('a fact is dead and will not be delivered');
+  if (forged !== undefined) {
+    log.error('a fact was written by a module that does not own its type; it is dead', forged);
+  } else if (outcome === 'dead') {
+    log.error('a fact is dead and will not be delivered');
+  }
   return outcome;
 };
 

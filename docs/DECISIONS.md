@@ -14330,6 +14330,11 @@ fact for each message (D-35).
     reason is the administrator's own and never the fact's. **No command-line twin:** a command has no authenticated administrator,
     so its entries would say that nobody did it, which is what this exists to prevent; the routes are the operator's tool (`DEPLOY.md`
     gives the requests).
+13. **A row's producer is the type's owner** (an audit of 2026-11-08, red-team F9). `publishFact` checks who may publish a type, but a row
+    written any other way (SQL of a module's own, a restored backup) was delivered on trust. The delivery now reads the row's `producer`
+    and, when it is not the owner of the type's declaration, ends the row `dead` with `ProducerRefused` before its handler is asked:
+    counted as any dead row is (`purlay_outbox_failures_total`) and said once at `error` with the producer and the owner, never the
+    payload. The bound on a chain of facts is D-283's own, item 11.
 
 **Rejected.** *Counting the attempt when the handler fails*
 
@@ -14419,6 +14424,29 @@ default, every module (D-24, D-250 rule 9).
    plain and cover un-entitled data. A scheduled job now reads `WORKSPACE_MODULES` (the CLI had composed the build in `open` mode
    whatever the server's setting). *Not done:* the outbox claim still reads the grants in TypeScript (D-288 §11, changed
    elsewhere); it can take the statement when it is next touched.
+11. **The records of the cluster are read as what anyone with the Redis can write** (an audit of 2026-11-08, red-team F6). One field
+    with no `lapse|` in front of it stopped every node's announcement and turned every withdrawal into `PEERS_BEHIND` until somebody
+    deleted it by hand, and a "ghost" field that lapsed in ten years was a peer that never reads grants for as long as it said. The
+    scripts now treat a field that is not what a node writes as no node: no lapse, a lapse that is not a number or lies past `now + ttl`
+    (no node writes one further ahead, and all use Redis's clock), or a field of more than 4096 characters. The announcing script
+    removes such fields and answers how many, which the node says once as a warning (`the shared record of the cluster held fields no
+    node writes`); `peersBehind` skips them and counts a capability that is forged the same way as no capability, which is the safe
+    side. The bus is read as strictly: a frame is a `ServerFrame`, a topic the contract's grammar with a UUID, an origin the id a
+    backplane makes for itself and a count a whole number from one, and what fails is dropped and logged without its content. A
+    count that claims a hole sends every socket back to replay; claims within `GAP_REPLAY_MIN_MS` (10 s) of the last are told once
+    when it has passed, so a real hole is still replayed and a stream of forged ones costs one replay in ten seconds. *Not
+    built:* a limit on how many fields a hash may hold or on who may write at all, which is Redis's own (ACL, TLS, one
+    `REDIS_KEY_PREFIX` for each environment; `DEPLOY.md`): a peer with the Redis credentials can still withhold a restriction by
+    keeping a node's field alive, as it could by running a node.
+12. **The trail of a grant says what it replaced, and the edition file is read as written** (red-team F11, builds on D-292). Each
+    `server.module_*` entry records, as columns and never words, the state the row had before (`module_state_before`, none when
+    there was no row), the end it set and the end it had (`module_valid_until`, `module_valid_until_before`), and
+    `cluster_ready_asserted` when the command ran with `--cluster-ready`, which is the operator's word that every node reads grants
+    and which nothing verified: it is warned of at `warn` and recorded with each grant it let through. A file that names one address
+    twice in one object is refused with nothing applied (`JSON.parse` keeps the last and says nothing), as is an unknown address
+    (already so); the address a tenant registered first is the workspace it finds, so a dry run now prints what each address
+    resolved to for the operator to read against their customers. *Not built:* keying the file by workspace id, which would let a
+    typo write to the wrong workspace as an address cannot; and showing the new columns in the console's list of the trail.
 
 **Rejected.** *A `modules` column on `workspaces`:* a hot table for one module's concern (D-275), and a column cannot carry an end date,
 a source or a writer. *A JSON setting on the server:* not per workspace. *Environment or file with a restart:* an edition sale is
@@ -14569,7 +14597,7 @@ pays for, so the writer is a commercial authority and its rules are decided here
    rail follows; a page that misses it is corrected by its first `404` as for a module a rolling deploy stopped (D-255).
 6. **A restrictive write waits for the cluster.** Withdrawing a module, or running a server `managed`, is refused
    `409 PEERS_BEHIND` while a live peer does not advertise that it reads grants, because that peer would serve the module to every
-   workspace. Granting is never refused for it. The roll finishes first and the restriction follows; `DEPLOY.md` says so. The edition command cannot see the cluster (only the serving process holds the link to Redis), so on a server with `REDIS_URL` it asks the operator to say `--cluster-ready` before it takes anything away.
+   workspace. Granting is never refused for it. The roll finishes first and the restriction follows; `DEPLOY.md` says so. The edition command cannot see the cluster (only the serving process holds the link to Redis), so on a server with `REDIS_URL` it asks the operator to say `--cluster-ready` before it takes anything away. That word is the operator's and nothing verifies it: the command warns of it and the trail records it (D-289 §12).
 
 **Rejected.** *A workspace owner who can switch their own modules:* the gate would be a button in the customer's hands. *A row per
 edition:* the edition is a name in a file and nothing in the table (D-289); the table says modules. *Writing the trail after the

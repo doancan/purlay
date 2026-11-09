@@ -49,5 +49,8 @@ have it.
 
 - **Inbox** — A person can no longer be flooded: the workspace find and the inbox list are rate limited per user (`429` with `Retry-After`), a person's unread notices of one module in a workspace are capped at 200 (the oldest are read as history and counted in `purlay_inbox_collapsed_total`), and their pushes of one kind are limited to three at once and then one a minute (`purlay_push_failures_total{reason="throttled"}`) (D-285, D-286)
 - **Modules** — A module's files, its start for a new workspace and its pushes now follow the workspace's grant like its routes do; retention, export, purge and erasure still cover its data (D-289)
+- **Operations** — A malformed or forged field in the cluster's shared Redis records can no longer stop every node from announcing itself or turn every withdrawal of a module into `PEERS_BEHIND`: such fields are ignored, removed and said once, frames on the shared bus are checked as strictly as a client's, and a forged hole in a frame count costs one replay in ten seconds (D-289)
+- **Modules** — A row in the outbox whose producer does not own the fact is given up on instead of delivered (D-288)
+- **Operations** — `entitlements:apply` records on the server's trail what each grant replaced, until when it runs and, when it was given, your word that every node reads grants; it refuses a file that names an address twice, and a dry run says which workspace each address resolved to (D-289)
 
 ---

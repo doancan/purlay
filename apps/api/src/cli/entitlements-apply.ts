@@ -1,9 +1,10 @@
 /**
  * `bun run entitlements:apply --file <editions.json> [--dry-run] [--cluster-ready]` — an operator applies an edition file (D-292): each workspace it
  * lists is given the modules of its edition and none of the others, in one transaction, through the one writer the console uses.
- * `--dry-run` says what would change and changes nothing. Run again it changes nothing. Prints counts by module and state, and
+ * `--dry-run` says what would change and which workspace each address in the file resolved to, and changes nothing. Run again it changes nothing. Prints counts by module and state, and
  * workspace addresses; never anybody's words. Exits 2 on a file or a workspace it cannot use, 1 when the file takes grants away on a clustered server (`REDIS_URL`) and
- * `--cluster-ready` does not say that every node reads grants: the command cannot see the cluster, the serving process can. Open pages of the workspaces it changed correct themselves at their next request for a module they no longer have.
+ * `--cluster-ready` does not say that every node reads grants: the command cannot see the cluster, the serving process can. `--cluster-ready`
+ * is the operator's word and nothing checks it: it is warned of in the log and recorded with each grant it wrote (D-292). Open pages of the workspaces it changed correct themselves at their next request for a module they no longer have.
  */
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
@@ -40,6 +41,7 @@ const fail = (message: string, code = 2): void => {
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
+const clusterReady = args.includes('--cluster-ready');
 const at = args.indexOf('--file');
 const path = at === -1 ? undefined : args[at + 1];
 // A dry run writes no entry, so it says none: the line of the trail is written as the entry is made, and a transaction undone has no entry.
@@ -63,17 +65,13 @@ if (
         .where('slug', 'in', Object.keys(file.workspaces))
         .where('deleted_at', 'is', null)
         .execute();
-      const plan = planEdition(
-        file,
-        catalogue,
-        new Map(found.map((workspace) => [workspace.slug, workspace.id])),
-        systemClock.now(),
-      );
+      const resolved = new Map(found.map((workspace) => [workspace.slug, workspace.id]));
+      const plan = planEdition(file, catalogue, resolved, systemClock.now());
       // The command cannot see the cluster (only the process that serves holds its link to Redis), so where there is a Redis it
       // asks the operator to say that every node reads grants before it takes anything away.
       const needsWord =
         config.REDIS_URL !== undefined &&
-        !args.includes('--cluster-ready') &&
+        !clusterReady &&
         plan.writes.some((write) => restricts(write, catalogue.mode));
       if (plan.problems.length > 0) {
         fail(plan.problems.join('\n'));
@@ -83,6 +81,12 @@ if (
           1,
         );
       } else {
+        if (clusterReady && !dryRun) {
+          log.warn(
+            '--cluster-ready is the operator’s word that every node reads workspace grants; nothing has checked it, and it is recorded with each change',
+            { see: 'DEPLOY.md, entitlements:apply' },
+          );
+        }
         const changes = await applyEdition(
           database,
           systemClock,
@@ -90,7 +94,14 @@ if (
           `file:${basename(path)}`,
           plan.writes,
           dryRun,
+          clusterReady,
         );
+        // The file names workspaces by the address a tenant chose, and a tenant who registered it first is the workspace it finds. A dry
+        // run says what each address resolved to, so the operator reads it against their own list of customers before the real one.
+        if (dryRun) {
+          for (const [slug, id] of [...resolved].sort())
+            process.stdout.write(`workspace ${slug} = ${id}\n`);
+        }
         const counts = new Map<string, number>();
         for (const change of changes)
           counts.set(

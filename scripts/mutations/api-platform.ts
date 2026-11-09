@@ -1036,6 +1036,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
+    id: 'outbox-drain-trusts-the-producer',
+    why: 'a row written outside publishFact by a module that does not own the type is delivered as though it were the owner’s (red-team F9)',
+    file: 'apps/api/src/platform/outbox-drain.ts',
+    find: '    if (row.producer !== handling.declaration.owner) {',
+    replace: '    if (false as boolean) {',
+    tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
+  },
+  {
     id: 'outbox-error-says-the-message',
     why: 'a failure is recorded with its message, which a database error fills with the row’s values, so a payload reaches last_error (D-288)',
     file: 'apps/api/src/platform/outbox-drain.ts',

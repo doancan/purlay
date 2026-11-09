@@ -11,34 +11,47 @@
 import type { Logger } from '../platform/logging';
 import type { RedisLink } from '../platform/redis';
 import { systemTimers, type Timers } from './hub';
-import { ANNOUNCE_RETRY_MS, NODE_TTL_MS } from './module-set';
+import { ANNOUNCE_RETRY_MS, FIELD_MAX_CHARS, NODE_TTL_MS } from './module-set';
 
 const RENEW_MS = NODE_TTL_MS / 3;
 
+/**
+ * A field that is not a number, or whose lapse lies further ahead than a node ever writes (`now + ttl`), is not a peer and is
+ * removed, as in the module-set record (red-team F6): it must not make the script fail, nor count as a node that reads grants.
+ */
 /** KEYS: the hash of capable nodes. ARGV: node, ttl. */
 const ADVERTISE_SCRIPT = `
 local time = redis.call('TIME')
 local now = time[1] * 1000 + math.floor(time[2] / 1000)
-redis.call('HSET', KEYS[1], ARGV[1], now + tonumber(ARGV[2]))
-redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
+local ttl = tonumber(ARGV[2])
+redis.call('HSET', KEYS[1], ARGV[1], now + ttl)
+redis.call('PEXPIRE', KEYS[1], ttl)
 local all = redis.call('HGETALL', KEYS[1])
 for i = 1, #all, 2 do
-  if tonumber(all[i + 1]) <= now then redis.call('HDEL', KEYS[1], all[i]) end
+  local lapse = tonumber(all[i + 1])
+  if (not lapse) or lapse <= now or lapse > now + ttl then redis.call('HDEL', KEYS[1], all[i]) end
 end
 return 1
 `;
 
-/** KEYS: the module-set hash (`node -> lapse|set`), the hash of capable nodes. Answers how many live nodes are not in the second. */
+/**
+ * KEYS: the module-set hash (`node -> lapse|word`), the hash of capable nodes. ARGV: ttl, field cap. Answers how many live nodes are not in the
+ * second. A field of the first that is not a live node's (no lapse, a lapse not a number or past `now + ttl`) is not a node; a field
+ * of the second that is not a live capable node's does not make one capable.
+ */
 const BEHIND_SCRIPT = `
 local time = redis.call('TIME')
 local now = time[1] * 1000 + math.floor(time[2] / 1000)
+local ttl = tonumber(ARGV[1])
+local cap = tonumber(ARGV[2])
 local live = redis.call('HGETALL', KEYS[1])
 local behind = 0
 for i = 1, #live, 2 do
   local cut = string.find(live[i + 1], '|', 1, true)
-  if tonumber(string.sub(live[i + 1], 1, cut - 1)) > now then
-    local lapse = redis.call('HGET', KEYS[2], live[i])
-    if (not lapse) or tonumber(lapse) <= now then behind = behind + 1 end
+  local lapse = cut and tonumber(string.sub(live[i + 1], 1, cut - 1))
+  if lapse and lapse > now and lapse <= now + ttl and #live[i + 1] <= cap then
+    local capable = tonumber(redis.call('HGET', KEYS[2], live[i]) or '')
+    if (not capable) or capable <= now or capable > now + ttl then behind = behind + 1 end
   end
 end
 return behind
@@ -99,7 +112,11 @@ export const advertiseEntitlements = (advertising: Advertising): EntitlementPeer
 
 /** How many live nodes are not in `hash`. Rejects when Redis cannot say: a restriction waits for an answer. */
 const behindIn = async (link: RedisLink, hash: string): Promise<number> => {
-  const answer = await link.script(BEHIND_SCRIPT, [link.names.moduleSet, hash], []);
+  const answer = await link.script(
+    BEHIND_SCRIPT,
+    [link.names.moduleSet, hash],
+    [String(NODE_TTL_MS), String(FIELD_MAX_CHARS)],
+  );
   if (typeof answer !== 'number') throw new Error('the peers script answered something else');
   return answer;
 };
