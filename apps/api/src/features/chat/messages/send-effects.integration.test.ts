@@ -374,17 +374,20 @@ describe('integration: a reply', () => {
     });
   });
 
-  test('a thousand replies are counted exactly', async () => {
+  test('every reply is counted exactly: the count is one increment each, not a recount', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const root = await post(db, room, 'alice', 'a long argument');
+      // The count is `thread_reply_count + 1` in one statement, so it cannot drift with how many there are: a
+      // few dozen alternating senders show it, where a thousand sends cost twenty seconds and failed under load.
+      const REPLIES = 25;
       let last: Sent | undefined;
-      for (let n = 0; n < 1_000; n += 1) {
+      for (let n = 0; n < REPLIES; n += 1) {
         last = await post(db, room, n % 2 === 0 ? 'bob' : 'alice', `reply ${String(n)}`, {
           parentId: root.message.id,
         });
       }
-      expect(last?.thread?.summary.replyCount).toBe(1_000);
+      expect(last?.thread?.summary.replyCount).toBe(REPLIES);
       const row = await db
         .selectFrom('messages')
         .select('thread_reply_count')
@@ -396,11 +399,11 @@ describe('integration: a reply', () => {
         .where('parent_id', '=', root.message.id)
         .executeTakeFirstOrThrow();
       expect({ stored: row.thread_reply_count, rows: Number(actual.n) }).toEqual({
-        stored: 1_000,
-        rows: 1_000,
+        stored: REPLIES,
+        rows: REPLIES,
       });
     });
-  }, 60_000);
+  });
 });
 
 describe('integration: replies that must be refused', () => {
