@@ -311,6 +311,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/settings/pages/notifications.test.tsx'],
   },
   {
+    id: 'new-conversation-filter-ignores-turkish-letters',
+    why: 'typing `isik` finds nobody called Işık in the new conversation’s people list, as `ist` finds no İstanbul',
+    file: 'apps/web/src/features/chat/conversations/new-conversation.tsx',
+    find: 'fold(person.displayName).includes(wanted)',
+    replace: 'person.displayName.toLowerCase().includes(wanted)',
+    tests: ['apps/web/src/features/chat/conversations/new-conversation.test.tsx'],
+  },
+  {
     id: 'notification-browser-failed-notice-retained',
     why: 'a browser refusal leaves a failed notice retained by its tag',
     file: 'apps/web/src/features/push/notifier.ts',
@@ -1199,6 +1207,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     find: 'const at = after === -1 ? group.rows.length : after + 1;',
     replace: 'const at = after === -1 ? group.rows.length : after;',
     tests: ['apps/web/src/modules/registry.test.tsx'],
+  },
+  {
+    id: 'workspace-address-drops-turkish-letters',
+    why: 'the address suggested for `Çağrı Merkezi` is `a-r-merkezi`: its Turkish letters are dropped, not folded',
+    file: 'apps/web/src/features/shell/home.tsx',
+    find: "    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/ı/gu, 'i')\n",
+    replace: '    .toLowerCase()\n',
+    tests: ['apps/web/src/features/shell/home.test.ts'],
   },
   {
     id: 'workspace-deletion-offered-to-admins',

@@ -20,6 +20,7 @@ import {
   aUser,
   someChannels,
   NO_PROFILE,
+  WHEN,
 } from '../../../testing/fixtures';
 import { CONVERSATION_PEOPLE_MAX } from '@purlay/types';
 import { renderApp } from '../../../testing/render';
@@ -58,6 +59,8 @@ const open = async (api: Partial<Api> = {}, channels = someChannels()): Promise<
 
 const startNew = async (view: View): Promise<void> => {
   await person().click(view.getByRole('button', { name: 'New message' }));
+  // The dialog is a chunk of its own: on a cold start it takes longer than the fixed turns `settle` waits.
+  await view.findByRole('dialog');
   await settle();
 };
 
@@ -151,6 +154,33 @@ describe('New message', () => {
     expect(view.getByRole('button', { name: `Pick ${BOB.displayName}` })).toBeDefined();
     await person().type(view.getByLabelText('Find a person'), 'zzz');
     expect(view.getByText('Nobody by that name.')).toBeDefined();
+    view.unmount();
+  });
+
+  test('finds a person by the plain letters of a Turkish name, and by the Turkish ones', async () => {
+    const isik = {
+      ...aUser('isik', '00000000-0000-4000-8000-0000000000e9'),
+      displayName: 'Işık Çağlar',
+    };
+    const view = await open({
+      members: () =>
+        Promise.resolve(
+          [ME, ALICE, isik].map((user) => ({
+            user,
+            role: 'member' as const,
+            joinedAt: WHEN,
+            profile: NO_PROFILE,
+          })),
+        ),
+    });
+    await startNew(view);
+    for (const typed of ['cag', 'ışık', 'ISIK', 'çağ']) {
+      const field = view.getByLabelText('Find a person');
+      await person().clear(field);
+      await person().type(field, typed);
+      expect(view.getByRole('button', { name: `Pick ${isik.displayName}` })).toBeDefined();
+      expect(view.queryByRole('button', { name: `Pick ${ALICE.displayName}` })).toBeNull();
+    }
     view.unmount();
   });
 
