@@ -11,6 +11,7 @@ import {
   closeIntegrationDatabase,
   type Executor,
   DROP_HOOK_MS,
+  sql,
 } from '@purlay/db';
 import { hashPassword } from 'better-auth/crypto';
 import { signInAdmin } from '../modules/setup/admin';
@@ -290,6 +291,20 @@ describe('integration: bun run admin:reset-password', () => {
     expect(await signsIn(db, admin.email, OLD)).toBe(true);
     expect(await signsIn(db, admin.email, NEW)).toBe(false);
     expect(await sessionsOf(db, admin.userId)).toBe(2);
+  });
+
+  test('a failure of the change is told as what it was, never with the password, and changes nothing', async () => {
+    const { db, url } = await aDatabase();
+    const admin = await anAdministrator(db);
+    await aSession(db, systemClock, admin.userId);
+    await sql`drop table accounts cascade`.execute(db);
+    const ran = run(url, [admin.email], `${NEW}\n`);
+    expect(ran.code).toBe(1);
+    expect(ran.out).toBe('');
+    expect(ran.err).toContain('relation "accounts" does not exist');
+    expect(ran.err).toContain('Nothing was changed.');
+    expect(ran.err).not.toContain(NEW);
+    expect(await sessionsOf(db, admin.userId)).toBe(1);
   });
 
   test('without a database it refuses', () => {

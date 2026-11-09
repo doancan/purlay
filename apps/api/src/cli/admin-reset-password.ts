@@ -105,11 +105,10 @@ try {
     database,
     { email, password },
     systemClock,
-  ).catch(() => undefined);
-  if (outcome === undefined) {
-    fail(
-      'Could not change the password: the database did not answer as needed. Nothing was changed.',
-    );
+  ).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));
+  if (outcome instanceof Error) {
+    // The message only: a database error's detail can carry the row it refused, and a row holds the new hash.
+    fail(`Could not change the password: ${outcome.message}. Nothing was changed.`);
   } else if (outcome.ok) {
     process.stdout.write(`Password changed for ${outcome.email}\n`);
     if (outcome.twoFactorOff) process.stdout.write('Two-step verification is off for it now.\n');
