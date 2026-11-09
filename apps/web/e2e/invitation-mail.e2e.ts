@@ -284,13 +284,21 @@ test('an owner emails invitations from Settings and a newcomer joins through the
 
     // The same page can issue a separate link, and revoking it removes the one-time copy field.
     await page.setViewportSize({ width: 1440, height: 900 });
+    const revokes = main
+      .getByRole('region', { name: 'Links still open' })
+      .getByRole('button', { name: 'Revoke', exact: true });
+    const openBefore = await revokes.count();
     await main.getByRole('button', { name: 'Make a link', exact: true }).click();
     await expect(main.getByRole('textbox', { name: 'Invitation link' })).not.toHaveValue(link);
-    await main
-      .getByRole('region', { name: 'Links still open' })
-      .getByRole('button', { name: 'Revoke', exact: true })
-      .first()
-      .click();
+    // The copy field appears when the link is made; the list of open links is read again after that. A
+    // Revoke pressed in between would be an older link's, so wait until the new one is in the list. Which
+    // row is the new link's is not for the test to guess, so every open link is revoked, one at a time:
+    // the copy field must be gone with the last, whichever order the rows came in.
+    await expect(revokes).toHaveCount(openBefore + 1);
+    for (let left = openBefore + 1; left > 0; left -= 1) {
+      await revokes.first().click();
+      await expect(revokes).toHaveCount(left - 1);
+    }
     await expect(main.getByRole('textbox', { name: 'Invitation link' })).toHaveCount(0);
     await expect(main.getByRole('button', { name: 'Make a link' })).toBeVisible();
   } finally {
