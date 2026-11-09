@@ -25,6 +25,27 @@ describe('the module guide', () => {
     expect(paths.filter((path) => !existsSync(join(ROOT, path)))).toEqual([]);
   });
 
+  test('names only short paths that exist under a source root (`platform/ports/fact-publisher.ts`)', () => {
+    const ROOTS = [
+      'apps/api/src',
+      'apps/web/src',
+      'packages/db',
+      'packages/db/src',
+      'packages/types/src',
+    ];
+    const short = quoted.filter(
+      (token) =>
+        /^[a-z][\w.-]*(\/[\w.-]+)+\.(ts|tsx|sql|json|md|yml)$/.test(token) &&
+        !/^(apps|packages|scripts|docs|\.github)\//.test(token) &&
+        !token.includes('zz') &&
+        !token.includes(EXAMPLE_ID),
+    );
+    expect(short.length).toBeGreaterThan(1);
+    expect(
+      short.filter((path) => !ROOTS.some((root) => existsSync(join(ROOT, root, path)))),
+    ).toEqual([]);
+  });
+
   test('names only commands the root package has', () => {
     const scripts = (
       JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {

@@ -142,10 +142,23 @@ for f, s in docs.items():
         if m not in mig:
             problems['bilinmeyen migration'].append(f"{f}: {m}")
 
-for needle, owner in {'26214400': 'docs/SCHEMA.md', '5368709120': 'docs/SCHEMA.md'}.items():
-    homes = [f for f, s in docs.items() if needle in s]
-    if homes != [owner]:
-        problems['SSOT ihlali'].append(f"{needle}: {homes}")
+def is_changelog(f):
+    return f.startswith("docs/changelog/")
+
+# A figure of seven digits or more, written out (a size in bytes, a count of milliseconds), is a copy wherever it appears twice:
+# it lives in one document and the others say the thing in words. The documents that record what was true on their dates
+# are exempt, as they are from the version check below. A number the code owns is held against it by `stated-numbers.test.ts`
+# (a sentence) or written into the document by `bun run docs:sync` (a table), not by listing it here (`CONTRIBUTING.md` §6.1).
+figure_re = re.compile(r'(?<![\w.,/-])\d{7,}(?!\w)')
+figure_homes = collections.defaultdict(set)
+for f, s in docs.items():
+    if f == 'docs/DECISIONS.md' or is_changelog(f) or f.startswith(('docs/spikes/', 'docs/superpowers/')):
+        continue
+    for figure in figure_re.findall(s):
+        figure_homes[figure].add(f)
+for figure, homes in sorted(figure_homes.items()):
+    if len(homes) > 1:
+        problems['a figure is stated in more than one document'].append(f"{figure}: {sorted(homes)}")
 
 # A path a document names in backticks exists. A file that was renamed or deleted leaves a sentence that sends a reader
 # nowhere (the audit found `ingress/http/messages.ts` and `issues-budget.integration.test.ts` named long after they moved).
@@ -182,8 +195,6 @@ VERSION_OWNERS = {"docs/DECISIONS.md"}
 VERSION_OWNER_PREFIXES = ("docs/spikes/", "docs/changelog/")
 # Every file under docs/changelog/ is history — the changelog, the release notes of each version and what
 # was written before the first release — and is judged as history by the checks below that say so.
-def is_changelog(f):
-    return f.startswith("docs/changelog/")
 TECHNOLOGIES = ["PostgreSQL", "Bun", "React", "Vite", "Tailwind", "Kysely",
                 "TypeBox", "ElysiaJS", "Elysia", "TypeScript", "ESLint", "Prettier",
                 "Zustand", "Turborepo"]
