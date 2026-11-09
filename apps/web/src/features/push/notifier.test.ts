@@ -12,10 +12,11 @@ installDom();
 
 interface Shown {
   readonly title: string;
-  readonly options: NotificationOptions;
+  readonly options: NotificationOptions & { readonly renotify?: boolean };
   closed: boolean;
   onclick: (() => void) | null;
   onclose: (() => void) | null;
+  onerror: (() => void) | null;
 }
 
 interface Browser {
@@ -63,7 +64,7 @@ const aBrowser = (permission: NotificationPermission = 'default'): Browser => {
     readonly record: Shown;
     constructor(title: string, options: NotificationOptions) {
       if (browser.refuses !== undefined) throw browser.refuses;
-      this.record = { title, options, closed: false, onclick: null, onclose: null };
+      this.record = { title, options, closed: false, onclick: null, onclose: null, onerror: null };
       browser.shown.push(this.record);
     }
     set onclick(handler: () => void) {
@@ -71,6 +72,9 @@ const aBrowser = (permission: NotificationPermission = 'default'): Browser => {
     }
     set onclose(handler: () => void) {
       this.record.onclose = handler;
+    }
+    set onerror(handler: () => void) {
+      this.record.onerror = handler;
     }
     close(): void {
       this.record.closed = true;
@@ -154,7 +158,38 @@ describe('notices from an open page', () => {
       tag: 'conversation-1',
       icon: '/favicon.svg',
       lang: 'tr',
+      renotify: true,
     });
+  });
+
+  test('successive requests keep their conversation tag and ask to alert again', () => {
+    const browser = aBrowser('granted');
+    document.documentElement.lang = 'tr';
+    const notifier = notifierOf();
+    notifier.show(aNotice());
+    notifier.show(aNotice({ body: 'another message' }));
+    expect(browser.shown.map(({ options }) => options)).toEqual([
+      {
+        body: 'Lunch at noon?',
+        tag: 'conversation-1',
+        icon: '/favicon.svg',
+        lang: 'tr',
+        renotify: true,
+      },
+      {
+        body: 'another message',
+        tag: 'conversation-1',
+        icon: '/favicon.svg',
+        lang: 'tr',
+        renotify: true,
+      },
+    ]);
+  });
+
+  test('an untagged notice does not ask for invalid renotification', () => {
+    const browser = aBrowser('granted');
+    expect(notifierOf().show(aNotice({ tag: '' }))).toBe(true);
+    expect(browser.shown[0]?.options).toMatchObject({ tag: '', renotify: false });
   });
 
   test('a click brings the page to the front, opens what it is about, and goes away', () => {
@@ -220,6 +255,44 @@ describe('notices from an open page', () => {
     browser.refuses = new TypeError('Illegal constructor');
     expect(notifierOf().show(aNotice())).toBe(false);
     expect(browser.shown).toHaveLength(0);
+  });
+
+  test('a later browser refusal is reported and its failed notice is forgotten', () => {
+    const browser = aBrowser('granted');
+    const notifier = notifierOf();
+    let refused = 0;
+    expect(
+      notifier.show(
+        aNotice({
+          onError: () => {
+            refused += 1;
+          },
+        }),
+      ),
+    ).toBe(true);
+    browser.shown[0]?.onerror?.();
+    expect(refused).toBe(1);
+    notifier.close('conversation-1');
+    expect(browser.shown[0]?.closed).toBe(false);
+  });
+
+  test('an older refusal cannot forget the newer notice with its tag', () => {
+    const browser = aBrowser('granted');
+    const notifier = notifierOf();
+    notifier.show(aNotice());
+    notifier.show(aNotice({ body: 'newer' }));
+    browser.shown[0]?.onerror?.();
+    notifier.close('conversation-1');
+    expect(browser.shown[1]?.closed).toBe(true);
+  });
+
+  test('a later refusal without a listener still forgets the failed notice', () => {
+    const browser = aBrowser('granted');
+    const notifier = notifierOf();
+    notifier.show(aNotice());
+    browser.shown[0]?.onerror?.();
+    notifier.close('conversation-1');
+    expect(browser.shown[0]?.closed).toBe(false);
   });
 
   test('any other failure to show is not hidden', () => {

@@ -320,6 +320,14 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/data/sidebar-writes.test.ts'],
   },
   {
+    id: 'push-worker-replacement-stays-silent',
+    why: 'a new push silently replaces its conversation notice without requesting another alert',
+    file: 'apps/web/worker/notice.ts',
+    find: '  renotify: true,',
+    replace: '  renotify: false,',
+    tests: ['apps/web/worker/notice.test.ts'],
+  },
+  {
     id: 'refused-edit-stays-on-screen',
     why: 'words the server refused stay on screen as though they were saved',
     file: 'apps/web/src/data/actions.ts',

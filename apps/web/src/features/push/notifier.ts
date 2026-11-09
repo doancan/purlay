@@ -14,6 +14,8 @@ export interface Notice {
   readonly tag: string;
   /** The person clicked it: the page is brought to the front first. */
   readonly onOpen: () => void;
+  /** The constructor accepted the request, but the browser later refused to show it. */
+  readonly onError?: () => void;
 }
 
 export interface Notifier {
@@ -43,16 +45,19 @@ export const browserNotifier = (): Notifier | null => {
       Notification.permission === 'default'
         ? await Notification.requestPermission()
         : Notification.permission,
-    show: ({ title, body, tag, onOpen }): boolean => {
+    show: ({ title, body, tag, onOpen, onError }): boolean => {
       if (Notification.permission !== 'granted') return false;
       let notice: Notification;
       try {
-        notice = new Notification(title, {
+        // The standard's optional preference is not in the shared DOM baseline; unsupported browsers ignore it.
+        const options: NotificationOptions & { readonly renotify: boolean } = {
           body,
           tag,
           icon: ICON,
           lang: document.documentElement.lang,
-        });
+          renotify: tag !== '',
+        };
+        notice = new Notification(title, options);
       } catch (refused) {
         // Chrome on Android: "Illegal constructor", only a worker may. Anything else is not expected.
         if (refused instanceof TypeError) return false;
@@ -66,6 +71,10 @@ export const browserNotifier = (): Notifier | null => {
       };
       notice.onclose = (): void => {
         if (shown.get(tag) === notice) shown.delete(tag);
+      };
+      notice.onerror = (): void => {
+        if (shown.get(tag) === notice) shown.delete(tag);
+        onError?.();
       };
       return true;
     },

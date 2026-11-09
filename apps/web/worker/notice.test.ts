@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { PushOpenMessage, PushPayload } from '@purlay/types';
-import { PLAIN_NOTICE, noticeOf, openMessage, pathOf, tabFor } from './notice';
+import { PLAIN_NOTICE, noticeOf, openMessage, optionsOf, pathOf, tabFor } from './notice';
 
 const ORIGIN = 'https://chat.example.com';
 
@@ -17,6 +17,20 @@ const sent: PushPayload = {
 };
 
 describe('a push becomes a notice', () => {
+  test('successive notices keep one conversation tag while requesting another alert', () => {
+    const first = optionsOf(sent);
+    const second = optionsOf({ ...sent, body: 'another direct message' });
+    expect(first).toEqual({
+      body: sent.body,
+      tag: sent.tag,
+      icon: '/favicon.svg',
+      renotify: true,
+      data: { url: sent.url },
+    });
+    expect(second).toMatchObject({ tag: sent.tag, renotify: true, body: 'another direct message' });
+    const fallback = optionsOf(noticeOf(JSON.stringify({ ...sent, tag: '' }), ORIGIN));
+    expect(fallback).toMatchObject({ tag: 'purlay', renotify: true });
+  });
   test('what the server sent is shown as it was sent', () => {
     const notice = noticeOf(JSON.stringify(sent), ORIGIN);
     expect(notice).toEqual(sent);

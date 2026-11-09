@@ -21,12 +21,17 @@ interface Recorded {
   readonly title: string;
   readonly body: string;
   readonly tag: string;
+  readonly renotify: boolean;
 }
 
 declare global {
   interface Window {
     /** What the page asked the browser to show, in order. */
-    shownNotices?: (Recorded & { closed: boolean; readonly open: () => void })[];
+    shownNotices?: (Recorded & {
+      closed: boolean;
+      readonly open: () => void;
+      readonly refuse: () => void;
+    })[];
     /** The person is in another window. */
     elsewhere?: boolean;
   }
@@ -50,14 +55,17 @@ const recordNotices = async (page: Page, owner: string | null = null): Promise<v
       }
       onclick: (() => void) | null = null;
       onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
       readonly record: NonNullable<Window['shownNotices']>[number];
       constructor(title: string, options: NotificationOptions = {}) {
         this.record = {
           title,
           body: options.body ?? '',
           tag: options.tag ?? '',
+          renotify: Reflect.get(options, 'renotify') === true,
           closed: false,
           open: (): void => this.onclick?.(),
+          refuse: (): void => this.onerror?.(),
         };
         window.shownNotices?.push(this.record);
       }
@@ -90,6 +98,76 @@ test.describe('a tab in the background', () => {
     () => test.info().project.name !== 'chromium-dark',
     'a notice and an icon look the same in every theme and width',
   );
+
+  test('device tests request fresh alerts and report only the current browser refusal', async ({
+    newcomer,
+  }) => {
+    const viewer = await newcomer('device-test-viewer');
+    const workspace = await workspaceFor(viewer);
+    const page = await viewer.page();
+    await recordNotices(page, viewer.userId);
+    await page.goto(`/w/${workspace.slug}/settings/notifications`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Notifications' })).toBeVisible();
+    const card = page.getByRole('region', { name: 'Notifications on this device' });
+    const button = card.getByRole('button', { name: 'Test notification' });
+    await expect(button).toBeEnabled();
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => window.shownNotices?.length)).toBe(1);
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => window.shownNotices?.length)).toBe(2);
+    const records = await page.evaluate(() =>
+      window.shownNotices?.map(({ tag, closed }) => ({ tag, closed })),
+    );
+    expect(new Set(records?.map(({ tag }) => tag)).size).toBe(2);
+    expect(records?.map(({ closed }) => closed)).toEqual([true, false]);
+    await page.evaluate(() => window.shownNotices?.[0]?.refuse());
+    await expect(
+      page.getByText(/^Your browser could not show the test notification\./),
+    ).toBeHidden();
+    await expect(page.getByText(/^Test notification requested\./)).toHaveCount(1);
+    await page.evaluate(() => window.shownNotices?.[1]?.refuse());
+    await expect(
+      page.getByText(/^Your browser could not show the test notification\./),
+    ).toBeVisible();
+    await expect(page.getByText(/^Test notification requested\./)).toBeHidden();
+  });
+
+  test('every ordinary DM requests an alert while away, including the first message from a person', async ({
+    newcomer,
+  }) => {
+    const viewer = await newcomer('dm-alert-viewer');
+    const writer = await newcomer('dm-alert-writer');
+    const workspace = await workspaceFor(viewer, writer);
+    const page = await viewer.page();
+    await recordNotices(page, viewer.userId);
+    const subscribed = socketSubscribed(page);
+    await page.goto(`/w/${workspace.slug}/inbox`);
+    await shellReady(page);
+    await subscribed;
+    await page.evaluate(() => {
+      window.elsewhere = true;
+      window.dispatchEvent(new Event('blur'));
+    });
+    const dm = await writer.api.post<Channel>(`/api/workspaces/${workspace.id}/dms`, {
+      userId: viewer.userId,
+    });
+    const notices = (): Promise<Recorded[]> =>
+      page.evaluate(
+        (tag) =>
+          (window.shownNotices ?? [])
+            .filter((notice) => notice.tag === tag)
+            .map(({ title, body, tag, renotify }) => ({ title, body, tag, renotify })),
+        `purlay:c:${dm.id}`,
+      );
+    for (const [index, content] of ['First private message', 'Second private message'].entries()) {
+      await writer.api.say(dm.id, content);
+      await expect.poll(notices).toHaveLength(index + 1);
+      const latest = (await notices()).at(-1);
+      expect(latest?.renotify).toBe(true);
+      expect(latest?.body).not.toContain(content);
+    }
+  });
 
   test('is told of a mention, with a dot on its icon, and the notice opens the conversation', async ({
     page,
@@ -135,7 +213,12 @@ test.describe('a tab in the background', () => {
 
     const told = (): Promise<Recorded[]> =>
       page.evaluate(() =>
-        (window.shownNotices ?? []).map(({ title, body, tag }) => ({ title, body, tag })),
+        (window.shownNotices ?? []).map(({ title, body, tag, renotify }) => ({
+          title,
+          body,
+          tag,
+          renotify,
+        })),
       );
     // Other specs mention this person too, in rooms of their own: this room's notice is the one.
     await expect
@@ -144,6 +227,7 @@ test.describe('a tab in the background', () => {
         title: `#${there.name}`,
         body: 'Carol Reyes mentioned you',
         tag: `purlay:c:${there.id}`,
+        renotify: true,
       });
     await expect
       .poll(() =>

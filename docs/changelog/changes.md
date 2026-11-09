@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **Notifications** — New background messages request another alert when replacing their conversation notice; repeated device tests request a fresh alert and report later browser refusal (D-126, D-148)
 
 ---

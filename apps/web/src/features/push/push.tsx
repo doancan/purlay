@@ -75,6 +75,11 @@ interface Notifications {
   readonly notifier: Notifier | null;
 }
 
+interface DeviceTest {
+  readonly tag: string;
+  toast: number | null;
+}
+
 const PushContext = createContext<Notifications>({ controls: null, notifier: null });
 
 /** The switch, or `null` where none is offered: nothing in this browser can tell the person. */
@@ -112,7 +117,7 @@ export const PushProvider = ({
   const api = useApi();
   const { t, locale } = useI18n();
   const storage = useClientStorage();
-  const { show } = useToast();
+  const { show, dismiss } = useToast();
   const describe = useDescribeFailure();
   const { navigate } = useRoute();
   const port = useContext(PushDeviceContext);
@@ -136,6 +141,18 @@ export const PushProvider = ({
   const [status, setStatus] = useState<PushStatus | null>(null);
   // The language the server last heard from this page, so a change is sent once.
   const told = useRef<PushLocale | null>(null);
+  const deviceTest = useRef<DeviceTest | null>(null);
+
+  useEffect(() => {
+    return (): void => {
+      const previous = deviceTest.current;
+      deviceTest.current = null;
+      if (previous !== null) {
+        notifier?.close(previous.tag);
+        if (previous.toast !== null) dismiss(previous.toast);
+      }
+    };
+  }, [notifier, status, userId, dismiss]);
 
   const failed = useCallback(
     (error: unknown): void => {
@@ -275,17 +292,36 @@ export const PushProvider = ({
       return;
     }
     try {
+      const previous = deviceTest.current;
+      // A deliberate test is a fresh alert, rather than a silent update of an existing notice.
+      const current: DeviceTest = { tag: `purlay:test:${crypto.randomUUID()}`, toast: null };
+      deviceTest.current = current;
+      if (previous !== null) {
+        notifier.close(previous.tag);
+        if (previous.toast !== null) dismiss(previous.toast);
+      }
       const accepted = notifier.show({
         title: t('push.testTitle'),
         body: t('push.testBody'),
-        tag: 'purlay:test',
+        tag: current.tag,
         onOpen: (): void => undefined,
+        onError: (): void => {
+          if (deviceTest.current !== current) return;
+          deviceTest.current = null;
+          if (current.toast !== null) dismiss(current.toast);
+          show({ message: t('push.testFailed') });
+        },
       });
-      show({ message: t(accepted ? 'push.testRequested' : 'push.testFailed') });
+      if (accepted) current.toast = show({ message: t('push.testRequested') });
+      else {
+        deviceTest.current = null;
+        show({ message: t('push.testFailed') });
+      }
     } catch {
+      deviceTest.current = null;
       show({ message: t('push.testFailed') });
     }
-  }, [notifier, status, storage, show, t]);
+  }, [notifier, status, storage, show, dismiss, t]);
 
   const value = useMemo(
     () => ({

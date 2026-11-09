@@ -49,6 +49,17 @@ export const noticeOf = (text: string | null, origin: string): PushPayload => {
   };
 };
 
+/** A parsed notice keeps its conversation tag, but each new push requests another alert. */
+export const optionsOf = (
+  notice: PushPayload,
+): NotificationOptions & { readonly renotify: true } => ({
+  body: notice.body,
+  tag: notice.tag,
+  icon: '/favicon.svg',
+  renotify: true,
+  data: { url: notice.url },
+});
+
 /** A tab of this site, as the worker sees it. */
 export interface OpenTab {
   readonly focused: boolean;

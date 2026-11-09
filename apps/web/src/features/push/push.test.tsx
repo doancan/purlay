@@ -656,8 +656,8 @@ describe('one switch over the open tab and the closed one (D-148)', () => {
     expect(shown[0]).toMatchObject({
       title: 'Purlay notifications',
       body: 'This is a test notification from Purlay.',
-      tag: 'purlay:test',
     });
+    expect(shown[0]?.tag).toMatch(/^purlay:test:/);
     shown[0]?.onOpen();
     expect(page.asked()).toBe(0);
     expect(view.getByText(/^Test notification requested\./)).toBeDefined();
@@ -669,6 +669,128 @@ describe('one switch over the open tab and the closed one (D-148)', () => {
     const view = await openWith(aSignedInApi(), null, aNotifier('default').notifier);
     expect(card(view).queryByRole('button', { name: 'Test notification' })).toBeNull();
     view.unmount();
+  });
+
+  test('each explicit test requests a fresh alert and retires its predecessor', async () => {
+    const shown: Notice[] = [];
+    const closed: string[] = [];
+    const view = await openWith(
+      aSignedInApi(),
+      null,
+      {
+        ...aNotifier('granted').notifier,
+        show: (notice) => {
+          shown.push(notice);
+          return true;
+        },
+        close: (tag) => {
+          closed.push(tag);
+        },
+      },
+      IDS.me,
+    );
+    const keyboard = person();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await keyboard.click(card(view).getByRole('button', { name: 'Test notification' }));
+    }
+    expect(new Set(shown.map((notice) => notice.tag)).size).toBe(5);
+    expect(closed).toEqual(shown.slice(0, -1).map((notice) => notice.tag));
+    expect(view.getAllByText(/^Test notification requested\./)).toHaveLength(1);
+    view.unmount();
+    expect(closed).toEqual(shown.map((notice) => notice.tag));
+  });
+
+  test('an asynchronous test refusal replaces the requested message with a failure', async () => {
+    const shown: Notice[] = [];
+    const view = await openWith(
+      aSignedInApi(),
+      null,
+      {
+        ...aNotifier('granted').notifier,
+        show: (notice) => {
+          shown.push(notice);
+          return true;
+        },
+      },
+      IDS.me,
+    );
+    await person().click(card(view).getByRole('button', { name: 'Test notification' }));
+    act(() => {
+      shown[0]?.onError?.();
+    });
+    expect(view.getByText(/^Your browser could not show the test notification\./)).toBeDefined();
+    expect(view.queryByText(/^Test notification requested\./)).toBeNull();
+    // A browser failure is terminal for this request, even if it reports it twice.
+    act(() => {
+      shown[0]?.onError?.();
+    });
+    expect(view.getAllByText(/^Your browser could not show the test notification\./)).toHaveLength(
+      1,
+    );
+    view.unmount();
+  });
+
+  test('a superseded test cannot report a late failure for its replacement', async () => {
+    const shown: Notice[] = [];
+    const view = await openWith(
+      aSignedInApi(),
+      null,
+      {
+        ...aNotifier('granted').notifier,
+        show: (notice) => {
+          shown.push(notice);
+          return true;
+        },
+      },
+      IDS.me,
+    );
+    const keyboard = person();
+    await keyboard.click(card(view).getByRole('button', { name: 'Test notification' }));
+    await keyboard.click(card(view).getByRole('button', { name: 'Test notification' }));
+    act(() => {
+      shown[0]?.onError?.();
+    });
+    expect(view.queryByText(/^Your browser could not show the test notification\./)).toBeNull();
+    expect(view.getAllByText(/^Test notification requested\./)).toHaveLength(1);
+    act(() => {
+      shown[1]?.onError?.();
+    });
+    expect(view.getByText(/^Your browser could not show the test notification\./)).toBeDefined();
+    view.unmount();
+  });
+
+  test('turning off or unmounting retires the test and ignores its late failure', async () => {
+    for (const stop of ['off', 'unmount'] as const) {
+      const shown: Notice[] = [];
+      const closed: string[] = [];
+      const view = await openWith(
+        aSignedInApi(),
+        null,
+        {
+          ...aNotifier('granted').notifier,
+          show: (notice) => {
+            shown.push(notice);
+            return true;
+          },
+          close: (tag) => {
+            closed.push(tag);
+          },
+        },
+        IDS.me,
+      );
+      const keyboard = person();
+      await keyboard.click(card(view).getByRole('button', { name: 'Test notification' }));
+      if (stop === 'off') {
+        await keyboard.click(card(view).getByRole('button', { name: 'Turn off' }));
+        await settle();
+      } else view.unmount();
+      expect(closed).toEqual(shown.map((notice) => notice.tag));
+      act(() => {
+        shown[0]?.onError?.();
+      });
+      expect(view.queryByText(/^Your browser could not show the test notification\./)).toBeNull();
+      if (stop === 'off') view.unmount();
+    }
   });
 
   test('a browser refusing the test says so, as does an unexpected notification failure', async () => {
