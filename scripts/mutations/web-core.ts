@@ -411,8 +411,8 @@ export const WEB_CORE: readonly Mutation[] = [
   {
     id: 'upload-progress-never-told',
     why: 'a 25 MiB upload on a slow link says Uploading… for minutes and nothing more',
-    file: 'apps/web/src/data/api.ts',
-    find: '                onProgress(total === 0 ? 1 : sent / total);\n',
+    file: 'apps/web/src/data/endpoints/messages.ts',
+    find: '              onProgress(total === 0 ? 1 : sent / total);\n',
     replace: '',
     tests: ['apps/web/src/data/api.test.ts'],
   },

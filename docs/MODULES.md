@@ -912,7 +912,7 @@ the removal threshold, the behaviour, the hot path of `HOT_PATHS`, and the web f
   place that is not the module's own, or a manifest the registry does not list.
 - **Gating by `useRuns`** (or `WhenRun`) stays for what a manifest does not describe: a sidebar section, a request that
   would otherwise be answered with `404`.
-- Still per module: the icon (`components/icon.tsx`), the client (`data/api.ts`, `data/keys.ts`), the failure words for
+- Still per module: the icon (`components/icon.tsx`), the client (`data/api.ts` and the domain files in `data/endpoints/`, `data/keys.ts`), the failure words for
   its error codes (`data/failure.ts`, and the exhaustive switch in `features/chat/composer/uploads.tsx`), and the English and Turkish
   catalogues (`i18n/catalogue/en.ts`, `tr.ts`).
 - **`budget:web` shape check**: it reads the module ids from `features/*/manifest.ts` and looks for each one's marker,
