@@ -99,6 +99,22 @@ export const API_MODULES_ENTITLEMENTS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/entitlements/edition.test.ts'],
   },
   {
+    id: 'entitlement-queued-push-ignores-message-refusal',
+    why: 'a granted module sends a queued push even though its own message reader refused current access',
+    file: 'apps/api/src/modules/entitlements/hooks.ts',
+    find: '    if (!(await notices.canDeliver(executor, messageId, userId))) return false;\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
+  },
+  {
+    id: 'entitlement-queued-push-ignores-withdrawn-grant',
+    why: 'a queued push is delivered after its workspace loses the module grant',
+    file: 'apps/api/src/modules/entitlements/hooks.ts',
+    find: '      if ((await modulesOf(executor, notice.workspaceId, effective)).has(module)) return true;',
+    replace: '      return true;',
+    tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
+  },
+  {
     id: 'entitlement-restriction-allowed-while-a-peer-is-behind',
     why: 'withdrawing a module is allowed whatever the cluster reads (D-292)',
     file: 'apps/api/src/modules/entitlements/peers.ts',

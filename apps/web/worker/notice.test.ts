@@ -58,6 +58,16 @@ describe('a click goes to a path of this site, and nowhere else', () => {
     expect(noticeOf(JSON.stringify({ ...sent, url: given }), ORIGIN).url).toBe(opened);
   });
 
+  test('a thread target survives the shown notice and the message sent to a tab', () => {
+    const url =
+      '/w/acme/c/01911111-1111-7111-8111-111111111111?thread=01922222-2222-7222-8222-222222222222';
+    const notice = noticeOf(JSON.stringify({ ...sent, url }), ORIGIN);
+    expect(Value.Check(PushPayload, notice)).toBe(true);
+    const opened = openMessage(pathOf(notice.url, ORIGIN));
+    expect(opened).toEqual({ kind: 'push-open', url });
+    expect(Value.Check(PushOpenMessage, opened)).toBe(true);
+  });
+
   test('the contract refuses what the worker would not open', () => {
     for (const url of ['//evil.example/x', '/\\evil.example/x', '/\t/evil.example/x', '/\n/x']) {
       expect({ url, accepted: Value.Check(PushPayload, { ...sent, url }) }).toEqual({

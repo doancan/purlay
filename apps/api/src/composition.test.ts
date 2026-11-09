@@ -206,7 +206,10 @@ describe('the application as its modules make it', () => {
   });
 
   describe('the push notices', () => {
-    const notices: PushNotices = { of: () => Promise.resolve([]) };
+    const notices: PushNotices = {
+      of: () => Promise.resolve([]),
+      canDeliver: () => Promise.resolve(false),
+    };
     const noticing: BundledModule = {
       manifest: {
         id: 'noticing',

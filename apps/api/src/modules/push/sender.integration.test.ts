@@ -203,6 +203,11 @@ describe('integration: a device is told', () => {
       service.sent.length = 0;
       await say(room, 'alice', 'or me', undefined, root);
       await settled();
+      for (const push of service.sent) {
+        const device = push.url.endsWith('/bob') ? bob : carol;
+        const payload = (await device.read(push.body)) as { url: string };
+        expect(new URL(payload.url, 'https://purlay.test').searchParams.get('thread')).toBe(root);
+      }
       const bodies = new Map<string, unknown>();
       for (const push of service.sent) {
         const device = push.url.endsWith('/bob') ? bob : carol;
@@ -679,6 +684,261 @@ describe('integration: what the push service answers', () => {
       expect(
         await db.selectFrom('push_subscriptions').select('id').where('id', '=', id).execute(),
       ).toEqual([]);
+    });
+  });
+});
+
+describe('integration: queued notification authority', () => {
+  test.each([
+    'private access',
+    'workspace access',
+    'message read',
+    'message deleted',
+    'message hidden',
+    'channel muted',
+    'mentions only',
+    'all messages unchanged',
+    'Deep Work',
+    'quiet hours',
+    'active page',
+    'account suspended',
+    'account deleted',
+    'workspace deleted',
+    'channel deleted',
+    'reason no longer pushed',
+    'suppressed',
+    'unchanged',
+  ] as const)('rechecks %s while a device waits', async (change) => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { type: 'private' });
+      const heard = inMemoryAttention(clock);
+      const browser = await aBrowser();
+      for (const number of [1, 2, 3]) {
+        await subscribeDevice(db, room, 'bob', browser, {
+          endpoint: `https://audit-push.example.com/device/${String(number)}`,
+        });
+      }
+      const posted: string[] = [];
+      const held: (() => void)[] = [];
+      let released = false;
+      const post: PushPost = (url) => {
+        posted.push(url.pathname);
+        if (released) return Promise.resolve({ kind: 'answered', status: 201 });
+        return new Promise((resolve) => {
+          held.push(() => {
+            resolve({ kind: 'answered', status: 201 });
+          });
+        });
+      };
+      const { say, settled } = await sending(db, post, aRecordingLogger(), heard);
+      const everyMessage = change === 'mentions only' || change === 'all messages unchanged';
+      if (everyMessage) {
+        await db
+          .updateTable('channel_members')
+          .set({ notification_level: 'all' })
+          .where('channel_id', '=', room.channelId)
+          .where('user_id', '=', room.members['bob']?.userId ?? '')
+          .execute();
+      }
+      const id = await say(
+        room,
+        'alice',
+        everyMessage ? 'a channel update' : `${mention(room, 'bob')} a private message`,
+      );
+      try {
+        for (let turn = 0; turn < 100 && posted.length < 2; turn += 1) await Bun.sleep(10);
+        expect(posted).toHaveLength(2);
+        const bob = room.members['bob'];
+        if (bob === undefined) throw new Error('audit recipient is missing');
+        if (change === 'private access') {
+          await db
+            .deleteFrom('channel_members')
+            .where('channel_id', '=', room.channelId)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'workspace access') {
+          await db
+            .deleteFrom('workspace_members')
+            .where('workspace_id', '=', room.workspaceId)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'message read') {
+          await db
+            .updateTable('notifications')
+            .set({ read_at: NOW })
+            .where('message_id', '=', id)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'message deleted') {
+          await db.updateTable('messages').set({ deleted_at: NOW }).where('id', '=', id).execute();
+        } else if (change === 'message hidden') {
+          await db
+            .insertInto('hidden_messages')
+            .values({
+              user_id: bob.userId,
+              workspace_id: room.workspaceId,
+              channel_id: room.channelId,
+              message_id: id,
+              hidden_at: NOW,
+            })
+            .execute();
+        } else if (change === 'channel muted') {
+          await db
+            .updateTable('channel_members')
+            .set({ notification_level: 'none' })
+            .where('channel_id', '=', room.channelId)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'mentions only') {
+          await db
+            .updateTable('channel_members')
+            .set({ notification_level: 'mentions' })
+            .where('channel_id', '=', room.channelId)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'Deep Work') {
+          await db
+            .updateTable('workspace_members')
+            .set({ is_deep_work_active: true, deep_work_until: new Date(NOW.getTime() + 3600000) })
+            .where('workspace_id', '=', room.workspaceId)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'quiet hours') {
+          await db
+            .updateTable('users')
+            .set({ time_zone: 'UTC', quiet_from: 0, quiet_to: 1439, quiet_days: 127 })
+            .where('id', '=', bob.userId)
+            .execute();
+        } else if (change === 'active page') {
+          heard.heard(bob.userId, room.workspaceId);
+        } else if (change === 'account suspended') {
+          await db
+            .updateTable('users')
+            .set({ suspended_at: NOW })
+            .where('id', '=', bob.userId)
+            .execute();
+        } else if (change === 'account deleted') {
+          await db
+            .updateTable('users')
+            .set({ deleted_at: NOW })
+            .where('id', '=', bob.userId)
+            .execute();
+        } else if (change === 'workspace deleted') {
+          await db
+            .updateTable('workspaces')
+            .set({ deleted_at: NOW })
+            .where('id', '=', room.workspaceId)
+            .execute();
+        } else if (change === 'channel deleted') {
+          await db
+            .updateTable('channels')
+            .set({ deleted_at: NOW })
+            .where('id', '=', room.channelId)
+            .execute();
+        } else if (change === 'reason no longer pushed') {
+          await db
+            .updateTable('notifications')
+            .set({ type: 'thread_resolved' })
+            .where('message_id', '=', id)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        } else if (change === 'suppressed') {
+          await db
+            .updateTable('notifications')
+            .set({ suppressed_by_deep_work: true })
+            .where('message_id', '=', id)
+            .where('user_id', '=', bob.userId)
+            .execute();
+        }
+        released = true;
+        for (const release of held) release();
+        await settled();
+        // The third device was still waiting when authority was revoked.
+        expect(posted).toHaveLength(
+          change === 'unchanged' || change === 'all messages unchanged' ? 3 : 2,
+        );
+      } finally {
+        released = true;
+        for (const release of held) release();
+        await settled();
+      }
+    });
+  });
+});
+
+describe('integration: the initial push lookup omits notices no longer owed', () => {
+  test.each(['read', 'suppressed'] as const)(
+    'does not route a notice already %s',
+    async (change) => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob']);
+        const recipient = room.members['bob']?.userId ?? '';
+        const { say, settled } = await sending(db, aPushService().post);
+        const id = await say(room, 'alice', `${mention(room, 'bob')} ping`);
+        await settled();
+        expect(await chatPushNotices.of(db, id, [recipient])).toHaveLength(1);
+        await db
+          .updateTable('notifications')
+          .set(change === 'read' ? { read_at: NOW } : { suppressed_by_deep_work: true })
+          .where('message_id', '=', id)
+          .where('user_id', '=', recipient)
+          .execute();
+        expect(await chatPushNotices.of(db, id, [recipient])).toEqual([]);
+      });
+    },
+  );
+});
+
+describe('integration: push destinations agree with the message location', () => {
+  test.each([
+    'reply mention',
+    'reply reminder',
+    'top-level mention',
+    'top-level reminder',
+    'root thread reply',
+  ] as const)('%s opens its own destination', async (kind) => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const recipient = room.members['bob']?.userId ?? '';
+      const { say, settled } = await sending(db, aPushService().post);
+      const root = await say(room, 'alice', `${mention(room, 'bob')} a question`);
+      const id = kind.startsWith('reply')
+        ? await say(room, 'alice', `${mention(room, 'bob')} an answer`, undefined, root)
+        : root;
+      await settled();
+      if (kind.includes('reminder') || kind === 'root thread reply') {
+        await db
+          .updateTable('notifications')
+          .set({ type: kind === 'root thread reply' ? 'thread_reply' : 'reminder' })
+          .where('message_id', '=', id)
+          .where('user_id', '=', recipient)
+          .execute();
+      }
+      const browser = await aBrowser();
+      await subscribeDevice(db, room, 'bob', browser);
+      const service = aPushService();
+      const sender = await createPushSender({
+        database: db,
+        clock,
+        log: aRecordingLogger().log,
+        keys: KEYS,
+        attention,
+        notices: chatPushNotices,
+        noticeWords: noNoticeWords,
+        noticeThrottle: aNoticeThrottle(clock),
+        post: service.post,
+      });
+      sender.told(id, [recipient]);
+      await sender.flush(10_000);
+      expect(service.sent).toHaveLength(1);
+      const payload = (await browser.read(service.sent[0]?.body ?? new Uint8Array())) as {
+        url: string;
+      };
+      const target = new URL(payload.url, 'https://purlay.test');
+      expect(target.pathname.endsWith(`/c/${room.channelId}`)).toBe(true);
+      expect(target.searchParams.get('thread')).toBe(
+        kind.startsWith('reply') || kind === 'root thread reply' ? root : null,
+      );
     });
   });
 });

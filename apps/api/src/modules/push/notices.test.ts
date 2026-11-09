@@ -7,6 +7,9 @@ describe('the notices of a process that runs no chat', () => {
     expect(
       await noPushNotices.of(aDatabaseThatMustNotBeTouched(), 'a-message', ['a-person']),
     ).toEqual([]);
+    expect(
+      await noPushNotices.canDeliver(aDatabaseThatMustNotBeTouched(), 'a-message', 'a-person'),
+    ).toBe(false);
   });
 });
 
