@@ -665,6 +665,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/module-cells.test.ts'],
   },
   {
+    id: 'module-needs-reads-a-file-again',
+    why: 'the reader of what a suite needs reads every file of its import tree again for every suite and every cell, which took seconds and timed out the tests that use it',
+    file: 'apps/api/src/testing/module-needs.ts',
+    find: '    const known = texts.get(file);\n    if (known !== undefined) return known;\n',
+    replace: '',
+    tests: ['apps/api/src/testing/module-needs.test.ts'],
+  },
+  {
     id: 'module-new-help-not-recognised',
     why: '`module:new --help` answers `unknown flag --help` (D-294)',
     file: 'apps/api/src/testing/module-new.ts',
