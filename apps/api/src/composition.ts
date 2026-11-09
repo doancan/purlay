@@ -38,6 +38,7 @@ import type { KindOwners } from './modules/inbox/sink';
 import type { FactConsumers } from './platform/fact-consumers';
 import { outboxConsumerWorkers } from './modules/workers/outbox-consumer';
 import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
+import { modulePorts, type PortsFor } from './platform/ports/module-ports';
 import type { FrameHandlers } from './platform/frame-handlers';
 import type { RouterFrameContext } from './realtime/router';
 import { hookList } from './platform/hooks';
@@ -317,6 +318,11 @@ export interface Composition {
   readonly findSourcesOff: readonly string[];
   /** The implementation of each capability the modules this process runs provide; one whose module is off is not a key, so a read of it is `undefined`. */
   readonly ports: Readonly<Record<string, object>>;
+  /**
+   * A module's view of the ports it `uses`, for one workspace at a time and bound to the database of whoever asks: the routes, the
+   * workers and the fact consumers of the module are each handed one (D-283 §3). A module this build does not carry uses none.
+   */
+  readonly portsFor: PortsFor;
   /** What a workspace with no grant of its own is given (D-289): the server's `WORKSPACE_MODULES`. */
   readonly entitlementMode: EntitlementMode;
   /** The modules a workspace may use, from the grants read for it: the modules this process runs less those it is not granted (D-289). */
@@ -426,6 +432,23 @@ export const compose = (
             : module.readAttachment,
         ],
   );
+  // A port of a module the administrator has stopped is read as `undefined` (D-296), as the module is at the moment of the read.
+  const runningPorts = (): Readonly<Record<string, object>> => {
+    const held = suspension.current();
+    return Object.fromEntries(
+      modules
+        .filter((module) => !held.has(module.manifest.id))
+        .flatMap((module) => Object.entries(module.ports ?? {})),
+    );
+  };
+  const providers = new Map(
+    modules.flatMap((module) =>
+      module.manifest.provides.map((capability): [string, string] => [
+        capability,
+        module.manifest.id,
+      ]),
+    ),
+  );
   return {
     modules,
     bundled,
@@ -464,15 +487,19 @@ export const compose = (
     findSourcesOff: bundled
       .filter((module) => !modules.includes(module))
       .flatMap((module) => module.manifest.searchSources ?? []),
-    // A getter, because a stop is of the moment: a port of a module the administrator has stopped is read as `undefined` (D-296).
+    // A getter, because a stop is of the moment.
     get ports(): Readonly<Record<string, object>> {
-      const held = suspension.current();
-      return Object.fromEntries(
-        modules
-          .filter((module) => !held.has(module.manifest.id))
-          .flatMap((module) => Object.entries(module.ports ?? {})),
-      );
+      return runningPorts();
     },
+    portsFor: (id, database) =>
+      modulePorts(
+        {
+          uses: holding.find((module) => module.manifest.id === id)?.manifest.uses ?? [],
+          providerOf: (capability) => providers.get(capability),
+          running: runningPorts,
+        },
+        database,
+      ),
     jobWork: Object.fromEntries(holding.flatMap((module) => Object.entries(module.jobWork ?? {}))),
     workers: modules.flatMap((module) =>
       workersOf(module, facts, effectiveOfThisProcess).map((worker) => ({

@@ -14460,9 +14460,19 @@ partner, and what a row that points at another module's record is when that reco
    target's table: it asks a port the target provides, which is `undefined` where the target does not run (D-283 §3). The label is
    workspace content of the referrer and is covered by its export and purge; a label left behind by a target deleted while the
    referrer was not told is accepted, and a fact the target publishes on deletion lets the referrer clear it without making
-   correctness depend on that. *Not built:* the `ModuleRef` type and the resolver port, which come with the first module that links.
+   correctness depend on that. *(Built, item 5.)*
 4. **The guards are the ones that exist** plus the registry's rule and the generated case. No new scan of migrations was written
    for item 3: a key across modules already fails the build, and a read of another module's table does not compile.
+5. **The reference and its resolver are built, for the module that links first (`tasks`).** `ModuleRef { module, type, id }` and
+   `ports.resolveRef(ref, scope)` answer `{ status: 'available', ref, label }` or the one value `{ status: 'unavailable' }`; the
+   provider supplies `RecordResolver` under `<its id>.records` (issues: an issue by id inside the workspace, any member reading any
+   issue, D-254). Every ground for not showing a record is that one answer, so absence leaks nothing across workspaces: the provider
+   not run, stopped (D-296), not granted to the workspace (D-289), a record deleted, of another workspace, of another kind, an id
+   that is no UUID, and a capability the asker does not `use`. A failure of the database is the one thing thrown: it is not a
+   record's absence. `ports` is part of `ModuleRouteDependencies`, of a worker's context and of a fact consumer's arguments, one
+   view for each module made by `Composition.portsFor` from the manifest's `uses` and bound to the database of the request or
+   iteration (so the asker's share of the pool holds the question); `ports.of(scope)` is per workspace, `scope` being a request's
+   `WorkspaceContext` or a delivered fact (which carries the modules its workspace may use, read at delivery).
 
 **Rejected.** *A foreign key to the other module's record*: it makes the module need the other's tables and turns a deletion into a
 cascade across a boundary (D-250 rule 5). *Only the id*: the viewer would see "something" where a title was. *A live label read

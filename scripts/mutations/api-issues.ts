@@ -333,6 +333,22 @@ export const API_ISSUES: readonly Mutation[] = [
     ],
   },
   {
+    id: 'issues-record-resolved-across-workspaces',
+    why: 'a module that links to an issue is told the title of an issue of another workspace, which it then shows to a person who has no part in it (D-21, D-291)',
+    file: 'apps/api/src/features/issues/records.ts',
+    find: "      .where('workspace_id', '=', scope.workspaceId)\n",
+    replace: '',
+    tests: ['apps/api/src/features/issues/records.integration.test.ts'],
+  },
+  {
+    id: 'issues-record-resolved-of-another-kind',
+    why: 'issues answers for a kind of record it does not have, so a link of type `comment` shows an issue’s title',
+    file: 'apps/api/src/features/issues/records.ts',
+    find: 'if (type !== ISSUE_RECORD_TYPE || !Value.Check(Uuid, id)) return undefined;',
+    replace: 'if (!Value.Check(Uuid, id)) return undefined;',
+    tests: ['apps/api/src/features/issues/records.integration.test.ts'],
+  },
+  {
     id: 'issues-route-outside-its-manifest',
     why: 'a route registered in issues’ folder is at a path its manifest does not list, so it stays mounted with the module off (D-255 §2, D-280)',
     file: 'apps/api/src/features/issues/http/routes.ts',
