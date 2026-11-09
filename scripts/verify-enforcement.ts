@@ -270,6 +270,50 @@ const VIOLATIONS: readonly Violation[] = [
       "import { sql } from '../../../../../../packages/db/src/index';\n\nexport const use = (): unknown => sql`1`;\n",
   },
   {
+    rule: 'a feature does not issue a session: only `requireLiveSession` of the session file is open (D-250 rule 10)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import { issueSession } from '../../modules/auth/sessions';\n\nexport const use = (): unknown => issueSession;\n",
+  },
+  {
+    rule: 'a feature does not import the Better Auth instance or its secret (D-250 rule 10)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import { deriveAuthSecret } from '../../modules/auth/better-auth';\n\nexport const use = (): unknown => deriveAuthSecret;\n",
+  },
+  {
+    rule: "a feature does not build the core's notice sink or fact outbox (D-250 rule 10)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import { notificationSink } from '../../modules/inbox/sink';\nimport { publishFact } from '../../platform/outbox';\n\nexport const use = (): unknown => [notificationSink, publishFact];\n",
+  },
+  {
+    rule: "a feature's http folder does not import the application (D-250 rule 10)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/http/__enforcement__.ts',
+    source:
+      "import { createApp } from '../../../ingress/http/app';\n\nexport const use = (): unknown => createApp;\n",
+  },
+  {
+    rule: 'a feature imports what the core opens to every module (control)',
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/__enforcement__.ts',
+    source:
+      "import { requireLiveSession } from '../../modules/auth/sessions';\nimport { requireWorkspaceMembership } from '../../platform/tenancy';\n\nexport const use = (): unknown => [requireLiveSession, requireWorkspaceMembership];\n",
+    allowed: true,
+  },
+  {
+    rule: "a feature's http folder imports the door's session reader (control)",
+    ruleId: 'no-restricted-imports',
+    path: 'apps/api/src/features/enforce-a/http/__enforcement__.ts',
+    source:
+      "import { requireSession } from '../../../ingress/http/session';\n\nexport const use = (): unknown => requireSession;\n",
+    allowed: true,
+  },
+  {
     rule: 'a feature may write `sql.join` and a typed `sql<number>` template (control)',
     ruleId: 'no-restricted-syntax',
     path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
@@ -312,7 +356,7 @@ const VIOLATIONS: readonly Violation[] = [
     ruleId: 'no-restricted-imports',
     path: 'apps/api/src/features/chat/messages/__enforcement__.ts',
     source:
-      "import { thing } from '../../../modules/users/thing';\n\nexport const use = (): unknown => thing;\n",
+      "import { thing } from '../../../platform/clock';\n\nexport const use = (): unknown => thing;\n",
     allowed: true,
   },
   {

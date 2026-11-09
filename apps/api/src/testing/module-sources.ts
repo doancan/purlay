@@ -49,6 +49,17 @@ export const fenceBypassesIn = (source: string): string[] => {
   return found.filter(([pattern]) => pattern.test(code)).map(([, name]) => name);
 };
 
+/** The files of the core a source imports by a path, as `platform/clock`: what `scripts/module-reach.mjs` opens or refuses. */
+export const coreImportsOf = (source: string): string[] => [
+  ...new Set(
+    [
+      ...withoutComments(source).matchAll(
+        /\bfrom\s*['"](?:\.\.\/)+((?:platform|modules|ingress|realtime)\/[^'"]+)['"]/g,
+      ),
+    ].map((found) => found[1] ?? ''),
+  ),
+];
+
 /** The production files of a feature's own folder: not the doors' files that import it. */
 export const featureSources = (id: string): string[] =>
   production(filesUnder(join(API_SOURCE, 'features', id)));

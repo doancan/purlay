@@ -12187,7 +12187,11 @@ there is no broker).
     `TRUST_PROXY`, `auth` is a `SessionAuth` that only the session readers open (the Better Auth instance and its cookie
     secret stay behind it), and `database` is the module's own handle (`ModuleRouteDependencies<ChatDb>`), so the
     red-team's session forgery, its cross-tenant channel read and its read of `ENCRYPTION_KEY` do not compile
-    (`module-routes.test.ts`).
+    (`module-routes.test.ts`). (e) A module's reach into the core is a list and not an absence of bans:
+    `scripts/module-reach.mjs` refuses every file of `platform/`, `modules/`, `ingress/` and `realtime/` that it does not
+    open (the same base for every module, the door's helpers for its `http/` folder, and chat's own extra lines, which
+    only shrink under a cap), and opens `modules/auth/sessions` for `requireLiveSession` and `SessionAuth` alone, so
+    `issueSession`, the Better Auth instance and its secret derivation, the notice sink and the outbox cannot be imported.
 
 **Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
 chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs
