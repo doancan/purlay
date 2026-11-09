@@ -7,7 +7,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { DatabaseUnavailableError } from '@purlay/db';
-import { AUTH_BASE_PATH, SIGN_IN_CALLBACK, type SignInFailure } from '@purlay/types';
+import {
+  AUTH_BASE_PATH,
+  GITHUB_APP_CALLBACK,
+  SIGN_IN_CALLBACK,
+  type SignInFailure,
+} from '@purlay/types';
 import { createApp } from './app';
 import type { Auth } from '../../modules/auth/better-auth';
 import { AUTH_BUDGET, COSTLY_READ_BUDGET, WRITE_BUDGET } from './rate-limit';
@@ -186,5 +191,21 @@ describe('every reason the library gives is one of ours (D-121)', () => {
     expect(response.headers.get('location')).toBe(`${ORIGIN}/sign-in?error=failed`);
     const failure = lines.find((line) => line['msg'] === 'request failed');
     expect(failure).toMatchObject({ level: 'error', path: SIGN_IN_CALLBACK });
+  });
+});
+
+describe('the GitHub App’s callback that fails', () => {
+  test('is sent on to the app, told, and never shown the API’s JSON (D-246)', async () => {
+    const app = createApp(
+      testDependencies({
+        database: aDatabaseThatMustNotBeTouched(new DatabaseUnavailableError('pool exhausted')),
+      }),
+    );
+    const response = await app.handle(
+      new Request(`${ORIGIN}${GITHUB_APP_CALLBACK}?state=${'0'.repeat(64)}`),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/?github=unavailable');
+    expect(await response.text()).toBe('');
   });
 });
