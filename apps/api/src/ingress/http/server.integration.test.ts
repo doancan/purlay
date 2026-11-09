@@ -8,6 +8,7 @@ import type {
   ServerAuditPage,
   ServerMailTest,
   ServerOperations,
+  ServerOutboxChangeResponse,
   ServerOutboxPage,
   ServerOverview,
   ServerUserDetail,
@@ -2858,6 +2859,218 @@ describe('integration — the administrator’s view of the outbox (D-288 §12)'
     expect(await trail(server)).toEqual([]);
   });
 });
+describe('integration — the administrator requeues and discards facts (D-288 §12)', () => {
+  const MINUTE = 60_000;
+  const REASON = 'consumer fixed in 1.4.2';
+  const seeded = async (): Promise<{
+    server: Server;
+    dead: { id: string; factId: string };
+    stuck: { id: string; factId: string };
+    delivered: { id: string };
+    skipped: { id: string };
+  }> => {
+    const server = await aServer();
+    const listed = (await (
+      await call(server, 'GET', '/api/server/workspaces', { cookie: server.admin.cookie })
+    ).json()) as ServerWorkspacePage;
+    const workspaceId = listed.data[0]?.id ?? '';
+    const now = Date.now();
+    const dead = await anOutboxRow(server.db, workspaceId, {
+      state: 'dead',
+      at: new Date(now - 90 * MINUTE),
+      attempts: 8,
+      lastError: 'TypeError',
+      expiresAt: new Date(now - MINUTE),
+    });
+    const stuck = await anOutboxRow(server.db, workspaceId, {
+      at: new Date(now - 60 * MINUTE),
+      attempts: 3,
+    });
+    const delivered = await anOutboxRow(server.db, workspaceId, {
+      state: 'delivered',
+      at: new Date(now - 50 * MINUTE),
+    });
+    const skipped = await anOutboxRow(server.db, workspaceId, {
+      state: 'skipped',
+      at: new Date(now - 40 * MINUTE),
+    });
+    return { server, dead, stuck, delivered, skipped };
+  };
+  const post = async (
+    server: Server,
+    change: 'requeue' | 'discard',
+    body: unknown,
+    cookie: string | null = server.admin.cookie,
+  ): Promise<Response> =>
+    await call(server, 'POST', `/api/server/outbox/${change}`, {
+      ...(cookie === null ? {} : { cookie }),
+      body,
+    });
+  const rowOf = async (
+    server: Server,
+    id: string,
+  ): Promise<{
+    state: string;
+    attempts: number;
+    finished_at: Date | null;
+    next_attempt_at: Date;
+    expires_at: Date;
+  }> =>
+    await server.db
+      .selectFrom('outbox')
+      .select(['state', 'attempts', 'finished_at', 'next_attempt_at', 'expires_at'])
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+  const trail = async (
+    server: Server,
+  ): Promise<{ action: string; target_fact_id: string | null; note: string | null }[]> =>
+    await server.db
+      .selectFrom('server_audit_log')
+      .select(['action', 'target_fact_id', 'note'])
+      .where('action', 'in', ['server.fact_requeued', 'server.fact_discarded'])
+      .orderBy('id')
+      .execute();
+  const results = async (response: Response): Promise<string[]> =>
+    ((await response.json()) as ServerOutboxChangeResponse).results.map(({ result }) => result);
+
+  test('only the server administrator changes: an owner, a member and nobody get one answer and nothing moves', async () => {
+    const { server, dead } = await seeded();
+    for (const change of ['requeue', 'discard'] as const) {
+      const answers: string[] = [];
+      for (const cookie of [server.owner.cookie, server.member.cookie, null]) {
+        const response = await post(server, change, { ids: [dead.id], reason: REASON }, cookie);
+        const text = await response.text();
+        answers.push(`${String(response.status)} ${text}`);
+      }
+      expect(new Set(answers).size).toBe(1);
+      expect(answers[0]).toStartWith('404 ');
+    }
+    expect((await rowOf(server, dead.id)).state).toBe('dead');
+    expect(await trail(server)).toEqual([]);
+  });
+
+  test('a requeue makes a dead or stuck delivery fresh and due, holds it past its old expiry, and is on the trail with the reason', async () => {
+    const { server, dead, stuck } = await seeded();
+    const before = Date.now();
+    const response = await post(server, 'requeue', { ids: [dead.id, stuck.id], reason: REASON });
+    expect(response.status).toBe(200);
+    expect(await results(response)).toEqual(['changed', 'changed']);
+    for (const { id } of [dead, stuck]) {
+      const row = await rowOf(server, id);
+      expect(row).toMatchObject({ state: 'pending', attempts: 0, finished_at: null });
+      expect(row.next_attempt_at.getTime()).toBeGreaterThanOrEqual(before);
+      expect(row.expires_at.getTime()).toBeGreaterThan(before + 6 * 24 * 60 * MINUTE);
+    }
+    expect(await trail(server)).toEqual([
+      { action: 'server.fact_requeued', target_fact_id: dead.factId, note: REASON },
+      { action: 'server.fact_requeued', target_fact_id: stuck.factId, note: REASON },
+    ]);
+  });
+
+  test('requeuing twice is the same as once: the second changes nothing and records nothing', async () => {
+    const { server, dead } = await seeded();
+    const first = await post(server, 'requeue', { ids: [dead.id], reason: REASON });
+    const settled = await rowOf(server, dead.id);
+    const second = await post(server, 'requeue', { ids: [dead.id], reason: REASON });
+    expect([await results(first), await results(second)]).toEqual([['changed'], ['unchanged']]);
+    expect(await rowOf(server, dead.id)).toEqual(settled);
+    expect(await trail(server)).toHaveLength(1);
+  });
+
+  test('two requests at once for one delivery are one change and one entry', async () => {
+    const { server, dead } = await seeded();
+    const both = await Promise.all([
+      post(server, 'discard', { ids: [dead.id], reason: REASON }),
+      post(server, 'discard', { ids: [dead.id], reason: REASON }),
+    ]);
+    const answers = (await Promise.all(both.map(results))).flat().sort();
+    expect(answers).toEqual(['changed', 'unchanged']);
+    expect(await trail(server)).toHaveLength(1);
+  });
+
+  test('a discard keeps the row as discarded with its end time, lists under discarded, and can be undone by a requeue', async () => {
+    const { server, dead, stuck } = await seeded();
+    const response = await post(server, 'discard', { ids: [dead.id, stuck.id], reason: REASON });
+    expect(await results(response)).toEqual(['changed', 'changed']);
+    expect(await rowOf(server, dead.id)).toMatchObject({ state: 'discarded', attempts: 8 });
+    expect((await rowOf(server, dead.id)).finished_at).not.toBeNull();
+    const listed = (await (
+      await call(server, 'GET', '/api/server/outbox?state=discarded', {
+        cookie: server.admin.cookie,
+      })
+    ).json()) as ServerOutboxPage;
+    expect(listed.data.map(({ id }) => id).sort()).toEqual([dead.id, stuck.id].sort());
+    expect(
+      await results(await post(server, 'discard', { ids: [dead.id], reason: REASON })),
+    ).toEqual(['unchanged']);
+    expect(
+      await results(await post(server, 'requeue', { ids: [dead.id], reason: REASON })),
+    ).toEqual(['changed']);
+    expect((await rowOf(server, dead.id)).state).toBe('pending');
+    expect((await trail(server)).map(({ action }) => action)).toEqual([
+      'server.fact_discarded',
+      'server.fact_discarded',
+      'server.fact_requeued',
+    ]);
+  });
+
+  for (const change of ['requeue', 'discard'] as const)
+    test(`a ${change} refuses a delivery that is over, does not find an unknown one, and records only the change`, async () => {
+      const { server, dead, delivered, skipped } = await seeded();
+      const response = await post(server, change, {
+        ids: [delivered.id, skipped.id, crypto.randomUUID(), dead.id],
+        reason: REASON,
+      });
+      expect(await results(response)).toEqual(['refused', 'refused', 'not_found', 'changed']);
+      expect((await rowOf(server, delivered.id)).state).toBe('delivered');
+      expect((await rowOf(server, skipped.id)).state).toBe('skipped');
+      expect(await trail(server)).toHaveLength(1);
+    });
+
+  test('refuses a body that is not one: no ids, too many, a repeat, a non-id, no reason, a blank one, a long one, or more fields', async () => {
+    const { server, dead } = await seeded();
+    const id = dead.id;
+    const bad: unknown[] = [
+      {},
+      { ids: [], reason: REASON },
+      { ids: Array.from({ length: 51 }, () => crypto.randomUUID()), reason: REASON },
+      { ids: [id, id], reason: REASON },
+      { ids: ['x'], reason: REASON },
+      { ids: [id] },
+      { ids: [id], reason: '   ' },
+      { ids: [id], reason: 'x'.repeat(201) },
+      { ids: [id], reason: REASON, force: true },
+    ];
+    for (const body of bad) expect((await post(server, 'requeue', body)).status).toBe(400);
+    expect((await rowOf(server, id)).state).toBe('dead');
+    expect(await trail(server)).toEqual([]);
+  });
+
+  test('an administrator demoted between the guard and the change changes nothing and leaves no entry', async () => {
+    const { server, dead } = await seeded();
+    const original = setupAuthority.requireServerAdmin;
+    const guard = spyOn(setupAuthority, 'requireServerAdmin').mockImplementationOnce(
+      async (...args) => {
+        const authority = await original(...args);
+        await server.db
+          .updateTable('users')
+          .set({ is_server_admin: false })
+          .where('id', '=', server.admin.userId)
+          .execute();
+        return authority;
+      },
+    );
+    try {
+      const response = await post(server, 'discard', { ids: [dead.id], reason: REASON });
+      expect(response.status).toBe(404);
+      expect((await rowOf(server, dead.id)).state).toBe('dead');
+      expect(await trail(server)).toEqual([]);
+    } finally {
+      guard.mockRestore();
+    }
+  });
+});
+
 describe('integration — saved mail relay testing', () => {
   test('sends only to the verified requesting administrator, reuses saved credentials and persists a safe receipt', async () => {
     const server = await aServer();

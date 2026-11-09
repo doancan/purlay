@@ -568,6 +568,15 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/serving-the-client.test.ts'],
   },
   {
+    id: 'outbox-change-open-to-a-stranger',
+    why: 'anyone who asks requeues or discards the facts between modules (D-288 §12)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  const admin = await guard(deps, request);\n  const input = validated(ServerOutboxChangeRequest, body);',
+    replace:
+      '  const admin = { userId: crypto.randomUUID() } as Awaited<ReturnType<typeof guard>>;\n  const input = validated(ServerOutboxChangeRequest, body);',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'outbox-inspect-open-to-a-stranger',
     why: 'a fact’s payload is read by someone who is not the server’s administrator (D-288 §12)',
     file: 'apps/api/src/ingress/http/server-administration.ts',

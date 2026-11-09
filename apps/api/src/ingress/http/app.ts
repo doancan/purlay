@@ -17,6 +17,7 @@ import {
   writeAdministrationRole,
   readAdministrationOutbox,
   readAdministrationOutboxFact,
+  writeAdministrationOutbox,
   writeAdministrationModule,
   writeAdministrationModuleSuspension,
   readAdministrationModules,
@@ -1130,6 +1131,16 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get(
       '/api/server/audit/export',
       async ({ request }) => await downloadAdministrationAudit(administration, request),
+    )
+    .post(
+      '/api/server/outbox/requeue',
+      async ({ request, body }) =>
+        await writeAdministrationOutbox(administration, request, 'requeue', body),
+    )
+    .post(
+      '/api/server/outbox/discard',
+      async ({ request, body }) =>
+        await writeAdministrationOutbox(administration, request, 'discard', body),
     )
     .post(
       '/api/server/users/approve',

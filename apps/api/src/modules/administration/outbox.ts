@@ -5,10 +5,21 @@
  * on the trail did not happen, and one by an administrator demoted a moment ago did not either.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import type { ServerOutboxFactDetail, ServerOutboxPage, ServerOutboxQuery } from '@purlay/types';
+import type {
+  ServerOutboxChangeRequest,
+  ServerOutboxChangeResponse,
+  ServerOutboxFactDetail,
+  ServerOutboxPage,
+  ServerOutboxQuery,
+} from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
-import { listOutboxFacts, readOutboxFact } from '../../platform/outbox-operate';
+import {
+  changeOutboxFacts,
+  listOutboxFacts,
+  readOutboxFact,
+  type OutboxChange,
+} from '../../platform/outbox-operate';
 import { recordServerAudit } from '../audit/server-audit';
 import type { ServerAdminSession } from '../setup/setup';
 import { lockServerAdministrator } from './changes';
@@ -36,4 +47,32 @@ export const inspectServerOutboxFact = async (
     targetModule: fact.consumer,
   });
   return fact;
+};
+
+const ACTIONS = { requeue: 'server.fact_requeued', discard: 'server.fact_discarded' } as const;
+
+/**
+ * Requeues or discards deliveries, each change on the server's trail with the administrator's reason in the transaction of the
+ * change (D-288 §12). A repeat changes nothing and records nothing, so a double submission is one change and one entry for each
+ * delivery; the administrator is rechecked under the lock first.
+ */
+export const changeServerOutbox = async (
+  tx: Transaction,
+  clock: Clock,
+  admin: ServerAdminSession,
+  change: OutboxChange,
+  input: ServerOutboxChangeRequest,
+): Promise<ServerOutboxChangeResponse> => {
+  await lockServerAdministrator(tx, admin);
+  const { verdicts, changed } = await changeOutboxFacts(tx, change, input.ids, clock.now());
+  for (const fact of changed)
+    await recordServerAudit(tx, clock, {
+      actorUserId: admin.userId,
+      action: ACTIONS[change],
+      targetFactId: fact.factId,
+      targetWorkspaceId: fact.workspaceId,
+      targetModule: fact.consumer,
+      note: input.reason.trim(),
+    });
+  return { results: [...verdicts] };
 };
