@@ -1,12 +1,15 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { cloneIntegrationDatabase, closeIntegrationDatabase } from '@purlay/db';
+import { DAY_MS } from '../platform/clock';
+import { anOutboxRow, aWorkspaceRow } from '../testing/facts';
 
 /** Runs `bun run job <name>` as a scheduler does, with the test database and this `MODULES`. */
 const job = async (
   name: string,
   modules: string | undefined,
   databaseUrl = process.env['DATABASE_URL'] ?? '',
+  extraEnvironment: Readonly<Record<string, string>> = {},
 ): Promise<{ code: number; said: string }> => {
   const process_ = Bun.spawn(['bun', '--no-env-file', join(import.meta.dir, 'jobs.ts'), name], {
     stdout: 'pipe',
@@ -18,6 +21,7 @@ const job = async (
       DATABASE_URL: databaseUrl,
       ENCRYPTION_KEY: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
       ...(modules === undefined ? {} : { MODULES: modules }),
+      ...extraEnvironment,
     },
   });
   const code = await process_.exited;
@@ -121,4 +125,38 @@ describe('integration: the scheduled jobs of the modules a process runs', () => 
     expect(code).not.toBe(0);
     expect(said).toContain('calendar');
   }, 30_000);
+});
+
+describe('integration: sweep:outbox as the scheduler runs it (D-288 §12)', () => {
+  test('keeps a dead fact for OUTBOX_DEAD_KEPT_DAYS, 180 unless set, and says what it took', async () => {
+    const cloned = await cloneIntegrationDatabase();
+    try {
+      const workspaceId = await aWorkspaceRow(cloned.db);
+      const ago = (days: number): Date => new Date(Date.now() - days * DAY_MS);
+      await anOutboxRow(cloned.db, workspaceId, { state: 'dead', at: ago(100) });
+      await anOutboxRow(cloned.db, workspaceId, { state: 'dead', at: ago(20) });
+      await anOutboxRow(cloned.db, workspaceId, { state: 'discarded', at: ago(100) });
+      const left = async (): Promise<number> =>
+        (
+          await cloned.db
+            .selectFrom('outbox')
+            .select('id')
+            .where('workspace_id', '=', workspaceId)
+            .execute()
+        ).length;
+
+      const byDefault = await job('sweep:outbox', undefined, cloned.connectionString);
+      expect(byDefault.code).toBe(0);
+      expect(byDefault.said).toContain('"dead":0,"discarded":0');
+      expect(await left()).toBe(3);
+
+      const shorter = await job('sweep:outbox', undefined, cloned.connectionString, {
+        OUTBOX_DEAD_KEPT_DAYS: '60',
+      });
+      expect(shorter.said).toContain('"dead":1,"discarded":1');
+      expect(await left()).toBe(1);
+    } finally {
+      await cloned.drop();
+    }
+  }, 60_000);
 });

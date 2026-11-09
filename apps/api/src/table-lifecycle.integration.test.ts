@@ -37,7 +37,7 @@ import { recordAudit } from './modules/audit/audit';
 import { addressCounterKey } from './modules/auth/magic-link';
 import { sweepEmailSignIns } from './modules/jobs/jobs';
 import { sweepInbox } from './modules/inbox/sweep';
-import { sweepOutbox } from './platform/outbox-sweep';
+import { OUTBOX_DEAD_KEPT_DAYS, sweepOutbox } from './platform/outbox-sweep';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
 import { makeAndMailInvitation } from './modules/workspaces/invitation-mail';
@@ -890,7 +890,7 @@ const SWEEPS = {
     await sweepInbox({ database: db, clock });
   },
   'sweep:outbox': async (db: Transaction) => {
-    await sweepOutbox({ database: db, clock });
+    await sweepOutbox({ database: db, clock, deadKeptDays: OUTBOX_DEAD_KEPT_DAYS });
   },
   'sweep:sessions': async (db: Transaction) => {
     await purgeDeadSessions(db, NOW, 1_000);

@@ -225,7 +225,7 @@ answers differently by node. A migration that a new module brings applies when t
 **Facts between modules (the outbox, D-288).** A module that tells another something writes a row of `outbox` in its own transaction; the
 consuming module's worker (`outbox:consume`, every two seconds, in that module's share of the pool) delivers it. Nothing in the product publishes yet,
 so the numbers below are zero until a module does. `/metrics` carries, for each module that consumes a fact: `purlay_outbox_pending` (rows waiting),
-`purlay_outbox_oldest_age_seconds` (how long the oldest has waited) and `purlay_outbox_dead` (rows given up on after eight tries, kept thirty days),
+`purlay_outbox_oldest_age_seconds` (how long the oldest has waited) and `purlay_outbox_dead` (rows given up on after 8 tries, kept 180 days),
 all read from the table, so every node of a cluster reports the same value (alert on `max`); and `purlay_outbox_delivered_total`,
 `purlay_outbox_failures_total` and `purlay_outbox_dropped_total` by module and fact type, counted in the process. The server's overview lists a
 module with dead rows, or a fact that has waited more than 15 minutes. A fact whose consumer is off waits for it as its declaration says (a day, or the
@@ -242,7 +242,7 @@ The limits of the outbox, written from the code (`bun run docs:sync`):
 | Wait between tries | from 5 s, doubling, to 60 min (jittered) | `BACKOFF_FIRST_MS`, `BACKOFF_MAX_MS` |
 | Consuming worker runs every | 2 s | `OUTBOX_CONSUME_INTERVAL_MS` |
 | Facts one workspace may have waiting for one module | 5000 | `OUTBOX_PENDING_MAX` (`CONFIG.md`) |
-| Dead rows are kept | 30 days | `OUTBOX_DEAD_KEPT_DAYS` |
+| Dead rows are kept | 180 days | `OUTBOX_DEAD_KEPT_DAYS` |
 | A fact is held for a consumer that is off, at most | 14 days | `FACT_HOLD_DAYS_MAX` |
 | Largest payload (compact JSON) | 8192 bytes | `OUTBOX_PAYLOAD_BYTES_MAX` |
 | The overview calls a waiting fact stale after | 15 min | `OUTBOX_STALE_AFTER_SECONDS` |
@@ -257,6 +257,59 @@ A drain takes its batch of 20 by turns across workspaces (D-288 §11), so a work
 facts due, and the others' wait is about the number of workspaces with facts due divided by twenty, times the two seconds between drains. The pick costs about 10 µs for each
 workspace that has anything pending for the consumer (46 to 54 ms for 5,000 workspaces and a million pending rows, measured): if `pg_stat_statements` shows it
 dominating, it is the number of workspaces with pending facts that grew, and the fix is a consumer that keeps up, not a larger batch.
+
+**The thresholds, as alert rules (D-288 §12).** `docker/alerts/purlay-outbox.rules.yml` is the set to load into Prometheus (`rule_files:`) or Grafana
+Alerting; a test holds every metric it names to the code, so a renamed metric fails the build and not the alert. Gauges are the same on every node (`max`), counters are per
+process (`sum`). `OUTBOX_DEAD_KEPT_DAYS` (180 unless set) is how long a dead or discarded fact stays to be looked at. The find's skipped sources have no metric yet, so no rule.
+
+| Alert | Fires when | Severity | Then |
+| --- | --- | --- | --- |
+| `PurlayOutboxDeadFacts` | `purlay_outbox_dead` above 0 for 15 min | warning | A fact is dead |
+| `PurlayOutboxOldestPendingStale` | oldest waiting fact over 900 s (the overview's figure) for 5 min | warning | The backlog is growing |
+| `PurlayOutboxOldestPendingPage` | oldest waiting fact over 3600 s for 5 min | page | The backlog is growing |
+| `PurlayOutboxDepthGrowing` | more than 500 waiting and still rising over 30 min | warning | The backlog is growing |
+| `PurlayOutboxDeliveryFailing` | over 20% of deliveries to a module fail, for 15 min | warning | A consumer is slow or failing |
+| `PurlayOutboxConsumerWorkerFailing` | the `outbox:consume` worker failed 3 times in 15 min | warning | A consumer is slow or failing |
+| `PurlayOutboxPublishRefused` | any publish refused by the backlog ceiling in 15 min | warning | The backlog is growing |
+| `PurlayEntitlementRefusalsSpike` | requests refused for a grant above 1 a second for 10 min | warning | A grant was withdrawn or a client is stale |
+| `PurlayInboxCollapsing` | over 100 notices read as history for lack of room in an hour | warning | A module is notifying in a loop |
+
+**The requests below** are made as the server's administrator: sign in, copy the `__Host-purlay_session` cookie from the browser, and send it with an `Origin` equal to `APP_URL`
+(`C` below). Anyone else gets the plain `404` of a path that does not exist. `C='-H "Cookie: __Host-purlay_session=<value>" -H "Origin: https://purlay.example" -H "Content-Type: application/json"'`.
+
+### A fact is dead: what to do
+
+A fact is dead after eight tries, or at once when its payload no longer fits. It is kept for `OUTBOX_DEAD_KEPT_DAYS`, and nothing is lost until then.
+
+1. **List** them: `curl $C "$APP_URL/api/server/outbox?state=dead"` (filters `consumer`, `type`, `workspaceId`; page with `after=<last id>`). The list is metadata: the fact's type, workspace,
+   consumer, tries and the class of the last error, never the payload. `state=stuck` lists facts that have waited over 15 minutes.
+2. **Inspect** one: `curl $C "$APP_URL/api/server/outbox/<id>"` shows the payload. That read is on the server's trail (`server.fact_inspected`, with your id and the fact's), so open only what you need.
+   Also look at the module's log for `a fact is dead and will not be delivered` (module, type and fact id, never the payload).
+3. **Fix the consumer.** The error class says where to look; a class such as `PayloadRefused` is a fact that no longer fits its declaration and will not get better by waiting (poison): go to step 5.
+4. **Requeue** once the fix is deployed: `curl -X POST $C "$APP_URL/api/server/outbox/requeue" -d '{"ids":["<id>"],"reason":"consumer fixed in 1.4.2"}'` (up to 50 ids). The fact is pending again with its tries
+   reset and due now; the answer says `changed`, `unchanged` (already requeued, so running it twice is safe) or `refused` (a delivered fact is never brought back). Watch the module's `purlay_outbox_dead` fall.
+5. **Poison: discard** it: `curl -X POST $C "$APP_URL/api/server/outbox/discard" -d '{"ids":["<id>"],"reason":"payload from the 1.3 bug, nobody consumes it"}'`. The row is kept as `discarded` for `OUTBOX_DEAD_KEPT_DAYS` and can still be
+   requeued if you were wrong; the reason and your id stay on the trail (`GET /api/server/audit?action=server.fact_discarded`).
+
+Every requeue and discard is one entry on the server's trail with the fact's id, its workspace and consumer, and your reason: that is the answer to "who decided what became of it".
+
+### The outbox backlog is growing
+
+`PurlayOutboxOldestPendingStale`, `PurlayOutboxDepthGrowing` or `PurlayOutboxPublishRefused`. Find which module (the `module` label), then:
+
+1. Is the consumer running? `purlay_modules_info{module="<id>"}` is 1 on a node that runs it, and `purlay_module_suspended` is 0 (a stopped module delivers nothing and its facts wait, by design). A fact for a consumer that is not run waits for it until its declaration's hold ends.
+2. Is it failing? `rate(purlay_outbox_failures_total{module="<id>"}[10m])` and `purlay_worker_failures_total{worker="outbox:consume"}`: yes, go to *A consumer is slow or failing*.
+3. Is it one workspace? `GET /api/server/outbox?state=stuck&consumer=<id>` shows the workspaces; one workspace at its ceiling shows in `purlay_outbox_refused_total`. The claim goes by turns across workspaces (D-288 §11), so the others' facts are not
+   behind it; find the publisher that loops before raising `OUTBOX_PENDING_MAX`.
+4. If the consumer is healthy and the rate is simply higher than 10 facts a second, the drain (20 every two seconds) is the ceiling: the table is for facts of human scale, so find the module that publishes too many.
+
+### A consumer is slow or failing
+
+`PurlayOutboxDeliveryFailing` or `PurlayOutboxConsumerWorkerFailing`. Facts retry by themselves (from 5 s, doubling, to 60 min) and are dead at the eighth try, so there is time, but not much.
+
+1. Read the module's log around the failures: each failed delivery names the module, the fact type and the error class, never the payload, and carries the correlation id of the request that published it.
+2. A slow handler holds the rest of its batch (they run one after another under the worker's deadline): `purlay_worker_failures_total` rising with no `purlay_outbox_failures_total` is a deadline, not a throw.
+3. If it needs a release to fix, stop the consumer's module (*A module misbehaves: stop it*, above) so its facts wait instead of burning tries, deploy, resume it, and requeue what died meanwhile as in *A fact is dead*.
 
 **Backup evidence in server administration (D-278).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
 
@@ -406,7 +459,7 @@ start with it, `MODULES=none` (or the list without it) is the way back; if it is
 | `purlay_job_consecutive_failures` | gauge | `job`, `module` | How many times each scheduled job has failed since it last succeeded. |
 | `purlay_outbox_pending` | gauge | `module` | Facts waiting to be delivered to a module, by the module that consumes them; the same on every node of a cluster. |
 | `purlay_outbox_oldest_age_seconds` | gauge | `module` | Seconds the oldest fact waiting for a module has waited, 0 where none waits. |
-| `purlay_outbox_dead` | gauge | `module` | Facts given up on after their tries, kept 30 days to be looked at, by the module that was to consume them. |
+| `purlay_outbox_dead` | gauge | `module` | Facts given up on after their tries, kept 180 days to be looked at, by the module that was to consume them. |
 <!-- /generated:metrics -->
 
 ## Sizing an upgrade that backfills

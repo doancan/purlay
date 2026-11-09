@@ -65,7 +65,7 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   native_authorizations: decided('deleted', 'swept'),
   object_deletions: decided({ nobody: 'storage keys waiting to be deleted' }, 'swept'),
   // No column names a person, and an id inside a payload names the anonymised account after an erasure (D-256).
-  // `sweep:outbox` takes what was delivered a day ago, the dead after thirty days and what expired (D-288).
+  // `sweep:outbox` takes what was delivered a day ago, the dead or discarded after OUTBOX_DEAD_KEPT_DAYS and what expired (D-288).
   outbox: decided(
     { nobody: 'ids and a short label of what changed; no column names a person' },
     'swept',
