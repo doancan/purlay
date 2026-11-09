@@ -59,66 +59,36 @@ import {
   readExports,
   readMyExports,
 } from './exports';
-import { goneMessageReference } from '../../platform/gone-message';
 import { askForSignInLink, consumeSignIn, previewSignIn } from './magic-link';
 import { afterAnswer } from '../../platform/after-answer';
 import type { SignInLinkDependencies } from '../../modules/auth/magic-link';
 import { authMethods } from './auth-methods';
-import { clientInfo, clientPolicyOf } from './client-info';
+import { clientInfo } from './client-info';
 import { readLatestRelease } from './releases';
 import { authorizeNativeClient, exchangeNativeToken } from './native-handoff';
-import { clientRefusal, isOutsideClientPolicy } from './client-policy';
-import { Elysia, StatusMap, type HTTPHeaders } from 'elysia';
+import { Elysia } from 'elysia';
 import { leasingExecutor } from '@purlay/db';
 import { sessionAuthOf } from '../../modules/auth/sessions';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
 import {
-  abandonSignIn,
   readMySignIn,
   answerAuth,
   signOut,
   eraseMyAccount,
   signOutEverywhere,
   startSignIn,
-  type AuthResponse,
 } from './auth';
 import { lift, readServerAccounts, suspend } from './accounts';
 import { endMySession, readMySessions } from './devices';
-import {
-  AUTH_BASE_PATH,
-  GITHUB_APP_CALLBACK,
-  GOOGLE_CALLBACK,
-  OIDC_CALLBACK,
-  SIGN_IN_CALLBACK,
-  type ModuleId,
-} from '@purlay/types';
+import { type ModuleId } from '@purlay/types';
 import { limitKeyFor } from '../../platform/client-key';
 import { clientAddress, peerOf, type PeerSource } from './client-address';
 import { httpLimits, WRITE_BUDGET } from './rate-limit';
 import { inProcessLimiters } from '../../realtime/rate-limiter';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { AppError } from '../../platform/errors';
-import {
-  JSON_BODY_MAX_BYTES,
-  crossSiteResponse,
-  inboundRequestId,
-  bodyRefusal,
-  edgeRefusalResponse,
-  hasUnsupportedMediaType,
-  isUploadRequest,
-  isWebhookRequest,
-  uploadRefusal,
-  webhookRefusal,
-  isCrossSiteMutation,
-  unsupportedMediaTypeResponse,
-  responseHeaders,
-  DOCUMENT_HEADERS,
-  WORKER_HEADERS,
-  clientTooOldResponse,
-  pathWithoutSecret,
-} from './edge';
+import { responseHeaders, DOCUMENT_HEADERS, WORKER_HEADERS } from './edge';
 import { clientFileFor, isUnchanged } from './client';
-import { refusalFor } from './errors';
 import {
   createMyWorkspace,
   listMyWorkspaces,
@@ -153,7 +123,6 @@ import {
   readSetupStatus,
   tryGitHubApp,
   tryMailRelay,
-  type SetupAnswer,
   type SetupDependencies,
 } from './setup';
 import {
@@ -189,8 +158,7 @@ import { jobMetrics, readJobRuns } from '../../modules/jobs/metrics';
 import { outboxMetrics, readOutbox } from '../../platform/outbox-report';
 import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
 import { PLAN } from '../../modules/jobs/schedule';
-import { EDGE_ROUTE, answerMetrics, methodLabel, routeLabel, statusLabel } from './metrics';
-import { currentRequest, enterRequest, noteModule } from '../../platform/logging';
+import { answerMetrics } from './metrics';
 import { ATTACHMENT_BYTES_MAX, MAX_FRAME_BYTES } from '@purlay/types';
 import { credentialCipher } from '../../platform/crypto';
 import type { GitHubApi } from '../../features/chat/integrations/unfurl';
@@ -213,16 +181,19 @@ import { createSocketLifecycle, type HeldByConnections } from '../ws/socket';
 import { receiveUpload } from './uploads';
 import { discardAttachment, downloadAttachment } from './attachments';
 import { moduleConnections } from '../../platform/module-budget';
-import { deadlinesOf, timedOut, withDeadline } from '../../platform/request-deadline';
+import { deadlinesOf } from '../../platform/request-deadline';
 import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { runningModuleIds } from '../../composition';
 import { factContextOf, sinkOfModule } from '../../module-seams-wiring';
-import { FACT_BACKLOG_RETRY_AFTER_SECONDS, FactBacklogFull } from '../../platform/outbox';
 import { factPublisherOf } from '../../platform/ports/fact-publisher';
 import { listInbox, readInbox } from './inbox';
 import type { HandlerDependencies, LeasedDependencies } from './dependencies';
+import { requestObservation } from './request-observation';
+import { requestHooks } from './request-hooks';
+import { errorHook } from './error-hook';
+import { answerSetup, respond } from './route-answers';
 
 export interface Dependencies extends HandlerDependencies {
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
@@ -262,51 +233,8 @@ export interface HttpApplication {
   readonly settled: () => Promise<void>;
 }
 
-/** Paths asked every few seconds by a machine: their request lines are written at debug. */
-const POLLED: ReadonlySet<string> = new Set(['/health', '/health/ready', '/metrics']);
-
 /** Liveness. Deliberately touches nothing. */
 const HEALTH = { status: 'ok' } as const;
-
-/**
- * The sign-in library's routes (D-179): everything under its base path no route of ours answers. The
- * registrations below spell it as a literal, which `scripts/enforcement.test.ts` reads against
- * `API.md`; the request line's test binds the two spellings (`logging.integration.test.ts`).
- */
-const LIBRARY_ROUTE = `${AUTH_BASE_PATH}/*`;
-
-/**
- * The only place a handler's decision becomes a framework response.
- *
- * The handlers in `auth.ts` know nothing about the framework, so this is where a
- * cookie and a redirect are applied — once, rather than four times.
- */
-const respond = (
-  set: { status?: number | string; headers: HTTPHeaders },
-  result: AuthResponse,
-): string => {
-  set.headers['set-cookie'] = [...result.setCookie];
-  if (result.location === undefined) {
-    set.status = 204;
-    return '';
-  }
-  set.status = 302;
-  set.headers.location = result.location;
-  return '';
-};
-
-/** A setup route's answer, applied: its status, its cookies, its body. */
-const answerSetup = <T>(
-  set: { status?: number | string; headers: HTTPHeaders },
-  answer: SetupAnswer<T>,
-): T | string => {
-  set.status = answer.status;
-  if (answer.setCookie.length > 0) set.headers['set-cookie'] = [...answer.setCookie];
-  return answer.status === 204 ? '' : answer.body;
-};
-
-/** The setup's paths, its client pages included: nothing under them is for a search engine. */
-const SETUP_PATH = /^\/setup(?:\/|$)/;
 
 export const createApp = (given: Dependencies): HttpApplication => {
   // The modules this process runs (`composition.ts`).
@@ -330,12 +258,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
     userErased: given.userErased ?? modules.userErased,
     collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   } satisfies LeasedDependencies;
-  /**
-   * A path of a module this process does not run is no route (`MODULES.md` §3): the `404` of any unknown path, with
-   * the generic body and no word that says *disabled*, which would tell a caller who has not signed in which modules
-   * this instance runs. Judged on the path as sent, which is the path the router matches (it does not decode `%6d`).
-   */
-  const closedRoute = (request: Request): boolean => modules.closed(new URL(request.url).pathname);
   const { log } = dependencies;
   const metrics = dependencies.metrics ?? serverMetrics();
   /** How a request reads its workspace's grants (D-289): the composition's set, and the count of a request turned away for one. */
@@ -345,27 +267,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       metrics.entitlementRefusals.inc({ module });
     },
   };
-  /** The module that owns a route as registered; the request log names it for a module's route only. */
-  const moduleOfRoute = (route: string | undefined): string =>
-    modules.owner.ofRoute(routeLabel(route));
-  const moduleField = (route: string | undefined): { module?: string } => {
-    const owner = moduleOfRoute(route);
-    return owner === CORE_OWNER || owner === NO_OWNER ? {} : { module: owner };
-  };
-  /** One request's line on the page: never its path as sent, only the route it was registered as. */
-  const observe = (method: string, route: string | undefined, status: number): void => {
-    const started = currentRequest()?.startedAt;
-    if (started === undefined) return;
-    metrics.httpDuration.observe(
-      {
-        method: methodLabel(method),
-        route: routeLabel(route),
-        status: statusLabel(status),
-        module: moduleOfRoute(route),
-      },
-      (performance.now() - started) / 1000,
-    );
-  };
+  const observation = requestObservation({ modules, metrics, auth: dependencies.auth });
   /** `body` served by one instance of the library, the one current now; see `Dependencies.services`. */
   const within = async <T>(body: () => Promise<T>): Promise<T> =>
     dependencies.services === undefined ? await body() : await dependencies.services.within(body);
@@ -583,215 +485,28 @@ export const createApp = (given: Dependencies): HttpApplication => {
       request,
       clientAddress(peerOf(server, request), request.headers, dependencies.config.TRUST_PROXY),
     );
-  /**
-   * The path a log line names a request by: as sent, except under the library's routes, where it is
-   * the route as the library's own table spells it (`Auth.routeOf`) — a reset's token travels in a
-   * path segment there, and nothing a caller wrote belongs in the log (D-179 §3) — and an incoming
-   * webhook's, whose secret is its last segment (D-245).
-   */
-  const writtenPath = (route: string | undefined, path: string): string =>
-    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);
-  /** What a request's own hooks know that the deadline, which wraps them all, needs to answer in their place. */
-  const requestIds = new WeakMap<Request, string>();
-  const deadlineSignals = new WeakMap<Request, AbortSignal>();
-  /** The answer to a module's request that ran past its deadline: the envelope, with the headers the others carry. */
-  const answerOverrun = (request: Request, module: string): Response => {
-    const { status, body } = refusalFor('UNKNOWN', timedOut(), []);
-    const { pathname } = new URL(request.url);
-    log.warn('request ran past its deadline', {
-      module,
-      method: request.method,
-      path: pathWithoutSecret(pathname),
-    });
-    return Response.json(body, {
-      status,
-      headers: { ...edgeHeaders, 'x-request-id': requestIds.get(request) ?? '' },
-    });
-  };
+  const hooks = requestHooks({
+    dependencies,
+    modules,
+    log,
+    entitlements,
+    edgeHeaders,
+    deadlineOf,
+    admit,
+    observation,
+  });
+  const onError = errorHook({ dependencies, modules, log, metrics, observation });
   const app = new Elysia({
     websocket: { maxPayloadLength: MAX_FRAME_BYTES },
     // What an upload needs, and no more: every other body is bounded at the edge by its length,
     // before it is read (`bodyRefusal`, D-109 §4).
     serve: { maxRequestBodySize: ATTACHMENT_BYTES_MAX },
   })
-    /**
-     * A module's request runs against its module's deadline, whatever it waits for (`platform/request-deadline.ts`, D-270).
-     * `wrap` is the framework's own hook around the whole of a request, "do not use unless you know exactly what you are
-     * doing" in its type's words: `docs/spikes/elysia.md` says what was measured, and `deadline.integration.test.ts` answers
-     * a handler that never returns, over `handle` and over a started server, so an upgrade of the framework that changes it
-     * fails there.
-     */
-    .wrap((fn, request) => {
-      // The framework types what it wraps as a function that returns a function; it is the request's handler, which answers.
-      const handle = fn as unknown as (...given: unknown[]) => Promise<Response> | Response;
-      return async (...args: unknown[]): Promise<Response> => {
-        const module = modules.owner.ofPath(new URL(request.url).pathname);
-        const ms = module === undefined ? undefined : deadlineOf(module);
-        if (module === undefined || ms === undefined) return await handle(...args);
-        return await withDeadline(
-          ms,
-          async (signal) => {
-            deadlineSignals.set(request, signal);
-            return await handle(...args);
-          },
-          () => answerOverrun(request, module),
-        );
-      };
-    })
-    /**
-     * One error handler for the whole surface, so a status is decided in exactly
-     * one place. `set.status` rather than a thrown response: a second way to
-     * choose a status is a second place for two of them to disagree.
-     */
-    /**
-     * Every request is one scope from its first hook: an id the response carries
-     * back as `x-request-id`, and which every line written while serving it
-     * carries too, however deep (D-71).
-     */
-    .onRequest(({ request, set }) => {
-      // An id from the edge is kept when well-formed, as a label only (#234).
-      const requestId = inboundRequestId(request.headers);
-      enterRequest({ requestId, startedAt: performance.now(), entitlements });
-      requestIds.set(request, requestId);
-      // Before anything asks the library: every use of it in this request, and in what the request
-      // leaves for after its answer, is of the instance current now (D-179 §4).
-      dependencies.services?.pin();
-      const headers = {
-        ...edgeHeaders,
-        'x-request-id': requestId,
-        ...(SETUP_PATH.test(new URL(request.url).pathname) ? { 'x-robots-tag': 'noindex' } : {}),
-      };
-      Object.assign(set.headers, headers);
-      // A request turned away here never reaches `onAfterResponse`, and it is the one the person who
-      // holds its id most needs a line for: written now, as sent except under the library's, whose
-      // paths can carry a token and are written as `/auth/*`.
-      const turnedAway = (response: Response): Response => {
-        const { pathname } = new URL(request.url);
-        observe(request.method, EDGE_ROUTE, response.status);
-        log.info('request', {
-          method: request.method,
-          path: pathname.startsWith('/auth/') ? '/auth/*' : pathWithoutSecret(pathname),
-          status: response.status,
-          ms: Math.round(performance.now() - (currentRequest()?.startedAt ?? performance.now())),
-        });
-        return response;
-      };
-      // Before the body is read or a session looked up (D-39 item 2).
-      if (isCrossSiteMutation(request, dependencies.config.APP_URL)) {
-        return turnedAway(crossSiteResponse(headers));
-      }
-      // An installed client this server no longer serves is told so, with what to get (D-186): before the
-      // body is read or a session looked up, and not for the two things such a client needs in order to
-      // learn it — liveness, and `GET /api/client` itself.
-      if (!isOutsideClientPolicy(new URL(request.url).pathname)) {
-        const tooOld = clientRefusal(
-          request.headers.get('x-purlay-client'),
-          clientPolicyOf(dependencies.config),
-        );
-        if (tooOld !== null) return turnedAway(clientTooOldResponse(tooOld, headers));
-      }
-      if (isUploadRequest(request)) {
-        const refusal = uploadRefusal(request, ATTACHMENT_BYTES_MAX);
-        if (refusal !== null) return turnedAway(edgeRefusalResponse(refusal, headers));
-      } else if (isWebhookRequest(request) && !closedRoute(request)) {
-        // A webhook of a module not run is no route: it falls to the body rules of any unknown path below.
-        const refusal = webhookRefusal(request);
-        if (refusal !== null) return turnedAway(edgeRefusalResponse(refusal, headers));
-      } else {
-        if (hasUnsupportedMediaType(request))
-          return turnedAway(unsupportedMediaTypeResponse(headers));
-        const tooMuch = bodyRefusal(request, JSON_BODY_MAX_BYTES);
-        if (tooMuch !== null) return turnedAway(edgeRefusalResponse(tooMuch, headers));
-      }
-      return undefined;
-    })
-    // Before the handler, after the body is parsed: the body is already bounded by the
-    // server (`edge.ts`), and a malformed one is a 400 whoever sends it, with no lookup.
-    .onBeforeHandle(async ({ request, server, set, route }) => {
-      // The stopped modules are read again when the last read is older than the TTL (D-296): one query in two seconds, not one a request.
-      await modules.suspension.fresh();
-      if (closedRoute(request)) {
-        throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
-      }
-      // From here the request is its module's. The edge's limits and session reads below are the core's: they never touch
-      // the leased database.
-      const owner = moduleOfRoute(route);
-      if (owner !== CORE_OWNER && owner !== NO_OWNER)
-        noteModule(owner, deadlineSignals.get(request));
-      const wait = await admit(request, peerOf(server, request));
-      if (wait === undefined) return;
-      set.headers['retry-after'] = String(wait);
-      throw new AppError({ code: 'RATE_LIMITED', message: 'Too many requests. Slow down.' });
-    })
-    .onError(({ code, error, set, path, route }) => {
-      const issues = 'all' in error && Array.isArray(error.all) ? error.all : [];
-      const refusal = refusalFor(code, error, issues);
-      // A browser GitHub sent back is shown the sign-in screen, never this API's JSON (D-121).
-      if (path === SIGN_IN_CALLBACK || path === OIDC_CALLBACK || path === GOOGLE_CALLBACK) {
-        return respond(set, abandonSignIn(dependencies, error, refusal.body.error.code, path));
-      }
-      // As a sign-in's: a browser GitHub sent back is sent on to the app, told, never shown JSON (D-246). Not when
-      // the module that owns it is not run: that path is no route, and says so like any other.
-      if (path === GITHUB_APP_CALLBACK && !modules.closed(path)) {
-        if (refusal.status === 500) log.error('request failed', { err: error, path });
-        set.status = 302;
-        set.headers.location = '/?github=unavailable';
-        return '';
-      }
-      const where = writtenPath(route, path);
-      // The client is told INTERNAL and nothing else; the cause is written here.
-      if (refusal.status === 500)
-        log.error('request failed', { err: error, path: where, ...moduleField(route) });
-      // Said by the name of the reference, so a pairing defect is not hidden by the 404 (D-139 §2).
-      const gone = goneMessageReference(error);
-      if (gone !== undefined) {
-        log.warn('a write referred to a message that is not there', {
-          constraint: gone,
-          path: where,
-        });
-      }
-      if (refusal.body.error.code === 'RATE_LIMITED')
-        metrics.rateLimited.inc({ door: 'http', module: moduleOfRoute(route) });
-      if (error instanceof AppError && error.retryAfterSeconds !== undefined) {
-        set.headers['retry-after'] = String(error.retryAfterSeconds);
-      }
-      if (error instanceof FactBacklogFull) {
-        set.headers['retry-after'] = String(FACT_BACKLOG_RETRY_AFTER_SECONDS);
-        // The client is told to wait; which workspace and which consumer is for the operator.
-        log.warn('a fact was refused: the consumer’s backlog in the workspace is full', {
-          path: where,
-          fact: error.type,
-          workspaceId: error.workspaceId,
-          consumer: error.consumer,
-          ceiling: error.ceiling,
-          ...moduleField(route),
-        });
-      }
-      set.status = refusal.status;
-      return refusal.body;
-    })
-    .onAfterResponse(({ request, path, route, set, responseValue }) => {
-      const started = currentRequest()?.startedAt;
-      // A balancer and the container's own health check poll these every few seconds, and a
-      // scraper `/metrics`; at info they were most of the log. A probe that FAILS is not lost:
-      // readiness writes the reason at warn.
-      const write = POLLED.has(path) ? log.debug : log.info;
-      // A handler that returns a `Response` (the library's routes) leaves `set.status` unset.
-      const status =
-        responseValue instanceof Response
-          ? responseValue.status
-          : typeof set.status === 'string'
-            ? StatusMap[set.status]
-            : (set.status ?? 200);
-      observe(request.method, route, status);
-      write('request', {
-        method: request.method,
-        path: writtenPath(route, path),
-        ...moduleField(route),
-        status,
-        ...(started === undefined ? {} : { ms: Math.round(performance.now() - started) }),
-      });
-    })
+    .wrap(hooks.wrap)
+    .onRequest(hooks.onRequest)
+    .onBeforeHandle(hooks.onBeforeHandle)
+    .onError(onError)
+    .onAfterResponse(hooks.onAfterResponse)
     .get('/health', () => HEALTH)
     /**
      * Readiness: the database answers, every migration is applied, and the
