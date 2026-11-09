@@ -50,7 +50,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'application-leaves-out-the-modules-routes',
     why: 'the application uses no module’s own routes, so every path a module serves from its folder is the 404 of an unknown one (D-280)',
     file: APP,
-    find: '    .use(moduleRoutes)\n',
+    find: '    ...moduleRoutes,\n',
     replace: '',
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
@@ -106,8 +106,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'built-worker-keeps-data-only-csp',
     why: 'A real worker inherits default-src none and cannot load its same-origin decoders or font data.',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: '      if (file.worker) Object.assign(set.headers, WORKER_HEADERS);\n',
+    file: 'apps/api/src/ingress/http/routes/client-routes.ts',
+    find: '    if (file.worker) Object.assign(set.headers, WORKER_HEADERS);\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/serving-the-client.test.ts'],
   },
@@ -279,10 +279,10 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'creators-not-read-from-the-setting',
     why: 'who may make a workspace is not the server’s setting, and a server set to its first person lets anybody in',
-    file: APP,
-    find: '    workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,\n',
+    file: 'apps/api/src/ingress/http/route-context.ts',
+    find: '  workspaceCreators: dependencies.workspaceCreators ?? readWorkspaceCreators,\n',
     replace:
-      "    workspaceCreators:\n      dependencies.workspaceCreators ?? (() => Promise.resolve({ kind: 'anyone' as const })),\n",
+      "  workspaceCreators:\n    dependencies.workspaceCreators ?? (() => Promise.resolve({ kind: 'anyone' as const })),\n",
     tests: [CREATORS_TESTS],
   },
   {
@@ -296,8 +296,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'document-served-under-the-api-policy',
     why: "the shell keeps `default-src 'none'`, or no policy at all, and the browser suite would see a blank page or nothing",
-    file: APP,
-    find: '      if (file.document) Object.assign(set.headers, DOCUMENT_HEADERS);\n',
+    file: 'apps/api/src/ingress/http/routes/client-routes.ts',
+    find: '    if (file.document) Object.assign(set.headers, DOCUMENT_HEADERS);\n',
     replace: '',
     tests: CLIENT_TESTS,
   },
@@ -436,7 +436,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'inbox-routes-count-modules-that-are-not-run',
     why: 'the inbox lists the notices of every module the build carries, run or not (D-286)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/routes/workspace-routes.ts',
     find: '    running: modules.modules.map((module) => module.manifest.id),',
     replace: '    running: modules.bundled.map((module) => module.manifest.id),',
     tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],
@@ -509,7 +509,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'metrics-modules-info-left-off-the-page',
     why: '/metrics carries no purlay_modules_info, so no metric says which modules a node runs (O2)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/routes/probe-routes.ts',
     find: '            modulesInfoFamily(moduleIds),\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
@@ -517,7 +517,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'metrics-modules-info-names-every-module',
     why: '/metrics says chat and issues run on a process that runs neither, so an operator reads the wrong node set (O2)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/routes/probe-routes.ts',
     find: 'modulesInfoFamily(moduleIds)',
     replace: "modulesInfoFamily(['chat', 'issues'])",
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
@@ -619,7 +619,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'readiness-forgets-the-modules-collated-columns',
     why: 'a channel name column restored without COLLATE "C" is called ready because only the core\'s columns are asked about (D-40, D-250)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/routes/probe-routes.ts',
     find: '[...CORE_COLLATED_COLUMNS, ...dependencies.collatedColumns]',
     replace: '[...CORE_COLLATED_COLUMNS]',
     tests: ['apps/api/src/ingress/http/readiness.integration.test.ts'],
@@ -627,7 +627,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'readiness-ignores-the-sets-the-process-runs',
     why: "/health/ready is called without the migration sets of the modules this process runs, so a MODULES=none node on a database without chat's set never becomes ready (D-250)",
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/routes/probe-routes.ts',
     find: '        () => dependencies.shared?.problem(),\n        modules.migrationSets,\n',
     replace: '        () => dependencies.shared?.problem(),\n',
     tests: ['apps/api/src/ingress/http/readiness.integration.test.ts'],
@@ -741,7 +741,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'suspension-client-capabilities-from-the-process-alone',
     why: 'the client is told chat’s capabilities while chat is stopped (D-296)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/routes/sign-in-routes.ts',
     find: 'clientInfo(dependencies.config, dependencies.auth, runningNow())',
     replace: 'clientInfo(dependencies.config, dependencies.auth, moduleIds)',
     tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
@@ -824,7 +824,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'unchanged-file-sent-again',
     why: 'every revalidated file, fonts and shell included, is downloaded whole on every load',
-    file: APP,
+    file: 'apps/api/src/ingress/http/routes/client-routes.ts',
     find: "if (isUnchanged(request.headers.get('if-none-match'), file.etag)) {",
     replace: 'if (false) {',
     tests: CLIENT_TESTS,
