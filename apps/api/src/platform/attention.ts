@@ -31,18 +31,22 @@ export interface InMemoryAttention extends Attention {
 export const inMemoryAttention = (clock: Clock): InMemoryAttention => {
   const lastHeard = new Map<string, number>();
   const keyOf = (userId: string, workspaceId: string): string => `${userId}:${workspaceId}`;
-  // A word past its window is let go on the next call, wherever it is: memory is bounded by the
-  // people active now, not by everyone who ever was.
+  // A word past its window is let go on the next call: memory is bounded by the people active now, not by
+  // everyone who ever was. The map is kept oldest first (`heard` puts a renewed word at the end), so the
+  // sweep stops at the first word still good: a call costs what has run out, not everybody active.
   const sweep = (now: number): void => {
     for (const [key, at] of lastHeard) {
-      if (now - at >= ACTIVE_WINDOW_MS) lastHeard.delete(key);
+      if (now - at < ACTIVE_WINDOW_MS) break;
+      lastHeard.delete(key);
     }
   };
   return {
     heard: (userId, workspaceId): void => {
       const now = clock.now().getTime();
       sweep(now);
-      lastHeard.set(keyOf(userId, workspaceId), now);
+      const key = keyOf(userId, workspaceId);
+      lastHeard.delete(key);
+      lastHeard.set(key, now);
     },
     active: (userId, workspaceId): boolean => {
       const now = clock.now().getTime();
