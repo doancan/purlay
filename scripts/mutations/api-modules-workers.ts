@@ -3,6 +3,14 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_WORKERS: readonly Mutation[] = [
   {
+    id: 'consumer-worker-hands-its-handlers-no-seams',
+    why: 'a consumer’s handler can neither notify nor publish, though its module is wired for both, and fails at its first call',
+    file: 'apps/api/src/modules/workers/outbox-consumer.ts',
+    find: '          seams,\n',
+    replace: '',
+    tests: ['apps/api/src/modules/workers/outbox-consumer.integration.test.ts'],
+  },
+  {
     id: 'outbox-consumer-gets-no-worker',
     why: 'a module with handlers has nothing that runs them, so its facts wait until they expire (D-288)',
     file: 'apps/api/src/modules/workers/outbox-consumer.ts',
@@ -103,6 +111,14 @@ export const API_MODULES_WORKERS: readonly Mutation[] = [
     file: 'apps/api/src/modules/workers/module-workers.ts',
     find: 'portsFor?.(module, database) ?? noPorts',
     replace: 'noPorts',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
+    id: 'worker-is-handed-no-seams',
+    why: 'a worker of a module is handed seams that refuse every call, whatever its module declares',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: 'seamsFor?.(module) ?? noSeams',
+    replace: 'noSeams',
     tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
   },
   {

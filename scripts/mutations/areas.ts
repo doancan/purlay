@@ -33,6 +33,7 @@ export const AREAS = [
       'apps/api/src/export-catalogue.ts',
       'apps/api/src/index.ts',
       'apps/api/src/lifecycle.ts',
+      'apps/api/src/module-seams-wiring.ts',
       'apps/api/src/testing/',
     ],
   },

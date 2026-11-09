@@ -48,13 +48,14 @@ export const outboxConsumerWorkers = (
     {
       name: OUTBOX_CONSUME_WORKER,
       intervalMs: OUTBOX_CONSUME_INTERVAL_MS,
-      work: async ({ database, clock, log, outbox, ports }): Promise<void> => {
+      work: async ({ database, clock, log, outbox, ports, seams }): Promise<void> => {
         await drainOnce(database, {
           handlers,
           batch: OUTBOX_CONSUME_BATCH,
           clock,
           log,
           ports,
+          seams,
           ...(effective === undefined ? {} : { effective }),
           ...(outbox === undefined ? {} : { counters: outbox }),
         });
