@@ -56,50 +56,45 @@ correct the configuration before enabling automated deployment; preserve any dat
 
 ## Automatic updates
 
-Register a GitHub Actions self-hosted runner on the Linux amd64 server, under the same account,
-with the extra label `purlay-server`. Install GitHub CLI (`gh`) for the commit ancestry check.
-The account needs access to Docker and the deployment directory. Bun is not required on the host;
-backup operations use Bun inside the application container. The release packaging job runs on
-GitHub's hosted runner.
-
-In the repository's **Settings → Secrets and variables → Actions → Variables**, set:
-
-| Variable | Value |
-| --- | --- |
-| `DEPLOY_ROOT` | `/srv/purlay` (or the directory used above) |
-| `ENV_FILE` | Optional; defaults to `$DEPLOY_ROOT/production.env` |
-| `COMPOSE_OVERRIDES` | Optional; space-separated absolute paths to server-specific Compose files |
-
-Allow Actions to read the GHCR package; packages published by this repository's workflow normally
-inherit that access. The deploy job uses its temporary `GITHUB_TOKEN` with `packages: read`, so no
-long-lived registry secret is needed in Actions. Its Docker credentials are isolated to a temporary
-directory and removed after deployment.
+The `deploy` workflow publishes tested releases on GitHub-hosted runners. It does not connect to
+production or require an Actions runner on the server. Dockhand pulls published images; enable its
+release polling as described [below](#on-a-server-managed-with-dockhand).
 
 For each push to `main`:
 
 1. `image` builds once, tests the published digest and gives it the full commit tag.
-2. Deployment starts when both the `ci` run and the `image` run of that push have succeeded
-   (D-229). Whichever finishes second starts it; a failed, cancelled or missing run of either stops
-   it before the server is touched.
-3. `deploy` checks out that run's exact commit, pulls its image, resolves the digest, checks the
-   revision label and smoke-tests it. A missing image or failed check leaves the live site alone.
-4. Immediately before switching, it backs up the database and attachments. It records the digest
-   in `production.env`, switches `current` and waits for healthy services.
-5. If startup or the running revision check fails, it restores the database backup and previous
-   release. On success, the release job publishes a GitHub Release if the version is new.
+2. `deploy` waits for that exact commit's `ci` and `image` push runs to succeed (D-229), and verifies
+   the commit belongs to `main`. Failed, cancelled or missing runs refuse publication.
+3. Its hosted release job checks out that exact commit and publishes a GitHub Release when the
+   version is new. A merge that leaves the version alone publishes no new release.
+4. `release-image` gives the release's tested image its version tag and `:release`. Dockhand's
+   configured polling applies it. A successful Actions run proves publication, **not** a running
+   production revision; check the container's revision label and readiness on the actual host.
 
-The retained release directories contain deployment files and maintenance scripts. GitHub's runner
-also keeps its working checkout; the production containers run the downloaded image. Old Docker
-images are left in the host cache so deployment does not delete an image another installation uses.
-Retain the previous image when managing that cache.
+A digest pin is a manual installation. Following `:main` is also different from the release path:
+that tag is published by `image` independently of `ci`, so it can move before the full test gate passes.
+Existing self-hosted Actions runners are no longer used by any workflow and may be unregistered.
 
 ## Manual updates and recovery
 
-For an ordinary retry, use **Actions → deploy → Run workflow** from `main`, optionally supplying a
-full commit hash on `main` that was the tip of a push, whose `ci` and `image` runs both succeeded. A
-commit inside a rebased merge has no runs of its own and is refused. A manual run never publishes a
-GitHub Release. Automatic runs deploy the commit of the run that started them, rather than whatever
-happens to be the latest `main` when the runner starts.
+Use **Actions → deploy → Run workflow** from `main` to retry release publication, optionally giving
+a full commit hash on `main` whose `ci` and `image` push runs both succeeded. A commit inside a rebased
+merge has no runs of its own and is refused. This publishes artifacts; it does not restart a server.
+
+For a Compose installation managed directly, `scripts/deploy.sh` remains available on the server.
+From a clean checkout of the exact tested commit on `main`, authenticate to GHCR if the image is
+private, then run:
+
+```bash
+DEPLOY_ROOT=/srv/purlay IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full-commit-hash>
+```
+
+`ENV_FILE` optionally names the environment file (default: `$DEPLOY_ROOT/production.env`), and
+`COMPOSE_OVERRIDES` optionally lists space-separated absolute override paths. The script verifies the
+image revision, smoke-tests, backs up before switching and checks running revisions and health.
+It restores its backup and previous release on a failed switch. The operator must verify the commit's
+CI results before invoking it; the script does not query Actions. Retain the previous image when
+managing the host's Docker cache.
 
 A manual deploy of an older commit does **not** undo database migrations. To recover from an
 upgrade with a newer schema, use the database restore procedure in
