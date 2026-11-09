@@ -1730,6 +1730,31 @@ describe('attaching files (D-109, #370)', () => {
       expect(uploads.calls).toHaveLength(1);
     });
 
+    test('pasted as plain words, they go into the box as they are and the row still asks', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      fireEvent.keyDown(box(), { key: 'V', metaKey: true, shiftKey: true });
+      await user.paste(longText);
+      expect(box().value).toBe(longText);
+      expect(view.getByText(/This text is 600 lines long/)).toBeDefined();
+      await user.click(view.getByRole('button', { name: 'Send as file' }));
+      expect(box().value).toBe('');
+      expect(uploads.calls).toHaveLength(1);
+    });
+
+    test('words typed in front of the pasted ones are left, and only the pasted ones go', async () => {
+      const uploads = held();
+      const { view, box, user } = await mount({ api: aSignedInApi(uploads.api) });
+      await user.click(box());
+      await user.paste(longText);
+      await user.type(box(), 'first ', { initialSelectionStart: 0, initialSelectionEnd: 0 });
+      expect(box().value.startsWith('first ')).toBe(true);
+      await user.click(view.getByRole('button', { name: 'Send as file' }));
+      expect(box().value).toBe('first ');
+      expect(uploads.calls).toHaveLength(1);
+    });
+
     test('sending the message takes the row away', async () => {
       const { view, box, user } = await mount();
       await user.click(box());
@@ -2389,6 +2414,22 @@ describe('slash commands (D-214)', () => {
     ).toEqual(['/shrug', '/star', '/search']);
     await user.keyboard('{ArrowDown}{Tab}');
     expect(box().value).toBe('/star ');
+  });
+
+  test('the pointer moves the highlight, and a click completes that command and keeps the focus on the box', async () => {
+    const { view, box, user } = await mount();
+    await user.type(box(), '/s');
+    const options = within(view.getByRole('listbox', { name: 'Commands' })).getAllByRole('option');
+    const selected = (): (string | null)[] =>
+      options.map((option) => option.getAttribute('aria-selected'));
+    expect(selected()).toEqual(['true', 'false', 'false']);
+    const search = view.getByRole('option', { name: /\/search/ });
+    await user.hover(search);
+    expect(selected()).toEqual(['false', 'false', 'true']);
+    await user.click(search);
+    expect(box().value).toBe('/search ');
+    expect(view.queryByRole('listbox', { name: 'Commands' })).toBeNull();
+    expectFocusOn(box());
   });
 
   test('Esc closes the list and leaves what was typed', async () => {
