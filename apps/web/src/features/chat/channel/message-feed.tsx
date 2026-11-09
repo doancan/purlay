@@ -2,28 +2,22 @@
  * A channel's messages: loading, empty, failed, and the feed itself (`UX.md` §3, §6–§8).
  *
  * This component is the glue. The rules live in functions it calls — `buildFeed` decides what
- * is shown and where, `useFeedScroll` where the reader stands, `useMarkRead` when the
- * channel counts as read — each tested on its own; what is left here is arranging them and
- * the keyboard.
+ * is shown and where, `useFeedPlacement` where the channel opens, `useFeedScroll` where the
+ * reader stands, `useFeedPaging` which page is read next, `useFeedReveal` what a link brings
+ * into view, `useMarkRead` when the channel counts as read, `FeedList` the rows and the
+ * keyboard; what is left here is arranging them.
  *
  * **Never move content under the reader** (`UX.md` §1): the row at the top is a constant
  * height whether it says "loading older", "the beginning" or nothing, so the status of the
  * load above does not push what is below it; older pages restore the reader's place exactly;
  * and a message arriving while the reader is scrolled up raises a pill instead of moving them.
- *
- * **Keyboard**: the feed is one Tab stop — one row is in the tab order (roving focus), and the
- * controls inside a message are stops only while focus is in its row (`row-stops.ts`, D-168) —
- * and ↑ ↓ Home End move between rows (`row-keys.ts`); Escape returns to the composer — or, on the root whose thread is open in
- * the panel, closes the panel first (`features/threads`, which also owns T, R and ⌘⇧R on the
- * focused row). Visible focus is the global ring, which a row never hides.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { measureSwitch } from '../../../app/switch-timing';
 import { useQueryClient } from '@tanstack/react-query';
 import type { User } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { keepNewestPage } from '../../../data/cache';
-import { ApiError } from '../../../data/errors';
 import { useMembers, useMessages, readingOrder } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useEngine, usePending } from '../../../realtime/realtime-provider';
@@ -34,14 +28,13 @@ import { EmptyState, ErrorState } from '../../../ui/states';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
-import { useThreads } from '../threads/thread-context';
-import { LANDED_MS } from '../messages/message-link';
-import { ThreadedMessageRow } from '../threads/threaded-row';
-import { useEditing } from '../messages/editing';
-import { handleRowKeys } from '../messages/row-keys';
 import { buildFeed, newestConfirmedId, type FeedItem } from './feed-model';
+import { FeedList } from './feed-list';
 import { useFeedPorts } from './feed-ports';
 import { useNowMinute } from './now-minute';
+import { useFeedPaging } from './use-feed-paging';
+import { useFeedPlacement } from './use-feed-placement';
+import { useFeedReveal } from './use-feed-reveal';
 import { useFeedScroll } from './use-feed-scroll';
 import { useMarkRead } from './use-mark-read';
 
@@ -68,150 +61,6 @@ const useDeliveryAnnouncer = (items: readonly FeedItem[]): string => {
   }, [items, t]);
   return said;
 };
-
-/**
- * The channel's composer, wherever the screen put it: the text box in this region that is for
- * writing *to the channel*. The thread panel has a reply box of its own in the same region, and Esc
- * "to the composer" must not land in it (found in a browser, when threads were inline: with a
- * thread open, Esc moved focus into its reply box).
- */
-const composerIn = (region: Element | null): HTMLElement | null => {
-  const outsideThreads = (candidates: Iterable<HTMLElement>): HTMLElement | undefined =>
-    Array.from(candidates).find((box) => box.closest('[data-thread-root]') === null);
-  return (
-    outsideThreads(region?.querySelectorAll<HTMLElement>('[data-composer]') ?? []) ??
-    outsideThreads(region?.querySelectorAll<HTMLElement>('textarea') ?? []) ??
-    null
-  );
-};
-
-interface FeedListProps {
-  readonly content: React.RefObject<HTMLDivElement | null>;
-  readonly scroller: React.RefObject<HTMLDivElement | null>;
-  readonly items: readonly FeedItem[];
-  readonly ariaLabel: string;
-  readonly busy: boolean;
-  readonly meId: string;
-  readonly nowMinute: number;
-  readonly members: ReadonlyMap<string, string>;
-  /** The one row in the tab order. */
-  readonly tabbable: string | null;
-  /** The message a link opened, marked for a moment (D-149). */
-  readonly landed: string | null;
-  readonly onRetry: (id: string) => void;
-  readonly onDiscard: (id: string) => void;
-  readonly onFocusRow: (id: string) => void;
-}
-
-/**
- * The stream itself, and the keyboard that moves through it. It asks the threads' slice first
- * what a key means (T, R, ⌘⇧R, and Escape on the root whose thread is open) before the feed's own
- * keys get it.
- */
-const FeedList = ({
-  content,
-  scroller,
-  items,
-  ariaLabel,
-  busy,
-  meId,
-  nowMinute,
-  members,
-  tabbable,
-  landed,
-  onRetry,
-  onDiscard,
-  onFocusRow,
-}: FeedListProps): React.JSX.Element => {
-  const { t } = useI18n();
-  const threads = useThreads();
-
-  const rows = (): HTMLElement[] =>
-    Array.from(scroller.current?.querySelectorAll<HTMLElement>('[data-message-row]') ?? []);
-
-  const editing = useEditing();
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Menus and their items render in a portal but bubble here through React; they are not ours.
-    if (event.defaultPrevented || !scroller.current?.contains(event.target as Node)) return;
-    if (threads.handleKey(event)) return;
-    if (event.key === 'Escape') {
-      composerIn(scroller.current.closest('main'))?.focus();
-      return;
-    }
-    handleRowKeys(event, rows(), editing.start);
-  };
-
-  const onFocus = (event: React.FocusEvent<HTMLDivElement>): void => {
-    const id = (event.target as HTMLElement).closest<HTMLElement>('[data-message-id]')?.dataset[
-      'messageId'
-    ];
-    if (id !== undefined) onFocusRow(id);
-  };
-
-  return (
-    /* A feed is an ordered stream of articles, and a screen reader needs to know it is one. */
-    <div
-      ref={content}
-      role="feed"
-      className="w-full px-6 max-narrow:px-4"
-      aria-label={ariaLabel}
-      aria-busy={busy}
-      onKeyDown={onKeyDown}
-      onFocusCapture={onFocus}
-    >
-      {items.map((item) => {
-        if (item.kind === 'day') {
-          return (
-            <div
-              key={item.key}
-              aria-hidden="true"
-              className="flex items-center py-6 text-caption font-medium uppercase text-ink-muted"
-            >
-              <span className="flex-1 border-t-hairline border-border-subtle" />
-              <span className="shrink-0 px-3">{item.label}</span>
-              <span className="flex-1 border-t-hairline border-border-subtle" />
-            </div>
-          );
-        }
-        if (item.kind === 'marker') {
-          return (
-            <div
-              key={item.key}
-              data-feed-marker=""
-              className="flex items-center gap-3 py-3 text-caption font-semibold text-danger-text"
-            >
-              <span className="flex-1 border-t-hairline border-danger" />
-              <span className="shrink-0">{t('message.newMarker')}</span>
-            </div>
-          );
-        }
-        return (
-          <ThreadedMessageRow
-            key={item.key}
-            message={item.message}
-            delivery={item.delivery}
-            failure={item.failure}
-            grouped={item.grouped}
-            meId={meId}
-            nowMinute={nowMinute}
-            members={members}
-            tabIndex={item.key === tabbable ? 0 : -1}
-            landed={item.key === landed}
-            onRetry={onRetry}
-            onDiscard={onDiscard}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-/**
- * How many pages back the feed will read to find the reader's place before opening where it
- * is. Ten pages is five hundred messages: a place older than that is not a place the reader is
- * coming back to, and the cost of finding it is a wait they would notice.
- */
-export const SEEK_LIMIT_PAGES = 10;
 
 export interface MessageFeedProps {
   readonly channelId: string;
@@ -269,13 +118,7 @@ export const MessageFeed = ({
     },
     [client, channelId],
   );
-  const threads = useThreads();
   const windowed = around !== null;
-  // The message the link names, from the page that opened the window.
-  const target = useMemo(
-    () => feed.data?.pages.find((page) => page.target !== undefined)?.target,
-    [feed.data],
-  );
   // Newer messages than the window holds: it does not reach the present, and nothing arriving is put in it.
   const detached = windowed && feed.hasPreviousPage;
   const membersQuery = useMembers(workspace.id);
@@ -285,6 +128,7 @@ export const MessageFeed = ({
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const me = useMemo<User>(
@@ -319,31 +163,7 @@ export const MessageFeed = ({
     [format, nowMinute, today, yesterday],
   );
 
-  // **A channel opens where the reader's place is, so the place has to be in hand first.** The
-  // read position may be older than everything the first page holds (ninety unread in a page of
-  // fifty); the marker would then sit above the oldest *loaded* message, the reader would be
-  // placed there, and the pages that arrive above would carry them nowhere near the real line
-  // (found in a browser, in a channel with two hundred messages and the position at the 120th).
-  // Until the position is inside what is loaded — or the reader has been placed once, or the
-  // search has gone `SEEK_LIMIT_PAGES` back — older pages are read and the feed is not shown.
-  const placed = useRef(false);
-  // A link is followed to its message, not to the reader's unread place.
-  const markerFor = windowed ? undefined : markerAfter;
-  const behind =
-    typeof markerFor === 'string' &&
-    messages.length > 0 &&
-    !messages.some((m) => m.id <= markerFor);
-  const seeking =
-    !placed.current &&
-    behind &&
-    feed.hasNextPage &&
-    (feed.data?.pages.length ?? 0) < SEEK_LIMIT_PAGES;
-  useEffect(() => {
-    if (feed.isSuccess && !seeking) placed.current = true;
-  }, [feed.isSuccess, seeking]);
-  // "Never read anything" means the marker is above the oldest message — which is only
-  // the oldest *loaded* one until the first page reaches the beginning.
-  const marker = seeking || (markerFor === null && feed.hasNextPage) ? undefined : markerFor;
+  const { seeking, marker } = useFeedPlacement(feed, messages, markerAfter, windowed);
   const items = useMemo(
     () => buildFeed({ messages, pending, me, markerAfter: marker, dayLabel }),
     [messages, pending, me, marker, dayLabel],
@@ -394,113 +214,29 @@ export const MessageFeed = ({
     ports,
   });
   const announcement = useDeliveryAnnouncer(items);
-
-  // Older pages load when the top comes into view, one at a time.
-  //
-  // **A page that failed is not asked for again by itself.** The observer reports "visible"
-  // whenever it is set up and the top row is on screen, and a failed fetch ends the fetching
-  // state, which sets it up anew: without the error check one outage was a loop of requests
-  // with no back-off, hammering the server while the row said "Try again". Only that button
-  // asks after a failure.
-  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = feed;
-  useEffect(() => {
-    const root = scroller.current;
-    const target = top.current;
-    if (!ready || root === null || target === null || !hasNextPage || isFetchNextPageError) {
-      return undefined;
-    }
-    return ports.whenVisible(target, root, () => {
-      if (!isFetchingNextPage) void fetchNextPage();
-    });
-  }, [ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, ports]);
-
-  // Reading back to the reader's place (see `seeking`), one page at a time.
-  // The count of pages is a dependency because a page that arrives before the render that would
-  // have shown `isFetchingNextPage` leaves every other dependency as it was.
-  const pagesLoaded = feed.data?.pages.length ?? 0;
-  useEffect(() => {
-    if (seeking && !isFetchingNextPage) void fetchNextPage();
-  }, [seeking, isFetchingNextPage, fetchNextPage, pagesLoaded]);
-
-  // A thread the address asks for may be older than the first page: read back until its root
-  // is here or there is nothing older, one page at a time.
   const wanted = !windowed && openThread !== null && !messages.some((m) => m.id === openThread);
-  useEffect(() => {
-    if (wanted && ready && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
-      void fetchNextPage();
-    }
-  }, [wanted, ready, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
-
-  // Newer pages of a window load when its bottom comes into view, one at a time, and — like older
-  // ones — are not asked for again by themselves after a failure. They are history read in below,
-  // not news: the reader stays where they are (`extendBelow`).
-  const bottom = useRef<HTMLDivElement>(null);
-  const { hasPreviousPage, isFetchingPreviousPage, isFetchPreviousPageError, fetchPreviousPage } =
-    feed;
-  const readNewer = useCallback((): void => {
-    extendBelow();
-    void fetchPreviousPage();
-  }, [extendBelow, fetchPreviousPage]);
-  useEffect(() => {
-    const root = scroller.current;
-    const edge = bottom.current;
-    if (!ready || root === null || edge === null || !hasPreviousPage || isFetchPreviousPageError) {
-      return undefined;
-    }
-    return ports.whenVisible(edge, root, () => {
-      if (!isFetchingPreviousPage) readNewer();
-    });
-  }, [ready, hasPreviousPage, isFetchingPreviousPage, isFetchPreviousPageError, readNewer, ports]);
-
-  // A link that names nothing the person can read here — gone, never theirs, another channel's — is
-  // said by the screen, which opens the channel as it is (D-149).
-  const missing =
-    windowed &&
-    ((feed.isError &&
-      feed.data === undefined &&
-      feed.error instanceof ApiError &&
-      feed.error.code === 'MESSAGE_NOT_FOUND') ||
-      (target !== undefined && target.channelId !== channelId));
-  useEffect(() => {
-    if (missing) onLinkMissing?.(around);
-  }, [missing, around, onLinkMissing]);
-
-  // The row to bring into view: the root of the thread the address opened, or the one a link names
-  // (a reply's root, whose thread then opens). The reader was put at the bottom when the feed
-  // opened, and the feed follows the bottom while the box around it changes size: without letting
-  // go first, the older pages read back above it carry the reader straight back down, out of sight
-  // of the thing the link was for (found in a browser, in a channel with a hundred messages).
-  const revealId = windowed
-    ? target === undefined || missing
-      ? null
-      : (target.parentId ?? target.id)
-    : openThread;
-  const revealed = useRef(revealId === null && !windowed);
-  const [landed, setLanded] = useState<string | null>(null);
-  useLayoutEffect(() => {
-    if (revealed.current || !ready || revealId === null) return;
-    const row = scroller.current?.querySelector<HTMLElement>(
-      `[data-message-row][data-message-id="${revealId}"]`,
-    );
-    if (row === null || row === undefined) return;
-    revealed.current = true;
-    holdPlace();
-    row.scrollIntoView({ block: 'center' });
-    if (target === undefined) return;
-    // A reply is marked in its thread, which takes focus there; a root is marked here, and focused.
-    if (target.parentId !== null) {
-      threads.open(target.parentId, 'none');
-      return;
-    }
-    row.focus({ preventScroll: true });
-    setLanded(target.id);
+  const readNewer = useFeedPaging({
+    feed,
+    scroller,
+    top,
+    bottom,
+    ready,
+    seeking,
+    wanted,
+    extendBelow,
+    ports,
   });
-  useEffect(() => {
-    if (landed === null) return undefined;
-    return ports.schedule(() => {
-      setLanded(null);
-    }, LANDED_MS);
-  }, [landed, ports]);
+  const landed = useFeedReveal({
+    feed,
+    channelId,
+    scroller,
+    ready,
+    openThread,
+    around,
+    holdPlace,
+    onLinkMissing,
+    ports,
+  });
 
   // One function for every row, so a row's props do not change when another row's do.
   const retry = useCallback(
@@ -596,13 +332,13 @@ export const MessageFeed = ({
             <span className="flex items-center gap-2 text-danger-text">
               <Icon name="failed" size="sm" />
               {t('feed.olderError')}
-              <button type="button" className="underline" onClick={() => void fetchNextPage()}>
+              <button type="button" className="underline" onClick={() => void feed.fetchNextPage()}>
                 {t('feed.olderRetry')}
               </button>
             </span>
-          ) : isFetchingNextPage ? (
+          ) : feed.isFetchingNextPage ? (
             <span role="status">{t('feed.olderLoading')}</span>
-          ) : hasNextPage ? null : (
+          ) : feed.hasNextPage ? null : (
             <span>{t(conversation ? 'feed.startConversation' : 'feed.start')}</span>
           )}
         </div>
@@ -611,7 +347,7 @@ export const MessageFeed = ({
           scroller={scroller}
           items={items}
           ariaLabel={t('feed.label', { channel: channelName })}
-          busy={isFetchingNextPage}
+          busy={feed.isFetchingNextPage}
           meId={user.id}
           nowMinute={nowMinute}
           members={members}
@@ -627,7 +363,7 @@ export const MessageFeed = ({
             ref={bottom}
             className="flex h-control w-full items-center justify-center px-6 text-caption text-ink-muted"
           >
-            {isFetchPreviousPageError ? (
+            {feed.isFetchPreviousPageError ? (
               <span className="flex items-center gap-2 text-danger-text">
                 <Icon name="failed" size="sm" />
                 {t('feed.newerError')}
@@ -635,7 +371,7 @@ export const MessageFeed = ({
                   {t('feed.olderRetry')}
                 </button>
               </span>
-            ) : isFetchingPreviousPage ? (
+            ) : feed.isFetchingPreviousPage ? (
               <span role="status">{t('feed.newerLoading')}</span>
             ) : null}
           </div>
