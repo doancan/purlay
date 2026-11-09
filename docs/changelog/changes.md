@@ -27,19 +27,6 @@ have it.
 
 ## Unreleased
 
-### Added
-
-- **Notifications** — choose in-app message cards, sound and desktop alerts separately; a card opens the conversation, and multiple tabs share one alert (D-148)
-
-### Fixed
-
-- **Notifications** — when more push notifications are waiting than the server holds, it lets go of the oldest instead of the one that has just arrived (D-298)
-- **Notifications** — a missed-messages letter sent again after a failure that may have come after the mail server took it carries the same `Message-ID`, an address the mail server says does not exist is no longer tried every quarter hour, and one person's failed letter no longer holds back the others' (D-297)
-- **Copying** — on a page served over plain http, Copy no longer throws: a link or a code says it could not be copied, and the setup screen's button stays as it was
-- **Workspaces** — a workspace named with Turkish letters or accents suggests an address with their plain forms (`Çağrı Merkezi` is `cagri-merkezi`) instead of dropping them
-- **Conversations** — finding a person for a new conversation matches Turkish letters typed plain or accented (`isik` finds Işık)
-- **Operations** — `erase:content` now says when a message was held by another transaction and still has its words, exits 1 and is run again, and `--all` reaches a workspace where the person only left a decision note (D-139)
-- **Operations** — `admin:reset-password` tells the operator what actually failed instead of one fixed sentence (D-179)
-- **Messages** — moving to another workspace no longer deletes the messages you had not yet sent in the one you left
+_Nothing yet._
 
 ---
