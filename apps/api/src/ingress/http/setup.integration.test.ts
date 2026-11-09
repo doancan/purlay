@@ -9,7 +9,7 @@
  * every route, counted before anything is weighed; no secret, password, code or token in any line the
  * server writes.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
@@ -59,6 +59,12 @@ const clones: (() => Promise<void>)[] = [];
 const stops: (() => unknown)[] = [];
 // Every wizard's database, dropped after its connections have closed (`dropDatabases`): one a test, forty-six
 // of them, which fitted the five seconds a hook is given only on an idle machine (#797, D-228).
+// Each test here makes wizards of its own (a database clone each) and walks the real setup; the longest also times
+// 600 refusals. Measured on one quiet machine, three runs in a row: the file took 61, 31 and 17 seconds and its
+// slowest test 5.0, 3.5 and 2.6, the first after a checkout paying to transpile the API. Five seconds is not what
+// this work costs cold, so the ceiling is set from the work, not to make a failure go away.
+setDefaultTimeout(30_000);
+
 afterAll(async () => {
   for (const stop of stops) await stop();
   await Promise.all(
