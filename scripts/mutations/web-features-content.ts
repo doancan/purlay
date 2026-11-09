@@ -3,6 +3,14 @@ import type { Mutation } from '../mutate';
 
 export const WEB_FEATURES_CONTENT: readonly Mutation[] = [
   {
+    id: 'copy-port-throws-without-clipboard',
+    why: 'where the browser has no clipboard, copying throws before it can reject, so the callers never say it failed',
+    file: 'apps/web/src/features/content/content-ports.tsx',
+    find: '  copy: async (text) => {\n    await navigator.clipboard.writeText(text);\n  },\n',
+    replace: '  copy: (text) => navigator.clipboard.writeText(text),\n',
+    tests: ['apps/web/src/features/content/content-ports.test.tsx'],
+  },
+  {
     id: 'github-card-drawn-for-nothing',
     why: 'a link the server has no card for draws an empty card, or breaks the row',
     file: 'apps/web/src/features/content/github-cards.tsx',

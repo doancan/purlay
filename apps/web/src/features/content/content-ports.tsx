@@ -17,7 +17,10 @@ export interface ContentPorts {
 
 const browserPorts: ContentPorts = {
   highlight: browserHighlighter,
-  copy: (text) => navigator.clipboard.writeText(text),
+  // `navigator.clipboard` is absent outside a secure context: that is a refusal to report, not a throw.
+  copy: async (text) => {
+    await navigator.clipboard.writeText(text);
+  },
 };
 
 export const ContentPortsContext = createContext<ContentPorts>(browserPorts);
