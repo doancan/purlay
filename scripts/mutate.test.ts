@@ -50,6 +50,46 @@ const survivor: Mutation = {
 };
 
 describe('the mutation runner', () => {
+  test('bounds a flooding mutant without losing whether ordinary tests pass', () => {
+    const root = aRepository();
+    writeFileSync(
+      join(root, 'probe.ts'),
+      "import { clamp } from './src/clamp';\nif (clamp(99) !== 10) for (let i = 0; i < 32; i++) console.log('x'.repeat(8192));\n",
+    );
+    const started: string[] = [];
+    const verdicts = runMutations({
+      root,
+      mutations: [killed, survivor],
+      command: [process.execPath, '--no-env-file', 'probe.ts'],
+      outputMaxBytes: 1024,
+      onStart: (id): void => {
+        started.push(id);
+      },
+    });
+    expect(verdicts.map((verdict) => verdict.outcome)).toEqual(['caught', 'survived']);
+    expect(started).toEqual([killed.id, survivor.id]);
+  });
+
+  test('a flooding baseline still refuses to judge any mutation', () => {
+    const root = aRepository();
+    writeFileSync(
+      join(root, 'probe.ts'),
+      "for (let i = 0; i < 32; i++) console.log('x'.repeat(8192));\n",
+    );
+    const started: string[] = [];
+    expect(() =>
+      runMutations({
+        root,
+        mutations: [killed],
+        command: [process.execPath, '--no-env-file', 'probe.ts'],
+        outputMaxBytes: 1024,
+        onStart: (id): void => {
+          started.push(id);
+        },
+      }),
+    ).toThrow('fail before any mutation');
+    expect(started).toEqual([]);
+  });
   test('reports a mutation the tests notice as caught, and one they do not as survived', () => {
     const root = aRepository();
     const verdicts = runMutations({ root, mutations: [killed, survivor] });

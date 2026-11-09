@@ -427,6 +427,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/run-mutations.test.ts'],
   },
   {
+    id: 'mutation-output-unbounded',
+    why: 'A deliberately broken guard can flood child output until the mutation runner itself crashes.',
+    file: 'scripts/mutate.ts',
+    find: '    maxBuffer: outputMaxBytes,',
+    replace: '',
+    tests: ['scripts/mutate.test.ts'],
+  },
+  {
     id: 'prune-wal-keeps-from-the-newest-base-backup',
     why: 'the archive is cut at the newest base backup and every older one in the retention window can no longer be restored to',
     file: 'scripts/prune-wal.sh',

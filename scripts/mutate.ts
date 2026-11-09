@@ -63,6 +63,10 @@ export interface Options {
   readonly timeoutMs?: number;
   /** Longest the unmutated run may take: it runs every file the mutations name, not the few of one. */
   readonly baselineTimeoutMs?: number;
+  /** A removed guard may flood stderr; stop that child before buffering unbounded output. */
+  readonly outputMaxBytes?: number;
+  /** Identifies the mutation before its child starts, including a child that hangs or floods output. */
+  readonly onStart?: (id: string) => void;
 }
 
 /** A copy of the repository that mutations may be written to. */
@@ -94,6 +98,7 @@ const run = (
   tests: readonly string[],
   env: Options['env'],
   timeoutMs: number,
+  outputMaxBytes: number,
 ): { passed: boolean; output: string } => {
   const process = Bun.spawnSync([...command, ...tests], {
     cwd: copy,
@@ -101,6 +106,7 @@ const run = (
     stdout: 'pipe',
     stderr: 'pipe',
     timeout: timeoutMs,
+    maxBuffer: outputMaxBytes,
   });
   const output = process.stdout.toString() + process.stderr.toString();
   return { passed: process.exitCode === 0 && !process.exitedDueToTimeout, output };
@@ -116,6 +122,8 @@ export const runMutations = (options: Options): Verdict[] => {
   ];
   const timeoutMs = options.timeoutMs ?? 180_000;
   const baselineTimeoutMs = options.baselineTimeoutMs ?? 900_000;
+  // The full local suite produced 3.7 MB; 64 MiB leaves room for over ten times that output.
+  const outputMaxBytes = options.outputMaxBytes ?? 64 * 1024 * 1024;
   const root = resolve(options.root);
   const copy = copyTree(root);
   try {
@@ -125,6 +133,7 @@ export const runMutations = (options: Options): Verdict[] => {
       [...new Set(options.mutations.flatMap((m) => m.tests))],
       options.env,
       baselineTimeoutMs,
+      outputMaxBytes,
     );
     if (!baseline.passed) {
       throw new Error(
@@ -145,7 +154,8 @@ export const runMutations = (options: Options): Verdict[] => {
       }
       writeFileSync(path, mutated);
       try {
-        const result = run(copy, command, mutation.tests, options.env, timeoutMs);
+        options.onStart?.(mutation.id);
+        const result = run(copy, command, mutation.tests, options.env, timeoutMs, outputMaxBytes);
         if (result.passed && mutation.equivalent !== undefined) {
           return { id: mutation.id, outcome: 'equivalent', detail: mutation.equivalent };
         }

@@ -39,7 +39,13 @@ if (chosen.length === 0) {
   console.error(`no mutation matches ${wanted.join(', ')}`);
   process.exit(2);
 }
-const verdicts = runMutations({ root: join(import.meta.dir, '..'), mutations: chosen });
+const verdicts = runMutations({
+  root: join(import.meta.dir, '..'),
+  mutations: chosen,
+  onStart: (id): void => {
+    console.log(`testing ${id}`);
+  },
+});
 console.log(report(verdicts));
 // A changed entry must demonstrate a failing test; legacy declared equivalents remain valid in the full list.
 const passed =
