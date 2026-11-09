@@ -218,6 +218,19 @@ What belongs here is the discipline around them:
   first.
 - **Verify by running it.** Never claim something passes without the output in front of you, and
   CI is the only authority on whether it does.
+- **A test that fails once is a defect, not weather.** Nothing is retried, in CI or on a machine:
+  Playwright's `retries` is 0, and a run that passes the second time is not a pass that was earned.
+  When a test fails and nothing changed that explains it, the work stops until the cause is known. The
+  cause is reproduced on purpose (a route that slows an answer, a transaction held open, a fake clock for
+  the time the page waits on) and the fix is shown to fix that reproduction. A longer timeout, a second
+  run and a sleep are not fixes. The first failure keeps its trace (`retain-on-failure`), so the
+  evidence is in the report.
+- **Time is an argument, and a test costs the same every run.** A test that needs time to pass moves a
+  fake clock (`fixedClock`, `aMovableClock`, Playwright's `page.clock`) and does not wait for it; a
+  real wait remains only where the thing under test is real time. A test that needs seconds alone is a
+  test of too much, and it is the first to time out when the machine is busy: the bound it exercises is
+  taken as a dependency (`queueMax` of the push sender), so three devices prove what a thousand
+  encryptions would.
 - **Coverage says a line ran, not that a test would notice if it were wrong.** `bun run mutate`
   applies the hand-written mutations in `scripts/mutations/` (a guard removed, a limit raised, a
   call moved) to a copy of the repository and reports which the named tests catch; it exits

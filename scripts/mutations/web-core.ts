@@ -320,6 +320,14 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/data/sidebar-writes.test.ts'],
   },
   {
+    id: 'playwright-retries-the-failure',
+    why: 'CI runs a failing end-to-end test again and calls the second run a pass, so five flaky tests were green and nobody saw the first failure (CONTRIBUTING §5)',
+    file: 'apps/web/playwright.config.ts',
+    find: '  retries: 0,\n',
+    replace: '  retries: ci ? 1 : 0,\n',
+    tests: ['scripts/no-retries.test.ts'],
+  },
+  {
     id: 'push-worker-replacement-stays-silent',
     why: 'a new push silently replaces its conversation notice without requesting another alert',
     file: 'apps/web/worker/notice.ts',
