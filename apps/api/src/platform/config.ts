@@ -12,6 +12,7 @@
  * walking skeleton reachable. `CONFIG.md` publishes the whole set; this is the
  * part the application reads today, and a test checks it is a subset.
  */
+import { OUTBOX_DEAD_KEPT_DAYS } from './outbox-sweep';
 import { createECDH } from 'node:crypto';
 import { Type, type Static } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
@@ -89,6 +90,12 @@ export const Environment = Type.Object({
     minimum: 1,
     maximum: 1_000_000,
     default: OUTBOX_PENDING_MAX_DEFAULT,
+  }),
+  /** Days a dead or discarded fact is kept for an operator to look at, requeue or answer for (D-288 §12). */
+  OUTBOX_DEAD_KEPT_DAYS: Type.Integer({
+    minimum: 30,
+    maximum: 3650,
+    default: OUTBOX_DEAD_KEPT_DAYS,
   }),
   DATABASE_SSL: Type.Boolean({ default: false }),
   /** Production refuses a database connection without TLS unless this says the
