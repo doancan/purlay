@@ -13,8 +13,25 @@ import json, os, re, pathlib, collections, sys
 # A person's own tooling lives in directories no clone has and no commit carries (`.git/info/exclude`
 # names them on one machine). Reading them would fail the check here for a file CI never sees.
 PERSONAL = {'.agents', '.claude', '.superpowers', '.superdesign', '.swarm'}
-docs = {p.as_posix(): p.read_text() for p in sorted(pathlib.Path('.').rglob('*.md'))
-        if not (PERSONAL | {'node_modules'}) & set(p.parts)}
+_PRUNE = {'.git', 'node_modules', '.tsbuild', 'dist', 'coverage'} | PERSONAL
+
+
+def _tree():
+    """Every file under here, sorted as `rglob('*')` gave them, without going into what is never read.
+
+    `rglob` goes into every directory and filters afterwards, so a checkout with its dependencies installed
+    (or a person's own tooling holding copies of the repository) was walked in full, three times, to throw
+    nearly all of it away: tens of seconds, and different on every machine. This walks once and does not enter.
+    """
+    found = []
+    for dirpath, dirnames, filenames in os.walk('.'):
+        dirnames[:] = [d for d in dirnames if d not in _PRUNE]
+        found.extend(pathlib.Path(dirpath, name) for name in filenames)
+    return sorted(found)
+
+
+FILES = _tree()
+docs = {p.as_posix(): p.read_text() for p in FILES if p.suffix == '.md'}
 problems = collections.defaultdict(list)
 
 # ---- build a title index per document, covering all three heading styles ----
@@ -235,12 +252,16 @@ for f, body in docs.items():
 
 # ---- 11. every decision is cited by something other than the record itself --
 # A decision nothing points at was either never propagated or is dead.
+# The changelog mentions every decision by construction, so it cannot count
+# as propagation — that would make this check pass for a decision nothing acts on.
+# Read once, for every number at the same time: a search per decision over every document was
+# three hundred passes over the same text.
+_cited_elsewhere = set()
+for f, body in docs.items():
+    if f != "docs/DECISIONS.md" and not is_changelog(f):
+        _cited_elsewhere |= {int(m) for m in re.findall(r"\bD-(\d+)\b", body)}
 for n in sorted(defined["D"]):
-    # The changelog mentions every decision by construction, so it cannot count
-    # as propagation — that would make this check pass for a decision nothing acts on.
-    cited = any(re.search(rf"\bD-{n}\b", body) for f, body in docs.items()
-                if f != "docs/DECISIONS.md" and not is_changelog(f))
-    if not cited:
+    if n not in _cited_elsewhere:
         problems["decision never cited outside DECISIONS.md"].append(f"D-{n}")
 
 # ---- 12. section numbering is locked to its meaning -------------------------
@@ -300,11 +321,11 @@ if _open:
 # #268 reached main with an unresolved conflict in two documents, and every gate
 # was green: nothing in this repository read for the markers, and the numbering
 # check counts decisions without looking at where they sit. Both are cheap to see.
-_skip = {'.git', 'node_modules', '.tsbuild', 'dist', 'coverage'} | PERSONAL
+_skip = _PRUNE
 _binary = {'.png', '.jpg', '.gif', '.ico', '.woff', '.woff2', '.lock'}
 _marker = re.compile(r'^(<{7}|>{7})( |$)|^={7}$', re.M)
 _scanned = 0
-for _p in sorted(pathlib.Path('.').rglob('*')):
+for _p in FILES:
     if _skip & set(_p.parts) or not _p.is_file() or _p.suffix in _binary:
         continue
     try:
@@ -312,6 +333,8 @@ for _p in sorted(pathlib.Path('.').rglob('*')):
     except UnicodeDecodeError:
         continue
     _scanned += 1
+    if '<<<<<<<' not in _text and '>>>>>>>' not in _text and '=======' not in _text:
+        continue
     for _m in _marker.finditer(_text):
         problems['unresolved merge conflict marker'].append(f"{_p.as_posix()}:{_text.count(chr(10), 0, _m.start()) + 1}")
         break
@@ -372,10 +395,10 @@ for _f, _body in docs.items():
 # A comment that cites `MODULES.md §11` or D-254 is a pointer a reader follows. The documents' own references are
 # checked above; the ones in source were not, and a renumbering left them pointing at nothing or at another thing.
 _SOURCE_SUFFIXES = {'.ts', '.tsx', '.mjs'}
-_SOURCE_SKIP = {'.git', 'node_modules', '.tsbuild', 'dist', 'coverage'} | PERSONAL
+_SOURCE_SKIP = _PRUNE
 _source_cite = re.compile(r'`?([A-Za-z]+\.md)`?\s+§+\s*(\d+(?:\.\d+)?)')
 _sources = 0
-for _p in sorted(pathlib.Path('.').rglob('*')):
+for _p in FILES:
     if _p.suffix not in _SOURCE_SUFFIXES or _SOURCE_SKIP & set(_p.parts) or not _p.is_file():
         continue
     try:
@@ -383,13 +406,16 @@ for _p in sorted(pathlib.Path('.').rglob('*')):
     except UnicodeDecodeError:
         continue
     _sources += 1
-    for _doc, _sec in _source_cite.findall(_text):
-        _target = alias.get(_doc)
-        if _target and _sec not in TITLES[_target]:
-            problems['source cites a section that does not exist'].append(f"{_p.as_posix()} -> {_doc} §{_sec}")
-    for _n in sorted({int(m) for m in re.findall(r'\bD-(\d+)\b', _text)}):
-        if _n not in defined['D']:
-            problems['source cites a decision that does not exist'].append(f"{_p.as_posix()}: D-{_n}")
+    # Most files cite neither: a substring test costs a fraction of a regular expression read over every one.
+    if '.md' in _text:
+        for _doc, _sec in _source_cite.findall(_text):
+            _target = alias.get(_doc)
+            if _target and _sec not in TITLES[_target]:
+                problems['source cites a section that does not exist'].append(f"{_p.as_posix()} -> {_doc} §{_sec}")
+    if 'D-' in _text:
+        for _n in sorted({int(m) for m in re.findall(r'\bD-(\d+)\b', _text)}):
+            if _n not in defined['D']:
+                problems['source cites a decision that does not exist'].append(f"{_p.as_posix()}: D-{_n}")
 # A scan that read nothing found nothing for the wrong reason (CONTRIBUTING §6.4).
 if _sources < 100:
     problems['the source citation scan read almost nothing'].append(f"{_sources} files")
