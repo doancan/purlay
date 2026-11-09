@@ -32,8 +32,7 @@ import { ATTACHMENT_BYTES_MAX, ATTACHMENTS_PER_MESSAGE_MAX, MessageContent } fro
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon, type GlyphName } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
-import { RealtimePortsContext, useEngine } from '../../../realtime/realtime-provider';
-import { systemClock } from '../../../system-clock';
+import { useEngine } from '../../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
@@ -52,8 +51,6 @@ import {
   insertMarkdown,
   insertText,
   insideFence,
-  placeBlock,
-  undoPaste,
   withoutBlock,
   rowsFor,
   trimEnd,
@@ -73,9 +70,8 @@ import { renderContent } from '../../content/render-content';
 import { useCodeRepository } from '../../../data/queries';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 import { duringComposition, useComposition } from './composition';
-import { FileOfferBar } from './file-offer';
-import { convertPaste, fileOfferFor, isLargeTable, type FileOffer, type PasteKind } from './paste';
-import { pastedFiles } from './paste-shapes';
+import { FileOfferBar, type PendingOffer } from './file-offer';
+import { usePasteHandler } from './paste-handler';
 import { composerKey, useComposerInbox } from './quote';
 import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
 import { useSlashRunner } from './slash-run';
@@ -96,29 +92,6 @@ export interface ComposerProps {
   readonly onSent?: (id: string) => void;
 }
 
-/** What the toast says of each conversion a paste can make (D-210, D-259). */
-const PASTE_SAID: Readonly<
-  Record<
-    PasteKind,
-    | 'composer.pasted'
-    | 'composer.pasted.table'
-    | 'composer.pasted.formatted'
-    | 'composer.pasted.inline'
-    | 'composer.pasted.link'
-    | 'composer.pasted.list'
-  >
-> = {
-  code: 'composer.pasted',
-  table: 'composer.pasted.table',
-  formatted: 'composer.pasted.formatted',
-  inline: 'composer.pasted.inline',
-  link: 'composer.pasted.link',
-  list: 'composer.pasted.list',
-};
-
-/** Conversions that are Undo, not Paste as text: what was pasted was code, a link — a guess about words. */
-const UNDOABLE: ReadonlySet<PasteKind> = new Set<PasteKind>(['code', 'inline', 'link']);
-
 const Inner = ({
   channelId,
   channelName,
@@ -130,7 +103,6 @@ const Inner = ({
   const { t } = useI18n();
   const engine = useEngine();
   const toast = useToast();
-  const { dismiss } = toast;
   const client = useQueryClient();
   const session = useSession();
   const key = draftKey(session.user.id, channelId, parentId);
@@ -166,28 +138,12 @@ const Inner = ({
     readonly caret: number;
   } | null>(null);
   latest.current = text;
-  const pasteToast = useRef<number | null>(null);
-  // The page's clock, the one a test drives: files are named for the minute they were made (D-259).
-  const clock = useContext(RealtimePortsContext).clock ?? systemClock;
-  /** A paste too long for a message, and the words it put in the box: offered as a file until answered (D-259). */
-  const [offer, setOffer] = useState<{
-    readonly file: FileOffer;
-    /** What the paste put in the box, and where, so Send as file takes out that and not an earlier copy. */
-    readonly words: string;
-    readonly at: number;
-    readonly table: boolean;
-  } | null>(null);
+  const [offer, setOffer] = useState<PendingOffer | null>(null);
   // Words that have been edited away are not offered again if they come back (an undo, the same paste).
   useEffect(() => {
     if (offer !== null && !text.includes(offer.words)) setOffer(null);
   }, [text, offer]);
 
-  useEffect(
-    () => (): void => {
-      if (pasteToast.current !== null) dismiss(pasteToast.current);
-    },
-    [key, dismiss],
-  );
   // Held above the composer, per place, with a send asked for while they were still uploading: a
   // channel switch or a closed thread loses neither, and the send still goes when they land (D-171).
   const uploads = useUploads(key, () => latest.current);
@@ -238,6 +194,17 @@ const Inner = ({
     // What was wrong with the old text is not known to be wrong with the new.
     setError(null);
   };
+
+  const pasteHandler = usePasteHandler({
+    key,
+    text,
+    latest,
+    caret,
+    field,
+    change,
+    addFiles: uploads.add,
+    offerFile: setOffer,
+  });
 
   /** Where the caret goes once the text a button inserted is in the box. */
   const inserted = useRef<Selection | null>(null);
@@ -404,7 +371,7 @@ const Inner = ({
     uploads.clear();
     setWaiting(false);
     setOffer(null);
-    if (pasteToast.current !== null) dismiss(pasteToast.current);
+    pasteHandler.dismissNotice();
     setText('');
     setError(null);
     // Gone from storage now, not a debounce from now: a reload right after sending must
@@ -416,8 +383,7 @@ const Inner = ({
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     // The platform's "paste as plain text": the paste that follows is taken as it is (D-210).
-    plainNext.current =
-      (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'v';
+    pasteHandler.noteKey(event);
     if (
       event.key === 'ArrowUp' &&
       parentId === undefined &&
@@ -553,119 +519,6 @@ const Inner = ({
       field.current?.focus();
     },
   );
-
-  /** Set by Mod+Shift+V, read by the paste it starts. */
-  const plainNext = useRef(false);
-  const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
-    const data = event.clipboardData as DataTransfer | undefined;
-    const raw = data?.getData('text/plain') ?? '';
-    // Windows and old Macs end a line with CR LF or CR; a byte-order mark comes from a file's first line.
-    const pasted = raw.replace(/\r\n?/g, '\n').replace(/^\uFEFF/, '');
-    // A pasted image or file is uploaded, not written into the box — unless the clipboard's words are
-    // what was copied: a spreadsheet's range comes with a picture of itself (D-259). Some engines only
-    // list a pasted file under `items`.
-    const listed = Array.from(data?.files ?? []);
-    const carried =
-      listed.length > 0
-        ? listed
-        : Array.from(data?.items ?? []).flatMap((item) => {
-            const file = item.kind === 'file' ? item.getAsFile() : null;
-            return file === null ? [] : [file];
-          });
-    const files = pastedFiles(carried, pasted, clock.now());
-    if (files.length > 0) {
-      event.preventDefault();
-      uploads.add(files);
-      return;
-    }
-    const target = event.currentTarget;
-    const selection = { start: target.selectionStart, end: target.selectionEnd };
-    const selected = text.slice(selection.start, selection.end);
-    // Mod+Shift+V asked for the words as they are (D-210), and inside code the words are what is
-    // written: nothing is turned into anything (D-205).
-    const inCode = insideFence(text.slice(0, selection.start));
-    const plain = plainNext.current || inCode;
-    plainNext.current = false;
-    const converted = plain
-      ? null
-      : convertPaste(pasted, data?.getData('text/html') ?? '', selected);
-    // Too long for a message: the words are kept where they are, and a file is one answer away.
-    const fileOffer = inCode ? null : fileOfferFor(pasted, clock.now());
-    // The box takes the words as they are written here — not as the browser would insert them, which
-    // keeps a byte-order mark and may keep a CR — whenever the offer must find them again, or they differ.
-    const manual = converted === null && (fileOffer !== null || pasted !== raw);
-    if (converted === null && !manual) {
-      // The words the browser inserts. A picture the clipboard carried with them is left out; one press
-      // attaches it, since words winning was a guess about what was meant.
-      if (carried.length > 0) {
-        if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
-        pasteToast.current = toast.show({
-          message: t('composer.pasted.pictureLeft'),
-          actionLabel: t('composer.pasted.attachPicture'),
-          onAction: () => {
-            uploads.add(pastedFiles(carried, '', clock.now()));
-          },
-        });
-      }
-      return;
-    }
-    event.preventDefault();
-    if (converted === null) {
-      const inserted = insertText(text, selection, pasted);
-      caret.current = inserted.selection.end;
-      change(inserted.text);
-      if (fileOffer !== null) {
-        setOffer({
-          file: fileOffer,
-          words: pasted,
-          at: selection.start,
-          table: isLargeTable(pasted),
-        });
-      }
-      return;
-    }
-    const placed = converted.block
-      ? placeBlock(text, selection, converted.markdown)
-      : {
-          text: text.slice(0, selection.start) + converted.markdown + text.slice(selection.end),
-          caret: selection.start + converted.markdown.length,
-          start: selection.start,
-        };
-    if (fileOffer !== null) {
-      setOffer({
-        file: fileOffer,
-        words: converted.markdown,
-        at: placed.start,
-        table: isLargeTable(pasted),
-      });
-    }
-    // What was put in, with the line breaks that set it apart: Undo finds it and puts the words back.
-    const block = placed.text.slice(selection.start, placed.caret);
-    caret.current = placed.caret;
-    change(placed.text);
-    if (pasteToast.current !== null) toast.dismiss(pasteToast.current);
-    // A table or formatting is a guess about what was meant: the words as they were are one step away.
-    // Later edits are kept either way; a block that has itself been edited is left as it is (D-205).
-    // A link replaced the words it was pasted over: Undo gives *them* back, not the address.
-    pasteToast.current = toast.show({
-      message: t(PASTE_SAID[converted.kind]),
-      actionLabel: t(UNDOABLE.has(converted.kind) ? 'common.undo' : 'composer.pasted.asText'),
-      onAction: () => {
-        const undone = undoPaste(
-          latest.current,
-          block,
-          converted.kind === 'link' ? selected : pasted,
-        );
-        if (undone === null) {
-          toast.show({ message: t('composer.pasteChanged') });
-          return;
-        }
-        caret.current = undone.selection.end;
-        change(undone.text);
-        field.current?.focus();
-      },
-    });
-  };
 
   // The key printed in a tooltip: only the words depend on the platform, never the behaviour.
   const mac = isMacPlatform(typeof navigator === 'undefined' ? {} : navigator);
@@ -1060,7 +913,7 @@ const Inner = ({
                 setCaretAt(event.currentTarget.selectionStart);
               }}
               onKeyDown={onKeyDown}
-              onPaste={onPaste}
+              onPaste={pasteHandler.onPaste}
             />
             {previewing && (
               <div data-composer-preview="" className="min-h-control min-w-0 flex-1">
