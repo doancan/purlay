@@ -107,6 +107,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/production-compose.integration.test.ts'],
   },
   {
+    id: 'config-document-states-another-default',
+    why: 'CONFIG.md says another default than the loader applies, and an operator who reads it is told a port that is not the one',
+    file: 'docs/CONFIG.md',
+    find: '| `PORT` | — | `3001` |',
+    replace: '| `PORT` | — | `3002` |',
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
+  {
     id: 'config-metrics-table-forgets-a-family',
     why: 'the operator’s table of metric families omits one, so the series that says notices stopped arriving is learned of from the code',
     file: 'docs/CONFIG.md',
@@ -153,6 +161,14 @@ export const REPO: readonly Mutation[] = [
     find: '`cli/demo-seed.ts` and `cli/budget-latency.ts`).',
     replace: '`cli/demo-seed.ts`, `cli/demo-script.ts` and `cli/budget-latency.ts`).',
     tests: ['apps/api/src/stated-numbers.test.ts'],
+  },
+  {
+    id: 'schema-document-module-column-renamed',
+    why: 'the DDL SCHEMA.md shows for a module-owned table names a column the migration does not',
+    file: 'docs/SCHEMA.md',
+    find: '    assignee_id  UUID REFERENCES users(id) ON DELETE SET NULL,',
+    replace: '    assignee_uid UUID REFERENCES users(id) ON DELETE SET NULL,',
+    tests: ['scripts/schema-document.test.ts'],
   },
   {
     id: 'verify-gate-step-may-fail',
