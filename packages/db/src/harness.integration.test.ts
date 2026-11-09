@@ -213,29 +213,54 @@ describe('integration harness cost', () => {
     return { result, ms: performance.now() - started };
   };
 
-  test('a template is built from nothing, then cloned and dropped, inside the hook budget', async () => {
-    const scratch = `purlay_budget_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
-    let building = Number.POSITIVE_INFINITY;
-    try {
-      building = (await timed(async () => await buildIntegrationTemplate(scratch))).ms;
-    } finally {
-      await dropDatabases([scratch]);
+  /**
+   * A stall on a shared runner only adds to a measurement, so the lowest of several is what the work costs (the
+   * budgets of `scripts/budget-latency.ts` are judged the same way, D-267). The second and third are taken only when
+   * the first is over its budget: a quiet run pays for one, and a slow machine is not taken for a slow harness.
+   */
+  const floorOf = async (budget: number, measure: () => Promise<number>): Promise<number> => {
+    let lowest = Number.POSITIVE_INFINITY;
+    for (let trial = 0; trial < 3 && lowest >= budget; trial += 1) {
+      lowest = Math.min(lowest, await measure());
     }
+    return lowest;
+  };
 
-    const cloning = await timed(async () => await cloneIntegrationDatabase());
-    const cloned = cloning.result;
-    // The control: what was timed has the whole schema in it, so it is not quick for being empty.
-    const applied = await sql<{ n: string }>`select count(*) as n from kysely_migration`.execute(
-      cloned.db,
-    );
-    expect(Number(applied.rows[0]?.n)).toBeGreaterThan(1);
-    const dropping = await timed(async () => {
-      await cloned.drop();
+  test('a template is built from nothing, then cloned and dropped, inside the hook budget', async () => {
+    const building = await floorOf(TEMPLATE_BUDGET_MS, async () => {
+      const scratch = `purlay_budget_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+      try {
+        return (await timed(async () => await buildIntegrationTemplate(scratch))).ms;
+      } finally {
+        await dropDatabases([scratch]);
+      }
     });
 
+    let applied = 0;
+    let cloning = Number.POSITIVE_INFINITY;
+    let dropping = Number.POSITIVE_INFINITY;
+    for (
+      let trial = 0;
+      trial < 3 && (cloning >= CLONE_BUDGET_MS || dropping >= DROP_BUDGET_MS);
+      trial += 1
+    ) {
+      const cloned = await timed(async () => await cloneIntegrationDatabase());
+      // The control: what was timed has the whole schema in it, so it is not quick for being empty.
+      const migrations = await sql<{
+        n: string;
+      }>`select count(*) as n from kysely_migration`.execute(cloned.result.db);
+      applied = Number(migrations.rows[0]?.n);
+      const dropped = await timed(async () => {
+        await cloned.result.drop();
+      });
+      cloning = Math.min(cloning, cloned.ms);
+      dropping = Math.min(dropping, dropped.ms);
+    }
+    expect(applied).toBeGreaterThan(1);
+
     expect(building).toBeLessThan(TEMPLATE_BUDGET_MS);
-    expect(cloning.ms).toBeLessThan(CLONE_BUDGET_MS);
-    expect(dropping.ms).toBeLessThan(DROP_BUDGET_MS);
+    expect(cloning).toBeLessThan(CLONE_BUDGET_MS);
+    expect(dropping).toBeLessThan(DROP_BUDGET_MS);
   });
 });
 
