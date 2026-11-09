@@ -60,7 +60,7 @@ describe('integration: the work chat supplies for its jobs', () => {
       const relays: (SendMail | undefined)[] = [];
       const outcome = await chatJobWork['mail:missed']?.(contextOn(db, relays));
       expect(relays).toHaveLength(1);
-      expect(outcome).toEqual({ letters: 0, failed: 0, forgotten: 0 });
+      expect(outcome).toEqual({ letters: 0, failed: 0, refused: 0, forgotten: 0 });
     });
   });
 });
