@@ -27,9 +27,6 @@ have it.
 
 ## Unreleased
 
-### Added
-
-- **Notifications** — Server administrators can enable or disable browser notifications without a restart. Keys are created automatically and kept across disable/re-enable; existing keys are preserved (D-126).
-
+_Nothing yet._
 
 ---
