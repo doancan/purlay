@@ -599,6 +599,7 @@ export interface ServerAuditLog {
   id: string;
   note: string | null;
   session_id: string | null;
+  target_fact_id: string | null;
   target_module: string | null;
   target_user_id: string | null;
   target_workspace_id: string | null;

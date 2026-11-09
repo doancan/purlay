@@ -170,24 +170,33 @@ export const anOutboxRow = async (
     readonly at: Date;
     readonly finishedAt?: Date;
     readonly expiresAt?: Date;
+    readonly type?: string;
+    readonly attempts?: number;
+    readonly lastError?: string;
+    readonly payload?: unknown;
   },
-): Promise<void> => {
+): Promise<{ readonly id: string; readonly factId: string }> => {
   const state = row.state ?? 'pending';
+  const id = messageId(row.at);
+  const factId = messageId(row.at);
   await executor
     .insertInto('outbox')
     .values({
-      id: messageId(row.at),
-      fact_id: messageId(row.at),
+      id,
+      fact_id: factId,
       workspace_id: workspaceId,
-      type: 'notes.created',
+      type: row.type ?? 'notes.created',
       producer: 'notes',
       consumer: row.consumer ?? 'wiki',
-      payload: JSON.stringify({ noteId: 'n', title: 't' }),
+      payload: JSON.stringify(row.payload ?? { noteId: 'n', title: 't' }),
       state,
+      attempts: row.attempts ?? 0,
+      last_error: row.lastError ?? null,
       next_attempt_at: row.at,
       created_at: row.at,
       finished_at: state === 'pending' ? null : (row.finishedAt ?? row.at),
       expires_at: row.expiresAt ?? new Date(row.at.getTime() + 86_400_000),
     })
     .execute();
+  return { id, factId };
 };

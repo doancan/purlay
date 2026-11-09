@@ -2141,6 +2141,9 @@ CREATE TABLE server_audit_log (
     -- The operator's own words for why, on the one entry that carries them (`server.module_suspended`, D-296); NULL for
     -- every other entry. (0092)
     note          TEXT,
+    -- Which fact an entry about the outbox is about (`server.fact_inspected`, D-288 §12), by the fact's id; NULL for every
+    -- other entry. No key: the outbox row is swept, the entry stays. (0093)
+    target_fact_id UUID,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Added NOT VALID to a table that has rows, and validated in the next statement. (0090)
@@ -3063,6 +3066,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0091_outbox_pending_by_workspace.sql  idx_outbox_pending_workspace: what a publish counts against the per-consumer ceiling  (D-288)
 0092_suspended_modules.sql  suspended_modules: modules the administrator stopped at run time, and server_audit_log.note (D-296)
 0093_outbox_fair_claim.sql  idx_outbox_pending_by_workspace replaces it: the claim goes by turns across workspaces  (D-288)
+0094_audit_target_fact.sql  server_audit_log.target_fact_id: the fact an entry about the outbox is about (D-288)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

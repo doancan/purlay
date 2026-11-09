@@ -28,6 +28,9 @@ import {
   ServerMembershipsQuery,
   Uuid,
   type ServerAuditPage,
+  ServerOutboxQuery,
+  type ServerOutboxFactDetail,
+  type ServerOutboxPage,
   type ServerUserPage,
   type ServerUserDetail,
   type ServerWorkspacePage,
@@ -67,6 +70,7 @@ import type { AccountDependencies } from './accounts';
 import type { Config } from '../../platform/config';
 import { queryOf, validated } from './validate';
 import { exportServerAudit } from '../../modules/administration/audit-export';
+import { inspectServerOutboxFact, listServerOutbox } from '../../modules/administration/outbox';
 import { approvePendingAccounts } from '../../modules/administration/batch-approval';
 
 export interface AdministrationDependencies extends AccountDependencies {
@@ -179,6 +183,27 @@ export const readAdministrationOverview = async (
     ready.ready,
     deps.clock.now(),
     deps.outboxConsumers,
+  );
+};
+/** `GET /api/server/outbox` — the dead and stuck facts between modules, as metadata and never a payload (D-288 §12). */
+export const readAdministrationOutbox = async (
+  deps: AccountDependencies,
+  request: Request,
+): Promise<ServerOutboxPage> => {
+  await guard(deps, request);
+  const query = validated(ServerOutboxQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
+  return await listServerOutbox(deps.database, deps.clock, query);
+};
+/** `GET /api/server/outbox/:id` — one delivery whole, payload included, on the server's trail as read (D-288 §12). */
+export const readAdministrationOutboxFact = async (
+  deps: AccountDependencies,
+  request: Request,
+  id: string,
+): Promise<ServerOutboxFactDetail> => {
+  const admin = await guard(deps, request);
+  const rowId = validated(Uuid, id);
+  return await atomicallyOn(deps.database)(
+    async (tx) => await inspectServerOutboxFact(tx, deps.clock, admin, rowId),
   );
 };
 export const writeAdministrationRole = async (

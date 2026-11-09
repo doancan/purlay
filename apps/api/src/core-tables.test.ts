@@ -175,6 +175,7 @@ describe('only the outbox’s own files name the outbox', () => {
   const OUTBOX_FILES = [
     join('platform', 'outbox.ts'),
     join('platform', 'outbox-drain.ts'),
+    join('platform', 'outbox-operate.ts'),
     join('platform', 'outbox-report.ts'),
     join('platform', 'outbox-sweep.ts'),
   ];
