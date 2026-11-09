@@ -23,6 +23,7 @@ import type { AppErrorBody, ErrorResponse, HttpStatus } from '@purlay/types';
 import { statusFor } from '@purlay/types';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../../platform/errors';
+import { FactBacklogFull } from '../../platform/outbox';
 
 /** What a validation failure looks like coming out of the framework. */
 interface FrameworkIssue {
@@ -163,6 +164,14 @@ export const refusalFor = (
 
   // A message gone from under the write (D-139 §2): the same answer the socket gives.
   if (goneMessageReference(error) !== undefined) return respond(MESSAGE_GONE);
+
+  // The workspace and the consumer are for the log (`FactBacklogFull` names them); the client is told only to wait.
+  if (error instanceof FactBacklogFull) {
+    return respond({
+      code: 'FACT_BACKLOG_FULL',
+      message: 'This workspace has too much waiting to be handled. Try again shortly.',
+    });
+  }
 
   if (error instanceof DatabaseUnavailableError) {
     return respond({

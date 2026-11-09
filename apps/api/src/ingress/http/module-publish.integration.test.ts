@@ -19,7 +19,7 @@ import { fixedClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
-import { testDependencies } from '../../testing/doubles';
+import { testConfig, testDependencies } from '../../testing/doubles';
 import { aRoom } from '../../testing/rooms';
 import { aSession } from '../../testing/signed-in';
 import { createApp } from './app';
@@ -82,6 +82,7 @@ const consumer: BundledModule = {
 
 const fixture = async (
   db: Executor,
+  pendingMax?: number,
 ): Promise<{ post: (path: string) => Promise<Response>; workspaceId: string }> => {
   const room = await aRoom(db, ['member']);
   const member = room.members['member'];
@@ -91,6 +92,9 @@ const fixture = async (
     testDependencies({
       database: db,
       clock,
+      ...(pendingMax === undefined
+        ? {}
+        : { config: testConfig({ OUTBOX_PENDING_MAX: pendingMax }) }),
       composition: compose([consumer, publisher], [consumer, publisher], 'open', [
         ISSUE_TOLD,
         CHAT_TOLD,
@@ -140,6 +144,22 @@ describe('integration: a route publishes a fact', () => {
       const { post, workspaceId } = await fixture(db);
       expect((await post('stolen')).status).toBe(500);
       expect(await rowsOf(db, workspaceId)).toEqual([]);
+    });
+  });
+});
+
+describe('integration: a route whose fact finds the consumer’s backlog full', () => {
+  test('is answered 503 FACT_BACKLOG_FULL with Retry-After, naming nothing of the workspace, and its transaction ends', async () => {
+    await withRollback(async (db) => {
+      const { post, workspaceId } = await fixture(db, 1);
+      expect((await post('told')).status).toBe(200);
+      const refused = await post('told');
+      expect(refused.status).toBe(503);
+      expect(refused.headers.get('retry-after')).toBe('30');
+      const body = JSON.stringify(await refused.json());
+      expect(body).toContain('FACT_BACKLOG_FULL');
+      expect(body).not.toContain(workspaceId);
+      expect(await rowsOf(db, workspaceId)).toEqual(['issues>chat issues.told']);
     });
   });
 });

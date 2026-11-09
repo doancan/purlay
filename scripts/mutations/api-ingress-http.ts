@@ -361,6 +361,22 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/exports.integration.test.ts'],
   },
   {
+    id: 'fact-backlog-full-has-no-retry-after',
+    why: 'a request refused for a full backlog is not told when to come back, so clients retry at once into the flood (D-288 §10)',
+    file: 'apps/api/src/ingress/http/app.ts',
+    find: "        set.headers['retry-after'] = String(FACT_BACKLOG_RETRY_AFTER_SECONDS);\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
+  },
+  {
+    id: 'fact-backlog-full-is-answered-as-internal',
+    why: 'a full backlog is answered 500 INTERNAL and paged as a defect, where it is a refusal that clears by itself (D-288 §10)',
+    file: 'apps/api/src/ingress/http/errors.ts',
+    find: '  if (error instanceof FactBacklogFull) {',
+    replace: '  if (false as boolean) {',
+    tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
+  },
+  {
     id: 'failed-request-line-forgets-the-module',
     why: 'a request that failed with a 500 is logged without the module that owns its route (D-250 rule 7)',
     file: 'apps/api/src/ingress/http/app.ts',

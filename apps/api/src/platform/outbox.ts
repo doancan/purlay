@@ -85,6 +85,9 @@ export class FactPublishError extends Error {
  * written, and a publisher that does not catch it ends its transaction and so leaves nothing of what the fact reports; one that
  * does catch it holds a transaction that is still usable and decides for itself. The fact is never dropped in silence.
  */
+/** What a client is told to wait when a fact is refused for a full backlog: a few drains of the consumer (two seconds apart, D-288 §8). */
+export const FACT_BACKLOG_RETRY_AFTER_SECONDS = 30;
+
 export class FactBacklogFull extends Error {
   readonly type: string;
   readonly workspaceId: string;

@@ -182,6 +182,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'CHANNEL_GROUP_LIMIT':
       return 'failure.channelGroupLimit';
     case 'DATABASE_UNAVAILABLE':
+    case 'FACT_BACKLOG_FULL':
     case 'REQUEST_TIMEOUT':
     case 'STORAGE_UNAVAILABLE':
     case 'PUSH_UNAVAILABLE':

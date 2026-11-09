@@ -224,6 +224,11 @@ export const ErrorCode = Type.Union([
    */
   Type.Literal('DATABASE_UNAVAILABLE'),
   /**
+   * A fact a module tried to tell another was refused because this workspace already has the most the consumer may have waiting
+   * (D-288 §10): nothing was changed, and the request may be retried after `Retry-After`, when the consumer has caught up.
+   */
+  Type.Literal('FACT_BACKLOG_FULL'),
+  /**
    * The file store could not be reached, or none is configured: nothing was stored, and the request
    * may be retried. Never told as absence (D-109).
    */
@@ -380,6 +385,7 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   PUSH_UNAVAILABLE: 503,
   EMAIL_SIGN_IN_UNAVAILABLE: 503,
   DATABASE_UNAVAILABLE: 503,
+  FACT_BACKLOG_FULL: 503,
   REQUEST_TIMEOUT: 504,
 };
 
