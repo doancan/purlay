@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
+import { installDom } from '../../testing/dom';
+import { resetStorageNotes } from '../../data/browser-storage';
 import { TestLocks } from '../../testing/locks';
 import { memoryStorage } from '../../testing/fakes';
 import { claimAlert, holdFocus } from './coordination';
+
+installDom();
 
 describe('tabs sharing an alert', () => {
   const setup = (): Parameters<typeof claimAlert>[0] => {
@@ -43,17 +47,24 @@ describe('tabs sharing an alert', () => {
     expect(await claimAlert({ ...setup(), locks: null })).toBe(false);
     expect(await claimAlert({ ...setup(), storage: null })).toBe(false);
     expect(await claimAlert({ ...setup(), locks: null, focused: () => true })).toBe(true);
+    const options = setup();
+    let shown = 0;
     expect(
       await claimAlert({
-        ...setup(),
+        ...options,
         storage: {
-          ...memoryStorage(),
+          ...(options.storage ?? memoryStorage()),
           setItem: () => {
             throw new Error('Blocked');
           },
         },
+        show: (): boolean => {
+          shown += 1;
+          return true;
+        },
       }),
     ).toBe(false);
+    expect(shown).toBe(0);
   });
   test('tenfold traffic keeps a bounded, content-free claim list', async () => {
     const options = setup();
@@ -63,5 +74,33 @@ describe('tabs sharing an alert', () => {
     );
     expect(held).toBeArrayOfSize(100);
     expect(await claimAlert({ ...options, id: 'id-999' })).toBe(false);
+  });
+  test.each(['{broken', JSON.stringify(['old', 42, 'x'.repeat(201)])])(
+    'damaged or untrusted claim entries cannot prevent the next notice: %s',
+    async (stored) => {
+      const options = setup();
+      options.storage?.setItem('purlay.push.claims.workspace', stored);
+      expect(await claimAlert(options)).toBe(true);
+      expect(options.storage?.getItem('purlay.push.claims.workspace')).toBe(
+        JSON.stringify(stored === '{broken' ? ['notice'] : ['old', 'notice']),
+      );
+      expect(await claimAlert(options)).toBe(false);
+    },
+  );
+  test('a refused native lock stays quiet and leaves an inspectable failure', async () => {
+    class RefusedLocks extends TestLocks {
+      override request<T>(): Promise<T> {
+        return Promise.reject(new DOMException('Blocked', 'SecurityError'));
+      }
+    }
+    resetStorageNotes();
+    const options = { ...setup(), locks: new RefusedLocks() };
+    const release = holdFocus(options.locks, options.scope);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(await claimAlert(options)).toBe(false);
+    expect(document.documentElement.dataset['storageFailed']).toContain('alert-focus');
+    expect(document.documentElement.dataset['storageFailed']).toContain('alert-lock');
+    release();
   });
 });

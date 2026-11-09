@@ -3,13 +3,14 @@ import { act } from '@testing-library/react';
 import { installDom } from '../../testing/dom';
 import { renderApp } from '../../testing/render';
 import { memoryStorage, storageChanged } from '../../testing/fakes';
+import { resetStorageNotes } from '../../data/browser-storage';
 import { person } from '../../testing/user';
 import { AlertPreferencesProvider, ChimeContext, useAlertPreferences } from './preferences-context';
 
 installDom();
 
 const Controls = (): React.JSX.Element => {
-  const { change, play, preview, remembered } = useAlertPreferences();
+  const { change, play, preview, remembered, preferences, audio } = useAlertPreferences();
   return (
     <>
       <button
@@ -28,11 +29,61 @@ const Controls = (): React.JSX.Element => {
         Mute
       </button>
       <span>{remembered ? 'Remembered' : 'This page only'}</span>
+      <span>{preferences.sound ? 'Sound on' : 'Sound off'}</span>
+      <span>{audio}</span>
     </>
   );
 };
 
 describe('personal alert controls', () => {
+  test('controls outside a signed-in session remain unavailable and temporary', async () => {
+    const view = await renderApp(<Controls />);
+    await person().click(view.getByRole('button', { name: 'Play' }));
+    await person().click(view.getByRole('button', { name: 'Preview' }));
+    await person().click(view.getByRole('button', { name: 'Mute' }));
+    expect(view.getByText('unavailable')).toBeTruthy();
+    expect(view.getByText('This page only')).toBeTruthy();
+    expect(view.getByText('Sound on')).toBeTruthy();
+    view.unmount();
+  });
+  test('an unreadable preference falls back safely and records why', async () => {
+    resetStorageNotes();
+    const storage = memoryStorage();
+    storage.setItem('purlay.person', 'alice');
+    const view = await renderApp(
+      <ChimeContext.Provider value={null}>
+        <AlertPreferencesProvider userId="alice">
+          <Controls />
+        </AlertPreferencesProvider>
+      </ChimeContext.Provider>,
+      {
+        storage: {
+          ...storage,
+          getItem: (key): string | null => {
+            if (key.startsWith('purlay.push.preferences.')) throw new Error('Blocked');
+            return storage.getItem(key);
+          },
+        },
+      },
+    );
+    expect(view.getByText('Sound on')).toBeTruthy();
+    expect(document.documentElement.dataset['storageFailed']).toContain('alert-read');
+    view.unmount();
+  });
+  test('without storage a changed choice remains local and visibly temporary', async () => {
+    const view = await renderApp(
+      <ChimeContext.Provider value={null}>
+        <AlertPreferencesProvider userId="alice">
+          <Controls />
+        </AlertPreferencesProvider>
+      </ChimeContext.Provider>,
+      { storage: null },
+    );
+    await person().click(view.getByRole('button', { name: 'Mute' }));
+    expect(view.getByText('Sound off')).toBeTruthy();
+    expect(view.getByText('This page only')).toBeTruthy();
+    view.unmount();
+  });
   test('sound opt-out, logout and a pending preview cannot play another person’s sound', async () => {
     const storage = memoryStorage();
     storage.setItem('purlay.person', 'alice');

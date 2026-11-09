@@ -9,11 +9,12 @@ class Tone {
   onended: (() => void) | null = null;
   starts = 0;
   stops = 0;
+  disconnected = 0;
   connect(): void {
     /* Native audio output boundary. */
   }
   disconnect(): void {
-    /* Native audio output boundary. */
+    this.disconnected += 1;
   }
   start(): void {
     this.starts += 1;
@@ -31,6 +32,7 @@ class Audio {
   readonly peaks: number[] = [];
   resumeResult: Promise<void> | null = null;
   closed = false;
+  disconnectedGains = 0;
   constructor() {
     Audio.made.push(this);
   }
@@ -58,7 +60,9 @@ class Audio {
   } {
     return {
       connect: () => undefined,
-      disconnect: () => undefined,
+      disconnect: (): void => {
+        this.disconnectedGains += 1;
+      },
       gain: {
         setValueAtTime: () => undefined,
         linearRampToValueAtTime: (value): void => {
@@ -86,6 +90,20 @@ afterEach(() => {
 });
 
 describe('the app chime', () => {
+  test('a finished cue releases both audio nodes and is not stopped again', async () => {
+    const chime = browserChime();
+    expect(await chime?.unlock()).toBe(true);
+    expect(chime?.play(50)).toBe(true);
+    const audio = Audio.made[0];
+    const tone = audio?.tones[0];
+    if (audio === undefined || tone === undefined) throw new Error('Missing audio output');
+    tone.onended?.();
+    expect(tone.disconnected).toBe(1);
+    expect(audio.disconnectedGains).toBe(1);
+    chime?.stop();
+    expect(tone.stops).toBe(1);
+    chime?.dispose();
+  });
   test('a refused browser resume is reported without trying to play', async () => {
     const chime = browserChime();
     await chime?.unlock();

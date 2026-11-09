@@ -92,6 +92,14 @@ test('in-app and sound opt-outs are independent, remembered, and follow changes 
   expect(inApp).toHaveProperty('checked', true);
   expect(sound).toHaveProperty('checked', false);
   expect(view.getByRole('combobox', { name: 'App sound volume' })).toHaveProperty('value', '25');
+  await person().selectOptions(view.getByRole('combobox', { name: 'App sound volume' }), '75');
+  expect(JSON.parse(view.world.storage.getItem(key) ?? 'null')).toEqual({
+    inApp: true,
+    sound: false,
+    volume: 75,
+  });
+  await person().selectOptions(view.getByRole('combobox', { name: 'App sound volume' }), '0');
+  expect(view.getByRole('button', { name: 'Preview sound' })).toHaveProperty('disabled', true);
   await expectNoAxeViolations(view.container);
   view.unmount();
 });
