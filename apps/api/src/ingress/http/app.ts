@@ -15,6 +15,8 @@ import {
   readAdministrationOverview,
   readAdministrationOperations,
   writeAdministrationRole,
+  readAdministrationOutbox,
+  readAdministrationOutboxFact,
   writeAdministrationModule,
   writeAdministrationQuota,
   writeAdministrationSessions,
@@ -1093,6 +1095,15 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .get(
       '/api/server/workspaces',
       async ({ request }) => await readAdministrationWorkspaces(administration, request),
+    )
+    .get(
+      '/api/server/outbox',
+      async ({ request }) => await readAdministrationOutbox(administration, request),
+    )
+    .get(
+      '/api/server/outbox/:id',
+      async ({ request, params }) =>
+        await readAdministrationOutboxFact(administration, request, params.id),
     )
     .get(
       '/api/server/audit',

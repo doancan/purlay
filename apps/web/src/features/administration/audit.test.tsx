@@ -33,6 +33,7 @@ describe('server audit browsing', () => {
                 targetWorkspaceId: null,
                 targetModule: null,
                 note: null,
+                targetFactId: null,
                 createdAt: ADMIN_STAMP,
               },
             ],
@@ -64,6 +65,7 @@ describe('server audit browsing', () => {
       targetWorkspaceId: null,
       targetModule: null,
       note: null,
+      targetFactId: null,
       createdAt: ADMIN_STAMP,
     };
     const view = await renderAdministration('audit', (call) =>
@@ -162,6 +164,7 @@ describe('server audit browsing', () => {
       targetWorkspaceId: null,
       targetModule: null,
       note: null,
+      targetFactId: null,
       createdAt: ADMIN_STAMP,
     };
     const view = await renderAdministration('audit', (call) =>
@@ -220,6 +223,7 @@ describe('server audit browsing', () => {
                     targetWorkspaceId: ADMIN_USER.id,
                     targetModule: null,
                     note: null,
+                    targetFactId: null,
                     createdAt: ADMIN_STAMP,
                   },
                 ],

@@ -14277,6 +14277,18 @@ fact for each message (D-35).
     of the pick, which is made again without it (it looks at four workspaces for each place and makes the pick five times at most, so some four hundred such workspaces are passed over): its rows are never
     locked and hold no place in a batch, where before 50 due rows of one workspace without the grant left every granted workspace with
     no claim at all.
+12. **The server's administrator can look at the outbox, and nobody else** *(added 2026-11-09, #1197)*. A dead fact was only counted, so
+    the question an auditor asks first, what failed at 3 a.m. and who decided what became of it, had no answer but hand SQL on a
+    table the code hides. `GET /api/server/outbox` lists deliveries as **metadata**: the row's id and the fact's, type, shape, workspace,
+    producer, consumer, state, attempts, the class of the last error, and the times; never the payload. It filters by `state` (`dead`, the
+    default; `stuck`, a pending row older than the overview's fifteen minutes; `discarded`), `consumer`, `type` and `workspaceId`, oldest
+    first by id, a keyset page of at most 100. `GET /api/server/outbox/:id` shows one delivery whole. **The payload is shown, and the read is
+    audited**: a fact cannot be judged, fixed and requeued or discarded, without seeing what it said, and redacting it would send the
+    operator back to SQL; so the administrator sees it, and `server.fact_inspected` records who, the fact's id (`target_fact_id`, new, no
+    key since the row is swept and the entry is not), its workspace and its consumer, never a word of it, in the transaction of the read and after
+    the administrator is rechecked under the lock every authority change takes (D-292 §2). Each read is an entry, so reading twice is two
+    reads. Both routes sit behind the guard of the rest of `/api/server`, before parsing: an owner, a member and a stranger get the same `404`.
+    The SQL is in `platform/outbox-operate.ts`, one more of the files that name the table (§6).
 
 **Rejected.** *Counting the attempt when the handler fails*
 
