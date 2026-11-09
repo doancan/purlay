@@ -33,7 +33,7 @@ import {
 } from '../../../testing/fixtures';
 import { person } from '../../../testing/user';
 import * as Content from '../../content/render-content';
-import { SEEK_LIMIT_PAGES } from './message-feed';
+import { SEEK_LIMIT_PAGES } from './use-feed-placement';
 import { READ_DEBOUNCE_MS } from './use-mark-read';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { expectFocusOn, pressTab, tabOrder } from '../../../testing/focus';
