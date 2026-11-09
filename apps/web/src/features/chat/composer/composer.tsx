@@ -30,7 +30,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { ATTACHMENT_BYTES_MAX, ATTACHMENTS_PER_MESSAGE_MAX, MessageContent } from '@purlay/types';
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Icon, type GlyphName } from '../../../components/icon';
+import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useEngine } from '../../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
@@ -83,6 +83,7 @@ import {
   mentionOptionId,
 } from './suggestion-lists';
 import { EmojiPicker } from './emoji-picker';
+import { FormatToolbar } from './format-toolbar';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -125,9 +126,6 @@ const Inner = ({
   // The draft drawn as it will be sent (D-181): a look, never a second copy of the text.
   const [previewing, setPreviewing] = useState(false);
   const returningFromPreview = useRef(false);
-  // The formatting row is one Tab stop and the arrows move along it (the toolbar pattern): which
-  // button is the stop, the last one used.
-  const [stopAt, setStopAt] = useState(0);
   useEffect(() => {
     if (previewing || !returningFromPreview.current) return;
     returningFromPreview.current = false;
@@ -530,55 +528,11 @@ const Inner = ({
   const mac = isMacPlatform(typeof navigator === 'undefined' ? {} : navigator);
   const labels = keyLabels(mac);
   const chord = (...parts: readonly string[]): string => parts.join(mac ? '' : '+');
-  /** One button of the formatting row: its markdown, its glyph and the key that does the same. */
-  const tool = (
-    slot: number,
-    kind: MarkdownKind,
-    label: string,
-    glyph: GlyphName,
-    shortcut?: string,
-  ): React.JSX.Element => (
-    <IconButton
-      key={kind}
-      label={label}
-      glyph={glyph}
-      {...(shortcut === undefined ? {} : { shortcut })}
-      tabIndex={slot === stopAt ? 0 : -1}
-      onFocus={() => {
-        setStopAt(slot);
-      }}
-      onClick={() => {
-        insert(kind);
-      }}
-    />
-  );
-  /** ← → Home End along the row, round at its ends; Tab is left to leave it. */
-  const onToolbarKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
-    const at = buttons.findIndex((button) => button === document.activeElement);
-    const to =
-      event.key === 'ArrowRight'
-        ? (at + 1) % buttons.length
-        : event.key === 'ArrowLeft'
-          ? (at - 1 + buttons.length) % buttons.length
-          : event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? buttons.length - 1
-              : -1;
-    if (at === -1 || to === -1) return;
-    event.preventDefault();
-    buttons[to]?.focus();
-  };
   /** Preview on or off; back on the text, the box has the focus again where it left it. */
   const togglePreview = (): void => {
     setPreviewing((now) => !now);
     returningFromPreview.current = previewing;
   };
-  const divider = (
-    <span aria-hidden="true" className="mx-1 h-4 border-l-hairline border-border-subtle" />
-  );
-
   const left = unitsLeft(text);
   const rows = rowsFor(text, 1);
 
@@ -725,73 +679,13 @@ const Inner = ({
           <VisuallyHidden role="status" aria-live="polite">
             {open ? t('mention.results', { count: suggestions.length }) : ''}
           </VisuallyHidden>
-          <div
-            role="toolbar"
-            aria-label={t('composer.format')}
-            aria-orientation="horizontal"
-            className="flex items-center px-2 pt-2"
-            onKeyDown={onToolbarKey}
-          >
-            {/* One row on every width: on a phone it scrolls sideways instead of breaking into two, and
-              the preview toggle stays where it is. */}
-            <div className="flex min-w-0 flex-1 items-center overflow-x-auto p-1 scrollbar-thin">
-              {tool(0, 'bold', t('composer.bold'), 'bold', chord(labels.mod, 'B'))}
-              {tool(1, 'italic', t('composer.italic'), 'italic', chord(labels.mod, 'I'))}
-              {tool(
-                2,
-                'strike',
-                t('composer.strike'),
-                'strike',
-                chord(labels.mod, labels.shift, 'X'),
-              )}
-              {divider}
-              {tool(3, 'link', t('composer.link'), 'link', chord(labels.mod, labels.shift, 'U'))}
-              {tool(
-                4,
-                'bullets',
-                t('composer.bullets'),
-                'bullet-list',
-                chord(labels.mod, labels.shift, '8'),
-              )}
-              {tool(
-                5,
-                'numbers',
-                t('composer.numbers'),
-                'numbered-list',
-                chord(labels.mod, labels.shift, '7'),
-              )}
-              {tool(6, 'tasks', t('composer.tasks'), 'task-list')}
-              {tool(7, 'quote', t('composer.quote'), 'quote', chord(labels.mod, labels.shift, '9'))}
-              {divider}
-              {tool(
-                8,
-                'inlineCode',
-                t('composer.inlineCode'),
-                'inline-code',
-                chord(labels.mod, 'E'),
-              )}
-              {tool(
-                9,
-                'code',
-                t('composer.codeBlock'),
-                'code-block',
-                chord(labels.mod, labels.alt, labels.shift, 'C'),
-              )}
-              {tool(10, 'table', t('composer.table'), 'table')}
-            </div>
-            <IconButton
-              label={t('composer.preview')}
-              glyph="preview"
-              shortcut={chord(labels.mod, labels.shift, 'P')}
-              aria-pressed={previewing}
-              tabIndex={stopAt === 11 ? 0 : -1}
-              onFocus={() => {
-                setStopAt(11);
-              }}
-              className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-ink"
-              onClick={togglePreview}
-            />
-          </div>
+          <FormatToolbar
+            previewing={previewing}
+            labels={labels}
+            chord={chord}
+            onInsert={insert}
+            onTogglePreview={togglePreview}
+          />
           <div className="flex gap-2 px-3 pt-2">
             <textarea
               data-composer=""
