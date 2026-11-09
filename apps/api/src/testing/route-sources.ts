@@ -1,5 +1,5 @@
 /**
- * The source the application's routes are written in: `ingress/http/app.ts` and, for each module that keeps its HTTP in its own
+ * The source the application's routes are written in: `ingress/http/app.ts`, the core's route groups in `ingress/http/routes/` and, for each module that keeps its HTTP in its own
  * folder (D-280), the production files of `features/<id>/http/`. The tests that read the routes as text — the endpoint table,
  * the ownership of each path — read it through here, so a route is found where it is registered.
  */
@@ -18,9 +18,21 @@ export const httpFolderFiles = (id: string): string[] => {
     .sort();
 };
 
+/** The files the core registers its own routes in: `app.ts` composes, and each file of `routes/` is a group of them. */
+export const coreRouteFiles = (): string[] => {
+  const groups = join(API_SOURCE, 'ingress', 'http', 'routes');
+  return [
+    join(API_SOURCE, 'ingress', 'http', 'app.ts'),
+    ...readdirSync(groups)
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .sort()
+      .map((file) => join(groups, file)),
+  ];
+};
+
 /** Every file a route of the application is registered in. */
 const routeSourceFiles = (): string[] => [
-  join(API_SOURCE, 'ingress', 'http', 'app.ts'),
+  ...coreRouteFiles(),
   ...readdirSync(join(API_SOURCE, 'features'), { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => httpFolderFiles(entry.name)),

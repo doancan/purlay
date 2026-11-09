@@ -17,7 +17,7 @@ import { pathWithoutSecret } from './edge';
  * registrations spell it as a literal, which `scripts/enforcement.test.ts` reads against
  * `API.md`; the request line's test binds the two spellings (`logging.integration.test.ts`).
  */
-export const LIBRARY_ROUTE = `${AUTH_BASE_PATH}/*`;
+const LIBRARY_ROUTE = `${AUTH_BASE_PATH}/*`;
 
 export interface RequestObservation {
   /** The module that owns a route as registered. */

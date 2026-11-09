@@ -14,12 +14,11 @@
 import type { Executor } from '@purlay/db';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { bundledModules, type BundledModule } from '../../composition';
 import { fixedClock } from '../../platform/clock';
 import { inProcessLimiters } from '../../realtime/rate-limiter';
 import { NOW } from '../../testing/doubles';
-import { httpFolderFiles } from '../../testing/route-sources';
+import { coreRouteFiles, httpFolderFiles } from '../../testing/route-sources';
 import type { ModuleRouteDependencies } from './module-routes';
 import { CORE_ROUTES } from '../../platform/module-kit/core-claims';
 import { ownsPath } from '../../platform/module-kit/routes';
@@ -27,9 +26,9 @@ import { ownsPath } from '../../platform/module-kit/routes';
 const pathsIn = (text: string): string[] =>
   [...text.matchAll(/\.(?:get|post|put|patch|delete|ws)\(\s*'(\/[^']*)'/g)].map((m) => m[1] ?? '');
 
-/** The paths `app.ts` registers itself. */
+/** The paths the core registers itself: in `app.ts` and in the route groups it composes (`routes/`). */
 const registeredByApp = (): string[] =>
-  [...new Set(pathsIn(readFileSync(join(import.meta.dir, 'app.ts'), 'utf8')))].sort();
+  [...new Set(coreRouteFiles().flatMap((file) => pathsIn(readFileSync(file, 'utf8'))))].sort();
 
 /** The paths registered in a module's own HTTP folder, where it has one. */
 const registeredByFolder = (id: string): string[] =>

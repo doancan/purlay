@@ -15,7 +15,7 @@ const base = JSON.parse(readFileSync('packages/config/tsconfig.base.json', 'utf8
   compilerOptions: Record<string, unknown>;
 };
 
-/** The application's routes as text: `app.ts` and each module's own HTTP folder (D-280, `testing/route-sources.ts`). */
+/** The application's routes as text: `app.ts`, its route groups and each module's own HTTP folder (D-280, `testing/route-sources.ts`). */
 const applicationRoutes = (): string => {
   const features = 'apps/api/src/features';
   const folders = readdirSync(features, { withFileTypes: true })
@@ -27,7 +27,10 @@ const applicationRoutes = (): string => {
       .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
       .map((file) => readFileSync(`${folder}/${file}`, 'utf8')),
   );
-  return [readFileSync('apps/api/src/ingress/http/app.ts', 'utf8'), ...own].join('\n');
+  const groups = readdirSync('apps/api/src/ingress/http/routes')
+    .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+    .map((file) => readFileSync(`apps/api/src/ingress/http/routes/${file}`, 'utf8'));
+  return [readFileSync('apps/api/src/ingress/http/app.ts', 'utf8'), ...groups, ...own].join('\n');
 };
 
 describe('compiler strictness (CONTRIBUTING.md §1.3, D-47)', () => {
