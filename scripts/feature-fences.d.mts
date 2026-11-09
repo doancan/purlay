@@ -1,5 +1,6 @@
 interface RestrictedPattern {
   readonly group?: readonly string[];
+  readonly allowImportNames?: readonly string[];
   readonly regex?: string;
   readonly message: string;
 }
@@ -33,4 +34,5 @@ export function featureFences(
   httpTransportTypes?: RestrictedPattern,
   noComposition?: RestrictedPattern,
   everywhere?: readonly RestrictedPattern[],
+  reachFor?: (id: string, http: boolean) => readonly RestrictedPattern[],
 ): FeatureFence[];

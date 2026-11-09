@@ -6,6 +6,7 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import { fileURLToPath } from 'node:url';
 import tseslint from 'typescript-eslint';
 import { featureFences, featureIds } from './scripts/feature-fences.mjs';
+import { reachPatterns } from './scripts/module-reach.mjs';
 import { CORE_IMPORTS_OF_MODULES, webFences, webModuleIds } from './scripts/web-fences.mjs';
 
 // The layering rule two configurations below both need. ESLint replaces a rule
@@ -707,7 +708,12 @@ export default defineConfig([
   // and neither does a rule asking for return-type annotations in a JavaScript
   // file, which has no syntax to write one in.
   {
-    files: ['eslint.config.mjs', 'scripts/feature-fences.mjs', 'scripts/web-fences.mjs'],
+    files: [
+      'eslint.config.mjs',
+      'scripts/feature-fences.mjs',
+      'scripts/module-reach.mjs',
+      'scripts/web-fences.mjs',
+    ],
     extends: [tseslint.configs.disableTypeChecked],
     rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
   },
@@ -774,6 +780,7 @@ export default defineConfig([
     NO_COMPOSITION_FROM_HTTP,
     NO_COMPOSITION,
     NO_FENCE_BYPASS,
+    reachPatterns,
   ),
   // Repeats the clock and brand selectors, since a `no-restricted-syntax` replaces the one before it; tests are left to
   // the block below that gives them their own.

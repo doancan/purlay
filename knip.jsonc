@@ -17,9 +17,13 @@
 
   "workspaces": {
     ".": {
-      // The types of `scripts/feature-fences.mjs` and `scripts/web-fences.mjs`, which `eslint.config.mjs` imports as
+      // The types of `scripts/feature-fences.mjs`, `scripts/module-reach.mjs` and `scripts/web-fences.mjs`, which `eslint.config.mjs` imports as
       // plain JavaScript: the TypeScript that tests the helpers reads them, and knip does not follow a declaration file.
-      "ignore": ["scripts/feature-fences.d.mts", "scripts/web-fences.d.mts"],
+      "ignore": [
+        "scripts/feature-fences.d.mts",
+        "scripts/module-reach.d.mts",
+        "scripts/web-fences.d.mts",
+      ],
       // Run by a shell script inside the API image (`backup.sh`, `restore.sh`,
       // `restore-rehearsal.sh`), which knip does not read. Not dead: the
       // backup and the restore rehearsal are these files (#274, #275).
