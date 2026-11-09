@@ -33,6 +33,14 @@ export const recordServerAudit = async (
     readonly note?: string;
     /** Which fact an entry about the outbox is about, by id (D-288 §12). */
     readonly targetFactId?: string;
+    /** What a grant was before and until when, for an entry about one (D-289 §7): states, times and a flag, never words. */
+    readonly grant?: {
+      readonly stateBefore: 'on' | 'off' | null;
+      readonly validUntil: Date | null;
+      readonly validUntilBefore: Date | null;
+      /** `true` when the operator said every node reads grants (`--cluster-ready`); `null` for a write made another way. */
+      readonly clusterReady: true | null;
+    };
   },
 ): Promise<void> => {
   const now = clock.now();
@@ -49,6 +57,10 @@ export const recordServerAudit = async (
       target_module: entry.targetModule ?? null,
       note: entry.note ?? null,
       target_fact_id: entry.targetFactId ?? null,
+      module_state_before: entry.grant?.stateBefore ?? null,
+      module_valid_until: entry.grant?.validUntil ?? null,
+      module_valid_until_before: entry.grant?.validUntilBefore ?? null,
+      cluster_ready_asserted: entry.grant?.clusterReady ?? null,
       created_at: now,
     })
     .execute();

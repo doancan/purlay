@@ -134,6 +134,8 @@ describe('how many nodes do not read workspace grants', () => {
     link.behaviour.script = (): number => 2;
     expect(await peersBehind(link)).toBe(2);
     expect(link.scripts[0]?.keys).toEqual([names.moduleSet, names.entitlementNodes]);
+    // The lapse a node can have written is bounded by the time to live, which the script is told (red-team F6).
+    expect(link.scripts[0]?.args).toEqual([String(NODE_TTL_MS), '4096']);
   });
 
   test('is a failure and not a zero when the answer is not a number, or Redis cannot answer', async () => {

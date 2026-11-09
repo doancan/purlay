@@ -15,6 +15,7 @@ import {
   type Executor,
   type Outbox,
   type Selectable,
+  type Transaction,
 } from '@purlay/db';
 import { messageId, messageIdTime } from '@purlay/types';
 import { aMovableClock, NOW } from '../testing/doubles';

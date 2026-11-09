@@ -38,6 +38,8 @@ export interface EntitlementWrite {
 export interface EntitlementActor {
   readonly source: string;
   readonly userId: string | null;
+  /** The operator said every node reads grants (`entitlements:apply --cluster-ready`): recorded with each change, since nothing checked it. */
+  readonly clusterReady?: true;
 }
 
 export interface EntitlementChange {
@@ -109,7 +111,10 @@ export const applyEntitlements = async (
 
   // Plan first and write after: what the table would hold is judged before it is touched, so a refusal leaves nothing even where
   // the caller's transaction is not the one to undo it.
-  const planned: EntitlementWrite[] = [];
+  const planned: {
+    readonly write: EntitlementWrite;
+    readonly before: (typeof existing)[number] | undefined;
+  }[] = [];
   for (const write of writes) {
     const key = `${write.workspaceId}/${write.module}`;
     const row = rows.get(key);
@@ -129,11 +134,11 @@ export const applyEntitlements = async (
         valid_until: write.validUntil ?? null,
       });
     }
-    planned.push(write);
+    planned.push({ write, before: row });
   }
 
   // A module is not granted to a workspace that lacks one it requires, whichever order the writes came in.
-  for (const write of planned.filter(({ state }) => state === 'on')) {
+  for (const { write } of planned.filter(({ write: planning }) => planning.state === 'on')) {
     const granted: EntitlementRow[] = [...rows.values()]
       .filter((row) => row.workspace_id === write.workspaceId)
       .map((row) => ({
@@ -157,7 +162,7 @@ export const applyEntitlements = async (
   }
 
   const changes: EntitlementChange[] = [];
-  for (const write of planned) {
+  for (const { write, before } of planned) {
     if (write.state === 'inherit') {
       await tx
         .deleteFrom('workspace_modules')
@@ -183,6 +188,13 @@ export const applyEntitlements = async (
       action: ACTIONS[write.state],
       targetWorkspaceId: write.workspaceId,
       targetModule: write.module,
+      grant: {
+        stateBefore: before === undefined ? null : before.state === 'on' ? 'on' : 'off',
+        validUntil: write.validUntil ?? null,
+        validUntilBefore:
+          before === undefined || before.valid_until === null ? null : new Date(before.valid_until),
+        clusterReady: actor.clusterReady ?? null,
+      },
     });
     changes.push({ workspaceId: write.workspaceId, module: write.module, state: write.state });
   }

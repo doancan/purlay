@@ -24,10 +24,13 @@
  * duplicate this allows is a publish that timed out after Redis had taken it; a frame is idempotent on its id
  * and version, and a client keeps the larger.
  */
-import type { ServerFrame } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
+import { ServerFrame } from '@purlay/types';
 import type { Deliver, Topic } from '../platform/events';
+import { systemClock, type Clock } from '../platform/clock';
 import type { Logger } from '../platform/logging';
 import type { RedisLink } from '../platform/redis';
+import { systemTimers, type Timers } from './hub';
 import { subscriptionsOf, type Backplane, type InspectableEventBus } from './bus';
 
 interface Envelope {
@@ -38,7 +41,17 @@ interface Envelope {
   readonly seq: number;
 }
 
-/** What crosses between nodes is checked on arrival: another version of the server wrote it. */
+/** The contract's topics, whose ids are all UUIDs: anything else on the shared channel was not published by a node. */
+const TOPIC =
+  /^(?:workspace|channel|user|session):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const ORIGIN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * What crosses between nodes is checked on arrival, as strictly as a frame from a client is (red-team F6): another version of the
+ * server wrote it, and so may anyone who can write the Redis. The topic is the contract's grammar, the frame is a `ServerFrame`, the
+ * origin is the id a backplane makes for itself and the count is a whole number from one. A frame that fails is dropped, logged
+ * and never fanned out, so a forged `SESSION_ENDED` or a frame of an event no node sends reaches no socket.
+ */
 const envelopeOf = (message: string): Envelope | undefined => {
   let parsed: unknown;
   try {
@@ -49,29 +62,58 @@ const envelopeOf = (message: string): Envelope | undefined => {
   if (typeof parsed !== 'object' || parsed === null) return undefined;
   const topic: unknown = Reflect.get(parsed, 'topic');
   const frame: unknown = Reflect.get(parsed, 'frame');
-  if (typeof topic !== 'string' || typeof frame !== 'object' || frame === null) return undefined;
-  if (typeof Reflect.get(frame, 'event') !== 'string') return undefined;
   const origin: unknown = Reflect.get(parsed, 'origin');
   const seq: unknown = Reflect.get(parsed, 'seq');
-  if (typeof origin !== 'string' || typeof seq !== 'number') return undefined;
-  // The topic's shape is the contract's; a frame is checked as far as the hub reads it.
-  return { topic: topic as Topic, frame: frame as ServerFrame, origin, seq };
+  if (typeof topic !== 'string' || !TOPIC.test(topic)) return undefined;
+  if (typeof origin !== 'string' || !ORIGIN.test(origin)) return undefined;
+  if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 1) return undefined;
+  if (!Value.Check(ServerFrame, frame)) return undefined;
+  return { topic: topic as Topic, frame, origin, seq };
 };
+
+/**
+ * The least time between two tellings of "frames were missed": every socket of the node replays from the database for each, so
+ * a stream of frames that claim a hole (a forged count, red-team F6) must cost one replay, not one for each. A gap that comes
+ * inside the wait is not dropped, it is told once the wait is over, so a real hole is still replayed.
+ */
+export const GAP_REPLAY_MIN_MS = 10_000;
 
 interface Node {
   readonly fanOut: (topic: Topic, frame: ServerFrame) => void;
   readonly gap: (() => void) | undefined;
 }
 
-export const redisBackplane = (link: RedisLink, log: Logger): Backplane => {
+export const redisBackplane = (
+  link: RedisLink,
+  log: Logger,
+  timers: Timers = systemTimers,
+  clock: Clock = systemClock,
+): Backplane => {
   const nodes = new Set<Node>();
   /** This backplane's name on the channel, and how many frames it has tried to publish. */
   const origin = crypto.randomUUID();
   let published = 0;
   /** The last count heard from each backplane. A restarted one starts again at one, which is no hole. */
   const heardFrom = new Map<string, number>();
-  const tellGap = (): void => {
+  let lastGapAt = Number.NEGATIVE_INFINITY;
+  let gapWaiting = false;
+  const tellNow = (): void => {
+    lastGapAt = clock.now().getTime();
     for (const node of nodes) node.gap?.();
+  };
+  const tellGap = (): void => {
+    if (gapWaiting) return;
+    const wait = lastGapAt + GAP_REPLAY_MIN_MS - clock.now().getTime();
+    if (wait <= 0) {
+      tellNow();
+      return;
+    }
+    gapWaiting = true;
+    log.warn('sockets were told to replay a moment ago; the next telling waits', { waitMs: wait });
+    timers.set(() => {
+      gapWaiting = false;
+      tellNow();
+    }, wait);
   };
   const fanOutHere = (topic: Topic, frame: ServerFrame): void => {
     for (const node of nodes) node.fanOut(topic, frame);
