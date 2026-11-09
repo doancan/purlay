@@ -31,6 +31,14 @@ const serverClock = async (page: Page): Promise<number> => {
   return Date.parse(stamp ?? '');
 };
 
+/** When the server says this person's Deep Work in the workspace ends: null until it has written it. */
+const heldUntil = async (page: Page, workspaceId: string): Promise<string | null> => {
+  const me = (await (await page.request.get('/api/me')).json()) as {
+    memberships: { workspace: { id: string }; deepWorkUntil: string | null }[];
+  };
+  return me.memberships.find((m) => m.workspace.id === workspaceId)?.deepWorkUntil ?? null;
+};
+
 test.describe('Deep Work', () => {
   test('for two hours is kept by the server, said in the header, and ends when asked', async ({
     asOutsider,
@@ -46,11 +54,13 @@ test.describe('Deep Work', () => {
     const bar = page.getByRole('status').filter({ hasText: /Deep Work until/ });
     await expect(bar).toBeVisible();
 
-    // What the server holds is two hours from when it was asked, not the shortcut's one.
-    const me = (await (await page.request.get('/api/me')).json()) as {
-      memberships: { workspace: { id: string }; deepWorkUntil: string | null }[];
-    };
-    const until = me.memberships.find((m) => m.workspace.id === workspace.id)?.deepWorkUntil;
+    // What the server holds is two hours from when it was asked, not the shortcut's one. The header
+    // answers the moment the choice is made, before the server has written it: the server's own record
+    // is what is under test, so it is waited for rather than read once.
+    await expect
+      .poll(() => heldUntil(page, workspace.id), { message: 'the server keeps the chosen end' })
+      .not.toBeNull();
+    const until = await heldUntil(page, workspace.id);
     const after = await serverClock(page);
     const kept = Date.parse(until ?? '');
     expect(kept).toBeGreaterThan(before + 119 * 60_000);
