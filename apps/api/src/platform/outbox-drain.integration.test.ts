@@ -35,6 +35,7 @@ import { renderMetrics, serverMetrics } from './metrics';
 import { readExposition, sampleOf } from '../testing/exposition';
 import type { FactConsumer } from './fact-consumers';
 import { noPorts } from './ports/module-ports';
+import { noSeam } from './ports/module-seams';
 import {
   backoffMs,
   claimDue,
@@ -217,7 +218,7 @@ describe('integration: two nodes drain one table', () => {
     for (let n = 0; n < FACTS; n += 1) await publish(workspaceId, clock, `n${String(n)}`);
 
     const slowRecording: FactConsumer = async (fact, transaction) => {
-      await recording(fact, transaction, noPorts);
+      await recording(fact, transaction, noPorts, noSeam);
       await sql`select pg_sleep(0.002)`.execute(transaction);
       return 'done';
     };
@@ -315,7 +316,7 @@ describe('integration: a fact that does not get delivered', () => {
     const workspaceId = await aWorkspaceRow(cloned.db);
     await publish(workspaceId, clock, 'poison', 'hunter2-the-secret-title');
     const throwing: FactConsumer = async (fact, transaction) => {
-      await recording(fact, transaction, noPorts);
+      await recording(fact, transaction, noPorts, noSeam);
       throw new Error(`could not post "${JSON.stringify(fact.payload)}"`);
     };
     const outcomes: string[] = [];
@@ -346,7 +347,7 @@ describe('integration: a fact that does not get delivered', () => {
     const flaky: FactConsumer = async (fact, transaction) => {
       const tries = (await rowOf(workspaceId))[0]?.attempts ?? 0;
       if (tries < 3) throw new Error('not yet');
-      return await recording(fact, transaction, noPorts);
+      return await recording(fact, transaction, noPorts, noSeam);
     };
     for (const expected of ['failed', 'failed', 'delivered']) {
       clock.advance(3_700_000);
@@ -416,7 +417,7 @@ describe('integration: the handler’s effect and the mark are one commit', () =
     const one = claimed[0];
     if (one === undefined) throw new Error('nothing was claimed');
     const handle: FactConsumer = async (fact, transaction) => {
-      await recording(fact, transaction, noPorts);
+      await recording(fact, transaction, noPorts, noSeam);
       ran = true;
       return 'done';
     };
@@ -818,7 +819,7 @@ describe('integration: what a drain counts', () => {
     const handle: FactConsumer = (fact, transaction) =>
       (fact.payload as { noteId: string }).noteId === 'bad'
         ? Promise.reject(new Error('no'))
-        : recording(fact, transaction, noPorts);
+        : recording(fact, transaction, noPorts, noSeam);
     const { counters, read } = counted();
     const { log } = aRecordingLogger();
     const tally = await drainOnce(cloned.db, {
@@ -921,7 +922,7 @@ describe('integration: one workspace in a flood does not make the others wait (D
     const failsForHot: FactConsumer = (fact, transaction) =>
       fact.workspaceId === hot
         ? Promise.reject(new Error('down'))
-        : recording(fact, transaction, noPorts);
+        : recording(fact, transaction, noPorts, noSeam);
     const handlers = [{ ...wiki[0]!, declaration, handle: failsForHot }];
     const drain = async (): Promise<void> => {
       await drainOnce(cloned.db, { handlers, batch: BATCH, clock, log });

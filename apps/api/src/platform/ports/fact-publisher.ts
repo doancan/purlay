@@ -20,7 +20,7 @@ export type FactPublisher = <Fact extends FactDeclaration>(
 ) => Promise<void>;
 
 /** What the application knows once, and every module's publisher shares: everything of a publish but the workspace and the publisher. */
-type SharedFactContext = Omit<FactPublishContext, 'workspaceId' | 'producer'>;
+export type SharedFactContext = Omit<FactPublishContext, 'workspaceId' | 'producer'>;
 
 export const factPublisherOf =
   (producer: string, shared: SharedFactContext): FactPublisher =>

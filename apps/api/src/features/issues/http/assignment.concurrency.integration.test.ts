@@ -117,6 +117,7 @@ describe('integration: an assignment and its notice, together', () => {
     });
     const broken: NotificationSink = {
       notify: () => Promise.reject(new Error('the inbox is down')),
+      notifyIn: () => Promise.resolve(undefined),
       announce: () => Promise.resolve(),
     };
     const outcome = await atomicallyOn(cloned.db)(async (transaction) => {

@@ -159,6 +159,28 @@ const refuseWhenBacklogFull = async (
 };
 
 /**
+ * How many facts may be chained, each published by the delivery of the one before: a consumer that publishes a fact its own
+ * delivery chain consumes would otherwise feed itself for ever. The ninth link is refused, as an error of the publisher that ends its
+ * transaction, so the delivery that would have made it fails and ends dead like any that cannot succeed.
+ */
+export const FACT_CHAIN_DEPTH_MAX = 8;
+
+/** How long the chain of facts that led to `causedBy` is, itself included; the walk stops at the maximum, so a cycle ends too. */
+const chainDepth = async (transaction: Transaction, causedBy: string): Promise<number> => {
+  const { rows } = await sql<{ depth: number | null }>`
+    with recursive chain (fact_id, caused_by, depth) as (
+      (select o.fact_id, o.caused_by, 1 from outbox o where o.fact_id = ${causedBy} limit 1)
+      union all
+      select next.fact_id, next.caused_by, chain.depth + 1
+      from chain
+      cross join lateral (select o.fact_id, o.caused_by from outbox o where o.fact_id = chain.caused_by limit 1) next
+      where chain.depth < ${FACT_CHAIN_DEPTH_MAX}
+    )
+    select max(depth) as depth from chain`.execute(transaction);
+  return rows[0]?.depth ?? 0;
+};
+
+/**
  * Writes the fact for each module that consumes it, in the caller's transaction, which a pool is not: `Transaction` is the type
  * of one, so a publish with nothing to roll back with does not compile.
  *
@@ -198,6 +220,12 @@ export const publishFact = async <Fact extends FactDeclaration>(
   }
   const invalid = invalidReason(fact, payload);
   if (invalid !== undefined) throw new FactPublishError(fact.type, invalid);
+  if (causedBy !== undefined && (await chainDepth(transaction, causedBy)) >= FACT_CHAIN_DEPTH_MAX) {
+    throw new FactPublishError(
+      fact.type,
+      `it would be the ${String(FACT_CHAIN_DEPTH_MAX + 1)}th fact of a chain, each published by the delivery of the one before`,
+    );
+  }
 
   const now = clock.now();
   const factId = messageId(now);

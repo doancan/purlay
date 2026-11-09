@@ -7,6 +7,7 @@
  */
 import type { Transaction } from '@purlay/db';
 import type { ModulePorts } from './ports/module-ports';
+import type { WorkspaceSeam } from './ports/module-seams';
 
 /** A fact as the consumer is given it: whose it is, which delivery it is, and the payload, checked against its declaration. */
 interface DeliveredFact {
@@ -37,6 +38,12 @@ export type FactConsumer = (
   transaction: Transaction,
   /** The consumer's ports (`uses`), reading through the consumer's own share of the pool. */
   ports: ModulePorts,
+  /**
+   * Tells the rest of the build something from this delivery, as the consumer's module and for the fact's workspace: a notice with
+   * no actor and a follow-up fact, both in `transaction` and so undone with a throw. Notices are announced once the delivery has
+   * committed. A follow-up fact says it is a consequence of this one, and a chain of them is bounded.
+   */
+  seam: WorkspaceSeam,
 ) => Promise<'done' | 'skipped'>;
 
 export type FactConsumers = Readonly<Record<string, FactConsumer>>;

@@ -34,6 +34,7 @@ import type {
   WrittenNotice,
 } from '../../platform/ports/notification-sink';
 import { assertMinted } from '../../platform/tenancy';
+import { assertTurn } from '../../platform/workspace-turn';
 import type { PushSender } from '../push/sender';
 
 /** What the table's CHECK holds as well, so a mistake is named here and not as a database error. */
@@ -126,8 +127,15 @@ export const notificationSink = (dependencies: {
   readonly push?: Pick<PushSender, 'toldInbox'>;
   /** Whether the administrator has stopped the module at run time (D-296): its notices are not written. Absent, never. */
   readonly suspended?: () => boolean;
-}): NotificationSink => ({
-  notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
+}): NotificationSink => {
+  const write = async (
+    transaction: Transaction,
+    /** Read after the notice has been judged, so a call with nothing to write for names no workspace. */
+    whoFor: () => { readonly workspaceId: string; readonly actorId: string | null },
+    notice: ModuleNotice,
+    /** Asked once the notice is known well formed and the module not stopped: throws for a workspace that was forged, false for one that may not be told. */
+    authorized: () => boolean,
+  ): Promise<WrittenNotice | undefined> => {
     const { module } = dependencies;
     const declaredBy = dependencies.kinds.get(notice.kind);
     if (declaredBy === undefined) {
@@ -142,13 +150,14 @@ export const notificationSink = (dependencies: {
     if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);
     // A stopped module tells nobody anything, and what it would have said is not kept for later (D-296).
     if (dependencies.suspended?.() === true) return undefined;
-    assertMinted(context);
-    if (notice.recipientId === context.userId) return undefined;
+    if (!authorized()) return undefined;
+    const who = whoFor();
+    if (notice.recipientId === who.actorId) return undefined;
     // Erasure locks the workspace before its user; take the insert's foreign-key lock in that order.
     const workspace = await transaction
       .selectFrom('workspaces')
       .select('id')
-      .where('id', '=', context.workspaceId)
+      .where('id', '=', who.workspaceId)
       .where('deleted_at', 'is', null)
       .forKeyShare()
       .executeTakeFirst();
@@ -157,7 +166,7 @@ export const notificationSink = (dependencies: {
       .selectFrom('workspace_members')
       .innerJoin('users', 'users.id', 'workspace_members.user_id')
       .select('workspace_members.user_id')
-      .where('workspace_members.workspace_id', '=', context.workspaceId)
+      .where('workspace_members.workspace_id', '=', who.workspaceId)
       .where('workspace_members.user_id', '=', notice.recipientId)
       .where('users.deleted_at', 'is', null)
       .forKeyShare()
@@ -168,11 +177,11 @@ export const notificationSink = (dependencies: {
       .insertInto('inbox_entries')
       .values({
         id: messageId(now),
-        workspace_id: context.workspaceId,
+        workspace_id: who.workspaceId,
         user_id: notice.recipientId,
         module,
         kind: notice.kind,
-        actor_id: context.userId,
+        actor_id: who.actorId,
         subject_type: notice.subject.type,
         subject_id: notice.subject.id,
         params: JSON.stringify(notice.params),
@@ -193,35 +202,63 @@ export const notificationSink = (dependencies: {
       .returning('id')
       .executeTakeFirstOrThrow();
     const collapsed = await collapseOldestUnread(transaction, {
-      workspaceId: context.workspaceId,
+      workspaceId: who.workspaceId,
       userId: notice.recipientId,
       module,
       now,
     });
     return {
       entryId: written.id,
-      workspaceId: context.workspaceId,
+      workspaceId: who.workspaceId,
       recipientId: notice.recipientId,
       module,
       kind: notice.kind,
       collapsed,
     };
-  },
-  announce: async (written): Promise<void> => {
-    for (const { module, kind, collapsed } of written) {
-      dependencies.written.inc({ module, kind });
-      dependencies.collapsed.inc({ module, kind }, collapsed);
-    }
-    dependencies.push?.toldInbox(
-      written.filter((notice) => dependencies.pushedKinds.has(notice.kind)),
-    );
-    // One frame to each person for each workspace they were told in, however many notices they were written.
-    const people = new Map<string, WrittenNotice>();
-    for (const notice of written) people.set(`${notice.workspaceId}:${notice.recipientId}`, notice);
-    await publishAfterCommit(dependencies.log, [
-      [...people.values()].flatMap(({ workspaceId, recipientId }) =>
-        inboxUpdatedPublications(dependencies.bus, dependencies.clock, workspaceId, [recipientId]),
-      ),
-    ]);
-  },
-});
+  };
+  return {
+    notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
+      return await write(
+        transaction,
+        () => ({ workspaceId: context.workspaceId, actorId: context.userId }),
+        notice,
+        () => {
+          assertMinted(context);
+          return true;
+        },
+      );
+    },
+    notifyIn: async (transaction, turn, notice): Promise<WrittenNotice | undefined> => {
+      return await write(
+        transaction,
+        () => ({ workspaceId: turn.workspaceId, actorId: null }),
+        notice,
+        () => {
+          assertTurn(turn);
+          // A workspace that lost the module hears nothing from its loops, as it hears nothing from its routes (D-289).
+          return turn.modules === null || turn.modules.has(dependencies.module);
+        },
+      );
+    },
+    announce: async (written): Promise<void> => {
+      for (const { module, kind, collapsed } of written) {
+        dependencies.written.inc({ module, kind });
+        dependencies.collapsed.inc({ module, kind }, collapsed);
+      }
+      dependencies.push?.toldInbox(
+        written.filter((notice) => dependencies.pushedKinds.has(notice.kind)),
+      );
+      // One frame to each person for each workspace they were told in, however many notices they were written.
+      const people = new Map<string, WrittenNotice>();
+      for (const notice of written)
+        people.set(`${notice.workspaceId}:${notice.recipientId}`, notice);
+      await publishAfterCommit(dependencies.log, [
+        [...people.values()].flatMap(({ workspaceId, recipientId }) =>
+          inboxUpdatedPublications(dependencies.bus, dependencies.clock, workspaceId, [
+            recipientId,
+          ]),
+        ),
+      ]);
+    },
+  };
+};

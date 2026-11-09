@@ -995,7 +995,7 @@ telling the inbox and appearing in the find; every item is a defect or a gap of 
 
 - A member of `FindTarget` (`packages/types/src/find.ts`) for a search source whose hits lead somewhere a client does not know: the union is
   the wire's, not derivable from the manifests, and a client that does not know a member ignores it.
-- A consumer's handler is given the transaction and not the inbox.
+- Closed (D-286 §13, D-283 §11): a consumer's handler and a per-workspace worker's visit are given `notify` and `publishFact`, bound to the module and the workspace the framework handed out, in their transaction (`platform/ports/module-seams.ts`, `module-seams.integration.test.ts`; mutations `seam-publishes-as-the-fact-owner`, `workspace-turn-accepts-any-scope`, `outbox-chain-of-facts-has-no-end`, `delivery-notice-never-announced`).
 - Closed (D-286 §11): a feature's code imports `composition.ts` no more (the lint refuses it, `verify:enforcement` proves it, mutation
   `module-code-may-import-the-composition`), and the sink a module is handed is bound to that module, so a notice of another module's
   kind (`zz` writing `issue_assigned`) is refused and written as no one else's (`sink.test.ts`, `sink.integration.test.ts`, mutation
