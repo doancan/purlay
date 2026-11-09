@@ -368,7 +368,9 @@ describe("where each module's code is", () => {
     expect(shell[0]).toContain('the shell is');
     const chat = problemsOf(aShell([], incompressible((MODULE_BYTES['chat'] ?? 0) + 5_000)));
     expect(chat).toHaveLength(1);
-    expect(chat[0]).toContain("over the chat module's 50.00 KB bound");
+    expect(chat[0]).toContain(
+      `over the chat module's ${((MODULE_BYTES['chat'] ?? 0) / 1024).toFixed(2)} KB bound`,
+    );
     const issues = problemsOf(
       aShell([], 'x', incompressible((MODULE_BYTES['issues'] ?? 0) + 2_000)),
     );
