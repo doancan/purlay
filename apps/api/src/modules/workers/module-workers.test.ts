@@ -4,6 +4,7 @@ import type { EventBus } from '../../platform/events';
 import { currentRequest } from '../../platform/logging';
 import { noEntitledWorkspaces, type EntitledWorkspaces } from '../../platform/entitled-workspaces';
 import { sql } from '@purlay/db';
+import { noSeams, type ModuleSeams } from '../../platform/ports/module-seams';
 import { noPorts, type ModulePorts } from '../../platform/ports/module-ports';
 import { UNAVAILABLE_REF } from '../../platform/ports/record-ref';
 import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
@@ -131,6 +132,43 @@ describe('a worker’s ports', () => {
     expect(given.get('bare')).toBe(noPorts);
     await withComposition.stop();
     await without.stop();
+  });
+});
+
+describe('a worker’s seams', () => {
+  test('are its module’s, and a visit is run in a transaction of its database with them, or refused where none are wired', async () => {
+    const database = aDatabaseThatMustNotBeTouched();
+    const asked: string[] = [];
+    const own: ModuleSeams = { announce: () => Promise.resolve(), bind: noSeams.bind };
+    const handed = new Map<string, Parameters<WorkerWork>[0]>();
+    const base = {
+      database,
+      clock: fixedClock(new Date('2026-01-01T00:00:00Z')),
+      log: aRecordingLogger().log,
+      bus,
+      failures: { inc: (): void => undefined },
+      later: aManualTimer().later,
+    };
+    const work =
+      (name: string): WorkerWork =>
+      (context) => {
+        handed.set(name, context);
+        return Promise.resolve();
+      };
+    const composed = startWorkers([aWorker(work('composed'))], {
+      ...base,
+      seamsFor: (module) => {
+        asked.push(module);
+        return own;
+      },
+    });
+    const bare = startWorkers([aWorker(work('bare'))], base);
+    await settle();
+    expect(handed.get('composed')?.seams).toBe(own);
+    expect(asked).toEqual(['chat']);
+    expect(handed.get('bare')?.seams).toBe(noSeams);
+    await composed.stop();
+    await bare.stop();
   });
 });
 

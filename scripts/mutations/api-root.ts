@@ -1001,6 +1001,22 @@ export const API_ROOT: readonly Mutation[] = [
     ],
   },
   {
+    id: 'suspension-fact-routing-given-no-stop',
+    why: 'the application builds its fact routing without the stop, so a stopped consumer is written to as if it ran (D-296)',
+    file: 'apps/api/src/module-seams-wiring.ts',
+    find: '    composition.suspension.current,\n  ),',
+    replace: '    () => new Set(),\n  ),',
+    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
+  },
+  {
+    id: 'suspension-sink-given-no-stop',
+    why: 'the application hands a module an inbox that does not know it is stopped (D-296)',
+    file: 'apps/api/src/module-seams-wiring.ts',
+    find: '    suspended: () => inputs.composition.suspension.current().has(module),\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
+  },
+  {
     id: 'upgrade-check-migrates-the-core-alone',
     why: 'the check of the last release’s database migrates head under `MODULES=none` whatever the cell, so a module set that cannot apply on the old schema is never tried',
     file: 'apps/api/src/testing/module-upgrade.ts',

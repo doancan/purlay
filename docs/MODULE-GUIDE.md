@@ -70,28 +70,18 @@ provides. The composition hands you the implementation of the modules that run a
 `apps/api/src/platform/ports/ports.ts`), so the compiler makes you handle absence. The provider lists it under `provides` and supplies it in
 `ports` of its slot in `apps/api/src/composition.ts`; `compose` stops a build where the two differ.
 
-You read them from `ports` of what you are handed: `ModuleRouteDependencies` in a route, the context of a worker, the third argument of a
-fact consumer. `ports.of(context)` is asked for each workspace, because a port is there only when its provider runs, was not stopped
-by the administrator and is granted to *that* workspace; what you are given are the capabilities your manifest `uses`, no others.
-The type of a port is `CapabilityPorts` in `platform/ports/module-ports.ts`: `<id>.records` is a `RecordResolver` for any module, and a new kind of port is a member there.
+You read them from `ports` of what you are handed: a route's dependencies, a worker's context, a fact consumer's third argument.
+`ports.of(context)['issues.records']` is asked for each workspace, because a port is there only when its provider runs, was not
+stopped by the administrator and is granted to *that* workspace, and only for the capabilities your manifest `uses`. Its type is
+`CapabilityPorts` (`platform/ports/module-ports.ts`): `<id>.records` is a `RecordResolver` for any module.
 
-```ts
-const resolver = ports.of(context)['issues.records'];
-if (resolver === undefined) return hideTheIssueColumn(); // issues is not run here, or this workspace is not granted it
-```
-
-**Link another module's record.** Say it in four steps (D-291):
-
-1. Your manifest lists the partner in `optional` (with its `degrades` sentence) and `uses: ['issues.records']`.
-2. Your table stores `(module, type, id)` and the label the record had, with no key to the partner's table: `('issues', 'issue', id)`.
-3. To show the link, ask `await ports.resolveRef({ module: 'issues', type: 'issue', id }, context)`. `available` has the live `label`;
-   `unavailable` means draw the label you saved, as text, with "not available here" and no link. It is the same answer whether the
-   partner is off, stopped or not granted, the record is gone or is another workspace's: never turn it into a `404` or `500`, and never
-   tell the person which one it is. Only a failure of the database throws.
-4. Prove it in `degradation.testing.ts` (§4): compose without the partner and assert your view draws the saved label.
-
-To be the target of links, list `<your id>.records` under `provides` and implement `RecordResolver` for it in your slot's `ports`
-(`features/issues/records.ts` is the model: one query that names the workspace, an id that is no UUID answers none).
+**Link another module's record** (D-291). Your manifest lists the partner in `optional` (with its `degrades` sentence) and
+`uses: ['issues.records']`; your table stores `(module, type, id)` and the label the record had, with no key to the partner's table.
+To show the link, `await ports.resolveRef({ module: 'issues', type: 'issue', id }, context)`: `available` has the live `label`;
+`unavailable` means draw the saved label as text with "not available here" and no link. It is one answer whether the partner is off,
+stopped or not granted, or the record is gone or another workspace's: never a `404` or `500`, and never told apart. Only a failure of
+the database throws. To be a target, list `<your id>.records` under `provides` and implement `RecordResolver` in your slot's `ports`
+(`features/issues/records.ts` is the model).
 
 ## 4. Say, and prove, what you do without a partner
 
@@ -99,14 +89,7 @@ For every `optional` partner write the sentence in `degrades` and the scenario i
 both as stubs). `degradation.test.ts` composes the build without the partner and runs the scenario; it fails for an edge with no scenario. A
 reference to the partner's records follows D-291 (§3): your own table holds `(module, type, id)` and the label, with no key to the other
 module, and a missing target is a view. The stub `module:new --optional` writes asserts only that the partner is out of the world;
-for a partner whose records you link, replace it with the scenario below, which `runs` and `composition` make possible:
-
-```ts
-issues: async ({ composition }) => {
-  const ports = composition.portsFor('acme', database);
-  expect(await ports.resolveRef(savedLink, { workspaceId, modules: null })).toEqual({ status: 'unavailable' });
-},
-```
+the scenario it comments for a linked partner asks `composition.portsFor('<id>', database).resolveRef(savedLink, scope)` and expects `unavailable`.
 
 ## 5. Publish a fact
 
@@ -118,6 +101,10 @@ in `consumes` and supplies a handler in `factConsumers` of its slot (`MODULES.md
 `atomicallyOn(database)`: `publishFact(transaction, workspaceContext, FACT, payload)` writes the rows in that transaction, as the module whose
 route it is and for no other (`platform/ports/fact-publisher.ts`). The contract is built; the delivery by the outbox is the part of D-283 §1
 that `MODULES.md` §10 says whether it has landed.
+
+**From a consumer.** A handler is given the delivery's `seam` (fourth argument): `seam.publishFact(FACT, payload)` writes a follow-up
+fact in its transaction as your module, caused by the fact being delivered, and `seam.notify(notice)` writes an inbox notice (§6). A throw
+undoes both; notices are announced after the commit. A chain of facts that answer each other ends at its ninth link (`FACT_CHAIN_DEPTH_MAX`).
 
 **Evolving a fact.** During a rolling deploy nodes of two releases share the outbox, so a row may be read by a release that did not
 write it. Adding an optional field changes nothing for the nodes. Anything an older node would refuse (a new required field, a value more in an
@@ -182,6 +169,23 @@ put in its `where`; the page and the statement share it. What is exempt is the d
 exports cover the rows of a workspace that lost the module, and are written as plain jobs. A module that is `entitlement: 'always'` (chat)
 has no grant to lose and may write a plain `work`.
 
+**Notify from a worker.** The visit of a per-workspace worker is handed `inWorkspace(turn, work)`: `work(transaction, seam)` runs in one
+transaction of your module's database for that workspace, and `seam.notify` and `seam.publishFact` (as in §5) write in it as your module. The
+notice has no actor, because nobody is acting; its kind must be one your manifest lists under `notifications`, and its recipient a
+current member. It is committed with what `work` writes, announced after the commit, and not written for a workspace that lost the
+module or while the module is stopped.
+
+```ts
+work: perWorkspaceWorker(async (workspace, { database, clock, inWorkspace }) => {
+  for (const task of await overdueIn(database, workspace.workspaceId, clock.now())) {
+    await inWorkspace(workspace, async (transaction, seam) => {
+      await markOverdue(transaction, task.id);
+      await seam.notify({ kind: 'task_overdue', recipientId: task.assigneeId, subject: { type: 'task', id: task.id }, params: {} });
+    });
+  }
+}),
+```
+
 ## 7. Make it sellable
 
 A module is on or off for a whole process by `MODULES` (D-250). It is on or off for each workspace of a process that runs it by the
@@ -223,3 +227,23 @@ in `HOT_PATHS` and the web feature (`apps/web/src/features/<id>/`, its line in `
 search source, the member of `FindTarget` (`packages/types/src/find.ts`) that says where a hit leads: it is the wire's, and a client that
 does not know it ignores it. Everything else is derived from the bundle, or made by `module:new`: the tests that list modules, facts,
 kinds and sources read them from the manifests.
+
+## 11. Run the database without Docker
+
+`bun run db:up` starts PostgreSQL in Docker; the tests need only a server of the version `docker-compose.yml` names, with `pg_trgm`, that
+you may create and drop databases on. A native one, on a port nothing uses, with its own data directory and an env file the tests read
+instead of `.env.test`:
+
+```
+initdb -D ~/purlay-pg -U purlay --auth=trust --locale=C --encoding=UTF8
+pg_ctl -D ~/purlay-pg -o "-p 55432 -k /tmp -c listen_addresses=127.0.0.1 -c max_connections=300" -l ~/purlay-pg/log -w start
+psql -h 127.0.0.1 -p 55432 -U purlay postgres -c "create database purlay"
+echo "DATABASE_URL=postgres://purlay@127.0.0.1:55432/purlay" > ~/purlay-pg.env
+bun --no-env-file --env-file=$HOME/purlay-pg.env test apps/api/src/composition.test.ts
+bun --no-env-file --env-file=$HOME/purlay-pg.env run test:all
+```
+
+`--locale=C` is what the Compose file passes (identifier columns declare `COLLATE "C"`), `--auth=trust` is for a loopback-only server, and
+`max_connections=300` leaves room for the scratch databases the suites clone. Check `show data_directory` names the directory you made
+before anything that drops databases runs. `bun --no-env-file --env-file=<file> run <script>` runs any script that reads `DATABASE_URL`
+(`db:migrate`, `db:check`, `modules:suites`); stop the server with `pg_ctl -D ~/purlay-pg stop`.

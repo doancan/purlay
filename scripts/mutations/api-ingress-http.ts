@@ -715,14 +715,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
   },
   {
-    id: 'suspension-fact-routing-given-no-stop',
-    why: 'the application builds its fact routing without the stop, so a stopped consumer is written to as if it ran (D-296)',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: '      modules.suspension.current,\n    ),\n    dropped:',
-    replace: '      () => new Set(),\n    ),\n    dropped:',
-    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
-  },
-  {
     id: 'suspension-me-lists-a-stopped-module',
     why: 'the session still names a stopped module among those the server runs, so the page draws it (D-296)',
     file: 'apps/api/src/ingress/http/workspaces.ts',
@@ -761,14 +753,6 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     find: '  const admin = await guard(deps, request);\n  const module = validated(ServerModuleId, moduleId);',
     replace:
       '  const admin = { userId: crypto.randomUUID() } as never;\n  const module = validated(ServerModuleId, moduleId);',
-    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
-  },
-  {
-    id: 'suspension-sink-given-no-stop',
-    why: 'the application hands a module an inbox that does not know it is stopped (D-296)',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: '              suspended: () => modules.suspension.current().has(module.manifest.id),\n',
-    replace: '',
     tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
   },
   {

@@ -237,10 +237,8 @@ import { updateMyProfile } from './profile';
 import { readMyQuietHours, setMyQuietHours } from './quiet-hours';
 import { setMyAway } from './away';
 import { runningModuleIds, type Composition } from '../../composition';
-import { notificationSink } from '../../modules/inbox/sink';
-import { factRoutingOf } from '../../platform/outbox';
+import { factContextOf, sinkOfModule } from '../../module-seams-wiring';
 import { factPublisherOf } from '../../platform/ports/fact-publisher';
-import { withoutStopped } from '../../platform/suspended-modules';
 import { listInbox, readInbox } from './inbox';
 
 export interface Dependencies {
@@ -617,21 +615,16 @@ export const createApp = (given: Dependencies): HttpApplication => {
       ? dependencies.settingsChange?.holder.current()?.settings.githubApp
       : dependencies.githubApp();
 
-  // Who consumes what over the whole build, and which of it this process runs: what a publish writes a row for (D-288).
-  const factContext = {
+  const seamInputs = {
+    composition: modules,
     clock: dependencies.clock,
-    routing: withoutStopped(
-      factRoutingOf(
-        modules.bundled.map((module) => module.manifest),
-        modules.modules.map((module) => module.manifest),
-      ),
-      modules.suspension.current,
-    ),
-    dropped: metrics.outboxDropped,
-    refused: metrics.outboxRefused,
-    pendingMax: dependencies.config.OUTBOX_PENDING_MAX,
-    effective: modules.effectiveModules,
+    bus: sockets.bus,
+    log,
+    metrics,
+    outboxPendingMax: dependencies.config.OUTBOX_PENDING_MAX,
+    ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
   };
+  const factContext = factContextOf(seamInputs);
   // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
   // manifest, as the rest of the surface is (D-255 §2).
   const moduleRoutes = modules.bundled.flatMap((module) =>
@@ -651,18 +644,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
             ...(dependencies.githubApi === undefined ? {} : { githubApi: dependencies.githubApi }),
             ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
             permissions: modules.permissions,
-            inbox: notificationSink({
-              module: module.manifest.id,
-              clock: dependencies.clock,
-              kinds: modules.noticeOwners,
-              bus: sockets.bus,
-              log,
-              written: metrics.inboxEntries,
-              collapsed: metrics.inboxCollapsed,
-              pushedKinds: modules.pushedKinds,
-              suspended: () => modules.suspension.current().has(module.manifest.id),
-              ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
-            }),
+            inbox: sinkOfModule(module.manifest.id, seamInputs),
             publishFact: factPublisherOf(module.manifest.id, factContext),
             ports: modules.portsFor(module.manifest.id, dependencies.database),
             bus: sockets.bus,

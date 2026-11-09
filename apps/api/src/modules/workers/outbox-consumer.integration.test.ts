@@ -27,6 +27,7 @@ import {
   NOTES,
   WIKI,
 } from '../../testing/facts';
+import { noSeam, type ModuleSeams } from '../../platform/ports/module-seams';
 import { startWorkers, type Later } from './module-workers';
 
 let cloned: ClonedDatabase;
@@ -60,6 +61,7 @@ const once: Later = () => () => undefined;
 
 const runWorkers = async (
   composition: ReturnType<typeof compose>,
+  seamsFor?: (module: string) => ModuleSeams,
 ): Promise<{ failures: Record<string, string>[]; lines: Record<string, unknown>[] }> => {
   const { log, lines } = aRecordingLogger();
   const failures: Record<string, string>[] = [];
@@ -78,11 +80,47 @@ const runWorkers = async (
         failures.push(labels);
       },
     },
+    ...(seamsFor === undefined ? {} : { seamsFor }),
     later: once,
   });
   await started.stop();
   return { failures, lines };
 };
+
+describe('integration: what a consumer is handed by its worker', () => {
+  test('is the seams of its module, bound to the delivery’s workspace and to the fact it is delivering', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    const { context } = aPublishWorld(workspaceId, clock);
+    await cloned.db.transaction().execute(async (tx) => {
+      await publishFact(tx, context, NOTE_CREATED, { noteId: 'n9', title: 'Plan' });
+    });
+    const factId = (
+      await cloned.db
+        .selectFrom('outbox')
+        .select('fact_id')
+        .where('workspace_id', '=', workspaceId)
+        .executeTakeFirstOrThrow()
+    ).fact_id;
+    const bound: [string, string, string | undefined][] = [];
+    const asked: string[] = [];
+    const seams = (module: string): ModuleSeams => {
+      asked.push(module);
+      return {
+        announce: () => Promise.resolve(),
+        bind: (_transaction, turn, causedBy): ReturnType<ModuleSeams['bind']> => {
+          bound.push([module, turn.workspaceId, causedBy]);
+          return { written: () => [], seam: noSeam };
+        },
+      };
+    };
+    await runWorkers(
+      compose([notes, wikiWith(() => Promise.resolve('done'))], undefined, 'open', FACTS),
+      seams,
+    );
+    expect(asked).toContain('wiki');
+    expect(bound).toEqual([['wiki', workspaceId, factId]]);
+  });
+});
 
 describe('integration: a fact between two modules', () => {
   test('is delivered by the consumer’s worker, as the consumer, in the transaction that marks it', async () => {

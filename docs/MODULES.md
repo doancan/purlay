@@ -25,6 +25,18 @@ One process and one PostgreSQL stay (D-7): a module is a folder, a set of migrat
 a service. Modules are first-party code in this repository; the manifest is not a trust boundary, and
 loading a module from elsewhere is not supported (D-250 rule 2).
 
+**Modules are in-repo by design, and an out-of-tree module system is a decision of its own.** A module is compiled into the build:
+the bundle is static (`bundledModules` in `composition.ts`), the lists a module joins are closed types (`ModuleId`, `FACTS`,
+`FindTarget`, the error codes, the table owners and the migrator's sets), and a module runs in the API process with the database
+beside it. The trust boundary is therefore code review plus the lint fences and the types (`ModuleDb`, the import fences, the minted
+context), not a sandbox: a contributor who wants a module sends it to this repository, where the same guards and `module:new` hold it.
+Nothing here is an SDK. What one would need, none of it started: registration by a manifest the core reads instead of edits to the
+core's lists (so those unions open and the schema's owners come from the manifests); a compatibility range of each module against the
+core's contract, checked at load (`released-manifests.json` is the in-repo form of it); and a trust decision, first-party-reviewed
+modules only or isolation of an unreviewed one (a process or a sandbox, with the pool share and the types no longer enough). The
+trigger to start it is a named third party that must ship a module without sending it to this repository; until then the cost of
+the three is not paid, and a request for it is answered with this paragraph.
+
 **Where they live.** A module is `apps/api/src/features/<id>` and `apps/web/src/features/<id>`. The existing
 `apps/api/src/modules/` keeps its layered meaning (`ARCHITECTURE.md` §4) and shrinks as each module's files
 move under `features/`. An id may not be a name the core owns: a path segment (`auth`, `workspaces`), the words the build uses for
