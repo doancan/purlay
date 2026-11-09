@@ -184,11 +184,13 @@ export default defineConfig({
     '{testDir}/__snapshots__/{platform}/{projectName}/{testFileName}-snapshots/{arg}{ext}',
   fullyParallel: true,
   forbidOnly: ci,
-  retries: ci ? 1 : 0,
+  // Never: a test that passes the second time is a flaky test the first failure would have shown (`CONTRIBUTING.md` §5).
+  retries: 0,
   reporter: ci ? [['github'], ['html', { open: 'never' }]] : 'list',
   timeout: 30_000,
   use: {
-    trace: 'on-first-retry',
+    // A failure keeps its trace, since there is no second run to take one on.
+    trace: 'retain-on-failure',
     // The only motion in the product is a 120 ms collapse (`UX.md` §9); a screenshot
     // must never catch it half done.
     reducedMotion: 'reduce',
