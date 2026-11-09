@@ -98,10 +98,9 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'auth-request-line-logs-the-library-path-as-sent',
     why: 'the request line, and a failure thrown under the library, are written with the path as sent: a reset link’s token reaches the log on every click',
-    file: APP,
-    find: '    route === LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
-    replace:
-      '    route !== LIBRARY_ROUTE ? dependencies.auth.routeOf(path) : pathWithoutSecret(path);\n',
+    file: 'apps/api/src/ingress/http/request-observation.ts',
+    find: '    route === LIBRARY_ROUTE ? auth.routeOf(path) : pathWithoutSecret(path);\n',
+    replace: '    route !== LIBRARY_ROUTE ? auth.routeOf(path) : pathWithoutSecret(path);\n',
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
@@ -250,8 +249,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'client-too-old-served',
     why: 'a client below the minimum is let through to the handler: the app keeps talking to a server it can no longer follow, and decodes what it no longer understands',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: '        if (tooOld !== null) return turnedAway(clientTooOldResponse(tooOld, headers));\n',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: '      if (tooOld !== null) return turnedAway(clientTooOldResponse(tooOld, headers));\n',
     replace: '',
     tests: [
       'apps/api/src/ingress/http/client-handshake.test.ts',
@@ -272,7 +271,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'closed-route-gate-after-admission',
     why: 'a route of a module that is not run answers with what the route would, not the 404 of an unknown path (D-250)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
     find: 'if (closedRoute(request)) {',
     replace: 'if (false) {',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
@@ -289,7 +288,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'deadline-signal-not-on-the-request',
     why: 'the deadline answers a request but its signal never reaches the request’s connections, so the statement it waits in runs on after the answer (D-270)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
     find: 'noteModule(owner, deadlineSignals.get(request));',
     replace: 'noteModule(owner);',
     tests: ['apps/api/src/ingress/http/deadline.integration.test.ts'],
@@ -337,10 +336,10 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'edge-refusal-unlogged',
     why: 'a request turned away at the edge writes no line: the id a refused client quotes finds nothing, in the one case where it is most needed',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: "        log.info('request', {\n          method: request.method,\n          path: pathname.startsWith",
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: "      log.info('request', {\n        method: request.method,\n        path: pathname.startsWith",
     replace:
-      "        log.debug('request', {\n          method: request.method,\n          path: pathname.startsWith",
+      "      log.debug('request', {\n        method: request.method,\n        path: pathname.startsWith",
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
@@ -363,8 +362,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'fact-backlog-full-has-no-retry-after',
     why: 'a request refused for a full backlog is not told when to come back, so clients retry at once into the flood (D-288 §10)',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: "        set.headers['retry-after'] = String(FACT_BACKLOG_RETRY_AFTER_SECONDS);\n",
+    file: 'apps/api/src/ingress/http/error-hook.ts',
+    find: "      set.headers['retry-after'] = String(FACT_BACKLOG_RETRY_AFTER_SECONDS);\n",
     replace: '',
     tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
   },
@@ -379,7 +378,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'failed-request-line-forgets-the-module',
     why: 'a request that failed with a 500 is logged without the module that owns its route (D-250 rule 7)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/error-hook.ts',
     find: "log.error('request failed', { err: error, path: where, ...moduleField(route) });",
     replace: "log.error('request failed', { err: error, path: where });",
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
@@ -470,9 +469,9 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'library-status-logged-unset',
     why: 'the log line takes its status from `set` only, so every answer the library returns whole is written 200 and auth failures hide from a 4xx alert',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: '        responseValue instanceof Response\n          ? responseValue.status\n          : typeof set.status',
-    replace: '        typeof set.status',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: '      responseValue instanceof Response\n        ? responseValue.status\n        : typeof set.status',
+    replace: '      typeof set.status',
     tests: ['apps/api/src/ingress/http/logging.integration.test.ts'],
   },
   {
@@ -502,7 +501,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'metrics-module-label-of-every-route-is-core',
     why: 'every request is counted against the core, so a failing or slow module cannot be told from the rest (D-250 rule 7)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/request-observation.ts',
     find: 'module: moduleOfRoute(route),',
     replace: "module: 'core',",
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
@@ -559,7 +558,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'module-requests-have-no-deadline',
     why: 'a module’s request that waits on a lock or a slow service hangs for as long as it waits instead of being answered at its deadline (D-270)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
     find: 'if (module === undefined || ms === undefined) return await handle(...args);',
     replace: 'return await handle(...args);',
     tests: ['apps/api/src/ingress/http/deadline.integration.test.ts'],
@@ -567,8 +566,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'module-routes-not-noted-as-their-module',
     why: 'a module’s requests are not noted as its own, so no share of the pool holds them and a slow module holds the pool (O3, MODULES.md §7)',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: 'if (owner !== CORE_OWNER && owner !== NO_OWNER)\n        noteModule(owner, deadlineSignals.get(request));',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: 'if (owner !== CORE_OWNER && owner !== NO_OWNER) noteModule(owner, deadlineSignals.get(request));',
     replace: 'void noteModule;',
     tests: [
       'apps/api/src/features/issues/http/budget.integration.test.ts',
@@ -701,16 +700,16 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'setup-lock-without-retry-after',
     why: 'the setup’s lock says to wait without saying how long',
-    file: APP,
-    find: "        set.headers['retry-after'] = String(error.retryAfterSeconds);\n",
+    file: 'apps/api/src/ingress/http/error-hook.ts',
+    find: "      set.headers['retry-after'] = String(error.retryAfterSeconds);\n",
     replace: '',
     tests: [SETUP_HTTP_TESTS],
   },
   {
     id: 'setup-pages-indexed',
     why: 'a search engine may keep the setup’s answers and pages',
-    file: APP,
-    find: "        ...(SETUP_PATH.test(new URL(request.url).pathname) ? { 'x-robots-tag': 'noindex' } : {}),\n",
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: "      ...(SETUP_PATH.test(new URL(request.url).pathname) ? { 'x-robots-tag': 'noindex' } : {}),\n",
     replace: '',
     tests: [SETUP_HTTP_TESTS],
   },
@@ -758,8 +757,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'suspension-request-does-not-reread-the-stop',
     why: 'a node believes a stop only when something else reads the table, so a quiet node serves a stopped module for as long as it likes (D-296)',
-    file: 'apps/api/src/ingress/http/app.ts',
-    find: '      await modules.suspension.fresh();\n',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: '    await modules.suspension.fresh();\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
   },
@@ -791,8 +790,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'swap-request-not-pinned',
     why: 'a request reads whichever instance is current at each use, so a change of the settings mid-request serves its second half by the new instance (D-179 §4)',
-    file: APP,
-    find: '      dependencies.services?.pin();\n',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: '    dependencies.services?.pin();\n',
     replace: '',
     tests: [SWAP_TESTS],
   },
@@ -866,7 +865,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'webhook-length-refused-before-the-path-is-judged',
     why: 'a webhook of a chat that is not run is refused 411 or 413 where an unknown path is not: an oracle on which modules run (D-250)',
-    file: 'apps/api/src/ingress/http/app.ts',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
     find: '} else if (isWebhookRequest(request) && !closedRoute(request)) {',
     replace: '} else if (isWebhookRequest(request)) {',
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
