@@ -2365,7 +2365,7 @@ CREATE TABLE outbox (
     CONSTRAINT outbox_payload_is_small
         CHECK (octet_length(payload::text) <= 16384),
     CONSTRAINT outbox_state
-        CHECK (state IN ('pending', 'delivered', 'dead', 'skipped')),
+        CHECK (state IN ('pending', 'delivered', 'dead', 'skipped', 'discarded')),  -- 'discarded' by 0095 (D-288 §12)
     CONSTRAINT outbox_attempts_count
         CHECK (attempts >= 0),
     CONSTRAINT outbox_shape_is_counted
@@ -3067,6 +3067,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0092_suspended_modules.sql  suspended_modules: modules the administrator stopped at run time, and server_audit_log.note (D-296)
 0093_outbox_fair_claim.sql  idx_outbox_pending_by_workspace replaces it: the claim goes by turns across workspaces  (D-288)
 0094_audit_target_fact.sql  server_audit_log.target_fact_id: the fact an entry about the outbox is about (D-288)
+0095_outbox_discarded.sql  outbox_state admits 'discarded': a fact an administrator gave up on, kept for the audit (D-288)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

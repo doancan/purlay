@@ -3,6 +3,30 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_ADMINISTRATION: readonly Mutation[] = [
   {
+    id: 'outbox-change-drops-the-reason',
+    why: 'an entry says that a fact was discarded and not why (D-288 §12)',
+    file: 'apps/api/src/modules/administration/outbox.ts',
+    find: '      note: input.reason.trim(),\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
+    id: 'outbox-change-not-on-the-trail',
+    why: 'a fact is discarded and no entry says by whom or why, so the auditor’s question has no answer (D-288 §12)',
+    file: 'apps/api/src/modules/administration/outbox.ts',
+    find: '  for (const fact of changed)\n',
+    replace: '  for (const fact of [] as typeof changed)\n',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
+    id: 'outbox-change-skips-the-administrator-recheck',
+    why: 'an administrator demoted a moment ago still requeues or discards a fact (D-288 §12, D-292 §2)',
+    file: 'apps/api/src/modules/administration/outbox.ts',
+    find: '  await lockServerAdministrator(tx, admin);\n  const { verdicts',
+    replace: '  const { verdicts',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'outbox-inspect-not-on-the-trail',
     why: 'a payload is read and no entry says by whom, so the auditor’s question has no answer (D-288 §12)',
     file: 'apps/api/src/modules/administration/outbox.ts',

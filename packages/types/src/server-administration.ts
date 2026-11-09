@@ -42,6 +42,8 @@ export const ServerAuditAction = Type.Union([
   Type.Literal('server.module_suspended'),
   Type.Literal('server.module_resumed'),
   Type.Literal('server.fact_inspected'),
+  Type.Literal('server.fact_requeued'),
+  Type.Literal('server.fact_discarded'),
 ]);
 export type ServerAuditAction = Static<typeof ServerAuditAction>;
 
@@ -438,3 +440,26 @@ export const ServerOutboxFactDetail = Type.Composite([
   }),
 ]);
 export type ServerOutboxFactDetail = Static<typeof ServerOutboxFactDetail>;
+
+/** Requeue or discard some deliveries (D-288 §12): at most fifty, and the administrator's reason, which goes on the server's trail. */
+const OUTBOX_CHANGE_MAX = 50;
+export const ServerOutboxChangeRequest = FromClient({
+  ids: Type.Array(Uuid, { minItems: 1, maxItems: OUTBOX_CHANGE_MAX, uniqueItems: true }),
+  reason: Type.String({ minLength: 1, maxLength: 200, pattern: '\\S' }),
+});
+export type ServerOutboxChangeRequest = Static<typeof ServerOutboxChangeRequest>;
+/** What became of each delivery asked about: `unchanged` is a repeat, `refused` a delivery that is over (delivered or skipped). */
+export const ServerOutboxChangeResponse = Type.Object({
+  results: Type.Array(
+    Type.Object({
+      id: Uuid,
+      result: Type.Union([
+        Type.Literal('changed'),
+        Type.Literal('unchanged'),
+        Type.Literal('refused'),
+        Type.Literal('not_found'),
+      ]),
+    }),
+  ),
+});
+export type ServerOutboxChangeResponse = Static<typeof ServerOutboxChangeResponse>;

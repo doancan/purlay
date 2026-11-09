@@ -32,6 +32,8 @@ import {
   ServerMembershipsQuery,
   Uuid,
   type ServerAuditPage,
+  ServerOutboxChangeRequest,
+  type ServerOutboxChangeResponse,
   ServerOutboxQuery,
   type ServerOutboxFactDetail,
   type ServerOutboxPage,
@@ -81,7 +83,11 @@ import type { AccountDependencies } from './accounts';
 import type { Config } from '../../platform/config';
 import { queryOf, validated } from './validate';
 import { exportServerAudit } from '../../modules/administration/audit-export';
-import { inspectServerOutboxFact, listServerOutbox } from '../../modules/administration/outbox';
+import {
+  changeServerOutbox,
+  inspectServerOutboxFact,
+  listServerOutbox,
+} from '../../modules/administration/outbox';
 import { approvePendingAccounts } from '../../modules/administration/batch-approval';
 
 export interface AdministrationDependencies extends AccountDependencies {
@@ -274,6 +280,19 @@ export const readAdministrationOutboxFact = async (
   const rowId = validated(Uuid, id);
   return await atomicallyOn(deps.database)(
     async (tx) => await inspectServerOutboxFact(tx, deps.clock, admin, rowId),
+  );
+};
+/** `POST /api/server/outbox/requeue` and `/discard` — the administrator sends deliveries back or gives up on them, with a reason (D-288 §12). */
+export const writeAdministrationOutbox = async (
+  deps: AccountDependencies,
+  request: Request,
+  change: 'requeue' | 'discard',
+  body: unknown,
+): Promise<ServerOutboxChangeResponse> => {
+  const admin = await guard(deps, request);
+  const input = validated(ServerOutboxChangeRequest, body);
+  return await atomicallyOn(deps.database)(
+    async (tx) => await changeServerOutbox(tx, deps.clock, admin, change, input),
   );
 };
 export const writeAdministrationRole = async (
