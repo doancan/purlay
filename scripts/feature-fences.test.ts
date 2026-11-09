@@ -149,6 +149,31 @@ describe('the fence of a feature', () => {
     for (const fence of fences) expect(optionsOf(fence).patterns).toContain(bypass);
   });
 
+  test('keeps a feature’s production code and its http folder from the core, and its tests from nothing of it', () => {
+    const realtime = { group: ['**/realtime/**'], message: 'r' };
+    const reach = (id: string, http: boolean): { group: string[]; message: string }[] => [
+      { group: [`${id}-${String(http)}`], message: 'reach' },
+    ];
+    const fences = featureFences(
+      'd',
+      ['chat'],
+      transport,
+      () => [database],
+      () => [database],
+      realtime,
+      undefined,
+      [],
+      reach,
+    );
+    const groups = fences.map((fence) =>
+      optionsOf(fence).patterns.flatMap((pattern) => pattern.group ?? []),
+    );
+    expect(groups[0]).toContain('chat-false');
+    expect(groups[1]).not.toContain('chat-false');
+    expect(groups[2]).toContain('chat-true');
+    expect(groups[3]).not.toContain('chat-true');
+  });
+
   test('keeps a feature from nothing more when it is given no composition to keep it from', () => {
     const [only] = featureFences('d', ['chat'], transport, () => [database]);
     expect(optionsOf(only).patterns).toEqual([transport]);

@@ -205,7 +205,18 @@ three settings (`APP_URL`, `GITHUB_API_URL`, `TRUST_PROXY`) and no secret, `auth
 opens and nothing else does, and `database` is your `<Id>Db`, so `context.database.selectFrom('channels')` does not compile in a
 module that does not read `channels`. A setting a route needs is a line in `ModuleConfig`, in the pull request that needs it.
 
-## 9. What stays by hand
+## 9. What a module may import, and why
+
+A module's code imports the core by an allow-list (`scripts/module-reach.mjs`, D-250 rule 10), and the lint refuses the rest.
+Open to every module: tenancy, errors, the clock, events, logging, pagination, transactions, the ports (`platform/ports/*`), the
+manifest and permission types, the audit writer, the export catalogue, the retention and worker types and, of the session file,
+`requireLiveSession` and `SessionAuth`. The `http/` folder also has the door's `module-routes`, `session` and `validate`. Everything
+else (the outbox, the inbox sink, the Better Auth instance, `issueSession`, the configuration, the application and the composition)
+is the core's: a module reaches it through a port, a fact or its manifest, because each of those is checked for who is asking and the
+import is not. A file you need that is not open is a line in `module-reach.mjs`, in the pull request that needs it, with its reason;
+chat's `EXTRA` list is what it had before the rule, and only shrinks.
+
+## 10. What stays by hand
 
 The list a reviewer reads, and the only edits a new module makes outside its folder that the generator does not: a hot path of its own
 in `HOT_PATHS` and the web feature (`apps/web/src/features/<id>/`, its line in `modules/registry.ts`, the catalogue words), and, for a

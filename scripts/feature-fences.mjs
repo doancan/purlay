@@ -28,6 +28,9 @@ export const featureIds = (dir) =>
  * `everywhere` is a list of patterns every file of a feature is kept from, tests and the http folder included: the ways round
  * the fences by a path (a relative climb into `packages/`, the module loader).
  *
+ * `reachFor(id, http)` is the patterns that keep a feature's production code (its http folder, when `http`) from the core
+ * but what `module-reach.mjs` opens to it; its tests are kept from nothing by it.
+ *
  * `noComposition` is what the feature's code is kept from besides: the composition, which holds every module's slot, so a
  * feature that imported it could open another module's (D-286). Its tests may (a block after the feature's for them, when
  * `testPathsFor` is given, restates the fence without it), and its http folder is kept from it by `httpTransportTypes`.
@@ -41,10 +44,11 @@ export const featureFences = (
   httpTransportTypes,
   noComposition,
   everywhere = [],
+  reachFor = () => [],
 ) =>
   ids.flatMap((id) => {
     const others = ids.filter((other) => other !== id);
-    const fence = (files, paths, transport = noTransportTypes, kept = []) => ({
+    const fence = (files, paths, transport = noTransportTypes, kept = [], reach = []) => ({
       files,
       rules: {
         'no-restricted-imports': [
@@ -54,6 +58,7 @@ export const featureFences = (
               ...(transport === null ? [] : [transport]),
               ...kept,
               ...everywhere,
+              ...reach,
               ...(others.length === 0
                 ? []
                 : [
@@ -74,6 +79,7 @@ export const featureFences = (
         pathsFor(id),
         noTransportTypes,
         noComposition === undefined ? [] : [noComposition],
+        reachFor(id, false),
       ),
       ...(testPathsFor === undefined
         ? []
@@ -81,7 +87,13 @@ export const featureFences = (
       ...(httpTransportTypes === undefined
         ? []
         : [
-            fence([`${dir}/${id}/http/**/*.ts`], pathsFor(id), httpTransportTypes),
+            fence(
+              [`${dir}/${id}/http/**/*.ts`],
+              pathsFor(id),
+              httpTransportTypes,
+              [],
+              reachFor(id, true),
+            ),
             ...(testPathsFor === undefined
               ? []
               : [fence([`${dir}/${id}/http/**/*.test.ts`], [], null)]),

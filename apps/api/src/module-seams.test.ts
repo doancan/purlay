@@ -11,7 +11,13 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { featureSources, featuresImportedBy, fenceBypassesIn } from './testing/module-sources';
+import { EXTRA, EXTRA_CAP } from '../../../scripts/module-reach.mjs';
+import {
+  coreImportsOf,
+  featureSources,
+  featuresImportedBy,
+  fenceBypassesIn,
+} from './testing/module-sources';
 
 const SOURCE_ROOT = import.meta.dir;
 const FEATURES = join(SOURCE_ROOT, 'features');
@@ -260,5 +266,28 @@ describe('a feature gets round the import fences in no way the lint reads and th
       ),
     );
     expect(used).toEqual([]);
+  });
+});
+
+describe('what a module is opened beyond the rest of the modules (scripts/module-reach.mjs)', () => {
+  test('is read from the paths a source imports, and nothing in a comment', () => {
+    expect(
+      coreImportsOf(
+        "import { a } from '../../platform/clock';\nimport type { B } from '../../../modules/audit/audit';\n// from '../platform/x'",
+      ),
+    ).toEqual(['platform/clock', 'modules/audit/audit']);
+  });
+
+  test('is no longer than its cap, and each line is still imported by a file of the module', () => {
+    expect(Object.values(EXTRA).flat().length).toBeLessThanOrEqual(EXTRA_CAP);
+    for (const [id, opened] of Object.entries(EXTRA)) {
+      const imported = new Set(
+        featureSources(id).flatMap((file) => coreImportsOf(readFileSync(file, 'utf8'))),
+      );
+      expect(
+        opened.map(([path]) => path).filter((path) => !imported.has(path)),
+        `${id}: lines nothing imports any more, to remove from EXTRA`,
+      ).toEqual([]);
+    }
   });
 });
