@@ -43,6 +43,7 @@ have it.
 
 ### Fixed
 
+- **Operations** — Tested releases can be published without an Actions runner on the production server; Dockhand can follow the release image independently of that server’s CI runner (D-185)
 - **Operations** — `bun run entitlements:apply --help` and `bun run module:new --help` print their usage and succeed; the first used to stop with a configuration error before reading its arguments (D-292, D-294)
 - **Operations** — A server that starts now joins its cluster's record within about a second instead of ten, so a restriction of a workspace's modules is not written beside a server that does not read grants and has only just started (D-292)
 

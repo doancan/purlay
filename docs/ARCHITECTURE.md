@@ -1007,18 +1007,23 @@ it happened exits 1 too. The API and the scheduler both (`installCrashHandlers` 
 #634). Nothing is left running half-alive. The scheduler and each job process are tracked
 the same way, through the same `errorTrackingFor` (#635).
 
-First installation and runner configuration are in [DEPLOY.md](DEPLOY.md).
+First installation and image update configuration are in [DEPLOY.md](DEPLOY.md).
 
-**Deploying is a script now** (D-185): on the team's server, a merge to `main` does steps 1 and 2 below by
-itself once the commit's `ci` and image workflows have both succeeded (D-229), pulls the published image by digest and tries it before the switch,
-and checks in the end that the API and the scheduler run the published commit (`scripts/deploy.sh`, started by the `deploy` workflow on the server's runner). When
-that is not so, it goes back by steps 5 and 6. By hand, on any server with the same layout:
-`DEPLOY_ROOT=… IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>` from a checkout of that commit. The deployment directory
-holds `releases/<8 hex>/` (one per deploy, and the running one must be one of them), the `current` link to the
-running one, `backups/`, the env file (with its previous copy as `.prev`) and `deploys.log`, one line per deploy,
-rollback or refusal. A deploy that was cut off after it switched leaves `.switching`, and the next deploy refuses
-to start until someone has looked at the site and removed it. The steps below stay, because they are what the
-script does and what to do when it exits 2.
+**Actions publishes; the installation applies** (D-185, D-229, D-262). Hosted jobs publish a release
+only after the exact commit's `ci` and `image` push runs succeed. Dockhand polls `:release` when
+configured; it does not take a backup at the switch or automatically restore a failed upgrade.
+Its hourly database dumps and recovery commands are described in `DEPLOY.md`. A successful Actions
+run is not proof that a private server has applied that image.
+
+**A directly managed Compose installation** can use `scripts/deploy.sh` on the server. The operator
+first checks the exact commit's CI results, then invokes
+`DEPLOY_ROOT=… IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>`
+from a clean checkout of that commit. The script pulls and verifies the published image, smoke-tests,
+backs up, switches and checks that the API and scheduler run the expected commit; failure restores its
+backup by steps 5 and 6 below. Its deployment directory holds `releases/<8 hex>/`, the `current` link,
+`backups/`, the environment file (and `.prev`) and `deploys.log`. A deploy cut off after switching leaves
+`.switching` and the next invocation refuses until an operator investigates. These steps remain the
+recovery runbook for that script; they do not describe Dockhand's update mechanism.
 
 **Upgrading and rolling back** (the one home of this runbook; `CONFIG.md` points here). Every step below
 was run, and the failure in the last-but-one paragraph was reproduced, not reasoned out.

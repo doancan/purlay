@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tag and publish the release a merge to main made (D-185). Run by the `deploy` workflow after
-# the deploy has succeeded, so a release is only ever announced for a commit that is running:
+# the exact commit passed ci and image. Publication does not mean a server has deployed it:
 #
 #   GH_TOKEN=... GITHUB_REPOSITORY=owner/name scripts/release-publish.sh <full commit hash>
 #
