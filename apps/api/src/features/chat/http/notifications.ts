@@ -7,7 +7,7 @@
  * one are the same `404` (D-34), whatever else the request says.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   NotificationQuery,
   ReadNotificationsRequest,
@@ -108,7 +108,7 @@ const tell = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const notificationRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const notificationRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .put('/api/messages/:messageId/thread/read', async ({ request, params, body, set }) => {
       await markThreadRead(context, request, params.messageId, body);

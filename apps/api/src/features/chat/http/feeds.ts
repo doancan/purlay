@@ -3,7 +3,7 @@
  * owner's or an admin's in a channel they can see. Validate, call one service, answer.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   CreateGitHubFeedRequest,
   type CreatedGitHubFeed,
@@ -74,7 +74,7 @@ const disconnectFeed = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const feedRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const feedRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/channels/:channelId/github-feeds',

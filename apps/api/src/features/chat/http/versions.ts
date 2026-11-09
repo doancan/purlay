@@ -3,7 +3,7 @@
  * and one removed by its author. Validate, call one service, answer.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { OlderPageQuery, type MessageVersionPage } from '@purlay/types';
 import { atomicallyOn } from '../../../platform/transactions';
 import { messageVersions, removeVersion } from '../messages/versions';
@@ -49,7 +49,7 @@ export const deleteVersion = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const versionRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const versionRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/messages/:messageId/versions',

@@ -12182,7 +12182,12 @@ there is no broker).
     `module:new` and the contract's `ModuleId` refuse it. (c) A feature has no `import()`, `require`, loader of its
     own or path into `packages/` or `apps/`, no `sql` that is renamed, aliased or passed on, and no assertion to `never` or
     through `unknown`; the lint refuses each, `verify:enforcement` shows it, and `module-seams.test.ts` and
-    `module-tables.test.ts` read the same lines from the text.
+    `module-tables.test.ts` read the same lines from the text. (d) What a route is handed is built field by field in
+    `createApp`, never spread from the application's dependencies: `config` is `APP_URL`, `GITHUB_API_URL` and
+    `TRUST_PROXY`, `auth` is a `SessionAuth` that only the session readers open (the Better Auth instance and its cookie
+    secret stay behind it), and `database` is the module's own handle (`ModuleRouteDependencies<ChatDb>`), so the
+    red-team's session forgery, its cross-tenant channel read and its read of `ENCRYPTION_KEY` do not compile
+    (`module-routes.test.ts`).
 
 **Rejected.** *Chat as the base that the others require* — the cheaper road, but it makes "project management without
 chat" impossible and ties every package to chat. *A package per module* — the boundary is free, but the module needs

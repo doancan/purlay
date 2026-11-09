@@ -1,5 +1,5 @@
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   SetMessageReminderRequest,
   type MessageReminder,
@@ -75,7 +75,7 @@ const listReminders = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const reminderRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const reminderRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .put(
       '/api/messages/:messageId/reminder',

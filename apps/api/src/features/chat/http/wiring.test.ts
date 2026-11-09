@@ -6,18 +6,18 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { fixedClock } from '../../../platform/clock';
 import { inProcessLimiters } from '../../../realtime/rate-limiter';
 import { NOW } from '../../../testing/doubles';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { GitHubApi } from '../integrations/unfurl';
 import { githubWiring } from './wiring';
 
 const clock = fixedClock(NOW);
-const contextAt = (apiUrl: string, githubApi?: GitHubApi): ModuleRouteDependencies =>
+const contextAt = (apiUrl: string, githubApi?: GitHubApi): ChatRouteDependencies =>
   ({
     config: { GITHUB_API_URL: apiUrl },
     clock,
     limiterFor: inProcessLimiters(clock),
     githubApi,
-  }) as unknown as ModuleRouteDependencies;
+  }) as unknown as ChatRouteDependencies;
 
 const failing = Bun.serve({ port: 0, fetch: () => new Response('down', { status: 500 }) });
 afterAll(async () => {

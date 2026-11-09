@@ -11,6 +11,7 @@
  * (`CORE_ROUTES`); a route about a module's feature is the module's even where its path is under `/api/me`, as
  * `GET` and `PUT /api/me/missed-mail` are chat's.
  */
+import type { Executor } from '@purlay/db';
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,7 +48,7 @@ const unread = {
   config: { GITHUB_API_URL: 'https://api.github.test' },
   clock: fixedClock(NOW),
   limiterFor: inProcessLimiters(fixedClock(NOW)),
-} as unknown as ModuleRouteDependencies;
+} as unknown as ModuleRouteDependencies<Executor>;
 
 /** What a plugin registers, read from the plugin and not the text: handlers are not run, so the context is not read. */
 const pluginPaths = (module: BundledModule): string[] =>

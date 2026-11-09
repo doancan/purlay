@@ -6,11 +6,13 @@
  * the plugin to them.
  *
  * The context names what the module's routes use and no more: a module that needs another part of the application widens it
- * here, in a line a reviewer reads, and not by being handed the whole of `Dependencies`.
+ * here, in a line a reviewer reads, and not by being handed the whole of `Dependencies`. It is built field by field in
+ * `createApp` (never spread from `Dependencies`), and three of its fields are narrower than what they come from, so that a
+ * module cannot reach what it was never meant to hold (D-250 rule 10): `auth` is a handle that only the session readers open,
+ * `config` is the three settings a module reads and not the key, and `database` is typed as the module's own tables.
  */
-import type { Executor } from '@purlay/db';
 import type { Dependencies } from './app';
-import type { Auth } from '../../modules/auth/better-auth';
+import type { SessionAuth } from '../../modules/auth/sessions';
 import type { Clock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import type { CredentialCipher } from '../../platform/crypto';
@@ -22,17 +24,24 @@ import type { OnlinePresence } from '../../realtime/online';
 import type { ModulePorts } from '../../platform/ports/module-ports';
 import type { FactPublisher } from '../../platform/ports/fact-publisher';
 import type { NotificationSink } from '../../platform/ports/notification-sink';
+import type { PushSender } from '../../modules/push/sender';
 import type { Atomically } from '../../platform/transactions';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 
 /** What `limiterFor` makes: a bucket, charged by a key. */
 export type RouteLimiter = ReturnType<LimiterFactory>;
 
-export interface ModuleRouteDependencies {
+/** The settings a module's routes read: not the encryption key, the database address or any other secret. */
+type ModuleConfig = Pick<Dependencies['config'], 'APP_URL' | 'GITHUB_API_URL' | 'TRUST_PROXY'>;
+
+/**
+ * `Database` is the module's own handle (`ChatDb`, `IssuesDb`, D-271): the application passes its database, whose every
+ * connection is the module's share (D-266), and a query over a table the module does not name does not compile.
+ */
+export interface ModuleRouteDependencies<Database> {
   /** Who is calling: every session is resolved through it (`session.ts`). */
-  readonly auth: Auth;
-  /** The application's database, whose every connection is the module's share (D-266). */
-  readonly database: Executor;
+  readonly auth: SessionAuth;
+  readonly database: Database;
   readonly clock: Clock;
   /** What a role may do in a process that runs these modules. */
   readonly permissions: PermissionTable;
@@ -57,10 +66,12 @@ export interface ModuleRouteDependencies {
   readonly atomically: Atomically;
   /** Where a failed publish is written; the write it follows is already committed. */
   readonly log: Logger;
-  /** The application's configuration: the addresses GitHub is spoken to at, the client's address rules. */
-  readonly config: Dependencies['config'];
+  /** The addresses GitHub is spoken to at, the client's address rules. */
+  readonly config: ModuleConfig;
   /** The one cipher for stored credentials (D-39 §6), which the core's routes use too. */
   readonly cipher: CredentialCipher;
+  /** Devices told of what needs their person, through both doors; absent where push is off (D-126). */
+  readonly push?: PushSender;
   /** A limiter by name and budget: shared across nodes where Redis is, in this process where it is not. */
   readonly limiterFor: LimiterFactory;
   /** GitHub's API for unfurling, where a test hands its own; absent, the module makes the real one. */

@@ -8,7 +8,7 @@
  * With no module the core stands alone: no hook runs, nobody answers for channels, the purge takes the core's
  * tables, the exports hold the core's.
  */
-import { PRODUCT_MIGRATION_SETS, type MigrationSet } from '@purlay/db';
+import { PRODUCT_MIGRATION_SETS, type Executor, type MigrationSet } from '@purlay/db';
 import { FACTS, isModuleId, type FactDeclaration, type ModuleId } from '@purlay/types';
 import { chatModule } from './features/chat/module';
 import { entitledNotices, entitledReader, entitledStart } from './modules/entitlements/hooks';
@@ -119,7 +119,7 @@ export interface BundledModule {
    * module that is not run is closed by its manifest as before (D-255 §2). A module that has routes in its manifest
    * and supplies none fails `route-ownership.test.ts`.
    */
-  readonly routes?: (dependencies: ModuleRouteDependencies) => AnyElysia;
+  readonly routes?: (dependencies: ModuleRouteDependencies<Executor>) => AnyElysia;
   /**
    * What handles each fact type the manifest names under `consumes`, and no other: a type consumed with no handler, or a handler
    * for one not consumed, stops the build (`compose`), as for the work of a job (D-283 §3).

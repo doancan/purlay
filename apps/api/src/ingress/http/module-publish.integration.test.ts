@@ -39,7 +39,7 @@ const CHAT_TOLD = defineFact({ type: 'chat.told', owner: 'chat', absent: 'drop',
 
 /** A route of issues that publishes `fact`, as the module whose routes these are. */
 const publishing = (
-  context: ModuleRouteDependencies,
+  context: ModuleRouteDependencies<Executor>,
   path: string,
   fact: FactDeclaration,
 ): AnyElysia =>
@@ -53,7 +53,7 @@ const publishing = (
   });
 
 /** A route that publishes with a copy of its context aimed at another workspace: the spread type-checks. */
-const forging = (context: ModuleRouteDependencies): AnyElysia =>
+const forging = (context: ModuleRouteDependencies<Executor>): AnyElysia =>
   new Elysia().post(`${ISSUES_PATH}/forged`, async ({ request, params }) => {
     const { userId } = await requireSession(context.auth, request);
     const tenancy = await requireWorkspaceMembership(context.database, userId, params.workspaceId);

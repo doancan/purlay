@@ -24,7 +24,7 @@ import { aRoom } from '../../testing/rooms';
 import { sendMessage, send } from '../../features/chat/messages/messages';
 import { setResolved } from '../../features/chat/messages/threads';
 import { setReaction } from '../../features/chat/reactions/reactions';
-import { aTestAuth, aSignedInUser } from '../../testing/signed-in';
+import { aTestSessionAuth, aSignedInUser } from '../../testing/signed-in';
 import { openDirectMessageWith, readUpTo } from '../../features/chat/http/channels';
 import { aUniqueSlug } from '../../testing/users';
 import { createApp } from './app';
@@ -208,7 +208,7 @@ describe('integration: a read and a direct message announce through the same doo
       // Called directly with a bus that throws, as the shared adapter one day might.
       const { bus, sent } = flakyBus([1]);
       const { log, lines } = aRecordingLogger();
-      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log };
+      const dependencies = { auth: aTestSessionAuth(db), database: db, clock, bus, log };
       const read = await readUpTo(
         dependencies,
         new Request('https://purlay.test/', { headers: { cookie: alice.cookie } }),
@@ -231,7 +231,7 @@ describe('integration: a read and a direct message announce through the same doo
       const failing = flakyBus([1]);
       const second = aRecordingLogger();
       const opened = await openDirectMessageWith(
-        { auth: aTestAuth(db), database: db, clock, bus: failing.bus, log: second.log },
+        { auth: aTestSessionAuth(db), database: db, clock, bus: failing.bus, log: second.log },
         new Request('https://purlay.test/', { headers: { cookie: alice.cookie } }),
         workspace.id,
         { userId: bob.userId },

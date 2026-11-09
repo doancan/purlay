@@ -17,7 +17,7 @@ import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import { channelTopic, NO_LOG, type EventBus } from '../../../platform/events';
 import { SESSION_COOKIE } from '../../../platform/cookies';
-import { aTestAuth, aSession } from '../../../testing/signed-in';
+import { aTestSessionAuth, aSession } from '../../../testing/signed-in';
 import { aRoom } from '../../../testing/rooms';
 import { testDependencies } from '../../../testing/doubles';
 import { createApp } from '../../../ingress/http/app';
@@ -187,7 +187,7 @@ describe('integration: who is told of an incident', () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice'], { outsiders: ['erin'] });
       const { bus, told } = recordingBus();
-      const dependencies = { auth: aTestAuth(db), database: db, clock, bus, log: NO_LOG };
+      const dependencies = { auth: aTestSessionAuth(db), database: db, clock, bus, log: NO_LOG };
       const asked = async (userId: string): Promise<() => Request> => {
         const { token } = await aSession(db, clock, userId, 30);
         return () =>

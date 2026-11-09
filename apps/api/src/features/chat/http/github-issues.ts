@@ -4,7 +4,7 @@
  * `features/chat/integrations/github-issues.ts` and says which of the four outcomes it came to.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { GitHubWiring } from './wiring';
 import {
   CreateGitHubIssueRequest,
@@ -19,13 +19,13 @@ import {
   linkWork,
   type GitHubIssueDependencies,
 } from '../integrations/github-issues';
-import type { Auth } from '../../../modules/auth/better-auth';
+import type { SessionAuth } from '../../../modules/auth/sessions';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
 
 export interface GitHubIssueRouteDependencies extends GitHubIssueDependencies {
-  readonly auth: Auth;
+  readonly auth: SessionAuth;
 }
 
 /** `GET /api/workspaces/:workspaceId/github-repositories` — any member: what they may choose, never more. */
@@ -78,7 +78,7 @@ const linkGitHubWork = async (
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
 export const githubIssueRoutes = (
-  context: ModuleRouteDependencies,
+  context: ChatRouteDependencies,
   wiring: GitHubWiring,
 ): AnyElysia =>
   new Elysia()

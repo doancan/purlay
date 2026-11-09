@@ -4,7 +4,7 @@
  * (`INCIDENT_UPDATED`), after the commit, and only when it was one.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import {
   ChangeIncidentRequest,
   DeclareIncidentRequest,
@@ -149,7 +149,7 @@ export const putPostmortem = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const incidentRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const incidentRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/channels/:channelId/incident',

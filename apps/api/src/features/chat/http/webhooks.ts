@@ -6,7 +6,7 @@
  * hold the reads open. The feed's own bucket is charged once its signature holds, in the service.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { GitHubWiring } from './wiring';
 import { limitKeyFor } from '../../../platform/client-key';
 import { clientAddress, peerOf } from '../../../ingress/http/client-address';
@@ -83,7 +83,7 @@ export const receiveWebhook = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const webhookRoutes = (context: ModuleRouteDependencies, wiring: GitHubWiring): AnyElysia =>
+export const webhookRoutes = (context: ChatRouteDependencies, wiring: GitHubWiring): AnyElysia =>
   new Elysia().post(
     '/api/webhooks/github/:feedId',
     async ({ request, params, set, server }) => {

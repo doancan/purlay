@@ -4,6 +4,7 @@ import { requireLiveSession } from '../../../modules/auth/sessions';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { atomicallyOn } from '../../../platform/transactions';
 import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { __PASCAL__Db } from '../schema';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
 import { create__PASCAL__Item, list__PASCAL__Items } from '../items';
@@ -13,7 +14,7 @@ import { create__PASCAL__Item, list__PASCAL__Items } from '../items';
 
 /** `GET /api/workspaces/:workspaceId/__ID__` — newest first. */
 export const list__PASCAL__ = async (
-  { auth, database }: ModuleRouteDependencies,
+  { auth, database }: ModuleRouteDependencies<__PASCAL__Db>,
   request: Request,
   workspaceId: string,
 ): Promise<readonly __PASCAL__Item[]> => {
@@ -24,7 +25,7 @@ export const list__PASCAL__ = async (
 
 /** `POST /api/workspaces/:workspaceId/__ID__` — `201` with the row. */
 export const post__PASCAL__ = async (
-  { auth, database, clock }: ModuleRouteDependencies,
+  { auth, database, clock }: ModuleRouteDependencies<__PASCAL__Db>,
   request: Request,
   workspaceId: string,
   body: unknown,

@@ -4,9 +4,10 @@
  */
 import { Elysia, type AnyElysia } from 'elysia';
 import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { IssuesDb } from '../schema';
 import { listIssues, patchIssue, postIssue, removeIssue } from './handlers';
 
-export const issuesRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const issuesRoutes = (context: ModuleRouteDependencies<IssuesDb>): AnyElysia =>
   new Elysia()
     .get(
       '/api/workspaces/:workspaceId/issues',

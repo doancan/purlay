@@ -1,5 +1,5 @@
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { Message } from '@purlay/types';
 import { requireLiveSession } from '../../../modules/auth/sessions';
 import { hideMessage } from '../messages/hide';
@@ -62,7 +62,7 @@ export const hideMyMessage = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const hiddenRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const hiddenRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia().put(
     '/api/messages/:messageId/hidden',
     async ({ request, params }) => await hideMyMessage(context, request, params.messageId),

@@ -7,8 +7,8 @@
  * cannot validate differently.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
-import type { Auth } from '../../../modules/auth/better-auth';
+import type { ChatRouteDependencies } from './dependencies';
+import type { SessionAuth } from '../../../modules/auth/sessions';
 import {
   EditMessageRequest,
   CatchUpQuery,
@@ -58,8 +58,8 @@ import { queryOf, validated } from '../../../ingress/http/validate';
 /** Reading needs the database and the clock, and nothing that publishes. */
 export interface HistoryDependencies {
   /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
-  readonly auth: Auth;
-  readonly database: ModuleRouteDependencies['database'];
+  readonly auth: SessionAuth;
+  readonly database: ChatRouteDependencies['database'];
   readonly clock: Clock;
 }
 
@@ -297,7 +297,7 @@ const readSearch = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const messageRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const messageRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/channels/:channelId/unreads',

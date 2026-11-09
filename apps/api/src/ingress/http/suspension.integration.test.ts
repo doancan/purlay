@@ -621,7 +621,7 @@ describe('integration: what the application hands a module while it is stopped',
     absent: { holdDays: 3 },
     schema: Type.Object({ id: Type.String() }),
   });
-  let handed: ModuleRouteDependencies | undefined;
+  let handed: ModuleRouteDependencies<Executor> | undefined;
   const publisher: BundledModule = {
     manifest: {
       ...base,

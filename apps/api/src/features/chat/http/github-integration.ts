@@ -4,7 +4,7 @@
  */
 import { Elysia, type AnyElysia } from 'elysia';
 import { SetGitHubTokenRequest, type GitHubIntegration } from '@purlay/types';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { requireSession } from '../../../ingress/http/session';
 import { validated } from '../../../ingress/http/validate';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
@@ -20,7 +20,7 @@ import type { GitHubWiring } from './wiring';
 
 /** `GET /api/workspaces/:workspaceId/integrations/github` — whether a token is set. Never the token. */
 const readGitHubIntegration = async (
-  dependencies: Pick<ModuleRouteDependencies, 'auth' | 'database'>,
+  dependencies: Pick<ChatRouteDependencies, 'auth' | 'database'>,
   request: Request,
   workspaceId: string,
 ): Promise<GitHubIntegration> => {
@@ -37,7 +37,7 @@ const readGitHubIntegration = async (
  * token.
  */
 const changeGitHubToken = async (
-  dependencies: Pick<ModuleRouteDependencies, 'auth' | 'database' | 'clock' | 'cipher' | 'log'> & {
+  dependencies: Pick<ChatRouteDependencies, 'auth' | 'database' | 'clock' | 'cipher' | 'log'> & {
     readonly githubApi: GitHubApi;
   },
   request: Request,
@@ -76,7 +76,7 @@ const changeGitHubToken = async (
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
 export const githubIntegrationRoutes = (
-  context: ModuleRouteDependencies,
+  context: ChatRouteDependencies,
   wiring: GitHubWiring,
 ): AnyElysia =>
   new Elysia()

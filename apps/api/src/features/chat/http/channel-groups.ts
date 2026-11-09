@@ -9,7 +9,7 @@ import {
   type ChannelGroup,
   type ChannelGroupPage,
 } from '@purlay/types';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { requireSession } from '../../../ingress/http/session';
 import { queryOf, validated } from '../../../ingress/http/validate';
 import {
@@ -126,7 +126,7 @@ const putPlacement = async (
   return result.channel;
 };
 
-export const channelGroupRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const channelGroupRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/workspaces/:workspaceId/channel-groups',

@@ -4,9 +4,10 @@
  * a stranger is told the workspace does not exist whatever else they sent (D-34).
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies, RouteLimiter } from '../../../ingress/http/module-routes';
+import type { RouteLimiter } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { GitHubWiring } from './wiring';
-import type { Auth } from '../../../modules/auth/better-auth';
+import type { SessionAuth } from '../../../modules/auth/sessions';
 import { UnfurlRequest, type UnfurlResponse } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import type { CredentialCipher } from '../../../platform/crypto';
@@ -18,8 +19,8 @@ import { validated } from '../../../ingress/http/validate';
 
 const unfurlLink = async (
   dependencies: {
-    readonly auth: Auth;
-    readonly database: ModuleRouteDependencies['database'];
+    readonly auth: SessionAuth;
+    readonly database: ChatRouteDependencies['database'];
     readonly clock: Clock;
     readonly cipher: CredentialCipher;
     readonly githubApi: GitHubApi;
@@ -60,7 +61,7 @@ const unfurlLink = async (
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
 export const integrationRoutes = (
-  context: ModuleRouteDependencies,
+  context: ChatRouteDependencies,
   wiring: GitHubWiring,
 ): AnyElysia =>
   new Elysia().post(

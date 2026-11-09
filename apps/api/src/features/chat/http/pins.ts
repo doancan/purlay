@@ -3,7 +3,7 @@
  * watching the channel (`PINS_UPDATED`), after the commit, and only when it was one.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { PinList } from '@purlay/types';
 import { requireChannelById } from '../channels/guard';
 import {
@@ -67,7 +67,7 @@ const listPins = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const pinRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const pinRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/channels/:channelId/pins',

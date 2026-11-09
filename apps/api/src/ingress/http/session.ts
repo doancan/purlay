@@ -10,7 +10,11 @@
  * token they hold was ever real (D-60).
  */
 import type { Auth } from '../../modules/auth/better-auth';
-import { requireSessionFromHeaders, type SessionReach } from '../../modules/auth/sessions';
+import {
+  requireSessionFromHeaders,
+  type SessionAuth,
+  type SessionReach,
+} from '../../modules/auth/sessions';
 import { noteSession } from '../../platform/logging';
 
 /**
@@ -20,7 +24,7 @@ import { noteSession } from '../../platform/logging';
  * is held back too.
  */
 export const requireSession = async (
-  auth: Auth,
+  auth: Auth | SessionAuth,
   request: Request,
   reach: SessionReach = 'everything',
 ): Promise<{ readonly userId: string; readonly sessionId: string }> => {

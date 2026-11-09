@@ -4,7 +4,7 @@
  * Validate, call one service, answer.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { GitHubWiring } from './wiring';
 import { limitKeyFor } from '../../../platform/client-key';
 import { clientAddress, peerOf } from '../../../ingress/http/client-address';
@@ -95,7 +95,7 @@ export const postIncomingWebhook = async (
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
 export const incomingWebhookRoutes = (
-  context: ModuleRouteDependencies,
+  context: ChatRouteDependencies,
   wiring: GitHubWiring,
 ): AnyElysia =>
   new Elysia()

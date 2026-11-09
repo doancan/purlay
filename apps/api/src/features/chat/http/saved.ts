@@ -3,7 +3,7 @@
  * caller's own; a change tells only their own tabs (`SAVED_UPDATED`), after the commit.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import { SaveMessageRequest, SavedQuery, type SavedIds, type SavedPage } from '@purlay/types';
 import {
   NO_LOG,
@@ -80,7 +80,7 @@ const listSavedIds = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const savedRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const savedRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia()
     .get(
       '/api/workspaces/:workspaceId/saved',

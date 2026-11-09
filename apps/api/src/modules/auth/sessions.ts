@@ -35,6 +35,41 @@ import { ACTIVITY_STALE_AFTER_MS, fixedEnd } from './session-lifetime';
  * and takes no other, so whatever arms or mints an expiry beside it reads the same one; a test's
  * fixed clock in the past would otherwise mint sessions the library has already let lapse.
  */
+/** Not exported: only this file can build or open a `SessionAuth`. */
+const opens: unique symbol = Symbol('SessionAuth');
+const opened = new WeakMap<object, Auth>();
+
+/**
+ * What a module is handed in place of the Better Auth instance, which reaches the cookie secret (`$context`), every sign-in
+ * method and the adapter. It resolves a caller through `requireSession` and says whether sign-in links are on, and does
+ * nothing else; the instance behind it is found only by `authOf`, below, in this file.
+ */
+export interface SessionAuth {
+  readonly signInLinksOn: boolean;
+  readonly [opens]: true;
+}
+
+export const sessionAuthOf = (auth: Auth): SessionAuth => {
+  const handle: SessionAuth = Object.freeze({
+    // Read when asked: a test's auth is built on first use, and the application is built before any request.
+    get signInLinksOn(): boolean {
+      return auth.signInLinks !== undefined;
+    },
+    [opens]: true as const,
+  });
+  opened.set(handle, auth);
+  return handle;
+};
+
+/** The instance behind a handle, or the instance itself where the core holds one. */
+const authOf = (auth: Auth | SessionAuth): Auth => {
+  const behind = opened.get(auth);
+  if (behind !== undefined) return behind;
+  // A handle carries the brand: one that sessionAuthOf did not make (a spread of one) is refused, not read as the instance.
+  if (opens in auth) throw new Error('a SessionAuth that sessionAuthOf did not make was refused');
+  return auth;
+};
+
 export const SESSION_CLOCK: Clock = systemClock;
 
 export interface IssuedSession {
@@ -208,10 +243,11 @@ export const twoFactorRequired = (): AppError =>
  * two-step verification is `403 TWO_FACTOR_REQUIRED` (D-239), unless what it asks is part of turning it on.
  */
 export const requireSessionFromHeaders = async (
-  auth: Auth,
+  handle: Auth | SessionAuth,
   headers: Headers,
   reach: SessionReach = 'everything',
 ): Promise<SessionOwner> => {
+  const auth = authOf(handle);
   const owner = await sessionFromHeaders(auth, headers);
   if (owner === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });

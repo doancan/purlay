@@ -3,7 +3,7 @@
  * online now, for a member of it. Validate, call one service, answer.
  */
 import { Elysia, type AnyElysia } from 'elysia';
-import type { ModuleRouteDependencies } from '../../../ingress/http/module-routes';
+import type { ChatRouteDependencies } from './dependencies';
 import type { PresenceSnapshot } from '@purlay/types';
 import { workspacePresence, type OnlineReader } from '../presence/presence';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
@@ -22,7 +22,7 @@ const readPresence = async (
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */
-export const presenceRoutes = (context: ModuleRouteDependencies): AnyElysia =>
+export const presenceRoutes = (context: ChatRouteDependencies): AnyElysia =>
   new Elysia().get(
     '/api/workspaces/:workspaceId/presence',
     async ({ request, params }) =>

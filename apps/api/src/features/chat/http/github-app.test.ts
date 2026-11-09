@@ -4,6 +4,7 @@
  * refused, a body too slow to arrive is refused at its deadline — each said in the log, none touching the
  * database — and without an App there is no address at all.
  */
+import { sessionAuthOf } from '../../../modules/auth/sessions';
 import { describe, expect, test } from 'bun:test';
 import { aRecordingLogger, testDependencies } from '../../../testing/doubles';
 import { GITHUB_APP_STUB } from '../../../testing/github-app-stub';
@@ -31,7 +32,7 @@ const attempt = async (
   const dependencies = testDependencies();
   const code = await receiveAppWebhook(
     {
-      auth: dependencies.auth,
+      auth: sessionAuthOf(dependencies.auth),
       // A database that fails loudly if anything touches it: nothing may be looked up here.
       database: dependencies.database,
       clock: dependencies.clock,
