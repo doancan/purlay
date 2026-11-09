@@ -104,6 +104,13 @@ const aNotice = (overrides: Partial<Notice> = {}): Notice => ({
 });
 
 describe('notices from an open page', () => {
+  test('the sound preference reaches the OS without starting an app sound', () => {
+    const browser = aBrowser('granted');
+    const notifier = notifierOf();
+    notifier.show(aNotice({ silent: true }));
+    notifier.show(aNotice({ silent: false }));
+    expect(browser.shown.map((notice) => notice.options.silent)).toEqual([true, false]);
+  });
   test('a browser without notifications has no notifier', () => {
     replace(window, 'Notification', undefined);
     Reflect.deleteProperty(window, 'Notification');

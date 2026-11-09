@@ -106,6 +106,46 @@ describe('integration: an unconfigured push server', () => {
 });
 
 describe('integration: subscribing a device', () => {
+  test('sound opt-out survives old clients, but never transfers to another person', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'push-sound-a');
+      const bob = await aSignedInUser(db, clock, 'push-sound-b');
+      const input = {
+        endpoint: 'https://push.example.com/send/sound',
+        keys: { p256dh: P256DH, auth: AUTH },
+        locale: 'en',
+      };
+      const sound = async (): Promise<boolean> =>
+        (
+          await db
+            .selectFrom('push_subscriptions')
+            .select('sound')
+            .where('endpoint', '=', input.endpoint)
+            .executeTakeFirstOrThrow()
+        ).sound;
+      expect(
+        (await call(db, 'POST', '/api/push/subscriptions', alice, { ...input, sound: false }))
+          .status,
+      ).toBe(204);
+      expect(await sound()).toBe(false);
+      expect((await call(db, 'POST', '/api/push/subscriptions', alice, input)).status).toBe(204);
+      expect(await sound()).toBe(false);
+      expect(
+        (await call(db, 'POST', '/api/push/subscriptions', alice, { ...input, sound: 'false' }))
+          .status,
+      ).toBe(400);
+      expect(await sound()).toBe(false);
+      expect((await call(db, 'POST', '/api/push/subscriptions', bob, input)).status).toBe(204);
+      expect(await sound()).toBe(true);
+      expect(
+        (await call(db, 'POST', '/api/push/subscriptions', bob, { ...input, sound: false })).status,
+      ).toBe(204);
+      expect(
+        (await call(db, 'POST', '/api/push/subscriptions', bob, { ...input, sound: true })).status,
+      ).toBe(204);
+      expect(await sound()).toBe(true);
+    });
+  });
   test('stores it for the person and their session, once however often it is sent, in their language', async () => {
     await withRollback(async (db) => {
       const alice = await aSignedInUser(db, clock, 'push-sub');

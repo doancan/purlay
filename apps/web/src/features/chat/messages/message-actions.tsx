@@ -29,7 +29,7 @@ import { holdUnread, releaseUnread } from '../channel/use-mark-read';
 import { composerKey, focusComposer, quoteMarkdown, sendToComposer } from '../composer/quote';
 import { authorOf } from '../../../lib/author';
 import { messageUrl } from './message-link';
-import { ForwardDialog } from './forward-dialog';
+import { useDeferred } from '../../../app/deferred-door';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
 import { PinMenuItem, PinToggle } from '../pins/pin-toggle';
@@ -182,6 +182,7 @@ const MoreMenu = ({
   const selected = useRef<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [forwarding, setForwarding] = useState(false);
+  const deferred = useDeferred([forwarding, setForwarding]);
 
   const confirm = (): void => {
     setAsking(false);
@@ -318,7 +319,9 @@ const MoreMenu = ({
           </MenuItem>
         )}
       </Menu>
-      {member && <ForwardDialog message={message} open={forwarding} onOpenChange={setForwarding} />}
+      {member && deferred !== null && (
+        <deferred.ForwardDialog message={message} open={forwarding} onOpenChange={setForwarding} />
+      )}
       <Dialog
         open={asking}
         onOpenChange={setAsking}

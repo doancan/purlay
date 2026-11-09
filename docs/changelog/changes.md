@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Notifications** — choose in-app message cards, sound and desktop alerts separately; a card opens the conversation, and multiple tabs share one alert (D-148)
+
 ### Fixed
 
 - **Copying** — on a page served over plain http, Copy no longer throws: a link or a code says it could not be copied, and the setup screen's button stays as it was

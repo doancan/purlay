@@ -532,6 +532,7 @@ export interface PushSubscriptions {
   p256dh: string;
   server_key: string;
   session_id: string;
+  sound: Generated<boolean>;
   user_id: string;
 }
 

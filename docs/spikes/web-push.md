@@ -113,3 +113,19 @@ messages. This establishes that real delivery path on that device, not the timin
 OS banner. Unit and browser tests cover repeated native options, ordinary background DMs, and the
 worker's built event wiring; the headless notification surface remains stubbed as documented in the
 browser specs. No budget, assertion or security policy was loosened.
+
+
+### Device attention controls (2026-11-09, #1348)
+
+An owned Chromium profile on macOS exercised Web Locks on two same-origin localhost pages:
+100 concurrent read/modify/write updates under one exclusive lock produced exactly 100 updates.
+A native AudioContext was running in that profile both before and after a button-triggered resume;
+this confirms API availability there, not that browsers universally permit autoplay or that a user
+heard a cue. The implementation only creates/resumes audio from input or explicit preview, handles
+refusal, and never queues old sounds. Native banners, sound and volume remain browser/OS preferences.
+
+The API choice follows [Web Locks](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API)
+and [Chrome’s Web Audio autoplay policy](https://developer.chrome.com/blog/web-audio-autoplay).
+The independent desktop/sound controls were informed by
+[Discord’s desktop notifications guide](https://discord.com/blog/how-to-manage-your-discord-desktop-notifications);
+Purlay’s focused-page message card is our own interaction decision.

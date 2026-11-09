@@ -28,6 +28,7 @@ import type { PushDevice } from '../features/push/device';
 import type { Notifier } from '../features/push/notifier';
 import { anApi } from './fake-api';
 import { fakeColourScheme, fakeHistory, fakeSchedule, fakeSockets, memoryStorage } from './fakes';
+import { TestLocks } from './locks';
 
 export interface WorldOptions {
   readonly locale?: Locale;
@@ -43,6 +44,7 @@ export interface WorldOptions {
   readonly push?: PushDevice | null;
   /** The page's own notices (D-148). Absent, the browser has none. */
   readonly notifier?: Notifier | null;
+  readonly locks?: LockManager | null;
   /** The release notes the build carries (D-248). Absent, the build carries none. */
   readonly releaseNotes?: ReleaseNotesSource | null;
   /** What the browser keeps, instead of the empty one the world makes: a throwing store, or `null` for none. */
@@ -59,6 +61,7 @@ export const renderApp = async (
     api = anApi(),
     push = null,
     notifier = null,
+    locks = new TestLocks(),
     releaseNotes = null,
     storage,
   }: WorldOptions = {},
@@ -83,6 +86,7 @@ export const renderApp = async (
         releaseNotes,
         push,
         notifier,
+        locks,
         realtime: {
           openSocket: world.sockets.openSocket,
           schedule: world.timers.schedule,

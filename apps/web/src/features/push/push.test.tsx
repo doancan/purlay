@@ -219,6 +219,66 @@ const chooseLanguage = async (view: View, name: 'English' | 'Türkçe'): Promise
 };
 
 describe('notifications on this device', () => {
+  test('another tab can turn desktop alerts off, and an account change never removes its new subscription', async () => {
+    const { api } = aServer();
+    const { device, calls } = aDevice({ permission: 'granted', held: SUBSCRIPTION });
+    const view = await open(api, device, { owner: IDS.me });
+    act(() => {
+      view.world.storage.setItem('purlay.person', 'another-person');
+      view.world.storage.setItem(PUSH_OWNER_KEY, 'another-person');
+      window.dispatchEvent(new StorageEvent('storage', { key: 'purlay.person' }));
+    });
+    await settle();
+    expect(calls.filter((call) => call === 'unsubscribe')).toEqual([]);
+    expect(offered(view)).toEqual(['Turn on']);
+    view.unmount();
+    const next = await open(api, device, { owner: IDS.me });
+    act(() => {
+      next.world.storage.removeItem(PUSH_OWNER_KEY);
+      window.dispatchEvent(new StorageEvent('storage', { key: PUSH_OWNER_KEY }));
+    });
+    await settle();
+    expect(offered(next)).toEqual(['Turn on']);
+    next.unmount();
+  });
+  test('sound changes are serialized, and a failed closed-tab preference can be retried', async () => {
+    const received: boolean[] = [];
+    let refuse = false;
+    let release: (() => void) | undefined;
+    let slow: Promise<void> | null = null;
+    const { api } = aServer({
+      subscribePush: async (input) => {
+        received.push(input.sound ?? true);
+        await slow;
+        if (refuse) throw new ApiError(0, 'NETWORK', 'offline');
+      },
+    });
+    const { device } = aDevice({ permission: 'granted', held: SUBSCRIPTION });
+    const view = await open(api, device, { owner: IDS.me });
+    slow = new Promise((resolve) => {
+      release = resolve;
+    });
+    await person().click(view.getByRole('checkbox', { name: 'Notification sound' }));
+    await settle();
+    expect(received).toEqual([true, false]);
+    await person().click(view.getByRole('checkbox', { name: 'Notification sound' }));
+    await settle();
+    expect(received).toEqual([true, false]);
+    release?.();
+    await settle();
+    expect(received).toEqual([true, false, true]);
+    slow = null;
+    refuse = true;
+    await person().click(view.getByRole('checkbox', { name: 'Notification sound' }));
+    await settle();
+    expect(view.getByText(/^Sound preference was not saved/)).toBeTruthy();
+    refuse = false;
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(received.slice(-2)).toEqual([false, false]);
+    expect(view.getByText('Sound preference saved for closed-tab notifications.')).toBeTruthy();
+    view.unmount();
+  });
   test('are not offered where the browser has no push, and the server is not asked', async () => {
     // `pushKey` is the fake API's refusal: a call fails the test.
     const view = await open(aSignedInApi(), null);
@@ -756,6 +816,26 @@ describe('one switch over the open tab and the closed one (D-148)', () => {
       shown[1]?.onError?.();
     });
     expect(view.getByText(/^Your browser could not show the test notification\./)).toBeDefined();
+    view.unmount();
+  });
+
+  test('an explicit desktop test also honors the sound opt-out', async () => {
+    const shown: Notice[] = [];
+    const view = await openWith(
+      aSignedInApi(),
+      null,
+      {
+        ...aNotifier('granted').notifier,
+        show: (notice): boolean => {
+          shown.push(notice);
+          return true;
+        },
+      },
+      IDS.me,
+    );
+    await person().click(view.getByRole('checkbox', { name: 'Notification sound' }));
+    await person().click(card(view).getByRole('button', { name: 'Test notification' }));
+    expect(shown[0]?.silent).toBe(true);
     view.unmount();
   });
 

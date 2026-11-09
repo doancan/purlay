@@ -17,6 +17,17 @@ const sent: PushPayload = {
 };
 
 describe('a push becomes a notice', () => {
+  test('a closed tab respects the saved sound opt-out, including malformed payloads', () => {
+    expect(optionsOf(noticeOf(JSON.stringify({ ...sent, silent: true }), ORIGIN)).silent).toBe(
+      true,
+    );
+    expect(optionsOf(noticeOf(JSON.stringify({ ...sent, silent: false }), ORIGIN)).silent).toBe(
+      false,
+    );
+    expect(
+      optionsOf(noticeOf(JSON.stringify({ ...sent, silent: 'true' }), ORIGIN)).silent,
+    ).toBeUndefined();
+  });
   test('successive notices keep one conversation tag while requesting another alert', () => {
     const first = optionsOf(sent);
     const second = optionsOf({ ...sent, body: 'another direct message' });

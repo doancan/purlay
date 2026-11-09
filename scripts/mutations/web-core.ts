@@ -328,6 +328,14 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/worker/notice.test.ts'],
   },
   {
+    id: 'push-worker-sound-opt-out-ignored',
+    why: 'A closed tab ignores the sound opt-out in its encrypted push.',
+    file: 'apps/web/worker/notice.ts',
+    find: '...(notice.silent === undefined ? {} : { silent: notice.silent }),',
+    replace: '',
+    tests: ['apps/web/worker/notice.test.ts'],
+  },
+  {
     id: 'refused-edit-stays-on-screen',
     why: 'words the server refused stay on screen as though they were saved',
     file: 'apps/web/src/data/actions.ts',
@@ -375,6 +383,14 @@ export const WEB_CORE: readonly Mutation[] = [
     find: "raw === 'light' || raw === 'dark' || raw === 'midnight' ? raw : 'system'",
     replace: "raw === 'light' || raw === 'dark' ? raw : 'system'",
     tests: ['apps/web/src/theme/theme.test.ts'],
+  },
+  {
+    id: 'toast-replacement-restarts-a-reading-timer',
+    why: 'An updated message dismisses its card while the person reads or uses it.',
+    file: 'apps/web/src/ui/toast.tsx',
+    find: 'toast === undefined || paused.has(id)',
+    replace: 'toast === undefined',
+    tests: ['apps/web/src/ui/toast.test.tsx'],
   },
   {
     id: 'unreads-route-is-no-module-screen',

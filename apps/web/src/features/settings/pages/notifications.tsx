@@ -34,6 +34,7 @@ import { useWorkspace } from '../../shell/workspace';
 import { SettingsCard, SettingsPage, SettingsRow } from '../page';
 import { MissedMailCard } from './missed-mail-card';
 import { QuietHoursCard } from './quiet-hours-card';
+import { AlertDeliveryCard } from './alert-delivery-card';
 
 const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
 const INTERRUPTS = [
@@ -271,6 +272,7 @@ export const NotificationsPage = (): React.JSX.Element => {
       <WhatInterrupts />
       <DeepWorkCard />
       <DeviceCard />
+      <AlertDeliveryCard />
       <MissedMailCard />
       <QuietHoursCard />
       <ChannelLevels />

@@ -1736,6 +1736,35 @@ export const tr = {
     'Bildirim izni değişti. Tarayıcının site ayarlarından Purlay’e izin verip bildirimleri yeniden aç.',
   // Arka plandaki açık bir sekmenin söyledikleri (D-148).
   'alerts.many': '{count} konuşma seni bekliyor',
+  'alerts.open': 'Sohbeti aç',
+  'alerts.delivery': 'Mesajlardan nasıl haberdar olursun',
+  'alerts.deliveryHint':
+    'Bu seçimler bu tarayıcı için geçerlidir. Kanal tercihleri, Derin Çalışma ve sessiz saatler hangi mesajın uyarı vereceğini belirlemeye devam eder.',
+  'alerts.inApp': 'Uygulama içi mesaj kartları',
+  'alerts.inAppHint':
+    'Purlay’da başka bir sohbeti okurken tıklanabilir bir kart göster. Okuduğun sohbet sessiz kalır.',
+  'alerts.sound': 'Bildirim sesi',
+  'alerts.soundHint':
+    'Kısa bir uygulama sesi veya masaüstü bildirimiyle işletim sisteminin sesi. Aynı uyarıda ikisi birlikte çalmaz.',
+  'alerts.volume': 'Uygulama sesi düzeyi',
+  'alerts.volumeHint':
+    'Masaüstü ve kapalı sekme bildirimlerinin ses düzeyi sistem ayarlarından yönetilir.',
+  'alerts.percent': '%{volume}',
+  'alerts.preview': 'Sesi dene',
+  'alerts.audio.locked':
+    'Bu sekmede sese izin vermek için Purlay ile etkileşime geç veya sesi dene.',
+  'alerts.audio.ready':
+    'Bu sekmede ses hazır. Duyduğun sesi tarayıcı ve sistem ayarları da etkiler.',
+  'alerts.audio.failed':
+    'Tarayıcı sesi çalamadı. Sekmenin ses iznini ve sistem ses düzeyini kontrol edip tekrar dene.',
+  'alerts.audio.unavailable':
+    'Bu tarayıcıda uygulama sesi kullanılamıyor. Masaüstü bildirimleri sistem ayarlarını kullanır.',
+  'alerts.notRemembered':
+    'Bu tarayıcı seçimlerini hatırlayamıyor. Tercihler bu sayfa açık kaldığı sürece geçerlidir.',
+  'alerts.sync.saving': 'Kapalı sekme bildirimlerinin ses tercihi kaydediliyor…',
+  'alerts.sync.saved': 'Kapalı sekme bildirimlerinin ses tercihi kaydedildi.',
+  'alerts.sync.failed':
+    'Kapalı sekme bildirimlerinin ses tercihi kaydedilemedi. Bağlantını kontrol edip tekrar dene.',
   'alerts.waiting': 'Burada seni bekleyen bir şey var',
   'shortcuts.deepWork': 'Deep Work’ü başlat ya da bitir',
   'shortcuts.readAll': 'Tüm kanalları okundu işaretle',

@@ -367,6 +367,7 @@ CREATE TABLE push_subscriptions (
     -- The application-server key it was made with: after the operator changes it, inert.
     server_key  TEXT NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    sound       BOOLEAN NOT NULL DEFAULT true, -- this device’s preference, including a closed tab (D-148)
     failures    INTEGER NOT NULL DEFAULT 0,   -- deliveries in a row the push service did not take
 
     CONSTRAINT push_subscriptions_endpoint_is_https CHECK (endpoint LIKE 'https://%'),
@@ -3090,6 +3091,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0095_outbox_discarded.sql  outbox_state admits 'discarded': a fact an administrator gave up on, kept for the audit (D-288)
 0096_server_audit_grant_detail.sql  server_audit_log: what a grant replaced, until when, and the operator's word that the cluster reads grants  (D-289)
 0097_server_push_settings.sql      server_settings: live browser push, sealed stable pair and one-time environment import  (D-126)
+0098_push_subscription_sound.sql  push_subscriptions.sound (D-148)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
