@@ -14268,7 +14268,7 @@ fact for each message (D-35).
    of its module's rows and delivers them one after another, every two seconds. The wait of a fact is therefore two seconds and the
    time of the work; it is measured, and a local nudge from the publisher is added only if the measure asks for it.
 9. **The sweep and the metrics (step 14e).** `sweep:outbox`, a core job of every process: rows delivered or skipped after a day, dead
-   after thirty, and pending rows past `expires_at`, which it counts as expired, in batches of at most 5000 rows. Gauges for depth, age
+   after thirty *(amended 2026-11-09, §12: dead and discarded after `OUTBOX_DEAD_KEPT_DAYS`, 180 unless set)*, and pending rows past `expires_at`, which it counts as expired, in batches of at most 5000 rows. Gauges for depth, age
    of the oldest and dead rows by module, and counters for deliveries, failures and drops by module and fact, whose labels are the
    closed sets of the manifests. The overview of the server lists a module with dead rows or a pending row older than fifteen minutes.
    `DEPLOY.md` names the volume at which the table should be partitioned: more than a million rows a day, or vacuum that falls behind.
@@ -14330,6 +14330,14 @@ fact for each message (D-35).
     reason is the administrator's own and never the fact's. **No command-line twin:** a command has no authenticated administrator,
     so its entries would say that nobody did it, which is what this exists to prevent; the routes are the operator's tool (`DEPLOY.md`
     gives the requests).
+    **Retention:** a dead fact is a business fact that was not delivered, and it used to disappear after thirty days without anyone
+    having decided it. `sweep:outbox` now keeps `dead` and `discarded` rows until `OUTBOX_DEAD_KEPT_DAYS` (180 unless set, 30 to 3650) after they
+    ended, and counts them apart (`dead`, `discarded`) in the hourly log line of the job, the only place a CLI job reports; the gauge
+    `purlay_outbox_dead` is unchanged. **Alert rules as code** (`docker/alerts/purlay-outbox.rules.yml`): dead above zero for fifteen minutes,
+    the oldest pending fact past the overview's fifteen minutes (a warning) and an hour (a page), a backlog that keeps growing, a delivery
+    failure rate, publishes refused by the backlog ceiling, requests refused for a grant, and the consumer's worker failing. A test parses the
+    file and fails when it names a metric the code does not have, so renaming a metric breaks CI; the thresholds are in `DEPLOY.md`.
+    The find's skipped sources have no metric yet (`MODULES.md` §10), so no rule is written for them.
 13. **A row's producer is the type's owner** (an audit of 2026-11-08, red-team F9). `publishFact` checks who may publish a type, but a row
     written any other way (SQL of a module's own, a restored backup) was delivered on trust. The delivery now reads the row's `producer`
     and, when it is not the owner of the type's declaration, ends the row `dead` with `ProducerRefused` before its handler is asked:

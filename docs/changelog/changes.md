@@ -29,6 +29,7 @@ have it.
 
 ### Added
 
+- **Operations** — Facts between modules that were given up on are no longer swept after thirty days: they are kept 180 days (`OUTBOX_DEAD_KEPT_DAYS`, 30 to 3650) to be looked at, requeued or discarded; ready-made alert rules for the outbox ship in `docker/alerts/purlay-outbox.rules.yml`, and `DEPLOY.md` has the thresholds and a runbook for a dead fact, a growing backlog and a slow consumer (D-288)
 - **Operations** — The server's administrator can send dead or stuck facts between modules back to be delivered again, or give up on them, with a reason that goes on the server's trail (`POST /api/server/outbox/requeue` and `/discard`, up to fifty at a time); a delivered fact is never brought back, and doing either twice is the same as once (D-288)
 - **Operations** — The server's administrator can now list the facts between modules that were given up on or are stuck (`GET /api/server/outbox`: type, workspace, module, tries and the class of the last error, never the payload) and open one (`GET /api/server/outbox/:id`); opening one shows its payload and is written on the server's trail as `server.fact_inspected` (D-288)
 - **Operations** — One workspace can no longer bury the others' facts between modules: a workspace may have `OUTBOX_PENDING_MAX` (5000 unless set) facts waiting for one module, a publish past it is refused with `FactBacklogFull` and ends the publisher's transaction, and `purlay_outbox_refused_total` counts it by module and fact (D-288)
