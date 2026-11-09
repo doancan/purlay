@@ -163,6 +163,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['apps/api/src/stated-numbers.test.ts'],
   },
   {
+    id: 'outbox-alert-rule-names-a-renamed-metric',
+    why: 'a metric is renamed in the code and the alert on it goes on being valid and never fires (D-288 §12)',
+    file: 'docker/alerts/purlay-outbox.rules.yml',
+    find: 'max by (module) (purlay_outbox_dead) > 0',
+    replace: 'max by (module) (purlay_outbox_dead_facts) > 0',
+    tests: ['apps/api/src/outbox-alert-rules.test.ts'],
+  },
+  {
     id: 'schema-document-module-column-renamed',
     why: 'the DDL SCHEMA.md shows for a module-owned table names a column the migration does not',
     file: 'docs/SCHEMA.md',

@@ -400,6 +400,14 @@ export const API_CLI: readonly Mutation[] = [
     tests: ['apps/api/src/cli/frame-report.test.ts'],
   },
   {
+    id: 'outbox-sweep-job-ignores-the-retention-setting',
+    why: 'the operator sets how long dead facts are kept and the job keeps its own figure (D-288 §12)',
+    file: 'apps/api/src/cli/jobs.ts',
+    find: 'deadKeptDays: config.OUTBOX_DEAD_KEPT_DAYS',
+    replace: 'deadKeptDays: 180',
+    tests: ['apps/api/src/cli/jobs.integration.test.ts'],
+  },
+  {
     id: 'reset-password-reads-the-environment',
     why: 'the password is read from the environment, which the shell, the process table and logs keep',
     file: RESET_CLI,

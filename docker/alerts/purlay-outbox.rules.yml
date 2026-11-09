@@ -1,0 +1,91 @@
+# Alert rules for the facts modules tell one another (the outbox, D-288). Load them in Prometheus (`rule_files:`) or Grafana
+# Alerting; the thresholds, what each alert means and what to do are in docs/DEPLOY.md, "Facts between modules". Every metric named
+# here is held to the code by apps/api/src/outbox-alert-rules.test.ts, so a metric renamed in the code breaks the build and not the
+# alert. The gauges are read from the table and are the same on every node, hence `max`; the counters are counted in each process,
+# hence `sum`.
+groups:
+  - name: purlay-outbox
+    rules:
+      - alert: PurlayOutboxDeadFacts
+        expr: max by (module) (purlay_outbox_dead) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Facts for {{ $labels.module }} were given up on'
+          runbook: 'docs/DEPLOY.md, "A fact is dead: what to do"'
+
+      - alert: PurlayOutboxOldestPendingStale
+        expr: max by (module) (purlay_outbox_oldest_age_seconds) > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'A fact has waited over 15 minutes for {{ $labels.module }}'
+          runbook: 'docs/DEPLOY.md, "The outbox backlog is growing"'
+
+      - alert: PurlayOutboxOldestPendingPage
+        expr: max by (module) (purlay_outbox_oldest_age_seconds) > 3600
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: 'A fact has waited over an hour for {{ $labels.module }}'
+          runbook: 'docs/DEPLOY.md, "The outbox backlog is growing"'
+
+      - alert: PurlayOutboxDepthGrowing
+        expr: max by (module) (purlay_outbox_pending) > 500 and deriv(max by (module) (purlay_outbox_pending)[30m:1m]) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'The backlog for {{ $labels.module }} has grown for half an hour'
+          runbook: 'docs/DEPLOY.md, "The outbox backlog is growing"'
+
+      - alert: PurlayOutboxDeliveryFailing
+        expr: |
+          sum by (module) (rate(purlay_outbox_failures_total[10m]))
+            / (sum by (module) (rate(purlay_outbox_failures_total[10m])) + sum by (module) (rate(purlay_outbox_delivered_total[10m])))
+          > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'More than a fifth of the deliveries to {{ $labels.module }} fail'
+          runbook: 'docs/DEPLOY.md, "A consumer is slow or failing"'
+
+      - alert: PurlayOutboxConsumerWorkerFailing
+        expr: sum by (module) (increase(purlay_worker_failures_total{worker="outbox:consume"}[15m])) >= 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'The outbox worker of {{ $labels.module }} failed three times in 15 minutes'
+          runbook: 'docs/DEPLOY.md, "A consumer is slow or failing"'
+
+      - alert: PurlayOutboxPublishRefused
+        expr: sum by (module) (increase(purlay_outbox_refused_total[15m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Publishes for {{ $labels.module }} were refused: a workspace is at its backlog ceiling'
+          runbook: 'docs/DEPLOY.md, "The outbox backlog is growing"'
+
+      - alert: PurlayEntitlementRefusalsSpike
+        expr: sum by (module) (rate(purlay_entitlement_refusals_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Requests for {{ $labels.module }} are refused for a grant at over one a second'
+          runbook: 'docs/DEPLOY.md, "Facts between modules"'
+
+      - alert: PurlayInboxCollapsing
+        expr: sum by (module) (increase(purlay_inbox_collapsed_total[1h])) > 100
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Notices from {{ $labels.module }} are being read as history for lack of room'
+          runbook: 'docs/DEPLOY.md, "Facts between modules"'

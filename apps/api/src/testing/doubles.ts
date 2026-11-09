@@ -5,6 +5,7 @@
  * exactly what the route under test is allowed to use — and, more usefully,
  * supplies things that *object* if a route reaches for what it should not.
  */
+import { OUTBOX_DEAD_KEPT_DAYS } from '../platform/outbox-sweep';
 import { leasableStandIn, type DatabasePool, type Executor, type Transaction } from '@purlay/db';
 import { fixedClock, type Clock } from '../platform/clock';
 import {
@@ -114,6 +115,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   DATABASE_URL: 'postgres://unused',
   DATABASE_POOL_MAX: 10,
   OUTBOX_PENDING_MAX: OUTBOX_PENDING_MAX_DEFAULT,
+  OUTBOX_DEAD_KEPT_DAYS,
   SOCKET_MAX_CONNECTIONS: 2_000,
   SOCKET_REPLAY_CONCURRENCY: 50,
   TRUST_PROXY: false,
