@@ -108,6 +108,42 @@ export const ServerWorkspaceModuleRequest = FromClient({
 export type ServerWorkspaceModuleRequest = Static<typeof ServerWorkspaceModuleRequest>;
 /** The longest a reason for stopping a module may be: the table's own limit and the trail's (D-296). */
 export const SUSPENSION_REASON_MAX = 200;
+/** A module id as a path carries it. */
+export const ServerModuleId = Type.String({ pattern: '^[a-z][a-z0-9-]{0,31}$' });
+/**
+ * Stops a module for every workspace at once, or lets it run again (D-296): the one write of the table `suspended_modules`.
+ * A stop needs the operator's `reason`; stopping a module the product cannot do without (chat), or one that takes it down with
+ * it, needs `force: true`, which is the confirmation.
+ */
+export const ServerModuleSuspensionRequest = FromClient({
+  state: Type.Union([Type.Literal('suspended'), Type.Literal('running')]),
+  reason: Type.Optional(Type.String({ minLength: 1, maxLength: SUSPENSION_REASON_MAX })),
+  force: Type.Optional(Type.Boolean()),
+});
+export type ServerModuleSuspensionRequest = Static<typeof ServerModuleSuspensionRequest>;
+/** What a write of the above came to: whether it changed anything, and every module that is out of service because of the module (itself included). */
+export const ServerModuleSuspensionResult = Type.Object({
+  module: Type.String(),
+  state: Type.Union([Type.Literal('suspended'), Type.Literal('running')]),
+  changed: Type.Boolean(),
+  /** The modules that stopped, or came back, with this one because they require it, in order. */
+  alsoAffected: Type.Array(Type.String()),
+});
+export type ServerModuleSuspensionResult = Static<typeof ServerModuleSuspensionResult>;
+/** One module of the build and whether the administrator has stopped it. */
+export const ServerModuleStatus = Type.Object({
+  module: Type.String(),
+  /** Whether this process runs it (`MODULES`), before any stop. */
+  running: Type.Boolean(),
+  /** `suspended` is a stop; `blocked` is out because a module it requires is stopped. */
+  state: Type.Union([Type.Literal('active'), Type.Literal('suspended'), Type.Literal('blocked')]),
+  reason: Type.Union([Type.String(), Type.Null()]),
+  suspendedAt: Type.Union([Timestamp, Type.Null()]),
+  suspendedBy: Type.Union([Uuid, Type.Null()]),
+});
+export type ServerModuleStatus = Static<typeof ServerModuleStatus>;
+export const ServerModules = Type.Object({ data: Type.Array(ServerModuleStatus) });
+export type ServerModules = Static<typeof ServerModules>;
 export const ServerAdminRequest = FromClient({ isServerAdmin: Type.Boolean() });
 export type ServerAdminRequest = Static<typeof ServerAdminRequest>;
 export const ServerUser = Type.Object({

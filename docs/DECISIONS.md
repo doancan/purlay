@@ -14684,9 +14684,10 @@ of an editions platform needs a switch that is immediate, reversible, audited, s
 7. **The writer** is one service every writer calls, in the caller's transaction, behind the administrator's lock, audited with the
    operator's reason in `server_audit_log.note` (`server.module_suspended`, `server.module_resumed`, the module in
    `target_module`); a repeat is no change. It refuses a module the build does not carry, and a module that is `always` or whose
-   stop would take one down with it unless the request says `force: true`, which is the confirmation. It answers the
-   modules that stopped, or came back, with it; the route and the commands that call it follow. The node that wrote a stop believes
-   it at once.
+   stop would take one down with it unless the request says `force: true`, which is the confirmation. Its callers are
+   `POST /api/server/modules/:moduleId/suspension` (guard before parsing, behind the administrator's lock), which answers the
+   modules that stopped, or came back, with it, and, in the change that follows, `bun run module:suspend` and `module:resume`
+   and `GET /api/server/modules`. The node that wrote a stop believes it at once.
    The reason is the one place the trail holds words: the operator's own, 200 characters at most, because the row that held them is
    gone once the stop is lifted.
 8. **A stop waits for the cluster.** A node of a release that predates the table does not stop anything, so the write is refused

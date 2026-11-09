@@ -20,9 +20,10 @@ export interface ClusterNode {
 
 export interface ClusterNodeOptions {
   readonly databaseUrl: string;
-  readonly redisUrl: string;
+  /** Left out, the node has no Redis and is a cluster of one that shares only the database. */
+  readonly redisUrl?: string;
   /** The namespace of the cluster in Redis: a node of another namespace is another cluster. */
-  readonly redisPrefix: string;
+  readonly redisPrefix?: string;
   /** Files that run before the entry point, in order. */
   readonly preloads?: readonly string[];
   /** What a preload reads. */
@@ -57,8 +58,8 @@ export const startClusterNode = (options: ClusterNodeOptions): ClusterNode => {
       PORT: String(port),
       APP_URL: origin,
       DATABASE_URL: options.databaseUrl,
-      REDIS_URL: options.redisUrl,
-      REDIS_KEY_PREFIX: options.redisPrefix,
+      ...(options.redisUrl === undefined ? {} : { REDIS_URL: options.redisUrl }),
+      ...(options.redisPrefix === undefined ? {} : { REDIS_KEY_PREFIX: options.redisPrefix }),
       ENCRYPTION_KEY: DEVELOPMENT_ENCRYPTION_KEY,
       GITHUB_CLIENT_ID: 'id',
       GITHUB_CLIENT_SECRET: 'secret',

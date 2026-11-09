@@ -62,6 +62,7 @@ const aNode = (
   db: Executor,
   run: (suspension: Suspension) => Composition = (suspension) =>
     compositionFor(undefined, 'open', suspension),
+  extra: { readonly suspensionPeersBehind?: () => Promise<number> } = {},
 ): {
   readonly suspension: Suspension;
   readonly advance: (ms: number) => void;
@@ -81,7 +82,7 @@ const aNode = (
   });
   const metrics = serverMetrics();
   const app = createApp(
-    testDependencies({ database: db, clock, composition: run(suspension), metrics }),
+    testDependencies({ database: db, clock, composition: run(suspension), metrics, ...extra }),
   );
   return {
     suspension,
@@ -338,6 +339,262 @@ describe('integration: the core goes on', () => {
       expect(
         ((await node.call('GET', '/api/me', owner)).body as { modules: string[] }).modules,
       ).toEqual([]);
+    });
+  });
+});
+
+describe('integration: the administrator’s stop and its lifting (D-296)', () => {
+  const anAdmin = async (db: Executor): Promise<SignedInUser> => {
+    const admin = await aSignedInUser(db, clock, 'Admin');
+    await db
+      .updateTable('users')
+      .set({ is_server_admin: true })
+      .where('id', '=', admin.userId)
+      .execute();
+    return admin;
+  };
+  const stopPath = (module: string): string => `/api/server/modules/${module}/suspension`;
+  const trail = async (
+    db: Executor,
+  ): Promise<{ action: string; target_module: string | null; note: string | null }[]> =>
+    await db
+      .selectFrom('server_audit_log')
+      .select(['action', 'target_module', 'note'])
+      .where('action', 'like', 'server.module_%')
+      .orderBy('id')
+      .execute();
+  const rows = async (
+    db: Executor,
+  ): Promise<{ module: string; reason: string; source: string; suspended_by: string | null }[]> =>
+    await db
+      .selectFrom('suspended_modules')
+      .select(['module', 'reason', 'source', 'suspended_by'])
+      .where('module', 'in', ['issues', 'chat'])
+      .execute();
+
+  test('only the server administrator writes: an owner, a member and nobody get one answer, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      await aWorkspaceOf(node, owner);
+      const answers: string[] = [];
+      for (const who of [owner, null]) {
+        const answer = await node.call('POST', stopPath('issues'), who, {
+          state: 'suspended',
+          reason: 'nope',
+        });
+        answers.push(withoutRequestId(answer));
+      }
+      expect(new Set(answers).size).toBe(1);
+      expect(answers[0]).toContain('"status":404');
+      expect(await rows(db)).toEqual([]);
+      expect(await trail(db)).toEqual([]);
+    });
+  });
+
+  test('a stop is on this node at once, on the trail with its reason, and again is the same', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const admin = await anAdmin(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const [first, second] = [await aWorkspaceOf(node, owner), await aWorkspaceOf(node, owner)];
+      for (const workspaceId of [first, second])
+        expect(
+          (await node.call('GET', `/api/workspaces/${workspaceId}/issues`, owner)).status,
+        ).toBe(200);
+
+      for (let again = 0; again < 2; again += 1) {
+        const stopped = await node.call('POST', stopPath('issues'), admin, {
+          state: 'suspended',
+          reason: 'leaks rows between tickets',
+        });
+        expect(stopped.status).toBe(200);
+        expect(stopped.body).toEqual({
+          module: 'issues',
+          state: 'suspended',
+          changed: again === 0,
+          alsoAffected: [],
+        });
+      }
+      // No wait for the TTL on the node that wrote it, and every workspace at once.
+      for (const workspaceId of [first, second])
+        expect(
+          (await node.call('GET', `/api/workspaces/${workspaceId}/issues`, owner)).status,
+        ).toBe(404);
+      expect(await rows(db)).toEqual([
+        {
+          module: 'issues',
+          reason: 'leaks rows between tickets',
+          source: 'operator',
+          suspended_by: admin.userId,
+        },
+      ]);
+      expect(await trail(db)).toEqual([
+        {
+          action: 'server.module_suspended',
+          target_module: 'issues',
+          note: 'leaks rows between tickets',
+        },
+      ]);
+      const listed = await node.call(
+        'GET',
+        '/api/server/audit?action=server.module_suspended',
+        admin,
+      );
+      expect((listed.body as { data: { note: string }[] }).data[0]?.note).toBe(
+        'leaks rows between tickets',
+      );
+    });
+  });
+
+  test('lists what is stopped and why for the administrator alone', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const admin = await anAdmin(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      expect(withoutRequestId(await node.call('GET', '/api/server/modules', owner))).toContain(
+        '"status":404',
+      );
+      await node.call('POST', stopPath('issues'), admin, {
+        state: 'suspended',
+        reason: 'leaks rows between tickets',
+      });
+      const listed = await node.call('GET', '/api/server/modules', admin);
+      const { data } = listed.body as {
+        data: { module: string; state: string; reason: string | null; running: boolean }[];
+      };
+      expect(data.find(({ module }) => module === 'issues')).toMatchObject({
+        state: 'suspended',
+        reason: 'leaks rows between tickets',
+        running: true,
+      });
+      expect(data.find(({ module }) => module === 'chat')).toMatchObject({
+        state: 'active',
+        reason: null,
+      });
+    });
+  });
+
+  test('a resume brings everything back, on the trail, and again is the same', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const admin = await anAdmin(db);
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(node, owner);
+      const made = await node.call('POST', `/api/workspaces/${workspaceId}/issues`, owner, {
+        title: 'Kept',
+      });
+      expect(made.status).toBe(201);
+      await node.call('POST', stopPath('issues'), admin, {
+        state: 'suspended',
+        reason: 'incident',
+      });
+      for (let again = 0; again < 2; again += 1) {
+        const resumed = await node.call('POST', stopPath('issues'), admin, { state: 'running' });
+        expect(resumed.body).toMatchObject({ state: 'running', changed: again === 0 });
+      }
+      const back = await node.call('GET', `/api/workspaces/${workspaceId}/issues`, owner);
+      expect(back.status).toBe(200);
+      expect(JSON.stringify(back.body)).toContain('Kept');
+      expect(await rows(db)).toEqual([]);
+      // One entry for each change, whichever order the ids of one clock put them in.
+      expect((await trail(db)).map(({ action }) => action).sort()).toEqual([
+        'server.module_resumed',
+        'server.module_suspended',
+      ]);
+    });
+  });
+
+  test('refuses a stop with no reason, an unknown module, a body that is not one, and chat without the confirmation; writes nothing', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db);
+      const admin = await anAdmin(db);
+      const field = async (module: string, body: unknown): Promise<[number, string[]]> => {
+        const answer = await node.call('POST', stopPath(module), admin, body);
+        const { error } = answer.body as {
+          error: { details?: { fields?: Record<string, string> } };
+        };
+        return [answer.status, Object.keys(error.details?.fields ?? {})];
+      };
+      expect(await field('issues', { state: 'suspended' })).toEqual([400, ['reason']]);
+      expect(await field('issues', { state: 'suspended', reason: '   ' })).toEqual([
+        400,
+        ['reason'],
+      ]);
+      expect((await field('issues', { state: 'suspended', reason: 'x'.repeat(201) }))[0]).toBe(400);
+      expect(await field('tasks', { state: 'suspended', reason: 'why' })).toEqual([
+        400,
+        ['module'],
+      ]);
+      expect((await field('Issues', { state: 'suspended', reason: 'why' }))[0]).toBe(400);
+      expect((await field('issues', { state: 'paused', reason: 'why' }))[0]).toBe(400);
+      expect((await field('issues', { state: 'suspended', reason: 'why', extra: 1 }))[0]).toBe(400);
+      expect(await field('chat', { state: 'suspended', reason: 'incident' })).toEqual([
+        400,
+        ['force'],
+      ]);
+      expect(await rows(db)).toEqual([]);
+      expect(await trail(db)).toEqual([]);
+
+      // Said twice, it is meant: the product goes down and comes back.
+      const owner = await aSignedInUser(db, clock, 'Owner');
+      const workspaceId = await aWorkspaceOf(node, owner);
+      const forced = await node.call('POST', stopPath('chat'), admin, {
+        state: 'suspended',
+        reason: 'incident',
+        force: true,
+      });
+      expect(forced.status).toBe(200);
+      expect(
+        (await node.call('GET', `/api/workspaces/${workspaceId}/channels`, owner)).status,
+      ).toBe(404);
+      expect((await node.call('GET', `/api/workspaces/${workspaceId}/issues`, owner)).status).toBe(
+        200,
+      );
+      expect((await node.call('POST', stopPath('chat'), admin, { state: 'running' })).status).toBe(
+        200,
+      );
+      expect(
+        (await node.call('GET', `/api/workspaces/${workspaceId}/channels`, owner)).status,
+      ).toBe(200);
+    });
+  });
+
+  test('a stop waits for a node that does not read the stops, and a resume never does', async () => {
+    await withRollback(async (db) => {
+      let behind = 1;
+      const node = aNode(db, undefined, { suspensionPeersBehind: () => Promise.resolve(behind) });
+      const admin = await anAdmin(db);
+      const stop = (): Promise<Answer> =>
+        node.call('POST', stopPath('issues'), admin, { state: 'suspended', reason: 'incident' });
+      const refused = await stop();
+      expect(refused.status).toBe(409);
+      expect(JSON.stringify(refused.body)).toContain('PEERS_BEHIND');
+      expect(await rows(db)).toEqual([]);
+      expect(await trail(db)).toEqual([]);
+
+      behind = 0;
+      expect((await stop()).status).toBe(200);
+      // A resume is a lifting of a restriction: a node that is behind loses nothing by it.
+      behind = 2;
+      expect(
+        (await node.call('POST', stopPath('issues'), admin, { state: 'running' })).status,
+      ).toBe(200);
+    });
+  });
+
+  test('a stop is refused when the cluster cannot be asked', async () => {
+    await withRollback(async (db) => {
+      const node = aNode(db, undefined, {
+        suspensionPeersBehind: () => Promise.reject(new Error('Redis is away')),
+      });
+      const admin = await anAdmin(db);
+      const refused = await node.call('POST', stopPath('issues'), admin, {
+        state: 'suspended',
+        reason: 'incident',
+      });
+      expect(refused.status).toBe(409);
+      expect(await rows(db)).toEqual([]);
     });
   });
 });
