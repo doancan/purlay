@@ -9,6 +9,7 @@
         "/api/channels/**",
         "/api/github-app/**",
         "/api/integrations/**",
+        "/api/me/missed-mail",
         "/api/messages/**",
         "/api/missed-mail/stop",
         "/api/notifications",
@@ -58,7 +59,9 @@
       "id": "issues",
       "requires": [],
       "optional": [],
-      "provides": [],
+      "provides": [
+        "issues.records"
+      ],
       "routes": [
         "/api/workspaces/:workspaceId/issues",
         "/api/workspaces/:workspaceId/issues/**"
