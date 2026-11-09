@@ -1184,7 +1184,8 @@ export const API_PLATFORM: readonly Mutation[] = [
     why: 'a dead fact is deleted a day after it died, before anyone has looked at why (D-288)',
     file: 'apps/api/src/platform/outbox-sweep.ts',
     find: "              .where('state', '=', 'dead')\n              .where('finished_at', '<', deadBefore)\n",
-    replace: "              .where('state', '=', 'dead')\n              .where('finished_at', '<', finishedBefore)\n",
+    replace:
+      "              .where('state', '=', 'dead')\n              .where('finished_at', '<', finishedBefore)\n",
     tests: ['apps/api/src/platform/outbox-sweep.integration.test.ts'],
   },
   {
