@@ -18,6 +18,7 @@ import { PERSON_KEY } from '../../data/browser-storage';
 import { expectNoAxeViolations } from '../../testing/axe';
 import { expectFocusOn } from '../../testing/focus';
 import { installDom } from '../../testing/dom';
+import { storageChanged } from '../../testing/fakes';
 import { IDS, aSignedInApi } from '../../testing/fixtures';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
@@ -226,7 +227,7 @@ describe('notifications on this device', () => {
     act(() => {
       view.world.storage.setItem('purlay.person', 'another-person');
       view.world.storage.setItem(PUSH_OWNER_KEY, 'another-person');
-      window.dispatchEvent(new StorageEvent('storage', { key: 'purlay.person' }));
+      storageChanged('purlay.person');
     });
     await settle();
     expect(calls.filter((call) => call === 'unsubscribe')).toEqual([]);
@@ -235,7 +236,7 @@ describe('notifications on this device', () => {
     const next = await open(api, device, { owner: IDS.me });
     act(() => {
       next.world.storage.removeItem(PUSH_OWNER_KEY);
-      window.dispatchEvent(new StorageEvent('storage', { key: PUSH_OWNER_KEY }));
+      storageChanged(PUSH_OWNER_KEY);
     });
     await settle();
     expect(offered(next)).toEqual(['Turn on']);

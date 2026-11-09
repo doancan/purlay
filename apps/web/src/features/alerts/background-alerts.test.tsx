@@ -29,6 +29,7 @@ import type { Notice, Notifier } from '../push/notifier';
 import { PUSH_OWNER_KEY } from '../push/push';
 import { LocksContext } from '../../data/locks';
 import { TestLocks } from '../../testing/locks';
+import { memoryStorage } from '../../testing/fakes';
 import { Toaster } from '../../ui/toast';
 
 installDom();
@@ -113,6 +114,11 @@ const open = async ({
   path?: string;
   quietHours?: QuietHours | null;
 } = {}): Promise<Awaited<ReturnType<typeof renderApp>>> => {
+  // A returning browser already owns its preference when the page mounts. Seeding it after
+  // render races the first reconciliation on a fast runner and tests an off device by accident.
+  const storage = memoryStorage();
+  storage.setItem('purlay.person', me.user.id);
+  if (owner !== null) storage.setItem(PUSH_OWNER_KEY, owner);
   const view = await renderApp(
     <LocksContext.Provider value={new TestLocks()}>
       <Outlet />
@@ -120,6 +126,7 @@ const open = async ({
     </LocksContext.Provider>,
     {
       path,
+      storage,
       notifier: notifier.notifier,
       api: aSignedInApi({
         me: () => Promise.resolve(me),
@@ -129,9 +136,8 @@ const open = async ({
       }),
     },
   );
-  if (owner !== null) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
   await settle();
-  return view;
+  return Object.assign(view, { world: { ...view.world, storage } });
 };
 
 /** What the socket does when something new needs the person: the badge's new number. */
@@ -279,8 +285,8 @@ describe('a tab in the background', () => {
         await settle();
       }
       if (change === 'off') {
-        await person().click(view.getByRole('button', { name: 'Turn off' }));
-        await settle();
+        await person().click(await view.findByRole('button', { name: 'Turn off' }));
+        await view.findByRole('button', { name: 'Turn on' });
       }
       if (change === 'unmount') view.unmount();
       release([mention()]);

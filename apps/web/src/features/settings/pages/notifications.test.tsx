@@ -13,6 +13,7 @@ import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
+import { storageChanged } from '../../../testing/fakes';
 import { ALICE, IDS, aChannel, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
@@ -82,7 +83,11 @@ test('in-app and sound opt-outs are independent, remembered, and follow changes 
   });
   act(() => {
     view.world.storage.setItem(key, JSON.stringify({ inApp: true, sound: false, volume: 25 }));
-    window.dispatchEvent(new StorageEvent('storage', { key }));
+    storageChanged('unrelated.preference');
+  });
+  expect(inApp).toHaveProperty('checked', false);
+  act(() => {
+    storageChanged(key);
   });
   expect(inApp).toHaveProperty('checked', true);
   expect(sound).toHaveProperty('checked', false);

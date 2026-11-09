@@ -20,6 +20,13 @@ export interface MemoryStorage {
   readonly length: number;
 }
 
+/** A browser storage event at the external boundary; only its key is consumed by these hooks. */
+export const storageChanged = (key: string | null): void => {
+  const event = new Event('storage');
+  Object.defineProperty(event, 'key', { value: key });
+  window.dispatchEvent(event);
+};
+
 export const memoryStorage = (initial: Readonly<Record<string, string>> = {}): MemoryStorage => {
   const data: Record<string, string> = { ...initial };
   return {

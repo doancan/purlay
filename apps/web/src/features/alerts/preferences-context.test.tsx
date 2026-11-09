@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
 import { installDom } from '../../testing/dom';
 import { renderApp } from '../../testing/render';
-import { memoryStorage } from '../../testing/fakes';
+import { memoryStorage, storageChanged } from '../../testing/fakes';
 import { person } from '../../testing/user';
 import { AlertPreferencesProvider, ChimeContext, useAlertPreferences } from './preferences-context';
 
@@ -70,7 +70,7 @@ describe('personal alert controls', () => {
     await person().click(view.getByRole('button', { name: 'Preview' }));
     act(() => {
       storage.setItem('purlay.person', 'bob');
-      window.dispatchEvent(new StorageEvent('storage', { key: 'purlay.person' }));
+      storageChanged('purlay.person');
     });
     await act(async () => {
       resume?.(true);
