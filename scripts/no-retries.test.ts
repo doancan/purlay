@@ -16,7 +16,9 @@ describe('nothing is retried', () => {
     expect(config).toMatch(/^\s*retries: 0,$/m);
     expect(config).not.toMatch(/retries:\s*ci/);
     // With no second run, the first failure is the one to keep.
-    expect(config).toMatch(/trace: 'retain-on-failure'/);
+    expect(config).toMatch(/'retain-on-failure'/);
+    // But the run that measures is judged on how long the page takes, and a trace is time it does not have.
+    expect(config).toMatch(/trace: performanceMode === 'only' \? 'off'/);
   });
 
   test('no workflow and no script asks a test runner to run a test again', () => {

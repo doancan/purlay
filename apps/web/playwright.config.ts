@@ -189,8 +189,10 @@ export default defineConfig({
   reporter: ci ? [['github'], ['html', { open: 'never' }]] : 'list',
   timeout: 30_000,
   use: {
-    // A failure keeps its trace, since there is no second run to take one on.
-    trace: 'retain-on-failure',
+    // A failure keeps its trace, since there is no second run to take one on. Not in the run that measures
+    // (`PURLAY_E2E_PERFORMANCE=only`): recording costs the page time, and the cold load it is judged on
+    // came out twice as long with it (about 100 ms against 60 ms, measured), a regression that was the trace.
+    trace: performanceMode === 'only' ? 'off' : 'retain-on-failure',
     // The only motion in the product is a 120 ms collapse (`UX.md` §9); a screenshot
     // must never catch it half done.
     reducedMotion: 'reduce',
