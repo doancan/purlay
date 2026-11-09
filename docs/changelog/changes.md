@@ -27,9 +27,6 @@ have it.
 
 ## Unreleased
 
-### Changed
-
-- **Operations** — A fact whose handler hangs or fails no longer holds up the rest of its batch: each delivery is stopped after three seconds on its own, and a burst of facts is delivered as fast as the batches come back full instead of twenty every two seconds (D-288)
-- **Operations** — A request that publishes a fact the consumer cannot take yet, because the workspace already has the most it may have waiting, is answered `503` `FACT_BACKLOG_FULL` with `Retry-After` instead of `500`, and the log names the workspace and module (D-288)
+_Nothing yet._
 
 ---
