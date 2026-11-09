@@ -289,6 +289,19 @@ describe('loading configuration', () => {
     }
   });
 
+  /** A dead fact is a business fact that was not delivered: under a month is refused, and the default is half a year (D-288 §12). */
+  test('OUTBOX_DEAD_KEPT_DAYS is a whole number of days from thirty to 3650, 180 unless set', () => {
+    expect(loadConfig(valid).OUTBOX_DEAD_KEPT_DAYS).toBe(180);
+    expect(loadConfig({ ...valid, OUTBOX_DEAD_KEPT_DAYS: '' }).OUTBOX_DEAD_KEPT_DAYS).toBe(180);
+    expect(loadConfig({ ...valid, OUTBOX_DEAD_KEPT_DAYS: '30' }).OUTBOX_DEAD_KEPT_DAYS).toBe(30);
+    expect(loadConfig({ ...valid, OUTBOX_DEAD_KEPT_DAYS: '3650' }).OUTBOX_DEAD_KEPT_DAYS).toBe(
+      3650,
+    );
+    for (const OUTBOX_DEAD_KEPT_DAYS of ['0', '29', '3651', '1.5', '90d', 'long']) {
+      expect(refusal({ ...valid, OUTBOX_DEAD_KEPT_DAYS })).toContain('OUTBOX_DEAD_KEPT_DAYS');
+    }
+  });
+
   /**
    * How many sockets replay at once. Zero would let no replay run and every subscription would wait out its deadline;
    * a fraction has no count. Both are refused where they are read.

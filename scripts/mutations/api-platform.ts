@@ -963,6 +963,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-report.integration.test.ts'],
   },
   {
+    id: 'outbox-dead-retention-below-a-month',
+    why: 'an operator can set the retention of a dead fact to a day, which is the silent loss this exists to prevent (D-288 §12)',
+    file: 'apps/api/src/platform/config.ts',
+    find: '    minimum: 30,\n    maximum: 3650,',
+    replace: '    minimum: 1,\n    maximum: 3650,',
+    tests: ['apps/api/src/platform/config.test.ts'],
+  },
+  {
     id: 'outbox-delivery-checks-the-current-shape',
     why: 'a row is validated against the newest shape of its declaration whatever shape it was written in, so a newer node kills the facts an older node published during a rolling deploy (D-288 §5)',
     file: 'apps/api/src/platform/outbox-drain.ts',
@@ -1148,6 +1156,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-sweep.integration.test.ts'],
   },
   {
+    id: 'outbox-sweep-leaves-discarded-facts',
+    why: 'discarded rows are kept for ever and the table grows by what the operator gave up on (D-288 §12)',
+    file: 'apps/api/src/platform/outbox-sweep.ts',
+    find: "              .where('state', '=', 'discarded')\n",
+    replace: "              .where('state', '=', 'discarded-never')\n",
+    tests: ['apps/api/src/platform/outbox-sweep.integration.test.ts'],
+  },
+  {
     id: 'outbox-sweep-stops-after-one-batch',
     why: 'a long backlog is swept one batch at a time, one batch an hour, and the table never catches up (D-288)',
     file: 'apps/api/src/platform/outbox-sweep.ts',
@@ -1156,11 +1172,19 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-sweep.integration.test.ts'],
   },
   {
+    id: 'outbox-sweep-takes-dead-facts-after-a-month',
+    why: 'a dead fact, a business fact that was not delivered, disappears after thirty days whatever the operator set (D-288 §12)',
+    file: 'apps/api/src/platform/outbox-sweep.ts',
+    find: 'now.getTime() - deadKeptDays * DAY_MS',
+    replace: 'now.getTime() - 30 * DAY_MS',
+    tests: ['apps/api/src/platform/outbox-sweep.integration.test.ts'],
+  },
+  {
     id: 'outbox-sweep-takes-the-dead-too-soon',
     why: 'a dead fact is deleted a day after it died, before anyone has looked at why (D-288)',
     file: 'apps/api/src/platform/outbox-sweep.ts',
-    find: "              .where('finished_at', '<', deadBefore)\n",
-    replace: "              .where('finished_at', '<', finishedBefore)\n",
+    find: "              .where('state', '=', 'dead')\n              .where('finished_at', '<', deadBefore)\n",
+    replace: "              .where('state', '=', 'dead')\n              .where('finished_at', '<', finishedBefore)\n",
     tests: ['apps/api/src/platform/outbox-sweep.integration.test.ts'],
   },
   {

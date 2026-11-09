@@ -166,7 +166,7 @@ export const anOutboxRow = async (
   workspaceId: string,
   row: {
     readonly consumer?: string;
-    readonly state?: 'pending' | 'delivered' | 'dead' | 'skipped';
+    readonly state?: 'pending' | 'delivered' | 'dead' | 'skipped' | 'discarded';
     readonly at: Date;
     readonly finishedAt?: Date;
     readonly expiresAt?: Date;

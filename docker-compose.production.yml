@@ -62,6 +62,7 @@ x-environment: &environment
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   # Facts one workspace may have waiting for one module; a publish past it is refused (docs/DEPLOY.md).
   OUTBOX_PENDING_MAX: ${OUTBOX_PENDING_MAX:-5000}
+  OUTBOX_DEAD_KEPT_DAYS: ${OUTBOX_DEAD_KEPT_DAYS:-180}
   # Sockets this node holds open before it answers 503; size by measured fan-out (docs/DEPLOY.md).
   SOCKET_MAX_CONNECTIONS: ${SOCKET_MAX_CONNECTIONS:-2000}
   # Sockets that may replay at once after a reconnect; the rest wait their turn (docs/DEPLOY.md).
