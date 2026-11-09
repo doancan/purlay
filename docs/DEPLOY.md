@@ -348,6 +348,40 @@ workspace and the module. A workspace that is refused a module it should have sh
 Every node of a cluster should have the same `WORKSPACE_MODULES`: a node that finds another says `the nodes of this cluster do not
 agree on WORKSPACE_MODULES` once in its log, and again when they agree; it serves on.
 
+**A module misbehaves: stop it (D-296).** Changing `MODULES` is a rolling restart; stopping a module is not. The server administrator stops a
+module for every workspace and every node, with the reason, in about two seconds, and lets it run again the same way. Nothing is restarted
+and nothing is deleted.
+
+1. **Stop it.** `bun run module:suspend <id> --reason "<why>"` on any host that reads the deployment's configuration (in the container,
+   `docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" exec api bun run module:suspend issues --reason "leaks rows between tickets"`),
+   or as the administrator `POST /api/server/modules/<id>/suspension` with `{"state":"suspended","reason":"…"}`
+   (`API.md`). Chat is not exempt, and stopping it takes the product down: it needs `--force` (`"force": true`), as does a stop that
+   takes a module that is always granted down with it. A module that requires the one you stop stops with it and comes back with it;
+   the answer names it. A second stop of a stopped module changes nothing and keeps the first reason.
+2. **On a cluster** (`REDIS_URL`) a stop is refused `409 PEERS_BEHIND` while a live node runs a release that does not read the stops,
+   because that node would go on serving the module. Finish the rollout, then stop. The command cannot see the cluster: it exits `1`
+   and asks for `--cluster-ready` once you know that every node is on this release. In an emergency with a mixed cluster, change
+   `MODULES` on the nodes as before. Resuming is never refused for it.
+3. **Verify it took**, on each node, within two seconds: `GET /api/server/modules` says `suspended` with the reason (and `blocked` for
+   a module that requires it); `/metrics` has `purlay_module_suspended{module="<id>"} 1`; a request for the module's path, signed in or
+   not, answers the plain `404 ROUTE_NOT_FOUND` of an unknown path; `GET /api/me` no longer lists the module; the server's trail has
+   `server.module_suspended` with `targetModule` and the reason as `note`; the module's workers log nothing and its outbox rows wait
+   (`purlay_outbox_pending`). Its `jobs` (scheduled work for its users) are not run by `bun run job` and are not overdue in
+   `jobs:status`; its retention jobs still run.
+4. **What the stop does and does not do.** Its routes, socket operations and events, jobs, workers (the delivery of the facts it consumes
+   among them), search results and inbox lines are gone; it writes no notice; a fact it would consume is dropped or held as the fact's
+   own `absent` word says, as when a module is not run. Its rows stay, and export, erasure, the workspace purge and retention reach them.
+   Pages already open meet a `404` and read `GET /api/me` again, or are corrected on their next load.
+5. **Resume.** `bun run module:resume <id>` or `{"state":"running"}`. Everything is served again; what the module would have been told
+   during the stop is not replayed (notices) or is, if the fact was held. A stop left on shows as `purlay_module_suspended` at `1`:
+   alert on it, because a stop is meant for an incident.
+
+**Safe mode, and how a stop differs.** Running with only the core is `MODULES=none` and a restart of every node: it is chosen at deploy,
+for the whole cluster, and lasts until `MODULES` says otherwise. A stop is chosen at run time, per module, by the administrator, takes
+effect in `SUSPENSION_TTL_MS` (two seconds) on a running node, and ends at the next resume. If a module is so broken that nodes will not
+start with it, `MODULES=none` (or the list without it) is the way back; if it is running and misbehaving, stop it first, then decide on
+`MODULES` when there is time. Neither deletes data. A single module's tables cannot be restored alone from a backup (*Backup, restore and D-86*, above): stop it, or export what is needed.
+
 **Not supported.** Third-party modules: a module is first-party code in this repository, and loading one from elsewhere is not supported.
 
 **Every metric `/metrics` carries**, written from the code (`bun run docs:sync`; `metric-catalogue.test.ts` fails a metric the code has and this table lacks, and a document or an alert rule that names one the code does not have):

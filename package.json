@@ -57,6 +57,8 @@
     "export:workspace": "bun run apps/api/src/cli/export-workspace.ts",
     "erase:content": "bun run apps/api/src/cli/erase-content.ts",
     "entitlements:apply": "bun run apps/api/src/cli/entitlements-apply.ts",
+    "module:suspend": "bun run apps/api/src/cli/module-suspension.ts suspend",
+    "module:resume": "bun run apps/api/src/cli/module-suspension.ts resume",
     "admin:reset-password": "bun run apps/api/src/cli/admin-reset-password.ts",
     "storage:quota": "bun run apps/api/src/cli/storage-quota.ts",
     "knip": "knip",

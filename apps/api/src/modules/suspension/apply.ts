@@ -8,7 +8,7 @@
  * the module because it requires it, which is the stored set closed over `requires` and nothing the administrator named twice.
  * A write that says what the table already says changes nothing and records nothing, so a command run twice is the same as once.
  */
-import type { Transaction } from '@purlay/db';
+import type { Executor, Transaction } from '@purlay/db';
 import { SUSPENSION_REASON_MAX } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
@@ -138,4 +138,44 @@ export const applySuspension = async (
     alsoAffected: moved.filter((id) => id !== change.module),
     suspended: await readSuspended(tx),
   };
+};
+
+export interface ModuleStatusRow {
+  readonly module: string;
+  readonly state: 'active' | 'suspended' | 'blocked';
+  readonly reason: string | null;
+  readonly suspendedAt: Date | null;
+  readonly suspendedBy: string | null;
+}
+
+/** Every module of the build and whether it is stopped, or out because a module it requires is. */
+export const moduleStatuses = async (
+  executor: Executor,
+  catalogue: EntitlementCatalogue,
+  now: Date,
+): Promise<readonly ModuleStatusRow[]> => {
+  const rows = await executor
+    .selectFrom('suspended_modules')
+    .select(['module', 'reason', 'suspended_at', 'suspended_by'])
+    .execute();
+  const stopped = new Map(rows.map((row) => [row.module, row]));
+  const out = outOfService(catalogue, new Set(stopped.keys()), now);
+  return catalogue.carried.map(({ id }): ModuleStatusRow => {
+    const row = stopped.get(id);
+    return row === undefined
+      ? {
+          module: id,
+          state: out.has(id) ? 'blocked' : 'active',
+          reason: null,
+          suspendedAt: null,
+          suspendedBy: null,
+        }
+      : {
+          module: id,
+          state: 'suspended',
+          reason: row.reason,
+          suspendedAt: row.suspended_at,
+          suspendedBy: row.suspended_by,
+        };
+  });
 };

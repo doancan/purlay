@@ -705,6 +705,31 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
   },
   {
+    id: 'suspension-route-keeps-the-old-view-until-the-ttl',
+    why: 'the node that wrote a stop goes on serving the module until its own cache is old, so the operator sees nothing happen (D-296)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  deps.suspension.replace(result.suspended);\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
+  },
+  {
+    id: 'suspension-route-lists-modules-to-anyone',
+    why: 'which modules are stopped, and why, is shown to a caller who is not the administrator (D-296)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  await guard(deps, request);\n  const rows = await moduleStatuses(',
+    replace: '  const rows = await moduleStatuses(',
+    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
+  },
+  {
+    id: 'suspension-route-writes-before-it-knows-the-administrator',
+    why: 'the stop of a module is parsed and written for whoever asks (D-296)',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  const admin = await guard(deps, request);\n  const module = validated(ServerModuleId, moduleId);',
+    replace:
+      '  const admin = { userId: crypto.randomUUID() } as never;\n  const module = validated(ServerModuleId, moduleId);',
+    tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
+  },
+  {
     id: 'suspension-sink-given-no-stop',
     why: 'the application hands a module an inbox that does not know it is stopped (D-296)',
     file: 'apps/api/src/ingress/http/app.ts',
