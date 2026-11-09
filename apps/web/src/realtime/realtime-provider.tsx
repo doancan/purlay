@@ -127,17 +127,21 @@ export const RealtimeProvider = ({
 
   // A channel this workspace's list no longer has the person in — read again after a time offline,
   // say, when its ACCESS_REVOKED was never heard — is lost, and so are its unsent messages (#521).
-  // Only within this provider, which is one workspace's: another workspace's channels are not lost.
-  const memberBefore = useRef<readonly string[] | null>(null);
+  // Only within one workspace: the engine outlives a move to another, whose list has none of the
+  // first's channels without any of them having been taken away.
+  const memberBefore = useRef<{
+    readonly workspaceId: string;
+    readonly channelIds: readonly string[];
+  } | null>(null);
   useEffect(() => {
     if (channels.data === undefined) return;
     const before = memberBefore.current;
-    memberBefore.current = memberOf;
-    if (before === null) return;
+    memberBefore.current = { workspaceId: workspace.id, channelIds: memberOf };
+    if (before?.workspaceId !== workspace.id) return;
     const now = new Set(memberOf);
-    const gone = before.filter((id) => !now.has(id));
+    const gone = before.channelIds.filter((id) => !now.has(id));
     if (gone.length > 0) engine.lose(gone);
-  }, [engine, channels.data, memberOf]);
+  }, [engine, channels.data, memberOf, workspace.id]);
 
   return <EngineContext.Provider value={engine}>{children}</EngineContext.Provider>;
 };
