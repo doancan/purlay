@@ -333,13 +333,13 @@ docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-fil
 
 Where the repository is checked out, `bun run entitlements:apply --file editions.json` with `DATABASE_URL` set is the same command. The
 dry run makes the writes in a transaction and undoes them, so it refuses what the real run would (a module whose requirement the workspace lacks); run
-again, the real command changes nothing. It prints `changed N of M grants` and a count for each module and state, never a person's words.
+again, the real command changes nothing. It prints `changed N of M grants` and a count for each module and state, never a person's words; a dry run also prints `workspace <address> = <id>` for each address in the file, because the address is whatever the tenant who registered it first chose: read the ids against your own list of customers before the real run.
 
 | Exit code | Meaning |
 |---|---|
 | `0` | applied, or nothing to change |
-| `1` | the server is clustered (`REDIS_URL`) and the file takes grants away: say `--cluster-ready` once every node runs a release that reads grants |
-| `2` | the file or a workspace in it cannot be used: not JSON, an unknown edition or module, a slug with no workspace, a `validUntil` that has passed; nothing was applied |
+| `1` | the server is clustered (`REDIS_URL`) and the file takes grants away: say `--cluster-ready` once every node runs a release that reads grants. The word is yours and nothing checks it: the command warns of it, and the trail records it with each grant it let through (`server_audit_log.cluster_ready_asserted`) |
+| `2` | the file or a workspace in it cannot be used: not JSON, an address written twice in one object, an unknown edition or module, a slug with no workspace, a `validUntil` that has passed; nothing was applied |
 
 Read it back. `GET /api/server/workspaces` (server administrator) lists for each workspace what it was told (`on`, `off`, `inherit`), what
 that comes to now (`effective`), `validUntil` and `source`, which for a file is `file:<name>` (`file:stdin` when it came on standard input).
