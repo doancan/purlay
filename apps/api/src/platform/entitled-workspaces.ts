@@ -17,6 +17,7 @@ import type {
   EntitlementPolicy,
 } from './module-kit/entitlement';
 import type { WorkspaceScope } from './ports/record-ref';
+import { mintTurn } from './workspace-turn';
 
 /** Workspaces read at a time: a page is one statement and one read of the grants, however many workspaces there are. */
 export const ENTITLED_PAGE_SIZE = 100;
@@ -128,7 +129,7 @@ export const eachEntitled = async (
 ): Promise<void> => {
   for (let after: string | undefined; ;) {
     const page = await entitled.turns(after, ENTITLED_PAGE_SIZE);
-    for (const turn of page) await visit(turn);
+    for (const turn of page) await visit(mintTurn(turn));
     const last = page.at(-1);
     if (last === undefined || page.length < ENTITLED_PAGE_SIZE) return;
     after = last.workspaceId;

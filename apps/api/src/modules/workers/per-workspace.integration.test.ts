@@ -11,6 +11,7 @@ import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import type { ModuleManifest } from '../../platform/module-kit/manifest';
 import { noSuspension, type Suspension } from '../../platform/suspended-modules';
+import { assertTurn } from '../../platform/workspace-turn';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aGrant } from '../../testing/facts';
 import { aRoom } from '../../testing/rooms';
@@ -93,6 +94,33 @@ describe('integration: a loop written per workspace', () => {
       await tick(module, db);
       expect(visited).toContain(kept);
       expect(visited).not.toContain(lost);
+    });
+  });
+
+  test('is visited with workspaces the framework handed out, which the seams accept', async () => {
+    await withRollback(async (db) => {
+      await aWorkspace(db);
+      let refused: unknown = 'not asked';
+      const module: BundledModule = {
+        manifest: manifestOf('base', { entitlement: 'grant' }),
+        workers: [
+          {
+            name: 'sweep',
+            intervalMs: 5_000,
+            work: perWorkspaceWorker((turn) => {
+              try {
+                assertTurn(turn);
+                refused = undefined;
+              } catch (error) {
+                refused = error;
+              }
+              return Promise.resolve();
+            }),
+          },
+        ],
+      };
+      await tick(module, db);
+      expect(refused).toBeUndefined();
     });
   });
 

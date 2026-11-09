@@ -24,6 +24,9 @@ import { readGrants } from './grants';
 import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { Counter } from './metrics';
 import { noPorts, type ModulePorts } from './ports/module-ports';
+import { noSeams, type ModuleSeams } from './ports/module-seams';
+import type { WrittenNotice } from './ports/notification-sink';
+import { mintTurn } from './workspace-turn';
 import { atomicallyOn } from './transactions';
 
 /** Tries a fact has before it is given up on as `dead`. Five seconds doubling, with jitter, is about twenty minutes (`backoffMs`). */
@@ -273,10 +276,12 @@ export const deliver = async (
     readonly clock: Clock;
     readonly log: Logger;
     readonly ports?: ModulePorts;
+    readonly seams?: ModuleSeams;
     readonly effective?: EntitlementPolicy['effective'];
   },
 ): Promise<Delivery> => {
-  const { clock, ports = noPorts, effective } = dependencies;
+  const { clock, ports = noPorts, seams = noSeams, effective } = dependencies;
+  let told: readonly WrittenNotice[] = [];
   let log = dependencies.log;
   const outcome = await atomicallyOn(database)(async (transaction): Promise<Delivery> => {
     const row = await transaction
@@ -319,6 +324,11 @@ export const deliver = async (
             (await readGrants(transaction, [row.workspace_id])).get(row.workspace_id) ?? [],
             clock.now(),
           );
+    const bound = seams.bind(
+      transaction,
+      mintTurn({ workspaceId: row.workspace_id, modules }),
+      claimed.factId,
+    );
     await sql`savepoint fact_handler`.execute(transaction);
     let result: Awaited<ReturnType<FactConsumer>>;
     try {
@@ -342,6 +352,7 @@ export const deliver = async (
             },
             transaction,
             ports,
+            bound.seam,
           ),
       );
     } catch (error) {
@@ -363,9 +374,11 @@ export const deliver = async (
     }
     // Outside the try: a failure of the mark is not the handler's, and ends the transaction with the effect in it.
     await sql`release savepoint fact_handler`.execute(transaction);
+    told = bound.written();
     return await finish(result === 'skipped' ? 'skipped' : 'delivered', null);
   });
-  // After the commit: a line about a death is not said for a transaction that then fails.
+  // After the commit: a notice is told only if what it is about is, and a line about a death is not said for a transaction that then fails.
+  if (outcome === 'delivered' || outcome === 'skipped') await seams.announce(told);
   if (outcome === 'dead') log.error('a fact is dead and will not be delivered');
   return outcome;
 };
@@ -387,9 +400,10 @@ export const drainOnce = async (
     readonly effective?: EntitlementPolicy['effective'];
     readonly counters?: OutboxCounters;
     readonly ports?: ModulePorts;
+    readonly seams?: ModuleSeams;
   },
 ): Promise<Record<Delivery | 'exhausted', number>> => {
-  const { handlers, batch, clock, log, effective, counters, ports } = input;
+  const { handlers, batch, clock, log, effective, counters, ports, seams } = input;
   const tally = { delivered: 0, skipped: 0, failed: 0, dead: 0, gone: 0, exhausted: 0 };
   const { claimed, exhausted } = await claimDue(database, {
     handles: handlers,
@@ -415,6 +429,7 @@ export const drainOnce = async (
       clock,
       log,
       ...(ports === undefined ? {} : { ports }),
+      ...(seams === undefined ? {} : { seams }),
       ...(effective === undefined ? {} : { effective }),
     });
     tally[outcome] += 1;

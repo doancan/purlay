@@ -13899,6 +13899,14 @@ the second writer that §10 step 5 said a generic inbox waits for.
       measured filling the table; for now a dead row is seen and not retried.
     - *`holdDays` in production*: no fact uses it; it is proven in the fake module only, and the first real use confirms it.
     - *Workspace-level enablement* (D-250 rule 9) is unchanged and still a precondition of a package.
+11. **A worker and a consumer publish through the same seam, and a chain of facts is bounded.** `inWorkspace` hands a worker's visit,
+    and `deliver` hands a consumer's handler, a `WorkspaceSeam { notify, publishFact }` over the transaction, bound to the module (a
+    fact is published as the module whose loop this is, never one the caller names, and only a type it lists under `publishes`) and to
+    the workspace the framework handed out (D-286 §13). A fact published from a delivery carries the fact it is a consequence of in
+    `caused_by`, and `publishFact` refuses the fact that would be the ninth link of such a chain (`FACT_CHAIN_DEPTH_MAX`, a recursive
+    read of `caused_by`, which a cycle cannot outrun): the delivery that would have made it fails and ends dead like any that cannot
+    succeed, so two modules that answer each other stop within eight rounds and say so. The guard counts only through rows that still
+    exist (a swept chain is a new one), which is the bound a loop needs and not an audit of history.
 
 **Rejected.** *Only the in-process `DomainBus`, at most once*: a crash between commit and publish loses it, which D-35 warns
 of, and a notice that can vanish is not a notice. *Everything through the outbox, notices included*: a delay and a failure mode
@@ -14096,6 +14104,17 @@ an assignee, which is written in the same transaction as the assignment.
     *Rejected:* refusing the newest notice, which hides the assignment that is happening now behind the old ones nobody read; deleting
     the oldest, which loses a row an export holds; a per-sender rate in the sink, which an author with several accounts walks around and
     which is the write budget's question; coalescing the held pushes into one body, a new kind of push for a case the throttle bounds.
+13. **A worker's visit and a fact's consumer notify through the same sink, with no actor** (the tasks module's overdue sweep): a loop
+    written per workspace (D-289 §10) is handed `inWorkspace(turn, work)`, which runs `work` in one transaction with the module's
+    `notify` over it, and a consumer's handler is handed `seam.notify` for its delivery's transaction. Both call `notifyIn`, which
+    holds every rule of `notify`: the kind is the calling module's own (the sink is bound to the module), the recipient a current
+    member, a stopped module writes nothing, the notice is committed with the transaction or not at all. What differs is who is
+    acting: nobody, so the notice has no actor (`actor_id` is null) and is owed to the recipient whoever caused it, and the workspace is
+    a scope the framework handed out (`workspace-turn.ts`: minted by the walk of the entitled workspaces and by the delivery, refused
+    otherwise, as a request's context is refused unless the membership guard minted it), which also says which modules it may use, so a
+    workspace that lost the module hears nothing. Notices are announced after the commit: by `inWorkspace` for a worker, by the
+    delivery for a consumer, and not at all for one that rolled back. *Rejected:* handing a worker a `WorkspaceContext`, which is a
+    person's membership and would need a person; letting a module name the workspace, which is believing it.
 
 **Rejected.** *A notice written by the caller's own SQL*: the checks of the kind, the recipient and the size would be repeated in
 each module, and the first one that forgot would write a stranger a notice. *The module named by the caller in each call*: a lie

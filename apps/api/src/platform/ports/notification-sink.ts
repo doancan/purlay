@@ -7,6 +7,7 @@
  */
 import type { Transaction } from '@purlay/db';
 import type { WorkspaceContext } from '../tenancy';
+import type { WorkspaceScope } from './record-ref';
 
 /** What a notice carries about its subject: short facts, never a body or a person's words (at most 1 KiB as JSON). */
 type NoticeParams = Readonly<Record<string, string | number | boolean | null>>;
@@ -43,6 +44,17 @@ export interface NotificationSink {
   readonly notify: (
     transaction: Transaction,
     context: WorkspaceContext,
+    notice: ModuleNotice,
+  ) => Promise<WrittenNotice | undefined>;
+  /**
+   * `notify` for work no person is doing: a worker's sweep or a fact's consumer, for the workspace of a `turn` the framework handed
+   * it (`perWorkspaceWorker`, a delivery). The notice has no actor, so it is owed to the recipient even if they were the cause,
+   * and a workspace that lost the module hears nothing. Every other rule of `notify` holds: the kind must be the calling module's
+   * own, the recipient a current member, the transaction the caller's.
+   */
+  readonly notifyIn: (
+    transaction: Transaction,
+    turn: WorkspaceScope,
     notice: ModuleNotice,
   ) => Promise<WrittenNotice | undefined>;
   /**

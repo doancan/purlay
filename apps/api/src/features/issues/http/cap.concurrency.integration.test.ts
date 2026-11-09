@@ -24,6 +24,7 @@ import { createIssue } from '../issues';
 /** Nobody is assigned here, so nobody is told: a sink that is never asked. */
 const noInbox: NotificationSink = {
   notify: () => Promise.reject(new Error('nobody is assigned in this test')),
+  notifyIn: () => Promise.resolve(undefined),
   announce: () => Promise.resolve(),
 };
 
