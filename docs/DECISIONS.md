@@ -6905,7 +6905,7 @@ Slack's loop is a banner, a badge and a sound.
    person's own messages never move their badge. `NEEDS_YOU` moved to `@purlay/types`, one list for the
    server's send, read and delete and for the client.
 2. **A notice from the page itself**, through the browser's `Notification` — no worker, no server key —
-   only while the page is hidden or not focused, never in Deep Work, never on the first look at a list
+   for desktop output only while the page is hidden or not focused, never in Deep Work, never on the first look at a list
    (what was waiting when the page opened is not news). **Who and where, never what** (D-126 §2): the
    title is the place (`#api`, the person, a group's people), the body the inbox's own words for why,
    read from the inbox's newest page; a click focuses the window and opens what the inbox row would —
@@ -6938,8 +6938,25 @@ Slack's loop is a banner, a badge and a sound.
    tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count
    (`navigator.setAppBadge`, optional by its type where Firefox lacks it). Zero, or Deep Work, puts
    both back.
-6. **No sound.** The operating system already sounds a notice by the person's own settings; a second,
-   product-made one would double it, and quiet is the product (D-12).
+6. **Independent delivery preferences (amended 2026-11-09, #1348).** A focused page in a different
+   conversation may show one actionable in-app notice and a short, user-unlocked chime. Reading the
+   conversation stays quiet. In-app cards, sound and desktop permission are independent device
+   choices; channel eligibility, Deep Work and quiet hours apply to all. The app never plays its
+   chime alongside a desktop notice: the OS owns that sound, requested silent when sound is off.
+   The same sound choice is saved on the push subscription for a closed tab. An optional `sound`
+   field expands the subscription contract, defaulting true for existing rows/new owners; an old
+   client omitting it preserves the same owner's explicit choice. The additive push `silent` field
+   is optional for compatibility with yesterday's worker. Device preferences are bounded, validated
+   personal storage, synchronized between tabs and cleared on sign-out; no message contents are
+   stored. Web Locks arbitrate focus and serialize a bounded recent-notification claim list so
+   multiple tabs do not repeat an alert. Without shared coordination, focused in-app alerts may
+   work locally, but background page alerts fail closed; closed-tab push remains available.
+   The browser may block audio until interaction and may ignore native sound preferences; UI never
+   promises an OS banner or an audible sound.
+   The measured initial bundle is about 256 KB of the unchanged 400 KB backstop. Forwarding's
+   existing dialog joins the existing idle-preloaded deferred overlay chunk (D-163), keeping
+   chat below its unchanged 50 KB bound (D-277); its ownership stays in chat. No screen is moved
+   into the shell and no budget is raised.
 7. **Small and late.** What tells is loaded the first time there is something to tell; the
    always-loaded part is the comparison of two lists of numbers and the swap of an icon.
 

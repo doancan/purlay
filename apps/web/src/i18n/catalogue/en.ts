@@ -1752,6 +1752,34 @@ export const en = {
     'Notification permission changed. Allow Purlay in the browser’s site settings and turn notifications on again.',
   // What an open tab in the background says (D-148).
   'alerts.many': '{count} conversations need you',
+  'alerts.open': 'Open conversation',
+  'alerts.delivery': 'How you hear about messages',
+  'alerts.deliveryHint':
+    'These choices apply to this browser. Channel preferences, Deep Work and quiet hours still decide what may interrupt you.',
+  'alerts.inApp': 'In-app message cards',
+  'alerts.inAppHint':
+    'Show a clickable card when you are in Purlay, reading a different conversation. The conversation you are reading stays quiet.',
+  'alerts.sound': 'Notification sound',
+  'alerts.soundHint':
+    'A short app sound, or the operating system’s sound with a desktop notification. Never both for the same alert.',
+  'alerts.volume': 'App sound volume',
+  'alerts.volumeHint':
+    'Desktop and closed-tab notification volume is controlled in your system settings.',
+  'alerts.percent': '{volume}%',
+  'alerts.preview': 'Preview sound',
+  'alerts.audio.locked': 'Interact with Purlay or preview the sound to allow audio in this tab.',
+  'alerts.audio.ready':
+    'Audio is ready in this tab. Browser and system settings still control what you hear.',
+  'alerts.audio.failed':
+    'The browser could not play the sound. Check this tab’s sound permission and system volume, then preview again.',
+  'alerts.audio.unavailable':
+    'App sound is unavailable in this browser. Desktop notifications use your system’s settings.',
+  'alerts.notRemembered':
+    'This browser cannot remember these choices. They apply while this page stays open.',
+  'alerts.sync.saving': 'Saving sound preference for closed-tab notifications…',
+  'alerts.sync.saved': 'Sound preference saved for closed-tab notifications.',
+  'alerts.sync.failed':
+    'Sound preference was not saved for closed-tab notifications. Check your connection and try again.',
   'alerts.waiting': 'Something here needs you',
   'shortcuts.deepWork': 'Start or end Deep Work',
   'shortcuts.readAll': 'Mark all channels read',

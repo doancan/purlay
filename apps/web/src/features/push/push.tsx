@@ -36,11 +36,18 @@ import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { useClientStorage } from '../../data/storage-provider';
+import { isClaimedBy } from '../../data/browser-storage';
 import { useI18n } from '../../i18n/i18n-provider';
 import { useRoute } from '../../router/router-provider';
 import { useToast } from '../../ui/toast';
 import { browserPushDevice, type DeviceSubscription, type PushDevice } from './device';
 import { browserNotifier, type Notifier } from './notifier';
+import { useAlertPreferences } from '../alerts/preferences-context';
+import { parseAlertPreferences } from '../alerts/preferences';
+import { useLocks } from '../../data/locks';
+
+const deviceChange = async <T,>(locks: LockManager | null, run: () => Promise<T>): Promise<T> =>
+  locks !== null ? await locks.request('purlay.push.subscription', run) : await run();
 
 /** Who turned notifications on in this browser. A personal key: signing out forgets it (`browser-storage.ts`). */
 export const PUSH_OWNER_KEY = 'purlay.push.owner';
@@ -68,6 +75,8 @@ export interface PushControls {
   readonly turnOff: () => void;
   /** Requests a device test while on; the browser accepting it does not prove OS delivery. */
   readonly test: (() => void) | null;
+  readonly soundSync?: 'saving' | 'saved' | 'failed';
+  readonly retrySound?: () => void;
 }
 
 interface Notifications {
@@ -94,10 +103,15 @@ export const useNotices = (): Notifier | null => {
   return controls?.status === 'on' ? notifier : null;
 };
 
-const requestOf = (held: DeviceSubscription, locale: PushLocale): PushSubscribeRequest => ({
+const requestOf = (
+  held: DeviceSubscription,
+  locale: PushLocale,
+  sound: boolean,
+): PushSubscribeRequest => ({
   endpoint: held.endpoint,
   keys: { p256dh: held.p256dh, auth: held.auth },
   locale,
+  sound,
 });
 
 /** Either port answers for the one permission the browser keeps for the site. */
@@ -116,7 +130,36 @@ export const PushProvider = ({
 }): React.JSX.Element => {
   const api = useApi();
   const { t, locale } = useI18n();
+  const { preferences, remembered } = useAlertPreferences();
+  const sound = useRef(preferences.sound);
+  sound.current = preferences.sound;
+  const persistent = useRef(remembered);
+  persistent.current = remembered;
+  const [soundSync, setSoundSync] = useState<'saving' | 'saved' | 'failed'>('saved');
+  const soundQueue = useRef(Promise.resolve());
+  const lastSoundSent = useRef<boolean | null>(null);
+  const soundPending = useRef(0);
+  const [soundAttempt, setSoundAttempt] = useState(0);
+  const retrySound = useCallback((): void => {
+    setSoundAttempt((attempt) => attempt + 1);
+  }, []);
   const storage = useClientStorage();
+  const locks = useLocks();
+  // Read the latest persisted choice while holding the cross-tab lock, rather than replaying an
+  // older tab's captured value after the person changed it elsewhere.
+  const keepDevice = useCallback(
+    async (held: DeviceSubscription, language: PushLocale): Promise<boolean> =>
+      await deviceChange(locks, async (): Promise<boolean> => {
+        if (storage?.getItem(PUSH_OWNER_KEY) !== userId) return false;
+        const chosen = persistent.current
+          ? parseAlertPreferences(storage.getItem(`purlay.push.preferences.${userId}`)).sound
+          : sound.current;
+        await api.subscribePush(requestOf(held, language, chosen));
+        lastSoundSent.current = chosen;
+        return true;
+      }),
+    [api, storage, userId, locks],
+  );
   const { show, dismiss } = useToast();
   const describe = useDescribeFailure();
   const { navigate } = useRoute();
@@ -139,6 +182,24 @@ export const PushProvider = ({
   // Push is judged once its key is answered; without a device there is nothing to wait for.
   const keyAnswered = device === null || storage === null || !key.isPending;
   const [status, setStatus] = useState<PushStatus | null>(null);
+  const [ownerEpoch, setOwnerEpoch] = useState(0);
+  useEffect(() => {
+    const changed = (event: StorageEvent): void => {
+      if (event.key !== PUSH_OWNER_KEY && event.key !== 'purlay.person' && event.key !== null)
+        return;
+      if (asks !== null) setStatus(offOrBlocked(asks));
+      setOwnerEpoch((epoch) => epoch + 1);
+    };
+    const focused = (): void => {
+      if (asks !== null && asks.permission() !== 'granted') setStatus(offOrBlocked(asks));
+    };
+    window.addEventListener('storage', changed);
+    window.addEventListener('focus', focused);
+    return (): void => {
+      window.removeEventListener('storage', changed);
+      window.removeEventListener('focus', focused);
+    };
+  }, [asks]);
   // The language the server last heard from this page, so a change is sent once.
   const told = useRef<PushLocale | null>(null);
   const deviceTest = useRef<DeviceTest | null>(null);
@@ -174,6 +235,8 @@ export const PushProvider = ({
     let live = true;
     const reconcile = async (): Promise<PushStatus> => {
       const held = pushing === null ? null : await pushing.device.current();
+      // Another tab changed account: its live browser subscription is no longer ours to remove.
+      if (!isClaimedBy(storage, userId)) return offOrBlocked(asks);
       if (storage.getItem(PUSH_OWNER_KEY) !== userId) {
         if (held !== null) await pushing?.device.unsubscribe();
         return offOrBlocked(asks);
@@ -198,7 +261,7 @@ export const PushProvider = ({
         storage.removeItem(PUSH_OWNER_KEY);
         return offOrBlocked(asks);
       }
-      await api.subscribePush(requestOf(current, locale));
+      if (!(await keepDevice(current, locale))) return offOrBlocked(asks);
       told.current = locale;
       return 'on';
     };
@@ -216,9 +279,53 @@ export const PushProvider = ({
       live = false;
     };
     // Not on a language change: that would re-subscribe, and the effect below tells the server.
-  }, [asks, notifier, device, keyAnswered, serverKey, userId]);
+  }, [asks, notifier, device, keyAnswered, serverKey, userId, keepDevice, ownerEpoch]);
 
   useEffect(() => device?.onOpen(navigate), [device, navigate]);
+
+  // Serialize device writes: a slow earlier opt-in must not overwrite a later opt-out.
+  useEffect(() => {
+    if (status !== 'on' || device === null || serverKey === undefined) return;
+    if (lastSoundSent.current === preferences.sound && soundPending.current === 0) {
+      setSoundSync('saved');
+      return;
+    }
+    let live = true;
+    const current = (): boolean => live && storage?.getItem(PUSH_OWNER_KEY) === userId;
+    setSoundSync('saving');
+    soundPending.current += 1;
+    soundQueue.current = soundQueue.current
+      .then(async (): Promise<void> => {
+        if (!current()) return;
+        const held = await device.current();
+        if (!current() || held === null) return;
+        if (!(await keepDevice(held, locale))) return;
+        if (current()) setSoundSync('saved');
+      })
+      .catch((error: unknown): void => {
+        if (live) {
+          setSoundSync('failed');
+          failed(error);
+        }
+      })
+      .finally((): void => {
+        soundPending.current -= 1;
+      });
+    return (): void => {
+      live = false;
+    };
+  }, [
+    status,
+    device,
+    serverKey,
+    storage,
+    userId,
+    keepDevice,
+    locale,
+    preferences.sound,
+    failed,
+    soundAttempt,
+  ]);
 
   useEffect(() => {
     const previous = told.current;
@@ -249,7 +356,7 @@ export const PushProvider = ({
       // holding then has no owner, and the next load drops it.
       storage.setItem(PUSH_OWNER_KEY, userId);
       try {
-        await api.subscribePush(requestOf(made, locale));
+        if (!(await keepDevice(made, locale))) return offOrBlocked(asks);
       } catch (error) {
         storage.removeItem(PUSH_OWNER_KEY);
         throw error;
@@ -261,7 +368,7 @@ export const PushProvider = ({
       setStatus(offOrBlocked(asks));
       failed(error);
     });
-  }, [asks, notifier, device, serverKey, api, locale, storage, userId, failed]);
+  }, [asks, notifier, device, serverKey, keepDevice, locale, storage, userId, failed]);
 
   const turnOff = useCallback((): void => {
     if (storage === null) return;
@@ -270,18 +377,24 @@ export const PushProvider = ({
     // whatever follows, and what is left here has no owner and goes on the next load.
     let stopped = false;
     const switchOff = async (): Promise<PushStatus> => {
-      const held = device === null ? null : await device.current();
-      if (held !== null) await api.unsubscribePush(held.endpoint);
-      stopped = true;
-      storage.removeItem(PUSH_OWNER_KEY);
-      await device?.unsubscribe();
-      return 'off';
+      await soundQueue.current;
+      return await deviceChange(locks, async (): Promise<PushStatus> => {
+        if (storage.getItem(PUSH_OWNER_KEY) !== userId) return 'off';
+        const held = device === null ? null : await device.current();
+        if (held !== null) await api.unsubscribePush(held.endpoint);
+        stopped = true;
+        if (storage.getItem(PUSH_OWNER_KEY) === userId) {
+          storage.removeItem(PUSH_OWNER_KEY);
+          await device?.unsubscribe();
+        }
+        return 'off';
+      });
     };
     switchOff().then(setStatus, (error: unknown) => {
       setStatus(stopped ? 'off' : 'on');
       failed(error);
     });
-  }, [device, api, storage, failed]);
+  }, [device, api, storage, failed, userId, locks]);
 
   const test = useCallback((): void => {
     if (notifier === null || status !== 'on') return;
@@ -304,6 +417,7 @@ export const PushProvider = ({
         title: t('push.testTitle'),
         body: t('push.testBody'),
         tag: current.tag,
+        silent: !sound.current,
         onOpen: (): void => undefined,
         onError: (): void => {
           if (deviceTest.current !== current) return;
@@ -334,10 +448,12 @@ export const PushProvider = ({
               turnOff,
               test: status === 'on' && notifier !== null ? test : null,
               closedTab: device !== null && serverKey !== undefined,
+              soundSync,
+              retrySound,
             },
       notifier,
     }),
-    [status, turnOn, turnOff, test, notifier, device, serverKey],
+    [status, turnOn, turnOff, test, notifier, device, serverKey, soundSync, retrySound],
   );
   return <PushContext.Provider value={value}>{children}</PushContext.Provider>;
 };

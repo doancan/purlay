@@ -139,6 +139,69 @@ const failuresOf = (metrics: ServerMetrics, module = 'chat'): Record<string, num
   );
 
 describe('integration: a device is told', () => {
+  test.each(['sound changed', 'session revoked'] as const)(
+    'a prepared push is retired after %s during encryption',
+    async (change) => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob']);
+        const browser = await aBrowser();
+        const id = await subscribeDevice(db, room, 'bob', browser);
+        const service = aPushService();
+        let lookups = 0;
+        const { say, settled } = await sending(
+          db,
+          service.post,
+          aRecordingLogger(),
+          attention,
+          undefined,
+          {
+            keys: async () => {
+              lookups += 1;
+              if (lookups === 2) {
+                if (change === 'sound changed')
+                  await db
+                    .updateTable('push_subscriptions')
+                    .set({ sound: false })
+                    .where('id', '=', id)
+                    .execute();
+                else await db.deleteFrom('push_subscriptions').where('id', '=', id).execute();
+              }
+              return KEYS;
+            },
+          },
+        );
+        await say(room, 'alice', mention(room, 'bob'));
+        await settled();
+        expect(lookups).toBeGreaterThanOrEqual(2);
+        expect(service.sent).toHaveLength(0);
+      });
+    },
+  );
+  test('each device receives its own sound choice in the encrypted payload', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const browser = await aBrowser();
+      const muted = await subscribeDevice(db, room, 'bob', browser);
+      await db
+        .updateTable('push_subscriptions')
+        .set({ sound: false })
+        .where('id', '=', muted)
+        .execute();
+      await subscribeDevice(db, room, 'bob', browser, {
+        endpoint: 'https://push.example.com/send/bob-loud',
+      });
+      const service = aPushService();
+      const { say, settled } = await sending(db, service.post);
+      await say(room, 'alice', mention(room, 'bob'));
+      await settled();
+      expect(service.sent).toHaveLength(2);
+      for (const sent of service.sent) {
+        expect(await browser.read(sent.body)).toMatchObject({
+          silent: !sent.url.endsWith('bob-loud'),
+        });
+      }
+    });
+  });
   test('of a mention, in its person’s language, with who and where and never what was said', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
@@ -733,6 +796,7 @@ describe('integration: queued notification authority', () => {
     'channel deleted',
     'reason no longer pushed',
     'suppressed',
+    'sound off',
     'unchanged',
   ] as const)('rechecks %s while a device waits', async (change) => {
     await withRollback(async (db) => {
@@ -745,12 +809,14 @@ describe('integration: queued notification authority', () => {
         });
       }
       const posted: string[] = [];
+      const payloads: unknown[] = [];
       const held: (() => void)[] = [];
       let released = false;
-      const post: PushPost = (url) => {
+      const post: PushPost = async (url, _headers, body) => {
+        payloads.push(await browser.read(body));
         posted.push(url.pathname);
-        if (released) return Promise.resolve({ kind: 'answered', status: 201 });
-        return new Promise((resolve) => {
+        if (released) return { kind: 'answered', status: 201 };
+        return await new Promise((resolve) => {
           held.push(() => {
             resolve({ kind: 'answered', status: 201 });
           });
@@ -840,6 +906,12 @@ describe('integration: queued notification authority', () => {
             .set({ time_zone: 'UTC', quiet_from: 0, quiet_to: 1439, quiet_days: 127 })
             .where('id', '=', bob.userId)
             .execute();
+        } else if (change === 'sound off') {
+          await db
+            .updateTable('push_subscriptions')
+            .set({ sound: false })
+            .where('user_id', '=', bob.userId)
+            .execute();
         } else if (change === 'active page') {
           heard.heard(bob.userId, room.workspaceId);
         } else if (change === 'account suspended') {
@@ -884,9 +956,12 @@ describe('integration: queued notification authority', () => {
         released = true;
         for (const release of held) release();
         await settled();
+        if (change === 'sound off') expect(payloads.at(-1)).toMatchObject({ silent: true });
         // The third device was still waiting when authority was revoked.
         expect(posted).toHaveLength(
-          change === 'unchanged' || change === 'all messages unchanged' ? 3 : 2,
+          change === 'unchanged' || change === 'all messages unchanged' || change === 'sound off'
+            ? 3
+            : 2,
         );
       } finally {
         released = true;

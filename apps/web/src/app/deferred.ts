@@ -15,7 +15,7 @@
  */
 export { SettingsNav, SettingsScreen } from '../features/settings/settings-screen';
 export { TwoFactorEnrolment } from '../features/session/two-factor-enrolment';
-export { ImageViewer } from '../features/chat/messages/image-viewer';
+export { ImageViewer, ForwardDialog } from '../features/chat/messages/deferred';
 export { CommandPalette } from '../features/palette/command-palette';
 export { ShortcutsDialog } from '../features/shortcuts/shortcuts-dialog';
 export { NewConversationDialog } from '../features/chat/conversations/new-conversation';

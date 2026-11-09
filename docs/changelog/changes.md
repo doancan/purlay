@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Notifications** — choose in-app message cards, sound and desktop alerts separately; a card opens the conversation, and multiple tabs share one alert (D-148)
+
 ### Fixed
 
 - **Notifications** — when more push notifications are waiting than the server holds, it lets go of the oldest instead of the one that has just arrived (D-298)

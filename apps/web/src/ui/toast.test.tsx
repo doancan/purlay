@@ -50,6 +50,20 @@ describe('the live region', () => {
 });
 
 describe('a toast', () => {
+  test('a replacement message stays one keyboard target and keeps its reading pause', () => {
+    const clock = fakeSchedule();
+    const store = createToastStore(clock.schedule);
+    const first = store.getState().show({ tag: 'conversation', title: 'Alice', message: 'First' });
+    const other = store.getState().show({ tag: 'other', message: 'Another conversation' });
+    store.getState().pause(first);
+    const next = store.getState().show({ tag: 'conversation', title: 'Alice', message: 'Second' });
+    expect(next).toBe(first);
+    expect(store.getState().toasts.map((toast) => toast.id)).toEqual([first, other]);
+    expect(store.getState().toasts[0]?.message).toBe('Second');
+    expect(clock.pending()).toBe(1);
+    store.getState().resume(first);
+    expect(clock.pending()).toBe(2);
+  });
   test('appears in the live region', async () => {
     const { getByRole } = await renderApp(<Page />);
     await person().click(getByRole('button', { name: 'paste' }));

@@ -33,7 +33,7 @@ export const CORE_IMPORTS_OF_MODULES = [
     'channel/add-people.tsx',
     'conversations/group-details.tsx',
     'conversations/new-conversation.tsx',
-    'messages/image-viewer.tsx',
+    'messages/deferred.ts',
     'sidebar/deferred.ts',
   ].map((file) => ({
     from: 'app/deferred.ts',

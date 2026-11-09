@@ -40,3 +40,4 @@ export * from './find';
 export * from './releases';
 export * from './server-administration';
 export * from './channel-groups';
+export * from './alert-preferences';

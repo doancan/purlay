@@ -30,6 +30,8 @@ import { IconButton } from './icon-button';
 export const TOAST_DURATION_MS = 6_000;
 
 interface ToastInput {
+  readonly title?: string;
+  readonly tag?: string;
   readonly message: string;
   readonly actionLabel?: string;
   readonly onAction?: () => void;
@@ -37,6 +39,8 @@ interface ToastInput {
 }
 
 interface Toast {
+  readonly title?: string;
+  readonly tag?: string;
   readonly id: number;
   readonly message: string;
   readonly action: { readonly label: string; readonly run: () => void } | null;
@@ -55,6 +59,7 @@ export interface ToastState {
 export const createToastStore = (schedule: Schedule): StoreApi<ToastState> => {
   let next = 1;
   const timers = new Map<number, () => void>();
+  const paused = new Set<number>();
 
   const store = createStore<ToastState>()((set, get) => {
     const stop = (id: number): void => {
@@ -64,7 +69,7 @@ export const createToastStore = (schedule: Schedule): StoreApi<ToastState> => {
     const start = (id: number): void => {
       stop(id);
       const toast = get().toasts.find((candidate) => candidate.id === id);
-      if (toast === undefined) return;
+      if (toast === undefined || paused.has(id)) return;
       timers.set(
         id,
         schedule(() => {
@@ -75,31 +80,43 @@ export const createToastStore = (schedule: Schedule): StoreApi<ToastState> => {
     return {
       toasts: [],
       show: (input): number => {
-        const id = next++;
+        const id =
+          (input.tag === undefined
+            ? undefined
+            : get().toasts.find((toast) => toast.tag === input.tag)?.id) ?? next++;
         const action =
           input.actionLabel === undefined || input.onAction === undefined
             ? null
             : { label: input.actionLabel, run: input.onAction };
+        const toast: Toast = {
+          id,
+          ...(input.title === undefined ? {} : { title: input.title }),
+          ...(input.tag === undefined ? {} : { tag: input.tag }),
+          message: input.message,
+          action,
+          durationMs: input.durationMs ?? TOAST_DURATION_MS,
+        };
         set((state) => ({
-          toasts: [
-            ...state.toasts,
-            {
-              id,
-              message: input.message,
-              action,
-              durationMs: input.durationMs ?? TOAST_DURATION_MS,
-            },
-          ],
+          toasts: state.toasts.some((entry) => entry.id === id)
+            ? state.toasts.map((entry) => (entry.id === id ? toast : entry))
+            : [...state.toasts, toast],
         }));
         start(id);
         return id;
       },
       dismiss: (id): void => {
         stop(id);
+        paused.delete(id);
         set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) }));
       },
-      pause: stop,
-      resume: start,
+      pause: (id): void => {
+        paused.add(id);
+        stop(id);
+      },
+      resume: (id): void => {
+        paused.delete(id);
+        start(id);
+      },
     };
   });
   return store;
@@ -150,7 +167,7 @@ export const Toaster = ({ dismissLabel }: ToasterProps): React.JSX.Element => {
   return (
     <div
       role="status"
-      className="pointer-events-none fixed bottom-4 left-4 z-toast flex flex-col items-start gap-2"
+      className="pointer-events-none fixed bottom-4 left-4 right-4 z-toast flex flex-col items-start gap-2"
     >
       {toasts.map((toast) => (
         <div
@@ -159,20 +176,29 @@ export const Toaster = ({ dismissLabel }: ToasterProps): React.JSX.Element => {
           onPointerEnter={() => {
             pause(toast.id);
           }}
-          onPointerLeave={() => {
-            resume(toast.id);
+          onPointerLeave={(event) => {
+            if (!event.currentTarget.contains(document.activeElement)) resume(toast.id);
           }}
           onFocus={() => {
             pause(toast.id);
           }}
-          onBlur={() => {
-            resume(toast.id);
+          onBlur={(event) => {
+            if (
+              !event.currentTarget.contains(event.relatedTarget) &&
+              !event.currentTarget.matches(':hover')
+            )
+              resume(toast.id);
           }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') dismiss(toast.id);
           }}
         >
-          <span>{toast.message}</span>
+          <span className="min-w-0 break-words">
+            {toast.title !== undefined && (
+              <strong className="block text-label">{toast.title}</strong>
+            )}
+            {toast.message}
+          </span>
           {toast.action === null ? null : (
             <Button
               variant="ghost"

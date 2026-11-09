@@ -29,6 +29,7 @@ import type { Api } from '../data/api';
 import { ApiProvider } from '../data/api-provider';
 import type { ClientStorage } from '../data/browser-storage';
 import { StorageProvider } from '../data/storage-provider';
+import { LocksContext } from '../data/locks';
 import { RealtimePortsContext, type RealtimePorts } from '../realtime/realtime-provider';
 import { createQueryClient } from './query-client';
 import type { PushDevice } from '../features/push/device';
@@ -55,6 +56,7 @@ export interface AppPorts {
   readonly push?: PushDevice | null;
   /** The page's own notices while it is in the background; the browser's when absent (D-148). */
   readonly notifier?: Notifier | null;
+  readonly locks?: LockManager | null;
   /** The release notes the build carries (D-248); none when absent, and nothing is then shown. */
   readonly releaseNotes?: ReleaseNotesSource | null;
 }
@@ -95,7 +97,9 @@ export const AppProviders = ({
                           <PushDeviceContext.Provider value={ports.push}>
                             <NotifierContext.Provider value={ports.notifier}>
                               <ReleaseNotesSourceProvider value={ports.releaseNotes ?? null}>
-                                {children}
+                                <LocksContext.Provider value={ports.locks}>
+                                  {children}
+                                </LocksContext.Provider>
                               </ReleaseNotesSourceProvider>
                             </NotifierContext.Provider>
                           </PushDeviceContext.Provider>

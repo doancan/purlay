@@ -94,12 +94,13 @@ export const subscribe = async (
       p256dh: input.keys.p256dh,
       auth: input.keys.auth,
       server_key: serverKey,
+      sound: input.sound ?? true,
       created_at: now,
     })
     .onConflict((conflict) =>
       conflict
         .column('endpoint')
-        .doUpdateSet({
+        .doUpdateSet((row) => ({
           user_id: subscriber.userId,
           session_id: subscriber.sessionId,
           p256dh: input.keys.p256dh,
@@ -107,7 +108,15 @@ export const subscribe = async (
           server_key: serverKey,
           created_at: now,
           failures: 0,
-        })
+          sound:
+            input.sound ??
+            row
+              .case()
+              .when('push_subscriptions.user_id', '=', subscriber.userId)
+              .then(row.ref('push_subscriptions.sound'))
+              .else(true)
+              .end(),
+        }))
         .where((row) =>
           row.or([
             row('push_subscriptions.user_id', '=', subscriber.userId),

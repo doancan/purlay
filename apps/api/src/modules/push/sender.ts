@@ -369,16 +369,16 @@ export const createPushSender = async (
   };
 
   /** Still the person's, in a live session: asked right before the push goes. */
-  const stillTheirs = async (device: Device): Promise<boolean> =>
-    (await database
+  const stillTheirs = async (device: Device): Promise<{ readonly sound: boolean } | undefined> =>
+    await database
       .selectFrom('push_subscriptions as s')
       .innerJoin('sessions as live', 'live.id', 's.session_id')
-      .select('s.id')
+      .select('s.sound')
       .where('s.id', '=', device.id)
       .where('s.user_id', '=', device.userId)
       .where('s.session_id', '=', device.sessionId)
       .where('live.expires_at', '>', clock.now())
-      .executeTakeFirst()) !== undefined;
+      .executeTakeFirst();
 
   const counted = async (device: Device, url: URL, posted: Posted): Promise<void> => {
     const row = await database
@@ -438,9 +438,10 @@ export const createPushSender = async (
       await forget(device);
       return;
     }
+    const sound = (await stillTheirs(device))?.sound ?? false;
     const body = await encryptPush(
       device,
-      new TextEncoder().encode(JSON.stringify(device.payload)),
+      new TextEncoder().encode(JSON.stringify({ ...device.payload, silent: !sound })),
       await freshParts(),
     );
     const current = typeof keys === 'function' ? await keys() : keys;
@@ -453,7 +454,10 @@ export const createPushSender = async (
       device.endpoint,
       clock.now(),
     );
-    if (!(await stillTheirs(device))) return;
+    const live = await stillTheirs(device);
+    if (live === undefined) return;
+    // Changed while encryption waited: retire this prepared alert, just as a page retires a stale card.
+    if (live.sound !== sound) return;
     if (!(await stillRelevant(device))) return;
     if (dependencies.attention.active(device.userId, device.workspaceId)) return;
     if (

@@ -41,11 +41,13 @@ export const noticeOf = (text: string | null, origin: string): PushPayload => {
     throw error;
   }
   if (typeof data !== 'object' || data === null) return PLAIN_NOTICE;
+  const silent: unknown = Reflect.get(data, 'silent');
   return {
     title: textOf(data, 'title', PLAIN_NOTICE.title),
     body: textOf(data, 'body', ''),
     url: pathOf(Reflect.get(data, 'url'), origin),
     tag: textOf(data, 'tag', PLAIN_NOTICE.tag),
+    ...(typeof silent === 'boolean' ? { silent } : {}),
   };
 };
 
@@ -57,6 +59,7 @@ export const optionsOf = (
   tag: notice.tag,
   icon: '/favicon.svg',
   renotify: true,
+  ...(notice.silent === undefined ? {} : { silent: notice.silent }),
   data: { url: notice.url },
 });
 

@@ -27,6 +27,10 @@ import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import type { Notice, Notifier } from '../push/notifier';
 import { PUSH_OWNER_KEY } from '../push/push';
+import { LocksContext } from '../../data/locks';
+import { TestLocks } from '../../testing/locks';
+import { memoryStorage } from '../../testing/fakes';
+import { Toaster } from '../../ui/toast';
 
 installDom();
 
@@ -110,19 +114,30 @@ const open = async ({
   path?: string;
   quietHours?: QuietHours | null;
 } = {}): Promise<Awaited<ReturnType<typeof renderApp>>> => {
-  const view = await renderApp(<Outlet />, {
-    path,
-    notifier: notifier.notifier,
-    api: aSignedInApi({
-      me: () => Promise.resolve(me),
-      channels: () => Promise.resolve(withBadge({})),
-      notifications: async () => ({ data: await inbox, nextCursor: null }),
-      quietHours: () => Promise.resolve({ quietHours, timeZone: 'UTC' }),
-    }),
-  });
-  if (owner !== null) view.world.storage.setItem(PUSH_OWNER_KEY, owner);
+  // A returning browser already owns its preference when the page mounts. Seeding it after
+  // render races the first reconciliation on a fast runner and tests an off device by accident.
+  const storage = memoryStorage();
+  storage.setItem('purlay.person', me.user.id);
+  if (owner !== null) storage.setItem(PUSH_OWNER_KEY, owner);
+  const view = await renderApp(
+    <LocksContext.Provider value={new TestLocks()}>
+      <Outlet />
+      <Toaster dismissLabel="Dismiss" />
+    </LocksContext.Provider>,
+    {
+      path,
+      storage,
+      notifier: notifier.notifier,
+      api: aSignedInApi({
+        me: () => Promise.resolve(me),
+        channels: () => Promise.resolve(withBadge({})),
+        notifications: async () => ({ data: await inbox, nextCursor: null }),
+        quietHours: () => Promise.resolve({ quietHours, timeZone: 'UTC' }),
+      }),
+    },
+  );
   await settle();
-  return view;
+  return Object.assign(view, { world: { ...view.world, storage } });
 };
 
 /** What the socket does when something new needs the person: the badge's new number. */
@@ -137,6 +152,45 @@ const rise = async (
 };
 
 describe('a tab in the background', () => {
+  test('a card is removed when its conversation is muted, even while its old badge remains', async () => {
+    focused = true;
+    const view = await open();
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(view.getByRole('button', { name: 'Open conversation' })).toBeTruthy();
+    act(() => {
+      view.world.client.setQueryData(
+        keys.channels(IDS.workspace),
+        withBadge({ [IDS.deploys]: 1 }).map((channel) =>
+          channel.id === IDS.deploys ? { ...channel, notificationLevel: 'none' } : channel,
+        ),
+      );
+    });
+    await settle();
+    expect(view.queryByRole('button', { name: 'Open conversation' })).toBeNull();
+    view.unmount();
+  });
+  test('focused in another conversation, an actionable card works with desktop notifications off', async () => {
+    focused = true;
+    const fake = aNotifier();
+    const view = await open({ notifier: fake, owner: null });
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(fake.shown).toHaveLength(0);
+    expect(view.getByText('Alice mentioned you')).toBeTruthy();
+    await person().click(view.getByRole('button', { name: 'Open conversation' }));
+    expect(view.world.history.read().pathname).toBe(`/w/acme/c/${IDS.deploys}`);
+    view.unmount();
+  });
+  test('the conversation already being read stays quiet, and a remotely read card closes', async () => {
+    focused = true;
+    const view = await open({ owner: null });
+    await rise(view, { [IDS.api]: 1 });
+    expect(view.queryByRole('button', { name: 'Open conversation' })).toBeNull();
+    await rise(view, { [IDS.deploys]: 1 });
+    expect(view.getByRole('button', { name: 'Open conversation' })).toBeTruthy();
+    await rise(view, {});
+    expect(view.queryByRole('button', { name: 'Open conversation' })).toBeNull();
+    view.unmount();
+  });
   test('is told when a badge goes up: where, and why in the inbox’s words', async () => {
     const fake = aNotifier();
     const view = await open({ notifier: fake });
@@ -170,8 +224,10 @@ describe('a tab in the background', () => {
 
   test('one conversation is one notice: the next replaces it, by its tag', async () => {
     const fake = aNotifier();
-    const view = await open({ notifier: fake });
+    const inbox = [mention()];
+    const view = await open({ notifier: fake, inbox });
     await rise(view, { [IDS.deploys]: 1 });
+    inbox[0] = mention({ id: '0190a000-0000-7000-8000-00000000aaab' });
     await rise(view, { [IDS.deploys]: 2 });
     expect(fake.shown).toHaveLength(2);
     expect(new Set(fake.shown.map((n) => n.tag)).size).toBe(1);
@@ -229,8 +285,8 @@ describe('a tab in the background', () => {
         await settle();
       }
       if (change === 'off') {
-        await person().click(view.getByRole('button', { name: 'Turn off' }));
-        await settle();
+        await person().click(await view.findByRole('button', { name: 'Turn off' }));
+        await view.findByRole('button', { name: 'Turn on' });
       }
       if (change === 'unmount') view.unmount();
       release([mention()]);

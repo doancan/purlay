@@ -22,6 +22,7 @@ interface Recorded {
   readonly body: string;
   readonly tag: string;
   readonly renotify: boolean;
+  readonly silent?: boolean;
 }
 
 declare global {
@@ -34,6 +35,7 @@ declare global {
     })[];
     /** The person is in another window. */
     elsewhere?: boolean;
+    audioCueStarts?: number;
   }
 }
 
@@ -63,6 +65,7 @@ const recordNotices = async (page: Page, owner: string | null = null): Promise<v
           body: options.body ?? '',
           tag: options.tag ?? '',
           renotify: Reflect.get(options, 'renotify') === true,
+          silent: options.silent ?? false,
           closed: false,
           open: (): void => this.onclick?.(),
           refuse: (): void => this.onerror?.(),
@@ -98,6 +101,119 @@ test.describe('a tab in the background', () => {
     () => test.info().project.name !== 'chromium-dark',
     'a notice and an icon look the same in every theme and width',
   );
+
+  test('two tabs share one alert, the focused tab shows its card, and preferences follow both tabs', async ({
+    newcomer,
+    expectNoAxe,
+  }) => {
+    const viewer = await newcomer('shared-alert-viewer');
+    const writer = await newcomer('shared-alert-writer');
+    const workspace = await workspaceFor(viewer, writer);
+    const first = await viewer.page();
+    const second = await first.context().newPage();
+    for (const page of [first, second]) {
+      await recordNotices(page, viewer.userId);
+      // Headless windows do not reproduce a person's focus; keep only that external boundary controlled.
+      await page.addInitScript(() => {
+        Object.defineProperty(document, 'visibilityState', { get: () => 'visible' });
+        window.elsewhere = true;
+      });
+      await page.addInitScript(() => {
+        window.audioCueStarts = 0;
+        const start: unknown = Reflect.get(OscillatorNode.prototype, 'start');
+        if (typeof start !== 'function') throw new Error('Native oscillator start unavailable');
+        OscillatorNode.prototype.start = function (when?: number): void {
+          window.audioCueStarts = (window.audioCueStarts ?? 0) + 1;
+          Reflect.apply(start, this, [when]);
+        };
+      });
+      const subscribed = socketSubscribed(page);
+      await page.goto(`/w/${workspace.slug}/inbox`);
+      await shellReady(page);
+      await subscribed;
+    }
+    const dm = await writer.api.post<Channel>(`/api/workspaces/${workspace.id}/dms`, {
+      userId: viewer.userId,
+    });
+    const total = async (): Promise<number> =>
+      (await first.evaluate(() => window.shownNotices?.length ?? 0)) +
+      (await second.evaluate(() => window.shownNotices?.length ?? 0));
+    await writer.api.say(dm.id, 'first plain message');
+    await expect.poll(total).toBe(1);
+    await expect(first).toHaveTitle(/^\(1\)/);
+    await expect(second).toHaveTitle(/^\(1\)/);
+    await writer.api.say(dm.id, 'second plain message');
+    await expect.poll(total).toBe(2);
+    await expect(first).toHaveTitle(/^\(2\)/);
+    await expect(second).toHaveTitle(/^\(2\)/);
+    expect(await second.evaluate(() => window.audioCueStarts)).toBe(0);
+    await second.evaluate(() => {
+      window.elsewhere = false;
+      window.dispatchEvent(new Event('focus'));
+    });
+    await expect
+      .poll(() =>
+        second.evaluate(
+          async () =>
+            (await navigator.locks.query()).held?.some((lock) => lock.name?.endsWith(':focus')) ??
+            false,
+        ),
+      )
+      .toBe(true);
+    await second.keyboard.press('Shift');
+    await writer.api.say(dm.id, 'third plain message');
+    const open = second.getByRole('button', { name: 'Open conversation' });
+    await expect(open).toBeVisible();
+    await expect.poll(() => second.evaluate(() => window.audioCueStarts)).toBe(1);
+    await expect(first.getByRole('button', { name: 'Open conversation' })).toHaveCount(0);
+    expect(await total()).toBe(2);
+    await open.focus();
+    await second.keyboard.press('Enter');
+    await expect(second).toHaveURL(new RegExp(`/c/${dm.id}`));
+    await expect(first).not.toHaveTitle(/^\(\d+\)/);
+    for (const page of [first, second])
+      await page.goto(`/w/${workspace.slug}/settings/notifications`);
+    await second.getByRole('checkbox', { name: 'Notification sound' }).uncheck();
+    await expect(first.getByRole('checkbox', { name: 'Notification sound' })).not.toBeChecked();
+    await second.getByRole('checkbox', { name: 'In-app message cards' }).uncheck();
+    await expect(first.getByRole('checkbox', { name: 'In-app message cards' })).not.toBeChecked();
+    for (const page of [first, second])
+      await page.evaluate(() => {
+        window.elsewhere = true;
+        window.dispatchEvent(new Event('blur'));
+      });
+    await writer.api.say(dm.id, 'fourth plain message');
+    // Navigations reset the recording boundary; exactly one of the two tabs requests this alert.
+    await expect.poll(total).toBe(1);
+    const records = [
+      ...(await first.evaluate(() => window.shownNotices ?? [])),
+      ...(await second.evaluate(() => window.shownNotices ?? [])),
+    ];
+    expect(records[0]?.silent).toBe(true);
+    expect(await second.evaluate(() => window.audioCueStarts)).toBe(0);
+    const delivery = second.getByRole('region', { name: 'How you hear about messages' });
+    await delivery.getByRole('checkbox', { name: 'In-app message cards' }).scrollIntoViewIfNeeded();
+    await expectNoAxe(delivery);
+    await second.screenshot({ path: test.info().outputPath('notification-settings-dark.png') });
+    await second.setViewportSize({ width: 320, height: 720 });
+    await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await delivery.getByRole('checkbox', { name: 'In-app message cards' }).scrollIntoViewIfNeeded();
+    await expect(delivery).toBeVisible();
+    await expectNoAxe(delivery);
+    expect(await second.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await second.screenshot({
+      path: test.info().outputPath('notification-settings-light-narrow.png'),
+    });
+    await delivery
+      .getByRole('status')
+      .filter({ hasText: 'Audio is ready in this tab.' })
+      .scrollIntoViewIfNeeded();
+    await second.screenshot({
+      path: test.info().outputPath('notification-settings-light-narrow-volume.png'),
+    });
+  });
 
   test('device tests request fresh alerts and report only the current browser refusal', async ({
     newcomer,
@@ -208,6 +324,7 @@ test.describe('a tab in the background', () => {
 
     await page.evaluate(() => {
       window.elsewhere = true;
+      window.dispatchEvent(new Event('blur'));
     });
     await api('carol').say(there.id, `@dogancan please look at ${there.name}`);
 
@@ -280,6 +397,7 @@ test.describe('a tab in the background', () => {
       await shellReady(page);
       await page.evaluate(() => {
         window.elsewhere = true;
+        window.dispatchEvent(new Event('blur'));
       });
       await page.context().setOffline(true);
       const message = await writer.api.say(first.id, `@${viewer.username} first`);

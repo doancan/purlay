@@ -13,10 +13,12 @@ import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
+import { storageChanged } from '../../../testing/fakes';
 import { ALICE, IDS, aChannel, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import { Toaster } from '../../../ui/toast';
+import { ME } from '../../../testing/fixtures';
 
 installDom();
 
@@ -62,6 +64,45 @@ const open = async (api: Partial<Api> = {}): Promise<View> => {
 const main = (view: View): Scope => within(view.getByRole('main'));
 const levelOf = (view: View, channel: string): HTMLSelectElement =>
   main(view).getByRole('combobox', { name: `Notifications for #${channel}` });
+
+test('in-app and sound opt-outs are independent, remembered, and follow changes in another tab', async () => {
+  const view = await open();
+  const inApp = view.getByRole('checkbox', { name: 'In-app message cards' });
+  const sound = view.getByRole('checkbox', { name: 'Notification sound' });
+  expect(inApp).toHaveProperty('checked', true);
+  expect(sound).toHaveProperty('checked', true);
+  await person().click(inApp);
+  expect(inApp).toHaveProperty('checked', false);
+  expect(sound).toHaveProperty('checked', true);
+  await person().click(sound);
+  const key = `purlay.push.preferences.${ME.id}`;
+  expect(JSON.parse(view.world.storage.getItem(key) ?? 'null')).toEqual({
+    inApp: false,
+    sound: false,
+    volume: 50,
+  });
+  act(() => {
+    view.world.storage.setItem(key, JSON.stringify({ inApp: true, sound: false, volume: 25 }));
+    storageChanged('unrelated.preference');
+  });
+  expect(inApp).toHaveProperty('checked', false);
+  act(() => {
+    storageChanged(key);
+  });
+  expect(inApp).toHaveProperty('checked', true);
+  expect(sound).toHaveProperty('checked', false);
+  expect(view.getByRole('combobox', { name: 'App sound volume' })).toHaveProperty('value', '25');
+  await person().selectOptions(view.getByRole('combobox', { name: 'App sound volume' }), '75');
+  expect(JSON.parse(view.world.storage.getItem(key) ?? 'null')).toEqual({
+    inApp: true,
+    sound: false,
+    volume: 75,
+  });
+  await person().selectOptions(view.getByRole('combobox', { name: 'App sound volume' }), '0');
+  expect(view.getByRole('button', { name: 'Preview sound' })).toHaveProperty('disabled', true);
+  await expectNoAxeViolations(view.container);
+  view.unmount();
+});
 
 describe('notifications', () => {
   test('say what interrupts, in words', async () => {
@@ -289,8 +330,7 @@ describe('email about what was missed (D-240)', () => {
     });
     const card = within(view.getByRole('region', { name: 'Email' }));
     expect(card.getByText(/never during Deep Work or your quiet hours/)).toBeDefined();
-    const box = (): HTMLInputElement =>
-      card.getByRole<HTMLInputElement>('checkbox', { name: EMAIL });
+    const box = (): HTMLInputElement => card.getByRole('checkbox', { name: EMAIL });
     expect(box().checked).toBe(false);
     await person().click(box());
     expect(box().checked).toBe(true);
@@ -308,8 +348,7 @@ describe('email about what was missed (D-240)', () => {
       missedMail: () => Promise.resolve({ on: false, available: true }),
       setMissedMail: () => Promise.reject(new ApiError(500, 'INTERNAL', 'no')),
     });
-    const box = (): HTMLInputElement =>
-      main(view).getByRole<HTMLInputElement>('checkbox', { name: EMAIL });
+    const box = (): HTMLInputElement => main(view).getByRole('checkbox', { name: EMAIL });
     await person().click(box());
     await settle();
     expect(box().checked).toBe(false);
@@ -330,7 +369,7 @@ describe('email about what was missed (D-240)', () => {
     const card = await view.findByRole('region', { name: 'Email' });
     await person().click(within(card).getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(main(view).getByRole<HTMLInputElement>('checkbox', { name: EMAIL }).checked).toBe(true);
+    expect(main(view).getByRole('checkbox', { name: EMAIL })).toHaveProperty('checked', true);
     view.unmount();
   });
 });

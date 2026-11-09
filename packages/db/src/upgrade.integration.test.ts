@@ -323,6 +323,7 @@ describe('integration: upgrading from the previous release', () => {
         '0095_outbox_discarded',
         '0096_server_audit_grant_detail',
         '0097_server_push_settings',
+        '0098_push_subscription_sound',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

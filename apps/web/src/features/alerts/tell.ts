@@ -25,7 +25,7 @@ export interface Telling {
   readonly me: string;
   readonly channels: readonly Channel[];
   readonly t: Translate;
-  readonly notices: Notifier;
+  readonly notices: Pick<Notifier, 'show'>;
   /** Goes to a path in this tab, by the page's own router. */
   readonly open: (path: string) => void;
 }
@@ -50,6 +50,7 @@ export const tell = async (telling: Telling): Promise<void> => {
   const { plan, workspace, t, notices, open, me } = telling;
   if (plan.kind === 'many') {
     notices.show({
+      eventId: `summary:${(await newest(telling))[0]?.id ?? workspace.id}:${String(plan.count)}`,
       title: workspace.name,
       body: t('alerts.many', { count: plan.count }),
       tag: summaryTag(workspace.id),
@@ -63,6 +64,9 @@ export const tell = async (telling: Telling): Promise<void> => {
   const channel = telling.channels.find((c) => c.id === channelId);
   const said = newestFor(await newest(telling), channelId, me);
   notices.show({
+    eventId:
+      said?.id ??
+      `conversation:${channelId}:${channel?.lastMessageAt ?? ''}:${String(channel?.state?.unreadMentionCount ?? 0)}`,
     title: (channel === undefined ? null : placeOf(t, channel, me)) ?? workspace.name,
     body: said === null ? t('alerts.waiting') : whyOf(t, said, channel, me),
     tag: tagOf(channelId),

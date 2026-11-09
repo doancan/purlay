@@ -9,9 +9,12 @@
 
 /** One notice: replaced, not added to, by the next with the same `tag`. */
 export interface Notice {
+  /** Inbox identity for cross-tab de-duplication; never passed to the native API. */
+  readonly eventId?: string;
   readonly title: string;
   readonly body: string;
   readonly tag: string;
+  readonly silent?: boolean;
   /** The person clicked it: the page is brought to the front first. */
   readonly onOpen: () => void;
   /** The constructor accepted the request, but the browser later refused to show it. */
@@ -45,7 +48,7 @@ export const browserNotifier = (): Notifier | null => {
       Notification.permission === 'default'
         ? await Notification.requestPermission()
         : Notification.permission,
-    show: ({ title, body, tag, onOpen, onError }): boolean => {
+    show: ({ title, body, tag, silent, onOpen, onError }): boolean => {
       if (Notification.permission !== 'granted') return false;
       let notice: Notification;
       try {
@@ -56,6 +59,7 @@ export const browserNotifier = (): Notifier | null => {
           icon: ICON,
           lang: document.documentElement.lang,
           renotify: tag !== '',
+          ...(silent === undefined ? {} : { silent }),
         };
         notice = new Notification(title, options);
       } catch (refused) {

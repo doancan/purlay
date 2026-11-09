@@ -23,6 +23,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { ErrorState } from '../../ui/states';
 import { PushProvider } from '../push/push';
+import { AlertPreferencesProvider } from '../alerts/preferences-context';
 import { LazyTwoFactorEnrolment } from '../settings/load';
 import type { MeResponse } from '@purlay/types';
 
@@ -153,7 +154,9 @@ export const SessionGate = ({
   // Push is a person's, on every signed-in page: a device they turned it on in is tied again on load.
   return (
     <SessionContext.Provider value={me.data}>
-      <PushProvider userId={me.data.user.id}>{children}</PushProvider>
+      <AlertPreferencesProvider key={me.data.user.id} userId={me.data.user.id}>
+        <PushProvider userId={me.data.user.id}>{children}</PushProvider>
+      </AlertPreferencesProvider>
     </SessionContext.Provider>
   );
 };

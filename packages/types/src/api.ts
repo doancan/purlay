@@ -1253,6 +1253,7 @@ export const PushSubscribeRequest = FromClient({
   endpoint: Type.String({ pattern: '^https://', maxLength: 2048 }),
   keys: FromClient({ p256dh: Base64Url(65), auth: Base64Url(16) }),
   locale: PushLocale,
+  sound: Type.Optional(Type.Boolean()),
 });
 export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
 
@@ -1293,6 +1294,7 @@ export const PushPayload = Type.Object({
   body: Type.String({ maxLength: 200 }),
   url: Type.String({ pattern: SITE_PATH, maxLength: 512 }),
   tag: Type.String({ maxLength: 100 }),
+  silent: Type.Optional(Type.Boolean()),
 });
 export type PushPayload = Static<typeof PushPayload>;
 
