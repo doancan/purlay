@@ -22,6 +22,7 @@ import { TextField } from '../../../ui/text-field';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
+import { fold } from '../composer/mention-suggest';
 import { useMinute, useTimeAt } from '../profile/local-time';
 import type { Profile } from '@purlay/types';
 
@@ -73,12 +74,12 @@ export const NewConversationDialog = ({
   const now = useMinute();
   const profiles = new Map((members.data ?? []).map((member) => [member.user.id, member.profile]));
   const others = everybody.filter((person) => person.id !== user.id);
-  const wanted = filter.trim().toLowerCase();
+  const wanted = fold(filter.trim());
   const shown = others.filter(
     (person) =>
       wanted === '' ||
-      person.username.toLowerCase().includes(wanted) ||
-      person.displayName.toLowerCase().includes(wanted),
+      fold(person.username).includes(wanted) ||
+      fold(person.displayName).includes(wanted),
   );
   const full = picked.length >= OTHERS_MAX;
   const names = picked

@@ -29,6 +29,8 @@ have it.
 
 ### Fixed
 
+- **Workspaces** — a workspace named with Turkish letters or accents suggests an address with their plain forms (`Çağrı Merkezi` is `cagri-merkezi`) instead of dropping them
+- **Conversations** — finding a person for a new conversation matches Turkish letters typed plain or accented (`isik` finds Işık)
 - **Operations** — `erase:content` now says when a message was held by another transaction and still has its words, exits 1 and is run again, and `--all` reaches a workspace where the person only left a decision note (D-139)
 - **Operations** — `admin:reset-password` tells the operator what actually failed instead of one fixed sentence (D-179)
 - **Messages** — moving to another workspace no longer deletes the messages you had not yet sent in the one you left
