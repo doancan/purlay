@@ -35,6 +35,14 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
   },
   {
+    id: 'push-held-queue-unbounded',
+    why: 'the notices held for Deep Work are kept without a bound, and a person away for a day holds the node’s memory (D-298)',
+    file: 'apps/api/src/modules/push/sender.ts',
+    find: 'dropOldest(held, queueMax).length',
+    replace: '0',
+    tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
+  },
+  {
     id: 'push-inbox-attention-ignored',
     why: 'a person looking at the workspace’s page is pushed the notice they are looking at (D-143)',
     file: 'apps/api/src/modules/push/sender.ts',
@@ -89,6 +97,14 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     find: '  if (!(await isPoint(input.keys.p256dh))) {\n',
     replace: '  if (!(await isPoint(input.keys.p256dh)) && false) {\n',
     tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
+  },
+  {
+    id: 'push-line-unbounded',
+    why: 'the line of devices waiting for a push grows without a bound under load (D-298)',
+    file: 'apps/api/src/modules/push/sender.ts',
+    find: 'admit(waiting, devices, queueMax)',
+    replace: '0',
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
   },
   {
     id: 'push-live-disabled-before-post-ignored',

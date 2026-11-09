@@ -29,6 +29,7 @@ have it.
 
 ### Fixed
 
+- **Notifications** — when more push notifications are waiting than the server holds, it lets go of the oldest instead of the one that has just arrived (D-298)
 - **Notifications** — a missed-messages letter sent again after a failure that may have come after the mail server took it carries the same `Message-ID`, an address the mail server says does not exist is no longer tried every quarter hour, and one person's failed letter no longer holds back the others' (D-297)
 - **Copying** — on a page served over plain http, Copy no longer throws: a link or a code says it could not be copied, and the setup screen's button stays as it was
 - **Workspaces** — a workspace named with Turkish letters or accents suggests an address with their plain forms (`Çağrı Merkezi` is `cagri-merkezi`) instead of dropping them

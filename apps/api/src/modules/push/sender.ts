@@ -25,7 +25,7 @@
  *   rest are dropped and counted (`throttled`), and the notice is in the inbox.
  * - **Detached, bounded and fair:** the write's caller does not wait. At most `POSTS_AT_ONCE` are in
  *   flight on the node and `POSTS_PER_PERSON` for any one person, so one person's slow or hostile
- *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, a push is dropped and
+ *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, the oldest push is dropped and
  *   said. `flush` waits for them at shutdown, within its bound.
  */
 import type { Executor } from '@purlay/db';
@@ -37,6 +37,7 @@ import type { Counter, PushFailure } from '../../platform/metrics';
 import { CORE_OWNER } from '../../platform/module-kit/ownership';
 import type { WrittenNotice } from '../../platform/ports/notification-sink';
 import type { Posted } from '../images/fetch-external';
+import { admit, dropOldest } from '../../platform/bounded';
 import { externalImageAddress } from '../images/proxy';
 import { inDeepWork } from '../workspaces/deep-work';
 import type { NoticeWords, PushNotices } from './notices';
@@ -114,6 +115,11 @@ export interface PushSenderDependencies {
   readonly failures?: Counter<'reason' | 'module'>;
   /** The module whose notices this sender delivers, for the failure counter's label; absent, the core's. */
   readonly owner?: string;
+  /**
+   * Pushes that may wait, in line and held, before the oldest are let go: `QUEUE_MAX` where absent. A test of the
+   * bound gives a small one, as a thousand real encryptions is seconds of work to prove what three prove.
+   */
+  readonly queueMax?: number;
 }
 
 interface Subscription {
@@ -318,6 +324,7 @@ export const createPushSender = async (
   dependencies: PushSenderDependencies,
 ): Promise<PushSender> => {
   const { database, clock, log, keys, post } = dependencies;
+  const queueMax = dependencies.queueMax ?? QUEUE_MAX;
   const failed = (reason: PushFailure, by = 1, module?: string): void => {
     dependencies.failures?.inc({ reason, module: module ?? dependencies.owner ?? CORE_OWNER }, by);
   };
@@ -344,10 +351,11 @@ export const createPushSender = async (
     } else if (deviceId !== undefined) {
       entry.devices?.add(deviceId);
     }
-    for (const extra of [...held.keys()].slice(QUEUE_MAX)) {
-      held.delete(extra);
-      failed('dropped');
-      log.warn('push dropped: too many held');
+    // The oldest let go, the newest kept (`bounded.ts`): it is what the person has just been told of.
+    const dropped = dropOldest(held, queueMax).length;
+    if (dropped > 0) {
+      failed('dropped', dropped);
+      log.warn('push dropped: too many held', { dropped });
     }
   };
 
@@ -519,14 +527,16 @@ export const createPushSender = async (
     }
   };
 
-  /** Puts devices in line for a push, as many as the line has room for; the rest are dropped, and said. */
+  /**
+   * Puts devices in line for a push. The line holds `queueMax`: past it the oldest in line go, not these,
+   * and the count is said (`bounded.ts`).
+   */
   const enqueue = (devices: readonly Device[], about: Record<string, unknown>): void => {
-    const room = Math.max(QUEUE_MAX - waiting.length, 0);
-    if (devices.length > room) {
-      failed('dropped', devices.length - room);
-      log.warn('push dropped: too many waiting', { ...about, dropped: devices.length - room });
+    const dropped = admit(waiting, devices, queueMax);
+    if (dropped > 0) {
+      failed('dropped', dropped);
+      log.warn('push dropped: too many waiting', { ...about, dropped });
     }
-    waiting.push(...devices.slice(0, room));
     pump();
   };
 
@@ -576,8 +586,13 @@ export const createPushSender = async (
     await asked.catch(() => undefined);
   };
   // Once a minute, the notices waiting for the end of Deep Work are asked again. Unreferenced: it never keeps a process alive.
+  let releasingNow: Promise<void> | undefined;
   const releasing = setInterval(() => {
-    void releaseHeld();
+    // One at a time: a slow database must not let the next tick ask for what this one is still sending.
+    if (releasingNow !== undefined) return;
+    releasingNow = releaseHeld().finally(() => {
+      releasingNow = undefined;
+    });
   }, HELD_CHECK_MS);
   releasing.unref();
 

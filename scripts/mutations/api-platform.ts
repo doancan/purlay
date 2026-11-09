@@ -66,6 +66,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: [ANNOUNCEMENT_TESTS],
   },
   {
+    id: 'attention-renewed-word-keeps-its-place',
+    why: 'a renewed word stays where it was in the map, so the sweep stops at it and a person who has gone is still held as in front of the page (D-298)',
+    file: 'apps/api/src/platform/attention.ts',
+    find: '      lastHeard.delete(key);\n      lastHeard.set(key, now);',
+    replace: '      lastHeard.set(key, now);',
+    tests: ['apps/api/src/platform/attention.test.ts'],
+  },
+  {
     id: 'bucket-settings-half-given',
     why: 'three of four bucket settings start a server that talks to a store with no key, and the failure is a confusing one at the first upload',
     file: 'apps/api/src/platform/config.ts',
@@ -1435,6 +1443,22 @@ export const API_PLATFORM: readonly Mutation[] = [
     replace:
       '    ? undefined && `its payload is ${String(bytes)} bytes, past ${String(OUTBOX_PAYLOAD_BYTES_MAX)}`',
     tests: ['apps/api/src/platform/outbox.integration.test.ts'],
+  },
+  {
+    id: 'queue-admits-the-oldest-of-a-large-batch',
+    why: 'a batch larger than the line keeps its oldest and drops its newest, the reverse of what a person is waiting for (D-298)',
+    file: 'apps/api/src/platform/bounded.ts',
+    find: 'incoming.slice(Math.max(incoming.length - max, 0))',
+    replace: 'incoming.slice(0, max)',
+    tests: ['apps/api/src/platform/bounded.test.ts'],
+  },
+  {
+    id: 'queue-lets-go-of-the-newest-waiting',
+    why: 'a full line lets go of what came last, not what has waited longest (D-298)',
+    file: 'apps/api/src/platform/bounded.ts',
+    find: '  if (excess > 0) line.splice(0, excess);',
+    replace: '  if (excess > 0) line.splice(line.length - excess, excess);',
+    tests: ['apps/api/src/platform/bounded.test.ts'],
   },
   {
     id: 'readiness-ignores-the-sign-in-schema',
