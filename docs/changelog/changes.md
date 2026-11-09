@@ -43,12 +43,14 @@ have it.
 
 ### Fixed
 
+- **Notifications** — Reply pushes, including mentions and reminders in replies, open the right message thread when clicked (D-126)
 - **Operations** — Tested releases can be published without an Actions runner on the production server; Dockhand can follow the release image independently of that server’s CI runner (D-185)
 - **Operations** — `bun run entitlements:apply --help` and `bun run module:new --help` print their usage and succeed; the first used to stop with a configuration error before reading its arguments (D-292, D-294)
 - **Operations** — A server that starts now joins its cluster's record within about a second instead of ten, so a restriction of a workspace's modules is not written beside a server that does not read grants and has only just started (D-292)
 
 ### Security
 
+- **Notifications** — A queued push no longer goes after access is withdrawn, the message is read or hidden, the channel is muted, or the recipient starts quiet hours; a module notice held partway through delivery does not repeat devices already told (D-126, D-286)
 - **Inbox** — A person can no longer be flooded: the workspace find and the inbox list are rate limited per user (`429` with `Retry-After`), a person's unread notices of one module in a workspace are capped at 200 (the oldest are read as history and counted in `purlay_inbox_collapsed_total`), and their pushes of one kind are limited to three at once and then one a minute (`purlay_push_failures_total{reason="throttled"}`) (D-285, D-286)
 - **Modules** — A module's files, its start for a new workspace and its pushes now follow the workspace's grant like its routes do; retention, export, purge and erasure still cover its data (D-289)
 - **Operations** — A malformed or forged field in the cluster's shared Redis records can no longer stop every node from announcing itself or turn every withdrawal of a module into `PEERS_BEHIND`: such fields are ignored, removed and said once, frames on the shared bus are checked as strictly as a client's, and a forged hole in a frame count costs one replay in ten seconds (D-289)

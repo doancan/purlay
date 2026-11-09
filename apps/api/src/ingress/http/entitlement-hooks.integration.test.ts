@@ -28,6 +28,7 @@ const asked: string[] = [];
 
 const retentionWork = (): Promise<{ deleted: number }> => Promise.resolve({ deleted: 0 });
 const pushNotices: PushNotices = {
+  canDeliver: () => Promise.resolve(true),
   of: (_executor, _messageId, userIds) =>
     Promise.resolve(
       userIds.map((userId) => ({
@@ -39,6 +40,7 @@ const pushNotices: PushNotices = {
         groupNames: null,
         authorName: 'ada',
         rootSenderId: null,
+        threadId: null,
       })),
     ),
 };
@@ -199,8 +201,30 @@ describe('integration: a module’s push notices are for the workspaces granted 
           (notice) => notice.workspaceId,
         ),
       ).toEqual([granted]);
+      expect(await ONLY_THINGS.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId)).toBe(
+        true,
+      );
+      const unavailable = compose(
+        [
+          {
+            ...things,
+            pushNotices: {
+              ...pushNotices,
+              canDeliver: (): Promise<boolean> => Promise.resolve(false),
+            },
+          },
+        ],
+        carried,
+        'open',
+      );
+      expect(await unavailable.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId)).toBe(
+        false,
+      );
       workspaceOfNotice.id = lost;
       expect(await ONLY_THINGS.pushNotices.of(db, crypto.randomUUID(), [owner.userId])).toEqual([]);
+      expect(await ONLY_THINGS.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId)).toBe(
+        false,
+      );
     });
   });
 });

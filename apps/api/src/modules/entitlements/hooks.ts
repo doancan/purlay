@@ -68,6 +68,14 @@ export const entitledNotices = (
   notices: PushNotices,
   effective: Effective,
 ): PushNotices => ({
+  canDeliver: async (executor, messageId, userId): Promise<boolean> => {
+    if (!(await notices.canDeliver(executor, messageId, userId))) return false;
+    const told = await notices.of(executor, messageId, [userId]);
+    for (const notice of told) {
+      if ((await modulesOf(executor, notice.workspaceId, effective)).has(module)) return true;
+    }
+    return false;
+  },
   of: async (executor, messageId, userIds): ReturnType<PushNotices['of']> => {
     const told = await notices.of(executor, messageId, userIds);
     const granted = new Map<string, boolean>();

@@ -160,7 +160,7 @@ const senderOn = async (
     log: (over.log ?? aRecordingLogger()).log,
     keys: KEYS,
     attention: over.attention ?? nobodyActive,
-    notices: { of: () => Promise.resolve([]) },
+    notices: { of: () => Promise.resolve([]), canDeliver: () => Promise.resolve(false) },
     noticeWords: words,
     noticeThrottle: aNoticeThrottle(world.clock),
     post,
@@ -512,5 +512,108 @@ describe('integration: a push that cannot be looked up', () => {
     }).not.toThrow();
     await sender.flush(10_000);
     expect(failuresOf(metrics, 'chat')).toEqual({ error: 1 });
+  });
+});
+
+describe('integration: queued module notification authority', () => {
+  test.each([
+    'Deep Work',
+    'read',
+    'membership',
+    'workspace deleted',
+    'account suspended',
+    'account deleted',
+    'unchanged',
+  ] as const)('rechecks %s before posting the waiting device', async (change) => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const browser = await aBrowser();
+      for (const device of [1, 2, 3]) {
+        await subscribe(db, world.clock, world.ada, browser);
+        await db
+          .updateTable('push_subscriptions')
+          .set({ endpoint: `https://push.example.com/queued/${String(device)}` })
+          .where('user_id', '=', world.ada)
+          .where('endpoint', '=', `https://push.example.com/send/${world.ada}`)
+          .execute();
+      }
+      const posted: string[] = [];
+      const pending: (() => void)[] = [];
+      let released = false;
+      const sender = await senderOn(db, world, (url) => {
+        posted.push(url.pathname);
+        if (released) return Promise.resolve({ kind: 'answered', status: 201 });
+        return new Promise((resolve) => {
+          pending.push(() => {
+            resolve({ kind: 'answered', status: 201 });
+          });
+        });
+      });
+      const written = await world.write(world.ada);
+      sender.toldInbox([written]);
+      try {
+        for (let turn = 0; turn < 100 && posted.length < 2; turn += 1) await Bun.sleep(10);
+        expect(posted).toHaveLength(2);
+        if (change === 'Deep Work') {
+          await db
+            .updateTable('workspace_members')
+            .set({ is_deep_work_active: true, deep_work_until: new Date(NOW.getTime() + HOUR_MS) })
+            .where('workspace_id', '=', world.workspaceId)
+            .where('user_id', '=', world.ada)
+            .execute();
+        } else if (change === 'read') {
+          await db
+            .updateTable('inbox_entries')
+            .set({ read_at: world.clock.now() })
+            .where('id', '=', written.entryId)
+            .execute();
+        } else if (change === 'membership') {
+          await db
+            .deleteFrom('workspace_members')
+            .where('workspace_id', '=', world.workspaceId)
+            .where('user_id', '=', world.ada)
+            .execute();
+        } else if (change === 'workspace deleted') {
+          await db
+            .updateTable('workspaces')
+            .set({ deleted_at: world.clock.now() })
+            .where('id', '=', world.workspaceId)
+            .execute();
+        } else if (change === 'account suspended') {
+          await db
+            .updateTable('users')
+            .set({ suspended_at: world.clock.now() })
+            .where('id', '=', world.ada)
+            .execute();
+        } else if (change === 'account deleted') {
+          await db
+            .updateTable('users')
+            .set({ deleted_at: world.clock.now() })
+            .where('id', '=', world.ada)
+            .execute();
+        }
+        released = true;
+        for (const release of pending) release();
+        await sender.flush(10_000);
+        expect(posted).toHaveLength(change === 'unchanged' ? 3 : 2);
+        if (change === 'Deep Work') {
+          await db
+            .updateTable('workspace_members')
+            .set({ is_deep_work_active: false, deep_work_until: null })
+            .where('workspace_id', '=', world.workspaceId)
+            .where('user_id', '=', world.ada)
+            .execute();
+        }
+        await sender.releaseHeld();
+        await sender.flush(10_000);
+        const expected = change === 'Deep Work' || change === 'unchanged' ? 3 : 2;
+        expect(posted).toHaveLength(expected);
+        expect(new Set(posted).size).toBe(expected);
+      } finally {
+        released = true;
+        for (const release of pending) release();
+        await sender.flush(10_000);
+      }
+    });
   });
 });

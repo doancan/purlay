@@ -5,8 +5,8 @@
  * - **Who:** only the people a write told for the first time (`notify` returns them), and of those
  *   only a notification still unread, not held back by Deep Work, of a reason that needs them, on a
  *   message not deleted — on a device whose session is live and whose subscription was made with the
- *   server's current key. Looked up once per write, and each device is asked again, by its owner
- *   and session, right before it is sent to: a browser signed out of in between is not told. Pushed
+ *   server's current key. Looked up once per write, then current source access, unread state,
+ *   preferences, attention and session are checked per device immediately before posting. Pushed
  *   by the node that committed, never through the bus: a second node does not push it twice (§8).
  * - **What:** who and why, in the person's language (`words.ts`) and where, never what was written.
  * - **Where it goes:** the push service the browser named, through the checked address and lookup an
@@ -127,6 +127,8 @@ interface Subscription {
 }
 
 interface Device extends Omit<Subscription, 'locale'> {
+  readonly workspaceId: string;
+  readonly source: { readonly messageId: string } | { readonly entryId: string };
   readonly payload: PushPayload;
   /** The module whose notice this is, for the failure counter's label; absent, the sender's owner (chat's messages). */
   readonly module?: string;
@@ -202,6 +204,7 @@ const devicesFor = async (
     return [
       {
         ...row,
+        source: { messageId },
         payload: {
           // A channel by its name; a group by its people; a direct message by who wrote it.
           title:
@@ -211,7 +214,7 @@ const devicesFor = async (
             saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
             row.authorName,
           ),
-          url: `/w/${row.slug}/c/${row.channelId}`,
+          url: `/w/${row.slug}/c/${row.channelId}${row.threadId === null ? '' : `?thread=${encodeURIComponent(row.threadId)}`}`,
           tag: `channel:${row.channelId}`,
         },
       },
@@ -290,6 +293,8 @@ const routeInbox = async (
         return [
           {
             ...subscription,
+            workspaceId: entry.workspaceId,
+            source: { entryId: entry.id },
             module: entry.module,
             payload: {
               title: entry.workspaceName,
@@ -317,6 +322,27 @@ export const createPushSender = async (
   const active = new Map<string, number>();
   const running = new Set<Promise<void>>();
   const fetching = new Set<Promise<void>>();
+  /** One entry per held notice; a device set keeps a partial hold from repeating devices already told. */
+  const held = new Map<
+    string,
+    { readonly since: number; readonly devices: Set<string> | undefined }
+  >();
+  const hold = (id: string, now: number, deviceId?: string): void => {
+    const entry = held.get(id);
+    if (entry === undefined) {
+      held.set(id, {
+        since: now,
+        devices: deviceId === undefined ? undefined : new Set([deviceId]),
+      });
+    } else if (deviceId !== undefined) {
+      entry.devices?.add(deviceId);
+    }
+    for (const extra of [...held.keys()].slice(QUEUE_MAX)) {
+      held.delete(extra);
+      failed('dropped');
+      log.warn('push dropped: too many held');
+    }
+  };
 
   const forget = async (device: Device): Promise<void> => {
     await database
@@ -361,6 +387,35 @@ export const createPushSender = async (
     log.warn('push not taken', said);
   };
 
+  const stillRelevant = async (device: Device): Promise<boolean> => {
+    if ('messageId' in device.source) {
+      return await dependencies.notices.canDeliver(
+        database,
+        device.source.messageId,
+        device.userId,
+      );
+    }
+    return (
+      (await database
+        .selectFrom('inbox_entries as e')
+        .innerJoin('workspace_members as member', (join) =>
+          join
+            .onRef('member.workspace_id', '=', 'e.workspace_id')
+            .onRef('member.user_id', '=', 'e.user_id'),
+        )
+        .innerJoin('workspaces as w', 'w.id', 'e.workspace_id')
+        .innerJoin('users as person', 'person.id', 'e.user_id')
+        .select('e.id')
+        .where('e.id', '=', device.source.entryId)
+        .where('e.user_id', '=', device.userId)
+        .where('e.read_at', 'is', null)
+        .where('w.deleted_at', 'is', null)
+        .where('person.deleted_at', 'is', null)
+        .where('person.suspended_at', 'is', null)
+        .executeTakeFirst()) !== undefined
+    );
+  };
+
   const deliver = async (device: Device): Promise<void> => {
     const url = externalImageAddress(device.endpoint);
     if (url === null) {
@@ -368,16 +423,27 @@ export const createPushSender = async (
       await forget(device);
       return;
     }
-    if (!(await stillTheirs(device))) return;
     const body = await encryptPush(
       device,
       new TextEncoder().encode(JSON.stringify(device.payload)),
       await freshParts(),
     );
+    const authorization = await vapidAuthorization(signing, keys, device.endpoint, clock.now());
+    if (!(await stillTheirs(device))) return;
+    if (!(await stillRelevant(device))) return;
+    if (dependencies.attention.active(device.userId, device.workspaceId)) return;
+    if (
+      (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(
+        device.userId,
+      )
+    ) {
+      if ('entryId' in device.source) hold(device.source.entryId, clock.now().getTime(), device.id);
+      return;
+    }
     const posted = await post(
       url,
       {
-        authorization: await vapidAuthorization(signing, keys, device.endpoint, clock.now()),
+        authorization,
         'content-encoding': 'aes128gcm',
         'content-type': 'application/octet-stream',
         ttl: String(PUSH_TTL_SECONDS),
@@ -460,29 +526,25 @@ export const createPushSender = async (
     fetching.add(found);
   };
 
-  /** The entries of a module's notices waiting for Deep Work or quiet hours to end, and when each began to wait. */
-  const held = new Map<string, number>();
-
   const route = async (entryIds: readonly string[]): Promise<void> => {
     const { devices, waiting: stillWaiting } = await routeInbox(dependencies, entryIds);
     const now = clock.now().getTime();
+    const eligible = devices.filter((device) => {
+      if (!('entryId' in device.source)) return true;
+      const selected = held.get(device.source.entryId)?.devices;
+      return selected === undefined || selected.has(device.id);
+    });
     for (const id of entryIds) {
       if (!stillWaiting.has(id)) held.delete(id);
-      else if (!held.has(id)) held.set(id, now);
+      else hold(id, now);
     }
-    // The map is bounded like the line: past it a push is dropped and said, and the notice is still in the inbox.
-    for (const id of [...held.keys()].slice(QUEUE_MAX)) {
-      held.delete(id);
-      failed('dropped');
-      log.warn('push dropped: too many held');
-    }
-    enqueue(devices, { entries: entryIds.length });
+    enqueue(eligible, { entries: entryIds.length });
   };
 
   const releaseHeld = async (): Promise<void> => {
     const now = clock.now().getTime();
     const due: string[] = [];
-    for (const [id, since] of held) {
+    for (const [id, { since }] of held) {
       if (now - since > HELD_PUSH_MAX_MS) {
         held.delete(id);
         failed('dropped');

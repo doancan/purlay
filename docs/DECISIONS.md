@@ -5815,10 +5815,20 @@ people can aim.
    (D-103) — of a reason in `NEEDS_YOU`, not `suppressed_by_deep_work` (D-108), not already read,
    for a message not deleted, to a person not deleted. `channel_message` included: a member who
    chose "every message" (D-107) asked to be told. Never the author.
+   **Amended 2026-11-09:** each device is checked again immediately before its external request. Chat's
+   `PushNotices.canDeliver` uses the shared message visibility guard and current unread, suppression,
+   hidden-message and channel notification settings; the composition checks its current module grant.
+   The sender also rechecks the session, recipient, workspace attention, Deep Work and quiet hours.
+   A push still queued when private-channel access is withdrawn, the message is read or hidden, or the
+   person mutes the channel no longer goes. A suppressed chat push remains available in the inbox.
 2. **Who and where, never what.** The title is the place: `#api`, the person in a direct message, or
    a group's other people (D-127); the body is the inbox's own words for the reason, naming who did
    it (`alice mentioned you`, and in a group `alice wrote to the conversation`). The push service relays
    the payload encrypted for the device (RFC 8291), but a lock screen is not private.
+   A notice of a reply opens its thread root, including mentions and reminders within a reply;
+   ordinary top-level notices open the channel. Chat derives `PushNotices.threadId` from the existing
+   parent/root and the sender carries it in the same `thread` query the in-app notification uses.
+   The public push payload and the worker's site-path validation are unchanged.
 3. **In the person's language (D-41 kept):** `users.locale`, set by the client when the person
    subscribes and whenever they change language (`PUT /api/me/locale`).
 4. **A device belongs to a session.** A subscription carries the session it was made in: signing out
@@ -14064,6 +14074,10 @@ an assignee, which is written in the same transaction as the assignment.
    `quiet_from`, `quiet_to`, `workspace_members.deep_work_until`, `is_deep_work_active`) now have a second reader, the core's
    sender, so by `MODULES.md` §5 they leave `CORE_COLUMNS_FOR_A_MODULE` in this change and its cap falls from 14 to 9.
    `issue_assigned` is declared `pushed`; `needsYou` follows with the badge (14j).
+   **Amended 2026-11-09:** a queued device also rechecks the entry's current unread state, recipient,
+   workspace membership, account suspension and deletion before posting. Deep Work or quiet hours
+   starting while it waits hold that device; on release only the held devices are routed again, so
+   devices already told are not told twice. The same in-memory bound and expiry still apply.
 10. **The web's Updates section** (14j, decided by the owner in D-283 §8.3): a category of the inbox beside Mentions, Direct and
     Threads, never merged into them. It lists `GET …/inbox` and reads with `POST …/inbox/read`, painting a read at once and asking
     for the list again when the server refuses. It is offered only where a running module's *web* manifest declares `notices` (the

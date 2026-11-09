@@ -21,6 +21,8 @@ interface PushNotice {
   readonly authorName: string;
   /** The sender of the root of the thread a reply belongs to; none for anything else. */
   readonly rootSenderId: string | null;
+  /** The thread the notification opens; null for a channel-level notice. */
+  readonly threadId: string | null;
 }
 
 export interface PushNotices {
@@ -29,10 +31,15 @@ export interface PushNotices {
    * person, on a message not deleted, for these people.
    */
   of(executor: Executor, messageId: string, userIds: readonly string[]): Promise<PushNotice[]>;
+  /** Current source visibility and unread state, asked again when a queued device may be sent to. */
+  canDeliver(executor: Executor, messageId: string, userId: string): Promise<boolean>;
 }
 
 /** The notifications of a process that runs no chat: none. */
-export const noPushNotices: PushNotices = { of: () => Promise.resolve([]) };
+export const noPushNotices: PushNotices = {
+  of: () => Promise.resolve([]),
+  canDeliver: () => Promise.resolve(false),
+};
 
 /** What a push says of a module's notice in the core's inbox, and where in the workspace it lands (`path`, without a slash). */
 interface NoticeSaying {
