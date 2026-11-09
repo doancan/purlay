@@ -66,8 +66,7 @@ import {
 import { browserPorts, ComposerPortsContext, type ComposerPorts } from './composer-ports';
 import { isMacPlatform, keyLabels } from '../../shortcuts/platform';
 import { useClientStorage } from '../../../data/storage-provider';
-import { isClaimedBy } from '../../../data/browser-storage';
-import { draftKey, readDraft, writeDraft } from './drafts';
+import { draftKey, readDraft, useDraftWriter, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { renderContent } from '../../content/render-content';
@@ -96,9 +95,6 @@ export interface ComposerProps {
   /** Called with the id of every message the person sends, as it is sent. */
   readonly onSent?: (id: string) => void;
 }
-
-/** How long after the last keystroke the draft is written: often enough to lose nothing, rarely enough to cost nothing. */
-export const DRAFT_DEBOUNCE_MS = 300;
 
 /** What the toast says of each conversion a paste can make (D-210, D-259). */
 const PASTE_SAID: Readonly<
@@ -219,24 +215,7 @@ const Inner = ({
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
-  const userId = session.user.id;
-  // Debounced: written a moment after typing stops — while the page is still this person's.
-  useEffect(() => {
-    const cancel = ports.schedule(() => {
-      if (isClaimedBy(ports.storage, userId)) writeDraft(ports.storage, key, text);
-    }, DRAFT_DEBOUNCE_MS);
-    return cancel;
-  }, [text, key, ports, userId]);
-
-  // Written for certain as the composer goes — a channel switch or a closed screen —
-  // so the last keystrokes are never inside a timer that never fires. Not after a sign-out, or
-  // after somebody else signed in in another tab: that would put the words back for them (#694).
-  useEffect(
-    () => (): void => {
-      if (isClaimedBy(ports.storage, userId)) writeDraft(ports.storage, key, latest.current);
-    },
-    [key, ports, userId],
-  );
+  useDraftWriter({ ...ports, userId: session.user.id, key }, text, latest);
 
   useEffect(() => {
     if (autoFocus) field.current?.focus();

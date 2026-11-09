@@ -41,7 +41,8 @@ import {
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import type { Api } from '../../../data/api';
-import { Composer, DRAFT_DEBOUNCE_MS, type ComposerProps } from './composer';
+import { Composer, type ComposerProps } from './composer';
+import { DRAFT_DEBOUNCE_MS } from './drafts';
 import { ComposerPortsContext } from './composer-ports';
 import { OutboxProvider } from './uploads';
 import { draftKey, type DraftStorage } from './drafts';

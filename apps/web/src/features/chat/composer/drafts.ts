@@ -8,7 +8,9 @@
  * of that is allowed to reach the composer, so every access is guarded and a failure
  * is a draft that is not remembered, not a composer that does not work.
  */
-import { noteStorageFailure } from '../../../data/browser-storage';
+import { useEffect, type RefObject } from 'react';
+import { isClaimedBy, noteStorageFailure } from '../../../data/browser-storage';
+import type { Schedule } from '../../../realtime/connection';
 import type { KeyValueStorage } from '../../../theme/theme';
 
 export interface DraftStorage extends KeyValueStorage {
@@ -85,4 +87,41 @@ export const listDrafts = (storage: DraftStorage | null, userId: string): readon
     return [];
   }
   return found;
+};
+
+/** How long after the last keystroke the draft is written: often enough to lose nothing, rarely enough to cost nothing. */
+export const DRAFT_DEBOUNCE_MS = 300;
+
+/**
+ * Keeps the draft of one place written while its text changes: a moment after typing stops, and for
+ * certain as the composer goes. `latest` is the text at that moment, which a cleanup cannot read from a render.
+ */
+export const useDraftWriter = (
+  place: {
+    readonly storage: DraftStorage | null;
+    readonly schedule: Schedule;
+    readonly userId: string;
+    readonly key: string;
+  },
+  text: string,
+  latest: RefObject<string>,
+): void => {
+  const { storage, schedule, userId, key } = place;
+  // Debounced: written a moment after typing stops — while the page is still this person's.
+  useEffect(() => {
+    const cancel = schedule(() => {
+      if (isClaimedBy(storage, userId)) writeDraft(storage, key, text);
+    }, DRAFT_DEBOUNCE_MS);
+    return cancel;
+  }, [text, key, storage, schedule, userId]);
+
+  // Written for certain as the composer goes — a channel switch or a closed screen —
+  // so the last keystrokes are never inside a timer that never fires. Not after a sign-out, or
+  // after somebody else signed in in another tab: that would put the words back for them (#694).
+  useEffect(
+    () => (): void => {
+      if (isClaimedBy(storage, userId)) writeDraft(storage, key, latest.current);
+    },
+    [key, storage, userId, latest],
+  );
 };
