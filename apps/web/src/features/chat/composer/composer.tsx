@@ -36,10 +36,9 @@ import { useEngine } from '../../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
-import { Avatar } from '../../../ui/avatar';
 import { cn } from '../../../ui/cn';
 import { IconButton } from '../../../ui/icon-button';
-import { Kbd, keyHintsClasses } from '../../../ui/kbd';
+import { Kbd } from '../../../ui/kbd';
 import { useToast } from '../../../ui/toast';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { celebrate, hasPartyPopper } from '../../../ui/celebrate';
@@ -75,6 +74,14 @@ import { usePasteHandler } from './paste-handler';
 import { composerKey, useComposerInbox } from './quote';
 import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
 import { useSlashRunner } from './slash-run';
+import {
+  CommandList,
+  MentionList,
+  commandListId,
+  commandOptionId,
+  mentionListId,
+  mentionOptionId,
+} from './suggestion-lists';
 import { EmojiPicker } from './emoji-picker';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
@@ -286,7 +293,6 @@ const Inner = ({
     setCaretAt(written.length);
     change(next);
   };
-  const optionId = (index: number): string => `${listId}-option-${String(index)}`;
 
   /** Somebody chosen from the list: their handle replaces what was typed after the `@`. */
   const choose = (username: string): void => {
@@ -699,102 +705,22 @@ const Inner = ({
             </div>
           )}
           {commandsOpen && (
-            <div className="absolute bottom-full left-0 z-popover mb-2 w-full max-w-dialog overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
-              <div
-                id={`${listId}-commands`}
-                role="listbox"
-                aria-label={t('slash.listLabel')}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                className="max-h-palette-list overflow-y-auto p-1"
-              >
-                {commands.map((name, index) => (
-                  <div
-                    key={name}
-                    id={`${listId}-command-${name}`}
-                    role="option"
-                    aria-selected={index === currentCommand}
-                    onClick={() => {
-                      completeCommand(name);
-                    }}
-                    onPointerMove={() => {
-                      if (index !== currentCommand) setCommandActive(index);
-                    }}
-                    className={cn(
-                      'flex cursor-pointer items-baseline gap-3 rounded-md px-3 py-2',
-                      index === currentCommand && 'bg-accent-subtle',
-                    )}
-                  >
-                    <span className="shrink-0 font-mono text-label text-ink">/{name}</span>
-                    <span className="min-w-0 truncate text-label text-ink-muted">
-                      {t(`slash.${name}.about`)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className={keyHintsClasses}>
-                <span className="touch-only:hidden">
-                  <Kbd>Tab</Kbd> {t('slash.hint.complete')}
-                </span>
-                {/* What is typed, not a key: a finger writes it too, so it is shown everywhere. */}
-                <span>
-                  <code className="font-mono text-ink">//</code> {t('slash.hint.literal')}
-                </span>
-              </div>
-            </div>
+            <CommandList
+              listId={listId}
+              commands={commands}
+              current={currentCommand}
+              onChoose={completeCommand}
+              onHover={setCommandActive}
+            />
           )}
           {open && (
-            <div className="absolute bottom-full left-0 z-popover mb-2 w-full max-w-dialog overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
-              <div
-                id={listId}
-                role="listbox"
-                aria-label={t('mention.listLabel')}
-                // Choosing with the mouse must not take focus from the box: typing goes on there.
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                className="max-h-palette-list overflow-y-auto p-1"
-              >
-                {suggestions.map((person, index) => (
-                  <div
-                    key={person.id}
-                    id={optionId(index)}
-                    role="option"
-                    aria-selected={index === current}
-                    onClick={() => {
-                      choose(person.username);
-                    }}
-                    onPointerMove={() => {
-                      if (index !== current) setActive(index);
-                    }}
-                    className={cn(
-                      'flex cursor-pointer items-center gap-3 rounded-md px-3 py-2',
-                      index === current && 'bg-accent-subtle',
-                    )}
-                  >
-                    <Avatar size="sm" name={person.displayName} username={person.username} />
-                    <span className="min-w-0 truncate text-body font-medium text-ink">
-                      {person.displayName}
-                    </span>
-                    <span className="shrink-0 font-mono text-caption text-ink-muted">
-                      @{person.username}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className={cn(keyHintsClasses, 'touch-only:hidden')}>
-                <span>
-                  <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('mention.hint.move')}
-                </span>
-                <span>
-                  <Kbd>Enter</Kbd> {t('mention.hint.insert')}
-                </span>
-                <span>
-                  <Kbd>Esc</Kbd> {t('mention.hint.close')}
-                </span>
-              </div>
-            </div>
+            <MentionList
+              listId={listId}
+              people={suggestions}
+              current={current}
+              onChoose={choose}
+              onHover={setActive}
+            />
           )}
           <VisuallyHidden role="status" aria-live="polite">
             {open ? t('mention.results', { count: suggestions.length }) : ''}
@@ -877,12 +803,14 @@ const Inner = ({
               aria-describedby={hintsId}
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-controls={commandsOpen ? `${listId}-commands` : open ? listId : undefined}
+              aria-controls={
+                commandsOpen ? commandListId(listId) : open ? mentionListId(listId) : undefined
+              }
               aria-activedescendant={
                 commandsOpen
-                  ? `${listId}-command-${commands[currentCommand] ?? ''}`
+                  ? commandOptionId(listId, commands[currentCommand] ?? '')
                   : open
-                    ? optionId(current)
+                    ? mentionOptionId(listId, current)
                     : undefined
               }
               placeholder={t('composer.placeholder', { channel: channelName })}
