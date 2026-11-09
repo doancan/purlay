@@ -48,7 +48,8 @@ docker run -d --name "$DATABASE" --network "$NETWORK" \
 # Ready is the server that stays, over TCP. While the image runs its init scripts it starts a
 # temporary server that listens on the unix socket only, answers pg_isready, and is shut down a
 # moment later: a check over the socket ends the wait on it, and the next one finds nothing.
-for _ in $(seq 1 60); do
+# One try a second for a minute; `DB_READY_TRIES` is for the test of the give-up, which would otherwise start sixty processes to prove it.
+for _ in $(seq 1 "${DB_READY_TRIES:-60}"); do
   docker exec "$DATABASE" pg_isready -h 127.0.0.1 -U purlay -d purlay >/dev/null 2>&1 && break
   sleep 1
 done

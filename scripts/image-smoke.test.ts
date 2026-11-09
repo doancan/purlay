@@ -135,7 +135,8 @@ exit 0`,
   });
 
   test('gives up, and says so, on a database that never comes', () => {
-    const outcome = run({ NEVER_READY: '1' });
+    // Three tries, not the sixty a real wait makes: sixty stub processes took a second and a half, and over five when busy.
+    const outcome = run({ NEVER_READY: '1', DB_READY_TRIES: '3' });
     expect(outcome.code).toBe(1);
     expect(outcome.stderr).toContain('the throwaway database never became ready');
     expect(outcome.started).toBe(false);
