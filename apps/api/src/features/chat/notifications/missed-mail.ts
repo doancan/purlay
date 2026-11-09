@@ -13,12 +13,15 @@
  *   the one visibility rule shows them (`visibleChannelIds`, D-34), a message not deleted. Anything else is
  *   passed over for good (`mailed_at` set, no letter), so it never holds a place in the next run's batch.
  *   An erased or suspended account, or one whose address was never verified, is never mailed.
- * - **Never twice, whatever runs at once.** Each person is taken in a transaction of their own, under their
- *   row's lock taken with `SKIP LOCKED`: a second run passes over a person the first holds. The hour between
- *   two letters and `mailed_at IS NULL` are read under that lock, and the rows are marked before the commit.
- *   The letter is sent after the commit; if the relay refuses it, its rows are given back for the next run,
- *   and the run fails so `jobs:status` says so. A process that dies between the commit and the send loses that
- *   one letter rather than sending it twice.
+ * - **At least once, and a repeat is recognisable (D-297).** Each person is taken in a transaction of their own,
+ *   under their row's lock taken with `SKIP LOCKED`: a second run passes over a person the first holds. The
+ *   hour between two letters and `mailed_at IS NULL` are read under that lock, and the rows are marked before
+ *   the commit, so two runs at once never send one letter twice. The letter is sent after the commit; if the
+ *   relay does not take it, its rows are given back for the next run and the run fails so `jobs:status` says
+ *   so. A failure after the relay has the letter (a timeout waiting for its answer) cannot be told from one
+ *   before, so that letter can arrive twice; both carry the same `Message-ID`, made from the rows it is about.
+ *   A relay that says this address does not exist (an addressing status, `5.1.x`) is not tried again.
+ *   A process that dies between the commit and the send loses that one letter.
  * - **The link that stops it** opens without a session: a random token, whose digest alone is kept with the
  *   letter (`platform/tokens.ts`), good for `STOP_LINK_DAYS`. The job forgets letters past that.
  */
@@ -367,14 +370,51 @@ const takeLetter = async (
   return {
     letterId: letter.id,
     notificationIds: mailed.map((row) => row.id),
-    letter: missedLetter({
-      to: person.email,
-      locale: person.locale === 'tr' ? 'tr' : 'en',
-      appUrl,
-      stopToken: token,
-      workspaces: shape(quoted.filter((row) => messageIds.has(row.id))),
-    }),
+    letter: {
+      ...missedLetter({
+        to: person.email,
+        locale: person.locale === 'tr' ? 'tr' : 'en',
+        appUrl,
+        stopToken: token,
+        workspaces: shape(quoted.filter((row) => messageIds.has(row.id))),
+      }),
+      messageId: await messageIdFor(
+        mailed.map((row) => row.id),
+        appUrl,
+      ),
+    },
   };
+};
+
+/**
+ * Whether the relay said that this address, and not the relay, is the trouble: a permanent refusal (5xx)
+ * carrying an addressing status (RFC 3463 `5.1.1` to `5.1.3`: no such mailbox, no such domain, a bad
+ * address). A bare `550` is not enough, as `550 5.7.1 relaying denied` is the relay's own and would be said
+ * to every person. A relay that sends no status is taken to be the trouble, and the letter is tried again.
+ */
+const addressRefusedForGood = (error: unknown): boolean => {
+  const { responseCode, response } = (error ?? {}) as {
+    responseCode?: unknown;
+    response?: unknown;
+  };
+  return (
+    typeof responseCode === 'number' &&
+    responseCode >= 500 &&
+    typeof response === 'string' &&
+    /\b5\.1\.[123]\b/.test(response)
+  );
+};
+
+/**
+ * The letter's `Message-ID`: the same for the same rows, so that a letter sent again after a failure that may
+ * have come after the relay took it reads as the copy it is. The host is the server's own.
+ */
+const messageIdFor = async (
+  notificationIds: readonly string[],
+  appUrl: string,
+): Promise<string> => {
+  const digest = await tokenDigest([...notificationIds].sort().join(','));
+  return `<missed-${digest.slice(0, 32)}@${new URL(appUrl).hostname}>`;
 };
 
 /** A letter the relay did not take: its rows wait for the next run, and its hour is not spent. */
@@ -390,14 +430,19 @@ const giveBack = async (transaction: ChatTx, taken: Taken): Promise<void> => {
 /** `mail:missed`: every letter due now, and the letters past their stop link forgotten. */
 export const mailMissedMessages = async (
   dependencies: MissedMailDependencies,
-): Promise<{ letters: number; failed: number; forgotten: number }> => {
+): Promise<{ letters: number; failed: number; refused: number; forgotten: number }> => {
   const { database, clock, log, send, appUrl } = dependencies;
   const now = clock.now();
   const forgotten = await database
     .deleteFrom('missed_mail_letters')
     .where('sent_at', '<=', new Date(now.getTime() - STOP_LINK_DAYS * DAY_MS))
     .executeTakeFirst();
-  const outcome = { letters: 0, failed: 0, forgotten: Number(forgotten.numDeletedRows) };
+  const outcome = {
+    letters: 0,
+    failed: 0,
+    refused: 0,
+    forgotten: Number(forgotten.numDeletedRows),
+  };
   // No relay: nothing is taken, so nothing is lost — a relay added later mails what is still unread.
   if (send === undefined) return outcome;
 
@@ -432,12 +477,23 @@ export const mailMissedMessages = async (
       await send(taken.letter);
       outcome.letters += 1;
     } catch (error) {
-      outcome.failed += 1;
       // The relay's code only: its words can quote the recipient back (ARCHITECTURE §10).
+      if (addressRefusedForGood(error)) {
+        // Its rows stay marked: the next run would be refused the same way, for ever.
+        outcome.refused += 1;
+        log.warn('a missed-mail address was refused for good', { reason: codeOf(error) });
+        continue;
+      }
+      outcome.failed += 1;
       log.error('a missed-mail letter could not be sent', { reason: codeOf(error) });
-      await atomicallyOn(database)(async (transaction) => {
-        await giveBack(transaction, taken);
-      });
+      try {
+        await atomicallyOn(database)(async (transaction) => {
+          await giveBack(transaction, taken);
+        });
+      } catch (givingBack) {
+        // One person's rows stay marked (their letter is lost, as after a crash); everybody else's go on.
+        log.error('a missed-mail letter could not be given back', { reason: codeOf(givingBack) });
+      }
     }
   }
   if (outcome.failed > 0) {

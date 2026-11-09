@@ -71,6 +71,14 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     tests: INBOX_TESTS,
   },
   {
+    id: 'missed-mail-address-refused-retried-for-ever',
+    why: 'an address the relay says does not exist is given back and refused again every quarter hour, failing the run each time (D-297)',
+    file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
+    find: 'if (addressRefusedForGood(error)) {',
+    replace: 'if (false as boolean) {',
+    tests: ['apps/api/src/features/chat/notifications/missed-mail.integration.test.ts'],
+  },
+  {
     id: 'missed-mail-every-reason',
     why: 'a thread reply is mailed, though the setting names direct messages and mentions (D-240)',
     file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
@@ -135,6 +143,22 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
     find: "    return seen !== 'held' && seen?.has(row.channel_id) === true;\n",
     replace: "    return seen !== 'held';\n",
+    tests: ['apps/api/src/features/chat/notifications/missed-mail.integration.test.ts'],
+  },
+  {
+    id: 'missed-mail-relay-refusal-taken-for-the-address',
+    why: 'a relay that refuses everybody (550 relaying denied) is read as every person’s address being wrong, and every person’s letter is lost (D-297)',
+    file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
+    find: '/\\b5\\.1\\.[123]\\b/.test(response)',
+    replace: 'true',
+    tests: ['apps/api/src/features/chat/notifications/missed-mail.integration.test.ts'],
+  },
+  {
+    id: 'missed-mail-repeat-has-another-message-id',
+    why: 'a letter sent again after an ambiguous failure carries no Message-ID of its own making, so a copy that did arrive is not recognised (D-297)',
+    file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
+    find: '      messageId: await messageIdFor(\n        mailed.map((row) => row.id),\n        appUrl,\n      ),\n',
+    replace: '',
     tests: ['apps/api/src/features/chat/notifications/missed-mail.integration.test.ts'],
   },
   {
