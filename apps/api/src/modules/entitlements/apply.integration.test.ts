@@ -138,6 +138,56 @@ describe('integration: the writer of a workspace’s grants', () => {
     });
   });
 
+  test('audits the end it set and what the row said before, with the operator’s word that every node reads grants when it was given', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const until = new Date(NOW.getTime() + 3_600_000);
+      const later = new Date(NOW.getTime() + 7_200_000);
+      const detailOf = async (): Promise<unknown[]> =>
+        (
+          await db
+            .selectFrom('server_audit_log')
+            .select([
+              'action',
+              'module_state_before',
+              'module_valid_until',
+              'module_valid_until_before',
+              'cluster_ready_asserted',
+            ])
+            .where('target_workspace_id', '=', workspaceId)
+            .orderBy('id')
+            .execute()
+        ).map((row) => [
+          row.action,
+          row.module_state_before,
+          row.module_valid_until?.getTime() ?? null,
+          row.module_valid_until_before?.getTime() ?? null,
+          row.cluster_ready_asserted,
+        ]);
+      // No row before: the server's mode decided, so there was no state to record.
+      await apply(db, 'open', [write(workspaceId, 'base', 'on', until)]);
+      // The end moves from one to another, the state stays.
+      await apply(db, 'open', [write(workspaceId, 'base', 'on', later)]);
+      // A withdrawal records what it took away, and the operator's word when the command had it.
+      await applyEntitlements(db, clock, catalogue('managed'), { ...ACTOR, clusterReady: true }, [
+        write(workspaceId, 'base', 'off'),
+      ]);
+      // Removing the row records the withdrawal it ends.
+      await apply(db, 'open', [write(workspaceId, 'base', 'inherit')]);
+      // The clock stands still in this test, so the trail's order is not the order written: compared as a set.
+      expect((await detailOf()).map((row) => JSON.stringify(row)).sort()).toEqual(
+        [
+          ['server.module_granted', null, until.getTime(), null, null],
+          ['server.module_granted', 'on', later.getTime(), until.getTime(), null],
+          ['server.module_withdrawn', 'on', null, later.getTime(), true],
+          ['server.module_reset', 'off', null, null, null],
+        ]
+          .map((row) => JSON.stringify(row))
+          .sort(),
+      );
+    });
+  });
+
   test('refuses what it must, by name, before it writes anything', async () => {
     await withRollback(async (db) => {
       const workspaceId = await aWorkspace(db);

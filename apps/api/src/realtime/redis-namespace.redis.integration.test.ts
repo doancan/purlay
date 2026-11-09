@@ -19,6 +19,8 @@ import { redisPresenceDirectory, redisPresenceRegistry } from './redis-presence'
 
 const silent = createLogger({ level: 'silent' });
 const unique = (word: string): string => `${word}-${crypto.randomUUID()}`;
+/** A topic's id is a UUID, as the contract's are: the bus refuses one that is not. */
+const aUuid = (): string => crypto.randomUUID();
 /** Two namespaces no other run uses, so a run beside this one on the same Redis is no third party. */
 const SUFFIX = crypto.randomUUID().slice(0, 8);
 const NORTH = `north-${SUFFIX}`;
@@ -57,7 +59,7 @@ const limiterOn = (
 
 const frame = (ts: number): ServerFrame => ({
   event: 'PINS_UPDATED',
-  data: { channelId: 'c' },
+  data: { channelId: '00000000-0000-4000-8000-000000000001' },
   ts,
 });
 
@@ -105,7 +107,7 @@ const busNode = async (
 
 describe('integration: two namespaces on one Redis', () => {
   test('a frame published in one is heard by every node of that namespace and by none of the other', async () => {
-    const topic = channelTopic(unique('c'));
+    const topic = channelTopic(aUuid());
     const [north1, north2, south] = [
       await busNode(NORTH, topic),
       await busNode(NORTH, topic),

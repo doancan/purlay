@@ -24,6 +24,13 @@ import {
   type EntitledWorkspaces,
 } from '../../platform/entitled-workspaces';
 import type { WorkspaceScope } from '../../platform/ports/record-ref';
+import {
+  inWorkspace,
+  noSeams,
+  type ModuleSeams,
+  type WorkspaceSeam,
+} from '../../platform/ports/module-seams';
+import type { Transaction } from '@purlay/db';
 import { noPorts, type ModulePorts, type PortsFor } from '../../platform/ports/module-ports';
 import type { OutboxCounters } from '../../platform/outbox-drain';
 import type { PushSender } from '../push/sender';
@@ -48,6 +55,17 @@ interface WorkerContext {
   readonly bus: EventBus;
   /** The ports of what the module `uses`, reading through `database`: ask them for each workspace the work touches (D-283 §3). */
   readonly ports: ModulePorts;
+  /** The module's seams, for the framework's own consumer worker; a module's visit uses `inWorkspace`. */
+  readonly seams: ModuleSeams;
+  /**
+   * Runs `work` in one transaction of the module's database for the workspace of a `turn` the framework handed to the visit, with
+   * the module's `notify` and `publishFact` over it: the notice and the fact are committed with what `work` writes or not at all,
+   * and the notices are announced after the commit (D-286). The kinds and facts must be the module's own.
+   */
+  readonly inWorkspace: <T>(
+    turn: WorkspaceScope,
+    work: (transaction: Transaction, seam: WorkspaceSeam) => Promise<T>,
+  ) => Promise<T>;
   /** The workspaces the module may act for now (D-289): for a loop that acts for workspaces, `perWorkspaceWorker` walks them. */
   readonly entitled: EntitledWorkspaces;
   /** Where the process has Web Push on. */
@@ -161,6 +179,8 @@ export interface WorkersDependencies {
   readonly outbox?: OutboxCounters;
   /** The composition's `portsFor`; left out, a worker has no ports. */
   readonly portsFor?: PortsFor;
+  /** What binds a module's `notify` and `publishFact`; left out, a worker's seams refuse every call. */
+  readonly seamsFor?: (module: string) => ModuleSeams;
   /** The composition's `entitledFor`; left out, a worker has no workspace to act for. */
   readonly entitledFor?: EntitledFor;
   /** `purlay_worker_failures_total`: one series for each worker the build carries, made at zero by `serverMetrics`. */
@@ -193,6 +213,7 @@ export const startWorkers = (
     suspended,
     portsFor,
     entitledFor,
+    seamsFor,
     later = timeoutLater,
   } = dependencies;
   let stopped = false;
@@ -201,6 +222,7 @@ export const startWorkers = (
     const log = dependencies.log.child({ module, worker: name });
     const ports = portsFor?.(module, database) ?? noPorts;
     const entitled = entitledFor?.(module, database) ?? noEntitledWorkspaces;
+    const seams = seamsFor?.(module) ?? noSeams;
     const iteration = async (): Promise<void> => {
       // A stopped module claims nothing and sweeps nothing; its rows wait for it (D-296).
       if ((await suspended?.())?.has(module) === true) return;
@@ -220,6 +242,8 @@ export const startWorkers = (
               bus,
               ports,
               entitled,
+              seams,
+              inWorkspace: async (turn, work) => await inWorkspace(seams, database, turn, work),
               ...(push === undefined ? {} : { push }),
               ...(outbox === undefined ? {} : { outbox }),
             });

@@ -126,6 +126,22 @@ export const API_CLI: readonly Mutation[] = [
     tests: ['apps/api/src/cli/entitlements-apply.integration.test.ts'],
   },
   {
+    id: 'entitlements-apply-cluster-ready-unsaid',
+    why: 'the command takes the operator’s word that every node reads grants and does not warn that nothing checked it (red-team F11)',
+    file: 'apps/api/src/cli/entitlements-apply.ts',
+    find: '        if (clusterReady && !dryRun) {',
+    replace: '        if (false as boolean) {',
+    tests: ['apps/api/src/cli/entitlements-apply.integration.test.ts'],
+  },
+  {
+    id: 'entitlements-apply-dry-run-hides-the-workspaces',
+    why: 'a dry run does not say which workspace each address in the file resolved to, so a tenant who took an address first is not seen (red-team F11)',
+    file: 'apps/api/src/cli/entitlements-apply.ts',
+    find: '        if (dryRun) {\n          for (const [slug, id]',
+    replace: '        if (false as boolean) {\n          for (const [slug, id]',
+    tests: ['apps/api/src/cli/entitlements-apply.integration.test.ts'],
+  },
+  {
     id: 'entitlements-apply-source-is-not-the-file',
     why: 'the row does not say which file wrote it, so an edition file’s work cannot be told from an operator’s by hand (D-292)',
     file: 'apps/api/src/cli/entitlements-apply.ts',

@@ -29,29 +29,45 @@ export const ANNOUNCE_RETRY_MS = 1_000;
 export const moduleSetOf = (ids: readonly string[]): string =>
   ids.length === 0 ? 'none' : [...ids].sort().join(',');
 
-/** KEYS: the hash. ARGV: node, set, ttl. Answers the distinct sets of the live nodes, this one's included. */
+/**
+ * A field of a record that is not what a node writes is ignored, never trusted and never an error (red-team F6): anyone who can write
+ * the Redis can write a field, and one that made the script fail would stop every node's announcement and every restriction of a
+ * workspace's modules until somebody deleted it by hand. Such a field is one with no `lapse|` in front, a lapse that is not a number
+ * or lies further ahead than a node ever writes (`now + ttl`: a "ghost" that would count as a live peer for as long as it says), or
+ * more than `FIELD_MAX_CHARS` long. It is removed, and counted in the answer so the node can say so.
+ */
+export const FIELD_MAX_CHARS = 4096;
+
+/** KEYS: the hash. ARGV: node, word, ttl, field cap. Answers the distinct words of the live nodes, this one's included, and how many fields it ignored. */
 const ANNOUNCE_SCRIPT = `
 local time = redis.call('TIME')
 local now = time[1] * 1000 + math.floor(time[2] / 1000)
 local ttl = tonumber(ARGV[3])
+local cap = tonumber(ARGV[4])
 redis.call('HSET', KEYS[1], ARGV[1], (now + ttl) .. '|' .. ARGV[2])
 redis.call('PEXPIRE', KEYS[1], ttl)
 local all = redis.call('HGETALL', KEYS[1])
 local seen = {}
 local sets = {}
+local ignored = 0
 for i = 1, #all, 2 do
-  local cut = string.find(all[i + 1], '|', 1, true)
-  if tonumber(string.sub(all[i + 1], 1, cut - 1)) <= now then
+  local value = all[i + 1]
+  local cut = string.find(value, '|', 1, true)
+  local lapse = cut and tonumber(string.sub(value, 1, cut - 1))
+  if (not lapse) or lapse > now + ttl or #value > cap then
+    redis.call('HDEL', KEYS[1], all[i])
+    ignored = ignored + 1
+  elseif lapse <= now then
     redis.call('HDEL', KEYS[1], all[i])
   else
-    local set = string.sub(all[i + 1], cut + 1)
+    local set = string.sub(value, cut + 1)
     if not seen[set] then
       seen[set] = true
       sets[#sets + 1] = set
     end
   end
 end
-return sets
+return { sets, ignored }
 `;
 
 export interface ModuleSetWatch {
@@ -92,6 +108,7 @@ export const watchModuleSet = ({
   const word = wordOf(set, mode);
   let mismatched = false;
   let disagreed = false;
+  let ignoring = false;
   let stopped = false;
   let next: unknown;
 
@@ -101,10 +118,21 @@ export const watchModuleSet = ({
       const answer = await link.script(
         ANNOUNCE_SCRIPT,
         [link.names.moduleSet],
-        [nodeId, word, String(NODE_TTL_MS)],
+        [nodeId, word, String(NODE_TTL_MS), String(FIELD_MAX_CHARS)],
       );
-      if (!Array.isArray(answer)) throw new Error('the module-set script answered something else');
-      const others = (answer as string[]).filter((one) => one !== word).map(parts);
+      const reply: unknown[] = Array.isArray(answer) ? (answer as unknown[]) : [];
+      const [words, ignored] = reply;
+      if (!Array.isArray(words) || typeof ignored !== 'number') {
+        throw new Error('the module-set script answered something else');
+      }
+      if (ignored > 0 && !ignoring) {
+        log.warn(
+          'the shared record of the cluster held fields no node writes; they were removed and ignored',
+          { fields: ignored, see: 'DEPLOY.md, Redis' },
+        );
+      }
+      ignoring = ignored > 0;
+      const others = (words as string[]).filter((one) => one !== word).map(parts);
       const otherSets = others.filter((one) => one.set !== set).map((one) => one.set);
       const otherModes = others.flatMap((one) =>
         one.mode === undefined || one.mode === mode ? [] : [one.mode],

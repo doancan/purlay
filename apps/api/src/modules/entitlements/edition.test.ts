@@ -28,6 +28,28 @@ describe('reading an edition file', () => {
   test('accepts the documented shape and names what is wrong otherwise', () => {
     expect(readEditionFile(JSON.stringify(file())).problems).toEqual([]);
     expect(readEditionFile('{').problems).toEqual(['it is not JSON']);
+  });
+
+  test('refuses a key written twice in one object, whichever it is, since the parser keeps the last and says nothing', () => {
+    const twice = (text: string): string[] => readEditionFile(text).problems;
+    const base = '"editions":{"a":["chat"]}';
+    expect(twice(`{${base},"workspaces":{"acme":{"edition":"a"},"acme":{"edition":"a"}}}`)).toEqual(
+      [
+        '"acme" is written more than once in one object, so which entry applies is not for a parser to guess',
+      ],
+    );
+    // An escape is the same key; a repeat in an object of another place is found; two objects that each have a key are not a repeat.
+    expect(
+      twice(`{${base},"workspaces":{"ac\\u006de":{"edition":"a"},"acme":{"edition":"a"}}}`),
+    ).toHaveLength(1);
+    expect(twice('{"editions":{"a":[],"a":[]},"workspaces":{}}')).toHaveLength(1);
+    expect(twice(`{${base},"workspaces":{"x":{"edition":"a"},"y":{"edition":"a"}}}`)).toEqual([]);
+    // A string that looks like syntax is a string.
+    expect(
+      twice(
+        `{"editions":{"a, \\"b\\": {":["chat"]},"workspaces":{"w":{"edition":"a, \\"b\\": {"}}}`,
+      ),
+    ).toEqual([]);
     for (const bad of [
       {},
       { editions: {}, workspaces: {}, extra: 1 },

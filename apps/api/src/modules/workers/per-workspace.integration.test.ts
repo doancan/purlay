@@ -11,6 +11,7 @@ import { fixedClock } from '../../platform/clock';
 import type { EventBus } from '../../platform/events';
 import type { ModuleManifest } from '../../platform/module-kit/manifest';
 import { noSuspension, type Suspension } from '../../platform/suspended-modules';
+import { inWorkspace, noSeams } from '../../platform/ports/module-seams';
 import { assertTurn } from '../../platform/workspace-turn';
 import { aRecordingLogger } from '../../testing/doubles';
 import { aGrant } from '../../testing/facts';
@@ -77,6 +78,8 @@ describe('integration: a loop written per workspace', () => {
       bus,
       ports: composition.portsFor('base', db),
       entitled: composition.entitledFor('base', db),
+      seams: noSeams,
+      inWorkspace: (turn, inside) => inWorkspace(noSeams, db, turn, inside),
     });
   };
 

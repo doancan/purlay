@@ -13,6 +13,11 @@
  *       // `workspace.workspaceId` is the one to work on; `ports.of(workspace)` is right for it.
  *     }),
  *   },
+ *
+ * and the loop tells the build something through `inWorkspace(workspace, async (transaction, seam) => { ... })`: `seam.notify`
+ * (a kind this module declares under `notifications`; no actor) and `seam.publishFact` (a type it lists under `publishes`) are written in
+ * that transaction as this module, and the notice is announced after the commit. A fact consumer is handed the same `seam` as its
+ * fourth argument.
  */
 import type { ModuleWorker } from '../../modules/workers/module-workers';
 

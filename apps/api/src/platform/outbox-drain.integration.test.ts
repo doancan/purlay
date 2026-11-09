@@ -980,3 +980,51 @@ describe('integration: one workspace in a flood does not make the others wait (D
     expect(effects.rows.every((row) => row.n === '1')).toBe(true);
   });
 });
+
+describe('integration: a row whose producer does not own its fact (red-team F9)', () => {
+  const metrics = serverMetrics(undefined, [], [], [], [{ module: 'wiki', fact: 'notes.created' }]);
+  const failures = (): number =>
+    sampleOf(readExposition(renderMetrics(metrics)), 'purlay_outbox_failures_total', {
+      module: 'wiki',
+      fact: 'notes.created',
+    }) ?? Number.NaN;
+
+  test('is dead at its delivery with a clear error, its handler is not run, it is counted and said, and an honest row beside it is delivered', async () => {
+    const clock = aMovableClock(NOW);
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await publish(workspaceId, clock, 'forged');
+    await publish(workspaceId, clock, 'honest');
+    // Written outside `publishFact`, as by a module with SQL of its own: the producer is not the type's owner.
+    await sql`update outbox set producer = 'wiki' where workspace_id = ${workspaceId} and payload->>'noteId' = 'forged'`.execute(
+      cloned.db,
+    );
+    const recorded = aRecordingLogger();
+    const before = failures();
+    const tally = await drainOnce(cloned.db, {
+      handlers: [{ ...wiki[0]!, declaration, handle: recording }],
+      batch: BATCH,
+      clock,
+      log: recorded.log,
+      counters: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
+    });
+    expect(tally).toMatchObject({ delivered: 1, dead: 1 });
+    const rows = await rowOf(workspaceId);
+    const forged = rows.find((row) => row.producer === 'wiki');
+    expect(forged).toMatchObject({ state: 'dead', last_error: 'ProducerRefused' });
+    expect(rows.find((row) => row.producer === 'notes')).toMatchObject({ state: 'delivered' });
+    const effects = await sql<{
+      n: string;
+    }>`select count(*) as n from handled where workspace_id = ${workspaceId}`.execute(cloned.db);
+    expect(effects.rows[0]?.n).toBe('1');
+    expect(failures() - before).toBe(1);
+    expect(
+      recorded.lines.some(
+        (line) =>
+          line['level'] === 'error' &&
+          line['producer'] === 'wiki' &&
+          line['owner'] === 'notes' &&
+          !JSON.stringify(line).includes('forged'),
+      ),
+    ).toBe(true);
+  });
+});

@@ -60,6 +60,7 @@ import { inMemoryAttention } from './platform/attention';
 import { NOTICE_PUSH_BUDGET, PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
+import { seamsOfModules } from './module-seams-wiring';
 import { moduleConnections } from './platform/module-budget';
 import { startWorkers, type Workers } from './modules/workers/module-workers';
 import { readSuspended, suspensionCache } from './platform/suspended-modules';
@@ -427,6 +428,15 @@ if (!workerLifecycle.stopped) {
     bus: runtimeBase.bus,
     failures: metrics.workerFailures,
     portsFor: modules.portsFor,
+    seamsFor: seamsOfModules({
+      composition: modules,
+      clock: systemClock,
+      bus: runtimeBase.bus,
+      log,
+      metrics,
+      outboxPendingMax: config.OUTBOX_PENDING_MAX,
+      ...(push === undefined ? {} : { push }),
+    }),
     entitledFor: modules.entitledFor,
     suspended: modules.suspension.fresh,
     outbox: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },

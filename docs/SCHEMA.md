@@ -2144,6 +2144,12 @@ CREATE TABLE server_audit_log (
     -- Which fact an entry about the outbox is about (`server.fact_inspected`, D-288 §12), by the fact's id; NULL for every
     -- other entry. No key: the outbox row is swept, the entry stays. (0093)
     target_fact_id UUID,
+    -- What an entry about a grant replaced and until when (D-289 §12), as states, times and a flag, never words. NULL for every other
+    -- entry. `module_state_before` is NULL when there was no row; `cluster_ready_asserted` is the operator's word, unverified. (0096)
+    module_state_before       TEXT,
+    module_valid_until        TIMESTAMPTZ,
+    module_valid_until_before TIMESTAMPTZ,
+    cluster_ready_asserted    BOOLEAN,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Added NOT VALID to a table that has rows, and validated in the next statement. (0090)
@@ -2152,6 +2158,8 @@ CREATE TABLE server_audit_log (
     -- (0092, as above)
     CONSTRAINT server_audit_log_note_length
         CHECK (char_length(note) BETWEEN 1 AND 200),
+    CONSTRAINT server_audit_log_module_state_before_known
+        CHECK (module_state_before IN ('on', 'off')),
     CONSTRAINT server_audit_log_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
 );
@@ -3068,6 +3076,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0093_outbox_fair_claim.sql  idx_outbox_pending_by_workspace replaces it: the claim goes by turns across workspaces  (D-288)
 0094_audit_target_fact.sql  server_audit_log.target_fact_id: the fact an entry about the outbox is about (D-288)
 0095_outbox_discarded.sql  outbox_state admits 'discarded': a fact an administrator gave up on, kept for the audit (D-288)
+0096_server_audit_grant_detail.sql  server_audit_log: what a grant replaced, until when, and the operator's word that the cluster reads grants  (D-289)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
