@@ -28,7 +28,7 @@
  * with that place's draft and the old one's is saved as it goes.
  */
 import { Value } from '@sinclair/typebox/value';
-import { ATTACHMENT_BYTES_MAX, ATTACHMENTS_PER_MESSAGE_MAX, MessageContent } from '@purlay/types';
+import { MessageContent } from '@purlay/types';
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
@@ -38,7 +38,6 @@ import { useSession } from '../../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
 import { cn } from '../../../ui/cn';
 import { IconButton } from '../../../ui/icon-button';
-import { Kbd } from '../../../ui/kbd';
 import { useToast } from '../../../ui/toast';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { celebrate, hasPartyPopper } from '../../../ui/celebrate';
@@ -50,7 +49,6 @@ import {
   insertMarkdown,
   insertText,
   insideFence,
-  withoutBlock,
   rowsFor,
   trimEnd,
   typedWrap,
@@ -69,7 +67,7 @@ import { renderContent } from '../../content/render-content';
 import { useCodeRepository } from '../../../data/queries';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 import { duringComposition, useComposition } from './composition';
-import { FileOfferBar, type PendingOffer } from './file-offer';
+import { FileOfferBar, useFileOffer } from './file-offer';
 import { usePasteHandler } from './paste-handler';
 import { composerKey, useComposerInbox } from './quote';
 import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
@@ -84,6 +82,7 @@ import {
 } from './suggestion-lists';
 import { EmojiPicker } from './emoji-picker';
 import { FormatToolbar } from './format-toolbar';
+import { KeyHints } from './key-hints';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
@@ -143,12 +142,6 @@ const Inner = ({
     readonly caret: number;
   } | null>(null);
   latest.current = text;
-  const [offer, setOffer] = useState<PendingOffer | null>(null);
-  // Words that have been edited away are not offered again if they come back (an undo, the same paste).
-  useEffect(() => {
-    if (offer !== null && !text.includes(offer.words)) setOffer(null);
-  }, [text, offer]);
-
   // Held above the composer, per place, with a send asked for while they were still uploading: a
   // channel switch or a closed thread loses neither, and the send still goes when they land (D-171).
   const uploads = useUploads(key, () => latest.current);
@@ -200,6 +193,15 @@ const Inner = ({
     setError(null);
   };
 
+  const fileOffer = useFileOffer({
+    text,
+    latest,
+    caret,
+    field,
+    change,
+    attached: uploads.items.length,
+    addFiles: uploads.add,
+  });
   const pasteHandler = usePasteHandler({
     key,
     text,
@@ -208,7 +210,7 @@ const Inner = ({
     field,
     change,
     addFiles: uploads.add,
-    offerFile: setOffer,
+    offerFile: fileOffer.set,
   });
 
   /** Where the caret goes once the text a button inserted is in the box. */
@@ -374,7 +376,7 @@ const Inner = ({
     if (hasPartyPopper(content)) celebrate();
     uploads.clear();
     setWaiting(false);
-    setOffer(null);
+    fileOffer.set(null);
     pasteHandler.dismissNotice();
     setText('');
     setError(null);
@@ -541,38 +543,6 @@ const Inner = ({
   // Inside an open fence, and on a phone, Enter is a new line, so the key that sends is the one the hint
   // names (D-188) — and the field's description, which a screen reader reads at every width, says it too.
   const fenced = insideFence(text.slice(0, caretAt)) || (ports.touchOnly?.() ?? false);
-  const hints = (
-    <>
-      <span className="whitespace-nowrap">
-        <Kbd>{fenced ? chord(labels.mod, labels.enter) : 'Enter'}</Kbd> {t('composer.hint.send')}
-      </span>
-      <span className="whitespace-nowrap">
-        <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
-      </span>
-      <span className="whitespace-nowrap">
-        <Kbd>```</Kbd> {t('composer.hint.code')}
-      </span>
-    </>
-  );
-  // A thread's panel is too narrow for them beside the buttons (`size-thread`): read, not drawn (D-164).
-  const hintsBlock =
-    focused && !compact ? (
-      // Each hint whole. Not drawn on a narrow window: a phone's keyboard has no Shift+Enter, and drawn
-      // there they took a row of their own, so focusing the composer made it taller and moved what was
-      // above it — a pill moved between a press and its release, and the click missed (#654). Nor where
-      // there is no keyboard to press them on. They are still the field's description, which a screen
-      // reader reads.
-      <span
-        id={hintsId}
-        className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-caption text-ink-muted max-narrow:hidden touch-only:hidden"
-      >
-        {hints}
-      </span>
-    ) : (
-      <VisuallyHidden>
-        <span id={hintsId}>{hints}</span>
-      </VisuallyHidden>
-    );
   const counter = (
     <span aria-live="polite" className="ml-auto text-caption text-ink-muted">
       {left === null
@@ -606,6 +576,8 @@ const Inner = ({
       )}
     </button>
   );
+
+  const pendingOffer = fileOffer.offer;
 
   return (
     <div className="shrink-0 pb-4 pt-2">
@@ -793,7 +765,13 @@ const Inner = ({
                 />
               )}
             </span>
-            {hintsBlock}
+            <KeyHints
+              id={hintsId}
+              drawn={focused && !compact}
+              fenced={fenced}
+              labels={labels}
+              chord={chord}
+            />
             {!compact && <TypingLine channelId={channelId} />}
             {counter}
             {sendButton}
@@ -807,44 +785,13 @@ const Inner = ({
         )}
         {/* A live region that is there before its content, or most screen readers say nothing of it. */}
         <div role="status" className="empty:hidden">
-          {offer !== null && (
+          {pendingOffer !== null && (
             <FileOfferBar
-              offer={offer.file}
-              table={offer.table}
-              onKeep={() => {
-                setOffer(null);
-                field.current?.focus();
-              }}
+              offer={pendingOffer.file}
+              table={pendingOffer.table}
+              onKeep={fileOffer.keep}
               onAccept={() => {
-                const wanted = latest.current.startsWith(offer.words, offer.at)
-                  ? offer.at
-                  : latest.current.indexOf(offer.words);
-                if (wanted < 0) {
-                  setOffer(null);
-                  toast.show({ message: t('composer.offer.changed') });
-                  return;
-                }
-                // The words leave the box only when the file can take them: never to a refusal.
-                if (uploads.items.length >= ATTACHMENTS_PER_MESSAGE_MAX) {
-                  toast.show({ message: t('composer.offer.noRoom') });
-                  return;
-                }
-                if (new Blob([offer.file.text]).size > ATTACHMENT_BYTES_MAX) {
-                  toast.show({
-                    message: t('composer.offer.tooLarge', {
-                      limit: `${String(ATTACHMENT_BYTES_MAX / 1_048_576)} MB`,
-                    }),
-                  });
-                  return;
-                }
-                const rest = withoutBlock(latest.current, wanted, offer.words);
-                setOffer(null);
-                caret.current = rest.caret;
-                change(rest.text);
-                uploads.add([
-                  new File([offer.file.text], offer.file.name, { type: offer.file.type }),
-                ]);
-                field.current?.focus();
+                fileOffer.accept(pendingOffer);
               }}
             />
           )}

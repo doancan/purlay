@@ -144,9 +144,9 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
   {
     id: 'offer-accept-past-the-file-limit',
     why: 'Send as file takes the words out of the box when the message has no room for another file, and the file is refused',
-    file: 'apps/web/src/features/chat/composer/composer.tsx',
-    find: 'uploads.items.length >= ATTACHMENTS_PER_MESSAGE_MAX',
-    replace: 'uploads.items.length < 0',
+    file: 'apps/web/src/features/chat/composer/file-offer.tsx',
+    find: 'attached >= ATTACHMENTS_PER_MESSAGE_MAX',
+    replace: 'attached < 0',
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
   },
   {
