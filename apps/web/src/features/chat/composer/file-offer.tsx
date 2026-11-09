@@ -8,6 +8,15 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import type { FileOffer } from './paste';
 
+/** A paste too long for a message, and the words it put in the box: offered as a file until answered. */
+export interface PendingOffer {
+  readonly file: FileOffer;
+  /** What the paste put in the box, and where, so Send as file takes out that and not an earlier copy. */
+  readonly words: string;
+  readonly at: number;
+  readonly table: boolean;
+}
+
 export interface FileOfferBarProps {
   readonly offer: FileOffer;
   /** Whether it is a table, which has its own words. */

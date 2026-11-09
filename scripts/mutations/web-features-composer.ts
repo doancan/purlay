@@ -53,7 +53,7 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
   {
     id: 'composer-paste-uploads-picture-over-words',
     why: "the composer uploads the clipboard's picture whatever words came with it",
-    file: 'apps/web/src/features/chat/composer/composer.tsx',
+    file: 'apps/web/src/features/chat/composer/paste-handler.ts',
     find: 'pastedFiles(carried, pasted, clock.now())',
     replace: 'carried',
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
@@ -240,7 +240,7 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
   {
     id: 'paste-undo-link-gives-back-the-address',
     why: 'Undo of a link pasted over words leaves the address where the words were: the words are lost',
-    file: 'apps/web/src/features/chat/composer/composer.tsx',
+    file: 'apps/web/src/features/chat/composer/paste-handler.ts',
     find: "converted.kind === 'link' ? selected : pasted",
     replace: 'pasted',
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
