@@ -43,6 +43,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/server/users/:userId/admission',
   '/api/server/backups',
   '/api/server/mail-test',
+  '/api/server/push',
   '/api/server/overview',
   '/api/server/operations',
   '/api/server/users',

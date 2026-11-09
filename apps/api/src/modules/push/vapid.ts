@@ -65,3 +65,16 @@ export const vapidAuthorization = async (
   );
   return `vapid t=${header}.${claims}.${base64url(signature)}, k=${keys.publicKey}`;
 };
+
+/** Generate through WebCrypto so a leading-zero scalar still has all 32 bytes (as push:keys). */
+export const generateVapidKeys = async (subject: string): Promise<VapidKeys> => {
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+  ]);
+  const publicKey = Buffer.from(await crypto.subtle.exportKey('raw', pair.publicKey)).toString(
+    'base64url',
+  );
+  const { d } = await crypto.subtle.exportKey('jwk', pair.privateKey);
+  if (d === undefined) throw new Error('a generated P-256 key exported without its scalar');
+  return { publicKey, privateKey: d, subject };
+};

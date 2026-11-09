@@ -126,6 +126,8 @@ export const PushProvider = ({
     queryFn: ({ signal }) => api.pushKey(signal),
     enabled: device !== null && storage !== null,
     staleTime: Infinity,
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 60_000,
   });
   // `undefined`: the operator has push off, or the key could not be read — the open tab alone.
   const serverKey = key.data?.publicKey ?? undefined;

@@ -639,6 +639,11 @@ export interface ServerSettings {
   oidc_issuer: string | null;
   oidc_name: string | null;
   password_sign_in: Generated<boolean>;
+  push_enabled: Generated<boolean>;
+  push_imported_from_env_at: Timestamp | null;
+  push_private_key_encrypted: string | null;
+  push_public_key: string | null;
+  push_subject: string | null;
   require_account_approval: Generated<boolean>;
   require_two_factor: Generated<boolean>;
   session_idle_timeout_hours: number | null;

@@ -86,12 +86,21 @@ describe('integration: the server’s push key', () => {
       const body: unknown = await key.json();
       expect(Value.Check(PushKeyResponse, body)).toBe(true);
       expect(body).toEqual({ publicKey: SERVER_PUBLIC });
+      // Environment values seed once; removing them does not revoke existing subscriptions.
+      const unchanged = await call(db, 'GET', '/api/push/key', alice, undefined, testConfig());
+      expect(await unchanged.json()).toEqual({ publicKey: SERVER_PUBLIC });
+      expect((await call(db, 'GET', '/api/push/key', undefined)).status).toBe(401);
+    });
+  });
+});
+
+describe('integration: an unconfigured push server', () => {
+  test('a fresh installation without push keys answers null', async () => {
+    await withRollback(async (db) => {
+      const alice = await aSignedInUser(db, clock, 'push-off');
       const off = await call(db, 'GET', '/api/push/key', alice, undefined, testConfig());
       expect(off.status).toBe(200);
-      const none: unknown = await off.json();
-      expect(Value.Check(PushKeyResponse, none)).toBe(true);
-      expect(none).toEqual({ publicKey: null });
-      expect((await call(db, 'GET', '/api/push/key', undefined)).status).toBe(401);
+      expect(await off.json()).toEqual({ publicKey: null });
     });
   });
 });

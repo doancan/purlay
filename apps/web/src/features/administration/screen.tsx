@@ -1,3 +1,4 @@
+import { ServerPushCard } from './push';
 /** Workspace-independent administration. Only the session's server administrator reaches its queries. */
 import { useSignOut } from '../shell/sign-out';
 import { Backups } from './backups';
@@ -94,8 +95,14 @@ const Content = ({ section }: { readonly section: Section }): React.JSX.Element 
       return <Users />;
     case 'workspaces':
       return <Workspaces />;
-    case 'security':
     case 'email':
+      return (
+        <>
+          <ServerPushCard />
+          <Configuration section={section} />
+        </>
+      );
+    case 'security':
     case 'integrations':
       return <Configuration section={section} />;
     case 'data':

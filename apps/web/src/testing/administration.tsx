@@ -148,6 +148,8 @@ export const renderAdministration = async (
                       restoreMatchesLatest: false,
                     }
                   : { data: [], nextCursor: null };
+    if (pathname === '/api/server/push')
+      return Promise.resolve(adminJson({ enabled: false, keysCreated: false, subject: null }));
     return Promise.resolve(adminJson(value));
   };
   const client = createAdministrationClient(fetchFn);

@@ -13,6 +13,8 @@ export const ServerAuditAction = Type.Union([
   Type.Literal('server.github_app_connected'),
   Type.Literal('server.github_app_disconnected'),
   Type.Literal('server.smtp_connected'),
+  Type.Literal('server.push_enabled'),
+  Type.Literal('server.push_disabled'),
   Type.Literal('server.smtp_disconnected'),
   Type.Literal('server.sign_up_changed'),
   Type.Literal('server.two_factor_requirement_changed'),
@@ -463,3 +465,11 @@ export const ServerOutboxChangeResponse = Type.Object({
   ),
 });
 export type ServerOutboxChangeResponse = Static<typeof ServerOutboxChangeResponse>;
+
+export const ServerPushSettings = Type.Object({
+  enabled: Type.Boolean(),
+  keysCreated: Type.Boolean(),
+  subject: Type.Union([Type.String(), Type.Null()]),
+});
+export type ServerPushSettings = Static<typeof ServerPushSettings>;
+export const ServerPushRequest = FromClient({ enabled: Type.Boolean() });

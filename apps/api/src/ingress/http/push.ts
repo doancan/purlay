@@ -12,7 +12,7 @@ import {
   type PushKeyResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
-import type { Config } from '../../platform/config';
+import type { PushConfiguration } from '../../modules/push/settings';
 import {
   pushUnavailable,
   setLocale,
@@ -28,32 +28,27 @@ export interface PushDependencies {
   readonly auth: Auth;
   readonly database: Executor;
   readonly clock: Clock;
-  readonly config: Pick<Config, 'VAPID_PUBLIC_KEY'>;
+  readonly pushConfiguration: Pick<PushConfiguration, 'keys'>;
 }
-
-/** The key, or push is off: what subscribing needs first. */
-const serverKey = (config: PushDependencies['config']): string => {
-  if (config.VAPID_PUBLIC_KEY === undefined) throw pushUnavailable();
-  return config.VAPID_PUBLIC_KEY;
-};
 
 /** `GET /api/push/key` — what a browser subscribes with. */
 export const readPushKey = async (
-  { auth, config }: PushDependencies,
+  { auth, pushConfiguration }: PushDependencies,
   request: Request,
 ): Promise<PushKeyResponse> => {
   await requireSession(auth, request);
-  return { publicKey: config.VAPID_PUBLIC_KEY ?? null };
+  return { publicKey: (await pushConfiguration.keys())?.publicKey ?? null };
 };
 
 /** `POST /api/push/subscriptions` — this device, in this session, is told. */
 export const subscribeDevice = async (
-  { auth, database, clock, config }: PushDependencies,
+  { auth, database, clock, pushConfiguration }: PushDependencies,
   request: Request,
   body: unknown,
 ): Promise<void> => {
   const subscriber = await requireSession(auth, request);
-  const key = serverKey(config);
+  const key = (await pushConfiguration.keys())?.publicKey;
+  if (key === undefined) throw pushUnavailable();
   const input = validated(PushSubscribeRequest, body);
   await atomicallyOn(database)(async (transaction) => {
     await subscribe(transaction, clock, subscriber, input, key);

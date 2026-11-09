@@ -2891,7 +2891,7 @@ export const en = {
   'admin.users': 'Users and administrators',
   'admin.workspaces': 'Workspaces',
   'admin.security': 'Identity and security',
-  'admin.email': 'Email',
+  'admin.email': 'Notifications',
   'admin.data': 'Storage and data',
   'admin.integrations': 'Integrations and notifications',
   'admin.operations': 'Operations and maintenance',
@@ -2956,7 +2956,7 @@ export const en = {
   'admin.security.body':
     'Configure sign-in providers and the rules for joining and keeping a session.',
   'admin.email.body':
-    'Configure the mail relay used for invitations, verification and sign-in letters.',
+    'Manage browser notifications and the mail relay used for invitations, verification and sign-in letters.',
   'admin.data.body':
     'Storage includes uploads waiting to be sent. Retention remains each workspace owner’s policy.',
   'admin.integrations.body':
@@ -3037,6 +3037,20 @@ export const en = {
   'admin.s3': 'S3-compatible store configured',
   'admin.unconfigured': 'Not configured',
   'admin.configured': 'Configured; delivery not tested here',
+  'admin.audit.action.server.push_enabled': 'Browser push enabled',
+  'admin.audit.action.server.push_disabled': 'Browser push disabled',
+  'admin.browserPush': 'Browser notifications',
+  'admin.browserPush.body':
+    'Allow people to receive notifications when their Purlay tab is closed. This setting applies to everyone on this server.',
+  'admin.browserPush.on': 'Closed-tab notifications are enabled on the server.',
+  'admin.browserPush.off': 'Closed-tab notifications are disabled on the server.',
+  'admin.browserPush.generate': 'Enabling generates the server keys automatically.',
+  'admin.browserPush.preserved':
+    'The existing keys and device registrations are kept when you turn this off and on again.',
+  'admin.browserPush.enable': 'Enable on this server',
+  'admin.browserPush.disable': 'Disable on this server',
+  'admin.browserPush.permission':
+    'Each person must enable notifications in their browser. Quiet hours, Deep Work and device settings still apply.',
   'admin.push': 'Web Push',
   'admin.shared': 'Shared state',
   'admin.deployment': 'Deployment configuration',

@@ -1,3 +1,4 @@
+import { pushConfiguration } from './modules/push/settings';
 /**
  * `apps/api` — Bun + ElysiaJS, one process.
  *
@@ -146,35 +147,32 @@ log.info(
 // Who is in front of a workspace's page now: heard by the sockets, asked by the push sender (D-143).
 const attention = inMemoryAttention(systemClock);
 
-// Web Push (#78, D-126): on with the three keys, which the configuration has checked are one pair.
-const push =
-  config.VAPID_PUBLIC_KEY === undefined ||
-  config.VAPID_PRIVATE_KEY === undefined ||
-  config.VAPID_SUBJECT === undefined
-    ? undefined
-    : await createPushSender({
-        database,
-        clock: systemClock,
-        log,
-        attention,
-        notices: modules.pushNotices,
-        noticeWords: modules.noticeWords,
-        noticeThrottle: inProcessRateLimiter(systemClock, NOTICE_PUSH_BUDGET),
-        failures: metrics.pushFailures,
-        owner: modules.pushOwner,
-        // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
-        post: async (url, headers, body) =>
-          await postExternal(url, headers, body, {
-            lookup: checkingLookup(systemResolver),
-            timeoutMs: PUSH_TIMEOUT_MS,
-          }),
-        keys: {
-          publicKey: config.VAPID_PUBLIC_KEY,
-          privateKey: config.VAPID_PRIVATE_KEY,
-          subject: config.VAPID_SUBJECT,
-        },
-      });
-log.info(push === undefined ? 'web push is off: no VAPID keys' : 'web push is on');
+// Live server settings (#1325); no database is read before migrations finish.
+const browserPush = pushConfiguration(
+  database,
+  credentialCipher(config.ENCRYPTION_KEY),
+  systemClock,
+  config,
+);
+const push = await createPushSender({
+  database,
+  clock: systemClock,
+  log,
+  attention,
+  notices: modules.pushNotices,
+  noticeWords: modules.noticeWords,
+  noticeThrottle: inProcessRateLimiter(systemClock, NOTICE_PUSH_BUDGET),
+  failures: metrics.pushFailures,
+  owner: modules.pushOwner,
+  // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
+  post: async (url, headers, body) =>
+    await postExternal(url, headers, body, {
+      lookup: checkingLookup(systemResolver),
+      timeoutMs: PUSH_TIMEOUT_MS,
+    }),
+  keys: browserPush.keys,
+});
+log.info('web push is managed in server settings');
 
 // An owner's exports, one at a time, made by this process after answering (D-140).
 const storage = storeFor(config);
@@ -302,7 +300,7 @@ const app = createApp({
   attention,
   metrics,
   ...(client === undefined ? {} : { client }),
-  ...(push === undefined ? {} : { push }),
+  push,
 });
 
 log.info('listening', { port: app.listen(config.PORT) });
@@ -356,6 +354,7 @@ const fromSettings = async (): Promise<RuntimeServices> => {
         });
       }
     }
+    await browserPush.view();
     const { settings, needsReentry } = await readSettingsToBoot(database, cipher);
     if (needsReentry.length > 0) {
       // A rotated ENCRYPTION_KEY: the server starts in setup mode with these read as unset, and the
@@ -435,12 +434,12 @@ if (!workerLifecycle.stopped) {
       log,
       metrics,
       outboxPendingMax: config.OUTBOX_PENDING_MAX,
-      ...(push === undefined ? {} : { push }),
+      push,
     }),
     entitledFor: modules.entitledFor,
     suspended: modules.suspension.fresh,
     outbox: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
-    ...(push === undefined ? {} : { push }),
+    push,
   });
 }
 // Sign-in by email (#81, D-138 §6): on where the settings name a relay and its sender.

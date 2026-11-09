@@ -292,7 +292,7 @@ address, which is why the statement comes first.
 | `S3_ACCESS_KEY_ID` | production | — | Garage's format: `GK` and 24 hex digits |
 | `S3_SECRET_ACCESS_KEY` | production | — | **Secret** |
 | `STORAGE_DIRECTORY` | — | — | A directory attachments are kept in **instead of a bucket** — the demonstration and the browser suite (D-117). Production refuses to start with it; with the `S3_*` variables it is refused too: one store or the other |
-| `VAPID_PUBLIC_KEY` | — | — | Web Push's application-server public key: the uncompressed P-256 point, base64url (RFC 8292, #78). With `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, all three or none; **none switches push off** and the API says so — production starts without it, since the in-app inbox is the record (D-12). `bun run push:keys` prints a pair; the API refuses to start on a key spelled other than canonically, or on halves of two pairs |
+| `VAPID_PUBLIC_KEY` | — | — | Web Push's application-server public key: the uncompressed P-256 point, base64url (RFC 8292, #78). With `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, all three or none; **a one-time seed** for the persisted server push settings: none seeds push off. Thereafter **Administration → Notifications** owns the enabled state and keys; changing these environment values does not replace them (#1325). `bun run push:keys` prints a pair; the API refuses to start on a key spelled other than canonically, or on halves of two pairs |
 | `VAPID_PRIVATE_KEY` | — | — | Its private scalar, base64url. A secret: kept where the other secrets are, never logged |
 | `VAPID_SUBJECT` | — | — | Who runs this server, for a push service that needs to reach them: `mailto:` an address, or the `https:` address of the deployment |
 
@@ -304,12 +304,19 @@ without them. A filesystem store for the simplest self-host (D-16) is not built 
 Storage keys are opaque and never served as public URLs — downloads are brokered by the API so
 workspace membership is actually checked (`ARCHITECTURE.md` §9).
 
-**Enabling Web Push on an existing server.** Generate the pair with `bun run push:keys` (or the
-image command in `docker/production.env.example`), put both printed values and `VAPID_SUBJECT` in
-the actual deployment env file, and recreate the API and scheduler using the same Compose files
-and env file as the deployment. Keep the private key with the other secrets and retain the pair
-across updates: changing it requires devices to subscribe again. A subject of the deployment's
-HTTPS address is sufficient. Signed in, `GET /api/push/key` must now return a non-null public key.
+**Managing Web Push.** In **Administration → Notifications**, enable browser notifications. The server
+creates its P-256 pair automatically, seals the private key in `server_settings` with `ENCRYPTION_KEY`,
+and uses the deployment's HTTPS address as its subject. No restart is needed. Disabling stops new
+provider requests while off, including requests whose device was already queued; it keeps keys and
+device registrations. Re-enabling uses the same pair. Existing quiet-hour holds retain their normal
+expiry and unread checks; the server's inbox remains the record.
+
+On the first start after migration 0097, an existing complete `VAPID_*` environment triple is imported
+once and keeps push enabled, preserving devices. With none, it starts disabled. Afterwards the row is
+authoritative; changing or clearing environment values cannot undo an administrator's choice. Keep
+the database backup **and the same `ENCRYPTION_KEY`** to restore these keys. A private key that cannot
+open fails closed and is never silently regenerated; restore the encryption key and database backup.
+Signed in, `GET /api/push/key` returns the public key only while enabled.
 Each person still turns notifications on in **Settings → Notifications** on each device; server
 keys do not grant a browser permission. **Test notification** checks that device's browser notice,
 not the server-to-push-service path. Verify closed-tab delivery separately from another account,
@@ -487,7 +494,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `DATABASE_POOL_MAX`, `OUTBOX_PENDING_MAX`,
-`SOCKET_MAX_CONNECTIONS`, `SOCKET_REPLAY_CONCURRENCY`, `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (Web Push, off while empty) and
+`SOCKET_MAX_CONNECTIONS`, `SOCKET_REPLAY_CONCURRENCY`, `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (one-time Web Push seed) and
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), `UPDATE_CHECK` (on unless `false`), and to the API alone `METRICS_TOKEN` (metrics, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack
