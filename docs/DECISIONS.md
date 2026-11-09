@@ -14294,6 +14294,19 @@ fact for each message (D-35).
     the administrator is rechecked under the lock every authority change takes (D-292 §2). Each read is an entry, so reading twice is two
     reads. Both routes sit behind the guard of the rest of `/api/server`, before parsing: an owner, a member and a stranger get the same `404`.
     The SQL is in `platform/outbox-operate.ts`, one more of the files that name the table (§6).
+    **Requeue and discard** *(same item, built after the read side)*: `POST /api/server/outbox/requeue` and `/discard` take up to fifty
+    delivery ids and the administrator's **reason** (1 to 200 characters, not blank), and answer a result for each id. A requeue makes a
+    dead, discarded or stuck delivery `pending` again with no tries used, due now, and its expiry held at least seven days ahead, since a dead
+    row's own may have passed and the sweep would take it at once; a discard ends a dead or pending delivery as `discarded` (new state,
+    migration 0095, `finished_at` is when), kept for the audit and sweepable at the retention horizon. A delivery that is over,
+    `delivered` or `skipped`, is **refused** in both: it was acted on, and acting twice is the fault the table prevents. Repeats are
+    `unchanged` and write nothing: the rows are locked in id order and judged under the lock, so two requests at once for one row are
+    one change and one entry, and a delivery in flight is waited for and then found delivered. Every change is one entry on the
+    trail, `server.fact_requeued` or `server.fact_discarded`, with the fact's id, workspace, consumer and the reason in `note` (the column
+    D-296 added for an administrator's words), in the change's transaction after the administrator is rechecked under the lock. The
+    reason is the administrator's own and never the fact's. **No command-line twin:** a command has no authenticated administrator,
+    so its entries would say that nobody did it, which is what this exists to prevent; the routes are the operator's tool (`DEPLOY.md`
+    gives the requests).
 
 **Rejected.** *Counting the attempt when the handler fails*
 
