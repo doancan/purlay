@@ -5,6 +5,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
+import { noEntitledWorkspaces } from '../../platform/entitled-workspaces';
 import type { JobContext } from '../../modules/jobs/jobs';
 import type { SendMail } from '../../platform/mail';
 import { aRecordingLogger } from '../../testing/doubles';
@@ -28,6 +29,7 @@ describe('integration: the work chat supplies for its jobs', () => {
     log: aRecordingLogger().log,
     storage: aMemoryStore(),
     appUrl: 'http://localhost:3000',
+    entitled: noEntitledWorkspaces,
     withMailer: async (use): ReturnType<typeof use> => {
       relays.push(undefined);
       return await use(undefined);

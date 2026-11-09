@@ -427,6 +427,7 @@ if (!workerLifecycle.stopped) {
     bus: runtimeBase.bus,
     failures: metrics.workerFailures,
     portsFor: modules.portsFor,
+    entitledFor: modules.entitledFor,
     suspended: modules.suspension.fresh,
     outbox: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
     ...(push === undefined ? {} : { push }),

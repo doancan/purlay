@@ -106,6 +106,14 @@ export const API_MODULES_WORKERS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
   },
   {
+    id: 'worker-is-handed-no-workspaces',
+    why: 'a worker of a module is handed no workspace to act for, whatever its module is granted',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: 'entitledFor?.(module, database) ?? noEntitledWorkspaces',
+    replace: 'noEntitledWorkspaces',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
     id: 'worker-name-not-checked',
     why: 'two workers of one module share a name, and so a series and a line',
     file: 'apps/api/src/modules/workers/module-workers.ts',

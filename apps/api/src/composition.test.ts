@@ -14,8 +14,12 @@ import {
 import { PRODUCT_MIGRATION_SETS } from '@purlay/db';
 import { chatModule } from './features/chat/module';
 import { issuesModule } from './features/issues/module';
-import type { JobWork } from './modules/jobs/jobs';
-import { DEFAULT_WORKER_DEADLINE_MS, type ModuleWorker } from './modules/workers/module-workers';
+import { perWorkspaceJob, type JobWork } from './modules/jobs/jobs';
+import {
+  DEFAULT_WORKER_DEADLINE_MS,
+  perWorkspaceWorker,
+  type ModuleWorker,
+} from './modules/workers/module-workers';
 import type { AttachmentReader } from './modules/attachments/readable';
 import { noPushNotices, type PushNotices } from './modules/push/notices';
 import { noWorkspaceChannels } from './modules/workspaces/channels-port';
@@ -640,20 +644,28 @@ describe('a module a workspace is granted', () => {
     ...(workers === undefined ? {} : { workers }),
   });
 
-  test('may not run a job or a worker, whose work is not given the workspace’s grant', () => {
-    const problem =
-      "\"other\" is a grant of the workspace and declares jobs or workers, whose work is not given the workspace's grant: it must say entitlement: 'always'";
-    expect(() => compose([], [grant({ jobs: ['other:send'] })])).toThrow(problem);
+  const plain = (): Promise<void> => Promise.resolve();
+
+  test('may not run a job or a worker that does not act per workspace', () => {
+    const jobProblem =
+      '"other" is a grant of the workspace and declares the job "other:send"; work that acts for workspaces must be written with perWorkspaceWorker or perWorkspaceJob, or the module must say entitlement: \'always\'';
+    const workerProblem =
+      '"other" is a grant of the workspace and declares the worker "tick"; work that acts for workspaces must be written with perWorkspaceWorker or perWorkspaceJob, or the module must say entitlement: \'always\'';
+    expect(() => compose([], [grant({ jobs: ['other:send'] })])).toThrow(jobProblem);
+    expect(() =>
+      compose([], [grant({}, [{ name: 'tick', intervalMs: 5_000, work: plain }])]),
+    ).toThrow(workerProblem);
+    // A function that merely says it is per workspace is not: only the constructors make one.
     expect(() =>
       compose(
         [],
         [
           grant({}, [
-            { name: 'tick', intervalMs: 5_000, work: (): Promise<void> => Promise.resolve() },
+            { name: 'tick', intervalMs: 5_000, work: Object.assign(plain, { perWorkspace: true }) },
           ]),
         ],
       ),
-    ).toThrow(problem);
+    ).toThrow(workerProblem);
     // Saying nothing is a grant; a module with neither is fine, and so is one no grant can take.
     expect(() => compose([], [grant({})])).not.toThrow();
     expect(() =>
@@ -667,6 +679,24 @@ describe('a module a workspace is granted', () => {
         ],
       ),
     ).not.toThrow();
+  });
+
+  test('may run a worker or a job written per workspace, and retention without either', () => {
+    const everyone: BundledModule = {
+      manifest: {
+        ...another.manifest,
+        entitlement: 'grant',
+        jobs: ['other:send'],
+        retention: ['purge:other'],
+      },
+      jobWork: {
+        'other:send': perWorkspaceJob(() => Promise.resolve({ sent: 1 })),
+        // The data's lifecycle is exempt: it covers rows of workspaces that lost the module.
+        'purge:other': () => Promise.resolve({ purged: 1 }),
+      },
+      workers: [{ name: 'tick', intervalMs: 5_000, work: perWorkspaceWorker(plain) }],
+    };
+    expect(() => compose([], [everyone])).not.toThrow();
   });
 });
 

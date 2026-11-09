@@ -184,9 +184,11 @@ subselect of the statement that already runs, measured at 0.03 to 0.05 ms at the
 (`modules/find/find.ts`); the inbox lists, counts and marks read the notices of the running modules the workspace may use, and keeps
 the rest (`ingress/http/inbox.ts`); `GET /api/me`, `GET /api/workspaces` and the answer of an accepted invitation carry
 `memberships[].modules`, which the web draws a workspace from (`useModules`, `WorkspaceScopeProvider`), falling back to the
-server's list for a server that does not send it. A module that is a grant and declares `jobs` or `workers` stops the build
-(`unguardedWorkProblem`, `composition.ts`): their work is not yet given the workspace's grant, so the first such module brings
-the SQL form of the function with it, or says `always`. A module's ports are asked for the workspace (`ports.of(context)`, §4) with the same set; the outbox asks it when it publishes and when it claims (D-288).
+server's list for a server that does not send it. A module that is a grant may declare `jobs` and `workers` only
+written per workspace (`perWorkspaceWorker`, `perWorkspaceJob`): the framework walks the workspaces the module may act for now, by the
+SQL form of the function (`platform/entitled-workspaces.ts`, held to `effectiveModules` by `entitled-workspaces.integration.test.ts`),
+and the work is called with one of them and no other; a plain `work`, or a job that is not, stops the build (`unguardedWorkProblem`,
+`composition.ts`) unless the module says `always`. `retention` is the data's lifecycle and is exempt. A module's ports are asked for the workspace (`ports.of(context)`, §4) with the same set; the outbox asks it when it publishes and when it claims (D-288).
 
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
@@ -1056,7 +1058,7 @@ Each step ships alone and can be reverted.
 | 13 | Issues complete, the second module in full — **built** as D-254, deliberately the smallest record that exercises every seam: its own set, its hooks held whether or not it runs (D-254 §4), its routes in the manifest, a chunk of its own, the matrix tested on a database each cell made | new feature |
 | 14 | How modules tell one another things (D-283): **(a)** the decision and these documents — **built**; **(b)** the contract skeleton: fact declarations, ports folder, the manifest's `publishes`, `consumes` and `uses`, their refusals and a fake module's tests — **built**; **(c)** the outbox table, `publishFact` and the `absent` policy, with the release snapshot's hold on `publishes` and `consumes` and the bundle's module structure — **built** (D-288); **(d)** the claim, the delivery and the drain worker — **built** (D-288); **(e)** the outbox sweep, metrics and the overview line — **built** (D-288); **(f)** `inbox_entries`, the `NotificationSink` port, its sink and `sweep:inbox` (D-286) — **built**; **(g)** the inbox routes, `INBOX_UPDATED` and the sink's `announce` (D-286) — **built**; **(h)** issues' assignment notice (D-286) — **built**; **(i)** push held by Deep Work and quiet hours, and those columns leaving `CORE_COLUMNS_FOR_A_MODULE` (D-286 §9) — **built**; **(j)** the web's *Updates* section and badge (D-286 §10) — **built**; **(k)** `find` and chat's source — **built** (D-285); **(l)** issues' source and its index — **built** (D-285); **(m)** the web's search groups — not built; **(n)** the close: this file's rows turned to built and what is not, with its trigger (D-295) — **built**; a scan of publishers and the wire-union watcher — not built | **yes**, from (g) |
 
-**Before a package is sold:** workspace-level enablement (D-250 rule 9) is built (D-289, D-292) but for the jobs and workers of a module that is a grant (the table above), the downgrade lifecycle, and for each
+**Before a package is sold:** workspace-level enablement (D-250 rule 9) is built (D-289, D-292) (the jobs and workers of a module that is a grant are written per workspace, §2), the downgrade lifecycle, and for each
 module a written removal threshold — active workspaces, retention, support load — rather than a sentence.
 **Between modules** a table of module pair × experience (mention, link, notification, search, attachment,
 permission, onboarding) says what a user sees when the partner is absent: shown, hidden, or plain text. It is part
@@ -1072,7 +1074,6 @@ file and cluster check, and the scaffold. Not built:
 | Not built | What would start it | What watches for it today |
 |---|---|---|
 | A fact published by a module of the product | the first feature that must tell a module that may be absent (issues' link to a channel, D-254 §1) | nothing: a route has `publishFact` (`ModuleRouteDependencies`, `platform/ports/fact-publisher.ts`, `ingress/http/module-publish.integration.test.ts`), bound to its module, so the first publisher only declares its fact |
-| The SQL form of `effectiveModules` (`entitled()`) for jobs and workers | the first module that is a grant and declares `jobs` or `workers` | the build refuses it (`unguardedWorkProblem`, `composition.test.ts`) |
 | The web's search groups and the skipped line (14m) | the product wants the find drawn; the route answers them today | none; a metric of how long each source took and how many were skipped is also not built |
 | A runtime kill switch for a module | the administrator's command (`module:suspend`, `module:resume`) and the list of what is stopped (D-296: the state, everything that reads it, and the route that writes it are built) | until then the route is the only writer, and a row written by hand is believed by every node within two seconds |
 | Tracing across modules (OpenTelemetry) | a latency question that the per-module histograms, `purlay_worker_failures_total` and the request id in the logs cannot answer | none |

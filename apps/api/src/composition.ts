@@ -39,6 +39,11 @@ import type { FactConsumers } from './platform/fact-consumers';
 import { outboxConsumerWorkers } from './modules/workers/outbox-consumer';
 import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
 import { modulePorts, type PortsFor } from './platform/ports/module-ports';
+import {
+  entitledWorkspaces,
+  isPerWorkspace,
+  type EntitledFor,
+} from './platform/entitled-workspaces';
 import type { FrameHandlers } from './platform/frame-handlers';
 import type { RouterFrameContext } from './realtime/router';
 import { hookList } from './platform/hooks';
@@ -251,13 +256,31 @@ const searchSourceProblem = ({
 
 /**
  * What is wrong with a module a workspace is granted that runs work of its own, or `undefined`. A scheduled job or a background
- * loop acts for workspaces without a request to carry the guard (`tenancy.ts`), so until their work is given the workspace's grant
- * a grant would go on being served to a workspace that lost it (D-289): the module is `always`, or has neither.
+ * loop acts for workspaces without a request to carry the guard (`tenancy.ts`), so on a grant it must be written per workspace
+ * (`perWorkspaceWorker`, `perWorkspaceJob`): the framework walks the workspaces the module may act for now and the work is only
+ * ever called with one of them (D-289). A module that is `always` has no grant to lose, and `retention` is the data's lifecycle.
  */
-const unguardedWorkProblem = ({ manifest, workers = [] }: BundledModule): string | undefined =>
-  manifest.entitlement === 'always' || ((manifest.jobs ?? []).length === 0 && workers.length === 0)
+const unguardedWorkProblem = ({
+  manifest,
+  workers = [],
+  jobWork = {},
+}: BundledModule): string | undefined => {
+  if (manifest.entitlement === 'always') return undefined;
+  const loose = [
+    ...workers
+      .filter(({ work }) => !isPerWorkspace(work))
+      .map(({ name }) => `the worker "${name}"`),
+    ...(manifest.jobs ?? [])
+      .filter((job) => {
+        const work = jobWork[job];
+        return work !== undefined && !isPerWorkspace(work);
+      })
+      .map((job) => `the job "${job}"`),
+  ];
+  return loose.length === 0
     ? undefined
-    : `"${manifest.id}" is a grant of the workspace and declares jobs or workers, whose work is not given the workspace's grant: it must say entitlement: 'always'`;
+    : `"${manifest.id}" is a grant of the workspace and declares ${loose.join(', ')}; work that acts for workspaces must be written with perWorkspaceWorker or perWorkspaceJob, or the module must say entitlement: 'always'`;
+};
 
 /** Whether a workspace is granted the module and may lose it (`entitlement: 'always'` is the other kind, which no row can take away). */
 const isGrant = ({ manifest }: BundledModule): boolean => manifest.entitlement !== 'always';
@@ -323,6 +346,11 @@ export interface Composition {
    * workers and the fact consumers of the module are each handed one (D-283 §3). A module this build does not carry uses none.
    */
   readonly portsFor: PortsFor;
+  /**
+   * The workspaces a module may act for now, bound to the database of whoever asks: what a worker's and a job's context hand
+   * `perWorkspaceWorker` and `perWorkspaceJob`, and the SQL form of the effective set (`platform/entitled-workspaces.ts`).
+   */
+  readonly entitledFor: EntitledFor;
   /** What a workspace with no grant of its own is given (D-289): the server's `WORKSPACE_MODULES`. */
   readonly entitlementMode: EntitlementMode;
   /** The modules a workspace may use, from the grants read for it: the modules this process runs less those it is not granted (D-289). */
@@ -491,6 +519,17 @@ export const compose = (
     get ports(): Readonly<Record<string, object>> {
       return runningPorts();
     },
+    entitledFor: (id, database) =>
+      entitledWorkspaces(
+        id,
+        {
+          running: modules.map((module) => module.manifest),
+          mode: entitlementMode,
+          suspended: suspension.current,
+          effective: effectiveOfThisProcess,
+        },
+        database,
+      ),
     portsFor: (id, database) =>
       modulePorts(
         {

@@ -13,7 +13,7 @@ const occurrences = (needle: string): number => source.split(needle).length - 1;
 describe('the job command', () => {
   test('gives a module’s job the database its runner hands it, and no other', () => {
     expect(occurrences('contextOn(')).toBe(1);
-    expect(occurrences('work(contextOn(on))')).toBe(1);
+    expect(occurrences('work(contextOn(on, job))')).toBe(1);
   });
 
   test('runs every job through the runner, which records the run, and does not record one itself', () => {

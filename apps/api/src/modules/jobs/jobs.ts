@@ -10,6 +10,12 @@
  */
 import { sql, type Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
+import {
+  eachEntitled,
+  markPerWorkspace,
+  type EntitledWorkspaces,
+} from '../../platform/entitled-workspaces';
+import type { WorkspaceScope } from '../../platform/ports/record-ref';
 import type { Logger } from '../../platform/logging';
 import type { SendMail } from '../../platform/mail';
 import type { ObjectStore } from '../../platform/storage';
@@ -40,6 +46,8 @@ export type Outcome = Readonly<Record<string, number>>;
 export interface JobContext extends JobDependencies {
   readonly storage: ObjectStore;
   readonly appUrl: string;
+  /** The workspaces the job's module may act for now (D-289): for a job that acts for workspaces, `perWorkspaceJob` walks them. */
+  readonly entitled: EntitledWorkspaces;
   /**
    * Runs `use` with the relay the server's settings name now, read for this run, so a relay changed in Administration is the
    * one the next run sends through; `undefined` where none is set. The relay is closed when `use` is done.
@@ -49,6 +57,25 @@ export interface JobContext extends JobDependencies {
 
 /** The work of one scheduled job a module supplies, named in its manifest's `jobs` or `retention`. */
 export type JobWork = (context: JobContext) => Promise<Outcome>;
+
+/**
+ * The work of a job that acts for workspaces, written for one: `visit` is called for each workspace the module may act for and
+ * its counts are added up. A module that is a grant may declare no other kind of `jobs` (`unguardedWorkProblem`, D-289); what
+ * keeps rows tidy is `retention` and is exempt, since a workspace that lost the module still has its rows.
+ */
+export const perWorkspaceJob = (
+  visit: (turn: WorkspaceScope, context: JobContext) => Promise<Outcome>,
+): JobWork =>
+  markPerWorkspace(async (context) => {
+    const total: Record<string, number> = { workspaces: 0 };
+    await eachEntitled(context.entitled, async (turn) => {
+      total['workspaces'] = (total['workspaces'] ?? 0) + 1;
+      for (const [count, value] of Object.entries(await visit(turn, context))) {
+        total[count] = (total[count] ?? 0) + value;
+      }
+    });
+    return total;
+  });
 
 export const runJob = async (
   dependencies: JobDependencies,
