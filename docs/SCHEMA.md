@@ -2443,6 +2443,7 @@ the storage, `APP_URL`, where GitHub is — stays in the environment (`CONFIG.md
   `SESSION_MAX_AGE_DAYS`); the check here refuses only what no policy could mean. Nothing is written into
   `sessions` (§3.2): each session is judged from its own `created_at` and `last_used_at` when it is read, so a
   change reaches the sessions already open.
+- **Web Push** (D-126, added by 0097): `push_enabled` controls closed-tab pushes. `push_public_key`, `push_private_key_encrypted` and `push_subject` are all set or all null; enabling needs the triple. The private scalar is sealed with its column name. Disable keeps the pair and devices; `push_imported_from_env_at` independently records the one-time `VAPID_*` seed for existing installations.
 - `imported_from_env_at` is when the environment was copied in, **once**, on the first start; set, every
   later start leaves the row alone (`importFromEnvOnce`). `setup_completed_at` is when the setup in the
   browser was finished.
@@ -2464,6 +2465,11 @@ CREATE TABLE server_settings (
     smtp_url_encrypted        TEXT,
     mail_from                 TEXT,
     smtp_allow_plaintext      BOOLEAN NOT NULL DEFAULT FALSE,
+    push_enabled boolean NOT NULL DEFAULT false,
+    push_public_key text,
+    push_private_key_encrypted text,
+    push_subject text,
+    push_imported_from_env_at timestamptz,
     workspace_creators        TEXT NOT NULL DEFAULT 'first',
     workspace_creator_logins  TEXT[] NOT NULL DEFAULT '{}',
     setup_completed_at        TIMESTAMPTZ,
@@ -2499,6 +2505,12 @@ CREATE TABLE server_settings (
     CONSTRAINT server_settings_github_client_id CHECK (github_client_id <> ''),
     CONSTRAINT server_settings_mail_from CHECK (mail_from <> ''),
     CONSTRAINT server_settings_mail_pair CHECK ((smtp_url_encrypted IS NULL) = (mail_from IS NULL)),
+    CONSTRAINT server_settings_push_pair CHECK (
+        (push_public_key IS NULL AND push_private_key_encrypted IS NULL AND push_subject IS NULL)
+        OR (push_public_key <> '' AND push_private_key_encrypted <> '' AND push_subject <> ''
+            AND push_public_key IS NOT NULL AND push_private_key_encrypted IS NOT NULL AND push_subject IS NOT NULL)
+    ),
+    CONSTRAINT server_settings_push_enabled CHECK (NOT push_enabled OR push_public_key IS NOT NULL),
     CONSTRAINT server_settings_workspace_creators
         CHECK (workspace_creators IN ('first', 'anyone', 'listed')),
     CONSTRAINT server_settings_creator_logins
@@ -3077,6 +3089,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0094_audit_target_fact.sql  server_audit_log.target_fact_id: the fact an entry about the outbox is about (D-288)
 0095_outbox_discarded.sql  outbox_state admits 'discarded': a fact an administrator gave up on, kept for the audit (D-288)
 0096_server_audit_grant_detail.sql  server_audit_log: what a grant replaced, until when, and the operator's word that the cluster reads grants  (D-289)
+0097_server_push_settings.sql      server_settings: live browser push, sealed stable pair and one-time environment import  (D-126)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

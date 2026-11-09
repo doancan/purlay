@@ -1,5 +1,8 @@
+import { pushConfiguration } from '../../modules/push/settings';
 import { instanceInfo } from '../../modules/administration/admission';
 import {
+  readAdministrationPush,
+  writeAdministrationPush,
   readAdministrationPreferences,
   writeAdministrationPreferences,
   writeAdministrationAdmission,
@@ -557,6 +560,13 @@ export const createApp = (given: Dependencies): HttpApplication => {
   });
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
+  const browserPush = pushConfiguration(
+    dependencies.database,
+    cipher,
+    dependencies.clock,
+    dependencies.config,
+  );
+  const pushDependencies = { ...dependencies, pushConfiguration: browserPush };
   const sending = { ...dependencies, bus: sockets.bus, atomically: sockets.atomically };
   const inboxDependencies = {
     ...sending,
@@ -677,6 +687,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   };
   const administration = {
     ...dependencies,
+    pushConfiguration: browserPush,
     bus: sockets.bus,
     modules: moduleIds,
     entitlements: {
@@ -1047,6 +1058,14 @@ export const createApp = (given: Dependencies): HttpApplication => {
     )
     .post('/setup/verify', async ({ body }) => await followAddressLink(setup, body))
 
+    .get(
+      '/api/server/push',
+      async ({ request }) => await readAdministrationPush(administration, request),
+    )
+    .put(
+      '/api/server/push',
+      async ({ request, body }) => await writeAdministrationPush(administration, request, body),
+    )
     .get('/api/instance', async () => await instanceInfo(dependencies.database))
     .get('/api/admission', async ({ request }) => await readOwnAdmission(administration, request))
     .get(
@@ -1293,18 +1312,18 @@ export const createApp = (given: Dependencies): HttpApplication => {
       async ({ request, body }) => await setMyAway(dependencies, sockets.online, request, body),
     )
     .put('/api/me/locale', async ({ request, body, set }) => {
-      await setMyLocale(dependencies, request, body);
+      await setMyLocale(pushDependencies, request, body);
       set.status = 204;
       return null;
     })
-    .get('/api/push/key', async ({ request }) => await readPushKey(dependencies, request))
+    .get('/api/push/key', async ({ request }) => await readPushKey(pushDependencies, request))
     .post('/api/push/subscriptions', async ({ request, body, set }) => {
-      await subscribeDevice(dependencies, request, body);
+      await subscribeDevice(pushDependencies, request, body);
       set.status = 204;
       return null;
     })
     .post('/api/push/subscriptions/remove', async ({ request, body, set }) => {
-      await unsubscribeDevice(dependencies, request, body);
+      await unsubscribeDevice(pushDependencies, request, body);
       set.status = 204;
       return null;
     })

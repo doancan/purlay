@@ -96,7 +96,7 @@ export interface PushSenderDependencies {
   readonly database: Executor;
   readonly clock: Clock;
   readonly log: Logger;
-  readonly keys: VapidKeys;
+  readonly keys: VapidKeys | (() => Promise<VapidKeys | undefined>);
   /** How a push reaches its service: `postExternal` on the checked lookup, where the server is composed. */
   readonly post: PushPost;
   /**
@@ -124,6 +124,7 @@ interface Subscription {
   readonly p256dh: string;
   readonly auth: string;
   readonly locale: string;
+  readonly serverKey: string;
 }
 
 interface Device extends Omit<Subscription, 'locale'> {
@@ -141,13 +142,16 @@ const OUR_REQUEST_REFUSED = new Set([400, 401, 403, 413]);
 const subscriptionsOf = async (
   { database, clock, keys }: PushSenderDependencies,
   userIds: readonly string[],
-): Promise<Subscription[]> =>
-  await database
+): Promise<Subscription[]> => {
+  const current = typeof keys === 'function' ? await keys() : keys;
+  if (current === undefined) return [];
+  return await database
     .selectFrom('push_subscriptions as s')
     .innerJoin('users as person', 'person.id', 's.user_id')
     .innerJoin('sessions as live', 'live.id', 's.session_id')
     .select([
       's.id',
+      's.server_key as serverKey',
       's.user_id as userId',
       's.session_id as sessionId',
       's.endpoint',
@@ -158,11 +162,12 @@ const subscriptionsOf = async (
     .where('s.user_id', 'in', userIds)
     .where('person.deleted_at', 'is', null)
     .where('live.expires_at', '>', clock.now())
-    .where('s.server_key', '=', keys.publicKey)
+    .where('s.server_key', '=', current.publicKey)
     // A person's devices in the order they were subscribed: the same order every time.
     .orderBy('s.created_at')
     .orderBy('s.id')
     .execute();
+};
 
 const localeOf = (locale: string): PushLocale => (locale === 'tr' ? 'tr' : 'en');
 
@@ -317,7 +322,9 @@ export const createPushSender = async (
     dependencies.failures?.inc({ reason, module: module ?? dependencies.owner ?? CORE_OWNER }, by);
   };
   // Imported once, here, so a key that cannot sign stops the start rather than the first push.
-  const signing = await vapidSigningKey(keys);
+  let cached: { readonly publicKey: string; readonly signing: CryptoKey } | undefined;
+  if (typeof keys !== 'function')
+    cached = { publicKey: keys.publicKey, signing: await vapidSigningKey(keys) };
   const waiting: Device[] = [];
   const active = new Map<string, number>();
   const running = new Set<Promise<void>>();
@@ -428,7 +435,16 @@ export const createPushSender = async (
       new TextEncoder().encode(JSON.stringify(device.payload)),
       await freshParts(),
     );
-    const authorization = await vapidAuthorization(signing, keys, device.endpoint, clock.now());
+    const current = typeof keys === 'function' ? await keys() : keys;
+    if (current?.publicKey !== device.serverKey) return;
+    if (cached?.publicKey !== current.publicKey)
+      cached = { publicKey: current.publicKey, signing: await vapidSigningKey(current) };
+    const authorization = await vapidAuthorization(
+      cached.signing,
+      current,
+      device.endpoint,
+      clock.now(),
+    );
     if (!(await stillTheirs(device))) return;
     if (!(await stillRelevant(device))) return;
     if (dependencies.attention.active(device.userId, device.workspaceId)) return;
@@ -440,6 +456,7 @@ export const createPushSender = async (
       if ('entryId' in device.source) hold(device.source.entryId, clock.now().getTime(), device.id);
       return;
     }
+    if (typeof keys === 'function' && (await keys())?.publicKey !== device.serverKey) return;
     const posted = await post(
       url,
       {

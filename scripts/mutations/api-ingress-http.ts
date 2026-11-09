@@ -666,6 +666,23 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: [SERVER_TESTS],
   },
   {
+    id: 'server-push-read-guard-omitted',
+    why: 'an outsider can read and initialize server push configuration',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  await guard(deps, request);\n  return await deps.pushConfiguration.view();',
+    replace: '  return await deps.pushConfiguration.view();',
+    tests: ['apps/api/src/ingress/http/server-push.integration.test.ts'],
+  },
+  {
+    id: 'server-push-write-parsed-before-guard',
+    why: 'invalid input discloses an administration route to outsiders before authorization',
+    file: 'apps/api/src/ingress/http/server-administration.ts',
+    find: '  const admin = await guard(deps, request);\n  const input = validated(ServerPushRequest, body);',
+    replace:
+      '  const input = validated(ServerPushRequest, body);\n  const admin = await guard(deps, request);',
+    tests: ['apps/api/src/ingress/http/server-push.integration.test.ts'],
+  },
+  {
     id: 'setup-lock-without-retry-after',
     why: 'the setup’s lock says to wait without saying how long',
     file: APP,

@@ -207,7 +207,7 @@ export const Environment = Type.Object({
 
   /** Web Push's application-server keys (RFC 8292, #78): the uncompressed P-256 public point and its
    *  32-byte private scalar, base64url, and who runs it (`mailto:` or `https:`). All three or none:
-   *  none is push switched off — the API says so, and the in-app inbox is still the record (D-12).
+   *  a first start without them seeds push off. Afterwards Administration → Notifications owns it (#1325).
    */
   VAPID_PUBLIC_KEY: Type.Optional(Type.String({ pattern: '^B[A-Za-z0-9_-]{86}$' })),
   VAPID_PRIVATE_KEY: Type.Optional(Type.String({ pattern: '^[A-Za-z0-9_-]{43}$' })),

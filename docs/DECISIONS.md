@@ -5845,12 +5845,22 @@ people can aim.
    credentials, no address literal, no `localhost` or dotless host) and its checked public-address
    lookup, no redirect, a short timeout. A browser chose the endpoint; anybody signed in could choose
    any other, so the server must never reach inside.
-7. **Off without keys.** `VAPID_*` all three or none; none is push off — the key is `null`, an
-   answer every signed-in page can ask for without an error, a subscription is `PUSH_UNAVAILABLE`, and
-   production still starts, since the inbox is the record. Changing the pair
-   leaves old subscriptions inert (each remembers the key it was made with); devices subscribe again.
-   *Amended by D-148:* the switch itself is still offered without keys, for the notices an open tab
-   in the background shows; push joins it where the keys are.
+7. **Managed in server administration** (amended 2026-11-09, #1325). Browser notifications are enabled
+   or disabled in **Administration → Notifications**, without restarting. Migration 0097 adds the
+   enabled state, public key, sealed private scalar, subject and independent env-import marker to
+   `server_settings`. On first enable the server generates a P-256 pair; disabling retains it and the
+   device registrations. Re-enabling uses the same pair. Existing complete `VAPID_*` values seed it
+   once on upgrade, under the row lock; absent values seed it off. Later environment edits do not
+   override the saved choice. The private key is bound to its column by `CredentialCipher`, never
+   returned, logged or exported; restoring needs the database and its `ENCRYPTION_KEY`. An unreadable
+   seal fails closed and is never silently replaced. Reads require the current server administrator;
+   writes lock and recheck them, serialize generation and audit a real state change atomically.
+   The sender reads the saved keys at device lookup and immediately before a provider request, on
+   every node; no new provider request starts while off, including one already queued. Existing
+   quiet-hour holds retain their normal expiry and unread checks. Requests already posted cannot be recalled.
+   Off returns a null public key and refuses new subscriptions with `PUSH_UNAVAILABLE`. D-148's
+   open-tab notifications and each person's browser permission remain independent. Visible clients
+   recheck the key once a minute and on window focus; no browser permission is requested by the admin.
 8. **Sent by the node that committed the write,** not through the `EventBus`: a second node does not
    double it (D-7).
 9. **No dependency.** RFC 8291 and RFC 8292 with `crypto.subtle` (`docs/spikes/web-push.md`).
@@ -5875,7 +5885,7 @@ Purlay keeps (D-39 §6, #113). The test that holds "one cipher" names `modules/p
 the second place, and why.
 
 **Cost of reversing:** migration 0024's table and column, `modules/push`, four routes, the worker, the
-account menu's item, and this decision; push is off with the keys unset, without a code change.
+account menu's item, and this decision; push can be disabled in server administration without a code change.
 
 ### D-127. Group conversations: a direct message of up to ten people, whose people are its identity — #486
 

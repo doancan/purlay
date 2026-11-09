@@ -1,3 +1,5 @@
+import { ServerPushRequest, type ServerPushSettings } from '@purlay/types';
+import type { PushConfiguration } from '../../modules/push/settings';
 /** Guard first, then strict parsing. Global metadata does not mint a workspace membership. */
 import { readBackupEvidence } from '../../platform/backup-evidence';
 import type { ServerBackupStatus } from '@purlay/types';
@@ -91,6 +93,7 @@ import {
 import { approvePendingAccounts } from '../../modules/administration/batch-approval';
 
 export interface AdministrationDependencies extends AccountDependencies {
+  readonly pushConfiguration: PushConfiguration;
   readonly config: Config;
   readonly modules: readonly string[];
   readonly jobs: readonly string[];
@@ -258,6 +261,7 @@ export const readAdministrationOverview = async (
     deps.modules,
     ready.ready,
     deps.clock.now(),
+    (await deps.pushConfiguration.view()).enabled,
     deps.outboxConsumers,
   );
 };
@@ -456,4 +460,21 @@ export const readAdministrationBackups = async (
 ): Promise<ServerBackupStatus> => {
   await guard(deps, request);
   return await readBackupEvidence(deps.config.BACKUP_STATUS_DIRECTORY, deps.clock.now());
+};
+
+export const readAdministrationPush = async (
+  deps: AdministrationDependencies,
+  request: Request,
+): Promise<ServerPushSettings> => {
+  await guard(deps, request);
+  return await deps.pushConfiguration.view();
+};
+export const writeAdministrationPush = async (
+  deps: AdministrationDependencies,
+  request: Request,
+  body: unknown,
+): Promise<ServerPushSettings> => {
+  const admin = await guard(deps, request);
+  const input = validated(ServerPushRequest, body);
+  return await deps.pushConfiguration.change(admin, input.enabled);
 };

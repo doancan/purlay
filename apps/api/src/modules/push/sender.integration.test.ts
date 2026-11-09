@@ -1,3 +1,4 @@
+import type { PushSenderDependencies } from './sender';
 /**
  * Telling a device (#78, D-126), through the one send path and real SQL, to a push service of the
  * test's own: who is pushed and who is not, what the browser can read of it — decrypted here with
@@ -76,6 +77,7 @@ const sending = async (
   recording = aRecordingLogger(),
   heard: Attention = attention,
   metrics?: ServerMetrics,
+  overrides: Partial<Pick<PushSenderDependencies, 'keys' | 'notices'>> = {},
 ): Promise<{
   readonly say: (
     room: Room,
@@ -98,6 +100,7 @@ const sending = async (
     post,
     // The notices are chat's, so the failures of what they told are chat's.
     ...(metrics === undefined ? {} : { failures: metrics.pushFailures, owner: 'chat' }),
+    ...overrides,
   });
   let at = 0;
   return {
@@ -337,14 +340,22 @@ describe('integration: a device is told', () => {
         .deleteFrom('sessions')
         .where('user_id', '=', room.members['bob']?.userId ?? '')
         .execute();
-      await subscribeDevice(db, room, 'carol', await aBrowser(), {
+      const stale = await subscribeDevice(db, room, 'carol', await aBrowser(), {
         serverKey: `B${'x'.repeat(86)}`,
       });
+      // A stale-key device is ignored even when its old crypto material no longer decodes.
+      await db
+        .updateTable('push_subscriptions')
+        .set({ p256dh: 'old-device-material' })
+        .where('id', '=', stale)
+        .execute();
+      const recording = aRecordingLogger();
       const service = aPushService();
-      const { say, settled } = await sending(db, service.post);
+      const { say, settled } = await sending(db, service.post, recording);
       await say(room, 'alice', `${mention(room, 'bob')} ${mention(room, 'carol')} look`);
       await settled();
       expect(service.sent).toEqual([]);
+      expect(recording.lines).toHaveLength(0);
     });
   });
 });
@@ -467,19 +478,24 @@ describe('integration: what the push service answers', () => {
       };
       const { say, settled } = await sending(db, post);
       await say(room, 'alice', `${mention(room, 'bob')} ${mention(room, 'carol')} look`);
-      // Carol's push goes while two of Bob's hang, and Bob's third waits for one of his own.
-      for (
-        let turn = 0;
-        turn < 50 && !posted.some((url) => url === 'https://push.example.com/send/carol');
-        turn++
-      ) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+      try {
+        // Carol's push goes while two of Bob's hang, and Bob's third waits for one of his own.
+        for (
+          let turn = 0;
+          turn < 50 &&
+          (!posted.some((url) => url === 'https://push.example.com/send/carol') ||
+            posted.filter((url) => url.startsWith('https://slow.example.com/')).length < 2);
+          turn++
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(posted.filter((url) => url.startsWith('https://slow.example.com/'))).toHaveLength(2);
+        expect(posted).toContain('https://push.example.com/send/carol');
+      } finally {
+        released = true;
+        for (const release of held) release();
+        await settled();
       }
-      expect(posted.filter((url) => url.startsWith('https://slow.example.com/'))).toHaveLength(2);
-      expect(posted).toContain('https://push.example.com/send/carol');
-      released = true;
-      for (const release of held) release();
-      await settled();
       expect(posted.filter((url) => url.startsWith('https://slow.example.com/'))).toHaveLength(3);
     });
   });
@@ -690,6 +706,7 @@ describe('integration: what the push service answers', () => {
 
 describe('integration: queued notification authority', () => {
   test.each([
+    'server disabled',
     'private access',
     'workspace access',
     'message read',
@@ -730,7 +747,10 @@ describe('integration: queued notification authority', () => {
           });
         });
       };
-      const { say, settled } = await sending(db, post, aRecordingLogger(), heard);
+      let enabled = true;
+      const { say, settled } = await sending(db, post, aRecordingLogger(), heard, undefined, {
+        keys: () => Promise.resolve(enabled ? KEYS : undefined),
+      });
       const everyMessage = change === 'mentions only' || change === 'all messages unchanged';
       if (everyMessage) {
         await db
@@ -750,7 +770,9 @@ describe('integration: queued notification authority', () => {
         expect(posted).toHaveLength(2);
         const bob = room.members['bob'];
         if (bob === undefined) throw new Error('audit recipient is missing');
-        if (change === 'private access') {
+        if (change === 'server disabled') {
+          enabled = false;
+        } else if (change === 'private access') {
           await db
             .deleteFrom('channel_members')
             .where('channel_id', '=', room.channelId)
@@ -941,4 +963,40 @@ describe('integration: push destinations agree with the message location', () =>
       );
     });
   });
+});
+
+describe('integration: live push settings', () => {
+  for (const stage of ['lookup', 'last recipient check'] as const) {
+    test(`live push disabled during ${stage} never reaches a provider and leaves devices intact`, async () => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob']);
+        await subscribeDevice(db, room, 'bob', await aBrowser());
+        const service = aPushService(201);
+        const recording = aRecordingLogger();
+        let enabled = stage !== 'lookup';
+        const sender = await sending(db, service.post, recording, attention, undefined, {
+          keys: () => Promise.resolve(enabled ? KEYS : undefined),
+          notices: {
+            ...chatPushNotices,
+            canDeliver: async (...args) => {
+              const allowed = await chatPushNotices.canDeliver(...args);
+              enabled = false;
+              return allowed;
+            },
+          },
+        });
+        await sender.say(room, 'alice', `${mention(room, 'bob')} a notice`);
+        await sender.settled();
+        expect(service.sent).toHaveLength(0);
+        expect(recording.lines).toHaveLength(0);
+        expect(
+          await db
+            .selectFrom('push_subscriptions')
+            .select('id')
+            .where('user_id', '=', room.members['bob']?.userId ?? '')
+            .execute(),
+        ).toHaveLength(1);
+      });
+    });
+  }
 });

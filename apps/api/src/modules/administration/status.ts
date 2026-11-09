@@ -51,6 +51,7 @@ export const serverOverview = async (
   modules: readonly string[],
   ready: boolean,
   now: Date,
+  pushConfigured: boolean,
   outboxConsumers: readonly string[] = [],
 ): Promise<ServerOverview> => {
   const users = await db
@@ -98,7 +99,7 @@ export const serverOverview = async (
         : config.S3_BUCKET !== undefined
           ? 's3'
           : 'unconfigured',
-    pushConfigured: config.VAPID_PUBLIC_KEY !== undefined,
+    pushConfigured,
     sharedStateConfigured: config.REDIS_URL !== undefined,
     exportFailures: Number(failedExports.count),
     outboxDeadFacts: outbox.deadFacts,

@@ -76,6 +76,52 @@ test('administration is independent, responsive, keyboard accessible and backed 
         failedReads.push(`${String(response.status())} ${new URL(response.url()).pathname}`);
     });
     await page.goto('/server/email');
+    const push = page.getByRole('region', { name: 'Browser notifications' });
+    await expect(
+      push.getByText('Closed-tab notifications are disabled on the server.'),
+    ).toBeVisible();
+    await push.getByRole('button', { name: 'Enable on this server' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(
+      push.getByText('Closed-tab notifications are enabled on the server.'),
+    ).toBeVisible();
+    const firstKey: unknown = await (await owner.request.get('/api/push/key')).json();
+    expect(firstKey).toMatchObject({ publicKey: expect.stringMatching(/^B[A-Za-z0-9_-]{86}$/) });
+    await page.reload();
+    await expect(
+      push.getByText('Closed-tab notifications are enabled on the server.'),
+    ).toBeVisible();
+    await push.getByRole('button', { name: 'Disable on this server' }).click();
+    await expect(
+      push.getByText('Closed-tab notifications are disabled on the server.'),
+    ).toBeVisible();
+    expect(await (await owner.request.get('/api/push/key')).json()).toEqual({ publicKey: null });
+    await push.getByRole('button', { name: 'Enable on this server' }).click();
+    await expect(
+      push.getByText('Closed-tab notifications are enabled on the server.'),
+    ).toBeVisible();
+    expect(await (await owner.request.get('/api/push/key')).json()).toEqual(firstKey);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((value) => {
+        document.documentElement.setAttribute('data-theme', value);
+      }, theme);
+      for (const width of [1360, 768, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .include('main')
+              .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        if (width === 320)
+          await push.screenshot({ path: info.outputPath(`browser-push-${theme}-320.png`) });
+      }
+    }
     const mail = page.getByRole('region', { name: 'Test saved mail configuration' });
     await mail.getByRole('button', { name: 'Send test email' }).click();
     await expect(

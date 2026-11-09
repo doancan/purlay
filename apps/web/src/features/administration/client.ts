@@ -6,6 +6,7 @@ import {
   ServerPreferences,
   type ServerPreferencesRequest,
   ServerMailStatus,
+  ServerPushSettings,
   ServerMailTest,
   ServerAuditPage,
   ServerOperations,
@@ -37,6 +38,8 @@ export const createAdministrationClient = (
     userIds: readonly string[],
     signal?: AbortSignal,
   ) => Promise<ServerBatchApprovalResponse>;
+  pushSettings: (signal?: AbortSignal) => Promise<ServerPushSettings>;
+  savePushSettings: (enabled: boolean) => Promise<ServerPushSettings>;
   mailStatus: (signal?: AbortSignal) => Promise<ServerMailStatus>;
   testMail: () => Promise<ServerMailTest>;
   overview: (signal?: AbortSignal) => Promise<ServerOverview>;
@@ -75,6 +78,12 @@ export const createAdministrationClient = (
     approveAccounts: async (userIds, signal): Promise<ServerBatchApprovalResponse> => {
       const { status, json } = await call('POST', '/api/server/users/approve', { userIds }, signal);
       if (!Value.Check(ServerBatchApprovalResponse, json)) throw malformed(status);
+      return json;
+    },
+    pushSettings: async (signal) => await read('/api/server/push', ServerPushSettings, signal),
+    savePushSettings: async (enabled): Promise<ServerPushSettings> => {
+      const { status, json } = await call('PUT', '/api/server/push', { enabled });
+      if (!Value.Check(ServerPushSettings, json)) throw malformed(status);
       return json;
     },
     mailStatus: async (signal) => await read('/api/server/mail-test', ServerMailStatus, signal),

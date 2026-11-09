@@ -2857,7 +2857,7 @@ export const tr = {
   'admin.users': 'Kullanıcılar ve yöneticiler',
   'admin.workspaces': 'Çalışma alanları',
   'admin.security': 'Kimlik ve güvenlik',
-  'admin.email': 'E-posta',
+  'admin.email': 'Bildirimler',
   'admin.data': 'Depolama ve veri',
   'admin.integrations': 'Entegrasyonlar ve bildirimler',
   'admin.operations': 'İşletim ve bakım',
@@ -2923,7 +2923,7 @@ export const tr = {
   'admin.security.body':
     'Giriş sağlayıcılarını, katılım kurallarını ve oturum politikalarını ayarlayın.',
   'admin.email.body':
-    'Davet, doğrulama ve giriş iletileri için kullanılan posta sunucusunu ayarlayın.',
+    'Tarayıcı bildirimlerini ve davet, doğrulama ve giriş iletileri için posta sunucusunu yönetin.',
   'admin.data.body':
     'Kullanıma henüz gönderilmemiş dosyalar dahildir. Saklama süresini çalışma alanı sahipleri belirler.',
   'admin.integrations.body':
@@ -3004,6 +3004,20 @@ export const tr = {
   'admin.s3': 'S3 uyumlu depo ayarlanmış',
   'admin.unconfigured': 'Yapılandırılmamış',
   'admin.configured': 'Yapılandırılmış; teslimat burada sınanmadı',
+  'admin.audit.action.server.push_enabled': 'Tarayıcı push bildirimleri açıldı',
+  'admin.audit.action.server.push_disabled': 'Tarayıcı push bildirimleri kapatıldı',
+  'admin.browserPush': 'Tarayıcı bildirimleri',
+  'admin.browserPush.body':
+    'Purlay sekmesi kapalıyken de bildirim alınmasını sağlar. Bu ayar sunucudaki herkes için geçerlidir.',
+  'admin.browserPush.on': 'Kapalı sekme bildirimleri sunucuda açık.',
+  'admin.browserPush.off': 'Kapalı sekme bildirimleri sunucuda kapalı.',
+  'admin.browserPush.generate': 'Açtığınızda sunucu anahtarları otomatik oluşturulur.',
+  'admin.browserPush.preserved':
+    'Kapatıp yeniden açtığınızda mevcut anahtarlar ve cihaz kayıtları korunur.',
+  'admin.browserPush.enable': 'Sunucuda etkinleştir',
+  'admin.browserPush.disable': 'Sunucuda kapat',
+  'admin.browserPush.permission':
+    'Her kullanıcının kendi tarayıcısında bildirimlere izin vermesi gerekir. Sessiz saatler, Derin Çalışma ve cihaz ayarları uygulanmaya devam eder.',
   'admin.push': 'Web Push',
   'admin.shared': 'Paylaşılan durum',
   'admin.deployment': 'Dağıtım yapılandırması',
