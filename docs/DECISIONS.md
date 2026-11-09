@@ -14362,6 +14362,21 @@ fact for each message (D-35).
     and, when it is not the owner of the type's declaration, ends the row `dead` with `ProducerRefused` before its handler is asked:
     counted as any dead row is (`purlay_outbox_failures_total`) and said once at `error` with the producer and the owner, never the
     payload. The bound on a chain of facts is D-283's own, item 11.
+14. **A delivery has its own deadline, and a full batch is followed by another** *(added 2026-11-08)*. The worker's deadline (a
+    minute unless the manifest says) bounded the whole batch, so one handler that waited held the nineteen after it and, when it
+    ran out, cut them all off with their tries spent. Each delivery now runs under its own deadline, `OUTBOX_ROW_DEADLINE_MS` (three
+    seconds, so twenty slow rows still end with the worker's default minute): past it the delivery's signal aborts, what the handler
+    asked of the database is cancelled and what it asks next is refused, so its transaction cannot commit and the row is not marked; the
+    fact is counted as failed and waits for its backoff, its attempt having been counted at the claim (§4). The deadline does not
+    release anything, since the claim holds nothing but the backoff: a fact that hangs every time costs three seconds of a worker eight
+    times over about twenty minutes (the backoff of five seconds doubling), not a minute eight times, and is then `dead`. A handler that
+    waits on something that is not the database and ignores the signal is not waited for, and still holds its connection until it
+    returns. A delivery that throws outside its handler (a handler that swallowed a database error and returned leaves an aborted
+    transaction) is `failed` too and is the only loss of the batch. And a drain that took a full batch is followed at once by another,
+    up to ten drains or twenty seconds an iteration and never past the worker's deadline, where it was twenty facts for each two
+    seconds, about ten a second, though the code does over a thousand; an idle module still claims once every two seconds. Exactly
+    once for the database effects and at least once for the rest are as §5 says: the handler's effect and the mark are still one
+    transaction.
 
 **Rejected.** *Counting the attempt when the handler fails*
 

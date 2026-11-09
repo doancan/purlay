@@ -980,6 +980,22 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
+    id: 'outbox-delivery-failure-ends-the-batch',
+    why: 'a delivery that throws outside its handler (an aborted transaction) ends the drain and spends the tries of the facts after it for nothing (D-288 §14)',
+    file: 'apps/api/src/platform/outbox-drain.ts',
+    find: "    return fail(error, 'a delivery failed outside its handler; the fact is tried again later');",
+    replace: '    throw error;',
+    tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
+  },
+  {
+    id: 'outbox-delivery-has-no-deadline',
+    why: 'one fact whose handler waits holds every fact after it in its batch until the worker’s deadline cuts the whole batch off (D-288 §14)',
+    file: 'apps/api/src/platform/outbox-drain.ts',
+    find: '      deadlineMs,\n      async (signal) =>',
+    replace: '      3_600_000,\n      async (signal) =>',
+    tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
+  },
+  {
     id: 'outbox-delivery-hides-the-modules-of-the-workspace',
     why: 'a consumer is told no modules were judged for its workspace, so `ports.of(fact)` reaches a provider the workspace lost',
     file: 'apps/api/src/platform/outbox-drain.ts',

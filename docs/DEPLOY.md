@@ -257,6 +257,9 @@ A drain takes its batch of 20 by turns across workspaces (D-288 §11), so a work
 facts due, and the others' wait is about the number of workspaces with facts due divided by twenty, times the two seconds between drains. The pick costs about 10 µs for each
 workspace that has anything pending for the consumer (46 to 54 ms for 5,000 workspaces and a million pending rows, measured): if `pg_stat_statements` shows it
 dominating, it is the number of workspaces with pending facts that grew, and the fix is a consumer that keeps up, not a larger batch.
+A handler is stopped after three seconds (D-288 §14): its transaction does not commit, the fact is counted in `purlay_outbox_failures_total` and tried again after its
+backoff, and after eight tries (about twenty minutes) it is dead. A burst is drained without waiting the two seconds between batches while batches come back full, up to ten
+batches or twenty seconds an iteration; the idle cost stays one claim every two seconds for each module on each node.
 
 **The thresholds, as alert rules (D-288 §12).** `docker/alerts/purlay-outbox.rules.yml` is the set to load into Prometheus (`rule_files:`) or Grafana
 Alerting; a test holds every metric it names to the code, so a renamed metric fails the build and not the alert. Gauges are the same on every node (`max`), counters are per
