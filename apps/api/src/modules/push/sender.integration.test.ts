@@ -77,7 +77,7 @@ const sending = async (
   recording = aRecordingLogger(),
   heard: Attention = attention,
   metrics?: ServerMetrics,
-  overrides: Partial<Pick<PushSenderDependencies, 'keys' | 'notices'>> = {},
+  overrides: Partial<Pick<PushSenderDependencies, 'keys' | 'notices' | 'queueMax'>> = {},
 ): Promise<{
   readonly say: (
     room: Room,
@@ -623,18 +623,21 @@ describe('integration: what the push service answers', () => {
     ).toContainEqual(['error', 'push delivery failed', 'm-1', 'finding devices']);
   });
 
-  test('past the pushes that may wait, the rest are dropped and said', async () => {
+  test('past the pushes that may wait, the oldest are dropped and said, and the newest told', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const userId = room.members['bob']?.userId ?? '';
       const { sessionId } = await aSession(db, clock, userId, 30);
       const browser = await aBrowser();
+      const LINE = 3;
       await db
         .insertInto('push_subscriptions')
         .values(
-          Array.from({ length: 1_001 }, (_, n) => ({
+          Array.from({ length: LINE + 1 }, (_, n) => ({
             user_id: userId,
             session_id: sessionId,
+            // Subscribed one after the other: device 0 is the oldest in line, the last the newest.
+            created_at: new Date(clock.now().getTime() - (LINE + 1 - n) * 1_000),
             endpoint: `https://push.example.com/many/${String(n)}`,
             p256dh: browser.p256dh,
             auth: browser.auth,
@@ -645,10 +648,16 @@ describe('integration: what the push service answers', () => {
       const service = aPushService();
       const recording = aRecordingLogger();
       const metrics = serverMetrics(undefined, ['chat']);
-      const { say, settled } = await sending(db, service.post, recording, attention, metrics);
+      const { say, settled } = await sending(db, service.post, recording, attention, metrics, {
+        queueMax: LINE,
+      });
       await say(room, 'alice', `${mention(room, 'bob')} look`);
       await settled();
-      expect(service.sent).toHaveLength(1_000);
+      expect(service.sent).toHaveLength(LINE);
+      // The oldest in line is the one let go; the newest is told.
+      const told = new Set(service.sent.map((push) => push.url));
+      expect(told.has('https://push.example.com/many/0')).toBe(false);
+      expect(told.has(`https://push.example.com/many/${String(LINE)}`)).toBe(true);
       expect(failuresOf(metrics)).toMatchObject({ dropped: 1 });
       expect(
         recording.lines.find((line) => line['msg'] === 'push dropped: too many waiting'),

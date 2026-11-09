@@ -255,7 +255,7 @@ What the shape is for, which the types do not say:
   channel's box, never a thread's reply box (D-171); it hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
   listener forgets a person when that runs out or their message arrives. `ACTIVE` is the client's
   word that its page is in front of the person in a workspace: answered with nothing, heard only by the
-  push sender, which holds that workspace's pushes for its window (D-143), and — as the person's own
+  push sender, which holds that workspace's pushes for its window (D-143; its queues are bounded and let go of the oldest first, D-298), and — as the person's own
   word that they are using Purlay — by presence, which counts it against `AWAY_AFTER_MS` (D-257). Each frame joined the union
   with its feature, so an exhaustive switch breaks where a case is unhandled rather than carrying
   stubs for features that do not exist.

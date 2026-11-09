@@ -152,6 +152,7 @@ const senderOn = async (
     attention?: Attention;
     metrics?: ServerMetrics;
     log?: ReturnType<typeof aRecordingLogger>;
+    queueMax?: number;
   } = {},
 ): Promise<Awaited<ReturnType<typeof createPushSender>>> =>
   await createPushSender({
@@ -165,6 +166,7 @@ const senderOn = async (
     noticeThrottle: aNoticeThrottle(world.clock),
     post,
     ...(over.metrics === undefined ? {} : { failures: over.metrics.pushFailures, owner: 'chat' }),
+    ...(over.queueMax === undefined ? {} : { queueMax: over.queueMax }),
   });
 
 /** The failures counted under a module, by reason: the notices of `things` under `things`, the sender's own under `chat`. */
@@ -454,6 +456,45 @@ describe('integration: what Deep Work and quiet hours hold back', () => {
       await sender.flush(10_000);
       expect(service.sent).toEqual([]);
       expect(failuresOf(metrics, 'chat')).toEqual({ dropped: 1 });
+    });
+  });
+
+  test('holds only as many as may wait: past it the oldest are dropped and counted, and the rest are delivered', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await subscribe(db, world.clock, world.ada, await aBrowser());
+      await db
+        .updateTable('workspace_members')
+        .set({
+          is_deep_work_active: true,
+          deep_work_until: new Date(world.clock.now().getTime() + HOUR_MS),
+        })
+        .where('user_id', '=', world.ada)
+        .execute();
+      const metrics = serverMetrics(undefined, ['things'], [], []);
+      const recording = aRecordingLogger();
+      const service = aPushService();
+      const sender = await senderOn(db, world, service.post, {
+        metrics,
+        log: recording,
+        queueMax: 2,
+      });
+      sender.toldInbox([
+        await world.write(world.ada, 'one'),
+        await world.write(world.ada, 'two'),
+        await world.write(world.ada, 'three'),
+      ]);
+      await sender.flush(10_000);
+      expect(service.sent).toEqual([]);
+      expect(failuresOf(metrics, 'chat')).toEqual({ dropped: 1 });
+      expect(
+        recording.lines.find((line) => line['msg'] === 'push dropped: too many held'),
+      ).toMatchObject({ dropped: 1 });
+
+      world.clock.to(new Date(world.clock.now().getTime() + 2 * HOUR_MS));
+      await sender.releaseHeld();
+      await sender.flush(10_000);
+      expect(service.sent).toHaveLength(2);
     });
   });
 
