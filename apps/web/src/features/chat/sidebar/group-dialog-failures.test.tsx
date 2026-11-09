@@ -176,10 +176,9 @@ test('revoking channel membership closes an open move and does not reopen it whe
     fireEvent.contextMenu(row, { clientX: 0, clientY: 0 });
     await Promise.resolve();
   });
-  await settle();
-  await person().click(view.getByRole('menuitem', { name: 'Move to group…' }));
-  await settle();
-  expect(view.getByRole('dialog', { name: 'Move api' })).toBeTruthy();
+  // The menu and the dialog are chunks of their own: each is waited for, not a count of turns.
+  await person().click(await view.findByRole('menuitem', { name: 'Move to group…' }));
+  expect(await view.findByRole('dialog', { name: 'Move api' })).toBeTruthy();
   const key = keys.channels(channels[0]?.workspaceId ?? '');
   channels = [aChannel(IDS.api, 'api', { state: null })];
   await act(async () => {

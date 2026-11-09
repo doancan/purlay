@@ -3,7 +3,7 @@
  * the reactions, and that it does not re-render for nothing.
  */
 import { describe, expect, spyOn, test } from 'bun:test';
-import { act, fireEvent, within } from '@testing-library/react';
+import { act, fireEvent, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import { ApiError } from '../../../data/errors';
@@ -57,7 +57,10 @@ describe('message-bound public metadata', () => {
       const pending = await mount(props({ message, delivery }));
       expect(pending.container.querySelector('[data-web-link-cards]') === null).toBe(true);
       const sent = await mount(props({ message, delivery: 'sent' }));
-      expect(sent.container.querySelector('[data-web-link-cards]') !== null).toBe(true);
+      // The cards are a chunk of their own: they are there when it has loaded, which is not a count of turns.
+      await waitFor(() => {
+        expect(sent.container.querySelector('[data-web-link-cards]') !== null).toBe(true);
+      });
     },
   );
 });
