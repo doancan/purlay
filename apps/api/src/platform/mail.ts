@@ -30,6 +30,11 @@ export interface MailMessage {
   readonly subject: string;
   readonly text: string;
   readonly html: string;
+  /**
+   * The letter's `Message-ID`, where the sender must be able to send the same letter again and have a
+   * copy that did arrive recognised for what it is. Absent, the relay makes one.
+   */
+  readonly messageId?: string;
 }
 
 /** Hands a message to the relay; resolves once it has accepted it. */

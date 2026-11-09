@@ -451,6 +451,95 @@ describe('integration: what keeps a letter from going', () => {
   });
 });
 
+describe('integration: a letter that may or may not have gone', () => {
+  test('a letter given back after a timeout is sent again with the same Message-ID, so a copy that did arrive is recognised', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoomForAda(db);
+      await told(db, room, ago(HOUR_MS));
+      const seen: (string | undefined)[] = [];
+      const timingOut: SendMail = (letter) => {
+        seen.push(letter.messageId);
+        return Promise.reject(Object.assign(new Error('Timeout'), { code: 'ETIMEDOUT' }));
+      };
+      await run(db, NOW, timingOut).catch(() => undefined);
+      const again: SendMail = (letter) => {
+        seen.push(letter.messageId);
+        return Promise.resolve();
+      };
+      expect(await run(db, NOW, again)).toMatchObject({ letters: 1 });
+      expect(seen).toHaveLength(2);
+      expect(seen[0]).toMatch(/^<missed-[0-9a-f]{32}@purlay\.test>$/);
+      expect(seen[1]).toBe(seen[0]);
+    });
+  });
+
+  test('different rows are a different letter, with a Message-ID of its own', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoomForAda(db);
+      await told(db, room, ago(HOUR_MS));
+      const first = aPostbox();
+      await run(db, NOW, first.send);
+      await told(db, room, ago(HOUR_MS, new Date(NOW.getTime() + 2 * HOUR_MS)));
+      const second = aPostbox();
+      await run(db, new Date(NOW.getTime() + 2 * HOUR_MS), second.send);
+      expect(first.letters[0]?.messageId).toBeDefined();
+      expect(second.letters[0]?.messageId).toBeDefined();
+      expect(second.letters[0]?.messageId).not.toBe(first.letters[0]?.messageId);
+    });
+  });
+
+  test('an address the relay refuses for good (550) is counted, not tried again every run, and does not fail the run', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoomForAda(db);
+      const waiting = await told(db, room, ago(HOUR_MS));
+      const { log, lines } = aRecordingLogger();
+      const refusing: SendMail = () =>
+        Promise.reject(
+          Object.assign(new Error('550 5.1.1 no such user ada@example.test'), {
+            code: 'EENVELOPE',
+            responseCode: 550,
+            response: '550 5.1.1 no such user ada@example.test',
+          }),
+        );
+      const outcome = await mailMissedMessages({
+        database: db,
+        clock: fixedClock(NOW),
+        log,
+        send: refusing,
+        appUrl: APP,
+      });
+      expect(outcome).toMatchObject({ letters: 0, failed: 0, refused: 1 });
+      expect(JSON.stringify(lines)).not.toContain('example.test');
+      expect(await mailedAt(db, waiting.notificationId)).not.toBeNull();
+      const postbox = aPostbox();
+      expect(await run(db, NOW, postbox.send)).toMatchObject({ letters: 0, refused: 0 });
+      expect(postbox.letters).toEqual([]);
+    });
+  });
+
+  test.each([
+    ['535 sign-in', { code: 'EAUTH', responseCode: 535, response: '535 5.7.8 bad credentials' }],
+    [
+      '550 relaying denied',
+      { code: 'EENVELOPE', responseCode: 550, response: '550 5.7.1 relaying denied' },
+    ],
+    ['550 with no status', { code: 'EENVELOPE', responseCode: 550, response: '550 go away' }],
+  ])(
+    'a refusal that is the relay’s own (%s) is not the address’s: the rows wait and the run fails',
+    async (_name, fields) => {
+      await withRollback(async (db) => {
+        const room = await aRoomForAda(db);
+        const waiting = await told(db, room, ago(HOUR_MS));
+        const refusing: SendMail = () =>
+          Promise.reject(Object.assign(new Error('refused'), fields));
+        const failure = await run(db, NOW, refusing).catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(Error);
+        expect(await mailedAt(db, waiting.notificationId)).toBeNull();
+      });
+    },
+  );
+});
+
 describe('integration: through a real relay', () => {
   test('the letter reaches the relay addressed to the person alone, in text and HTML', async () => {
     const relay = await aScriptedRelay();

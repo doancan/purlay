@@ -602,7 +602,7 @@ only with a `location /metrics { return 404; }` in Nginx Proxy Manager's *Advanc
 **The scheduled jobs** run in the `scheduler` service, from the same image with the same settings
 (D-30): sessions hourly; the orphan sweep, the storage reconciliation and the expired link previews
 nightly, in UTC; and every quarter hour `mail:missed`, the letters to people who asked to be emailed about what
-they left unread (D-240), sent through the relay the server's settings name — read on each run with
+they left unread (D-240; at least once, a repeat carrying the same `Message-ID`, D-297), sent through the relay the server's settings name — read on each run with
 `ENCRYPTION_KEY`, as the API reads it, so the scheduler reaches the relay as the API does. Without a relay it
 sends nothing and succeeds. When it starts it first runs, once, each job that has never succeeded (`jobs:first`), so a
 new deployment is proven, and its status is clean, from its first minute (D-30). Every run is
