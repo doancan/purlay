@@ -31,5 +31,6 @@ have it.
 
 - **Operations** — `erase:content` now says when a message was held by another transaction and still has its words, exits 1 and is run again, and `--all` reaches a workspace where the person only left a decision note (D-139)
 - **Operations** — `admin:reset-password` tells the operator what actually failed instead of one fixed sentence (D-179)
+- **Messages** — moving to another workspace no longer deletes the messages you had not yet sent in the one you left
 
 ---

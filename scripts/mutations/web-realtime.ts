@@ -3,6 +3,14 @@ import type { Mutation } from '../mutate';
 
 export const WEB_REALTIME: readonly Mutation[] = [
   {
+    id: 'channel-gone-keeps-its-unsent-messages',
+    why: 'a channel the list no longer has the person in is lost, and its unsent messages stay failed for ever (#521)',
+    file: 'apps/web/src/realtime/realtime-provider.tsx',
+    find: '    if (gone.length > 0) engine.lose(gone);\n',
+    replace: '',
+    tests: ['apps/web/src/realtime/realtime-provider.test.tsx'],
+  },
+  {
     id: 'client-send-drops-its-attachments',
     why: 'a message the composer sent with files reaches the server without them, on either door',
     file: 'apps/web/src/realtime/engine.ts',
@@ -217,5 +225,13 @@ export const WEB_REALTIME: readonly Mutation[] = [
     find: "useChannels(workspace.id, useRuns('chat'))",
     replace: 'useChannels(workspace.id)',
     tests: ['apps/web/src/features/shell/chatless-shell.test.tsx'],
+  },
+  {
+    id: 'workspace-move-loses-unsent-messages',
+    why: 'moving to another workspace reads its channel list as the first one’s channels taken away, and the unsent messages for them go (#521)',
+    file: 'apps/web/src/realtime/realtime-provider.tsx',
+    find: '    if (before?.workspaceId !== workspace.id) return;\n',
+    replace: '    if (before === null) return;\n',
+    tests: ['apps/web/src/realtime/realtime-provider.test.tsx'],
   },
 ];
