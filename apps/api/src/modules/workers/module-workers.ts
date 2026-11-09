@@ -16,6 +16,7 @@ import { withinRequest, type Logger } from '../../platform/logging';
 import type { ModuleManifest } from '../../platform/module-kit/manifest';
 import type { Counter } from '../../platform/metrics';
 import { withDeadline } from '../../platform/request-deadline';
+import { noPorts, type ModulePorts, type PortsFor } from '../../platform/ports/module-ports';
 import type { OutboxCounters } from '../../platform/outbox-drain';
 import type { PushSender } from '../push/sender';
 
@@ -37,6 +38,8 @@ interface WorkerContext {
   /** Names the module and the worker on every line. */
   readonly log: Logger;
   readonly bus: EventBus;
+  /** The ports of what the module `uses`, reading through `database`: ask them for each workspace the work touches (D-283 §3). */
+  readonly ports: ModulePorts;
   /** Where the process has Web Push on. */
   readonly push?: PushSender;
   /** What the outbox worker of a module counts into, where the process records metrics. */
@@ -132,6 +135,8 @@ export interface WorkersDependencies {
   readonly bus: EventBus;
   readonly push?: PushSender;
   readonly outbox?: OutboxCounters;
+  /** The composition's `portsFor`; left out, a worker has no ports. */
+  readonly portsFor?: PortsFor;
   /** `purlay_worker_failures_total`: one series for each worker the build carries, made at zero by `serverMetrics`. */
   readonly failures: Counter<'module' | 'worker'>;
   /** The modules the administrator has stopped (D-296), as fresh as the TTL: a worker of one of them does not run its iteration. */
@@ -160,12 +165,14 @@ export const startWorkers = (
     outbox,
     failures,
     suspended,
+    portsFor,
     later = timeoutLater,
   } = dependencies;
   let stopped = false;
   const loops = workers.map((worker) => {
     const { module, name, work, deadlineMs } = worker;
     const log = dependencies.log.child({ module, worker: name });
+    const ports = portsFor?.(module, database) ?? noPorts;
     const iteration = async (): Promise<void> => {
       // A stopped module claims nothing and sweeps nothing; its rows wait for it (D-296).
       if ((await suspended?.())?.has(module) === true) return;
@@ -183,6 +190,7 @@ export const startWorkers = (
               clock,
               log,
               bus,
+              ports,
               ...(push === undefined ? {} : { push }),
               ...(outbox === undefined ? {} : { outbox }),
             });

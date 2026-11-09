@@ -14,11 +14,13 @@ import { ISSUES_AUDIT_ACTIONS, ISSUES_NOTIFICATION_KINDS } from '@purlay/types';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { issuesBudget } from './budget';
 import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
+import type { CapabilityPorts } from '../../platform/ports/module-ports';
 import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
 import { issuesNoticeWords } from './notice-words';
 import { issuesRoutes } from './http/routes';
 import { issuesPersonalExport } from './personal-export';
+import { issuesRecords } from './records';
 import { issuesSearchSource } from './search';
 import type { IssuesTx } from './schema';
 
@@ -44,7 +46,8 @@ export const issuesModule = {
     requires: [],
     optional: [],
     degrades: {},
-    provides: [],
+    // A module that links to an issue asks for it by id and is told its title, or that it is not available (D-291).
+    provides: ['issues.records'],
     // A third of the pool, so that a module whose queries are slow cannot make chat's sends queue (`budget.ts`).
     budget: { poolShare: issuesBudget },
     // Past its own queue (1 s) and statement limit (5 s), well under the default: a list of issues is not a long request.
@@ -67,4 +70,5 @@ export const issuesModule = {
   personalExport: issuesPersonalExport,
   searchSources: [issuesSearchSource],
   routes: issuesRoutes,
+  ports: { 'issues.records': issuesRecords } satisfies Partial<CapabilityPorts>,
 };

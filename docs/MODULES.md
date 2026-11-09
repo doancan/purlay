@@ -186,7 +186,7 @@ the rest (`ingress/http/inbox.ts`); `GET /api/me`, `GET /api/workspaces` and the
 `memberships[].modules`, which the web draws a workspace from (`useModules`, `WorkspaceScopeProvider`), falling back to the
 server's list for a server that does not send it. A module that is a grant and declares `jobs` or `workers` stops the build
 (`unguardedWorkProblem`, `composition.ts`): their work is not yet given the workspace's grant, so the first such module brings
-the SQL form of the function with it, or says `always`. No module has ports or `ports.of` to ask it yet; the outbox asks it when it publishes and when it claims (D-288).
+the SQL form of the function with it, or says `always`. A module's ports are asked for the workspace (`ports.of(context)`, §4) with the same set; the outbox asks it when it publishes and when it claims (D-288).
 
 **What an anonymous caller can still infer.** A closed route hides its body and its code: both are those of an
 unknown path. It does not hide its status. For a caller with no session, a route of a module that runs answers `401`
@@ -230,14 +230,17 @@ In this order:
    implements or calls. `AttachmentOwner` is *not built and not decided*.
 3. **Asking whether a capability exists** is a typed port that is `undefined` where the provider is not run, not a
    `capabilities.has` call (D-283 §3): `Composition.ports` holds the implementations of the modules that run and `Port<T>`
-   (`platform/ports/ports.ts`) makes a caller say what absence means. **Built** (step 14b) as that skeleton, held by a fake module;
-   no module provides or uses a capability yet, so `provides` of the two real ones is still a list of names nothing asks.
+   (`platform/ports/ports.ts`) makes a caller say what absence means. **Built** (step 14b) as that skeleton, held by a fake module.
+   A module is handed its ports as `ports` of its route dependencies, of a worker's context and of a fact consumer's third argument
+   (`platform/ports/module-ports.ts`, `Composition.portsFor`): `ports.of(scope)` has the port of each capability the manifest `uses`
+   whose provider runs, is not stopped and is granted to the workspace of `scope` (a request's `WorkspaceContext`, or a delivered
+   fact, which carries its workspace's modules), and `undefined` for the rest. Issues provides the first, `issues.records`.
 
 **Which interaction uses which (D-283 §1).** The rule is what the receiver must be told:
 
 | The interaction | The mechanism | Built in step (§10) | State |
 |---|---|---|---|
-| A read whose answer shapes the caller's request (search sources, is this person in that channel) | a port call with a deadline and an abort signal; `undefined` where the provider is not run | 14b the contract, 14k the search | the contract skeleton and the search built (`SearchSource`, D-285); no port a module `uses` exists yet, so `Port<T>` is proven by a fake module only |
+| A read whose answer shapes the caller's request (search sources, is this person in that channel) | a port call with a deadline and an abort signal; `undefined` where the provider is not run | 14b the contract, 14k the search | the contract and the search built (`SearchSource`, D-285); `ports.of` and `resolveRef` built, with `issues.records` the first port a module can `use` (D-291) |
 | A fact written to a row the core keeps, to a receiver that is always there (an assignment notice) | a port call inside the caller's transaction, announced after commit | 14f, 14h | the sink and its table built (14f), called by issues' assignment (14h, **built**) |
 | An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | the table and `publishFact` (14c), the claim, the delivery and the worker (14d), the sweep, the metrics and the overview line (14e) built (D-288) |
 | A hint: a cache nudge, presence, "read again" | the domain bus or the socket's `EventBus`, which exist | — | built, with no module using it |
@@ -291,8 +294,13 @@ failure. The real build has no optional edge today, so the cases appear with the
 `(module, type, id)` and the label the record had when it was linked; there is no foreign key to the other module (a key between
 modules is already held by `module-foreign-keys.integration.test.ts`, and a read of the other's table does not compile, above). The
 target being off, not entitled, deleted or hidden from the viewer is a view, "not available here", shown as the saved label in
-plain text and never an error, and deleting the target never cascades. The resolver port and the wire type come with the first
-module that links; the rule binds the table it writes.
+plain text and never an error, and deleting the target never cascades. The reference is `ModuleRef` and the question is
+`ports.resolveRef(ref, scope)` (`platform/ports/record-ref.ts`, `module-ports.ts`): the provider lists `<its id>.records` under
+`provides` and implements `RecordResolver`; the asker lists it under `uses`. The answer is `{ status: 'available', ref, label }` or
+the one value `{ status: 'unavailable' }`, for a provider that is not run, was stopped, is not granted to the workspace, a record that
+is gone, of another workspace or of a kind the provider does not have, and for a capability the asker does not `use`; only a
+failure of the database is thrown. Built, with issues as the first provider (`features/issues/records.ts`); the wire type of a link
+is the referrer's own, as its table is.
 
 **Reads are bounded the same way.** A module's functions take a handle typed with *its own tables and the
 core's it names* — never the combined schema (`features/<id>/schema.ts`: `ModuleSchema`, derived from `TABLE_OWNERS`, so
@@ -757,8 +765,9 @@ the removal threshold, the behaviour, the hot path of `HOT_PATHS`, and the web f
   named `<module>.<what>` and the slot's `ports` has an implementation of the interface in `platform/ports/` for each, and none
   for a name not listed (`compose`). `uses`: a capability provided by a module in the module's `requires` or `optional`, never one
   nobody provides (the registry): the module is handed `Port<T>`, the implementation where the provider runs and `undefined`
-  where it does not, and says in code what the feature does without it. Asking never makes a requirement. No scan yet holds a
-  module to reading only the ports it `uses`; the release snapshot holds `publishes` and `consumes` but not `uses` (§4, D-288).
+  where it does not (or where the workspace is not granted the provider: `ports.of(context)`), and says in code what the feature
+  does without it. Asking never makes a requirement. Routes, workers and fact consumers get their view from the composition, so
+  they read only the ports their manifest `uses`; no scan holds the module's own code to using the view and not the provider's files; the release snapshot holds `publishes` and `consumes` but not `uses` (§4, D-288).
 - `retention`: the scheduled jobs that keep the module's rows within their retention, a purge or a sweep, **in the
   manifest, not in `cli/jobs.ts`**. They run in every process (rows outlive the module's being off); a job that acts for
   the module's users goes under `jobs` and waits for the module to run. The work is `jobWork` of the module's slot in
@@ -1062,7 +1071,6 @@ file and cluster check, and the scaffold. Not built:
 | Not built | What would start it | What watches for it today |
 |---|---|---|
 | A fact published by a module of the product | the first feature that must tell a module that may be absent (issues' link to a channel, D-254 §1) | nothing: a route has `publishFact` (`ModuleRouteDependencies`, `platform/ports/fact-publisher.ts`, `ingress/http/module-publish.integration.test.ts`), bound to its module, so the first publisher only declares its fact |
-| `Composition.ports` asked per workspace (`ports.of`) | the first module that `uses` a port of a module that is a grant: today a port answers for a process, not for a workspace the module is withheld from | `uses` and `provides` of the real modules are empty, so nothing can ask yet |
 | The SQL form of `effectiveModules` (`entitled()`) for jobs and workers | the first module that is a grant and declares `jobs` or `workers` | the build refuses it (`unguardedWorkProblem`, `composition.test.ts`) |
 | The web's search groups and the skipped line (14m) | the product wants the find drawn; the route answers them today | none; a metric of how long each source took and how many were skipped is also not built |
 | A runtime kill switch for a module | the administrator's command (`module:suspend`, `module:resume`) and the list of what is stopped (D-296: the state, everything that reads it, and the route that writes it are built) | until then the route is the only writer, and a row written by hand is believed by every node within two seconds |
@@ -1095,7 +1103,7 @@ beyond the threshold is held by review.
 | Module | Requires | Optional | Provides |
 |---|---|---|---|
 | `chat` | — | — | — |
-| `issues` | — | — | — |
+| `issues` | — | — | `issues.records` |
 
 ### `chat`
 
@@ -1223,8 +1231,8 @@ table, so that §11's listing test reads only the modules.
   the consumer's own by a worker of its module: at least once, unordered, for facts of human scale. The table, `publishFact`, the claim, the
   delivery, the worker, the sweep and the metrics are **built** (D-288), with no publisher in the product.
 - **Port** — an interface the core defines and a module implements, handed to the module that `uses` it as `Port<T>`, the
-  implementation or `undefined` where the provider is not run (`platform/ports/`, `Composition.ports`, built in step 14b with no
-  port yet). Built before it: `WorkspaceChannels`, `PushNotices`, `SearchSource` (D-285), `NotificationSink` (D-286).
+  implementation or `undefined` where the provider is not run or the workspace is not granted it (`platform/ports/`,
+  `Composition.portsFor`, step 14b; `issues.records` is the first). Built before it: `WorkspaceChannels`, `PushNotices`, `SearchSource` (D-285), `NotificationSink` (D-286).
 - **Capability** — a name a module lists under `provides`: held to no repeat by the registry and to the last release's by
   `module-compat.test.ts`. A module that `uses` one is handed its implementation or `undefined` (`Composition.ports`, built, with no
   module yet using one), and there is no `capabilities.has` (§4, D-283 §3).

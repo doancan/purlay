@@ -70,12 +70,43 @@ provides. The composition hands you the implementation of the modules that run a
 `apps/api/src/platform/ports/ports.ts`), so the compiler makes you handle absence. The provider lists it under `provides` and supplies it in
 `ports` of its slot in `apps/api/src/composition.ts`; `compose` stops a build where the two differ.
 
+You read them from `ports` of what you are handed: `ModuleRouteDependencies` in a route, the context of a worker, the third argument of a
+fact consumer. `ports.of(context)` is asked for each workspace, because a port is there only when its provider runs, was not stopped
+by the administrator and is granted to *that* workspace; what you are given are the capabilities your manifest `uses`, no others.
+The type of a port is `CapabilityPorts` in `platform/ports/module-ports.ts`: `<id>.records` is a `RecordResolver` for any module, and a new kind of port is a member there.
+
+```ts
+const resolver = ports.of(context)['issues.records'];
+if (resolver === undefined) return hideTheIssueColumn(); // issues is not run here, or this workspace is not granted it
+```
+
+**Link another module's record.** Say it in four steps (D-291):
+
+1. Your manifest lists the partner in `optional` (with its `degrades` sentence) and `uses: ['issues.records']`.
+2. Your table stores `(module, type, id)` and the label the record had, with no key to the partner's table: `('issues', 'issue', id)`.
+3. To show the link, ask `await ports.resolveRef({ module: 'issues', type: 'issue', id }, context)`. `available` has the live `label`;
+   `unavailable` means draw the label you saved, as text, with "not available here" and no link. It is the same answer whether the
+   partner is off, stopped or not granted, the record is gone or is another workspace's: never turn it into a `404` or `500`, and never
+   tell the person which one it is. Only a failure of the database throws.
+4. Prove it in `degradation.testing.ts` (§4): compose without the partner and assert your view draws the saved label.
+
+To be the target of links, list `<your id>.records` under `provides` and implement `RecordResolver` for it in your slot's `ports`
+(`features/issues/records.ts` is the model: one query that names the workspace, an id that is no UUID answers none).
+
 ## 4. Say, and prove, what you do without a partner
 
 For every `optional` partner write the sentence in `degrades` and the scenario in `features/<id>/degradation.testing.ts` (`--optional` makes
 both as stubs). `degradation.test.ts` composes the build without the partner and runs the scenario; it fails for an edge with no scenario. A
-reference to the partner's records follows D-291: your own table holds `(module, type, id)` and the label, with no key to the other
-module, and a missing target is a view.
+reference to the partner's records follows D-291 (§3): your own table holds `(module, type, id)` and the label, with no key to the other
+module, and a missing target is a view. The stub `module:new --optional` writes asserts only that the partner is out of the world;
+for a partner whose records you link, replace it with the scenario below, which `runs` and `composition` make possible:
+
+```ts
+issues: async ({ composition }) => {
+  const ports = composition.portsFor('acme', database);
+  expect(await ports.resolveRef(savedLink, { workspaceId, modules: null })).toEqual({ status: 'unavailable' });
+},
+```
 
 ## 5. Publish a fact
 

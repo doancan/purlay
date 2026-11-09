@@ -98,6 +98,14 @@ export const API_MODULES_WORKERS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'worker-is-handed-no-ports',
+    why: 'a worker is handed no ports whatever its module uses, so the work that links across modules finds every partner absent',
+    file: 'apps/api/src/modules/workers/module-workers.ts',
+    find: 'portsFor?.(module, database) ?? noPorts',
+    replace: 'noPorts',
+    tests: ['apps/api/src/modules/workers/module-workers.test.ts'],
+  },
+  {
     id: 'worker-name-not-checked',
     why: 'two workers of one module share a name, and so a series and a line',
     file: 'apps/api/src/modules/workers/module-workers.ts',

@@ -652,6 +652,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
               ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
             }),
             publishFact: factPublisherOf(module.manifest.id, factContext),
+            ports: modules.portsFor(module.manifest.id, dependencies.database),
             bus: sockets.bus,
             atomically: sockets.atomically,
             online: sockets.online,

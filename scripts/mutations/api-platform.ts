@@ -860,6 +860,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
   },
   {
+    id: 'outbox-delivery-hides-the-modules-of-the-workspace',
+    why: 'a consumer is told no modules were judged for its workspace, so `ports.of(fact)` reaches a provider the workspace lost',
+    file: 'apps/api/src/platform/outbox-drain.ts',
+    find: '      effective === undefined\n        ? null\n        : effective(',
+    replace: '      true\n        ? null\n        : effective!(',
+    tests: ['apps/api/src/platform/outbox-drain.integration.test.ts'],
+  },
+  {
     id: 'outbox-delivery-loses-the-correlation',
     why: 'a delivery runs under an id of its own and not the request that published the fact, so a log cannot be followed from the request to the consumer (D-288)',
     file: 'apps/api/src/platform/outbox-drain.ts',
@@ -1034,6 +1042,37 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: '`${INVITE_COOKIE}=${value}; ${ATTRIBUTES}; Max-Age=${String(maxAgeSeconds)}`',
     replace: '`${INVITE_COOKIE}=${value}; Max-Age=${String(maxAgeSeconds)}`',
     tests: ['apps/api/src/ingress/http/invitation-passport.integration.test.ts'],
+  },
+  {
+    id: 'ports-hand-a-port-of-a-provider-the-workspace-is-not-granted',
+    why: 'a module reaches the port of a module its workspace is not granted, and a withheld module is served through another module’s link (D-289, D-291)',
+    file: 'apps/api/src/platform/ports/module-ports.ts',
+    find: '      if (scope.modules !== null && !scope.modules.has(provider)) continue;\n',
+    replace: '',
+    tests: [
+      'apps/api/src/platform/ports/module-ports.test.ts',
+      'apps/api/src/features/issues/records.integration.test.ts',
+    ],
+  },
+  {
+    id: 'ports-hand-a-port-the-module-does-not-use',
+    why: 'a module reaches the port of a capability its manifest does not `uses`, so the registry’s rule on who may ask whom means nothing (D-283 §3)',
+    file: 'apps/api/src/platform/ports/module-ports.ts',
+    find: '    for (const capability of sources.uses) {',
+    replace: '    for (const capability of Object.keys(running)) {',
+    tests: ['apps/api/src/platform/ports/module-ports.test.ts'],
+  },
+  {
+    id: 'ports-resolve-a-ref-as-an-error-when-it-is-gone',
+    why: 'a link to a record that is gone, off or not granted is an error where D-291 says it is a view',
+    file: 'apps/api/src/platform/ports/module-ports.ts',
+    find: "      return found === undefined\n        ? UNAVAILABLE_REF\n        : { status: 'available', ref, label: found.label };",
+    replace:
+      "      if (found === undefined) throw new Error('no such record');\n      return { status: 'available', ref, label: found.label };",
+    tests: [
+      'apps/api/src/platform/ports/module-ports.test.ts',
+      'apps/api/src/features/issues/records.integration.test.ts',
+    ],
   },
   {
     id: 'production-starts-without-a-bucket',
