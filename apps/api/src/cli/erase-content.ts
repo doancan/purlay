@@ -37,10 +37,13 @@ try {
     );
     for (const workspace of done) {
       process.stdout.write(
-        `${workspace.workspaceId}: ${String(workspace.messages)} messages emptied, ${String(workspace.files)} files removed${workspace.leftBehind === 0 ? '' : `, ${String(workspace.leftBehind)} left in storage`}\n`,
+        `${workspace.workspaceId}: ${String(workspace.messages)} messages emptied, ${String(workspace.files)} files removed${workspace.leftBehind === 0 ? '' : `, ${String(workspace.leftBehind)} left in storage`}${workspace.lockedMessages === 0 ? '' : `, at least ${String(workspace.lockedMessages)} held by another transaction: run it again`}\n`,
       );
     }
-    if (done.some((workspace) => workspace.leftBehind > 0)) process.exitCode = 1;
+    // Words or files that remain are an erasure not done: 1, as the files left in storage are.
+    if (done.some((workspace) => workspace.leftBehind > 0 || workspace.lockedMessages > 0)) {
+      process.exitCode = 1;
+    }
   }
 } finally {
   await database.destroy();

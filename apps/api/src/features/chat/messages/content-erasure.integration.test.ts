@@ -129,7 +129,7 @@ describe('integration: erasing what a person wrote', () => {
         [room.workspaceId],
       );
       expect(done).toEqual([
-        { workspaceId: room.workspaceId, messages: 1, files: 1, leftBehind: 0 },
+        { workspaceId: room.workspaceId, messages: 1, files: 1, leftBehind: 0, lockedMessages: 0 },
       ]);
       expect(await message(db, hers)).toEqual({ content: '', deleted: true });
       // The controls.
@@ -179,7 +179,9 @@ describe('integration: erasing what a person wrote', () => {
           ada.userId,
           [room.workspaceId],
         ),
-      ).toEqual([{ workspaceId: room.workspaceId, messages: 0, files: 0, leftBehind: 0 }]);
+      ).toEqual([
+        { workspaceId: room.workspaceId, messages: 0, files: 0, leftBehind: 0, lockedMessages: 0 },
+      ]);
     });
   });
 
@@ -218,7 +220,9 @@ describe('integration: erasing what a person wrote', () => {
           ada.userId,
           [room.workspaceId],
         ),
-      ).toEqual([{ workspaceId: room.workspaceId, messages: 0, files: 1, leftBehind: 0 }]);
+      ).toEqual([
+        { workspaceId: room.workspaceId, messages: 0, files: 1, leftBehind: 0, lockedMessages: 0 },
+      ]);
     });
   });
 
@@ -266,6 +270,26 @@ describe('integration: erasing what a person wrote', () => {
         ok: false,
         reason: 'no workspace has that address',
       });
+    });
+  });
+
+  test('--all reaches a workspace where the person only left a decision note on somebody else’s root', async () => {
+    await withRollback(async (db) => {
+      const wrote = await aRoom(db, ['bob', 'ada']);
+      const noted = await aRoom(db, ['bob']);
+      const ada = member(wrote, 'ada');
+      await say(db, wrote, 'ada', 'words');
+      const root = await say(db, noted, 'bob', 'a root');
+      await db
+        .updateTable('messages')
+        .set({ decision_note: 'we chose this', decision_updated_by: ada.userId })
+        .where('id', '=', root)
+        .execute();
+      const plan = await planContentErasure(db, [ada.username, '--all']);
+      expect(plan).toMatchObject({ ok: true, userId: ada.userId });
+      expect(plan.ok ? [...plan.workspaceIds].sort() : []).toEqual(
+        [wrote.workspaceId, noted.workspaceId].sort(),
+      );
     });
   });
 });

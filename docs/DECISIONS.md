@@ -6555,7 +6555,10 @@ critique of the first plan found four of its answers wrong; what follows is what
    --workspace <slug>`; `--all` for a self-hoster who is the controller of every workspace, D-28): every
    message the person wrote there becomes a tombstone through the same set-based rule as a delete, and
    their attachments go with their blobs and bytes. Events, incidents' postmortems and runbooks (D-137 §3)
-   are untouched. One `content.erased` audit row per workspace. No frame, as §3.
+   are untouched. One `content.erased` audit row per workspace. No frame, as §3. A message another
+   transaction holds when its batch runs is not waited for (`SKIP LOCKED`, as the retention purge) but
+   counted: the row says `messagesLocked`, the command exits 1 and is run again — unlike the purge, whose
+   next night finishes it, an erasure someone asked for may not read as done while words remain.
 
 **Cost of reversing:** none for the data model — no column was added for any of it; what is purged or
 erased is gone, which is the point.

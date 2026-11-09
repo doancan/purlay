@@ -157,7 +157,8 @@ Server admission state and whether the account requires email verification are a
    first (D-139 §6).
 2. **What they wrote is erased by the operator**, per workspace or in all of them:
    `bun run erase:content <user> --workspace <slug>` or `--all` (D-139 §7). Each message becomes a
-   tombstone; their files go with their bytes. One `content.erased` line per workspace.
+   tombstone; their files go with their bytes. One `content.erased` line per workspace. A message another
+   transaction is holding is reported, not passed over: the command exits 1 and is run again.
 3. **Somebody who cannot sign in** cannot erase their account themselves, and there is no operator
    command for it yet (D-139 §5 left it to a separate issue). Erase their content (step 2), and remove
    their membership from each workspace; their account row keeps their profile until they can sign in

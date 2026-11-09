@@ -35,6 +35,8 @@ interface Batch {
   readonly files: number;
   readonly keys: readonly string[];
   readonly last: boolean;
+  /** Candidates another transaction held, so this batch left their words where they were. */
+  readonly held: number;
 }
 
 /** One batch of the person's messages in one workspace that still hold words or files. */
@@ -69,7 +71,7 @@ const eraseBatch = async (
     .orderBy('id')
     .limit(ERASURE_BATCH)
     .execute();
-  if (candidates.length === 0) return { emptied: 0, files: 0, keys: [], last: true };
+  if (candidates.length === 0) return { emptied: 0, files: 0, keys: [], last: true, held: 0 };
   await lockMemberships(transaction, channelsOf(candidates));
   const rows = await transaction
     .selectFrom('messages')
@@ -83,7 +85,9 @@ const eraseBatch = async (
     .forUpdate()
     .skipLocked()
     .execute();
-  if (rows.length === 0) return { emptied: 0, files: 0, keys: [], last: true };
+  if (rows.length === 0) {
+    return { emptied: 0, files: 0, keys: [], last: true, held: candidates.length };
+  }
   await takeBackLive(transaction, now, rows);
   const emptied = await tombstoneRows(
     transaction,
@@ -100,6 +104,7 @@ const eraseBatch = async (
     files: files.count,
     keys: files.keys,
     last: candidates.length < ERASURE_BATCH,
+    held: candidates.length - rows.length,
   };
 };
 
@@ -108,6 +113,12 @@ export interface ContentErased {
   readonly messages: number;
   readonly files: number;
   readonly leftBehind: number;
+  /**
+   * Messages still holding words because another transaction had them when the last batch ran — at
+   * least that many, as a batch that finds all of its candidates held cannot see past them. A run
+   * again takes them; unlike the retention purge's, this is not left for the next night.
+   */
+  readonly lockedMessages: number;
 }
 
 /**
@@ -153,6 +164,7 @@ export const eraseContent = async (
     let messages = 0;
     let files = 0;
     let leftBehind = 0;
+    let lockedMessages = 0;
     for (;;) {
       const batch = await atomicallyOn(database)(
         async (transaction) => await eraseBatch(transaction, now, workspaceId, userId),
@@ -164,7 +176,11 @@ export const eraseContent = async (
         { atomically: atomicallyOn(database), storage, log },
         batch.keys,
       );
-      if (batch.last) break;
+      if (batch.last) {
+        // A row held in an earlier batch comes up again as a candidate, so only the closing batch is the count.
+        lockedMessages = batch.held;
+        break;
+      }
     }
     await atomicallyOn(database)(async (transaction) => {
       await recordAudit(transaction, clock, {
@@ -177,10 +193,11 @@ export const eraseContent = async (
           messages: String(messages),
           files: String(files),
           ...(leftBehind === 0 ? {} : { filesLeft: String(leftBehind) }),
+          ...(lockedMessages === 0 ? {} : { messagesLocked: String(lockedMessages) }),
         },
       });
     });
-    done.push({ workspaceId, messages, files, leftBehind });
+    done.push({ workspaceId, messages, files, leftBehind, lockedMessages });
   }
   return done;
 };
@@ -196,7 +213,8 @@ const USAGE =
 /**
  * The person and the workspaces, from `<who> --workspace <slug>` or `<who> --all`. The person is found
  * by id, by username or by address, exactly — an erased person by id or by their `deleted-user-…`
- * name. `--all` is every workspace where they wrote anything: the self-hoster's, who controls them all.
+ * name. `--all` is every workspace where they wrote anything, a decision note included: the self-hoster's,
+ * who controls them all.
  */
 export const planContentErasure = async (
   executor: ChatDb,
@@ -220,13 +238,16 @@ export const planContentErasure = async (
     .executeTakeFirst();
   if (person === undefined) return { ok: false, reason: 'nobody is known by that' };
   if (flag === '--all') {
-    const wrote = await executor
+    // Their words are messages they sent and decision notes they left on other people's roots.
+    const touched = await executor
       .selectFrom('messages')
       .select('workspace_id')
       .distinct()
-      .where('sender_id', '=', person.id)
+      .where((eb) =>
+        eb.or([eb('sender_id', '=', person.id), eb('decision_updated_by', '=', person.id)]),
+      )
       .execute();
-    return { ok: true, userId: person.id, workspaceIds: wrote.map((row) => row.workspace_id) };
+    return { ok: true, userId: person.id, workspaceIds: touched.map((row) => row.workspace_id) };
   }
   const workspace = await executor
     .selectFrom('workspaces')
