@@ -21,7 +21,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-failures-counted-under-the-core',
     why: 'a push the service did not take is counted under the core though the notice was a module’s, so the module whose notifications fail is not the one the page names (D-250 rule 7)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/failures.ts',
     find: 'module: module ?? dependencies.owner ?? CORE_OWNER',
     replace: 'module: CORE_OWNER',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -29,7 +29,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-gone-device-kept',
     why: 'a browser that dropped its subscription is sent a push on every message, for ever',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '    if (status === 404 || status === 410) {\n',
     replace: '    if (status === 0) {\n',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -37,7 +37,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-held-queue-unbounded',
     why: 'the notices held for Deep Work are kept without a bound, and a person away for a day holds the node’s memory (D-298)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/held.ts',
     find: 'dropOldest(held, queueMax).length',
     replace: '0',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -45,7 +45,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-inbox-attention-ignored',
     why: 'a person looking at the workspace’s page is pushed the notice they are looking at (D-143)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: ' && !attention.active(entry.userId, entry.workspaceId)',
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -53,7 +53,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-inbox-deep-work-ignored',
     why: 'a person in Deep Work or in their quiet hours is pushed a module’s notice all the same (D-286 §9)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: 'entries.filter((entry) => quiet.get(entry.workspaceId)?.has(entry.userId)).map((e) => e.id),',
     replace: '[],',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -61,7 +61,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-inbox-failure-counted-under-the-senders-owner',
     why: 'a push of issues’ notice the service did not take is counted under chat, so the module whose notifications fail is not the one the page names (D-250 rule 7)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "failed('not_taken', 1, device.module);",
     replace: "failed('not_taken', 1);",
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -69,23 +69,23 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-inbox-held-for-ever',
     why: 'a push held for Deep Work is kept and delivered days later, long after the device would have dropped it (D-286 §9)',
-    file: 'apps/api/src/modules/push/sender.ts',
-    find: 'now - since > HELD_PUSH_MAX_MS',
+    file: 'apps/api/src/modules/push/held.ts',
+    find: 'now - since > maxMs',
     replace: 'now - since < 0',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
   },
   {
     id: 'push-inbox-held-never-delivered',
     why: 'a push held for Deep Work is forgotten, so what waited is never told when the person is free (D-286 §9)',
-    file: 'apps/api/src/modules/push/sender.ts',
-    find: '      held.set(id, {\n        since: now,\n        devices: deviceId === undefined ? undefined : new Set([deviceId]),\n      });\n',
+    file: 'apps/api/src/modules/push/held.ts',
+    find: '        held.set(id, {\n          since: now,\n          devices: deviceId === undefined ? undefined : new Set([deviceId]),\n        });\n',
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
   },
   {
     id: 'push-inbox-read-notice-pushed',
     why: 'a notice read in the meantime is pushed to a person who has nothing left to do about it (D-286 §9)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: "    // What was read meanwhile, or whose person or workspace is gone, is not worth a push.\n    .where('e.read_at', 'is', null)\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -101,7 +101,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-line-unbounded',
     why: 'the line of devices waiting for a push grows without a bound under load (D-298)',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/line.ts',
     find: 'admit(waiting, devices, queueMax)',
     replace: '0',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -109,7 +109,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-live-disabled-before-post-ignored',
     why: 'a server disabled during recipient checks still sends a queued push',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "    if (typeof keys === 'function' && (await keys())?.publicKey !== device.serverKey) return;\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -117,7 +117,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-live-disabled-lookup-errors',
     why: 'a normal disabled setting becomes an error on every push lookup',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: '  if (current === undefined) return [];\n',
     replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -125,7 +125,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-moved-device-told',
     why: 'a browser signed into by somebody else is sent the last person’s notice',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '    const live = await stillTheirs(device);\n    if (live === undefined) return;',
     replace: '    const live = (await stillTheirs(device)) ?? { sound: true };',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -157,7 +157,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-one-person-holds-the-node',
     why: 'one person’s slow or hostile push services hold every slot, and nobody else is told',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/line.ts',
     find: '(active.get(device.userId) ?? 0) < POSTS_PER_PERSON',
     replace: 'true',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -165,7 +165,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-our-fault-counted',
     why: 'a VAPID token the services refuse deletes every device on the server, five pushes each',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '    if (status !== null && OUR_REQUEST_REFUSED.has(status)) {\n',
     replace: '    if (status === 0) {\n',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -173,7 +173,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-attention-not-rechecked',
     why: 'a queued push buzzes a device after its person starts looking at that workspace',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '    if (dependencies.attention.active(device.userId, device.workspaceId)) return;\n',
     replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -181,7 +181,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-authority-not-rechecked',
     why: 'a queued device is told after its person loses access to the private message or reads it',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '    if (!(await stillRelevant(device))) return;\n',
     replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -189,15 +189,15 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-held-notice-repeats-told-devices',
     why: 'one device held by Deep Work causes every device already told to receive the notice again',
-    file: 'apps/api/src/modules/push/sender.ts',
-    find: '      return selected === undefined || selected.has(device.id);',
+    file: 'apps/api/src/modules/push/held.ts',
+    find: '      return selected === undefined || selected.has(deviceId);',
     replace: '      return true;',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
   },
   {
     id: 'push-queued-inbox-ignores-membership',
     why: 'a queued module push is sent after its recipient leaves the workspace',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "        .innerJoin('workspace_members as member', (join) =>",
     replace: "        .leftJoin('workspace_members as member', (join) =>",
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -205,7 +205,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-inbox-ignores-read',
     why: 'a queued module push no longer respects the current read state',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "        .where('e.read_at', 'is', null)\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -213,7 +213,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-inbox-ignores-recipient-deleted',
     why: 'a queued module push no longer respects the current recipient-deleted state',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "        .where('person.deleted_at', 'is', null)\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -221,7 +221,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-inbox-ignores-recipient-suspended',
     why: 'a queued module push no longer respects the current recipient-suspended state',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "        .where('person.suspended_at', 'is', null)\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -229,7 +229,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-inbox-ignores-workspace-deleted',
     why: 'a queued module push no longer respects the current workspace-deleted state',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: "        .where('w.deleted_at', 'is', null)\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
@@ -237,7 +237,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-queued-quiet-hours-not-rechecked',
     why: 'a push waits in the queue until Deep Work or quiet hours begin, then buzzes the device anyway',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '      (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(',
     replace:
       '      false && (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(',
@@ -246,7 +246,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-sent-while-its-person-is-looking',
     why: 'the phone buzzes for what its person is looking at on their desk',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: '    if (attention.active(row.userId, row.workspaceId)) {\n',
     replace: '    if (false) {\n',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -318,7 +318,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-sound-preparation-change-ignored',
     why: 'A prepared audible payload is posted after its device muted sound during encryption.',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: '    if (live.sound !== sound) return;',
     replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -326,7 +326,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-sound-snapshot-ignored',
     why: 'A device whose sound was muted while queued is sounded anyway.',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/delivery.ts',
     find: 'silent: !sound',
     replace: 'silent: false',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -342,7 +342,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-target-drops-the-thread-query',
     why: 'a reply push still contains the channel-only URL after the source supplied its thread',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: 'row.threadId === null',
     replace: 'true',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
@@ -350,7 +350,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   {
     id: 'push-under-a-replaced-key',
     why: 'a stale-key device is queued and its obsolete crypto material is processed instead of being ignored',
-    file: 'apps/api/src/modules/push/sender.ts',
+    file: 'apps/api/src/modules/push/devices.ts',
     find: "    .where('s.server_key', '=', current.publicKey)\n",
     replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],

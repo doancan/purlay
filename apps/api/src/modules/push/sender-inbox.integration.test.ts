@@ -3,7 +3,7 @@
  * pushed, in whose language and where, what Deep Work and quiet hours hold back and deliver once they end, and what is never sent
  * because the person read it, looked at the page, or waited longer than the push is worth.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, jest, test } from 'bun:test';
 import {
   closeIntegrationDatabase,
   withRollback,
@@ -35,6 +35,7 @@ afterAll(async () => {
 });
 
 const HOUR_MS = 3_600_000;
+const HELD_CHECK_MS = 60_000;
 const KIND = 'thing_assigned';
 /** The words of a module of the test's own: its title is in the params, and must never reach a device. */
 const words: NoticeWords = (kind, locale, actor) =>
@@ -375,6 +376,41 @@ describe('integration: what Deep Work and quiet hours hold back', () => {
     });
   });
 
+  test('is asked again by the sender’s own timer every minute, one asking at a time', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      let asked = 0;
+      const counted: World = {
+        ...world,
+        clock: {
+          ...world.clock,
+          now: (): Date => {
+            asked += 1;
+            return world.clock.now();
+          },
+        },
+      };
+      jest.useFakeTimers();
+      try {
+        const sender = await senderOn(db, counted, aPushService().post);
+        const before = asked;
+        jest.advanceTimersByTime(HELD_CHECK_MS - 1);
+        expect(asked).toBe(before);
+        jest.advanceTimersByTime(1);
+        expect(asked).toBe(before + 1);
+        // The next minute's tick finds the last asking not yet over and leaves it be; once over, the one after asks.
+        jest.advanceTimersByTime(HELD_CHECK_MS);
+        expect(asked).toBe(before + 1);
+        await sender.releaseHeld();
+        jest.advanceTimersByTime(HELD_CHECK_MS);
+        expect(asked).toBe(before + 3);
+        await sender.flush(10_000);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
   test('waits for the end of the person’s quiet hours, read on the clock of their time zone', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
@@ -553,6 +589,41 @@ describe('integration: a push that cannot be looked up', () => {
     }).not.toThrow();
     await sender.flush(10_000);
     expect(failuresOf(metrics, 'chat')).toEqual({ error: 1 });
+  });
+
+  test('when asking again for what is held, is said and counted, never thrown at the timer', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await subscribe(db, world.clock, world.ada, await aBrowser());
+      await db
+        .updateTable('workspace_members')
+        .set({
+          is_deep_work_active: true,
+          deep_work_until: new Date(world.clock.now().getTime() + HOUR_MS),
+        })
+        .where('user_id', '=', world.ada)
+        .execute();
+      let gone = false;
+      const flaky = new Proxy(db, {
+        get(target, property): unknown {
+          if (gone) throw new Error('the database went away');
+          const member: unknown = Reflect.get(target, property, target);
+          return typeof member === 'function' ? member.bind(target) : member;
+        },
+      });
+      const metrics = serverMetrics(undefined, ['things'], [], []);
+      const service = aPushService();
+      const sender = await senderOn(flaky, world, service.post, { metrics });
+      sender.toldInbox([await world.write(world.ada)]);
+      await sender.flush(10_000);
+
+      gone = true;
+      await sender.releaseHeld();
+      gone = false;
+      await sender.flush(10_000);
+      expect(failuresOf(metrics, 'chat')).toEqual({ error: 1 });
+      expect(service.sent).toEqual([]);
+    });
   });
 });
 
