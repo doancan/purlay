@@ -29,6 +29,7 @@ have it.
 
 ### Fixed
 
+- **Copying** — on a page served over plain http, Copy no longer throws: a link or a code says it could not be copied, and the setup screen's button stays as it was
 - **Workspaces** — a workspace named with Turkish letters or accents suggests an address with their plain forms (`Çağrı Merkezi` is `cagri-merkezi`) instead of dropping them
 - **Conversations** — finding a person for a new conversation matches Turkish letters typed plain or accented (`isik` finds Işık)
 - **Operations** — `erase:content` now says when a message was held by another transaction and still has its words, exits 1 and is run again, and `--all` reaches a workspace where the person only left a decision note (D-139)

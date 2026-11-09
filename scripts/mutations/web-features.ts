@@ -51,6 +51,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/administration/workspaces.test.tsx'],
   },
   {
+    id: 'copy-field-throws-without-clipboard',
+    why: 'on a setup screen served over plain http, pressing Copy throws out of the click handler instead of leaving the button as it was',
+    file: 'apps/web/src/features/setup/parts.tsx',
+    find: '    Promise.resolve()\n      .then(() => navigator.clipboard.writeText(value))\n      .then(\n',
+    replace: '    navigator.clipboard.writeText(value).then(\n',
+    tests: ['apps/web/src/features/setup/copy-field.test.tsx'],
+  },
+  {
     id: 'deep-work-client-never-ends',
     why: 'the bar says Deep Work long after it ended on the server, and the badges stay hidden',
     file: 'apps/web/src/features/shell/deep-work.tsx',

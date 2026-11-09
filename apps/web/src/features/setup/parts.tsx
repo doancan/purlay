@@ -178,14 +178,18 @@ export const CopyField = ({
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const copy = (): void => {
-    navigator.clipboard.writeText(value).then(
-      () => {
-        setCopied(true);
-      },
-      () => {
-        setCopied(false);
-      },
-    );
+    // The setup screen can be served over plain http, where `navigator.clipboard` is absent: the call
+    // throws before it can reject, so it is made inside the chain.
+    Promise.resolve()
+      .then(() => navigator.clipboard.writeText(value))
+      .then(
+        () => {
+          setCopied(true);
+        },
+        () => {
+          setCopied(false);
+        },
+      );
   };
   return (
     <div className="flex w-full items-start gap-2">
