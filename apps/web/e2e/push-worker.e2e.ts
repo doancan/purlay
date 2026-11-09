@@ -18,6 +18,7 @@ interface Shown {
   readonly body: string | undefined;
   readonly tag: string | undefined;
   readonly url: unknown;
+  readonly renotify: boolean;
 }
 
 declare global {
@@ -69,6 +70,7 @@ test.describe('the push worker', () => {
           body: options?.body,
           tag: options?.tag,
           url: (options?.data as { url?: unknown } | undefined)?.url,
+          renotify: options !== undefined && Reflect.get(options, 'renotify') === true,
         });
         return Promise.resolve();
       };
@@ -92,11 +94,19 @@ test.describe('the push worker', () => {
     );
     await expect
       .poll(() => shown(worker))
-      .toEqual([{ title: 'Alice in #api', body: 'mentioned you', tag: 'c:1', url: '/w/a/c/1' }]);
+      .toEqual([
+        {
+          title: 'Alice in #api',
+          body: 'mentioned you',
+          tag: 'c:1',
+          url: '/w/a/c/1',
+          renotify: true,
+        },
+      ]);
 
     await push('not what the server sends');
     await expect
       .poll(() => shown(worker))
-      .toContainEqual({ title: 'Purlay', body: '', tag: 'purlay', url: '/' });
+      .toContainEqual({ title: 'Purlay', body: '', tag: 'purlay', url: '/', renotify: true });
   });
 });

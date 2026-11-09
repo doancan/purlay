@@ -11,20 +11,13 @@
  * reach nothing; re-subscribing when the browser replaces a subscription is the page's, on its next
  * load (`features/push/push.tsx`).
  */
-import { noticeOf, openMessage, pathOf, tabFor } from './notice';
+import { noticeOf, openMessage, optionsOf, pathOf, tabFor } from './notice';
 
 declare const self: ServiceWorkerGlobalScope;
 
 self.addEventListener('push', (event) => {
   const notice = noticeOf(event.data?.text() ?? null, self.location.origin);
-  event.waitUntil(
-    self.registration.showNotification(notice.title, {
-      body: notice.body,
-      tag: notice.tag,
-      icon: '/favicon.svg',
-      data: { url: notice.url },
-    }),
-  );
+  event.waitUntil(self.registration.showNotification(notice.title, optionsOf(notice)));
 });
 
 const show = async (url: string): Promise<void> => {

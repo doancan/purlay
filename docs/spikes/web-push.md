@@ -85,3 +85,31 @@ Seven hand-written mutations were caught, with none surviving or stale. The adde
 has keyboard and accessibility coverage and reports browser acceptance without claiming OS
 delivery. No runtime dependency, schema or wire-contract change was needed; no application
 budget, test timeout or assertion was loosened.
+
+## Re-alert preference, 2026-11-09
+
+For #1331, Chrome 157.0.8103.39 on macOS 27.0.1 was run headfully in a fresh, isolated persistent
+profile. Only that profile was granted permission. No session, chat message or subscription was
+created. The public application document answered 200 under its real CSP.
+
+Two successive `new Notification` requests used the same non-empty tag and `renotify: true`.
+Both emitted `show`, and both native objects exposed `renotify === true`. Two corresponding
+`ServiceWorkerRegistration.showNotification` requests also resolved. The worker's immediate native
+notification collection was empty, so that probe did **not** establish its retained count or a
+visible OS banner. Its temporary worker registration was removed and the isolated browser closed.
+
+The [Notifications standard](https://notifications.spec.whatwg.org/#showing-a-notification) defines
+this as an alert preference when replacing a tagged notice, not a delivery receipt. The adapter
+keeps its tag for coalescing and requests the preference; an empty page tag does not request it,
+because the standard refuses that combination. The shared TypeScript DOM baseline does not declare
+the optional member, so the browser boundary explicitly extends its native options type. No
+runtime dependency or compatibility exception was added. Browsers that do not implement the member
+can ignore it; their behavior was not measured in this probe.
+
+Separately, the requesting user confirmed a real encrypted diagnostic push visibly arrived in their
+normal macOS Chrome session. It used the existing production encryption and VAPID implementation,
+targeted only their own registered devices, and made no database writes or synthetic chat/inbox
+messages. This establishes that real delivery path on that device, not the timing of every future
+OS banner. Unit and browser tests cover repeated native options, ordinary background DMs, and the
+worker's built event wiring; the headless notification surface remains stubbed as documented in the
+browser specs. No budget, assertion or security policy was loosened.

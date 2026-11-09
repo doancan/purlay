@@ -5841,6 +5841,9 @@ people can aim.
 5. **Always shown.** Browsers penalise a push that shows nothing (Chrome's generic notice, Safari's
    revocation), so the worker always shows one, folded by channel. *Amended by D-143:* a push is
    held, on the server, while its person is in front of that workspace's page.
+   **Amended 2026-11-09 (#1331):** an eligible new push requests the platform's `renotify` preference
+   when replacing its conversation notice, keeping its coalescing tag. This requests another alert;
+   browser support and OS settings still determine its display and timing.
 6. **Where a push may be sent:** the image proxy's address rule (`https:` on the default port, no
    credentials, no address literal, no `localhost` or dotless host) and its checked public-address
    lookup, no redirect, a short timeout. A browser chose the endpoint; anybody signed in could choose
@@ -6907,6 +6910,11 @@ Slack's loop is a banner, a badge and a sound.
 3. **Coalesced, not a storm.** One tag per conversation, so its next notice replaces its last; several
    conversations rising at once (a reconnect, a busy minute) are one notice, "3 conversations need you",
    opening the inbox. A conversation read elsewhere takes its notice back.
+   **Amended 2026-11-09 (#1331):** each eligible new background notice requests `renotify`, so replacing
+   a notice can alert again without accumulating notices. Ordinary private messages need no explicit
+   mention or channel-wide opt-in. Device opt-out, mute, Deep Work, quiet hours and focused-page silence
+   remain; unsupported browsers can ignore the preference. The browser capability and limits are
+   recorded in `docs/spikes/web-push.md`.
 4. **One switch.** "Notifications on this device" (D-126) now covers both: offered wherever the browser
    has notifications, it asks the browser once, and where the browser has push and the server has keys
    it also subscribes. It is on while the person who turned it on is signed in here and the browser still
@@ -6917,6 +6925,11 @@ Slack's loop is a banner, a badge and a sound.
    requires no new endpoint, and changes no channel preference. Both the feed and an open thread
    count as read only while the page is visible **and its window is focused**; blur/focus are observed
    alongside visibility, so an unread notice is not cleared while the person is in another window.
+   **Amended 2026-11-09 (#1331):** every explicit device test uses a fresh notification tag and retires
+   its previous test, so repeated clicks request a new alert rather than silently replacing one.
+   Asynchronous browser refusal replaces the requested message with a failure; a superseded,
+   disabled or unmounted test cannot report a late failure. This still does not certify OS banner
+   display or its timing. Conversation notices retain their coalescing tags.
 5. **A dot on the favicon, and the app's badge.** While the title counts, the tab's icon is
    `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`, bound to the
    tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count

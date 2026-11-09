@@ -102,6 +102,7 @@ export const AREAS = [
       'apps/web/vite.config.ts',
       'apps/web/public/',
       'apps/web/scripts/',
+      'apps/web/worker/',
       'apps/web/src/app/',
       'apps/web/src/data/',
       'apps/web/src/i18n/',
