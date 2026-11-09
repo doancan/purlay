@@ -2988,6 +2988,37 @@ describe('integration â€” the administrator requeues and discards facts (D-288 Â
     expect(await trail(server)).toHaveLength(1);
   });
 
+  test('a change waits for whoever holds the delivery and then judges what they left, so it never acts on a stale read', async () => {
+    const { server, dead } = await seeded();
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let signalLocked: () => void = () => undefined;
+    const locked = new Promise<void>((resolve) => {
+      signalLocked = resolve;
+    });
+    const holder = atomicallyOn(server.db)(async (tx) => {
+      await tx.selectFrom('outbox').select('id').where('id', '=', dead.id).forUpdate().execute();
+      signalLocked();
+      await released;
+      await tx
+        .updateTable('outbox')
+        .set({ state: 'discarded', finished_at: new Date() })
+        .where('id', '=', dead.id)
+        .execute();
+    });
+    await locked;
+    const request = post(server, 'discard', { ids: [dead.id], reason: REASON }).then(results);
+    expect(await Promise.race([request, Bun.sleep(500).then(() => 'still waiting')])).toBe(
+      'still waiting',
+    );
+    release();
+    await holder;
+    expect(await request).toEqual(['unchanged']);
+    expect(await trail(server)).toEqual([]);
+  });
+
   test('a discard keeps the row as discarded with its end time, lists under discarded, and can be undone by a requeue', async () => {
     const { server, dead, stuck } = await seeded();
     const response = await post(server, 'discard', { ids: [dead.id, stuck.id], reason: REASON });
