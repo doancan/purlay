@@ -48,7 +48,10 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     file: 'apps/api/src/modules/push/devices.ts',
     find: ' && !attention.active(entry.userId, entry.workspaceId)',
     replace: '',
-    tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/devices.integration.test.ts',
+      'apps/api/src/modules/push/sender-inbox.integration.test.ts',
+    ],
   },
   {
     id: 'push-inbox-deep-work-ignored',
@@ -88,7 +91,10 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     file: 'apps/api/src/modules/push/devices.ts',
     find: "    // What was read meanwhile, or whose person or workspace is gone, is not worth a push.\n    .where('e.read_at', 'is', null)\n",
     replace: '',
-    tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/devices.integration.test.ts',
+      'apps/api/src/modules/push/sender-inbox.integration.test.ts',
+    ],
   },
   {
     id: 'push-key-that-is-no-point',

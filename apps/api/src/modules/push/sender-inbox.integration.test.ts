@@ -4,19 +4,10 @@
  * because the person read it, looked at the page, or waited longer than the push is worth.
  */
 import { afterAll, describe, expect, jest, test } from 'bun:test';
-import {
-  closeIntegrationDatabase,
-  withRollback,
-  type Executor,
-  type Transaction,
-} from '@purlay/db';
+import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { MINUTES_PER_DAY } from '@purlay/types';
 import { inMemoryAttention, nobodyActive, type Attention } from '../../platform/attention';
-import type { Clock } from '../../platform/clock';
-import { NO_LOG, type EventBus } from '../../platform/events';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
-import type { WrittenNotice } from '../../platform/ports/notification-sink';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
 import {
   aDatabaseThatMustNotBeTouched,
   aNoticeThrottle,
@@ -24,10 +15,8 @@ import {
   NOW,
 } from '../../testing/doubles';
 import { aBrowser, aPushService, KEYS } from '../../testing/push-service';
-import { aSession } from '../../testing/signed-in';
-import { aUniqueSlug, aUserRow } from '../../testing/users';
-import { notificationSink } from '../inbox/sink';
-import type { NoticeWords } from './notices';
+import { aUserRow } from '../../testing/users';
+import { aWorld, KIND, movable, subscribe, words, type World } from '../../testing/push-world';
 import { createPushSender, HELD_PUSH_MAX_MS, NOTICE_PUSH_BUDGET } from './sender';
 
 afterAll(async () => {
@@ -36,115 +25,6 @@ afterAll(async () => {
 
 const HOUR_MS = 3_600_000;
 const HELD_CHECK_MS = 60_000;
-const KIND = 'thing_assigned';
-/** The words of a module of the test's own: its title is in the params, and must never reach a device. */
-const words: NoticeWords = (kind, locale, actor) =>
-  kind === KIND
-    ? {
-        body: locale === 'tr' ? `${actor} sana bir şey atadı` : `${actor} assigned you a thing`,
-        path: 'things',
-      }
-    : undefined;
-
-/** A clock the test moves. */
-const movable = (start: Date): Clock & { to: (instant: Date) => void } => {
-  let current = start;
-  return {
-    now: (): Date => new Date(current),
-    to: (instant): void => {
-      current = instant;
-    },
-  };
-};
-
-const quietBus: EventBus = {
-  publish: () => Promise.resolve(),
-  subscribe: () => false,
-  unsubscribe: () => undefined,
-  forget: () => undefined,
-};
-
-interface World {
-  readonly clock: ReturnType<typeof movable>;
-  readonly workspaceId: string;
-  readonly ada: string;
-  readonly bob: string;
-  readonly write: (recipient: string, title?: string) => Promise<WrittenNotice>;
-}
-
-const aWorld = async (db: Transaction): Promise<World> => {
-  const clock = movable(NOW);
-  const workspaceId = (
-    await db
-      .insertInto('workspaces')
-      .values({ name: 'Studio', slug: aUniqueSlug('studio') })
-      .returning('id')
-      .executeTakeFirstOrThrow()
-  ).id;
-  const member = async (name: string): Promise<string> => {
-    const { userId } = await aUserRow(db, name);
-    await db
-      .insertInto('workspace_members')
-      .values({ workspace_id: workspaceId, user_id: userId, role: 'member' })
-      .execute();
-    return userId;
-  };
-  const ada = await member('ada');
-  const bob = await member('bob');
-  const sink = notificationSink({
-    module: 'things',
-    clock,
-    kinds: new Map([[KIND, 'things']]),
-    bus: quietBus,
-    log: NO_LOG,
-    written: serverMetrics(undefined, ['things'], [], [{ module: 'things', kind: KIND }])
-      .inboxEntries,
-    collapsed: serverMetrics(undefined, ['things'], [], [{ module: 'things', kind: KIND }])
-      .inboxCollapsed,
-    pushedKinds: new Set([KIND]),
-  });
-  const context = await requireWorkspaceMembership(db, bob, workspaceId);
-  return {
-    clock,
-    workspaceId,
-    ada,
-    bob,
-    write: async (recipient, title = 'The secret plan'): Promise<WrittenNotice> => {
-      clock.to(new Date(clock.now().getTime() + 1));
-      const written = await sink.notify(db, context, {
-        kind: KIND,
-        recipientId: recipient,
-        subject: { type: 'thing', id: crypto.randomUUID() },
-        params: { title },
-      });
-      if (written === undefined) throw new Error('nothing was written');
-      return written;
-    },
-  };
-};
-
-const subscribe = async (
-  db: Executor,
-  clock: Clock,
-  userId: string,
-  browser: { p256dh: string; auth: string },
-): Promise<void> => {
-  const { sessionId } = await aSession(db, clock, userId, 30);
-  await db
-    .insertInto('push_subscriptions')
-    .values({
-      user_id: userId,
-      session_id: sessionId,
-      endpoint: `https://push.example.com/send/${userId}`,
-      p256dh: browser.p256dh,
-      auth: browser.auth,
-      server_key: KEYS.publicKey,
-      failures: 0,
-      created_at: new Date(clock.now().getTime() - 60_000),
-    })
-    .execute();
-};
-
 const senderOn = async (
   db: Executor,
   world: World,
