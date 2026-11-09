@@ -49,6 +49,28 @@ const survivor: Mutation = {
   tests: ['src/clamp.test.ts'],
 };
 
+describe('the copy the runner mutates', () => {
+  test('leaves out a person’s own tooling, which can be gigabytes, and keeps the files git ignores', () => {
+    const root = aRepository();
+    mkdirSync(join(root, '.claude', 'worktrees', 'agent-x'), { recursive: true });
+    writeFileSync(
+      join(root, '.claude', 'worktrees', 'agent-x', 'copy.txt'),
+      'a copy of everything',
+    );
+    writeFileSync(join(root, '.env.test'), 'A=1\n');
+    writeFileSync(
+      join(root, 'src', 'layout.test.ts'),
+      "import { expect, test } from 'bun:test';\nimport { existsSync } from 'node:fs';\ntest('the copy', () => {\n  expect(existsSync('.claude')).toBe(false);\n  expect(existsSync('.env.test')).toBe(true);\n});\n",
+    );
+    // The run refuses to start when the tests fail before any mutation, so a copy with the wrong files is red.
+    const verdicts = runMutations({
+      root,
+      mutations: [{ ...killed, tests: ['src/clamp.test.ts', 'src/layout.test.ts'] }],
+    });
+    expect(verdicts.map((v) => v.outcome)).toEqual(['caught']);
+  });
+});
+
 describe('the mutation runner', () => {
   test('bounds a flooding mutant without losing whether ordinary tests pass', () => {
     const root = aRepository();
