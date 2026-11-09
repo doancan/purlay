@@ -78,8 +78,22 @@ const moduleOwning = (file: string, ids: readonly string[]): string | undefined 
 export type NeedsOf = (file: string) => readonly string[];
 
 /** A reader over the modules a build carries (`ids`), for the files of one checkout. */
-export const needsReader = (ids: readonly string[]): NeedsOf => {
-  // A helper is imported by hundreds of suites and its imports do not change while one run reads them.
+export const needsReader = (
+  ids: readonly string[],
+  read: (file: string) => string = (file) => readFileSync(file, 'utf8'),
+): NeedsOf => {
+  // The files of one checkout do not change while one run reads them, and a helper is imported by
+  // hundreds of suites: each file is read once, and what it declares, what it imports and the answer for a
+  // suite are worked out once. Every cell of the module matrix asks about every suite again, and reading the
+  // import tree of each suite each time was seconds of file reads.
+  const texts = new Map<string, string>();
+  const textOf = (file: string): string => {
+    const known = texts.get(file);
+    if (known !== undefined) return known;
+    const text = read(file);
+    texts.set(file, text);
+    return text;
+  };
   const edges = new Map<string, readonly string[]>();
   const edgesOf = (file: string): readonly string[] => {
     const known = edges.get(file);
@@ -87,13 +101,23 @@ export const needsReader = (ids: readonly string[]): NeedsOf => {
     const isRoot = COMPOSITION_ROOTS.some((root) => join(API_SOURCE, root) === file);
     const next = isRoot
       ? []
-      : relativeImports(readFileSync(file, 'utf8')).flatMap(
-          (path) => resolveImport(file, path) ?? [],
-        );
+      : relativeImports(textOf(file)).flatMap((path) => resolveImport(file, path) ?? []);
     edges.set(file, next);
     return next;
   };
+  const ownNeeds = new Map<string, readonly string[]>();
+  const ownNeedsOf = (file: string): readonly string[] => {
+    const known = ownNeeds.get(file);
+    if (known !== undefined) return known;
+    const owner = moduleOwning(file, ids);
+    const own = [...declaredNeeds(textOf(file)), ...(owner === undefined ? [] : [owner])];
+    ownNeeds.set(file, own);
+    return own;
+  };
+  const answers = new Map<string, readonly string[]>();
   return (file) => {
+    const answered = answers.get(file);
+    if (answered !== undefined) return answered;
     const reached = new Set<string>([file]);
     const queue = [file];
     for (const current of queue) {
@@ -104,11 +128,9 @@ export const needsReader = (ids: readonly string[]): NeedsOf => {
       }
     }
     const needed = new Set<string>();
-    for (const reachedFile of reached) {
-      for (const id of declaredNeeds(readFileSync(reachedFile, 'utf8'))) needed.add(id);
-      const owner = moduleOwning(reachedFile, ids);
-      if (owner !== undefined) needed.add(owner);
-    }
-    return [...needed].toSorted();
+    for (const reachedFile of reached) for (const id of ownNeedsOf(reachedFile)) needed.add(id);
+    const sorted = [...needed].toSorted();
+    answers.set(file, sorted);
+    return sorted;
   };
 };

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterAll, describe, expect, test } from 'bun:test';
@@ -95,5 +95,23 @@ describe('which modules a suite needs', () => {
   test('every module of the build, for a suite that names them all, in the order of the build', () => {
     const named = aFile('both.test.ts', `// @needs-modules ${[...IDS].reverse().join(', ')}\n`);
     expect(needs(named)).toEqual([...IDS].sort());
+  });
+});
+
+describe('how often it reads a file', () => {
+  test('once, however many suites reach it and however many times a suite is asked', () => {
+    aFile('shared-helper.ts', '// @needs-modules chat\n');
+    const first = aFile('first-reader.test.ts', "import './shared-helper';\n");
+    const second = aFile('second-reader.test.ts', "import './shared-helper';\n");
+    const reads = new Map<string, number>();
+    const counting = (file: string): string => {
+      reads.set(file, (reads.get(file) ?? 0) + 1);
+      return readFileSync(file, 'utf8');
+    };
+    const needs = needsReader(IDS, counting);
+    // Every cell of the module matrix asks about every suite again: the answers do not change, and
+    // reading each file of each suite's whole import tree again each time took seconds.
+    for (const file of [first, second, first, second]) expect(needs(file)).toEqual(['chat']);
+    expect([...reads.values()]).toEqual([1, 1, 1]);
   });
 });
