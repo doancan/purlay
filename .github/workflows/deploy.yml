@@ -1,10 +1,9 @@
-# Deploy only a tested, published image from this repository's main branch: a commit whose `ci` run
-# and `image` run both succeeded (#798). No source build on the production server. See docs/DEPLOY.md
-# for first installation.
+# Publish only tested releases from main. Dockhand pulls their images (D-262); Actions never
+# runs on the production server. Both the commit's ci and image push runs must succeed (D-229).
 name: deploy
 
 on:
-  # Either may finish last; the one that does deploys, and the other finds its partner still running.
+  # Either may finish last; the second completion can publish the tested release.
   workflow_run:
     workflows: [ci, image]
     types: [completed]
@@ -12,12 +11,11 @@ on:
   workflow_dispatch:
     inputs:
       commit:
-        description: 'Full hash of a commit on main to deploy (empty: the tip of main)'
+        description: 'Full hash on main to retry release publication (empty: the tip of main)'
         required: false
         type: string
 
-# One deploy at a time, and the one in progress finishes: cancelling it halfway is how a migration is
-# left half done.
+# Serialize publication so two completions do not publish the same version at once.
 concurrency:
   group: deploy
   cancel-in-progress: false
@@ -28,8 +26,7 @@ permissions:
 jobs:
   # On GitHub's runner, not the server's: asking GitHub about runs needs nothing the server holds.
   gate:
-    # A hand-started run lets the person pick the branch the workflow file is read from; only main's
-    # copy of it, and only main's tip or a commit on main, may run on the server.
+    # Manual runs must use the workflow from main and a commit on main.
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
@@ -44,8 +41,22 @@ jobs:
       actions: read
     outputs:
       ready: ${{ steps.verdict.outputs.ready }}
+      commit: ${{ inputs.commit || github.event.workflow_run.head_sha || github.sha }}
     steps:
-      # The commit's push run of each workflow, newest first: both completed and successful deploys;
+      - name: the commit is on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ inputs.commit || github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "give a full 40-digit commit hash" >&2; exit 1; }
+          status="$(gh api "repos/$REPOSITORY/compare/main...$COMMIT" --jq .status)"
+          case "$status" in
+            behind | identical) echo "$COMMIT is on main ($status)" ;;
+            *) echo "$COMMIT is not on main (compare says: $status)" >&2; exit 1 ;;
+          esac
+
+      # The commit's push run of each workflow, newest first: both completed and successful permits publication;
       # either still running waits for its own completion to start this again; anything else refuses.
       # A hand-started run cannot wait, so a run still going refuses it too. A commit inside a rebased
       # merge has no runs of its own (CI runs on the pushed tip), and is refused: it was never tested.
@@ -65,81 +76,19 @@ jobs:
             case "$run" in
               "completed success") echo "$workflow: succeeded" ;;
               queued* | in_progress* | waiting* | pending* | requested*)
-                [ "$BY_HAND" != true ] || { echo "$workflow is still running for $COMMIT; start the deploy when it has finished" >&2; exit 1; }
-                echo "$workflow is still running; its completion deploys"
+                [ "$BY_HAND" != true ] || { echo "$workflow is still running for $COMMIT; retry publication when it has finished" >&2; exit 1; }
+                echo "$workflow is still running; its completion retries publication"
                 ready=false
                 ;;
-              *) echo "$workflow did not succeed for $COMMIT (${run:-no run}); nothing is deployed" >&2; exit 1 ;;
+              *) echo "$workflow did not succeed for $COMMIT (${run:-no run}); nothing is published" >&2; exit 1 ;;
             esac
           done
           echo "ready=$ready" >> "$GITHUB_OUTPUT"
 
-  deploy:
+  release:
+    # Publication is independent of a server's availability. This is not a deployment receipt.
     needs: gate
     if: needs.gate.outputs.ready == 'true'
-    runs-on: [self-hosted, linux, x64, purlay-server]
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: read
-    outputs:
-      commit: ${{ steps.commit.outputs.sha }}
-    steps:
-      # Both automatic and manual deploys must name a commit on main. Judged BEFORE
-      # anything is checked out, so a value that is not a commit on main fetches nothing. `behind` is
-      # "an ancestor of main", `identical` is main itself.
-      - name: the commit is on main
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          COMMIT: ${{ inputs.commit || github.event.workflow_run.head_sha || github.sha }}
-        run: |
-          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "give a full 40-digit commit hash" >&2; exit 1; }
-          status="$(gh api "repos/$REPOSITORY/compare/main...$COMMIT" --jq .status)"
-          case "$status" in
-            behind | identical) echo "$COMMIT is on main ($status)" ;;
-            *) echo "$COMMIT is not on main (compare says: $status)" >&2; exit 1 ;;
-          esac
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.commit || github.event.workflow_run.head_sha || github.sha }}
-          # Nothing here pushes; the token stays out of .git/config where later steps could read it.
-          persist-credentials: false
-
-      - id: commit
-        name: record the deployed commit
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: prepare isolated registry configuration
-        run: echo "DOCKER_CONFIG=$RUNNER_TEMP/purlay-docker-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
-
-      - name: log in to GHCR
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
-        with:
-          registry: ghcr.io
-          logout: false # The always() cleanup below removes the isolated config directory.
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: deploy
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
-          ENV_FILE: ${{ vars.ENV_FILE }}
-          COMPOSE_OVERRIDES: ${{ vars.COMPOSE_OVERRIDES }}
-        run: |
-          export IMAGE_REPOSITORY="ghcr.io/${GITHUB_REPOSITORY,,}-api"
-          scripts/deploy.sh "$(git rev-parse HEAD)"
-
-      - name: remove temporary registry credentials
-        if: always() && env.DOCKER_CONFIG != ''
-        run: rm -rf -- "$DOCKER_CONFIG"
-
-  release:
-    # Only after a push that deployed: a hand-started deploy, a rollback among them, tags nothing.
-    needs: deploy
-    if: github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -148,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.deploy.outputs.commit }}
+          ref: ${{ needs.gate.outputs.commit }}
           persist-credentials: false
 
       # The release carries the contract bundle (D-192), which is built from the repository's own code.

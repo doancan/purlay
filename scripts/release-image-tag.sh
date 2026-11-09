@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Give a release's image its version and `release` (D-262). Run by the `release-image` workflow after a
-# deploy, and by hand for a release already out:
+# tested release publication, and by hand for a release already out:
 #
 #   IMAGE=ghcr.io/owner/name-api GH_TOKEN=... scripts/release-image-tag.sh            # the checked-out commit
 #   IMAGE=ghcr.io/owner/name-api GH_TOKEN=... scripts/release-image-tag.sh v1.2.3     # a release by its tag

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Deploy the commit that is checked out to this server (D-185). Run by the `deploy` workflow on the
-# server's own runner once the commit's ci and image workflows have both succeeded (D-229); the same command is how an operator deploys by hand:
+# Deploy the commit checked out on a directly managed Compose server (D-185). The operator first
+# verifies that the commit's ci and image push runs on main succeeded (D-229), then invokes this locally:
 #
 #   DEPLOY_ROOT=/srv/purlay IMAGE_REPOSITORY=ghcr.io/<owner>/<repo>-api scripts/deploy.sh <full commit hash>
 #

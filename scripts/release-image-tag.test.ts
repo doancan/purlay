@@ -143,7 +143,7 @@ const run = (
 const tagged = (outcome: Outcome): readonly string[] =>
   outcome.calls.filter((call) => call.startsWith('docker buildx imagetools create'));
 
-describe('after a deploy, the commit checked out', () => {
+describe('after release publication, the commit checked out', () => {
   test('the latest release: its tested image is named by its version and `release`', () => {
     const place = sandbox();
     const outcome = run(place, { at: place.commits.release });

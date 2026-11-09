@@ -9104,7 +9104,7 @@ beyond the device's `purlay.theme`.
 
 ### D-185. `main` is the one branch, a merge deploys, and a release is a version someone chose
 
-*Amended by D-229: A commit deploys only after its own `ci` and `image` runs have both succeeded.*
+*Amended by D-229 and on 2026-11-09: Actions publishes tested releases on hosted runners; Dockhand applies them (D-262). No workflow runs on the production host.*
 
 **Decided (the owner, 2026-10-26), builds on D-73, D-86, D-92, D-94 and D-95.** How a change reaches the
 team's server, and what a release is, were a list of commands run by hand: build on the server (the Mac
@@ -9114,36 +9114,29 @@ Docker and deployment files in this repository. First installation is in `docs/D
 
 - **One long-lived branch.** Work happens on `feat/`, `fix/`, `chore/`, `refactor/` and `docs/` branches and
   reaches `main` by a pull request that passes the required checks. There is no `develop`.
-- **A merge deploys.** Every commit that lands on `main` is deployed to the server by the `deploy`
-  workflow after the `image` workflow succeeds for a push to this repository's `main`. A **self-hosted
-  runner on that server** runs `scripts/deploy.sh`: pull the published full-commit tag from GHCR, resolve
-  and pin its digest, verify the revision label, smoke-test, back up, switch, and check that the API and
-  scheduler run *this commit*. No application build runs on production. The backup is taken after the
-  pull and smoke test, so an image failure costs no backup and the backup is close to the switch. One deploy at
-  a time, and one in progress is never cancelled. The runner only asks GitHub for work; nothing reaches the
-  server from outside. A hand-started run only runs from `main`.
-- **A failure goes back the way `ARCHITECTURE.md` says, and no other.** Before the switch nothing has changed
-  and nothing is restored. After it, the migration may have run and an older image does not start on a
-  newer schema (D-86), so the way back is **the backup taken a minute earlier**: stop the API, restore the
-  database alone (`--no-bucket`, D-95), put the old image and release back, start. What was written since the
-  backup is what a rollback costs. A deploy told to stop (a cancelled job, a timeout) goes back the same way; one
-  that is killed outright leaves a marker, and the next deploy refuses to start until someone has looked. A
-  rollback that fails too exits 2 and names the backup.
-- **A release is a version, and merging a pull request makes it.** The root `package.json`'s `version` is its
-  one home. `bun run release -- minor` opens a pull request that sets it and moves what is under
-  *Unreleased* into `docs/changelog/v<x.y.z>.md`; when that merges, the deploy is followed by a tag and a
-  GitHub Release (`scripts/release-publish.sh`). A merge that leaves the version alone deploys and releases
-  nothing: numbers mark moments the owner chose, they are not a count of merges. A hand-started deploy of an
-  earlier commit on `main` tags nothing; undoing migrations requires the database restore procedure.
-  The release job runs on a GitHub-hosted runner and checks out exactly the deployed commit.
+- **A merge builds; a release is published after its checks pass.** The `deploy` workflow listens to
+  `ci` and `image`, checks both push runs of the exact commit on `main`, and verifies main ancestry on
+  GitHub's hosted runner. Its release job checks out that same commit. No Actions workflow connects to
+  production or requires a self-hosted runner. Dockhand follows `:release` when configured (D-262);
+  image publication is not a claim that a particular server is running it.
+- **A failure goes back the way `ARCHITECTURE.md` says.** A Dockhand upgrade needs the dump from before
+  the migration and the previous image; there is no automatic restore at its switch (D-262). An operator
+  managing Compose directly can still invoke `scripts/deploy.sh`: verify the commit's CI results, pull
+  and verify its image, back up, switch and check the running revision. That script restores its own
+  backup on failure. No data volumes or recovery procedures are removed with the Actions runner.
+- **A release is a version, and merging a pull request makes it.** The root `package.json`'s `version`
+  is its one home. `bun run release -- minor` opens the version and changelog pull request. Once that
+  commit's own checks pass, `scripts/release-publish.sh` publishes its tag and GitHub Release. A merge
+  that leaves the version alone publishes nothing new. A hand-started workflow can retry publication
+  after the same gate; it performs no server deployment or rollback.
 - **The changelog is in one shape.** Keep a Changelog: **Added, Changed, Deprecated, Removed, Fixed, Security**,
   one line per bullet, with a bold area and the decision in parentheses, so that a person scans a release in two
   minutes instead of reading a transcript. `changes.md` says how to write an entry; `scripts/changelog.test.ts`
   holds the files to it and `bun run release` refuses an Unreleased that is not. What was written before the
   first release, in prose, is kept as it was (`docs/changelog/pre-0.1.0.md`).
-- **What the runner may run is held by a test.** The server holds the production database, so the workflow
-  that runs there starts only after a successful image publication from `main` or by hand, never on a
-  pull request. Deploy has `packages: read`, and only the release job may write (`scripts/deploy-workflow.test.ts`).
+- **The workflow boundary is held by a test.** `scripts/deploy-workflow.test.ts` refuses a self-hosted
+  runner, an unchecked commit, or publication without the successful gate. Only the release job writes
+  repository contents; the separate image promotion workflow writes packages.
 
 **Considered and rejected.**
 
@@ -9155,22 +9148,19 @@ Docker and deployment files in this repository. First installation is in `docs/D
   a number nobody chose, and it fights a changelog written by hand under *Unreleased*.
 - *Deploying only on a tag.* One environment and a team using it is the feedback this phase exists for (S-1);
   waiting for a tag delays it for no safety the checks and the backup do not already give.
-- *GitHub's hosted runners for the deploy.* They cannot reach a server that accepts nothing from outside, and
-  the pipeline has been unavailable for billing more than once.
+- *Connecting hosted runners to production.* The server remains private. Hosted runners publish
+  artifacts instead; Dockhand polls GHCR without exposing its control panel.
 - *Running the old image to go back.* It refuses the newer schema (D-86); this was reproduced, not reasoned.
 - *Publishing to GHCR as part of this.* `image.yml` and `scripts/release-image.sh` (D-92) stay as they are: that
   is how a self-hoster gets an image, and nobody is waiting on it for the team's server.
 
-**Accepted.** A migration that passes the smoke test and the health check but is wrong in what it does is
-not caught; the backup is what is left. The site is unavailable for as long as a migration runs (about 18 s
-for a 15 s one, `ARCHITECTURE.md`), and every service is recreated when a file the stack mounts changes. A runner
-on the production host is the highest-value thing to protect in the pipeline. GitHub keeps one run waiting behind
-the one in progress, so merges that queue behind a deploy are deployed as the last of them (each commit contains
-the ones before it); a release whose merge was skipped this way is tagged at the commit that was deployed. Entries
-merged after a release pull request was opened conflict with it in `changes.md`: run `bun run release` again.
+**Accepted.** CI cannot prove that a private Dockhand instance applied an image. Readiness and the
+running image revision must be checked there. A migration can still pass tests and be wrong; the backup
+remains the recovery path. Concurrent publication is serialized and an already published version is a no-op.
 
-**Cost of reversing.** One workflow, three scripts and their tests. Going back to deploying by hand is
-stopping the runner; the runbook in `ARCHITECTURE.md` is unchanged.
+**Cost of reversing.** Restore a server deployment job if that installation needs it; the direct Compose
+script and recovery runbook remain available. Changelog entries merged after a release pull request was
+opened still require regenerating that release with `bun run release`.
 
 ### D-186. macOS gets a native Swift client in its own repository, drawn in Liquid Glass — supersedes D-51's "not planned"
 
@@ -11119,24 +11109,27 @@ run alone, and `image` does not wait for `ci`. On 2026-10-28 commit `8283c4a6` w
 failed at 09:19: the server ran a commit the gate later refused. Merging is not the proof either; branch protection
 judges the pull request's head, and a rebased merge is a new commit that the push's own `ci` run judges.
 
-- **`deploy` listens to both workflows.** A new `gate` job asks GitHub for the commit's push run on `main` of
-  `ci.yml` and `image.yml`, newest first. Both completed and successful: the server job runs. One still running: the
-  gate succeeds with nothing to do, and that run's own completion starts the workflow again. Anything else — failed,
-  cancelled, timed out, or no run at all — fails the gate and the server is not touched.
-- **The gate runs on GitHub's runner, not the server's.** Reading runs needs `actions: read` and nothing the server
-  holds; the server's runner is reached only through `needs: gate`.
-- **A hand-started deploy is judged the same way and cannot wait.** A rollback names a commit that was a push's tip
-  and passed; a commit inside a rebased merge has no runs of its own and is refused, because it was never tested.
+**Amended 2026-11-09.** The same gate now protects release publication, independently of any
+production runner; Dockhand applies release images (D-262).
 
-**Considered and rejected.** Making `image` depend on `ci` (`image` must run on pull requests as a required check of
-its own, D-87, and chaining would lengthen every merge's road to the server by the image build). A `workflow_run` on
-`ci` alone (the image could still be building, and its digest is what the server pulls). Polling in the deploy job
-until both finish (it would hold the server's runner for minutes, and a wait loop is a timeout to tune).
+- **`deploy` listens to both workflows.** The hosted `gate` asks for the exact commit's newest push
+  run on `main` of `ci.yml` and `image.yml`. Both completed and successful permit publication. A run
+  still in progress waits for its completion event; failed, cancelled or missing runs refuse it.
+- **The gate validates main ancestry before checkout.** Only `behind` or `identical` compared with
+  `main` is accepted. Workflow runs must come from this repository's main push; manual runs must
+  use main's workflow. Only the gate has `actions: read`.
+- **A manual retry has the same gate and cannot wait.** A commit inside a rebased merge has no push
+  runs of its own and is refused. The release job needs the gate's explicit `ready=true`, checks out
+  its exact commit, and runs entirely on a hosted runner. It does not switch a production container.
 
-**Cost of the choice.** When both finish within the same few seconds, both completions find the other done and the
-commit deploys twice; `concurrency: deploy` runs them one after the other and a second deploy of the running commit
-is a backup and a restart, which `deploy.sh` already handles. **Cost of reversing.** Set `workflows: [image]` back
-and remove the `gate` job.
+**Considered and rejected.** Making `image` depend on `ci` delays image publication and its own PR
+check. Listening to `ci` alone can race the image build. Polling inside a job ties up a runner while
+completion events already provide the retry. Following `:main` directly bypasses the full CI gate.
+
+**Cost of the choice.** Near-simultaneous completions can retry publication, serialized by
+`concurrency: deploy`; an already published version changes nothing. The release image path requires
+Dockhand polling to be configured, and CI success is not a deployment receipt. **Cost of reversing.**
+Restore a separate server deployment job, without weakening the exact-commit gate.
 
 ### D-230. Purlay installs as an application: a manifest, pictures drawn from the favicon, and no offline copy — builds on D-51, D-126, D-148; closes #89
 
@@ -12793,10 +12786,12 @@ the switch is not taken.
 
 **Decision.**
 1. **`:release` names the latest release's image, and only that.** `release-image` (its own workflow, since it
-   writes packages and the deploy's release job never may) runs after each deploy; when the commit is the
-   version's tag, it gives that commit's tested image (`:sha-<commit>`) the names `vX.Y.Z` and `release`.
+   writes packages and the release publication job never may) runs after hosted release publication. It resolves
+   the latest published release tag, checks out that tag, and gives its tested image (`:sha-<commit>`) the names
+   `vX.Y.Z` and `release`. The parent workflow's main tip can be newer than the released commit and is not used.
    Nothing is built. Run by hand with a tag, it names a release already out — and refuses one that is not the
-   latest, so `release` never moves back. A commit that is no release changes nothing.
+   latest, so `release` never moves back. Before the first release the workflow changes nothing; retrying
+   an existing release is idempotent.
 2. **Polling, not a webhook.** The stack's `PURLAY_IMAGE` is `…-api:release`, and Dockhand's auto-update checks
    it every fifteen minutes; it compares digests, so it pulls only when a release is out.
 3. **A dump every hour, in the stack.** `docker-compose.dockhand.yml` gains a `backup` service on the database's
