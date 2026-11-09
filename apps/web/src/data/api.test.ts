@@ -1547,3 +1547,54 @@ test('public instance identity and own admission use distinct strict endpoints, 
     ),
   ).toBeInstanceOf(ApiError);
 });
+
+describe('the endpoints that only a settings screen calls', () => {
+  test("appearing away is sent as the caller's own choice", async () => {
+    const h = harness({ away: true });
+    expect(await h.api.setAway(true)).toEqual({ away: true });
+    expect(h.calls).toEqual([{ method: 'PUT', url: '/api/me/away', body: { away: true } }]);
+  });
+  test('deleting a workspace needs its typed name and can be taken back', async () => {
+    const deletion = { workspace, purgeAt: WHEN };
+    const ask = harness(deletion);
+    expect(await ask.api.requestWorkspaceDeletion(ID, 'acme')).toEqual(deletion);
+    expect(ask.calls).toEqual([
+      { method: 'POST', url: `/api/workspaces/${ID}/deletion`, body: { confirm: 'acme' } },
+    ]);
+    const cancel = harness(null);
+    await cancel.api.cancelWorkspaceDeletion(ID);
+    expect(cancel.calls).toEqual([
+      { method: 'DELETE', url: `/api/workspaces/${ID}/deletion`, body: undefined },
+    ]);
+  });
+  test('incoming webhooks are listed, made and revoked on their channel', async () => {
+    const webhook = {
+      id: ID,
+      channelId: ID,
+      name: 'deploys',
+      createdBy: null,
+      createdAt: WHEN,
+      lastUsedAt: null,
+    };
+    const list = harness([webhook]);
+    expect(await list.api.incomingWebhooks(ID)).toEqual([webhook]);
+    expect(list.calls[0]).toMatchObject({
+      method: 'GET',
+      url: `/api/channels/${ID}/incoming-webhooks`,
+    });
+    const created = { webhook, path: `/api/webhooks/incoming/${ID}/${'a'.repeat(64)}` };
+    const make = harness(created);
+    expect(await make.api.createIncomingWebhook(ID, { name: 'deploys' })).toEqual(created);
+    expect(make.calls[0]).toEqual({
+      method: 'POST',
+      url: `/api/channels/${ID}/incoming-webhooks`,
+      body: { name: 'deploys' },
+    });
+    const revoke = harness(null);
+    await revoke.api.revokeIncomingWebhook(ID, ID);
+    expect(revoke.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/channels/${ID}/incoming-webhooks/${ID}`,
+    });
+  });
+});
