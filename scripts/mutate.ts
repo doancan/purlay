@@ -69,16 +69,30 @@ export interface Options {
   readonly onStart?: (id: string) => void;
 }
 
+/**
+ * What is not copied, at the top of the repository. A person's own tooling lives in directories no clone has
+ * (`scripts/check-docs.py` names the same ones) and can be gigabytes: an agent's worktrees are whole copies of
+ * the repository, and copying eleven gigabytes took minutes, in which the tree being copied had moved on.
+ * The files git ignores (`.env.test`) are copied, since the tests read them.
+ */
+const NOT_COPIED = new Set([
+  '.git',
+  'node_modules',
+  '.tsbuild',
+  '.agents',
+  '.claude',
+  '.superpowers',
+  '.superdesign',
+  '.swarm',
+]);
+
 /** A copy of the repository that mutations may be written to. */
 const copyTree = (root: string): string => {
   const copy = mkdtempSync(join(tmpdir(), 'purlay-mutate-'));
   cpSync(root, copy, {
     recursive: true,
     verbatimSymlinks: true,
-    filter: (source) => {
-      const relative = source.slice(root.length + 1);
-      return relative !== '.git' && relative !== 'node_modules' && relative !== '.tsbuild';
-    },
+    filter: (source) => !NOT_COPIED.has(source.slice(root.length + 1)),
   });
   const modules = join(root, 'node_modules');
   if (existsSync(modules)) symlinkSync(modules, join(copy, 'node_modules'));
