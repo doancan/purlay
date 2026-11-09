@@ -20,6 +20,8 @@ export interface RouteContext {
   /** The deadline each module's request runs against (`platform/request-deadline.ts`). */
   readonly deadlineOf: (module: string) => number | undefined;
   readonly sockets: Pick<SocketLifecycle, 'bus' | 'atomically' | 'online'>;
+  /** What the inbox is told of the modules: the ids this process runs; a notice of any other is kept and not shown (D-286). */
+  readonly inbox: { readonly running: readonly string[] };
 }
 
 /** Dependencies of a write that tells the sockets: through the bus, inside the transaction the write is in. */

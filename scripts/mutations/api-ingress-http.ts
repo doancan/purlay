@@ -436,7 +436,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
     id: 'inbox-routes-count-modules-that-are-not-run',
     why: 'the inbox lists the notices of every module the build carries, run or not (D-286)',
-    file: 'apps/api/src/ingress/http/routes/workspace-routes.ts',
+    file: 'apps/api/src/ingress/http/app.ts',
     find: '    running: modules.modules.map((module) => module.manifest.id),',
     replace: '    running: modules.bundled.map((module) => module.manifest.id),',
     tests: ['apps/api/src/ingress/http/inbox.integration.test.ts'],

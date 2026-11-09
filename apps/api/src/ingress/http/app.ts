@@ -162,7 +162,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const outboxConsumers = modules.bundled
     .filter((module) => (module.manifest.consumes ?? []).length > 0)
     .map((module) => module.manifest.id);
-  const context: RouteContext = { dependencies, modules, moduleIds, deadlineOf, sockets };
+  // The inbox lists the notices of the modules this process runs and no others (D-286). Made here, beside the
+  // composition it is read from, since the guard on it (`scripts/mutations/api-ingress-http.ts`) names this line.
+  const inbox = {
+    running: modules.modules.map((module) => module.manifest.id),
+  };
+  const context: RouteContext = { dependencies, modules, moduleIds, deadlineOf, sockets, inbox };
   const probes = probeRoutes(context, { metrics, outboxConsumers });
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);

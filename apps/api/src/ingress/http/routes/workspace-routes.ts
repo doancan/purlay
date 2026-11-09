@@ -43,13 +43,10 @@ export const workspaceRoutes = (
   context: RouteContext,
   invitationLater: InvitationMailDependencies['later'],
 ): AnyElysia => {
-  const { dependencies, modules, deadlineOf, sockets } = context;
+  const { dependencies, modules, deadlineOf, sockets, inbox } = context;
   const creating = creatingOf(context);
   const sending = sendingOf(context);
-  const inboxDependencies = {
-    ...sending,
-    running: modules.modules.map((module) => module.manifest.id),
-  };
+  const inboxDependencies = { ...sending, ...inbox };
   // Invitation letters are posted after the answer too, by the relay the sign-in library mails through.
   const invitationMail = (): InvitationMailDependencies => ({
     ...dependencies,
