@@ -19,6 +19,14 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
   },
   {
+    id: 'push-failure-streak-unbounded',
+    why: 'a restored large failure streak overflows instead of retaining a working browser subscription',
+    file: 'apps/api/src/modules/push/delivery.ts',
+    find: "eb.fn<number>('least', [eb.ref('failures'), eb.val(PUSH_FAILURES_MAX - 1)])",
+    replace: "eb.ref('failures')",
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+  },
+  {
     id: 'push-failures-counted-under-the-core',
     why: 'a push the service did not take is counted under the core though the notice was a module’s, so the module whose notifications fail is not the one the page names (D-250 rule 7)',
     file: 'apps/api/src/modules/push/failures.ts',
@@ -170,7 +178,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
   },
   {
     id: 'push-our-fault-counted',
-    why: 'a VAPID token the services refuse deletes every device on the server, five pushes each',
+    why: 'a VAPID token the services refuse is counted against the device instead of diagnosed as the server’s request',
     file: 'apps/api/src/modules/push/delivery.ts',
     find: '    if (status !== null && OUR_REQUEST_REFUSED.has(status)) {\n',
     replace: '    if (status === 0) {\n',
@@ -346,11 +354,27 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
   },
   {
+    id: 'push-success-clears-another-session',
+    why: 'a delayed successful response resets a subscription after it belongs to a different account or session',
+    file: 'apps/api/src/modules/push/delivery.ts',
+    find: "        .where('user_id', '=', device.userId)\n        .where('session_id', '=', device.sessionId)\n        .where('failures', '>', 0)",
+    replace: "        .where('failures', '>', 0)",
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+  },
+  {
     id: 'push-target-drops-the-thread-query',
     why: 'a reply push still contains the channel-only URL after the source supplied its thread',
     file: 'apps/api/src/modules/push/devices.ts',
     find: 'row.threadId === null',
     replace: 'true',
+    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+  },
+  {
+    id: 'push-temporary-failure-retires-live-device',
+    why: 'a provider outage deletes a live browser subscription, so later messages never reach the device',
+    file: 'apps/api/src/modules/push/delivery.ts',
+    find: "    failed('not_taken', 1, device.module);",
+    replace: "    await forget(device);\n    failed('not_taken', 1, device.module);",
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
   },
   {

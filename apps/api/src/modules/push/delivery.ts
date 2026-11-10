@@ -3,8 +3,8 @@
  * person's and the notice still theirs; encrypt it, sign it with the server's key, post it to the push
  * service the browser named, and act on the answer — 2xx keeps the device; 404 or 410 forgets it (the
  * browser dropped it); 400, 401, 403 or 413 is this server's request refused, said loudly and no device's
- * fault; any other answer, a timeout or a network failure counts against the device, and
- * `PUSH_FAILURES_MAX` in a row forgets it.
+ * fault; any other answer, a timeout or a network failure records a bounded failure streak without
+ * confusing a provider outage with the browser unsubscribing.
  */
 import type { Executor } from '@purlay/db';
 import type { Attention } from '../../platform/attention';
@@ -19,7 +19,7 @@ import type { FailureCount } from './failures';
 import type { PushNotices } from './notices';
 import { vapidAuthorization, vapidSigningKey } from './vapid';
 
-/** Deliveries in a row a push service did not take before the device is forgotten. */
+/** The largest recorded failure streak; temporary failures never expire a subscription. */
 export const PUSH_FAILURES_MAX = 5;
 /** How long a push service keeps it for a device that is off: a day, then it is stale. */
 export const PUSH_TTL_SECONDS = 24 * 60 * 60;
@@ -81,23 +81,23 @@ export const createDelivery = async (
       .executeTakeFirst();
 
   const counted = async (device: Device, url: URL, posted: Posted): Promise<void> => {
-    const row = await database
+    await database
       .updateTable('push_subscriptions')
-      .set((eb) => ({ failures: eb('failures', '+', 1) }))
+      .set((eb) => ({
+        failures: eb(
+          eb.fn<number>('least', [eb.ref('failures'), eb.val(PUSH_FAILURES_MAX - 1)]),
+          '+',
+          1,
+        ),
+      }))
       .where('id', '=', device.id)
       .where('user_id', '=', device.userId)
       .where('session_id', '=', device.sessionId)
-      .returning('failures')
-      .executeTakeFirst();
+      .execute();
     const said = {
       host: url.hostname,
       ...(posted.kind === 'answered' ? { status: posted.status } : { reason: posted.reason }),
     };
-    if (row !== undefined && row.failures >= PUSH_FAILURES_MAX) {
-      log.info('push device forgotten', { ...said, failures: row.failures });
-      await forget(device);
-      return;
-    }
     failed('not_taken', 1, device.module);
     log.warn('push not taken', said);
   };
@@ -186,6 +186,8 @@ export const createDelivery = async (
         .updateTable('push_subscriptions')
         .set({ failures: 0 })
         .where('id', '=', device.id)
+        .where('user_id', '=', device.userId)
+        .where('session_id', '=', device.sessionId)
         .where('failures', '>', 0)
         .execute();
       return;

@@ -17,7 +17,12 @@ import {
 import { aBrowser, aPushService, KEYS } from '../../testing/push-service';
 import { aUserRow } from '../../testing/users';
 import { aWorld, KIND, movable, subscribe, words, type World } from '../../testing/push-world';
-import { createPushSender, HELD_PUSH_MAX_MS, NOTICE_PUSH_BUDGET } from './sender';
+import {
+  createPushSender,
+  HELD_PUSH_MAX_MS,
+  NOTICE_PUSH_BUDGET,
+  PUSH_FAILURES_MAX,
+} from './sender';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -116,6 +121,31 @@ describe('integration: a device is told of a module’s notice', () => {
       const sender = await senderOn(db, world, aPushService(503).post, { metrics });
       sender.toldInbox([await world.write(world.ada)]);
       await sender.flush(10_000);
+      expect(failuresOf(metrics)).toEqual({ not_taken: 1 });
+      expect(failuresOf(metrics, 'chat')).toEqual({});
+    });
+  });
+
+  test('a module’s temporary provider failure retains its device and is still counted at the limit', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      await subscribe(db, world.clock, world.ada, await aBrowser());
+      await db
+        .updateTable('push_subscriptions')
+        .set({ failures: PUSH_FAILURES_MAX - 1 })
+        .where('user_id', '=', world.ada)
+        .execute();
+      const metrics = serverMetrics(undefined, ['things'], [], []);
+      const sender = await senderOn(db, world, aPushService(503).post, { metrics });
+      sender.toldInbox([await world.write(world.ada)]);
+      await sender.flush(10_000);
+      expect(
+        await db
+          .selectFrom('push_subscriptions')
+          .select('failures')
+          .where('user_id', '=', world.ada)
+          .execute(),
+      ).toEqual([{ failures: PUSH_FAILURES_MAX }]);
       expect(failuresOf(metrics)).toEqual({ not_taken: 1 });
       expect(failuresOf(metrics, 'chat')).toEqual({});
     });

@@ -452,10 +452,135 @@ describe('integration: what the push service answers', () => {
     expect(await answered(status)).toBeUndefined();
   });
 
-  test('anything else counts a failure, and the last one allowed forgets the device', async () => {
+  test('a temporary failure is counted without treating it as a browser unsubscribe', async () => {
     expect(await answered(500)).toEqual({ failures: 1 });
     expect(await answered(429, PUSH_FAILURES_MAX - 2)).toEqual({ failures: PUSH_FAILURES_MAX - 1 });
-    expect(await answered(500, PUSH_FAILURES_MAX - 1)).toBeUndefined();
+  });
+
+  test.each([429, 500, 503])(
+    '%p keeps a live device at the recorded failure limit',
+    async (status) => {
+      expect(await answered(status, PUSH_FAILURES_MAX - 1)).toEqual({
+        failures: PUSH_FAILURES_MAX,
+      });
+      expect(await answered(status, PUSH_FAILURES_MAX)).toEqual({ failures: PUSH_FAILURES_MAX });
+    },
+  );
+
+  test('a large restored failure streak cannot overflow or disable the subscription', async () => {
+    expect(await answered(503, 2_147_483_647)).toEqual({ failures: PUSH_FAILURES_MAX });
+  });
+
+  test('a later message tries the retained device and success clears its failure streak', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const id = await subscribeDevice(db, room, 'bob', await aBrowser(), {
+        failures: PUSH_FAILURES_MAX - 1,
+      });
+      let requests = 0;
+      const metrics = serverMetrics(undefined, ['chat']);
+      const recording = aRecordingLogger();
+      const post: PushPost = () => {
+        requests += 1;
+        return Promise.resolve({ kind: 'answered', status: requests === 1 ? 503 : 201 });
+      };
+      const { say, settled } = await sending(db, post, recording, attention, metrics);
+      await say(room, 'alice', `${mention(room, 'bob')} first`);
+      await settled();
+      expect(
+        await db.selectFrom('push_subscriptions').select('failures').where('id', '=', id).execute(),
+      ).toEqual([{ failures: PUSH_FAILURES_MAX }]);
+      expect(failuresOf(metrics)).toMatchObject({ not_taken: 1 });
+      expect(recording.lines.some((line) => line['msg'] === 'push device forgotten')).toBe(false);
+      await say(room, 'alice', `${mention(room, 'bob')} next`);
+      await settled();
+      expect(requests).toBe(2);
+      expect(
+        await db.selectFrom('push_subscriptions').select('failures').where('id', '=', id).execute(),
+      ).toEqual([{ failures: 0 }]);
+    });
+  });
+
+  test.each(['timeout', 'network connection lost'])(
+    'repeated %s responses retain the live device and bound the failure streak',
+    async (reason) => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob']);
+        const id = await subscribeDevice(db, room, 'bob', await aBrowser(), {
+          failures: PUSH_FAILURES_MAX - 1,
+        });
+        let requests = 0;
+        const post: PushPost = () => {
+          requests += 1;
+          return Promise.resolve({ kind: 'failed', reason });
+        };
+        const { say, settled } = await sending(db, post);
+        for (let i = 0; i < 10; i++) {
+          await say(room, 'alice', `${mention(room, 'bob')} message ${String(i)}`);
+          await settled();
+        }
+        expect(requests).toBe(10);
+        expect(
+          await db
+            .selectFrom('push_subscriptions')
+            .select('failures')
+            .where('id', '=', id)
+            .execute(),
+        ).toEqual([{ failures: PUSH_FAILURES_MAX }]);
+      });
+    },
+  );
+
+  test.each([201, 410, 503])(
+    '%p cannot change a device handed to another account while the request was in flight',
+    async (status) => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob', 'carol']);
+        const id = await subscribeDevice(db, room, 'bob', await aBrowser(), { failures: 4 });
+        const userId = room.members['carol']?.userId ?? '';
+        const { sessionId } = await aSession(db, clock, userId, 30);
+        const post: PushPost = async () => {
+          await db
+            .updateTable('push_subscriptions')
+            .set({ user_id: userId, session_id: sessionId, failures: 3 })
+            .where('id', '=', id)
+            .execute();
+          return { kind: 'answered', status };
+        };
+        const { say, settled } = await sending(db, post);
+        await say(room, 'alice', `${mention(room, 'bob')} message`);
+        await settled();
+        expect(
+          await db
+            .selectFrom('push_subscriptions')
+            .select('failures')
+            .where('id', '=', id)
+            .execute(),
+        ).toEqual([{ failures: 3 }]);
+      });
+    },
+  );
+
+  test('a success for an earlier session cannot clear the newer session’s failure streak', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const id = await subscribeDevice(db, room, 'bob', await aBrowser(), { failures: 4 });
+      const { sessionId } = await aSession(db, clock, room.members['bob']?.userId ?? '', 30);
+      const post: PushPost = async () => {
+        await db
+          .updateTable('push_subscriptions')
+          .set({ session_id: sessionId, failures: 3 })
+          .where('id', '=', id)
+          .execute();
+        return { kind: 'answered', status: 201 };
+      };
+      const { say, settled } = await sending(db, post);
+      await say(room, 'alice', `${mention(room, 'bob')} message`);
+      await settled();
+      expect(
+        await db.selectFrom('push_subscriptions').select('failures').where('id', '=', id).execute(),
+      ).toEqual([{ failures: 3 }]);
+    });
   });
 
   test.each([400, 401, 403, 413])(
