@@ -59,13 +59,28 @@ describe('the detector', () => {
   });
 });
 
+/**
+ * What is not the repository's: built output, and a person's own tooling, which no clone has and which can hold
+ * whole copies of the repository (an agent's worktrees). Reading those made this test slow where they exist and
+ * red for scripts that are not this repository's (`scripts/check-docs.py` and the mutation runner leave out the same).
+ */
+const NOT_THE_REPOSITORY = [
+  'node_modules',
+  '.git',
+  'dist',
+  '.tsbuild',
+  'coverage',
+  '.playwright-mcp',
+  '.agents',
+  '.claude',
+  '.superpowers',
+  '.superdesign',
+  '.swarm',
+];
+
 const sources = (directory: string): string[] =>
   readdirSync(directory).flatMap((name) => {
-    if (
-      ['node_modules', '.git', 'dist', '.tsbuild', 'coverage', '.playwright-mcp'].includes(name)
-    ) {
-      return [];
-    }
+    if (NOT_THE_REPOSITORY.includes(name)) return [];
     const path = join(directory, name);
     if (statSync(path).isDirectory()) return sources(path);
     return /\.(ts|tsx|mjs)$/.test(name) ? [path] : [];
