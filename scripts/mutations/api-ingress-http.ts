@@ -384,6 +384,14 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/metrics.test.ts'],
   },
   {
+    id: 'guest-directory-http-forgets-adapter',
+    why: 'The real directory endpoint must pass the scoped module adapter.',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: 'return await membersIn(database, context, dependencies.workspaceChannels);',
+    replace: 'return await membersIn(database, context);',
+    tests: ['apps/api/src/ingress/http/guest-invitations.integration.test.ts'],
+  },
+  {
     id: 'http-drain-keeps-the-original-listener-running',
     why: 'A drain reports completion while its own HTTP listener still handles new requests; the synchronous auth-entry probe must catch that even if the port is already occupied.',
     file: 'apps/api/src/ingress/http/app.ts',

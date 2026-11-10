@@ -19,7 +19,7 @@ afterAll(async () => {
 describe('integration: guest invitation HTTP admission', () => {
   test('the real HTTP acceptance path exposes only the selected post-admission history', async () => {
     await withRollback(async (db) => {
-      const room = await aRoom(db, ['owner']);
+      const room = await aRoom(db, ['owner'], { outsiders: ['other-employee'] });
       const clock = fixedClock(new Date());
       const recipient = await aSignedInUser(db, clock, 'http-guest');
       await db
@@ -81,6 +81,12 @@ describe('integration: guest invitation HTTP admission', () => {
         access: { kind: 'guest' },
         modules: ['chat'],
       });
+      const people = await call('GET', `/api/workspaces/${room.workspaceId}/members`);
+      expect(people.status).toBe(200);
+      const directory = (await people.json()) as { user: { id: string } }[];
+      expect(directory.map((row) => row.user.id).sort()).toEqual(
+        [owner.userId, recipient.userId].sort(),
+      );
       const history = await call('GET', `/api/channels/${room.channelId}/messages`);
       expect(history.status).toBe(200);
       expect(await history.json()).toMatchObject({ data: [], nextCursor: null });

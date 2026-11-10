@@ -109,6 +109,22 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/guest-invitations.integration.test.ts'],
   },
   {
+    id: 'guest-directory-adapter-missing',
+    why: 'A guest directory without its scope adapter must fail closed with a stable not-found response.',
+    file: 'apps/api/src/modules/workspaces/workspaces.ts',
+    find: '    if (channels.guests === undefined) throw workspaceNotFound();\n',
+    replace: '',
+    tests: ['apps/api/src/features/chat/channels/guest-directory.integration.test.ts'],
+  },
+  {
+    id: 'guest-directory-core-filter-ignored',
+    why: 'The core members endpoint must delegate restricted directory scope to its conversation owner.',
+    file: 'apps/api/src/modules/workspaces/workspaces.ts',
+    find: '  if (context.guest !== undefined) {\n',
+    replace: '  if (false) {\n',
+    tests: ['apps/api/src/features/chat/channels/guest-directory.integration.test.ts'],
+  },
+  {
     id: 'guest-invitation-expiry-ignored',
     why: 'The access end remains authoritative even if an invitation link lives longer.',
     file: 'apps/api/src/modules/workspaces/invitations.ts',

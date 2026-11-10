@@ -1,7 +1,8 @@
-/** The conversation-owning half of named guest admission; core never reaches into chat's tables. */
+/** Chat owns guest conversation grants and directory scope; core never reaches into chat's tables. */
 import { Value } from '@sinclair/typebox/value';
 import { GUEST_CHANNELS_MAX, GuestChannelIds } from '@purlay/types';
 import type { ChatDb } from '../schema';
+import { sql } from '@purlay/db';
 import type { WorkspaceGuestChannels } from '../../../modules/workspaces/channels-port';
 import { AppError, routeNotFound } from '../../../platform/errors';
 import {
@@ -10,7 +11,12 @@ import {
   requireWorkspaceMembership,
   type WorkspaceContext,
 } from '../../../platform/tenancy';
-import { requireChannelsById, channelNotFound, visibleChannelIdsQuery } from './guard';
+import {
+  requireChannelsById,
+  channelNotFound,
+  visibleChannelIdsQuery,
+  channelAudienceQuery,
+} from './guard';
 import { beginReadScopes } from './read-scope';
 
 const administrator = async (
@@ -30,6 +36,21 @@ const administrator = async (
 
 export const chatGuestChannels: WorkspaceGuestChannels = {
   moduleId: 'chat',
+  people: (executor, context, personId) => {
+    assertMinted(context);
+    if (!entitledTo(context, 'chat')) return sql<boolean>`false`;
+    const shared = executor
+      .selectFrom(visibleChannelIdsQuery(executor, context).as('shared_channel'))
+      .innerJoin('channel_members as colleague', 'colleague.channel_id', 'shared_channel.id')
+      .select('colleague.user_id')
+      .where('colleague.user_id', '=', personId)
+      .where(
+        'colleague.user_id',
+        'in',
+        channelAudienceQuery(executor, sql.ref<string>('shared_channel.id')),
+      );
+    return sql<boolean>`exists (${shared})`;
+  },
   prepare: async (executor, context, channelIds) => {
     const current = await administrator(executor, context);
     if (!Value.Check(GuestChannelIds, channelIds))

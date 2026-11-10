@@ -3,13 +3,19 @@
  * it, and chat — whose channels they are — implements it where the application is put together. With chat
  * absent there are no channels, and `noWorkspaceChannels` says so.
  */
-import type { Executor, Transaction } from '@purlay/db';
+import type { Executor, RawBuilder, Transaction } from '@purlay/db';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Clock } from '../../platform/clock';
 
 /** Admission is implemented by the module that owns the granted conversations. */
 export interface WorkspaceGuestChannels {
   readonly moduleId: string;
+  /** A guest's directory contains only active people in their explicitly shared conversations. */
+  people(
+    executor: Executor,
+    context: WorkspaceContext,
+    personId: RawBuilder<string>,
+  ): RawBuilder<boolean>;
   /** Lock selected channels before the workspace mutex, then recheck administrator visibility. */
   prepare(
     executor: Transaction,

@@ -56,6 +56,69 @@ const listening = (
 };
 
 describe('integration: who hears that somebody came online', () => {
+  test('a guest sees and hears only people in currently shared conversations', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['owner', 'guest', 'expired-speaker'], {
+        outsiders: ['unshared'],
+      });
+      const guestId = idOf(room, 'guest');
+      const ownerId = idOf(room, 'owner');
+      const now = new Date();
+      await db
+        .updateTable('workspace_members')
+        .set({
+          access_kind: 'guest',
+          guest_since: new Date(now.getTime() - 60_000),
+          guest_modules: ['chat'],
+        })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', guestId)
+        .execute();
+      const expiredSpeaker = idOf(room, 'expired-speaker');
+      await db
+        .updateTable('workspace_members')
+        .set({
+          access_kind: 'guest',
+          guest_since: new Date(now.getTime() - 60_000),
+          guest_expires_at: new Date(now.getTime() - 1_000),
+          guest_modules: ['chat'],
+        })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', expiredSpeaker)
+        .execute();
+      const guest = await requireWorkspaceMembership(db, guestId, room.workspaceId);
+      const online = {
+        version: (): number => 1,
+        onlineAmong: (ids: readonly string[]): Promise<readonly PresenceChange[]> =>
+          Promise.resolve(ids.map((userId) => ({ userId, online: true, away: false, version: 1 }))),
+      };
+      expect(
+        (await workspacePresence(db, guest, online)).online.map((row) => row.userId).sort(),
+      ).toEqual([guestId, ownerId].sort());
+      const node = listening(db);
+      await node.announce({ userId: expiredSpeaker, online: true, away: false, version: 1 });
+      expect(node.heard(guestId)).toEqual([]);
+      await node.announce({
+        userId: room.outsiders['unshared']?.userId ?? '',
+        online: true,
+        away: false,
+        version: 1,
+      });
+      expect(node.heard(guestId)).toEqual([]);
+      await node.announce({ userId: ownerId, online: true, away: false, version: 2 });
+      expect(node.heard(guestId)).toHaveLength(1);
+      await db
+        .updateTable('workspace_members')
+        .set({ guest_expires_at: new Date(now.getTime() - 1_000) })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', guestId)
+        .execute();
+      await node.announce({ userId: ownerId, online: false, away: false, version: 3 });
+      expect(node.heard(guestId)).toHaveLength(1);
+      expect((await workspacePresence(db, guest, online)).online).toEqual([]);
+    });
+  });
+
   test('everybody who shares a workspace with them, once, and they themselves (D-257)', async () => {
     await withRollback(async (db) => {
       const here = await aRoom(db, ['alice', 'bob'], { outsiders: ['erin'] });

@@ -172,7 +172,7 @@ export const listWorkspaceMembers = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await membersIn(database, context);
+  return await membersIn(database, context, dependencies.workspaceChannels);
 };
 
 /**

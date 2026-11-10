@@ -19,7 +19,7 @@
  * member are both Phase 1 (`API.md` §3). The guard belongs with those endpoints,
  * where it can be tested against something that actually tries.
  */
-import type { Executor, Transaction } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import {
   MODULE_IDS,
   type MeResponse,
@@ -30,7 +30,7 @@ import {
 } from '@purlay/types';
 import { asGrants, grantColumns } from '../../platform/grants';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { requireWorkspaceMembership, workspaceNotFound } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { Hooks } from '../../platform/hooks';
@@ -40,6 +40,7 @@ import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
 import { scheduledDeletionsOf } from './deletion';
 import { activeWorkspaceMembership } from '../../platform/membership-access';
+import { noWorkspaceChannels, type WorkspaceChannels } from './channels-port';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -331,12 +332,13 @@ export const renameWorkspace = async (
   return { workspace: asWorkspace(row), memberIds: members.map((member) => member.user_id) };
 };
 
-/** Everyone in the workspace, as the rest of it may see them — never their email. */
+/** Workspace people, restricted to shared conversations for a guest — never their email. */
 export const membersIn = async (
   executor: Executor,
   context: WorkspaceContext,
+  channels: WorkspaceChannels = noWorkspaceChannels,
 ): Promise<readonly WorkspaceMember[]> => {
-  const rows = await executor
+  let query = executor
     .selectFrom('workspace_members')
     .innerJoin('users', 'users.id', 'workspace_members.user_id')
     .select([
@@ -350,8 +352,12 @@ export const membersIn = async (
     ])
     .where('workspace_members.workspace_id', '=', context.workspaceId)
     .where('users.deleted_at', 'is', null)
-    .orderBy('workspace_members.joined_at', 'asc')
-    .execute();
+    .orderBy('workspace_members.joined_at', 'asc');
+  if (context.guest !== undefined) {
+    if (channels.guests === undefined) throw workspaceNotFound();
+    query = query.where(channels.guests.people(executor, context, sql.ref<string>('users.id')));
+  }
+  const rows = await query.execute();
 
   return rows.map((row) => ({
     user: {

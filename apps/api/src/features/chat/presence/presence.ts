@@ -8,6 +8,8 @@
  * themselves**, on their own topic: it is their own state, so nothing new is told to anybody, and
  * every page of theirs draws their own avatar from what the server says of them — away by choice
  * from another device, or idle, which only the server knows (D-257).
+ * Restricted guests hear only current colleagues in their explicitly shared conversations; snapshots
+ * use the same directory boundary, including when expiry cleanup has not run.
  *
  * **A workspace's presence** is its members online now, for a member of it; anybody else is told the
  * workspace does not exist, as for every workspace route (D-34).
@@ -18,6 +20,7 @@
  * wins: an offline change is never away, and nobody offline is in a snapshot.
  */
 import type { ChatDb } from '../schema';
+import { sql } from '@purlay/db';
 import type { PresenceChange, PresenceSnapshot } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import {
@@ -29,7 +32,8 @@ import {
 } from '../../../platform/events';
 import type { Logger } from '../../../platform/logging';
 import type { WorkspaceContext } from '../../../platform/tenancy';
-import { workspacesOf } from '../../../modules/users/profile';
+import { channelAudienceQuery } from '../channels/guard';
+import { chatGuestChannels } from '../channels/guest-grants';
 
 /** What a workspace's presence is read from: this node's record (`realtime/online.ts`). */
 export interface OnlineReader {
@@ -39,11 +43,38 @@ export interface OnlineReader {
 
 /** Everybody who shares a workspace with the person, once each, never the person. */
 const coMembers = async (executor: ChatDb, userId: string): Promise<readonly string[]> => {
-  const everyone = new Set<string>();
-  for (const workspace of await workspacesOf(executor, userId)) {
-    for (const memberId of workspace.memberIds) if (memberId !== userId) everyone.add(memberId);
-  }
-  return [...everyone];
+  const shared = executor
+    .selectFrom('channel_members as speaker')
+    .innerJoin('channels as shared_channel', 'shared_channel.id', 'speaker.channel_id')
+    .select('speaker.channel_id')
+    .where('speaker.user_id', '=', userId)
+    .where('shared_channel.workspace_id', '=', sql.ref<string>('everyone.workspace_id'))
+    .where(
+      'speaker.user_id',
+      'in',
+      channelAudienceQuery(executor, sql.ref<string>('shared_channel.id')),
+    )
+    .where((eb) =>
+      eb.exists(
+        channelAudienceQuery(executor, sql.ref<string>('shared_channel.id')).where(
+          'users.id',
+          '=',
+          sql.ref<string>('everyone.user_id'),
+        ),
+      ),
+    );
+  const rows = await executor
+    .selectFrom('workspace_members as mine')
+    .innerJoin('workspaces', 'workspaces.id', 'mine.workspace_id')
+    .innerJoin('workspace_members as everyone', 'everyone.workspace_id', 'mine.workspace_id')
+    .select('everyone.user_id')
+    .distinct()
+    .where('mine.user_id', '=', userId)
+    .where('everyone.user_id', '<>', userId)
+    .where('workspaces.deleted_at', 'is', null)
+    .where((eb) => eb.or([eb('everyone.access_kind', '=', 'member'), eb.exists(shared)]))
+    .execute();
+  return rows.map((row) => row.user_id);
 };
 
 /** Whether the person chose to appear away; false for nobody (an account erased meanwhile). */
@@ -99,6 +130,11 @@ export const workspacePresence = async (
     .selectFrom('workspace_members')
     .select('user_id')
     .where('workspace_id', '=', context.workspaceId)
+    .$if(context.guest !== undefined, (query) =>
+      query.where(
+        chatGuestChannels.people(executor, context, sql.ref<string>('workspace_members.user_id')),
+      ),
+    )
     .execute();
   // The version first: anybody who goes online after it is heard by a frame at a later one.
   const version = await online.version();

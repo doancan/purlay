@@ -27,6 +27,7 @@ import { recordAudit } from '../../../modules/audit/audit';
 import type { Clock } from '../../../platform/clock';
 import {
   channelNotFound,
+  channelAudienceQuery,
   isChannelMember,
   requireChannelMember,
   type ChannelContext,
@@ -543,6 +544,9 @@ export const channelMembers = async (
     ])
     .where('channel_members.channel_id', '=', context.channelId)
     .where('users.deleted_at', 'is', null)
+    .$if(context.guest !== undefined, (query) =>
+      query.where('users.id', 'in', channelAudienceQuery(executor, context.channelId)),
+    )
     .orderBy('channel_members.joined_at', 'asc')
     .orderBy('users.username', 'asc')
     .execute();
