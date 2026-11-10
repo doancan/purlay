@@ -135,7 +135,7 @@ export const reviseMessage = async (
     .executeTakeFirstOrThrow();
 
   // The mention rows follow the content; what was told is not taken back (D-103 §5).
-  const named = await resolveMentions(executor, context, names);
+  const named = await resolveMentions(executor, context, names, messageId);
   const previous = (
     await executor
       .selectFrom('mentions')

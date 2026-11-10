@@ -78,7 +78,7 @@ type VisibilityQuery = SelectQueryBuilder<
   object
 >;
 
-const visibleChannels = (executor: ChatDb, userId: string): VisibilityQuery =>
+const visibleChannels = (executor: ChatDb, userId: string | RawBuilder<string>): VisibilityQuery =>
   executor
     .selectFrom('channels')
     .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
@@ -108,6 +108,36 @@ const visibleChannels = (executor: ChatDb, userId: string): VisibilityQuery =>
         eb('channel_members.user_id', 'is not', null),
       ]),
     );
+
+/** The canonical reader's audience in one SQL statement, for notices and counter delivery. */
+export const channelAudienceQuery = (
+  executor: ChatDb,
+  channelId: string,
+  messageId?: string,
+): SelectQueryBuilder<ChatSchema, 'users', { id: string }> => {
+  const visible = visibleChannels(executor, sql.ref<string>('users.id'))
+    .select('channels.id')
+    .where('channels.id', '=', channelId)
+    .$if(messageId !== undefined, (query) =>
+      query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('messages as audience_message')
+            .select('audience_message.id')
+            .whereRef('audience_message.channel_id', '=', 'channels.id')
+            .where('audience_message.id', '=', messageId ?? '')
+            .where('audience_message.deleted_at', 'is', null)
+            .where(guestMessageHistoryFor('audience_message')),
+        ),
+      ),
+    );
+  return executor
+    .selectFrom('users')
+    .select('users.id')
+    .where('users.deleted_at', 'is', null)
+    .where('users.suspended_at', 'is', null)
+    .where((eb) => eb.exists(visible));
+};
 
 const visible = async (
   executor: ChatDb,

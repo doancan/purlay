@@ -398,7 +398,7 @@ export const sendMessage = async (
   const { recipients, told } = await recordDelivery(executor, {
     context,
     messageId: input.id,
-    mentioned: await resolveMentions(executor, context, names),
+    mentioned: await resolveMentions(executor, context, names, input.id),
     thread:
       input.parentId === undefined || root === undefined
         ? null

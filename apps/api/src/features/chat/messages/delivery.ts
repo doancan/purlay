@@ -24,7 +24,7 @@ import { memberReadScope } from '../channels/read-scope';
 import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
 import type { ChannelState, NEEDS_YOU } from '@purlay/types';
-import type { ChannelContext } from '../channels/guard';
+import { channelAudienceQuery, type ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
 import { unreadMessage } from '../channels/unread';
@@ -80,23 +80,7 @@ export const stillSeeing = async (
   userIds: readonly string[],
 ): Promise<ReadonlySet<string>> => {
   if (userIds.length === 0) return new Set();
-  let query = executor
-    .selectFrom('users')
-    .innerJoin('workspace_members', (join) =>
-      join
-        .onRef('workspace_members.user_id', '=', 'users.id')
-        .on('workspace_members.workspace_id', '=', context.workspaceId),
-    )
-    .select('users.id')
-    .where('users.id', 'in', userIds)
-    .where('users.deleted_at', 'is', null);
-  if (context.channelType !== 'public') {
-    query = query.innerJoin('channel_members', (join) =>
-      join
-        .onRef('channel_members.user_id', '=', 'users.id')
-        .on('channel_members.channel_id', '=', context.channelId),
-    );
-  }
+  const query = channelAudienceQuery(executor, context.channelId).where('users.id', 'in', userIds);
   return new Set((await query.execute()).map((row) => row.id));
 };
 
@@ -104,30 +88,16 @@ export const resolveMentions = async (
   executor: ChatDb,
   context: ChannelContext,
   names: readonly string[],
+  messageId?: string,
 ): Promise<readonly string[]> => {
   if (names.length === 0) return [];
-  let query = executor
-    .selectFrom('users')
-    .innerJoin('workspace_members', (join) =>
-      join
-        .onRef('workspace_members.user_id', '=', 'users.id')
-        .on('workspace_members.workspace_id', '=', context.workspaceId),
-    )
-    .select('users.id')
+  const query = channelAudienceQuery(executor, context.channelId, messageId)
     .where(
       sql<string>`lower(users.username)`,
       'in',
       names.map((name) => name.toLowerCase()),
     )
-    .where('users.id', '<>', context.userId)
-    .where('users.deleted_at', 'is', null);
-  if (context.channelType !== 'public') {
-    query = query.innerJoin('channel_members', (join) =>
-      join
-        .onRef('channel_members.user_id', '=', 'users.id')
-        .on('channel_members.channel_id', '=', context.channelId),
-    );
-  }
+    .where('users.id', '<>', context.userId);
   return (await query.execute()).map((row) => row.id);
 };
 
@@ -164,7 +134,13 @@ export const notify = async (
   writtenAt?: Date,
 ): Promise<readonly string[]> => {
   const messageId = message.id;
-  const candidates = [...reasons.keys()].filter((userId) => userId !== context.userId);
+  const proposed = [...reasons.keys()].filter((userId) => userId !== context.userId);
+  if (proposed.length === 0) return [];
+  const candidates = (
+    await channelAudienceQuery(executor, context.channelId, messageId)
+      .where('users.id', 'in', proposed)
+      .execute()
+  ).map((row) => row.id);
   if (candidates.length === 0) return [];
   const muted = new Set<string>();
   const alreadyRead = new Set<string>();
@@ -379,6 +355,7 @@ export const countArrival = async (
       .selectFrom('channel_members')
       .select('user_id')
       .where('channel_id', '=', channelId)
+      .where('user_id', 'in', channelAudienceQuery(executor, channelId, messageId))
       .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))
       .orderBy('user_id')
       .forNoKeyUpdate()
@@ -436,6 +413,7 @@ export const currentStates = async (
         'state_version',
       ])
       .where('channel_id', '=', context.channelId)
+      .where('user_id', 'in', channelAudienceQuery(executor, context.channelId))
       .where('user_id', '<>', context.userId)
       .execute()
   ).map((row) => ({
