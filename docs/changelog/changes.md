@@ -27,8 +27,6 @@ have it.
 
 ## Unreleased
 
-### Fixed
-
-- **Notifications** — temporary push-service and network failures keep the browser subscribed, so later messages can reach it; a delayed response cannot reset another account's or session's device state (D-299)
+_Nothing yet._
 
 ---
