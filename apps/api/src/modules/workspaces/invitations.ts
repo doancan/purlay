@@ -30,7 +30,9 @@ import {
   INVITATION_TTL_DAYS,
   PAGE_LIMIT,
   messageId,
+  normalisedMailbox,
   type CreatedInvitation,
+  type CreatedGuestInvitation,
   type Invitation,
   type InvitationPage,
   type InvitationPreview,
@@ -41,7 +43,8 @@ import {
 import { DAY_MS, type Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
-import type { WorkspaceContext } from '../../platform/tenancy';
+import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
+import type { WorkspaceChannels } from './channels-port';
 import { requireInvitationManager, requireInvitationManagerNow } from './invitation-manager';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 import { recordAudit } from '../audit/audit';
@@ -68,6 +71,28 @@ export const linkOpens = (
     eb('workspace_invitations.revoked_at', 'is', null),
     eb('workspace_invitations.expires_at', '>', now),
     eb('workspaces.deleted_at', 'is', null),
+    eb.or([
+      eb('workspace_invitations.access_kind', '=', 'member'),
+      eb.and([
+        eb('workspace_invitations.access_kind', '=', 'guest'),
+        eb.or([
+          eb('workspace_invitations.guest_access_expires_at', 'is', null),
+          eb('workspace_invitations.guest_access_expires_at', '>', now),
+        ]),
+        eb.exists(
+          eb
+            .selectFrom('workspace_members as inviter')
+            .innerJoin('users as inviter_account', 'inviter_account.id', 'inviter.user_id')
+            .select('inviter.user_id')
+            .whereRef('inviter.workspace_id', '=', 'workspace_invitations.workspace_id')
+            .whereRef('inviter.user_id', '=', 'workspace_invitations.created_by')
+            .where('inviter.access_kind', '=', 'member')
+            .where('inviter.role', 'in', ['owner', 'admin'])
+            .where('inviter_account.deleted_at', 'is', null)
+            .where('inviter_account.suspended_at', 'is', null),
+        ),
+      ]),
+    ]),
   ]);
 
 interface InvitationRow {
@@ -144,6 +169,8 @@ export const createInvitation = async (
   transaction: Transaction,
   clock: Clock,
   context: WorkspaceContext,
+  /** Server-owned scope, validated and locked by the guest admission service. */
+  guest?: { readonly access: CreatedGuestInvitation['guest']; readonly moduleId: string },
 ): Promise<CreatedInvitation> => {
   await requireInvitationManagerNow(transaction, context);
   const now = clock.now();
@@ -154,10 +181,26 @@ export const createInvitation = async (
     .values({
       id,
       workspace_id: context.workspaceId,
-      token_hash: await tokenDigest(token),
+      token_hash: `${guest === undefined ? '' : 'guest:'}${await tokenDigest(token)}`,
       created_by: context.userId,
       created_at: now,
-      expires_at: new Date(now.getTime() + INVITATION_TTL_DAYS * DAY_MS),
+      expires_at: new Date(
+        Math.min(
+          now.getTime() + INVITATION_TTL_DAYS * DAY_MS,
+          guest?.access.accessExpiresAt == null
+            ? Infinity
+            : new Date(guest.access.accessExpiresAt).getTime(),
+        ),
+      ),
+      ...(guest === undefined
+        ? {}
+        : {
+            access_kind: 'guest',
+            guest_email: guest.access.email,
+            guest_channels: [...guest.access.channelIds],
+            guest_modules: [guest.moduleId],
+            guest_access_expires_at: guest.access.accessExpiresAt,
+          }),
     })
     .execute();
   await recordAudit(transaction, clock, {
@@ -166,6 +209,15 @@ export const createInvitation = async (
     action: 'invitation.created',
     targetType: 'invitation',
     targetId: id,
+    ...(guest === undefined
+      ? {}
+      : {
+          metadata: {
+            accessKind: 'guest',
+            channelIds: guest.access.channelIds.join(','),
+            accessExpiresAt: guest.access.accessExpiresAt ?? 'none',
+          },
+        }),
   });
   const [row] = await openInvitations(transaction, context, now, { id });
   // Written above, in this transaction, with an expiry ahead of now.
@@ -237,6 +289,11 @@ interface Opened {
   readonly invitationId: string;
   readonly expiresAt: Date | string;
   readonly workspace: InvitationPreview['workspace'];
+  readonly guest?: {
+    readonly access: CreatedGuestInvitation['guest'];
+    readonly modules: readonly string[];
+    readonly manager: WorkspaceContext;
+  };
 }
 
 /**
@@ -253,6 +310,7 @@ const opened = async (
   token: string,
   lock: boolean,
 ): Promise<Opened> => {
+  const digest = await tokenDigest(token);
   const statement = executor
     .selectFrom('workspace_invitations')
     .innerJoin('workspaces', 'workspaces.id', 'workspace_invitations.workspace_id')
@@ -260,15 +318,60 @@ const opened = async (
       'workspace_invitations.id as invitation_id',
       'workspace_invitations.created_at',
       'workspace_invitations.expires_at',
+      'workspace_invitations.access_kind',
+      'workspace_invitations.guest_email',
+      'workspace_invitations.guest_channels',
+      'workspace_invitations.guest_modules',
+      'workspace_invitations.guest_access_expires_at',
+      'workspace_invitations.created_by',
       'workspaces.id',
       'workspaces.name',
       'workspaces.slug',
       'workspaces.avatar_url',
     ])
-    .where('workspace_invitations.token_hash', '=', await tokenDigest(token))
+    .where('workspace_invitations.token_hash', 'in', [digest, `guest:${digest}`])
     .where((eb) => linkOpens(eb, now));
   const row = await (lock ? statement.forShare() : statement).executeTakeFirst();
   if (row === undefined) throw notFound();
+  let guest: Opened['guest'];
+  if (row.access_kind === 'guest') {
+    if (
+      row.guest_email === null ||
+      row.guest_channels === null ||
+      row.guest_modules === null ||
+      row.created_by === null
+    )
+      throw notFound();
+    const recipient = await executor
+      .selectFrom('users')
+      .select('email')
+      .where('id', '=', userId)
+      .where('email_verified', '=', true)
+      .where('deleted_at', 'is', null)
+      .where('suspended_at', 'is', null)
+      .executeTakeFirst();
+    if (recipient === undefined || normalisedMailbox(recipient.email) !== row.guest_email)
+      throw notFound();
+    const manager = await requireWorkspaceMembership(executor, row.created_by, row.id).catch(
+      (error: unknown) => {
+        if (error instanceof AppError && error.status === 404) throw notFound();
+        throw error;
+      },
+    );
+    if (manager.role === 'member') throw notFound();
+    guest = {
+      manager,
+      modules: row.guest_modules,
+      access: {
+        email: row.guest_email,
+        channelIds: row.guest_channels,
+        accessExpiresAt:
+          row.guest_access_expires_at === null
+            ? null
+            : new Date(row.guest_access_expires_at).toISOString(),
+      },
+    };
+  }
   // Removed since the link was made: the removal stands (written in its transaction, D-26).
   const removed = await executor
     .selectFrom('audit_log')
@@ -283,6 +386,7 @@ const opened = async (
     invitationId: row.invitation_id,
     expiresAt: row.expires_at,
     workspace: { id: row.id, name: row.name, slug: row.slug, avatarUrl: row.avatar_url },
+    ...(guest === undefined ? {} : { guest }),
   };
 };
 
@@ -324,29 +428,82 @@ export const acceptInvitation = async (
   userId: string,
   token: string,
   effective?: EntitlementPolicy['effective'],
+  channels?: WorkspaceChannels,
 ): Promise<AcceptedInvitation> => {
   const now = clock.now();
-  const { workspace, invitationId } = await opened(transaction, now, userId, token, true);
+  // A guest locks its selected conversations before the workspace mutex used by role changes.
+  const isGuest = await transaction
+    .selectFrom('workspace_invitations')
+    .select('id')
+    .where('token_hash', '=', `guest:${await tokenDigest(token)}`)
+    .executeTakeFirst();
+  if (isGuest !== undefined) {
+    const pending = await opened(transaction, now, userId, token, false);
+    if (
+      pending.guest === undefined ||
+      channels?.guests === undefined ||
+      pending.guest.modules.length !== 1 ||
+      pending.guest.modules[0] !== channels.guests.moduleId
+    )
+      throw notFound();
+    await channels.guests
+      .prepare(transaction, pending.guest.manager, pending.guest.access.channelIds)
+      .catch((error: unknown) => {
+        if (error instanceof AppError && (error.status === 404 || error.status === 403))
+          throw notFound();
+        throw error;
+      });
+  }
+  const { workspace, invitationId, guest } = await opened(transaction, now, userId, token, true);
   const inserted = await transaction
     .insertInto('workspace_members')
-    .values({ workspace_id: workspace.id, user_id: userId, role: 'member', joined_at: now })
+    .values({
+      workspace_id: workspace.id,
+      user_id: userId,
+      role: 'member',
+      joined_at: now,
+      ...(guest === undefined
+        ? {}
+        : {
+            access_kind: 'guest',
+            guest_since: now,
+            guest_expires_at: guest.access.accessExpiresAt,
+            guest_modules: [...guest.modules],
+          }),
+    })
     .onConflict((conflict) => conflict.columns(['workspace_id', 'user_id']).doNothing())
     .returning('id')
     .executeTakeFirst();
   if (inserted !== undefined) {
+    if (guest !== undefined) {
+      if (channels?.guests === undefined) throw notFound();
+      await channels.guests.grant(
+        transaction,
+        clock,
+        guest.manager,
+        userId,
+        guest.access.channelIds,
+      );
+    }
     await recordAudit(transaction, clock, {
       workspaceId: workspace.id,
       actorUserId: userId,
       action: 'member.joined',
       targetType: 'user',
       targetId: userId,
-      metadata: { via: 'invitation', invitationId },
+      metadata: {
+        via: 'invitation',
+        invitationId,
+        ...(guest === undefined
+          ? {}
+          : { accessKind: 'guest', channelIds: guest.access.channelIds.join(',') }),
+      },
     });
   }
   await recordInvitationApplicant(transaction, clock, userId, invitationId, true);
   const [membership] = await membershipsOf(transaction, clock, userId, workspace.id, effective);
   // Inserted or already there, in this transaction: a membership that is not found is a bug.
-  if (membership === undefined) throw new Error('a membership just made is missing');
+  if (membership === undefined) throw notFound();
   const members =
     inserted === undefined
       ? []

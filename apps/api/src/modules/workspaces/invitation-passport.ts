@@ -52,7 +52,9 @@ export type PassportId = string;
 
 /** What a passport is looked up by: a browser's cookie, or an address. */
 export interface PassportPresented {
+  /** Presence selects a provider sign-in; even a missing cookie never falls back to an email pass. */
   readonly cookie?: string | undefined;
+  /** For a provider, this binds the verified identity to a named guest, rather than selecting a pass. */
   readonly email?: string | undefined;
 }
 
@@ -76,11 +78,16 @@ export const issuePassport = async (
   { token, email }: { readonly token: string; readonly email?: string | undefined },
 ): Promise<{ cookie?: string }> => {
   const now = clock.now();
+  const digest = await tokenDigest(token);
   const link = await transaction
     .selectFrom('workspace_invitations')
     .innerJoin('workspaces', 'workspaces.id', 'workspace_invitations.workspace_id')
-    .select('workspace_invitations.id')
-    .where('workspace_invitations.token_hash', '=', await tokenDigest(token))
+    .select([
+      'workspace_invitations.id',
+      'workspace_invitations.access_kind',
+      'workspace_invitations.guest_email',
+    ])
+    .where('workspace_invitations.token_hash', 'in', [digest, `guest:${digest}`])
     .where((eb) => linkOpens(eb, now))
     // Held to the end of the transaction: the one lock every passport of this link is made under.
     .forNoKeyUpdate(['workspace_invitations'])
@@ -90,6 +97,12 @@ export const issuePassport = async (
   // After the link, never before: a link that does not open is one answer whatever else was sent.
   const address = email === undefined ? undefined : await addressDigest(email);
   if (email !== undefined && address === undefined) throw new PassportRefused('invalid-address');
+  if (
+    link.access_kind === 'guest' &&
+    email !== undefined &&
+    normalisedMailbox(email) !== link.guest_email
+  )
+    throw notFound();
 
   // An address's own live passport for this link is replaced, not added to: it is not counted against it.
   const live = await transaction
@@ -155,7 +168,12 @@ export const passportAllows = async (
     presented.cookie === undefined || presented.cookie === ''
       ? undefined
       : await tokenDigest(presented.cookie);
-  const address = presented.email === undefined ? undefined : await addressDigest(presented.email);
+  const address =
+    'cookie' in presented || presented.email === undefined
+      ? undefined
+      : await addressDigest(presented.email);
+  const namedAddress =
+    presented.email === undefined ? undefined : normalisedMailbox(presented.email);
   if (cookie === undefined && address === undefined) return undefined;
   const row = await executor
     .selectFrom('invitation_passports')
@@ -169,6 +187,15 @@ export const passportAllows = async (
     .where('invitation_passports.consumed_at', 'is', null)
     .where('invitation_passports.expires_at', '>', now)
     .where((eb) => linkOpens(eb, now))
+    // A cookie proves possession of a link, never the named guest's identity by itself.
+    .where((eb) =>
+      eb.or([
+        eb('workspace_invitations.access_kind', '=', 'member'),
+        ...(namedAddress === undefined
+          ? []
+          : [eb('workspace_invitations.guest_email', '=', namedAddress)]),
+      ]),
+    )
     .where((eb) =>
       eb.or([
         ...(cookie === undefined

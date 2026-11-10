@@ -40,6 +40,7 @@ import {
   GOOGLE_ISSUER,
   NATIVE_CHALLENGE_PATTERN,
   NATIVE_STATE_PATTERN,
+  normalisedMailbox,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
   passwordProblem,
@@ -817,7 +818,7 @@ export const admittedByPassport = async (
   const headers = context.headers ?? context.request?.headers;
   const presented = byEmail
     ? { email }
-    : { cookie: readCookie(headers?.get('cookie') ?? null, INVITE_COOKIE) };
+    : { cookie: readCookie(headers?.get('cookie') ?? null, INVITE_COOKIE), email };
   // The library's own transaction: the passport is spent with the account, or not at all. Over a test's
   // rolled-back transaction the library opens none, and the database is the transaction already.
   const held = heldTransaction();
@@ -1881,12 +1882,13 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             // session in one transaction reads the account it has not committed yet.
             const adapter = await getCurrentAdapter((await instance.$context).adapter);
             const owner = await adapter.findOne<{
+              email: string;
               deletedAt?: Date | null;
               suspendedAt?: Date | null;
             }>({
               model: 'user',
               where: [{ field: 'id', value: session.userId }],
-              select: ['deletedAt', 'suspendedAt'],
+              select: ['email', 'deletedAt', 'suspendedAt'],
             });
             // No account, one erased, or one suspended (D-233): refused by every way in the library has —
             // GitHub, a password, a link, single sign-on, the second step (D-236). Thrown as the 401 the
@@ -1908,6 +1910,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             const round = signInRounds.getStore();
             let invitationId = round?.browserInvitationId;
             if (context?.path === LINK_SPEND_PATH && round?.emailInvitation !== undefined) {
+              const digest = await tokenDigest(round.emailInvitation);
               // The verified owner presented this actual bearer link in this sign-in. A passport
               // somebody else requested for their address never proves invitation use.
               invitationId = (
@@ -1915,12 +1918,18 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                   .selectFrom('workspace_invitations')
                   .innerJoin('workspaces', 'workspaces.id', 'workspace_invitations.workspace_id')
                   .select('workspace_invitations.id')
-                  .where(
-                    'workspace_invitations.token_hash',
-                    '=',
-                    await tokenDigest(round.emailInvitation),
-                  )
+                  .where('workspace_invitations.token_hash', 'in', [digest, `guest:${digest}`])
                   .where((eb) => linkOpens(eb, deps.clock.now()))
+                  .where((eb) =>
+                    eb.or([
+                      eb('workspace_invitations.access_kind', '=', 'member'),
+                      eb(
+                        'workspace_invitations.guest_email',
+                        '=',
+                        normalisedMailbox(owner.email) ?? '',
+                      ),
+                    ]),
+                  )
                   .executeTakeFirst()
               )?.id;
             } else if (
@@ -1930,6 +1939,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
               const headers = context.headers ?? context.request?.headers;
               const passportId = await passportAllows(executor, deps.clock, {
                 cookie: readCookie(headers?.get('cookie') ?? null, INVITE_COOKIE),
+                email: owner.email,
               });
               if (passportId !== undefined)
                 invitationId = (

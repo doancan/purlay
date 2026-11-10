@@ -42,6 +42,11 @@ import { anOidcStub, type OidcPerson, type OidcStub } from '../../testing/oidc-s
 import { anOidcAuth, returnFromOidc, startOidcSignIn } from '../../testing/oidc-sign-in';
 import { aUniqueSlug } from '../../testing/users';
 import { normalisedMailbox } from '@purlay/types';
+import { makeAndMailGuestInvitation } from '../../modules/workspaces/invitation-mail';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import { createChannel } from '../../features/chat/channels/channels';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { aGoogleAuth, aGoogleStub, signInWithGoogle } from '../../testing/google-sign-in';
 
 let cloned: ClonedDatabase;
 
@@ -167,6 +172,35 @@ const signInWith = async (
 };
 
 const CLOSED = `${ORIGIN}/sign-in?error=signup-closed`;
+
+const aNamedGuestInvitation = async (
+  server: Server,
+  email: string,
+): Promise<{ token: string; workspaceId: string; channelId: string; recipientId: string }> => {
+  const { owner, workspaceId } = await anInvitation(server, 'named-guest');
+  return await cloned.db.transaction().execute(async (tx) => {
+    const manager = await requireWorkspaceMembership(tx, owner.userId, workspaceId);
+    const channel = await createChannel(tx, server.clock, manager, { name: 'shared-with-guest' });
+    const made = await makeAndMailGuestInvitation(
+      tx,
+      server.clock,
+      manager,
+      { email, channelIds: [channel.id], accessExpiresAt: null },
+      { on: true, appUrl: ORIGIN },
+      chatWorkspaceChannels,
+    );
+    const letter = made.letters[0];
+    if (letter === undefined) throw new Error('Missing named guest letter');
+    const token = /\/invite#([0-9a-f]{64})/.exec(letter.text)?.[1];
+    if (token === undefined) throw new Error('Missing named guest token');
+    const attempt = await tx
+      .selectFrom('workspace_invitation_mail_attempts')
+      .select('recipient_id')
+      .where('id', '=', letter.attemptId)
+      .executeTakeFirstOrThrow();
+    return { token, workspaceId, channelId: channel.id, recipientId: attempt.recipient_id };
+  });
+};
 
 /** The passports held under one digest — a cookie's or an address's — and nobody else's. */
 const rowsFor = async (
@@ -374,6 +408,117 @@ describe('integration: the passport route', () => {
 });
 
 describe('integration: GitHub on an invite-only server', () => {
+  test('a verified Google Workspace identity joins the selected conversation as a guest', async () => {
+    const clock = aMovableClock();
+    const email = `guest-google-${crypto.randomUUID().slice(0, 8)}@example.test`;
+    const google = await aGoogleStub(
+      { sub: crypto.randomUUID(), email, hd: 'example.test' },
+      { now: () => clock.now().getTime() },
+    );
+    const mail = aRecordingOutbox();
+    const logs = aRecordingLogger();
+    const server: Server = {
+      clock,
+      mail,
+      logs,
+      app: createApp(
+        testDependencies({
+          database: cloned.db,
+          clock,
+          mail,
+          log: logs.log,
+          signUp: 'invite-only',
+          auth: aGoogleAuth(cloned.db, google, {
+            baseUrl: ORIGIN,
+            signUp: 'invite-only',
+            mailer: mail,
+            clock,
+            log: logs.log,
+          }),
+        }),
+      ),
+    };
+    const invite = await aNamedGuestInvitation(server, email);
+    const { pair } = await aGitHubPassport(server, invite.token);
+    const back = await signInWithGoogle(server.app, ORIGIN, google, pair);
+    expect(back.headers.get('location')).toBe(ORIGIN);
+    const accepted = await post(
+      server.app,
+      '/api/invitations/accept',
+      { token: invite.token },
+      { cookie: cookiesFrom(back) },
+    );
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      workspace: { id: invite.workspaceId },
+      access: { kind: 'guest' },
+    });
+    const user = await cloned.db
+      .selectFrom('users')
+      .select(['id', 'email_verified'])
+      .where('email', '=', email)
+      .executeTakeFirstOrThrow();
+    expect(user.email_verified).toBe(true);
+    expect(
+      await cloned.db
+        .selectFrom('channel_members')
+        .select('channel_id')
+        .where('user_id', '=', user.id)
+        .execute(),
+    ).toEqual([{ channel_id: invite.channelId }]);
+  });
+
+  test('a named guest passport admits its verified provider identity and no other account', async () => {
+    const person = aNewPerson();
+    const github = aGitHubFor(person);
+    const server = aServer(github);
+    const invite = await aNamedGuestInvitation(server, person.email);
+    const { pair } = await aGitHubPassport(server, invite.token);
+    const stranger = aNewPerson();
+    const strangerProvider = aGitHubFor(stranger);
+    expect(await signInWith(aServer(strangerProvider), strangerProvider, pair)).toBe(CLOSED);
+    expect(await accountsAt(stranger.email)).toBe(0);
+    const back = await returnFromGitHub(
+      server.app,
+      ORIGIN,
+      await startGitHubSignIn(server.app, ORIGIN, github, pair),
+    );
+    expect(back.headers.get('location')).toBe(ORIGIN);
+    const accepted = await post(
+      server.app,
+      '/api/invitations/accept',
+      { token: invite.token },
+      { cookie: cookiesFrom(back) },
+    );
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      workspace: { id: invite.workspaceId },
+      access: { kind: 'guest' },
+    });
+    const user = await cloned.db
+      .selectFrom('users')
+      .select(['id', 'email_verified'])
+      .where('email', '=', person.email)
+      .executeTakeFirstOrThrow();
+    expect(user.email_verified).toBe(true);
+    expect(
+      await cloned.db
+        .selectFrom('channel_members')
+        .select('channel_id')
+        .where('user_id', '=', user.id)
+        .execute(),
+    ).toEqual([{ channel_id: invite.channelId }]);
+    expect(
+      (
+        await cloned.db
+          .selectFrom('workspace_invitation_recipients')
+          .select('applicant_user_id')
+          .where('id', '=', invite.recipientId)
+          .executeTakeFirstOrThrow()
+      ).applicant_user_id,
+    ).toBe(user.id);
+  });
+
   test('without a passport a newcomer lands on signup-closed, and nothing is made', async () => {
     const person = aNewPerson();
     const github = aGitHubFor(person);
@@ -553,6 +698,55 @@ describe('integration: email on an invite-only server', () => {
     const letter = server.mail.posted.filter((message) => message.to === to).at(-1);
     return /#([0-9a-f]{64})/.exec(letter?.text ?? '')?.[1];
   };
+
+  test('the named guest opens an email account, is attested, and joins only as a guest', async () => {
+    const server = aServer(aGitHubFor(aNewPerson()));
+    const email = `guest-mail-${crypto.randomUUID().slice(0, 8)}@example.test`;
+    const invite = await aNamedGuestInvitation(server, email);
+    expect(
+      (
+        await post(server.app, '/api/invitations/passport', {
+          token: invite.token,
+          email: `other-${email}`,
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await post(server.app, '/api/invitations/passport', { token: invite.token, email })).status,
+    ).toBe(204);
+    await askFor(server, email);
+    const consumed = await post(server.app, '/auth/email/consume', {
+      token: tokenIn(server, email),
+      invitation: invite.token,
+    });
+    expect(consumed.status).toBe(204);
+    const accepted = await post(
+      server.app,
+      '/api/invitations/accept',
+      { token: invite.token },
+      { cookie: cookiesFrom(consumed) },
+    );
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toMatchObject({
+      workspace: { id: invite.workspaceId },
+      access: { kind: 'guest' },
+    });
+    const user = await cloned.db
+      .selectFrom('users')
+      .select(['id', 'email_verified'])
+      .where('email', '=', email)
+      .executeTakeFirstOrThrow();
+    expect(user.email_verified).toBe(true);
+    expect(
+      (
+        await cloned.db
+          .selectFrom('workspace_invitation_recipients')
+          .select('applicant_user_id')
+          .where('id', '=', invite.recipientId)
+          .executeTakeFirstOrThrow()
+      ).applicant_user_id,
+    ).toBe(user.id);
+  });
 
   test.each(['open', 'invite-only'] as const)(
     'recipient evidence needs the exact invitation presented at sign-in, never an address-only passport (%s)',

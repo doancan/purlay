@@ -8,6 +8,7 @@ import type { ChatDb } from '../schema';
 import { visibleChannelIds } from './guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import type { WorkspaceChannels } from '../../../modules/workspaces/channels-port';
+import { chatGuestChannels } from './guest-grants';
 
 const leaveAll = async (
   executor: ChatDb,
@@ -59,6 +60,7 @@ const leaveAll = async (
 };
 
 export const chatWorkspaceChannels: WorkspaceChannels = {
+  guests: chatGuestChannels,
   leaveAll,
 
   keptLonger: async (executor: ChatDb, context: WorkspaceContext, retentionDays: number | null) => {

@@ -151,7 +151,15 @@ export const lookAtInvitation = async (
 
 /** `POST /api/invitations/accept` — in, by the link in the body; answers the membership. */
 export const joinByInvitation = async (
-  { auth, database, clock, bus, log = NO_LOG, effectiveModules }: MemberWriteDependencies,
+  {
+    auth,
+    database,
+    clock,
+    bus,
+    log = NO_LOG,
+    effectiveModules,
+    workspaceChannels,
+  }: MemberWriteDependencies,
   request: Request,
   body: unknown,
 ): Promise<Membership> => {
@@ -159,7 +167,14 @@ export const joinByInvitation = async (
   const { token } = validated(InvitationTokenRequest, body);
   const { membership, memberIds } = await atomicallyOn(database)(
     async (transaction) =>
-      await acceptInvitation(transaction, clock, userId, token, effectiveModules),
+      await acceptInvitation(
+        transaction,
+        clock,
+        userId,
+        token,
+        effectiveModules,
+        workspaceChannels,
+      ),
   );
   await publishAfterCommit(log, [
     [
@@ -250,10 +265,17 @@ export const resendRecipient = async (
   const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
   const letter = await atomicallyOn(deps.database)(
     async (tx) =>
-      await resendInvitationRecipient(tx, deps.clock, context, validated(Uuid, recipientId), {
-        on: deps.outbox !== undefined,
-        appUrl: deps.appUrl,
-      }),
+      await resendInvitationRecipient(
+        tx,
+        deps.clock,
+        context,
+        validated(Uuid, recipientId),
+        {
+          on: deps.outbox !== undefined,
+          appUrl: deps.appUrl,
+        },
+        deps.workspaceChannels,
+      ),
   );
   const outbox = deps.outbox;
   if (outbox !== undefined)

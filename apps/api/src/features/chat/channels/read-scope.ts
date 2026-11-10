@@ -55,19 +55,22 @@ export const saveReadScope = async (
 /** Only newly inserted memberships: opening an existing DM must not reset its read scope. */
 export const beginReadScopes = async (
   executor: ChatTx,
-  channelId: string,
+  channel: string | readonly string[],
   userIds: readonly string[],
   joinedAt: Date,
 ): Promise<void> => {
-  if (userIds.length === 0) return;
+  const channelIds = typeof channel === 'string' ? [channel] : channel;
+  if (userIds.length === 0 || channelIds.length === 0) return;
   await executor
     .insertInto('channel_read_scopes')
     .values(
-      userIds.map((userId) => ({
-        channel_id: channelId,
-        user_id: userId,
-        unread_since: joinedAt,
-      })),
+      channelIds.flatMap((channelId) =>
+        userIds.map((userId) => ({
+          channel_id: channelId,
+          user_id: userId,
+          unread_since: joinedAt,
+        })),
+      ),
     )
     .execute();
 };

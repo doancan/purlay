@@ -35,6 +35,9 @@ import type { MailMessage } from '../../platform/mail';
 import { takeDaily, type Allowance } from '../../platform/quota';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { createInvitation, revokeInvitation, notFound } from './invitations';
+import { createGuestInvitation } from './guest-invitations';
+import { noWorkspaceChannels, type WorkspaceChannels } from './channels-port';
+import type { CreateGuestInvitationRequest, CreatedGuestInvitation } from '@purlay/types';
 import { addInvitationAttempt, INVITATION_RECEIPT_WAIT_MS } from './invitation-delivery';
 import { requireInvitationManagerNow } from './invitation-manager';
 import { AppError } from '../../platform/errors';
@@ -106,11 +109,39 @@ export interface Letterhead {
   /** `APP_URL/invite#<token>`: the token in the fragment, which no request line writes (D-115). */
   readonly url: string;
   readonly locale: Locale;
+  readonly guest?: {
+    readonly channelCount: number;
+    readonly accessExpiresAt: string | null;
+  };
 }
 
 /** The letter to one address: who invited, to what, the link, until when, and that it may be ignored. */
 export const invitationLetter = (to: string, head: Letterhead): MailMessage => {
   const words = WORDS[head.locale];
+  const guest = head.guest;
+  const scope =
+    guest === undefined
+      ? []
+      : [
+          {
+            kind: 'paragraph' as const,
+            text:
+              head.locale === 'tr'
+                ? `Bu davet yalnızca bu e-posta adresiyle doğrulanan hesap içindir. Misafir olarak ${String(guest.channelCount)} kanala erişebilirsin; yalnızca katıldıktan sonraki mesaj ve dosyaları göreceksin.`
+                : `This invitation is only for the account verified with this email address. As a guest you can access ${String(guest.channelCount)} channels, and only messages and files shared after you join.`,
+          },
+          ...(guest.accessExpiresAt === null
+            ? []
+            : [
+                {
+                  kind: 'note' as const,
+                  text:
+                    head.locale === 'tr'
+                      ? `Misafir erişiminin bitişi: ${untilWords(guest.accessExpiresAt, head.locale)}.`
+                      : `Guest access ends: ${untilWords(guest.accessExpiresAt, head.locale)}.`,
+                },
+              ]),
+        ];
   return composeLetter({
     to,
     subject: words.subject,
@@ -123,8 +154,17 @@ export const invitationLetter = (to: string, head: Letterhead): MailMessage => {
           quotable(head.workspace, words.workspace),
         ),
       },
+      ...scope,
       { kind: 'button', label: words.button, url: head.url },
-      { kind: 'note', text: words.until(untilWords(head.expiresAt, head.locale)) },
+      {
+        kind: 'note',
+        text:
+          guest === undefined
+            ? words.until(untilWords(head.expiresAt, head.locale))
+            : head.locale === 'tr'
+              ? `Davet bağlantısının bitişi: ${untilWords(head.expiresAt, head.locale)}; kimseyle paylaşma.`
+              : `The invitation link expires: ${untilWords(head.expiresAt, head.locale)}; do not share it.`,
+      },
       { kind: 'note', text: words.ignore },
     ],
   });
@@ -137,8 +177,8 @@ export interface InvitationLetter extends MailMessage {
   readonly attemptId: string;
 }
 
-export interface MailedInvitation {
-  readonly created: CreatedInvitation;
+export interface MailedInvitation<T extends CreatedInvitation = CreatedInvitation> {
+  readonly created: T;
   /** The letters to hand to the mail server once the answer is on its way — and the transaction committed. */
   readonly letters: readonly InvitationLetter[];
 }
@@ -179,7 +219,48 @@ export const makeAndMailInvitation = async (
   request: CreateInvitationRequest,
   mail: { readonly on: boolean; readonly appUrl: string },
 ): Promise<MailedInvitation> => {
-  const created = await createInvitation(transaction, clock, context);
+  return await makeAndMail(
+    transaction,
+    clock,
+    context,
+    request,
+    mail,
+    async () => await createInvitation(transaction, clock, context),
+  );
+};
+
+export const makeAndMailGuestInvitation = async (
+  transaction: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+  request: CreateGuestInvitationRequest,
+  mail: { readonly on: boolean; readonly appUrl: string },
+  channels: WorkspaceChannels,
+): Promise<MailedInvitation<CreatedGuestInvitation>> => {
+  return await makeAndMail(
+    transaction,
+    clock,
+    context,
+    {
+      emails: [request.email],
+      ...(request.locale === undefined ? {} : { locale: request.locale }),
+    },
+    mail,
+    async () => await createGuestInvitation(transaction, clock, context, request, channels),
+    { channelCount: request.channelIds.length, accessExpiresAt: request.accessExpiresAt },
+  );
+};
+
+const makeAndMail = async <T extends CreatedInvitation>(
+  transaction: Transaction,
+  clock: Clock,
+  context: WorkspaceContext,
+  request: CreateInvitationRequest,
+  mail: { readonly on: boolean; readonly appUrl: string },
+  create: () => Promise<T>,
+  guest?: Letterhead['guest'],
+): Promise<MailedInvitation<T>> => {
+  const created = await create();
   const typed = request.emails ?? [];
   if (typed.length === 0) return { created, letters: [] };
 
@@ -196,7 +277,7 @@ export const makeAndMailInvitation = async (
       outcomeOf.set(address, index < taken.granted ? 'queued' : refusal);
     });
   }
-  const mailed: CreatedInvitation = {
+  const mailed = {
     ...created,
     mail: entries.map(({ address, valid: ok }) => ({
       address,
@@ -220,6 +301,7 @@ export const makeAndMailInvitation = async (
     expiresAt: created.invitation.expiresAt,
     url: `${mail.appUrl}/invite#${created.token}`,
     locale: request.locale ?? ('en' as const),
+    ...(guest === undefined ? {} : { guest }),
   };
   const letters: InvitationLetter[] = [];
   for (const address of queued) {
@@ -235,7 +317,7 @@ export const makeAndMailInvitation = async (
         created_at: clock.now(),
       })
       .execute();
-    const personal = await createInvitation(transaction, clock, context);
+    const personal = await create();
     const attemptId = await addInvitationAttempt(
       transaction,
       clock,
@@ -283,7 +365,57 @@ export const resendInvitationRecipient = async (
   context: WorkspaceContext,
   recipientId: string,
   mail: { readonly on: boolean; readonly appUrl: string },
+  channels: WorkspaceChannels = noWorkspaceChannels,
 ): Promise<InvitationLetter> => {
+  // Guest creation locks conversations before the workspace/membership mutex. Prepare its replacement
+  // before the normal resend locks, then recheck the attempt under those locks below. Any refusal
+  // rolls back this replacement together with the transaction, leaving the old link untouched.
+  const scoped = await transaction
+    .selectFrom('workspace_invitation_mail_attempts as attempts')
+    .innerJoin('workspace_invitations as invitation', 'invitation.id', 'attempts.invitation_id')
+    .innerJoin(
+      'workspace_invitation_recipients as recipient',
+      'recipient.id',
+      'attempts.recipient_id',
+    )
+    .select([
+      'invitation.id',
+      'invitation.guest_email',
+      'invitation.guest_channels',
+      'invitation.guest_access_expires_at',
+      'invitation.guest_modules',
+      'recipient.email',
+    ])
+    .where('attempts.workspace_id', '=', context.workspaceId)
+    .where('attempts.recipient_id', '=', recipientId)
+    .where('invitation.access_kind', '=', 'guest')
+    .orderBy('attempts.id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  let replacement: CreatedGuestInvitation | undefined;
+  if (scoped !== undefined) {
+    if (
+      scoped.guest_email !== scoped.email ||
+      scoped.guest_channels === null ||
+      scoped.guest_modules?.length !== 1 ||
+      scoped.guest_modules[0] !== channels.guests?.moduleId
+    )
+      throw notFound();
+    replacement = await createGuestInvitation(
+      transaction,
+      clock,
+      context,
+      {
+        email: scoped.email,
+        channelIds: scoped.guest_channels,
+        accessExpiresAt:
+          scoped.guest_access_expires_at === null
+            ? null
+            : new Date(scoped.guest_access_expires_at).toISOString(),
+      },
+      channels,
+    );
+  }
   await requireInvitationManagerNow(transaction, context);
   const recipient = await transaction
     .selectFrom('workspace_invitation_recipients')
@@ -319,7 +451,7 @@ export const resendInvitationRecipient = async (
     .orderBy('id', 'desc')
     .limit(1)
     .executeTakeFirstOrThrow();
-  if (latest.id !== previous.id)
+  if (latest.id !== previous.id || (scoped !== undefined && previous.invitation_id !== scoped.id))
     throw new AppError(
       { code: 'RATE_LIMITED', message: 'This invitation changed. Refresh before trying again.' },
       { retryAfterSeconds: 1 },
@@ -342,7 +474,7 @@ export const resendInvitationRecipient = async (
       { retryAfterSeconds: 86_400 },
     );
   await revokeInvitation(transaction, clock, context, previous.invitation_id);
-  const made = await createInvitation(transaction, clock, context);
+  const made = replacement ?? (await createInvitation(transaction, clock, context));
   const attemptId = await addInvitationAttempt(
     transaction,
     clock,
@@ -364,6 +496,14 @@ export const resendInvitationRecipient = async (
       expiresAt: made.invitation.expiresAt,
       url: `${mail.appUrl}/invite#${made.token}`,
       locale: recipient.locale as Locale,
+      ...(replacement === undefined
+        ? {}
+        : {
+            guest: {
+              channelCount: replacement.guest.channelIds.length,
+              accessExpiresAt: replacement.guest.accessExpiresAt,
+            },
+          }),
     }),
     attemptId,
   };

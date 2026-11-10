@@ -3,10 +3,31 @@
  * it, and chat — whose channels they are — implements it where the application is put together. With chat
  * absent there are no channels, and `noWorkspaceChannels` says so.
  */
-import type { Executor } from '@purlay/db';
+import type { Executor, Transaction } from '@purlay/db';
 import type { WorkspaceContext } from '../../platform/tenancy';
+import type { Clock } from '../../platform/clock';
+
+/** Admission is implemented by the module that owns the granted conversations. */
+export interface WorkspaceGuestChannels {
+  readonly moduleId: string;
+  /** Lock selected channels before the workspace mutex, then recheck administrator visibility. */
+  prepare(
+    executor: Transaction,
+    context: WorkspaceContext,
+    channelIds: readonly string[],
+  ): Promise<void>;
+  /** Grant only a restricted member, under the current administrator's authority, in the same transaction. */
+  grant(
+    executor: Transaction,
+    clock: Clock,
+    context: WorkspaceContext,
+    userId: string,
+    channelIds: readonly string[],
+  ): Promise<void>;
+}
 
 export interface WorkspaceChannels {
+  readonly guests?: WorkspaceGuestChannels;
   /**
    * Takes the person out of every channel of the workspace and answers the channels they could see, read
    * by the one visibility rule before it stops being theirs. Inside the caller's transaction, before the
