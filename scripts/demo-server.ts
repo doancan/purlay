@@ -25,7 +25,20 @@ export interface FrontOptions {
    * browser tests carry would never reach the API there; over `https` it does.
    */
   readonly tls?: { readonly cert: string; readonly key: string };
+  /**
+   * How long the API has to begin answering one request before the front says it did not (`UPSTREAM_MS` where absent).
+   * A test of the front gives a short one.
+   */
+  readonly upstreamMs?: number;
 }
+
+/**
+ * Every page and file comes through the front, so a request the API takes and never answers would leave a browser
+ * waiting for its own document until the test's timeout, saying nothing of which request it was. This is far past
+ * anything the API does in a test (its slowest answer is a second or two), and short of the thirty seconds a
+ * navigation is given.
+ */
+const UPSTREAM_MS = 15_000;
 
 const COOKIE = '__Host-purlay_session';
 
@@ -58,7 +71,12 @@ const login = (url: URL, sessions: FrontOptions['sessions']): Response => {
 
 const HOP_BY_HOP = ['host', 'connection', 'accept-encoding', 'content-length'] as const;
 
-const proxy = async (request: Request, url: URL, api: string): Promise<Response> => {
+const proxy = async (
+  request: Request,
+  url: URL,
+  api: string,
+  upstreamMs: number,
+): Promise<Response> => {
   const headers = new Headers(request.headers);
   for (const name of HOP_BY_HOP) headers.delete(name);
   // Asked for plain bytes so the answer can be passed on as it came, headers and all.
@@ -67,20 +85,34 @@ const proxy = async (request: Request, url: URL, api: string): Promise<Response>
   const body =
     request.method !== 'GET' && request.method !== 'HEAD' ? await request.arrayBuffer() : null;
   let upstream: Response;
+  // Until the API begins to answer, not until the answer ends: a download or a stream may take as long as it takes.
+  const giveUp = new AbortController();
+  const timer = setTimeout(() => {
+    giveUp.abort();
+  }, upstreamMs);
   try {
     upstream = await fetch(`${api}${url.pathname}${url.search}`, {
       method: request.method,
       headers,
       redirect: 'manual',
+      signal: giveUp.signal,
       ...(body === null ? {} : { body }),
     });
   } catch (error) {
+    if (giveUp.signal.aborted) {
+      process.stderr.write(
+        `demo proxy: ${request.method} ${url.pathname} got no answer from the API in ${String(upstreamMs)} ms\n`,
+      );
+      return new Response('The API did not answer in time.', { status: 504 });
+    }
     // Every page and file comes through here: a 502 with no cause would leave a browser test
     // failing on a missing chunk with nothing to say why.
     process.stderr.write(
       `demo proxy: ${request.method} ${url.pathname} failed: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     return new Response('The API is not answering.', { status: 502 });
+  } finally {
+    clearTimeout(timer);
   }
   const answer = new Headers(upstream.headers);
   answer.delete('content-length');
@@ -129,7 +161,7 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
         case 'login':
           return login(url, options.sessions);
         case 'api':
-          return await proxy(request, url, options.api);
+          return await proxy(request, url, options.api, options.upstreamMs ?? UPSTREAM_MS);
       }
     },
     websocket: {

@@ -136,6 +136,33 @@ describe('the API proxy', () => {
     expect(redirect.headers.get('location')).toBe('/somewhere');
   });
 
+  test('an API that takes a request and never answers it is a 504 that names the request, not a page that hangs', async () => {
+    const silent = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => undefined) });
+    const front = startFront({
+      api: `http://localhost:${String(silent.port)}`,
+      sessions: {},
+      port: 0,
+      upstreamMs: 50,
+    });
+    const written: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      written.push(String(chunk));
+      return true;
+    };
+    try {
+      const response = await fetch(`http://localhost:${String(front.port)}/w/acme/questions`);
+      expect(response.status).toBe(504);
+      expect(await response.text()).toContain('did not answer');
+    } finally {
+      process.stderr.write = write;
+      await front.stop(true);
+      await silent.stop(true);
+    }
+    expect(written.join('')).toContain('GET /w/acme/questions');
+    expect(written.join('')).toContain('50 ms');
+  });
+
   test('an API that is not there is a 502, said plainly', async () => {
     const lonely = startFront({ api: 'http://localhost:1', sessions: {}, port: 0 });
     const response = await fetch(`http://localhost:${String(lonely.port)}/api/me`);
