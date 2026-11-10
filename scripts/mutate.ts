@@ -123,7 +123,10 @@ const run = (
     maxBuffer: outputMaxBytes,
   });
   const output = process.stdout.toString() + process.stderr.toString();
-  return { passed: process.exitCode === 0 && !process.exitedDueToTimeout, output };
+  // A run stopped for its output or its time did not finish, whatever code the stopped child is read as having: the
+  // verdict does not wait on how the kill and the exit were ordered.
+  const finished = !process.exitedDueToTimeout && !process.exitedDueToMaxBuffer;
+  return { passed: process.exitCode === 0 && finished, output };
 };
 
 export const runMutations = (options: Options): Verdict[] => {
