@@ -3,11 +3,14 @@
  * workspace, linked in the transaction that writes the message — with the bytes moved onto the
  * workspace's count (`SCHEMA.md` I-7) — or the whole send refused and nothing written.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
   withRollback,
+  type ClonedDatabase,
   type Executor,
 } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
@@ -174,65 +177,72 @@ describe('integration: a send carrying attachments', () => {
       expect(Object.keys(refusal.details.fields)).toEqual(['content']);
     });
   });
+});
+
+// Committed for real, so a refusal is seen to take the message back with it. The clone is made and dropped in
+// hooks: it waits its turn on the template's lock behind the other worker's clones, and a drop waits for a
+// checkpoint, which is the database's time and not the code under test's, and has its own budget (D-228).
+describe('integration: a refused send carrying attachments takes the message back', () => {
+  let cloned: ClonedDatabase;
+  beforeAll(async () => {
+    cloned = await cloneIntegrationDatabase();
+  }, CLONE_HOOK_MS);
+  afterAll(async () => {
+    await cloned.drop();
+  }, DROP_HOOK_MS);
 
   test('anything that is not the sender’s own unattached upload here is 404, and nothing is written', async () => {
-    // Committed for real, so a refusal is seen to take the message back with it.
-    const cloned = await cloneIntegrationDatabase();
-    try {
-      const db = cloned.db;
-      const room = await aRoom(db, ['alice', 'bob']);
-      const elsewhere = await aRoom(db, ['carol']);
-      const alice = member(room, 'alice').context;
-      const sentAlready = await anUpload(db, room, 'alice');
-      await sendMessage(db, clock, alice, {
-        id: anId(),
-        content: 'a',
-        attachmentIds: [sentAlready],
-      });
-      const usedBefore = await used(db, room);
-      const mine = await anUpload(db, room, 'alice');
-      const cases = {
-        unknown: anId(),
-        'somebody else’s': await anUpload(db, room, 'bob'),
-        'already sent': sentAlready,
-        'her own, in another workspace': await herOwnElsewhere(
-          db,
-          elsewhere,
-          member(room, 'alice').userId,
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice', 'bob']);
+    const elsewhere = await aRoom(db, ['carol']);
+    const alice = member(room, 'alice').context;
+    const sentAlready = await anUpload(db, room, 'alice');
+    await sendMessage(db, clock, alice, {
+      id: anId(),
+      content: 'a',
+      attachmentIds: [sentAlready],
+    });
+    const usedBefore = await used(db, room);
+    const mine = await anUpload(db, room, 'alice');
+    const cases = {
+      unknown: anId(),
+      'somebody else’s': await anUpload(db, room, 'bob'),
+      'already sent': sentAlready,
+      'her own, in another workspace': await herOwnElsewhere(
+        db,
+        elsewhere,
+        member(room, 'alice').userId,
+      ),
+    };
+    for (const [what, other] of Object.entries(cases)) {
+      const id = anId();
+      // In its own transaction, as both doors send: the refusal takes the message back with it.
+      const refused = await refusalOf(
+        atomicallyOn(db)(
+          async (transaction) =>
+            await sendMessage(transaction, clock, alice, {
+              id,
+              content: 'x',
+              attachmentIds: [mine, other],
+            }),
         ),
-      };
-      for (const [what, other] of Object.entries(cases)) {
-        const id = anId();
-        // In its own transaction, as both doors send: the refusal takes the message back with it.
-        const refused = await refusalOf(
-          atomicallyOn(db)(
-            async (transaction) =>
-              await sendMessage(transaction, clock, alice, {
-                id,
-                content: 'x',
-                attachmentIds: [mine, other],
-              }),
-          ),
-        );
-        expect({ what, refused }).toEqual({ what, refused: 'ATTACHMENT_NOT_FOUND' });
-        const written = await db.selectFrom('messages').select('id').where('id', '=', id).execute();
-        expect({ what, written }).toEqual({ what, written: [] });
-      }
-      const still = await db
-        .selectFrom('attachments')
-        .select('claimed_at')
-        .where('id', '=', mine)
-        .executeTakeFirstOrThrow();
-      expect(still.claimed_at).toBeNull();
-      const linkedToIt = await db
-        .selectFrom('message_attachments')
-        .select('attachment_id')
-        .where('attachment_id', '=', mine)
-        .execute();
-      expect(linkedToIt).toEqual([]);
-      expect(await used(db, room)).toBe(usedBefore);
-    } finally {
-      await cloned.drop();
+      );
+      expect({ what, refused }).toEqual({ what, refused: 'ATTACHMENT_NOT_FOUND' });
+      const written = await db.selectFrom('messages').select('id').where('id', '=', id).execute();
+      expect({ what, written }).toEqual({ what, written: [] });
     }
+    const still = await db
+      .selectFrom('attachments')
+      .select('claimed_at')
+      .where('id', '=', mine)
+      .executeTakeFirstOrThrow();
+    expect(still.claimed_at).toBeNull();
+    const linkedToIt = await db
+      .selectFrom('message_attachments')
+      .select('attachment_id')
+      .where('attachment_id', '=', mine)
+      .execute();
+    expect(linkedToIt).toEqual([]);
+    expect(await used(db, room)).toBe(usedBefore);
   });
 });
