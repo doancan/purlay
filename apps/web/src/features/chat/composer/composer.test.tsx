@@ -12,6 +12,7 @@ import {
   MESSAGE_CONTENT_MAX,
   type Attachment,
   type ServerFrame,
+  type MeResponse,
 } from '@purlay/types';
 import { ApiError } from '../../../data/errors';
 import { keys } from '../../../data/keys';
@@ -53,6 +54,17 @@ installDom();
 
 /** Who is signed in, in every mount here; the page is theirs (#694). */
 const ME = aSession().user.id;
+const guestSession = (): MeResponse => {
+  const session = aSession();
+  return {
+    ...session,
+    memberships: session.memberships.map((membership) => ({
+      ...membership,
+      role: 'member' as const,
+      access: { kind: 'guest' as const, historySince: WHEN, expiresAt: null },
+    })),
+  };
+};
 /** Where this person's draft for a place lives. */
 const mine = (channelId: string, parentId?: string): string => draftKey(ME, channelId, parentId);
 
@@ -1539,6 +1551,59 @@ describe('@ offers people (UX §5)', () => {
     await user.click(box());
     await user.keyboard('@a');
     expect(asked).toBe(0);
+  });
+
+  test('a guest reads public-channel participants before offering names, then keeps keyboard selection', async () => {
+    const waiting = Promise.withResolvers<{ user: typeof BOB_USER; joinedAt: string }[]>();
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        me: () => Promise.resolve(guestSession()),
+        channelMembers: () => waiting.promise,
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    expect(view.getByRole('status', { name: /reading/i })).toBeDefined();
+    expect(list(view)).toBeNull();
+    await act(async () => {
+      waiting.resolve([{ user: BOB_USER, joinedAt: WHEN }]);
+      await waiting.promise;
+    });
+    await settle();
+    expect(options(view)).toEqual(['Bob @bob']);
+    await expectNoAxeViolations(view.container);
+    await user.keyboard('{Enter}');
+    expect(box().value).toBe('@bob ');
+    expectFocusOn(box());
+    expect(list(view)).toBeNull();
+    expect(view.world.sockets.sent('MESSAGE_SEND')).toHaveLength(0);
+    await user.clear(box());
+    await user.keyboard('@a');
+    expect(options(view)).toEqual([]);
+  });
+
+  test('a guest public-channel lookup failure offers Retry and preserves the draft and focus', async () => {
+    let fails = true;
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        me: () => Promise.resolve(guestSession()),
+        channelMembers: () =>
+          fails
+            ? Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'busy'))
+            : Promise.resolve([{ user: BOB_USER, joinedAt: WHEN }]),
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    await settle();
+    const status = view.getByRole('status', { name: /could not be read/i });
+    expect(list(view)).toBeNull();
+    expect(box().value).toBe('@b');
+    fails = false;
+    await user.click(within(status).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expectFocusOn(box());
+    expect(options(view)).toEqual(['Bob @bob']);
   });
 
   test('passes the accessibility audit while the list is open, and says its words in Turkish', async () => {

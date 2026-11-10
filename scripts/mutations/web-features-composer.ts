@@ -118,6 +118,61 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/composer/composer-text.test.ts'],
   },
   {
+    id: 'guest-mention-mode-not-passed',
+    why: 'The hook must pass restricted access to the actual candidate filter.',
+    file: 'apps/web/src/features/chat/composer/mention-candidates.ts',
+    find: '      session.user.id,\n      guest,\n',
+    replace: '      session.user.id,\n',
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
+    id: 'guest-mention-participants-not-read',
+    why: 'Public guests must read the current channel participants before offering a mention.',
+    file: 'apps/web/src/features/chat/composer/mention-candidates.ts',
+    find: "channel?.type === 'private' || (guest && channel?.type === 'public')",
+    replace: "channel?.type === 'private'",
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
+    id: 'guest-mention-public-error-hidden',
+    why: 'Loading and failure states must not disappear just because the guest channel is public.',
+    file: 'apps/web/src/features/chat/composer/mention-candidates.ts',
+    find: '!needsParticipants || inChannel.data !== undefined',
+    replace: "channel?.type !== 'private' || inChannel.data !== undefined",
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
+    id: 'guest-mention-public-retry-missing',
+    why: 'A guest must be able to retry a failed public-channel participant lookup.',
+    file: 'apps/web/src/features/chat/composer/mention-candidates.ts',
+    find: 'if (needsParticipants && isStale) void refetch();',
+    replace: "if (channel?.type === 'private' && isStale) void refetch();",
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
+    id: 'guest-mention-public-scope-ignored',
+    why: 'A public-channel guest must not be offered all visible workspace people.',
+    file: 'apps/web/src/features/chat/composer/mention-candidates.ts',
+    find: "channel.type === 'public' && !guest",
+    replace: "channel.type === 'public'",
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
     id: 'list-button-on-a-blank-line-does-nothing',
     why: 'the list and quote buttons do nothing on an empty line, so a list cannot be started with the button (D-181)',
     file: 'apps/web/src/features/chat/composer/composer-text.ts',

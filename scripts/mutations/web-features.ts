@@ -265,6 +265,28 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/settings/pages/general.test.tsx'],
   },
   {
+    id: 'guest-workspace-access-forgotten',
+    why: 'The workspace provider must preserve the server guest descriptor.',
+    file: 'apps/web/src/features/shell/workspace.tsx',
+    find: "access: membership.access ?? { kind: 'member' },",
+    replace: "access: { kind: 'member' },",
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
+    id: 'guest-workspace-legacy-access-missing',
+    why: 'An older server without an access descriptor still represents an ordinary full member.',
+    file: 'apps/web/src/features/shell/workspace.tsx',
+    find: "access: membership.access ?? { kind: 'member' },",
+    replace: 'access: membership.access,',
+    tests: [
+      'apps/web/src/features/chat/composer/composer.test.tsx',
+      'apps/web/src/features/chat/composer/mention-candidates.test.ts',
+    ],
+  },
+  {
     id: 'inbox-dot-ignores-updates',
     why: 'an update a module wrote waits unread and the rail’s Inbox carries no dot for it (D-286)',
     file: 'apps/web/src/features/chat/inbox/inbox-link.tsx',
