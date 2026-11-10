@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **Operations** — the server's HTTP application and push sender, and the web client's composer, message feed and API client, are each split into units with one responsibility, with no change in what they do; the full test suite takes about 40% less time, and CI no longer runs a failing browser test a second time to call it a pass
 
 ---
