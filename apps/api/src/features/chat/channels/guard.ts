@@ -112,8 +112,8 @@ const visibleChannels = (executor: ChatDb, userId: string | RawBuilder<string>):
 /** The canonical reader's audience in one SQL statement, for notices and counter delivery. */
 export const channelAudienceQuery = (
   executor: ChatDb,
-  channelId: string,
-  messageId?: string,
+  channelId: string | RawBuilder<string>,
+  messageId?: string | RawBuilder<string>,
 ): SelectQueryBuilder<ChatSchema, 'users', { id: string }> => {
   const visible = visibleChannels(executor, sql.ref<string>('users.id'))
     .select('channels.id')
