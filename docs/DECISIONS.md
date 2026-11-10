@@ -15012,6 +15012,15 @@ An older invitation reader can therefore never match a guest link and accidental
 full member. This encoding does not replace the cluster's guest-reader readiness gate: old readers must
 still be absent before a guest membership is created.
 
+Guest admission locks its selected channels for update before the workspace membership mutex. Message
+inserts take a channel foreign-key key-share lock before choosing their recipients, so an overlapping
+send waits until the grant commits and counts a newly readable message for the guest. Invitation
+creation uses a no-key-update workspace mutex: it still serializes with membership administration but
+does not block a sender holding a workspace foreign-key key-share lock while waiting for the channel.
+Real concurrent transactions reproduced both a deadlock and a missing initial unread count with weaker
+locks. Expiry is checked again after lock waits, and the guest admission/history timestamp is taken then,
+not when the request arrived.
+
 **Rejected.** A second Better Auth organization membership authority beside the existing one; an ordinary member
 role with client-only hiding; public discovery followed by a denied message; reusing mutable unread scopes as
 history permission; email-only automatic account linking; treating a library plugin's availability as a shipped

@@ -427,6 +427,14 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/direct-messages.integration.test.ts'],
   },
   {
+    id: 'guest-admission-channel-lock-shared',
+    why: 'A sender must wait before counting recipients until the guest channel grant commits.',
+    file: 'apps/api/src/features/chat/channels/guest-grants.ts',
+    find: '      .forUpdate()\n      .execute();\n    const visible =',
+    replace: '      .forShare()\n      .execute();\n    const visible =',
+    tests: ['apps/api/src/modules/workspaces/guest-admission-races.integration.test.ts'],
+  },
+  {
     id: 'guest-audience-channel-ignored',
     why: 'A grant in another channel cannot authorize this audience.',
     file: 'apps/api/src/features/chat/channels/guard.ts',
@@ -478,8 +486,8 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'guest-channel-creation-unlocked',
     why: 'A selected conversation must stay locked through invitation creation.',
     file: 'apps/api/src/features/chat/channels/guest-grants.ts',
-    find: '      .forShare()\n',
-    replace: '',
+    find: '      .forUpdate()\n      .execute();\n    const visible =',
+    replace: '      .execute();\n    const visible =',
     tests: ['apps/api/src/modules/workspaces/guest-invitations.integration.test.ts'],
   },
   {

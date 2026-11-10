@@ -454,19 +454,32 @@ export const acceptInvitation = async (
         throw error;
       });
   }
-  const { workspace, invitationId, guest } = await opened(transaction, now, userId, token, true);
+  const { workspace, invitationId, guest, expiresAt } = await opened(
+    transaction,
+    now,
+    userId,
+    token,
+    true,
+  );
+  // Lock waits are real time: the arrival of the request is not its admission/history instant.
+  const joinedAt = clock.now();
+  if (
+    new Date(expiresAt) <= joinedAt ||
+    (guest?.access.accessExpiresAt != null && new Date(guest.access.accessExpiresAt) <= joinedAt)
+  )
+    throw notFound();
   const inserted = await transaction
     .insertInto('workspace_members')
     .values({
       workspace_id: workspace.id,
       user_id: userId,
       role: 'member',
-      joined_at: now,
+      joined_at: joinedAt,
       ...(guest === undefined
         ? {}
         : {
             access_kind: 'guest',
-            guest_since: now,
+            guest_since: joinedAt,
             guest_expires_at: guest.access.accessExpiresAt,
             guest_modules: [...guest.modules],
           }),

@@ -57,12 +57,13 @@ export const createGuestInvitation = async (
     });
   if (channels.guests === undefined) throw routeNotFound();
   await channels.guests.prepare(transaction, context, request.channelIds);
-  // Same membership mutex as role changes/removal; selected channel locks were taken first.
+  // Serializes with role changes/removal without blocking a sender's workspace FK KEY SHARE.
+  // UPDATE here would deadlock with a sender already waiting on the selected channel locks.
   await transaction
     .selectFrom('workspaces')
     .select('id')
     .where('id', '=', context.workspaceId)
-    .forUpdate()
+    .forNoKeyUpdate()
     .execute();
   const current = await requireWorkspaceMembership(
     transaction,

@@ -68,7 +68,9 @@ export const chatGuestChannels: WorkspaceGuestChannels = {
       .where('deleted_at', 'is', null)
       .where('type', '!=', 'direct_message')
       .orderBy('id')
-      .forShare()
+      // Sends take KEY SHARE through their message FK before counting recipients. UPDATE makes
+      // them wait until admission commits, so a newly readable message is counted for the guest.
+      .forUpdate()
       .execute();
     const visible = await requireChannelsById(executor, current.userId, channelIds);
     if (
