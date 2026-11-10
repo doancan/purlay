@@ -15006,6 +15006,12 @@ changes are administrator actions with atomic audit records and live revocation.
 is explicit and explains the wider access. Guest admission is not enabled before every reader enforces the
 contract; mixed-server rollout must not create guest rows for an unrestricted reader.
 
+Guest invitations store a type-tagged digest (`guest:` followed by the SHA-256 hexadecimal digest). A normal
+invitation retains its plain hexadecimal digest, and the database binds each encoding to its access kind.
+An older invitation reader can therefore never match a guest link and accidentally admit its holder as a
+full member. This encoding does not replace the cluster's guest-reader readiness gate: old readers must
+still be absent before a guest membership is created.
+
 **Rejected.** A second Better Auth organization membership authority beside the existing one; an ordinary member
 role with client-only hiding; public discovery followed by a denied message; reusing mutable unread scopes as
 history permission; email-only automatic account linking; treating a library plugin's availability as a shipped

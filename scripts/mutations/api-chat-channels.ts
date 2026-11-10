@@ -427,6 +427,14 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/direct-messages.integration.test.ts'],
   },
   {
+    id: 'guest-expired-membership-cannot-be-revoked',
+    why: 'An expired guest cannot be removed and its channel subscriptions cannot be enumerated for revocation.',
+    file: 'apps/api/src/features/chat/channels/workspace-channels.ts',
+    find: "membership?.access_kind === 'guest'",
+    replace: 'false',
+    tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
+  },
+  {
     id: 'guest-generic-channel-invitation',
     why: 'An ordinary invitation path broadens a guest’s explicit channel scope.',
     file: 'apps/api/src/features/chat/channels/members.ts',

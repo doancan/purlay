@@ -14,8 +14,29 @@ const leaveAll = async (
   workspaceId: string,
   userId: string,
 ): Promise<readonly string[]> => {
-  const theirs = await requireWorkspaceMembership(executor, userId, workspaceId);
-  const channelIds = await visibleChannelIds(executor, theirs);
+  const membership = await executor
+    .selectFrom('workspace_members')
+    .select('access_kind')
+    .where('workspace_id', '=', workspaceId)
+    .where('user_id', '=', userId)
+    .executeTakeFirst();
+  // Expiry denies reading; it must not prevent the administrator or expiry worker from revoking the rows.
+  const channelIds =
+    membership?.access_kind === 'guest'
+      ? (
+          await executor
+            .selectFrom('channel_members')
+            .innerJoin('channels', 'channels.id', 'channel_members.channel_id')
+            .select('channel_members.channel_id')
+            .where('channels.workspace_id', '=', workspaceId)
+            .where('channel_members.user_id', '=', userId)
+            .orderBy('channel_members.channel_id')
+            .execute()
+        ).map((row) => row.channel_id)
+      : await visibleChannelIds(
+          executor,
+          await requireWorkspaceMembership(executor, userId, workspaceId),
+        );
   await executor
     .deleteFrom('channel_members')
     .where('user_id', '=', userId)

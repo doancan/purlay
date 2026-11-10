@@ -28,7 +28,8 @@ import { markRead, markUnread } from './read-state';
 import { memberReadScope, saveReadScope } from './read-scope';
 import { unreadMessage, unreadMessages } from './unread';
 import { membershipsOf } from '../../../modules/workspaces/workspaces';
-import { changeRole } from '../../../modules/workspaces/members';
+import { changeRole, removeMember } from '../../../modules/workspaces/members';
+import { chatWorkspaceChannels } from './workspace-channels';
 import { liveGuestHistory } from './live-history';
 import { readBuilt } from '../messages/reader';
 import {
@@ -163,6 +164,42 @@ const historyFixture = async (
 };
 
 describe('integration: restricted workspace guests', () => {
+  test('an administrator can remove an expired guest and revoke every assigned channel', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['owner', 'guest']);
+      const { userId } = await restrict(db, room, new Date(Date.now() - 1_000));
+      const owner = await requireWorkspaceMembership(
+        db,
+        room.members['owner']?.userId ?? '',
+        room.workspaceId,
+      );
+      const removed = await removeMember(
+        db,
+        fixedClock(new Date()),
+        owner,
+        userId,
+        chatWorkspaceChannels,
+      );
+      expect(removed.channelIds).toEqual([room.channelId]);
+      expect(
+        await db
+          .selectFrom('workspace_members')
+          .select('id')
+          .where('workspace_id', '=', room.workspaceId)
+          .where('user_id', '=', userId)
+          .execute(),
+      ).toEqual([]);
+      expect(
+        await db
+          .selectFrom('channel_members')
+          .select('channel_id')
+          .where('channel_id', '=', room.channelId)
+          .where('user_id', '=', userId)
+          .execute(),
+      ).toEqual([]);
+    });
+  });
+
   test('one trusted timestamp read serves recipients with different guest history floors', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['owner', 'guest', 'later']);
