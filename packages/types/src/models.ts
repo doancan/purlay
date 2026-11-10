@@ -142,11 +142,27 @@ export const Workspace = Type.Object({
 });
 export type Workspace = Static<typeof Workspace>;
 
+/** Guest history is an authority boundary, independent of a person's read/unread position. */
+export const GuestMembershipAccess = Type.Object({
+  kind: Type.Literal('guest'),
+  historySince: Timestamp,
+  expiresAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type GuestMembershipAccess = Static<typeof GuestMembershipAccess>;
+
+export const WorkspaceAccess = Type.Union([
+  Type.Object({ kind: Type.Literal('member') }),
+  GuestMembershipAccess,
+]);
+export type WorkspaceAccess = Static<typeof WorkspaceAccess>;
+
 /** Your membership of a workspace. Ownership is a role, never a column on the workspace (D-22). */
 export const Membership = Type.Object({
   workspace: Workspace,
   role: UserRole,
   joinedAt: Timestamp,
+  /** An older server omits this; restricted membership is always explicit on a supporting server. */
+  access: Type.Optional(WorkspaceAccess),
   /**
    * Until when the caller is in Deep Work here (D-15, D-108), or null when they are not. It ends by
    * itself at this instant: the server stops counting it then, and so does the client.

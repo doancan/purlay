@@ -28,6 +28,8 @@ import { readCookie, SESSION_COOKIE } from '../platform/cookies';
 import type { Logger } from '../platform/logging';
 import { SESSION_CLOCK, sessionFromHeaders } from '../modules/auth/sessions';
 import type { SocketIdentity } from './router';
+import type { ChannelDeliveryGate, ChannelDeliveryScope } from '../platform/ports/channel-delivery';
+import { DEFAULT_DEADLINE_MS, timedOut, withDeadline } from '../platform/request-deadline';
 
 /** How a connection is reached and ended. The transport supplies both. */
 export interface Connection {
@@ -108,7 +110,7 @@ export const after = <Handle>(
   };
 };
 
-export interface SocketHub {
+export interface SocketHub extends ChannelDeliveryGate {
   /** Registers the connection and resolves who is on it; `undefined` if nobody is. */
   opened: (
     socketId: string,
@@ -198,6 +200,14 @@ interface Held {
   sessionId?: string;
   /** Set when the hub closes the connection itself, so queued work stops at once. */
   ending: boolean;
+  /** Allocated only for restricted subscriptions; ordinary delivery keeps its synchronous path. */
+  channels?: Map<string, RestrictedChannel>;
+  projected?: { tail: Promise<void>; bytes: number };
+}
+
+interface RestrictedChannel {
+  readonly scope: ChannelDeliveryScope;
+  readonly cancel: (() => void) | undefined;
 }
 
 export interface HubOptions {
@@ -281,7 +291,7 @@ export const createSocketHub = (
   const running = new Set<Promise<void>>();
   const byUser = new Map<string, number>();
 
-  const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
+  const writeNow = (socketId: string, socket: Held, frame: ServerFrame): void => {
     if (frame.event === 'SESSION_ENDED') {
       if (socket.ended === true) return;
       socket.ended = true;
@@ -304,6 +314,89 @@ export const createSocketHub = (
     }
   };
 
+  const releaseChannels = (socketId: string, channelIds: readonly string[]): void => {
+    const socket = held.get(socketId);
+    for (const channelId of channelIds) {
+      socket?.channels?.get(channelId)?.cancel?.();
+      socket?.channels?.delete(channelId);
+    }
+  };
+
+  const expireChannel = (socketId: string, channelId: string): void => {
+    deliver(socketId, {
+      event: 'ACCESS_REVOKED',
+      data: { channelIds: [channelId] },
+      ts: clock.now().getTime(),
+    });
+  };
+
+  const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
+    const channelId = channelOf(frame);
+    const restricted = channelId === null ? undefined : socket.channels?.get(channelId);
+    if (restricted === undefined || channelId === null) {
+      writeNow(socketId, socket, frame);
+      return;
+    }
+    if (socket.ending || socket.ended === true) return;
+    if (
+      restricted.scope.expiresAt !== null &&
+      restricted.scope.expiresAt <= clock.now().getTime()
+    ) {
+      expireChannel(socketId, channelId);
+      return;
+    }
+    const queue = socket.projected ?? { tail: Promise.resolve(), bytes: 0 };
+    socket.projected = queue;
+    const bytes = Buffer.byteLength(JSON.stringify(frame), 'utf8');
+    // The transport's existing byte budget also bounds data waiting for a narrower projection.
+    if (queue.bytes + bytes > OUTBOUND_HIGH_WATER_MARK) {
+      socket.ending = true;
+      socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+      return;
+    }
+    queue.bytes += bytes;
+    const current = (): boolean =>
+      held.get(socketId) === socket &&
+      !socket.ending &&
+      socket.ended !== true &&
+      socket.channels?.get(channelId) === restricted;
+    const run = queue.tail
+      .then(async () => {
+        if (!current()) return;
+        const accepted = await withDeadline<boolean | undefined>(
+          DEFAULT_DEADLINE_MS,
+          async (signal) => await restricted.scope.accepts(frame, signal),
+          () => undefined,
+        );
+        if (accepted === undefined) throw timedOut();
+        if (!current()) return;
+        if (
+          restricted.scope.expiresAt !== null &&
+          restricted.scope.expiresAt <= clock.now().getTime()
+        ) {
+          expireChannel(socketId, channelId);
+          return;
+        }
+        if (accepted) writeNow(socketId, socket, frame);
+      })
+      .catch((error: unknown) => {
+        if (!current()) return;
+        log.error('restricted channel delivery failed; closing to resync', {
+          socketId,
+          channelId,
+          err: error,
+        });
+        socket.ending = true;
+        socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+      })
+      .finally(() => {
+        queue.bytes -= bytes;
+        running.delete(run);
+      });
+    queue.tail = run;
+    running.add(run);
+  };
+
   const purge = (socket: Held, channelIds: ReadonlySet<string>): void => {
     socket.holding = socket.holding?.filter((kept) => {
       const channelId = channelOf(kept);
@@ -319,6 +412,7 @@ export const createSocketHub = (
     if (socket === undefined) return;
     if (closedEvent?.(frame.event) === true) return;
     if (frame.event === 'ACCESS_REVOKED') {
+      releaseChannels(socketId, frame.data.channelIds);
       // Takes effect now, even behind a replay: what was kept for these channels is
       // forgotten, and nothing published to them reaches this connection again. The
       // notice itself follows in order, so the client hears it after its replay.
@@ -439,6 +533,7 @@ export const createSocketHub = (
     closed: (socketId: string): void => {
       const socket = held.get(socketId);
       socket?.cancelExpiry?.();
+      if (socket?.channels !== undefined) releaseChannels(socketId, [...socket.channels.keys()]);
       if (socket?.userId !== undefined) {
         const remaining = (byUser.get(socket.userId) ?? 1) - 1;
         // An empty count is a leak that grows with every user who ever connected.
@@ -462,6 +557,28 @@ export const createSocketHub = (
       ),
 
     deliver,
+
+    restrictChannel: (socketId, channelId, scope): void => {
+      const socket = held.get(socketId);
+      if (socket === undefined) return;
+      if (socket.channels?.get(channelId)?.scope.key === scope.key) return;
+      releaseChannels(socketId, [channelId]);
+      const channels = socket.channels ?? new Map<string, RestrictedChannel>();
+      socket.channels = channels;
+      const restricted: RestrictedChannel = {
+        scope,
+        cancel:
+          scope.expiresAt === null
+            ? undefined
+            : after(timers, scope.expiresAt - clock.now().getTime(), () => {
+                if (held.get(socketId) === socket && channels.get(channelId) === restricted)
+                  expireChannel(socketId, channelId);
+              }),
+      };
+      channels.set(channelId, restricted);
+    },
+
+    releaseChannels,
 
     hold: (socketId: string): void => {
       const socket = held.get(socketId);

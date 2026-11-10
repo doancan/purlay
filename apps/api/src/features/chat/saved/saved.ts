@@ -23,7 +23,7 @@ import {
   type SavedQuery,
 } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import { requireMessageById, visibleChannelIds } from '../channels/guard';
+import { requireMessageById, visibleChannelIds, withinMessageHistory } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
@@ -34,7 +34,7 @@ const at = (value: Date | string): string => new Date(value).toISOString();
 /** The saves a person is shown in a workspace: in a channel they can see, of a message not deleted. */
 const shown = (
   executor: ChatDb,
-  context: Pick<WorkspaceContext, 'userId' | 'workspaceId'>,
+  context: WorkspaceContext,
   visible: readonly string[],
 ): SelectQueryBuilder<ChatSchema, 'saved_messages' | 'messages', object> =>
   executor
@@ -44,6 +44,7 @@ const shown = (
     .where('saved_messages.workspace_id', '=', context.workspaceId)
     .where('saved_messages.channel_id', 'in', visible)
     .where('messages.deleted_at', 'is', null)
+    .where(withinMessageHistory(executor, context))
     .where(notHiddenBy(context.userId));
 
 /** Saves the message, or moves its save to `input.state`. Answers the workspace it is in. */

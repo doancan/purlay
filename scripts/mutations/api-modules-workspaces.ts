@@ -37,8 +37,8 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     id: 'deep-work-membership-ignores-the-clock',
     why: 'a Deep Work that ended at its instant is still shown as on, and the person thinks they are still quiet',
     file: 'apps/api/src/modules/workspaces/workspaces.ts',
-    find: '      row.is_deep_work_active && row.deep_work_until !== null && new Date(row.deep_work_until) > now\n',
-    replace: '      row.is_deep_work_active && row.deep_work_until !== null\n',
+    find: '        row.deep_work_until !== null &&\n        new Date(row.deep_work_until) > now\n',
+    replace: '        row.deep_work_until !== null\n',
     tests: ['apps/api/src/modules/workspaces/deep-work.integration.test.ts'],
   },
   {
@@ -67,6 +67,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     find: "    .where('workspace_members.role', '=', 'owner')\n    .where('users.deleted_at', 'is', null)\n",
     replace: "    .where('workspace_members.role', '=', 'owner')\n",
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
+  },
+  {
+    id: 'guest-role-patch-promotes',
+    why: 'A generic role patch attempts to make a guest an administrator instead of requiring deliberate conversion.',
+    file: 'apps/api/src/modules/workspaces/members.ts',
+    find: "  if (targetIsGuest && role !== 'member')",
+    replace: '  if (false)',
+    tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
   },
   {
     id: 'invitation-accept-forgets-the-workspaces-modules',
@@ -294,8 +302,9 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     id: 'me-lists-deleted-workspaces',
     why: '/api/me hands the client a workspace that no longer exists to try to open',
     file: WORKSPACES,
-    find: "    .where('workspaces.deleted_at', 'is', null)\n    .orderBy('workspace_members.joined_at', 'asc')",
-    replace: "    .orderBy('workspace_members.joined_at', 'asc')",
+    find: "    .where('workspaces.deleted_at', 'is', null)\n    .where(activeWorkspaceMembership)\n    .orderBy('workspace_members.joined_at', 'asc')",
+    replace:
+      "    .where(activeWorkspaceMembership)\n    .orderBy('workspace_members.joined_at', 'asc')",
     tests: WORKSPACES_TESTS,
   },
   {
@@ -326,8 +335,8 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     id: 'membership-list-omits-the-workspaces-modules',
     why: 'a person’s list of workspaces says nothing of what each may use, and the client draws every module the server runs (D-289)',
     file: 'apps/api/src/modules/workspaces/workspaces.ts',
-    find: '...(effective === undefined\n      ? {}',
-    replace: '...(true\n      ? {}',
+    find: ': { modules: moduleIdsIn(granted) }',
+    replace: ': {}',
     tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {

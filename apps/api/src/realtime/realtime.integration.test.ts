@@ -176,6 +176,44 @@ describe('integration: the frame router', () => {
       raw,
     );
 
+  test('a transport without restricted delivery support refuses and unsubscribes a guest', async () => {
+    await withRollback(async (db) => {
+      const owner = await signedIn(db, 'rt-guest-owner');
+      const guest = await signedIn(db, 'rt-guest');
+      const { workspaceId, channelId } = await aChannel(db, owner, 'rt-guest-legacy');
+      await db
+        .insertInto('workspace_members')
+        .values({
+          workspace_id: workspaceId,
+          user_id: guest.userId,
+          role: 'member',
+          access_kind: 'guest',
+          guest_since: NOW,
+          guest_modules: ['chat'],
+        })
+        .execute();
+      await db
+        .insertInto('channel_members')
+        .values({ channel_id: channelId, user_id: guest.userId, joined_at: NOW })
+        .execute();
+      const bus = inProcessEventBus(() => undefined, createLogger({ level: 'silent' }));
+      const replies = await route(
+        db,
+        guest,
+        {
+          id: messageId(NOW),
+          op: 'SUBSCRIBE',
+          payload: {
+            channels: [{ channelId, afterMessageId: null }],
+          },
+        },
+        bus,
+      );
+      expect(replies).toMatchObject([{ event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } }]);
+      expect(bus.size()).toEqual({ topics: 0, sockets: 0 });
+    });
+  });
+
   test('a frame over budget is refused before it is read, and does nothing', async () => {
     await withRollback(async (db) => {
       const alice = await signedIn(db, 'rt-limited');

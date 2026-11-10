@@ -14982,3 +14982,36 @@ counter bound and response-ownership guard. No migration, dependency, infrastruc
 is changed.
 
 **Cost of reversing.** Restore the previous delivery policy; existing rows need no conversion.
+
+### D-300. Restricted guests use the existing membership with explicit channels, verified invitations and a strict join history floor — builds on D-21, D-34, D-115, D-179
+
+**Context.** The requested SME/corporate chat scope includes named external people without granting them the
+organization's public channels or historical messages and files. The user explicitly selected only content
+shared after the guest joins. A guest flag hidden only by the client is not authority: the existing public
+channel, attachment, search and notification readers all need the same boundary.
+
+**Decision.** The existing workspace membership carries an additive member/guest access descriptor, a trusted
+guest history floor, optional expiry and opaque allowed-module labels. Owner/admin/member roles remain the
+existing roles; a guest can hold only the member role. Existing memberships and generic invitations are unchanged.
+Named guest invitations bind a verified address, bounded explicit channels and optional access expiry; a generic
+invitation or role patch cannot promote the guest. The core reaches channels through its existing port and keeps
+no foreign key to a module's tables. Guests reach only explicitly granted conversations, and message visibility
+starts at the later of their current guest admission and channel grant. Read/unread controls cannot move that
+security floor. A removed or expired guest cannot recover scope by reconnecting or reusing old identifiers.
+
+Every surface that reads or delivers messages or files enforces current scope and history, including search,
+threads and quoted context, pins, questions, inbox, exports, attachment URLs and queued/live delivery. Private
+integration metadata and the organization directory are not implicitly shared by workspace membership. Scope
+changes are administrator actions with atomic audit records and live revocation. Converting to full membership
+is explicit and explains the wider access. Guest admission is not enabled before every reader enforces the
+contract; mixed-server rollout must not create guest rows for an unrestricted reader.
+
+**Rejected.** A second Better Auth organization membership authority beside the existing one; an ordinary member
+role with client-only hiding; public discovery followed by a denied message; reusing mutable unread scopes as
+history permission; email-only automatic account linking; treating a library plugin's availability as a shipped
+application feature. Provider-neutral OIDC/SCIM remains the enterprise identity path, including Google Workspace,
+without assuming an outbound provisioning feature is present on every provider plan.
+
+**Cost of reversing.** Guest admission can be disabled while restrictive readers remain. Revoke or explicitly
+convert guest memberships before removing those readers; never roll an unrestricted server back over live
+guest rows. Additive metadata remains and no earlier content or membership is discarded.

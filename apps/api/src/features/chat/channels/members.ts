@@ -8,7 +8,7 @@ import type { ChatDb, ChatTx } from '../schema';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { requireChannelMember, type ChannelContext } from './guard';
-import type { WorkspaceContext } from '../../../platform/tenancy';
+import { requireFullMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { AppError } from '../../../platform/errors';
 import { recordAudit } from '../../../modules/audit/audit';
 import { channelFor } from './channels';
@@ -28,6 +28,7 @@ const requireWorkspacePerson = async (
     .select('users.id')
     .where('workspace_members.workspace_id', '=', context.workspaceId)
     .where('workspace_members.user_id', '=', userId)
+    .where('workspace_members.access_kind', '=', 'member')
     .where('users.deleted_at', 'is', null)
     .executeTakeFirst();
   if (person === undefined) {
@@ -51,6 +52,7 @@ export const requireWorkspacePeople = async (
     .select('users.id')
     .where('workspace_members.workspace_id', '=', context.workspaceId)
     .where('workspace_members.user_id', 'in', wanted)
+    .where('workspace_members.access_kind', '=', 'member')
     .where('users.deleted_at', 'is', null)
     .execute();
   if (found.length !== wanted.length) {
@@ -76,6 +78,7 @@ export const addMember = async (
   context: ChannelContext,
   userId: string,
 ): Promise<Added> => {
+  requireFullMembership(context, 'Only a full member can invite people into a channel.');
   if (context.channelType === 'direct_message') {
     throw new AppError({
       code: 'FORBIDDEN',

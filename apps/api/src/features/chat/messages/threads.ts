@@ -19,7 +19,12 @@ import type { ChatDb } from '../schema';
 import { type Message, type MessagePage, type UnresolvedQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
-import { requireChannelMember, requireMessageById, type VisibleMessage } from '../channels/guard';
+import {
+  requireChannelMember,
+  requireMessageById,
+  withinMessageHistory,
+  type VisibleMessage,
+} from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import type { Atomically } from '../../../platform/transactions';
@@ -92,6 +97,7 @@ export const threadReplies = async (
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.parent_id', '=', root.messageId)
+    .where(withinMessageHistory(executor, root.context))
     .orderBy('messages.id', backwards ? 'desc' : 'asc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);
@@ -126,6 +132,7 @@ export const unresolvedIn = async (
     .select(MESSAGE_COLUMNS)
     .where('messages.workspace_id', '=', context.workspaceId)
     .where('messages.channel_id', 'in', channelIds)
+    .where(withinMessageHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where('messages.resolved_at', 'is', null)
     .where((eb) =>

@@ -22,6 +22,7 @@ import {
   messageNotFound,
   requireChannelMember,
   requireMessageById,
+  withinMessageHistory,
   type ChannelContext,
 } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
@@ -131,6 +132,7 @@ export const channelPins = async (executor: ChatDb, context: ChannelContext): Pr
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .orderBy('pinned_messages.pinned_at', 'desc')
+    .where(withinMessageHistory(executor, context))
     .orderBy('pinned_messages.message_id', 'desc')
     .limit(PINS_MAX)
     .execute();

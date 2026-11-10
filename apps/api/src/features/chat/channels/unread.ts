@@ -9,6 +9,8 @@ type Id = string | RawBuilder<unknown>;
 export const HISTORY_BEGINNING = '1970-01-01T00:00:00.000Z';
 
 export interface ReadScope {
+  /** Guest authority is independent of an explicitly reopened unread range. */
+  readonly historyFloor?: Date | string | RawBuilder<unknown> | null;
   readonly userId: Id;
   readonly position: Id | null;
   readonly threadBaseline: Id | null;
@@ -17,6 +19,11 @@ export interface ReadScope {
   /** NULL is a legacy unknown scope, made explicit on its first read recount. */
   readonly since: Date | string | RawBuilder<unknown> | null;
 }
+
+const withinHistory = (scope: ReadScope, message: string): RawBuilder<boolean> =>
+  scope.historyFloor === undefined || scope.historyFloor === null
+    ? sql<boolean>`true`
+    : sql<boolean>`${sql.ref(`${message}.created_at`)} >= coalesce(${scope.historyFloor}::timestamptz, '-infinity'::timestamptz)`;
 
 /** Whether the two positions leave this message waiting, before a notification asks again. */
 const unreadPosition = (scope: ReadScope, message: string): RawBuilder<boolean> => sql<boolean>`(
@@ -48,13 +55,13 @@ export const unreadCondition = (
   scope: ReadScope,
   message: string,
 ): RawBuilder<boolean> => sql<boolean>`(
-  ${unreadPosition(scope, message)} or (
+  ${withinHistory(scope, message)} and (${unreadPosition(scope, message)} or (
     ${sql.ref(`${message}.parent_id`)} is not null and exists (
       select 1 from notifications n
       where n.user_id = ${scope.userId} and n.message_id = ${sql.ref(`${message}.id`)}
         and n.read_at is null and n.type in (${sql.join(NEEDS_YOU)})
     )
-  )
+  ))
 )`;
 
 /** Classifies a row even just after deletion/hiding; late mentions can ask what was unread before them. */
@@ -64,7 +71,7 @@ export const unreadMessage = (
   includeNotifications = true,
 ): RawBuilder<boolean> => sql<boolean>`exists (
   select 1 from messages unread_message where unread_message.id = ${messageId}
-    and ${includeNotifications ? unreadCondition(scope, 'unread_message') : unreadPosition(scope, 'unread_message')}
+    and ${includeNotifications ? unreadCondition(scope, 'unread_message') : sql<boolean>`${withinHistory(scope, 'unread_message')} and ${unreadPosition(scope, 'unread_message')}`}
 )`;
 
 /** Count messages once, including a waiting reply behind either read cursor. */

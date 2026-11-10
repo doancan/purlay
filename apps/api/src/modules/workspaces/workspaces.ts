@@ -39,6 +39,7 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
 import { scheduledDeletionsOf } from './deletion';
+import { activeWorkspaceMembership } from '../../platform/membership-access';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -151,27 +152,53 @@ export const membershipsOf = async (
       'workspace_members.joined_at',
       'workspace_members.is_deep_work_active',
       'workspace_members.deep_work_until',
+      'workspace_members.access_kind',
+      'workspace_members.guest_since',
+      'workspace_members.guest_expires_at',
+      'workspace_members.guest_modules',
       ...grantColumns,
     ])
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
+    .where(activeWorkspaceMembership)
     .orderBy('workspace_members.joined_at', 'asc');
   if (workspaceId !== undefined) statement = statement.where('workspaces.id', '=', workspaceId);
   const rows = await statement.execute();
 
-  return rows.map((row) => ({
-    workspace: asWorkspace(row),
-    role: row.role,
-    joinedAt: new Date(row.joined_at).toISOString(),
-    // Over when its instant has passed: ended by the clock, with no job to end it (D-108).
-    deepWorkUntil:
-      row.is_deep_work_active && row.deep_work_until !== null && new Date(row.deep_work_until) > now
-        ? new Date(row.deep_work_until).toISOString()
-        : null,
-    ...(effective === undefined
-      ? {}
-      : { modules: moduleIdsIn(effective(asGrants(row.grants), row.read_at)) }),
-  }));
+  return rows.map((row) => {
+    const granted = effective?.(asGrants(row.grants), row.read_at);
+    if (row.access_kind === 'guest' && (row.guest_since === null || row.guest_modules === null))
+      throw new Error('A restricted membership is missing its authority metadata');
+    return {
+      workspace: asWorkspace(row),
+      role: row.role,
+      joinedAt: new Date(row.joined_at).toISOString(),
+      // Over when its instant has passed: ended by the clock, with no job to end it (D-108).
+      deepWorkUntil:
+        row.is_deep_work_active &&
+        row.deep_work_until !== null &&
+        new Date(row.deep_work_until) > now
+          ? new Date(row.deep_work_until).toISOString()
+          : null,
+      ...(row.access_kind === 'guest' && row.guest_since !== null && row.guest_modules !== null
+        ? {
+            access: {
+              kind: 'guest' as const,
+              historySince: new Date(row.guest_since).toISOString(),
+              expiresAt:
+                row.guest_expires_at === null ? null : new Date(row.guest_expires_at).toISOString(),
+            },
+            modules: moduleIdsIn(
+              new Set(
+                row.guest_modules.filter((module) => granted === undefined || granted.has(module)),
+              ),
+            ),
+          }
+        : granted === undefined
+          ? {}
+          : { modules: moduleIdsIn(granted) }),
+    };
+  });
 };
 
 /**

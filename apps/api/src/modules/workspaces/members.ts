@@ -49,19 +49,19 @@ const rolesUnderLock = async (
   executor: Executor,
   context: WorkspaceContext,
   userId: string,
-): Promise<{ caller: UserRole; target: UserRole }> => {
+): Promise<{ caller: UserRole; target: UserRole; targetIsGuest: boolean }> => {
   await lockWorkspace(executor, context);
   const rows = await executor
     .selectFrom('workspace_members')
-    .select(['user_id', 'role'])
+    .select(['user_id', 'role', 'access_kind'])
     .where('workspace_id', '=', context.workspaceId)
     .where('user_id', 'in', [context.userId, userId])
     .execute();
   const caller = rows.find((row) => row.user_id === context.userId)?.role;
   if (caller === undefined || caller === 'member') throw forbidden();
-  const target = rows.find((row) => row.user_id === userId)?.role;
+  const target = rows.find((row) => row.user_id === userId);
   if (target === undefined) throw notFound();
-  return { caller, target };
+  return { caller, target: target.role, targetIsGuest: target.access_kind === 'guest' };
 };
 
 /**
@@ -95,7 +95,12 @@ export const changeRole = async (
 ): Promise<WorkspaceMember> => {
   if (context.role === 'member') throw forbidden();
   if (!Value.Check(Uuid, userId)) throw notFound();
-  const { caller, target } = await rolesUnderLock(executor, context, userId);
+  const { caller, target, targetIsGuest } = await rolesUnderLock(executor, context, userId);
+  if (targetIsGuest && role !== 'member')
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Convert guest access to full membership before changing its role.',
+    });
   if (!mayManage(caller, target, role)) throw forbidden();
   if (target === 'owner' && role !== 'owner') await keepAnOwner(executor, context);
   // The same role again changes nothing, and records nothing.

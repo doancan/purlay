@@ -23,7 +23,7 @@ import type { ChatTx } from '../schema';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
-import { visibleChannelsIn, type ChannelContext } from './guard';
+import { visibleChannelsIn, withinMessageHistory, type ChannelContext } from './guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { HISTORY_BEGINNING, unreadMessages } from './unread';
 
@@ -87,6 +87,7 @@ export const markRead = async (
     .select('id')
     .where('id', '=', messageId)
     .where('channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .executeTakeFirst();
   if (target === undefined) {
     throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
@@ -148,6 +149,7 @@ export const markRead = async (
       threadBaseline,
       since,
       historyFrom: scope.unread_history_from,
+      historyFloor: scope.history_floor,
     },
     context.channelId,
   );
@@ -232,6 +234,7 @@ export const markAllRead = async (
       .selectFrom('messages')
       .select('id')
       .where('channel_id', '=', member.channel_id)
+      .where(withinMessageHistory(executor, channel))
       .orderBy('id', 'desc')
       .limit(1)
       .executeTakeFirst();
@@ -284,6 +287,7 @@ export const markUnread = async (
     .select(['id', 'parent_id'])
     .where('id', '=', messageId)
     .where('channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .executeTakeFirst();
   if (target === undefined) {
     throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
@@ -319,6 +323,7 @@ export const markUnread = async (
     .select('id')
     .where('channel_id', '=', context.channelId)
     .where('id', '<', from)
+    .where(withinMessageHistory(executor, context))
     .orderBy('id', 'desc')
     .limit(1)
     .executeTakeFirst();
@@ -359,7 +364,14 @@ export const markUnread = async (
     thread_read_baseline_id: threadBaseline,
   });
   const unread = unreadMessages(
-    { userId: context.userId, position, threadBaseline, since, historyFrom },
+    {
+      userId: context.userId,
+      position,
+      threadBaseline,
+      since,
+      historyFrom,
+      historyFloor: scope.history_floor,
+    },
     context.channelId,
   );
   const updated = await executor

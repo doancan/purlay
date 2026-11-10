@@ -30,7 +30,7 @@ import { excerptOf } from '@purlay/markdown';
 import { NEEDS_YOU, THREAD_EXCERPT_MAX, NotificationType } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { requireMessageById } from '../channels/guard';
+import { requireMessageById, withinMessageHistory } from '../channels/guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
 import { HISTORY_BEGINNING, unreadMessages } from '../channels/unread';
@@ -118,10 +118,14 @@ export const inboxOf = async (
     .select([
       sql<
         string | null
-      >`case when ${notHiddenBy(context.userId, sql.ref('roots.id'))} then roots.content else null end`.as(
+      >`case when ${notHiddenBy(context.userId, sql.ref('roots.id'))} and ${withinMessageHistory(executor, context, 'roots')} then roots.content else null end`.as(
         'root_content',
       ),
-      'roots.sender_id as root_sender_id',
+      sql<
+        string | null
+      >`case when ${withinMessageHistory(executor, context, 'roots')} then roots.sender_id else null end`.as(
+        'root_sender_id',
+      ),
       'roots.deleted_at as root_deleted_at',
       'notifications.id as notification_id',
       'notifications.type as notification_type',
@@ -131,6 +135,7 @@ export const inboxOf = async (
     .where('notifications.user_id', '=', context.userId)
     .where('notifications.workspace_id', '=', context.workspaceId)
     .where('notifications.channel_id', 'in', visible)
+    .where(withinMessageHistory(executor, context))
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .orderBy('notifications.created_at', 'desc')

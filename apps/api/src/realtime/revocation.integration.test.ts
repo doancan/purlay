@@ -241,6 +241,65 @@ const post = async (cookie: string, channelId: string, at: number): Promise<stri
 const created = (frames: readonly ServerFrame[]): string[] =>
   frames.flatMap((f) => (f.event === 'MESSAGE_CREATED' ? [f.data.id] : []));
 
+describe('integration: restricted guest history on real sockets', () => {
+  test('an edited earlier message is hidden while a new message still reaches the guest on another node', async () => {
+    const room = await aRoom();
+    const earlier = await post(room.alice.cookie, room.channelId, -1_000);
+    await cloned.db
+      .updateTable('messages')
+      .set({ created_at: new Date(NOW.getTime() - 60_000) })
+      .where('id', '=', earlier)
+      .execute();
+    await cloned.db
+      .updateTable('workspace_members')
+      .set({
+        access_kind: 'guest',
+        guest_since: new Date(NOW.getTime() - 1_000),
+        guest_modules: ['chat'],
+      })
+      .where('workspace_id', '=', room.workspaceId)
+      .where('user_id', '=', room.bob.userId)
+      .execute();
+    const guest = await connect(room.bob.cookie);
+    const owner = await connect(room.alice.cookie);
+    try {
+      await subscribe(guest, room.channelId);
+      await subscribe(owner, room.channelId);
+      expect(guest.frames.some((frame) => frame.event === 'ACK' && 'channels' in frame.data)).toBe(
+        true,
+      );
+      expect((await http('GET', `/api/messages/${earlier}/context`, room.bob.cookie)).status).toBe(
+        404,
+      );
+      expect(
+        (
+          await http('PATCH', `/api/messages/${earlier}`, room.alice.cookie, {
+            content: 'Earlier confidential words',
+          })
+        ).ok,
+      ).toBe(true);
+      const later = await post(room.alice.cookie, room.channelId, 1);
+      // A later accepted channel frame is the barrier for the guest's ordered, asynchronous projection.
+      await guest.until((frames) => created(frames).includes(later), 'the later guest message');
+      await owner.until(
+        (frames) =>
+          frames.some(
+            (frame) => frame.event === 'MESSAGE_REVISED' && frame.data.messageId === earlier,
+          ),
+        'the owner’s earlier revision',
+      );
+      expect(
+        guest.frames.some(
+          (frame) => frame.event === 'MESSAGE_REVISED' && frame.data.messageId === earlier,
+        ),
+      ).toBe(false);
+    } finally {
+      await guest.close();
+      await owner.close();
+    }
+  });
+});
+
 describe('integration: a session that ends on another node', () => {
   test('signing out on node A closes the socket node B holds, after saying why', async () => {
     const alice = await aSignedInUser(cloned.db, clock, 'signout');

@@ -9,6 +9,7 @@ import { Value } from '@sinclair/typebox/value';
 import { Uuid, type AttachmentKind } from '@purlay/types';
 import type { Database, Executor, Expression, ExpressionBuilder, SqlBool } from '@purlay/db';
 import { attachmentNotFound } from '../../platform/errors';
+import { activeWorkspaceMembership } from '../../platform/membership-access';
 
 /** An attachment the caller may read, with where its bytes are. */
 export interface ReadableAttachment {
@@ -42,6 +43,7 @@ export const isUnsentUploadOf = (
         .select('workspace_members.user_id')
         .whereRef('workspace_members.workspace_id', '=', 'attachments.workspace_id')
         .where('workspace_members.user_id', '=', userId)
+        .where(activeWorkspaceMembership)
         .where('workspaces.deleted_at', 'is', null),
     ),
   ]);

@@ -9,7 +9,7 @@ import {
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { limitOf } from '../../../platform/pagination';
 import type { ChatDb } from '../schema';
-import { visibleChannelIdsQuery } from '../channels/guard';
+import { visibleChannelIdsQuery, withinMessageHistory } from '../channels/guard';
 import { memberReadScope } from '../channels/read-scope';
 import { unreadCondition } from '../channels/unread';
 import { notHiddenBy } from './hidden';
@@ -41,6 +41,7 @@ export const followedThreads = async (
     .select(MESSAGE_COLUMNS)
     .select(activityText.as('activity_at'))
     .where('messages.channel_id', 'in', visibleChannelIdsQuery(executor, context))
+    .where(withinMessageHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where(notHiddenBy(context.userId))
     .where(

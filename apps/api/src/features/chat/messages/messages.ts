@@ -36,6 +36,7 @@ import type { Clock } from '../../../platform/clock';
 import {
   messageNotFound,
   requireChannelMember,
+  withinMessageHistory,
   type ChannelContext,
   type VisibleMessage,
 } from '../channels/guard';
@@ -117,6 +118,7 @@ const requireRoot = async (
     .selectFrom('messages')
     .select(['channel_id', 'parent_id', 'sender_id'])
     .where('id', '=', parentId)
+    .where(withinMessageHistory(executor, context))
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
   // Another channel's message and none at all are one answer: which of the two it was
@@ -488,6 +490,7 @@ export const messageHistory = async (
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where((eb) => eb.or([notHiddenBy(context.userId), eb('messages.thread_reply_count', '>', 0)]))
     // A deleted root keeps its place while it has replies, as their tombstone (D-103 §7).
@@ -536,6 +539,7 @@ export const messageWindow = async (
       .leftJoin('users', 'users.id', 'messages.sender_id')
       .select(MESSAGE_COLUMNS)
       .where('messages.id', 'in', [...new Set([rootId, visible.messageId])])
+      .where(withinMessageHistory(executor, visible.context))
       .execute(),
   ]);
   const built = await buildMessages(executor, rows, visible.context.userId);
@@ -572,6 +576,15 @@ export const missedIn = async (
 ): Promise<ReadonlyMap<string, Replay>> => {
   const replays = new Map<string, Replay>();
   if (wanted.length === 0) return replays;
+  const history = wanted.some(({ context }) => context.guest !== undefined)
+    ? sql<boolean>`(${sql.join(
+        wanted.map(
+          ({ context }) =>
+            sql<boolean>`(messages.channel_id = ${context.channelId}::uuid and ${withinMessageHistory(executor, context)})`,
+        ),
+        sql` or `,
+      )})`
+    : sql<boolean>`true`;
 
   const rows = await executor
     .selectFrom(
@@ -589,6 +602,7 @@ export const missedIn = async (
           .selectAll('messages')
           .whereRef('messages.channel_id', '=', 'wanted.channel_id')
           .whereRef('messages.id', '>', 'wanted.after_id')
+          .where(history)
           .where('messages.parent_id', 'is', null)
           .where('messages.deleted_at', 'is', null)
           .orderBy('messages.id', 'asc')

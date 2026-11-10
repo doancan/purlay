@@ -53,6 +53,7 @@ import { requireWorkspaceMembership } from '../platform/tenancy';
 import { noteSessionActivity, type SessionLifetime } from '../modules/auth/session-lifetime';
 import { SESSION_CLOCK } from '../modules/auth/sessions';
 import type { RateLimiter } from './rate-limiter';
+import type { ChannelDeliveryGate } from '../platform/ports/channel-delivery';
 
 const unlimited: ReplayGate = async (work) => await work();
 
@@ -124,7 +125,7 @@ export interface RouterDependencies {
   readonly replayGate?: ReplayGate;
 }
 
-interface SocketGate {
+interface SocketGate extends ChannelDeliveryGate {
   /** Live frames are kept, not written, until the hub's `reply` (subscribe before replay). */
   readonly hold: (socketId: string) => void;
   /** False once the connection has closed: nothing more may be subscribed for it. */

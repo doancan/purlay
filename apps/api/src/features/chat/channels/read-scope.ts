@@ -4,6 +4,7 @@ import type { ChatDb, ChatTx } from '../schema';
 import type { ReadScope } from './unread';
 
 interface StoredScope {
+  readonly history_floor: Date | null;
   readonly unread_since: Date | null;
   readonly unread_history_from: string | null;
   readonly thread_read_baseline_id: string | null;
@@ -16,12 +17,19 @@ export const loadReadScope = async (
   userId: string,
 ): Promise<StoredScope> =>
   (await executor
-    .selectFrom('channel_read_scopes')
+    .selectFrom('channel_members')
+    .leftJoin('channel_read_scopes', (join) =>
+      join
+        .onRef('channel_read_scopes.channel_id', '=', 'channel_members.channel_id')
+        .onRef('channel_read_scopes.user_id', '=', 'channel_members.user_id'),
+    )
     .select(['unread_since', 'unread_history_from', 'thread_read_baseline_id'])
-    .where('channel_id', '=', channelId)
-    .where('user_id', '=', userId)
+    .select(guestHistoryFloor('channel_members').as('history_floor'))
+    .where('channel_members.channel_id', '=', channelId)
+    .where('channel_members.user_id', '=', userId)
     .executeTakeFirst()) ?? {
     unread_since: null,
+    history_floor: null,
     unread_history_from: null,
     thread_read_baseline_id: null,
   };
@@ -67,6 +75,14 @@ export const beginReadScopes = async (
 type MemberAlias = 'channel_members' | 'counted';
 type ScopeColumn = 'unread_since' | 'unread_history_from' | 'thread_read_baseline_id';
 
+/** This floor is authority, never a value the read/unread controls can write. */
+const guestHistoryFloor = (member: MemberAlias): RawBuilder<Date | null> => sql`(
+  select greatest(membership.guest_since, ${sql.ref(`${member}.joined_at`)})
+  from workspace_members membership inner join channels granted on granted.workspace_id = membership.workspace_id
+  where granted.id = ${sql.ref(`${member}.channel_id`)}
+    and membership.user_id = ${sql.ref(`${member}.user_id`)} and membership.access_kind = 'guest'
+)`;
+
 /** Correlated to one locked membership; NULL when chat has never activated its legacy scope. */
 const scopeValue = (member: MemberAlias, column: ScopeColumn): RawBuilder<unknown> => sql`(
   select ${sql.ref(`read_scope.${column}`)} from channel_read_scopes read_scope
@@ -79,6 +95,7 @@ export const memberReadScope = (member: MemberAlias, legacyJoinFloor = true): Re
   const since = scopeValue(member, 'unread_since');
   const position = sql.ref(`${member}.last_read_message_id`);
   return {
+    historyFloor: guestHistoryFloor(member),
     userId: sql.ref(`${member}.user_id`),
     position,
     since: legacyJoinFloor ? sql`coalesce(${since}, ${sql.ref(`${member}.joined_at`)})` : since,

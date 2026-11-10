@@ -23,6 +23,14 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/read-scopes.integration.test.ts'],
   },
   {
+    id: 'guest-history-inbox-leak',
+    why: 'The inbox reader exposes messages before the current guest grant.',
+    file: 'apps/api/src/features/chat/notifications/notifications.ts',
+    find: '    .where(withinMessageHistory(executor, context))\n',
+    replace: '',
+    tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
+  },
+  {
     id: 'inbox-cursor-from-another-workspace',
     why: 'a cursor from the same person’s other workspace is taken as a place in this one, and the page starts somewhere arbitrary',
     file: INBOX,

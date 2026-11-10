@@ -83,6 +83,7 @@ export const hideMessage = async (
               userId,
               position: member.last_read_message_id,
               since: scope.unread_since,
+              historyFloor: scope.history_floor,
               historyFrom: scope.unread_history_from,
               threadBaseline: scope.thread_read_baseline_id,
             },

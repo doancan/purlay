@@ -14,7 +14,7 @@ import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
 import type { FilePage, FileQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import type { ChannelContext } from './guard';
+import { withinMessageHistory, type ChannelContext } from './guard';
 import { limitOf } from '../../../platform/pagination';
 import { asAttachment } from '../../../modules/attachments/uploads';
 
@@ -28,9 +28,11 @@ const cursorOf = async (
 ): Promise<string> => {
   const row = await executor
     .selectFrom('message_attachments')
-    .select('message_id')
+    .innerJoin('messages', 'messages.id', 'message_attachments.message_id')
+    .select('message_attachments.message_id')
     .where('attachment_id', '=', before)
-    .where('channel_id', '=', context.channelId)
+    .where('message_attachments.channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .executeTakeFirst();
   if (row === undefined) {
     throw new AppError({
@@ -73,6 +75,7 @@ export const channelFiles = async (
       'users.avatar_url',
     ])
     .where('message_attachments.channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .orderBy('message_attachments.message_id', 'desc')

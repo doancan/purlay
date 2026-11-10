@@ -25,12 +25,15 @@
  * exemption, and `scripts/verify-enforcement.ts` proves the ban by writing one.
  */
 import { Value } from '@sinclair/typebox/value';
-import { Uuid, type UserRole } from '@purlay/types';
+import { Uuid, type GuestMembershipAccess, type UserRole } from '@purlay/types';
 import type { Executor } from '@purlay/db';
 import { AppError, routeNotFound } from './errors';
 import { currentRequest } from './logging';
 import { asGrants, grantColumns } from './grants';
 import { inTheCore } from './module-budget';
+import { activeWorkspaceMembership } from './membership-access';
+
+export { activeWorkspaceMembership } from './membership-access';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const tenancy: unique symbol = Symbol('WorkspaceContext');
@@ -63,6 +66,8 @@ export interface WorkspaceContext {
   readonly workspaceId: string;
   readonly userId: string;
   readonly role: UserRole;
+  /** Restricted authority, independent of the mutable read/unread scope. Absent for existing members. */
+  readonly guest?: GuestMembershipAccess;
   /**
    * The modules this workspace may use, as the guard read the grants (D-289): what search, the inbox, the ports, the workers and
    * the outbox are asked, so that none of them works the set out again. `null` for a request made with no policy to judge by
@@ -79,6 +84,14 @@ export interface WorkspaceContext {
  */
 export const entitledTo = (context: WorkspaceContext, module: string): boolean =>
   context.modules === null || context.modules.has(module);
+
+/** Guest capabilities never inherit the workspace-wide actions of the ordinary member role. */
+export const requireFullMembership = (
+  context: Pick<WorkspaceContext, 'guest'>,
+  message: string,
+): void => {
+  if (context.guest !== undefined) throw new AppError({ code: 'FORBIDDEN', message });
+};
 
 /**
  * **404, never 403.** A 403 confirms the resource exists, which is itself a
@@ -122,24 +135,50 @@ const workspaceMembership = async (
   const row = await executor
     .selectFrom('workspace_members')
     .innerJoin('workspaces', 'workspaces.id', 'workspace_members.workspace_id')
-    .select(['workspace_members.role', ...grantColumns])
+    .select([
+      'workspace_members.role',
+      'workspace_members.access_kind',
+      'workspace_members.guest_since',
+      'workspace_members.guest_expires_at',
+      'workspace_members.guest_modules',
+      ...grantColumns,
+    ])
     .where('workspace_members.workspace_id', '=', workspaceId)
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
+    .where(activeWorkspaceMembership)
     .executeTakeFirst();
 
   if (row === undefined) throw workspaceNotFound();
 
   const request = currentRequest();
   const policy = request?.entitlements;
-  if (policy === undefined) return mint({ workspaceId, userId, role: row.role, modules: null });
-
-  const modules = policy.effective(asGrants(row.grants), row.read_at);
-  if (request?.module !== undefined && !modules.has(request.module)) {
-    policy.refused(request.module);
+  const granted = policy?.effective(asGrants(row.grants), row.read_at) ?? null;
+  let guest: GuestMembershipAccess | undefined;
+  let modules = granted;
+  if (row.access_kind === 'guest') {
+    if (row.guest_since === null || row.guest_modules === null) throw workspaceNotFound();
+    guest = {
+      kind: 'guest',
+      historySince: new Date(row.guest_since).toISOString(),
+      expiresAt:
+        row.guest_expires_at === null ? null : new Date(row.guest_expires_at).toISOString(),
+    };
+    modules = new Set(
+      row.guest_modules.filter((module) => granted === null || granted.has(module)),
+    );
+  }
+  if (request?.module !== undefined && modules !== null && !modules.has(request.module)) {
+    policy?.refused(request.module);
     throw routeNotFound();
   }
-  return mint({ workspaceId, userId, role: row.role, modules });
+  return mint({
+    workspaceId,
+    userId,
+    role: row.role,
+    modules,
+    ...(guest === undefined ? {} : { guest }),
+  });
 };
 
 /** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-266). */

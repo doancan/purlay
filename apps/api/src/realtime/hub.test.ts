@@ -4,7 +4,7 @@
  * before the connection closes (#194).
  */
 import { describe, expect, test } from 'bun:test';
-import { CLOSE_CODES, MAX_FRAME_BYTES } from '@purlay/types';
+import { CLOSE_CODES, MAX_FRAME_BYTES, type ServerFrame } from '@purlay/types';
 import { anAuthThatMustNotBeTouched } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
 import { createLogger } from '../platform/logging';
@@ -43,6 +43,202 @@ const recordedTimers = (): Timers & {
 };
 
 const DAY = 24 * 60 * 60 * 1000;
+
+describe('restricted live channel delivery', () => {
+  const channelId = '11111111-1111-4111-8111-111111111111';
+  const revision = (id: string, content = 'private words'): ServerFrame => ({
+    event: 'MESSAGE_REVISED',
+    data: {
+      channelId,
+      messageId: id,
+      parentId: null,
+      content,
+      editedAt: null,
+      deletedAt: null,
+      mentions: [],
+    },
+    version: 1,
+    ts: 1,
+  });
+  const rig = async (): Promise<{
+    hub: ReturnType<typeof createSocketHub>;
+    sent: ServerFrame[];
+    closes: number[];
+    timers: ReturnType<typeof recordedTimers>;
+    clock: { now: () => Date };
+  }> => {
+    const sent: ServerFrame[] = [];
+    const closes: number[] = [];
+    const timers = recordedTimers();
+    const clock = { now: (): Date => new Date('2026-11-10T00:00:00Z') };
+    const hub = createSocketHub(anAuthThatMustNotBeTouched(), clock, {
+      log: createLogger({ level: 'silent' }),
+      leave: () => undefined,
+      listen: () => undefined,
+      timers,
+    });
+    await hub.opened(
+      'guest',
+      {
+        send: (payload) => {
+          sent.push(JSON.parse(payload) as ServerFrame);
+          return payload.length;
+        },
+        buffered: () => 0,
+        close: (code) => {
+          closes.push(code);
+        },
+      },
+      new Request('https://purlay.test/ws'),
+    );
+    // Identity admission is covered by the socket tests; this fixture exercises transport projection only.
+    closes.length = 0;
+    return { hub, sent, closes, timers, clock };
+  };
+
+  test('live and held revisions pass the subscription policy, while the acknowledgement stays first', async () => {
+    const { hub, sent } = await rig();
+    hub.hold('guest');
+    hub.deliver('guest', revision('earlier'));
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'grant',
+      expiresAt: null,
+      accepts: (frame) =>
+        Promise.resolve(frame.event !== 'MESSAGE_REVISED' || frame.data.messageId !== 'earlier'),
+    });
+    hub.reply('guest', [{ event: 'ACK', data: { channels: [] }, ts: 2 }]);
+    hub.deliver('guest', revision('later'));
+    await hub.settled();
+    expect(sent.map((frame) => frame.event)).toEqual(['ACK', 'MESSAGE_REVISED']);
+    expect(sent.at(-1)).toEqual(revision('later'));
+  });
+
+  test('expiry refuses a frame even when the expiry timer has not fired', async () => {
+    const { hub, sent, clock } = await rig();
+    let attempted = 0;
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'expiring',
+      expiresAt: clock.now().getTime() + 1,
+      accepts: () => {
+        attempted += 1;
+        return Promise.resolve(true);
+      },
+    });
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.deliver('guest', revision('late'));
+    await hub.settled();
+    expect(sent.map((frame) => frame.event)).toEqual(['ACCESS_REVOKED']);
+    expect(attempted).toBe(0);
+  });
+
+  test('revocation drops an authorization result that was already waiting', async () => {
+    const { hub, sent } = await rig();
+    let finish: (value: boolean) => void = () => {
+      throw new Error('Policy did not start');
+    };
+    const pending = new Promise<boolean>((resolve) => {
+      finish = resolve;
+    });
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'grant',
+      expiresAt: null,
+      accepts: async () => await pending,
+    });
+    hub.deliver('guest', revision('pending'));
+    await Promise.resolve();
+    hub.deliver('guest', { event: 'ACCESS_REVOKED', data: { channelIds: [channelId] }, ts: 2 });
+    finish(true);
+    await hub.settled();
+    expect(sent.map((frame) => frame.event)).toEqual(['ACCESS_REVOKED']);
+  });
+
+  test('a failed policy closes to resynchronize without exposing the frame', async () => {
+    const { hub, sent, closes } = await rig();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'grant',
+      expiresAt: null,
+      accepts: () => Promise.reject(new Error('Metadata read unavailable')),
+    });
+    hub.deliver('guest', revision('unreadable'));
+    await hub.settled();
+    expect(sent).toEqual([]);
+    expect(closes).toEqual([CLOSE_CODES.RESYNC]);
+  });
+
+  test('an unchanged resubscription keeps an already waiting frame in order', async () => {
+    const { hub, sent } = await rig();
+    let finish: (value: boolean) => void = () => {
+      throw new Error('Missing pending projection');
+    };
+    const pending = new Promise<boolean>((resolve) => {
+      finish = resolve;
+    });
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'same-grant',
+      expiresAt: null,
+      accepts: async () => await pending,
+    });
+    hub.deliver('guest', revision('first'));
+    await Promise.resolve();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'same-grant',
+      expiresAt: null,
+      accepts: () => Promise.resolve(true),
+    });
+    hub.deliver('guest', revision('second'));
+    finish(true);
+    await hub.settled();
+    expect(
+      sent.map((frame) => (frame.event === 'MESSAGE_REVISED' ? frame.data.messageId : frame.event)),
+    ).toEqual(['first', 'second']);
+  });
+
+  test('expiry is checked again after a slow projection and timers are cleared on disconnect', async () => {
+    const { hub, sent, clock, timers } = await rig();
+    let finish: (value: boolean) => void = () => {
+      throw new Error('Missing pending projection');
+    };
+    const pending = new Promise<boolean>((resolve) => {
+      finish = resolve;
+    });
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'expires',
+      expiresAt: clock.now().getTime() + 1_000,
+      accepts: async () => await pending,
+    });
+    hub.deliver('guest', revision('waiting'));
+    await Promise.resolve();
+    clock.now = (): Date => new Date('2026-11-10T00:00:02Z');
+    finish(true);
+    await hub.settled();
+    expect(sent.map((frame) => frame.event)).toEqual(['ACCESS_REVOKED']);
+    expect(timers.cleared).toHaveLength(1);
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'later-grant',
+      expiresAt: clock.now().getTime() + 1_000,
+      accepts: () => Promise.resolve(true),
+    });
+    hub.closed('guest');
+    expect(timers.cleared).toHaveLength(2);
+    timers.pending.at(-1)?.fire();
+    expect(sent.map((frame) => frame.event)).toEqual(['ACCESS_REVOKED']);
+  });
+
+  test('pending projections share the transport byte budget', async () => {
+    const { hub, sent, closes } = await rig();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'grant',
+      expiresAt: null,
+      accepts: () => Promise.resolve(true),
+    });
+    for (let index = 0; index < 300; index += 1)
+      hub.deliver('guest', revision(String(index), 'x'.repeat(20_000)));
+    await hub.settled();
+    expect(sent).toEqual([]);
+    expect(closes.every((code) => code === CLOSE_CODES.RESYNC)).toBe(true);
+    expect(closes.length).toBeGreaterThan(0);
+  });
+});
 
 describe('a timer longer than a JavaScript timer allows', () => {
   test('is chained in links the runtime honours, and fires once, at the end', () => {

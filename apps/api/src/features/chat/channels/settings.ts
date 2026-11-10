@@ -32,7 +32,11 @@ import {
   type ChannelContext,
 } from './guard';
 import { AppError } from '../../../platform/errors';
-import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
+import {
+  requireFullMembership,
+  requireWorkspaceMembership,
+  type WorkspaceContext,
+} from '../../../platform/tenancy';
 import { channelFor } from './channels';
 import { recordDeparture } from './departures';
 
@@ -100,6 +104,7 @@ export const updateChannel = async (
   context: ChannelContext,
   input: UpdateChannelRequest,
 ): Promise<Updated> => {
+  requireFullMembership(context, 'Only a full member can change channel settings.');
   const current = await lockNamed(executor, context);
   await requireChannelMember(executor, context, 'Join the channel to change it.');
   const name = input.name ?? current.name;

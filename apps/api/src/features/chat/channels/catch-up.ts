@@ -3,7 +3,7 @@ import { loadReadScope } from './read-scope';
 import { sql } from '@purlay/db';
 import { CATCH_UP_PAGE, type CatchUpQuery, type ChannelCatchUp } from '@purlay/types';
 import type { ChatDb } from '../schema';
-import { channelNotFound, type ChannelContext } from './guard';
+import { channelNotFound, withinMessageHistory, type ChannelContext } from './guard';
 import { unreadCondition, type ReadScope } from './unread';
 import { notHiddenBy } from '../messages/hidden';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
@@ -26,6 +26,7 @@ export const catchUpIn = async (
     userId: context.userId,
     position: member.last_read_message_id,
     since: stored.unread_since,
+    historyFloor: stored.history_floor,
     historyFrom: stored.unread_history_from,
     threadBaseline:
       stored.unread_since === null ? member.last_read_message_id : stored.thread_read_baseline_id,
@@ -36,6 +37,7 @@ export const catchUpIn = async (
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
@@ -54,6 +56,7 @@ export const catchUpIn = async (
     ])
     .where('messages.channel_id', '=', context.channelId)
     .where('messages.parent_id', 'is not', null)
+    .where(withinMessageHistory(executor, context))
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .where(sql<boolean>`messages.sender_id is distinct from ${context.userId}`)
@@ -74,6 +77,7 @@ export const catchUpIn = async (
           .leftJoin('users', 'users.id', 'messages.sender_id')
           .select(MESSAGE_COLUMNS)
           .where('messages.channel_id', '=', context.channelId)
+          .where(withinMessageHistory(executor, context))
           .where('messages.parent_id', 'is', null)
           .where(
             'messages.id',

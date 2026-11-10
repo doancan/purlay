@@ -803,9 +803,14 @@ export interface WorkspaceInvitationRecipients {
 }
 
 export interface WorkspaceInvitations {
+  access_kind: Generated<string>;
   created_at: Timestamp;
   created_by: string | null;
   expires_at: Timestamp;
+  guest_access_expires_at: Timestamp | null;
+  guest_channels: string[] | null;
+  guest_email: string | null;
+  guest_modules: string[] | null;
   id: string;
   revoked_at: Timestamp | null;
   token_hash: string;
@@ -813,7 +818,11 @@ export interface WorkspaceInvitations {
 }
 
 export interface WorkspaceMembers {
+  access_kind: Generated<string>;
   deep_work_until: Timestamp | null;
+  guest_expires_at: Timestamp | null;
+  guest_modules: string[] | null;
+  guest_since: Timestamp | null;
   id: Generated<string>;
   is_deep_work_active: Generated<boolean>;
   joined_at: Generated<Timestamp>;
