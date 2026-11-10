@@ -13,8 +13,8 @@
  *   external image uses (§6).
  * - **What the answer does:** 2xx keeps the device; 404 or 410 forgets it (the browser dropped it);
  *   400, 401, 403 or 413 is this server's request refused — said loudly, and no device's fault; any
- *   other answer, a timeout or a network failure counts against the device, and `PUSH_FAILURES_MAX`
- *   in a row forgets it.
+ *   other answer, a timeout or a network failure records a streak bounded by `PUSH_FAILURES_MAX`;
+ *   the subscription stays available for later messages and a successful delivery resets the streak.
  * - **A module's notice** (`toldInbox`, D-286 §9) is the same path with its own rows: only an entry still unread, of a person
  *   not erased, in a workspace not deleted, worded by the module that declares its kind. A person in Deep Work or in their
  *   quiet hours is not told now: the push waits **in memory, on the node that committed it**, and is asked again every

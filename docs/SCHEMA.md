@@ -368,7 +368,7 @@ CREATE TABLE push_subscriptions (
     server_key  TEXT NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     sound       BOOLEAN NOT NULL DEFAULT true, -- this device’s preference, including a closed tab (D-148)
-    failures    INTEGER NOT NULL DEFAULT 0,   -- deliveries in a row the push service did not take
+    failures    INTEGER NOT NULL DEFAULT 0,   -- bounded streak of deliveries the push service did not take (D-299)
 
     CONSTRAINT push_subscriptions_endpoint_is_https CHECK (endpoint LIKE 'https://%'),
     CONSTRAINT push_subscriptions_endpoint_bounded CHECK (length(endpoint) <= 2048),
@@ -384,6 +384,10 @@ At most 20 devices a person, the least recently subscribed dropped when a twenty
 as well as its endpoint. A session's rows go when its row is deleted (sign-out, sign out everywhere,
 expiry swept by `purgeDeadSessions`): the foreign key takes them with it, in the same transaction.
 The endpoint and both keys are a person's: never logged (`ARCHITECTURE.md` §10).
+Temporary provider and network failures retain the subscription. Its recorded streak is saturated before
+incrementing, including for a large restored value, and success clears it only for the same person and
+session. Definitive expiry (404/410), an invalid endpoint, sign-out and the existing device bound still
+remove the row (D-299). Retaining a subscription is not a retry of the failed notification.
 
 ---
 
