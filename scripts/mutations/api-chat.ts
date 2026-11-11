@@ -207,6 +207,14 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/notification-kinds.test.ts'],
   },
   {
+    id: 'departure-proof-loses-request-ownership',
+    why: 'An old proof cannot be matched to its subscription and can end a newer loss.',
+    file: 'apps/api/src/features/chat/frames.ts',
+    find: "context.reply({ event: 'ACCESS_REVOKED', data: { channelIds: ids, reason } }, refId)",
+    replace: "context.reply({ event: 'ACCESS_REVOKED', data: { channelIds: ids, reason } })",
+    tests: ['apps/api/src/realtime/departed-subscribe.integration.test.ts'],
+  },
+  {
     id: 'export-bound-reads-the-old-column',
     why: 'the export’s people bound reads an attachment’s own message_id again (D-250)',
     file: 'apps/api/src/features/chat/export.ts',
@@ -793,7 +801,7 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'refusal-is-not-followed-by-the-notice-it-missed',
     why: 'a refused subscription says only "not found", so a channel archived while the socket was down shows no reason',
     file: 'apps/api/src/features/chat/frames.ts',
-    find: '...(await missedRevocations(context, channelIds))',
+    find: '...(await missedRevocations(context, channelIds, frame.id))',
     replace: '',
     tests: ['apps/api/src/realtime/departed-subscribe.integration.test.ts'],
   },

@@ -12,7 +12,7 @@ import { appendFileSync } from 'node:fs';
 
 /** Paths a screen depends on: the client, the API behind it, the shared packages, the dependencies. */
 const BROWSER =
-  /^(apps\/web\/|apps\/api\/|packages\/|package\.json$|bun\.lock$|\.github\/workflows\/ci\.yml$)/;
+  /^(apps\/web\/|apps\/api\/|packages\/|package\.json$|bun\.lock$|\.github\/workflows\/ci\.yml$|\.github\/actions\/browsers\/)/;
 
 /**
  * Paths a process's answers depend on: the API, the packages it is built from (the one that migrates it among them),

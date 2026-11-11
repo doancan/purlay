@@ -4,7 +4,8 @@
  * somebody looking at a channel an admin archives is told so.
  */
 import { expect, test } from './fixtures';
-import { navLink, openNav } from './support';
+import { navLink, openNav, wallClock } from './support';
+import type { ChannelList } from '@purlay/types';
 
 test('a rename shows in another person’s sidebar and header; leaving takes it off both of the leaver’s tabs', async ({
   page,
@@ -91,6 +92,7 @@ test('a channel archived while this page had no connection says so when the conn
   signIn,
   room,
   api,
+  tenant,
 }) => {
   const made = await room({ members: ['dogancan', 'alice'] });
   // The page's connection is cut by the test and refused while it is "down"; what the server sent in
@@ -113,6 +115,7 @@ test('a channel archived while this page had no connection says so when the conn
       ws.send(frame);
     });
   });
+  await page.clock.install({ time: wallClock() });
   await signIn('alice');
   await page.goto(made.path);
   await expect(page.getByRole('heading', { level: 1, name: made.name })).toBeVisible();
@@ -123,8 +126,31 @@ test('a channel archived while this page had no connection says so when the conn
 
   down = true;
   cut();
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('offline'));
+  });
   await api('dogancan').del(`/api/channels/${made.id}`);
+  // Age only wall time, then let the normal online cache refresh win while sockets stay down.
+  // The generic missing state proves the HTTP answer committed before the next socket opens.
+  await page.clock.setSystemTime(new Date(wallClock().getTime() + 60_000));
+  const refreshed = page.waitForResponse(
+    async (answer) =>
+      answer.request().method() === 'GET' &&
+      new URL(answer.url()).pathname === `/api/workspaces/${tenant.workspaceId}/channels` &&
+      answer.status() === 200 &&
+      !((await answer.json()) as ChannelList).some((channel) => channel.id === made.id),
+  );
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('online'));
+  });
+  await refreshed;
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'That channel is not here' }),
+  ).toBeVisible();
   down = false;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('online'));
+  });
 
   await expect(
     page.getByRole('heading', { level: 1, name: 'This channel was archived' }),

@@ -1567,3 +1567,452 @@ describe('bounded session diagnostics', () => {
     },
   );
 });
+
+describe('departure explanations after HTTP loss', () => {
+  const reply = (h: Harness, frame: ServerFrame): void => {
+    h.last().handlers.message(JSON.stringify(frame));
+  };
+  const accept = (h: Harness, sent: SubscribeFrame): void => {
+    reply(h, {
+      event: 'ACK',
+      data: {
+        channels: sent.payload.channels.map(({ channelId }) => ({ channelId, nextCursor: null })),
+      },
+      refId: sent.id,
+      ts: T0,
+    });
+  };
+  const latest = (h: Harness): SubscribeFrame => {
+    const sent = h.subscribes(h.last()).at(-1);
+    if (sent === undefined) throw new Error('No subscription was sent');
+    return sent;
+  };
+
+  test.each([0, 1, SUBSCRIBE_MAX_CHANNELS, SUBSCRIBE_MAX_CHANNELS + 1, 1001])(
+    'queues %s explanations in bounded separate chunks',
+    (count) => {
+      const h = harness();
+      const ids = Array.from({ length: count }, (_, i) => channel(i + 1));
+      h.connection.explainDepartures(ids);
+      h.connection.explainDepartures(ids);
+      h.connection.start();
+      h.last().handlers.opened();
+      let answered = 0;
+      while (answered < count) {
+        const sent = latest(h);
+        expect(sent.payload.channels.length).toBeLessThanOrEqual(SUBSCRIBE_MAX_CHANNELS);
+        expect(sent.payload.channels.every((c) => c.afterMessageId === null)).toBe(true);
+        answered += sent.payload.channels.length;
+        reply(h, {
+          event: 'ERROR',
+          data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+          refId: sent.id,
+          ts: T0,
+        });
+        const barrier = h.pings(h.last()).at(-1);
+        if (barrier === undefined) throw new Error('No FIFO barrier');
+        reply(h, { event: 'PONG', data: {}, refId: barrier.id, ts: T0 });
+      }
+      expect(
+        h.subscribes(h.last()).flatMap((s) => s.payload.channels.map((c) => c.channelId)),
+      ).toEqual(ids);
+      expect(h.frames.every((frame) => frame.event === 'PONG')).toBe(true);
+      h.last().handlers.closed(1006);
+      retrySocket(h);
+      h.last().handlers.opened();
+      expect(h.subscribes(h.last())).toHaveLength(0);
+      h.connection.stop();
+    },
+  );
+
+  test('an unavailable explanation never refuses a batch of current member subscriptions', () => {
+    const h = harness();
+    h.connection.watch(channel(1));
+    h.connection.explainDepartures([channel(1), channel(2)]);
+    h.connection.start();
+    h.last().handlers.opened();
+    expect(latest(h).payload.channels.map((c) => c.channelId)).toEqual([channel(1)]);
+    accept(h, latest(h));
+    expect(latest(h).payload.channels.map((c) => c.channelId)).toEqual([channel(2)]);
+    reply(h, {
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+      refId: latest(h).id,
+      ts: T0,
+    });
+    reply(h, {
+      event: 'ACCESS_REVOKED',
+      data: { channelIds: [channel(2)], reason: 'archived' },
+      ts: T0,
+    });
+    expect(h.frames.map((f) => f.event)).toEqual(['ACK', 'ACCESS_REVOKED']);
+    h.last().handlers.closed(1006);
+    retrySocket(h);
+    h.last().handlers.opened();
+    expect(latest(h).payload.channels.map((c) => c.channelId)).toEqual([channel(1)]);
+    h.connection.stop();
+  });
+
+  test('a successful explanation does not admit content, continue replay, or move its cursor', () => {
+    const h = harness();
+    const id = channel(1);
+    const before = idAt(1);
+    h.connection.observe(id, before);
+    h.connection.start();
+    h.last().handlers.opened();
+    h.connection.explainDepartures([id]);
+    expect(latest(h).payload.channels).toEqual([{ channelId: id, afterMessageId: null }]);
+    h.last().handlers.message(created(id, idAt(10)));
+    const accepted = latest(h);
+    reply(h, {
+      event: 'ACK',
+      data: { channels: [{ channelId: id, nextCursor: idAt(9) }] },
+      refId: accepted.id,
+      ts: T0,
+    });
+    h.connection.explainDepartures([id]);
+    expect(h.subscribes(h.last())).toHaveLength(1);
+    h.last().handlers.message(created(id, idAt(20)));
+    expect(h.frames).toEqual([]);
+    expect(h.connection.pendingContinuations().size).toBe(0);
+    const unsubscribes = h
+      .last()
+      .sent.map((text) => JSON.parse(text) as ClientFrame)
+      .filter((f) => f.op === 'UNSUBSCRIBE');
+    expect(unsubscribes.map((f) => f.payload.channelIds)).toEqual([[id]]);
+    h.connection.watch(id);
+    expect(latest(h).payload.channels).toEqual([{ channelId: id, afterMessageId: before }]);
+    h.connection.stop();
+  });
+
+  test.each(['stop', 'session end'] as const)(
+    'a pending explanation cannot outlive %s',
+    (cause) => {
+      const h = harness();
+      h.connection.explainDepartures([channel(1)]);
+      h.connection.start();
+      if (cause === 'stop') h.connection.stop();
+      else h.last().handlers.closed(CLOSE_CODES.SESSION_ENDED);
+      h.connection.start();
+      h.last().handlers.opened();
+      expect(h.subscribes(h.last())).toHaveLength(0);
+      h.connection.stop();
+    },
+  );
+});
+
+describe('departure explanation ownership', () => {
+  test('a channel given back during a probe gets a normal subscription and is not unsubscribed by its old reply', () => {
+    const h = harness();
+    const id = channel(1);
+    const before = idAt(1);
+    h.connection.observe(id, before);
+    h.connection.start();
+    h.last().handlers.opened();
+    h.connection.explainDepartures([id]);
+    const probe = h.subscribes(h.last())[0];
+    if (probe === undefined) throw new Error('No probe');
+    h.connection.watch(id);
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACK',
+        data: { channels: [{ channelId: id, nextCursor: null }] },
+        refId: probe.id,
+        ts: T0,
+      }),
+    );
+    const requests = h.subscribes(h.last());
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.payload.channels).toEqual([{ channelId: id, afterMessageId: before }]);
+    expect(
+      h.last().sent.some((text) => (JSON.parse(text) as ClientFrame).op === 'UNSUBSCRIBE'),
+    ).toBe(false);
+    h.connection.stop();
+  });
+
+  test.each(['RATE_LIMITED', 'DATABASE_UNAVAILABLE'] as const)(
+    'a temporary %s waits before retrying only the diagnostic chunk',
+    (code) => {
+      const h = harness();
+      const id = channel(1);
+      h.connection.start();
+      h.last().handlers.opened();
+      h.connection.explainDepartures([id]);
+      const probe = h.subscribes(h.last())[0];
+      if (probe === undefined) throw new Error('No probe');
+      h.last().handlers.message(
+        JSON.stringify({
+          event: 'ERROR',
+          data: { code, message: 'wait' },
+          refId: probe.id,
+          ts: T0,
+        }),
+      );
+      expect(h.subscribes(h.last())).toHaveLength(1);
+      h.fireWaiting(reconnectDelay(0, () => 0));
+      expect(h.subscribes(h.last())).toHaveLength(2);
+      expect(h.subscribes(h.last())[1]?.payload.channels).toEqual([
+        { channelId: id, afterMessageId: null },
+      ]);
+      expect(h.frames).toEqual([]);
+      h.connection.stop();
+    },
+  );
+});
+
+describe('departure proof completion ownership', () => {
+  const answer = (h: Harness, frame: ServerFrame): void => {
+    h.last().handlers.message(JSON.stringify(frame));
+  };
+  const probe = (h: Harness): SubscribeFrame => {
+    const sent = h.subscribes(h.last()).at(-1);
+    if (sent === undefined) throw new Error('No probe');
+    return sent;
+  };
+  test('a disconnect between the error and its separate canonical reason retries the unresolved explanation', () => {
+    const h = harness();
+    const id = channel(1);
+    h.connection.explainDepartures([id]);
+    h.connection.start();
+    h.last().handlers.opened();
+    answer(h, {
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+      refId: probe(h).id,
+      ts: T0,
+    });
+    h.last().handlers.closed(1006);
+    retrySocket(h);
+    h.last().handlers.opened();
+    expect(h.subscribes(h.last()).map((s) => s.payload.channels)).toEqual([
+      [{ channelId: id, afterMessageId: null }],
+    ]);
+    h.connection.stop();
+  });
+
+  test.each(['ACK', 'ERROR'] as const)(
+    'an old %s cannot complete or revoke the explanation for a later membership loss',
+    (event) => {
+      const h = harness();
+      const id = channel(1);
+      h.connection.start();
+      h.last().handlers.opened();
+      h.connection.explainDepartures([id]);
+      const old = probe(h);
+      h.connection.watch(id);
+      h.connection.unwatch([id]);
+      h.connection.explainDepartures([id]);
+      answer(
+        h,
+        event === 'ACK'
+          ? {
+              event: 'ACK',
+              data: { channels: [{ channelId: id, nextCursor: null }] },
+              refId: old.id,
+              ts: T0,
+            }
+          : {
+              event: 'ERROR',
+              data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+              refId: old.id,
+              ts: T0,
+            },
+      );
+      expect(h.subscribes(h.last())).toHaveLength(2);
+      const next = probe(h);
+      if (event === 'ERROR') {
+        answer(h, {
+          event: 'ACCESS_REVOKED',
+          data: { channelIds: [id], reason: 'left' },
+          refId: old.id,
+          ts: T0,
+        });
+        expect(h.frames.filter((f) => f.event === 'ACCESS_REVOKED')).toHaveLength(0);
+        const barrier = h.pings(h.last()).at(-1);
+        if (barrier === undefined) throw new Error('No completion barrier');
+        answer(h, { event: 'PONG', data: {}, refId: barrier.id, ts: T0 });
+      }
+      answer(h, {
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: next.id,
+        ts: T0,
+      });
+      answer(h, {
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [id], reason: 'removed' },
+        refId: next.id,
+        ts: T0,
+      });
+      expect(h.frames.filter((f) => f.event === 'ACCESS_REVOKED').map((f) => f.data)).toEqual([
+        { channelIds: [id], reason: 'removed' },
+      ]);
+      h.connection.stop();
+    },
+  );
+});
+
+test('3,500 departure probes settle under a tighter frame budget, including refused completion pings', () => {
+  const h = harness();
+  const ids = Array.from({ length: 3500 }, (_, i) => channel(i + 1));
+  const explained = new Set<string>();
+  let tokens = 20;
+  let handled = 0;
+  h.connection.explainDepartures(ids);
+  h.connection.start();
+  h.last().handlers.opened();
+  const serve = (): void => {
+    while (handled < h.last().sent.length) {
+      const text = h.last().sent[handled++];
+      if (text === undefined) throw new Error('Missing frame');
+      const sent = JSON.parse(text) as ClientFrame;
+      let reply: ServerFrame;
+      if (tokens < 1)
+        reply = {
+          event: 'ERROR',
+          data: { code: 'RATE_LIMITED', message: 'wait' },
+          refId: sent.id,
+          ts: T0,
+        };
+      else {
+        tokens--;
+        if (sent.op === 'SUBSCRIBE') {
+          for (const c of sent.payload.channels) explained.add(c.channelId);
+          reply = {
+            event: 'ERROR',
+            data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+            refId: sent.id,
+            ts: T0,
+          };
+        } else reply = { event: 'PONG', data: {}, refId: sent.id, ts: T0 };
+      }
+      h.last().handlers.message(JSON.stringify(reply));
+    }
+  };
+  for (let turn = 0; turn < 400 && explained.size < ids.length; turn++) {
+    serve();
+    if (explained.size === ids.length) break;
+    const timer = h.live().find((t) => t.ms < STABLE_AFTER_MS);
+    if (timer === undefined) throw new Error('No bounded retry');
+    tokens = Math.min(20, tokens + timer.ms / 100);
+    timer.live = false;
+    timer.fn();
+  }
+  expect(explained.size).toBe(ids.length);
+  expect(h.frames.some((f) => f.event === 'ERROR')).toBe(false);
+  h.last().handlers.closed(1006);
+  retrySocket(h);
+  h.last().handlers.opened();
+  expect(h.subscribes(h.last())).toHaveLength(0);
+  h.connection.stop();
+});
+
+describe('normal subscription completion ownership', () => {
+  test('an old normal proof cannot revoke a later loss intent', () => {
+    const h = harness();
+    const id = channel(1);
+    h.connection.watch(id);
+    h.connection.start();
+    h.last().handlers.opened();
+    const old = h.subscribes(h.last())[0];
+    if (old === undefined) throw new Error('No original subscription');
+    h.connection.unwatch([id]);
+    h.connection.explainDepartures([id]);
+    h.connection.watch(id);
+    h.connection.unwatch([id]);
+    h.connection.explainDepartures([id]);
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: old.id,
+        ts: T0,
+      }),
+    );
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [id], reason: 'left' },
+        refId: old.id,
+        ts: T0,
+      }),
+    );
+    expect(h.frames).toEqual([]);
+    expect(h.subscribes(h.last())).toHaveLength(2);
+    const next = h.subscribes(h.last())[1];
+    if (next === undefined) throw new Error('No new probe');
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: next.id,
+        ts: T0,
+      }),
+    );
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [id], reason: 'removed' },
+        refId: next.id,
+        ts: T0,
+      }),
+    );
+    expect(h.frames.map((f) => f.data)).toEqual([{ channelIds: [id], reason: 'removed' }]);
+    h.connection.stop();
+  });
+
+  test('a normal replay ACK after HTTP removal does not continue the retired membership', () => {
+    const h = harness();
+    const id = channel(1);
+    h.connection.watch(id);
+    h.connection.start();
+    h.last().handlers.opened();
+    const old = h.subscribes(h.last())[0];
+    if (old === undefined) throw new Error('No original subscription');
+    h.connection.unwatch([id]);
+    h.connection.explainDepartures([id]);
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACK',
+        data: { channels: [{ channelId: id, nextCursor: idAt(9) }] },
+        refId: old.id,
+        ts: T0,
+      }),
+    );
+    expect(h.frames).toEqual([]);
+    expect(h.connection.pendingContinuations().size).toBe(0);
+    h.connection.stop();
+  });
+});
+
+test('a partial obsolete ACK refreshes only the still-owned channel and creates no retired replay', () => {
+  const h = harness();
+  const gone = channel(1);
+  const kept = channel(2);
+  h.connection.watch(gone);
+  h.connection.watch(kept);
+  h.connection.start();
+  h.last().handlers.opened();
+  const old = h.subscribes(h.last())[0];
+  if (old === undefined) throw new Error('No original subscription');
+  h.connection.unwatch([gone]);
+  h.connection.explainDepartures([gone]);
+  h.last().handlers.message(
+    JSON.stringify({
+      event: 'ACK',
+      data: {
+        channels: [
+          { channelId: gone, nextCursor: idAt(9) },
+          { channelId: kept, nextCursor: null },
+        ],
+      },
+      refId: old.id,
+      ts: T0,
+    }),
+  );
+  expect(h.connection.pendingContinuations().size).toBe(0);
+  expect(h.frames.map((f) => f.data)).toEqual([
+    { channels: [{ channelId: kept, nextCursor: null }] },
+  ]);
+  h.connection.stop();
+});

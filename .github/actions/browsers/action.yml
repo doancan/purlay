@@ -1,0 +1,40 @@
+name: Pinned browser server
+description: Run CI browsers with their system libraries, without modifying the hosted runner.
+inputs:
+  cleanup:
+    description: Remove only the container recorded by startup, even after a failed test.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - id: start
+      if: inputs.cleanup != 'true'
+      shell: bash
+      env:
+        # D-304: match apps/web's client; the digest also pins system libraries and fonts.
+        CI_BROWSER_IMAGE: mcr.microsoft.com/playwright:v1.64.1-resolute@sha256:f76885029244e5a384243a930ff283cef67d90653978ee27a77dd4cff8882fb4
+      run: |
+        set -euo pipefail
+        client=$(bun --no-env-file -e 'console.log((await Bun.file("apps/web/package.json").json()).devDependencies["@playwright/test"])')
+        expected=${CI_BROWSER_IMAGE#*playwright:v}
+        expected=${expected%%-resolute*}
+        if [[ "$client" != "$expected" ]]; then
+          echo "Playwright client $client does not match browser image $expected" >&2
+          exit 1
+        fi
+        cid=$(docker run --detach --init --ipc=host --network=host \
+          --mount "type=bind,source=$GITHUB_WORKSPACE,target=/work,readonly" --workdir /work \
+          "$CI_BROWSER_IMAGE" node apps/web/node_modules/.bin/playwright run-server --host 127.0.0.1 --port 3000)
+        if ! [[ "$cid" =~ ^[a-f0-9]{64}$ ]]; then
+          echo 'Docker did not return a container id' >&2
+          exit 1
+        fi
+        echo "CI_BROWSER_CONTAINER_ID=$cid" >> "$GITHUB_ENV"
+        curl --silent --show-error --fail --retry 20 --retry-connrefused --retry-all-errors \
+          --retry-delay 1 --max-time 2 http://127.0.0.1:3000/
+        test "$(docker inspect --format '{{.State.Running}}' "$cid")" = true
+        echo 'PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3000/' >> "$GITHUB_ENV"
+    - id: cleanup
+      if: always() && inputs.cleanup == 'true'
+      shell: bash
+      run: docker rm --force "$CI_BROWSER_CONTAINER_ID"

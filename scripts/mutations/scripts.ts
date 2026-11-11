@@ -155,6 +155,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
+    id: 'ci-browser-skips-changes-to-its-container-action',
+    why: 'a pull request can break browser startup without running any browser job',
+    file: 'scripts/ci-changes.ts',
+    find: '|\\.github\\/actions\\/browsers\\/',
+    replace: '',
+    tests: ['scripts/ci-changes.test.ts'],
+  },
+  {
     id: 'ci-gate-accepts-a-skipped-modules-job-whatever-changed',
     why: 'the required check passes with the module matrix skipped for a change that can move what a process answers (D-250)',
     file: 'scripts/ci-gate.ts',

@@ -29,10 +29,10 @@ have it.
 
 ### Changed
 
-- **Integrations** — Workspace administrators can choose a channel, create an incoming webhook and send a real test message from its one-time setup address (D-303).
+- **Integrations** — Workspace administrators can choose a channel, create an incoming webhook and send a real test message from its one-time setup address (D-305).
 
 ### Fixed
 
-- **Integrations** — An incoming request cannot post after its channel is archived or workspace is closed, even when closure races the request (D-303).
+- **Integrations** — An incoming request cannot post after its channel is archived or workspace is closed, even when closure races the request (D-305).
 
 ---

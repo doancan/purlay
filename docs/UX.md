@@ -341,7 +341,7 @@ yes the row goes at once; a refusal puts it back and is said under the list. The
 they are reading the channel, is told *You were removed from this channel* in its place (a private
 one) or sees it as one not joined (a public one), and their sidebar loses it at once.
 Workspace **Settings → Integrations** also offers incoming messages from ERP, n8n or other systems
-(D-303). An owner/admin chooses a readable named channel; loading, an unavailable channel list and an
+(D-305). An owner/admin chooses a readable named channel; loading, an unavailable channel list and an
 empty list are said beside the choice, with Retry where it can help. The channel's existing list/create/
 revoke section then opens. Its one-time address and JSON example can be copied, and **Send test message**
 posts through that exact address. Success means the chat message was accepted, never an OS push; an
@@ -368,7 +368,9 @@ conversation.
 into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes
 `istanbul`: lowercase, accents and Turkish letters folded to their plain letter, anything else one
 hyphen (`features/chat/channel/channel-name.ts`). Somebody looking at a channel that is archived, or that
-they left on another screen, is told which, instead of *not found*.
+they left on another screen, is told which, instead of *not found*. A refreshed HTTP list may arrive before
+reconnect; the client still asks for the server departure reason without retaining membership or unsent
+messages while it waits (D-303).
 
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
 too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*

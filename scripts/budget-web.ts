@@ -27,7 +27,7 @@
  * so a module added later is held without a line here, and its files are derived from its folder (`screenSources`, D-277); one with no bound in `MODULE_BYTES` fails. The check reads
  * the source maps of the initial chunks, so it needs `bun run build:web:mapped`, and fails — rather than passing
  * unproven — when there is none. A bound goes with each chunk, and one with the shell's, set from the measured build
- * with a margin for a feature or two: the shell's 257 KB (2026-11-03: 242.04 KB gzipped, set at 250; 2026-11-07: 250.07 KB with the find's and the inbox's shared contract types, so raised by 6; 2026-11-11: 256.1 KB with incoming webhook test/setup contracts and English copy, one KB added for that measured feature) so the 400 KB
+ * with a margin for a feature or two: the shell's 257 KB (2026-11-03: 242.04 KB gzipped, set at 250; 2026-11-07: 250.07 KB with the find's and the inbox's shared contract types, so raised by 6; 2026-11-11: owned departure probes measured 256.58 KB and incoming webhook setup/test contracts bring the combined build to 256.85 KB, within the one KB added) so the 400 KB
  * backstop above is no longer what catches a screen that crept back; chat's 52 KB (45.65 KB, 10% above, set at 50; 2026-11-10: 50.12 KB, raised by 2, since the composer and the feed were split into units that each have a reason to change, which costs 0.8 KB gzipped of structure — hook results, props handed across, one shared popover — and gives no screen anything new); issues' 3 KB
  * (2026-11-06: 2.70 KB, 11% above). They move up in a commit that says why, as the backstop does.
  */

@@ -62,6 +62,7 @@ export interface ChatFrameContext extends FrameContext {
 const missedRevocations = async (
   context: ChatFrameContext,
   channelIds: readonly string[],
+  refId: string,
 ): Promise<readonly ServerFrame[]> => {
   let departures: ReadonlyMap<string, RevokedReason>;
   try {
@@ -75,7 +76,7 @@ const missedRevocations = async (
     byReason.set(reason, [...(byReason.get(reason) ?? []), channelId]);
   }
   return [...byReason].map(([reason, ids]) =>
-    context.reply({ event: 'ACCESS_REVOKED', data: { channelIds: ids, reason } }),
+    context.reply({ event: 'ACCESS_REVOKED', data: { channelIds: ids, reason } }, refId),
   );
 };
 
@@ -234,7 +235,10 @@ export const chatFrames = (
         // with the error.
         socket.drop(identity.socketId, fresh);
         if (error instanceof AppError && error.body.code === 'CHANNEL_NOT_FOUND') {
-          return [context.fail(error, frame.id), ...(await missedRevocations(context, channelIds))];
+          return [
+            context.fail(error, frame.id),
+            ...(await missedRevocations(context, channelIds, frame.id)),
+          ];
         }
         throw error;
       }

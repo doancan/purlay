@@ -9,7 +9,9 @@
  * **What it does not.** Optimistic sends and their ACK deadline, the message
  * buffer, and continuing a replay that was only one page (`nextCursor` in the
  * `ACK`, then `?after=` over HTTP) belong to the store that sits on top of this.
- * Every frame is handed to `onFrame` untouched for exactly that reason; this
+ * An HTTP-discovered departure uses an isolated, one-shot subscription with no cursor: only the
+ * server’s departure reason is forwarded, never its replay, content, or diagnostic ACK/error.
+ * Ordinary frames are handed to `onFrame` untouched for exactly that reason; this
  * module reads them only to advance a cursor — and to withhold that advance
  * while a continuation is owed (`pendingContinuations`, D-82).
  *
@@ -118,6 +120,8 @@ export interface Connection {
   readonly status: () => ConnectionStatus;
   /** Receive a channel's messages, resuming from the highest id held. */
   readonly watch: (channelId: string) => void;
+  /** Ask once why previously owned channels left, without receiving their content or replay. */
+  readonly explainDepartures: (channelIds: readonly string[]) => void;
   /**
    * Stop receiving these channels: **one** `UNSUBSCRIBE` for all of them (chunked at the frame's
    * bound), never one per channel — a burst of per-channel frames spends the socket's frame budget,
@@ -161,6 +165,15 @@ export interface Connection {
 export const createConnection = (options: ConnectionOptions): Connection => {
   const cursors = createCursors();
   const watched = new Set<string>();
+  // Object identity separates a new loss from a prior probe of the same channel.
+  const lifetimes = new Map<string, object>();
+  const explanations = new Set<string>();
+  const conclusions = new Map<
+    string,
+    { readonly owners: ReadonlyMap<string, object>; readonly barrier: string }
+  >();
+  // Ignore live content until the successful probe's UNSUBSCRIBE is acknowledged.
+  const retiring = new Set<string>();
   // Channel -> the `nextCursor` of a replay whose HTTP continuation is still owed.
   const pending = new Map<string, string>();
 
@@ -214,6 +227,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     clearTimers();
     socket?.close();
     socket = null;
+    lifetimes.clear();
+    explanations.clear();
+    conclusions.clear();
+    retiring.clear();
     setStatus('idle');
   };
 
@@ -238,14 +255,26 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   // Channels waiting for a SUBSCRIBE, the one chunk on the wire, and the pause
   // before it is sent again after the server said RATE_LIMITED.
   let queue: string[] = [];
-  let inFlight: { readonly id: string; readonly channelIds: readonly string[] } | null = null;
+  let inFlight: {
+    readonly id: string;
+    readonly channelIds: readonly string[];
+    readonly diagnostic: boolean;
+    readonly owners: ReadonlyMap<string, object>;
+  } | null = null;
   let limitedTimes = 0;
   let cancelResend: (() => void) | null = null;
+
+  const currentMembers = (request: NonNullable<typeof inFlight>): string[] =>
+    request.channelIds.filter(
+      (id) => watched.has(id) && lifetimes.get(id) === request.owners.get(id),
+    );
 
   /** Stops watching these, and returns the ones that were watched, each once. */
   const letGo = (channelIds: readonly string[]): string[] => {
     const gone: string[] = [];
     for (const channelId of channelIds) {
+      explanations.delete(channelId);
+      retiring.delete(channelId);
       if (!watched.delete(channelId)) continue;
       pending.delete(channelId);
       gone.push(channelId);
@@ -265,55 +294,115 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   const pump = (): void => {
     if (inFlight !== null || status !== 'open') return;
     const chunk: string[] = [];
+    let diagnostic: boolean | null = null;
     while (chunk.length < SUBSCRIBE_MAX_CHANNELS) {
-      const next = queue.shift();
+      const next = queue[0];
       if (next === undefined) break;
+      if (!watched.has(next) && !explanations.has(next)) {
+        queue.shift();
+        continue;
+      }
+      // A refused explanation must never refuse a current member's subscription with it.
+      if (diagnostic !== null && diagnostic !== explanations.has(next)) break;
+      diagnostic = explanations.has(next);
+      queue.shift();
       chunk.push(next);
     }
-    if (chunk.length > 0) sendChunk(chunk);
+    if (chunk.length > 0) sendChunk(chunk, diagnostic === true);
   };
 
-  const sendChunk = (channelIds: readonly string[]): void => {
-    const live = channelIds.filter((channelId) => watched.has(channelId));
+  const sendChunk = (channelIds: readonly string[], diagnostic: boolean): void => {
+    const live = channelIds.filter((channelId) =>
+      diagnostic ? explanations.has(channelId) : watched.has(channelId),
+    );
     if (live.length === 0) {
       inFlight = null;
       pump();
       return;
     }
     const id = options.newId();
-    inFlight = { id, channelIds: live };
+    const owners = new Map<string, object>();
+    for (const channelId of live) {
+      const owner = lifetimes.get(channelId);
+      if (owner !== undefined) owners.set(channelId, owner);
+    }
+    inFlight = { id, channelIds: live, diagnostic, owners };
     write({
       id,
       op: 'SUBSCRIBE',
       payload: {
-        channels: live.map((channelId) => ({ channelId, afterMessageId: cursors.get(channelId) })),
+        channels: live.map((channelId) => ({
+          channelId,
+          afterMessageId: diagnostic ? null : cursors.get(channelId),
+        })),
       },
     });
+  };
+
+  const unsubscribe = (channelIds: readonly string[]): void => {
+    for (let at = 0; at < channelIds.length; at += SUBSCRIBE_MAX_CHANNELS) {
+      write({
+        id: options.newId(),
+        op: 'UNSUBSCRIBE',
+        payload: { channelIds: channelIds.slice(at, at + SUBSCRIBE_MAX_CHANNELS) },
+      });
+    }
   };
 
   /** The answer to the chunk on the wire: go on, or send it again after a wait. */
   const answered = (frame: ServerFrame): void => {
     if (inFlight === null || frame.refId !== inFlight.id) return;
     if (frame.event === 'ACK' && 'channels' in frame.data) {
+      const { channelIds, diagnostic, owners } = inFlight;
       inFlight = null;
+      if (diagnostic) {
+        for (const [id, owner] of owners) {
+          if (lifetimes.get(id) === owner) explanations.delete(id);
+        }
+        const released = channelIds.filter((id) => !watched.has(id));
+        for (const id of released) retiring.add(id);
+        unsubscribe(released);
+      }
       limitedTimes = 0;
       pump();
     } else if (frame.event === 'ERROR') {
       if (frame.data.code === 'RATE_LIMITED' || frame.data.code === 'DATABASE_UNAVAILABLE') {
-        const again = inFlight.channelIds;
+        const { channelIds: again, diagnostic } = inFlight;
         cancelResend = options.schedule(
           () => {
             cancelResend = null;
-            sendChunk(again);
+            sendChunk(again, diagnostic);
           },
           reconnectDelay(limitedTimes, options.random),
         );
         limitedTimes += 1;
       } else {
         // Refused for a reason waiting will not change: say so, and go on with the next chunk.
-        const { channelIds, id } = inFlight;
+        const request = inFlight;
+        const { channelIds, id, diagnostic, owners } = request;
+        const current = currentMembers(request);
+        const missing = frame.data.code === 'CHANNEL_NOT_FOUND';
         inFlight = null;
-        options.onSubscribeRefused?.(channelIds, frame.data.code, id);
+        if (!diagnostic) {
+          if (missing && current.length < channelIds.length) {
+            // A batch containing an obsolete watch says nothing about the remaining members.
+            for (const channelId of current) if (!queue.includes(channelId)) queue.push(channelId);
+          } else if (current.length > 0) options.onSubscribeRefused?.(current, frame.data.code, id);
+        }
+        if (missing) {
+          for (const [channelId, owner] of owners) {
+            if (lifetimes.get(channelId) === owner && !watched.has(channelId))
+              explanations.add(channelId);
+          }
+          // ERROR and reason are separate frames; a later FIFO reply completes their handoff.
+          const barrier = options.newId();
+          conclusions.set(id, { owners, barrier });
+          write({ id: barrier, op: 'PING', payload: {} });
+        } else if (diagnostic) {
+          for (const [channelId, owner] of owners) {
+            if (lifetimes.get(channelId) === owner) explanations.delete(channelId);
+          }
+        }
         pump();
       }
     }
@@ -330,6 +419,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     failures = 0;
     neverOpened = 0;
     releaseCheck(true);
+    lifetimes.clear();
+    explanations.clear();
+    conclusions.clear();
+    retiring.clear();
     setStatus('ended');
   };
 
@@ -439,7 +532,13 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         cancelStable = options.schedule(() => {
           failures = 0;
         }, STABLE_AFTER_MS);
-        queue = [...watched];
+        retiring.clear();
+        conclusions.clear();
+        for (const id of watched) if (!lifetimes.has(id)) lifetimes.set(id, {});
+        for (const id of lifetimes.keys()) {
+          if (!watched.has(id) && !explanations.has(id)) lifetimes.delete(id);
+        }
+        queue = [...watched, ...explanations];
         limitedTimes = 0;
         pump();
         ping();
@@ -458,10 +557,68 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         // included: a newer server is not a reason to leave it (D-82).
         armIdle();
         if (message.kind === 'unknown') return;
-        const { frame } = message;
+        let { frame } = message;
         measureClock(frame);
-        noteReplay(frame);
+        if (frame.event === 'PONG' || frame.event === 'ERROR') {
+          let completed = false;
+          for (const [requestId, conclusion] of conclusions) {
+            if (conclusion.barrier !== frame.refId) continue;
+            for (const [id, owner] of conclusion.owners) {
+              if (lifetimes.get(id) === owner) {
+                explanations.delete(id);
+                if (!watched.has(id) && !retiring.has(id)) lifetimes.delete(id);
+              }
+            }
+            conclusions.delete(requestId);
+            completed = true;
+          }
+          // Even a rate refusal proves this later request passed the server's FIFO boundary.
+          if (completed) return;
+        }
+        if (frame.event === 'ACCESS_REVOKED' && frame.refId !== undefined) {
+          const conclusion = conclusions.get(frame.refId);
+          if (conclusion !== undefined) {
+            const ids = frame.data.channelIds.filter((id) => {
+              const owner = conclusion.owners.get(id);
+              return owner !== undefined && lifetimes.get(id) === owner;
+            });
+            if (ids.length === 0) return;
+            for (const id of ids) explanations.delete(id);
+            frame = { ...frame, data: { ...frame.data, channelIds: ids } };
+          }
+        }
+        const reply =
+          frame.event === 'ERROR' || (frame.event === 'ACK' && 'channels' in frame.data);
+        const request = reply && inFlight?.id === frame.refId ? inFlight : null;
+        const current = request === null ? [] : currentMembers(request);
+        const diagnostic = request?.diagnostic === true;
+        const obsolete =
+          request !== null &&
+          !diagnostic &&
+          (current.length === 0 ||
+            (frame.event === 'ERROR' &&
+              frame.data.code === 'CHANNEL_NOT_FOUND' &&
+              current.length < request.channelIds.length));
+        if (request !== null && !diagnostic && frame.event === 'ACK' && 'channels' in frame.data) {
+          frame = {
+            ...frame,
+            data: { channels: frame.data.channels.filter((c) => current.includes(c.channelId)) },
+          };
+        }
+        if (!diagnostic && !obsolete) noteReplay(frame);
         answered(frame);
+        if (diagnostic || obsolete) return;
+        if (
+          'channelId' in frame.data &&
+          (explanations.has(frame.data.channelId) || retiring.has(frame.data.channelId))
+        )
+          return;
+        if (frame.event === 'ACK' && 'channelIds' in frame.data) {
+          for (const id of frame.data.channelIds) {
+            retiring.delete(id);
+            if (!watched.has(id) && !explanations.has(id)) lifetimes.delete(id);
+          }
+        }
         if (frame.event === 'MESSAGE_CREATED') advance(frame.data.channelId, frame.data.id);
         options.onFrame(frame);
       },
@@ -495,16 +652,25 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     status: (): ConnectionStatus => status,
     watch: (channelId): void => {
       if (watched.has(channelId)) return;
+      explanations.delete(channelId);
+      retiring.delete(channelId);
+      lifetimes.set(channelId, {});
       watched.add(channelId);
-      queue.push(channelId);
+      if (!queue.includes(channelId)) queue.push(channelId);
+      pump();
+    },
+    explainDepartures: (channelIds): void => {
+      for (const id of channelIds) {
+        if (watched.has(id) || explanations.has(id) || retiring.has(id)) continue;
+        lifetimes.set(id, {});
+        explanations.add(id);
+        if (!queue.includes(id)) queue.push(id);
+      }
       pump();
     },
     unwatch: (channelIds): void => {
-      const gone = letGo(channelIds);
-      for (let at = 0; at < gone.length; at += SUBSCRIBE_MAX_CHANNELS) {
-        const chunk = gone.slice(at, at + SUBSCRIBE_MAX_CHANNELS);
-        write({ id: options.newId(), op: 'UNSUBSCRIBE', payload: { channelIds: chunk } });
-      }
+      for (const id of channelIds) lifetimes.delete(id);
+      unsubscribe(letGo(channelIds));
     },
     forget: (channelIds): void => {
       letGo(channelIds);
