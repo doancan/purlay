@@ -35,6 +35,7 @@
         "/api/workspaces/:workspaceId/saved/ids",
         "/api/workspaces/:workspaceId/scheduled",
         "/api/workspaces/:workspaceId/search",
+        "/api/workspaces/:workspaceId/shared",
         "/api/workspaces/:workspaceId/unresolved"
       ],
       "jobs": [
