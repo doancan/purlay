@@ -17,6 +17,7 @@ describe('the browser jobs', () => {
     'package.json',
     'bun.lock',
     '.github/workflows/ci.yml',
+    '.github/actions/browsers/action.yml',
   ])('run for a pull request that changes %s', (file) => {
     expect(needsBrowser('pull_request', ['docs/UX.md', file])).toBe(true);
   });
