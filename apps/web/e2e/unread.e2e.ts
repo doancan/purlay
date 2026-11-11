@@ -42,13 +42,16 @@ const roomWithHistory = async (
   return { ...made, ids: [] };
 };
 
-/** Where a row is, relative to the visible part of the scroller: both measured in the page. */
-const visibleWithin = async (page: Page, target: Locator): Promise<boolean> => {
-  const box = await target.boundingBox();
-  const frame = await scroller(page).boundingBox();
-  if (box === null || frame === null) return false;
-  return box.y >= frame.y - 1 && box.y + box.height <= frame.y + frame.height + 1;
-};
+/** One layout snapshot: separate remote box reads can outlast the poll before returning. */
+const visibleWithin = async (page: Page, selector: string): Promise<boolean> =>
+  await page.evaluate((selector): boolean => {
+    const target = document.querySelector(selector);
+    const container = target?.closest('[data-message-list]');
+    if (target === null || container === null || container === undefined) return false;
+    const box = target.getBoundingClientRect();
+    const frame = container.getBoundingClientRect();
+    return box.top >= frame.top - 1 && box.bottom <= frame.bottom + 1;
+  }, selector);
 
 test.describe('a channel with unread messages', () => {
   test.setTimeout(120_000);
@@ -71,7 +74,7 @@ test.describe('a channel with unread messages', () => {
 
     const marker = page.locator('[data-feed-marker]');
     await expect(marker).toBeVisible();
-    await expect.poll(() => visibleWithin(page, marker)).toBe(true);
+    await expect.poll(() => visibleWithin(page, '[data-feed-marker]')).toBe(true);
     const firstUnread = page.locator(`[data-message-id="${ids[40] ?? ''}"]`);
     await expect(firstUnread).toBeVisible();
     // The marker sits directly above the first message past the read position, and not above
@@ -136,7 +139,9 @@ test.describe('a channel with unread messages', () => {
     await page.goto(made.path);
     const last = page.locator(`[data-message-id="${ids.at(-1) ?? ''}"]`);
     await expect(last).toBeVisible();
-    await expect.poll(() => visibleWithin(page, last)).toBe(true);
+    await expect
+      .poll(() => visibleWithin(page, `[data-message-id="${ids.at(-1) ?? ''}"]`))
+      .toBe(true);
     await expect(page.locator('[data-feed-marker]')).toHaveCount(0);
   });
 });
