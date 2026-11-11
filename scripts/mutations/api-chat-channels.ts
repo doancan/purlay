@@ -855,6 +855,22 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
   },
   {
+    id: 'guest-live-counter-audience-channels-merged',
+    why: 'A guest in two channels must retain each current channel history in a pending counter batch.',
+    file: 'apps/api/src/features/chat/channels/live-audience.ts',
+    find: 'JSON.stringify([context.workspaceId, context.channelId, messageId])',
+    replace: 'JSON.stringify([context.workspaceId, messageId])',
+    tests: ['apps/api/src/features/chat/channels/live-audience.integration.test.ts'],
+  },
+  {
+    id: 'guest-live-counter-audience-per-frame',
+    why: 'Recipient-specific counter frames must not restore one authority query per online member.',
+    file: 'apps/api/src/features/chat/channels/live-audience.ts',
+    find: "if (frame.event === 'CHANNEL_STATE') {",
+    replace: 'if (false) {',
+    tests: ['apps/api/src/features/chat/channels/live-audience.integration.test.ts'],
+  },
+  {
     id: 'guest-live-current-full-member-refused',
     why: 'A current full member retains useful historical and fresh channel delivery.',
     file: 'apps/api/src/features/chat/channels/live-history.ts',

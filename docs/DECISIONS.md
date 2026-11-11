@@ -15097,7 +15097,9 @@ authority reads, sharing the existing byte bound. Session end and access-change 
 projection immediately; the policy hint is written before close and the queued tail is retired. Every channel
 publication reads the canonical active account, workspace, applicable module and channel membership,
 current history floor and access end before writing words. Recipients queued for the same publication share
-bounded batches of at most 500 waiters. The database executor, channel, workspace, message and recipient remain
+bounded batches of at most 500 waiters. Pending `CHANNEL_STATE` authority reads also share a batch across
+recipient-specific frames (#1388); those frames retain their independent transport queues and payloads.
+The database executor, channel, workspace, message and recipient remain
 part of the lookup's identity; the batch detaches before dispatch, so neither a started nor a completed
 statement authorizes a later arrival. Message creation time comes from the stored row, including a readable
 tombstone's clearing event, rather than a publisher's event time or supplied creation time. A current denial
