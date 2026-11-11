@@ -27,6 +27,9 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **Notifications** — Missed-message email resumes after a worker restart, keeping earlier unsubscribe links valid and rechecking current access before retry (D-302).
+
 
 ---

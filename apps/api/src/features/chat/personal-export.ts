@@ -283,7 +283,8 @@ type ChatPersonalExcluded =
   | 'github_links'
   | 'github_operations'
   | 'link_previews'
-  | 'missed_mail_letters';
+  | 'missed_mail_letters'
+  | 'missed_mail_claims';
 
 const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
   channel_departures:
@@ -319,6 +320,8 @@ const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
   link_previews: 'a cache of other sites’ pages',
   missed_mail_letters:
     'when each letter about what they missed went, and its stop link’s digest: a credential (D-240)',
+  missed_mail_claims:
+    'pending relay attempts and released stop-link markers: private delivery state (D-302)',
 };
 
 export const chatPersonalExport = {

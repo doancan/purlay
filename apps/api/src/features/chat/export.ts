@@ -336,6 +336,7 @@ type ChatExcluded =
   | 'github_operations'
   | 'notifications'
   | 'missed_mail_letters'
+  | 'missed_mail_claims'
   | 'saved_messages'
   | 'saved_searches'
   | 'thread_follows'
@@ -370,6 +371,8 @@ const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   notifications: 'each person’s inbox, their own state',
   missed_mail_letters:
     'when each person was last emailed about what they missed, and the digest of the link that stops it: a credential, the person’s own (D-240)',
+  missed_mail_claims:
+    'pending relay attempts and released stop-link markers: private delivery state (D-302)',
   saved_messages: 'each person’s saved items, their own state',
   saved_searches: 'each person’s named filters, their own state',
   thread_follows: 'which threads each person follows or let go, their own state',

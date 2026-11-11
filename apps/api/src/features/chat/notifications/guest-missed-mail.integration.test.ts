@@ -207,7 +207,15 @@ describe('integration: guest missed-mail authority', () => {
             .select('id')
             .where('user_id', '=', userId)
             .execute(),
-        ).toEqual([]);
+        ).toHaveLength(1);
+        expect(
+          await db
+            .selectFrom('missed_mail_claims as claim')
+            .innerJoin('missed_mail_letters as letter', 'letter.id', 'claim.letter_id')
+            .select('claim.lease_until')
+            .where('letter.user_id', '=', userId)
+            .execute(),
+        ).toEqual([{ lease_until: null }]);
         const marked = await db
           .selectFrom('notifications')
           .select('mailed_at')

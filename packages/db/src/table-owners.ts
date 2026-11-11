@@ -84,6 +84,7 @@ export const TABLE_OWNERS = {
   scheduled_message_attachments: 'chat',
   scheduled_messages: 'chat',
   missed_mail_letters: 'chat',
+  missed_mail_claims: 'chat',
   pinned_messages: 'chat',
   reactions: 'chat',
   saved_messages: 'chat',
