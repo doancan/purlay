@@ -23,7 +23,7 @@
  *   so. A failure after the relay has the letter (a timeout waiting for its answer) cannot be told from one
  *   before, so that letter can arrive twice; both carry the same `Message-ID`, made from the rows it is about.
  *   A relay that says this address does not exist (an addressing status, `5.1.x`) is not tried again.
- *   A process that dies between the commit and the send loses that one letter.
+ *   A five-minute durable claim recovers after process death (D-302); a late old worker cannot settle its replacement.
  * - **The link that stops it** opens without a session: a random token, whose digest alone is kept with the
  *   letter (`platform/tokens.ts`), good for `STOP_LINK_DAYS`. The job forgets letters past that.
  */
@@ -46,6 +46,12 @@ import { randomToken, tokenDigest } from '../../../platform/tokens';
 import { atomicallyOn } from '../../../platform/transactions';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { missedLetter, type MissedConversation, type MissedWorkspace } from './missed-mail-letter';
+import {
+  MISSED_MAIL_CLAIM_MS,
+  recoverMailClaims,
+  releaseMailClaim,
+  settleMailClaim,
+} from './missed-mail-claims';
 
 /**
  * How long a notification waits unread before it is mailed: long enough that a person at their desk, or
@@ -315,11 +321,29 @@ const takeLetter = async (
     .skipLocked()
     .executeTakeFirst();
   if (person?.missed_mail_since == null) return null;
+  const active = await transaction
+    .selectFrom('missed_mail_claims as claim')
+    .innerJoin('missed_mail_letters as letter', 'letter.id', 'claim.letter_id')
+    .select('claim.letter_id')
+    .where('letter.user_id', '=', userId)
+    .where('claim.lease_until', 'is not', null)
+    .executeTakeFirst();
+  if (active !== undefined) return null;
   const recent = await transaction
     .selectFrom('missed_mail_letters')
     .select('id')
     .where('user_id', '=', userId)
     .where('sent_at', '>', new Date(now.getTime() - MISSED_MAIL_WINDOW_MS))
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('missed_mail_claims as claim')
+            .select('claim.letter_id')
+            .whereRef('claim.letter_id', '=', 'missed_mail_letters.id'),
+        ),
+      ),
+    )
     .executeTakeFirst();
   if (recent !== undefined) return null;
 
@@ -395,6 +419,14 @@ const takeLetter = async (
     .values({ user_id: userId, sent_at: now, stop_digest: await tokenDigest(token) })
     .returning('id')
     .executeTakeFirstOrThrow();
+  await transaction
+    .insertInto('missed_mail_claims')
+    .values({
+      letter_id: letter.id,
+      notification_ids: mailed.map((row) => row.id),
+      lease_until: new Date(now.getTime() + MISSED_MAIL_CLAIM_MS),
+    })
+    .execute();
   return {
     userId,
     letterId: letter.id,
@@ -448,12 +480,7 @@ const messageIdFor = async (
 
 /** A letter the relay did not take: its rows wait for the next run, and its hour is not spent. */
 const giveBack = async (transaction: ChatTx, taken: Taken): Promise<void> => {
-  await transaction
-    .updateTable('notifications')
-    .set({ mailed_at: null })
-    .where('id', 'in', taken.notificationIds)
-    .execute();
-  await transaction.deleteFrom('missed_mail_letters').where('id', '=', taken.letterId).execute();
+  await releaseMailClaim(transaction, taken.userId, taken.letterId);
 };
 
 /** The claim is no longer authority after its commit: recheck before handing content to the relay. */
@@ -462,6 +489,13 @@ const letterStillReadable = async (
   now: Date,
   taken: Taken,
 ): Promise<boolean> => {
+  const claim = await transaction
+    .selectFrom('missed_mail_claims')
+    .select('letter_id')
+    .where('letter_id', '=', taken.letterId)
+    .where('lease_until', '>', now)
+    .executeTakeFirst();
+  if (claim === undefined) return false;
   const person = await mailablePerson(transaction, taken.userId).executeTakeFirst();
   if (person?.missed_mail_since == null || person.email !== taken.letter.to) return false;
   const pending = await transaction
@@ -497,9 +531,22 @@ export const mailMissedMessages = async (
 ): Promise<{ letters: number; failed: number; refused: number; forgotten: number }> => {
   const { database, clock, log, send, appUrl } = dependencies;
   const now = clock.now();
+  const recovered = await recoverMailClaims(database, now);
+  if (recovered > 0) log.info('expired missed-mail claims released', { recovered });
   const forgotten = await database
     .deleteFrom('missed_mail_letters')
     .where('sent_at', '<=', new Date(now.getTime() - STOP_LINK_DAYS * DAY_MS))
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('missed_mail_claims as claim')
+            .select('claim.letter_id')
+            .whereRef('claim.letter_id', '=', 'missed_mail_letters.id')
+            .where('claim.lease_until', 'is not', null),
+        ),
+      ),
+    )
     .executeTakeFirst();
   const outcome = {
     letters: 0,
@@ -534,7 +581,7 @@ export const mailMissedMessages = async (
 
   for (const { id } of people) {
     const taken = await atomicallyOn(database)(
-      async (transaction) => await takeLetter(transaction, now, id, appUrl),
+      async (transaction) => await takeLetter(transaction, clock.now(), id, appUrl),
     );
     if (taken === null) continue;
     const ready = await atomicallyOn(database)(async (transaction) => {
@@ -544,32 +591,44 @@ export const mailMissedMessages = async (
       return false;
     });
     if (!ready) continue;
+    let refused = false;
     try {
       await send(taken.letter);
-      outcome.letters += 1;
     } catch (error) {
       // The relay's code only: its words can quote the recipient back (ARCHITECTURE §10).
       if (addressRefusedForGood(error)) {
         // Its rows stay marked: the next run would be refused the same way, for ever.
-        outcome.refused += 1;
+        refused = true;
         log.warn('a missed-mail address was refused for good', { reason: codeOf(error) });
+      } else {
+        outcome.failed += 1;
+        log.error('a missed-mail letter could not be sent', { reason: codeOf(error) });
+        try {
+          await atomicallyOn(database)(async (transaction) => {
+            await giveBack(transaction, taken);
+          });
+        } catch (givingBack) {
+          // The durable claim remains pending for recovery; everybody else's delivery goes on.
+          log.error('a missed-mail letter could not be given back', { reason: codeOf(givingBack) });
+        }
         continue;
       }
+    }
+    try {
+      await atomicallyOn(database)(async (transaction) => {
+        await settleMailClaim(transaction, taken.userId, taken.letterId);
+      });
+      if (refused) outcome.refused += 1;
+      else outcome.letters += 1;
+    } catch (error) {
+      // Keep a durable pending claim if the relay answered but its acknowledgement could not commit.
       outcome.failed += 1;
-      log.error('a missed-mail letter could not be sent', { reason: codeOf(error) });
-      try {
-        await atomicallyOn(database)(async (transaction) => {
-          await giveBack(transaction, taken);
-        });
-      } catch (givingBack) {
-        // One person's rows stay marked (their letter is lost, as after a crash); everybody else's go on.
-        log.error('a missed-mail letter could not be given back', { reason: codeOf(givingBack) });
-      }
+      log.error('a missed-mail result could not be recorded', { reason: codeOf(error) });
     }
   }
   if (outcome.failed > 0) {
     throw new Error(
-      `${String(outcome.failed)} missed-mail letter(s) were refused by the mail relay, and will be tried again`,
+      `${String(outcome.failed)} missed-mail letter(s) could not be completed, and will be tried again`,
     );
   }
   return outcome;

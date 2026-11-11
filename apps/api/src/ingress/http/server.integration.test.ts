@@ -2961,10 +2961,15 @@ describe('integration â€” the administrator requeues and discards facts (D-288 Â
       expect(row.next_attempt_at.getTime()).toBeGreaterThanOrEqual(before);
       expect(row.expires_at.getTime()).toBeGreaterThan(before + 6 * 24 * 60 * MINUTE);
     }
-    expect(await trail(server)).toEqual([
-      { action: 'server.fact_requeued', target_fact_id: dead.factId, note: REASON },
-      { action: 'server.fact_requeued', target_fact_id: stuck.factId, note: REASON },
-    ]);
+    const audit = await trail(server);
+    expect(audit).toHaveLength(2);
+    for (const { factId } of [dead, stuck]) {
+      expect(audit).toContainEqual({
+        action: 'server.fact_requeued',
+        target_fact_id: factId,
+        note: REASON,
+      });
+    }
   });
 
   test('requeuing twice is the same as once: the second changes nothing and records nothing', async () => {

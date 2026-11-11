@@ -447,6 +447,30 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       .values({ user_id: world.adaId, sent_at: NOW, stop_digest: crypto.randomUUID() })
       .execute();
   }),
+  missed_mail_claims: by(
+    'missed_mail_claims',
+    'letter_id',
+    (world) => world.bobsMessage,
+    async (db, world) => {
+      await db
+        .insertInto('missed_mail_letters')
+        .values({
+          id: world.bobsMessage,
+          user_id: world.adaId,
+          sent_at: NOW,
+          stop_digest: crypto.randomUUID(),
+        })
+        .execute();
+      await db
+        .insertInto('missed_mail_claims')
+        .values({
+          letter_id: world.bobsMessage,
+          notification_ids: [anId()],
+          lease_until: NOW,
+        })
+        .execute();
+    },
+  ),
   saved_messages: ofAda('saved_messages', async (db, world) => {
     await db
       .insertInto('saved_messages')

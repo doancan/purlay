@@ -158,6 +158,7 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   scheduled_message_attachments: decided('deleted', 'with-parent'),
   scheduled_messages: decided('deleted', 'swept'),
   missed_mail_letters: decided('deleted', 'swept'),
+  missed_mail_claims: decided('deleted', 'with-parent'),
   pinned_messages: decided('anonymised', 'with-parent'),
   reactions: decided('anonymised', 'with-parent'),
   saved_messages: decided('deleted', 'until-removed'),

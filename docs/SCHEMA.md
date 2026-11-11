@@ -2840,12 +2840,13 @@ CREATE INDEX idx_native_authorizations_expiry ON native_authorizations (expires_
 Each letter the scheduled `mail:missed` sent a person about what they missed (D-240), read and written by
 `features/chat/notifications/missed-mail.ts`.
 
-- **The hour between two**: a person gets no letter while one of theirs has `sent_at` within the last hour, read
-  under their row's lock.
+- **The hour between two**: a person gets no letter while a settled letter has `sent_at` within the last hour,
+  or a pending claim exists, read under their row's lock (D-302).
 - **The stop link is never stored**: `stop_digest` is the SHA-256 of the 64 hex digits the letter's link carries
   (`platform/tokens.ts`), unique. Whoever opens it turns off the letters of `user_id`, and nobody else's.
 - **Thirty days**: the link opens while `sent_at` is within thirty days, and the job deletes the row after that.
-  A letter the relay refused is deleted at once, with its notifications given back.
+  Pending claims are recovered before retention, never purged while still pending. Released attempts retain
+  their stop link but do not spend the hourly slot.
 - **A person's own**: `user_id`, `ON DELETE CASCADE`; erasure deletes the person's rows.
 
 Instance-wide; never exported.
@@ -2862,6 +2863,24 @@ CREATE TABLE missed_mail_letters (
 
 -- The person's last letter, for the hour between two (D-240).
 CREATE INDEX idx_missed_mail_letters_user ON missed_mail_letters (user_id, sent_at DESC);
+```
+
+`missed_mail_claims` is chat's private durable relay state (D-302). No row means a legacy or settled letter;
+`lease_until IS NOT NULL` means pending, and null means released. At most 100 expired claims are recovered
+per run, under each recipient's row lock, restoring only their captured notifications still marked at the
+letter's timestamp. SMTP remains outside SQL transactions. Late acknowledgements affect only their own
+pending claim. Successful delivery deletes its claim; released markers cascade with the letter after thirty
+days. Neither table is exported, and no raw stop token or composed message is stored in a claim.
+
+```sql
+CREATE TABLE missed_mail_claims (
+    letter_id UUID PRIMARY KEY REFERENCES missed_mail_letters(id) ON DELETE CASCADE,
+    notification_ids UUID[] NOT NULL,
+    lease_until TIMESTAMPTZ,
+    CONSTRAINT missed_mail_claims_size CHECK (cardinality(notification_ids) BETWEEN 1 AND 200)
+);
+CREATE INDEX idx_missed_mail_claims_due ON missed_mail_claims (lease_until, letter_id)
+    WHERE lease_until IS NOT NULL;
 ```
 
 ---
@@ -3174,6 +3193,7 @@ chat/0009_thread_read_baseline.sql channel_members.thread_read_baseline_id: inde
 chat/0010_membership_read_scopes.sql channel_read_scopes: moves the three prototype scope columns into chat's own table, preserving known scopes and restoring the core's shape (D-282)
 chat/0011_personal_channel_groups.sql channel_groups and channel_group_channels: private headings and one placement per membership (D-284)
 chat/0012_removed_membership_scope.sql chat-owned membership deletion trigger removes scoped channel grants/departures even without a chat runtime (D-300)
+chat/0013_missed_mail_claims.sql durable missed-mail leases and released attempt markers, without replaying legacy letters (D-302)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```

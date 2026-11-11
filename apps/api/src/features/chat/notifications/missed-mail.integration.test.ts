@@ -432,7 +432,7 @@ describe('integration: what keeps a letter from going', () => {
         appUrl: APP,
       }).catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(Error);
-      expect((failure as Error).message).toContain('refused by the mail relay');
+      expect((failure as Error).message).toContain('could not be completed');
       expect(
         lines.find((line) => line['msg'] === 'a missed-mail letter could not be sent'),
       ).toMatchObject({ reason: 'EENVELOPE' });
@@ -444,7 +444,7 @@ describe('integration: what keeps a letter from going', () => {
           .select('id')
           .where('user_id', '=', room.ada)
           .execute(),
-      ).toEqual([]);
+      ).toHaveLength(1);
       const postbox = aPostbox();
       expect(await run(db, NOW, postbox.send)).toMatchObject({ letters: 1 });
     });

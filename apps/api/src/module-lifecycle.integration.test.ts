@@ -291,10 +291,20 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
         workspace_id: workspaceId,
       })
       .execute();
-    await tx
+    const mailLetter = await tx
       .insertInto('missed_mail_letters')
       .values({ sent_at: NOW, stop_digest: crypto.randomUUID(), user_id: ada.userId })
-      .execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    if (hasSet(state, 'chat'))
+      await tx
+        .insertInto('missed_mail_claims')
+        .values({
+          letter_id: mailLetter.id,
+          notification_ids: [anId()],
+          lease_until: new Date(NOW.getTime() + 5 * 60_000),
+        })
+        .execute();
     const unsentFile = await upload(tx, store, workspaceId, ada.userId);
     // What issues keeps, where its table is there: an issue each made and gave to the other.
     let issues: World['issues'];

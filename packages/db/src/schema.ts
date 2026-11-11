@@ -442,6 +442,12 @@ export interface MessageVersions {
   workspace_id: string;
 }
 
+export interface MissedMailClaims {
+  lease_until: Timestamp | null;
+  letter_id: string;
+  notification_ids: string[];
+}
+
 export interface MissedMailLetters {
   id: Generated<string>;
   sent_at: Timestamp;
@@ -893,6 +899,7 @@ export interface DB {
   message_reminders: MessageReminders;
   message_versions: MessageVersions;
   messages: Messages;
+  missed_mail_claims: MissedMailClaims;
   missed_mail_letters: MissedMailLetters;
   native_authorizations: NativeAuthorizations;
   notifications: Notifications;
