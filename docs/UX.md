@@ -360,7 +360,9 @@ conversation.
 into the name's form as it is typed — *Genel Sohbet* becomes `genel-sohbet`, *İstanbul* becomes
 `istanbul`: lowercase, accents and Turkish letters folded to their plain letter, anything else one
 hyphen (`features/chat/channel/channel-name.ts`). Somebody looking at a channel that is archived, or that
-they left on another screen, is told which, instead of *not found*.
+they left on another screen, is told which, instead of *not found*. A refreshed HTTP list may arrive before
+reconnect; the client still asks for the server departure reason without retaining membership or unsent
+messages while it waits (D-303).
 
 **The GitHub connection** (D-23). **GitHub connection…** in the same menu, an owner's or an admin's
 too, gives the workspace its one token: a password field and **Save token**, then *Connected since …*

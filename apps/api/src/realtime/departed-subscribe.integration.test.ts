@@ -162,6 +162,8 @@ describe('integration: a refused subscription and who is told why', () => {
       expect(replies).toHaveLength(2);
       expect(replies[0]).toMatchObject({ event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } });
       expect(replies[1]).toMatchObject(revoked(world.privateId, 'archived') as object);
+      expect(replies[0]?.refId).toBeDefined();
+      expect(replies[1]?.refId).toBe(replies[0]?.refId);
     });
   });
 

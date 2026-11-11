@@ -12930,6 +12930,9 @@ to know. *Telling any member of the workspace* — D-34.
 **Cost of reversing.** One function and its call in `router.ts`, the two writes in `settings.ts`, and a migration that
 drops a table nothing else reads.
 
+*Amended 2026-11-11 by D-303:* HTTP-discovered loss requests a separate, owned departure proof.
+It does not retain membership, content or pending sends while awaiting an explanation.
+
 ### D-265. A module's audit actions and permissions are manifest fields, so the core reads one registry and a missing entry fails a test — builds on D-26, D-222, D-250, D-260
 
 **Context.** Two modules run, and what each adds to the places the core leaves open was still written by hand in the core:
@@ -15327,3 +15330,88 @@ delivery; extending the existing in-memory push queue and calling it durable.
 **Cost of reversing.** Stop new mail processing and retain the additive table. Older code can still
 read legacy letters, but cannot recover pending claims. Do not remove the table or rewrite an applied
 migration; the durable push and native/mobile acceptance work remains separately tracked in the goal.
+
+
+### D-303. A refreshed HTTP list cannot lose the channel departure reason across reconnect — builds on D-264, D-82
+
+**Context.** Main CI's browser trace showed the refreshed channel list omitting an archived channel before
+the socket opened again. The engine correctly stopped watching it, so reconnect never requested D-264's
+existing departure proof. The screen could only say that the channel was not there. This is a product
+ordering defect, not a reason to retry the unchanged test or lengthen its timeout.
+
+**Decision.** HTTP loss in the same workspace immediately removes pending sends, as before. If the reason
+is unknown, an isolated diagnostic subscription requests the existing departure proof without a replay
+cursor. It never shares a subscription chunk with current memberships. Ordinary chunk bounds and transient
+backoff apply; a refused diagnostic cannot refuse other channels or degrade their content stream.
+
+Every normal watch or departure intent owns an object identity captured by its request. Completion can retire only that intent:
+a membership returned and lost again has a new owner. Named departure replies carry their subscription's
+id in the existing optional `refId` envelope field. The client drops a correlated proof belonging to an old
+intent; legacy uncorrelated revocation remains conservative. Existing clients can ignore the correlation.
+A late normal-subscription reply is subject to the same ownership check. A refused batch containing
+an obsolete watch rechecks the remaining memberships without discarding their pending sends.
+No response restores content or sending authority.
+
+A not-found error is not the end of a diagnostic: its named reason is a separate frame. Keep the intent
+until a valid reason arrives or a subsequent correlated PING reply proves that same socket's FIFO reply finished
+without one. The server handles inbound frames serially and writes a reply's frames in order. Even a rate refusal of the later PING completes that FIFO barrier. A disconnect
+between ERROR, reason and its barrier reply retains unresolved intent for the next socket. An old completion barrier
+cannot clear a new loss. This uses existing PING/PONG and no new endpoint or frame shape.
+
+Diagnostic ACK/error frames do not start content replay or advance cursors. Channel content during a probe
+or its unsubscribe is ignored. A successful probe is unsubscribed immediately unless membership returned;
+normal membership then receives its own cursor subscription. Stop/session end clear diagnostics; socket
+generations and account ownership still guard every write. No stored intent, migration or new authority
+is introduced. Measured client growth is recorded beside the shell bound; total and module fences remain.
+
+**Proof.** Transport tests drive the HTTP-before-open order, empty/bounded/chunked queues, current-member
+batch isolation, content/cursor suppression, membership return, repeated loss, partial reply disconnect,
+old ACK/error/reason/barrier, transient failure and stop/session end. The real browser test keeps sockets
+down until HTTP has omitted the channel and the generic missing page is visible, then requires the archived
+reason after reconnect. SQL tests preserve prior-member-only disclosure and assert reply correlation.
+
+**Rejected.** Retaining membership or its outbox until a socket returns; holding HTTP behind realtime; a
+new departure endpoint; diagnostic replay; mixing missing probes with member batches; treating ERROR as
+proof that no reason follows; channel-id-only completion; wider browser timeouts or unchanged test retries.
+
+**Cost of reversing.** Remove the diagnostic request and accept the generic missing state for this order.
+Keep immediate authority/outbox removal and server departure-proof privacy.
+
+
+### D-304. CI starts browsers from their pinned image instead of installing system packages in every job — builds on D-203, D-227
+
+**Context.** Two different PR heads failed before browser tests: all Chromium and WebKit jobs exhausted
+three bounded dependency installs because both Ubuntu mirrors failed DNS resolution (#1402). Reordering
+mirrors would not address both failures. The actual Linux spike and its unchanged visual/download checks
+are recorded in `docs/spikes/ci-browser-container.md`.
+
+**Decision.** Both hosted browser jobs use a shared local composite action. The official Playwright image
+is pinned by a multi-architecture digest and must match the frozen client version before Docker starts.
+Only browsers run inside it. Bun, the API, database, test workers and budget commands keep running on the
+hosted runner. The checkout is mounted read-only; no token or application environment is passed into the
+container. Direct Linux host networking lets the browser reach the unchanged localhost servers without a
+proxy; the browser server listens only on loopback. No production image or configuration changes.
+
+Startup records only a valid Docker id for cleanup, waits a bounded interval for readiness and verifies
+its own container is still running before publishing the test endpoint. Every job removes only its own
+recorded id even after failure. A version mismatch, start failure, readiness failure or exited server fails
+the job. The image includes browser system libraries and fonts; developer native installation remains
+available. See the [official container guidance](https://playwright.dev/docs/docker).
+
+Existing test commands, engine/theme/width matrix, WebKit policy, Linux screenshot goldens, zero retries,
+measurement isolation, performance bounds and required gate remain unchanged. Changes to the local action
+run the browser jobs. Image/client upgrades must move together and pass those checks; no baseline refresh
+or weaker threshold is part of this change.
+
+**Proof.** The real Linux host-network spike passed 56 cases with 4 existing engine/project skips,
+including unchanged Chromium visual goldens, WebKit CSV download, WebSocket archive/reconnect and Chromium
+push-worker/CDP operations. Lifecycle tests execute the actual action shell with controlled Docker/network
+failures, and mutations remove its new guards. Full hosted CI remains the release authority, including
+performance: the local spike does not claim a hosted performance result.
+
+**Rejected.** Unchanged job retries; mirror reordering after both failed; larger install/test timeouts;
+skipping browser checks; running the whole application in the browser image; a floating image tag; a
+loopback forwarding proxy, whose WebKit download stalled in a Mac-only prototype; new visual baselines.
+
+**Cost of reversing.** Restore the existing native browser installer steps. Keep all test commands and
+checks. There is no migration, persistent service or production rollback action.

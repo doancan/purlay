@@ -302,9 +302,9 @@ jobs:
       - name: start the database
         run: bun run db:up:postgres
 
-      - name: install the browser
+      - name: start the pinned browser server
         timeout-minutes: 10
-        run: bun run test:e2e:install
+        uses: ./.github/actions/browsers
 
       # Everything but the files that write a measurement: those run in the other part, alone (D-227).
       - name: the browser tests
@@ -364,6 +364,12 @@ jobs:
             apps/web/test-results
           retention-days: 7
 
+      - name: stop the browser server
+        if: always() && env.CI_BROWSER_CONTAINER_ID != ''
+        uses: ./.github/actions/browsers
+        with:
+          cleanup: 'true'
+
   # The same browser tests on Safari's engine, one job beside the Chromium ones: light, 1440 wide, no
   # screenshots (a baseline is one engine's), and none of the measuring files — a latency line is
   # Chromium's claim and a hosted runner's number is not a person's (D-49, D-227). What WebKit cannot
@@ -393,9 +399,9 @@ jobs:
       - name: start the database
         run: bun run db:up:postgres
 
-      - name: install WebKit
+      - name: start the pinned browser server
         timeout-minutes: 10
-        run: bun run test:e2e:install:webkit
+        uses: ./.github/actions/browsers
 
       - name: the browser tests on WebKit
         run: bun run test:e2e
@@ -412,6 +418,12 @@ jobs:
             apps/web/playwright-report
             apps/web/test-results
           retention-days: 7
+
+      - name: stop the browser server
+        if: always() && env.CI_BROWSER_CONTAINER_ID != ''
+        uses: ./.github/actions/browsers
+        with:
+          cleanup: 'true'
 
   # Requires a database, which is why it is a job of its own rather than part of
   # `bun run verify` — that stays the subset a developer can run with nothing
