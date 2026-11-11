@@ -48,8 +48,10 @@ export interface ModuleShortcut {
 export type SettingsGroup = 'account' | 'workspace' | 'server';
 export type SettingsAudience = 'everyone' | 'admins' | 'owners' | 'serverAdmin';
 
-/** A settings page the module owns, after the page it names (or last); its screen is in the settings' chunk. */
+/** A settings page the module owns, after the page it names (or last), with its own deferred screen. */
 export interface ModuleSettingsPage {
+  /** A module-owned screen, loaded only after the core authorizes its settings entry. */
+  readonly load: () => Promise<{ readonly default: React.ComponentType }>;
   readonly id: string;
   readonly group: SettingsGroup;
   readonly glyph: GlyphName;

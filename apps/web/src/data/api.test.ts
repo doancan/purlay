@@ -1701,6 +1701,13 @@ describe('the endpoints that only a settings screen calls', () => {
       url: `/api/channels/${ID}/incoming-webhooks`,
       body: { name: 'deploys' },
     });
+    const post = harness({ messageId: ID });
+    expect(await post.api.postIncomingWebhook(created.path, 'Order updated')).toEqual({
+      messageId: ID,
+    });
+    expect(post.calls).toEqual([
+      { method: 'POST', url: created.path, body: { text: 'Order updated' } },
+    ]);
     const revoke = harness(null);
     await revoke.api.revokeIncomingWebhook(ID, ID);
     expect(revoke.calls[0]).toMatchObject({

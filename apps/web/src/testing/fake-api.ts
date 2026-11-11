@@ -113,6 +113,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   disconnectGitHubFeed: unexpected('disconnectGitHubFeed'),
   incomingWebhooks: unexpected('incomingWebhooks'),
   createIncomingWebhook: unexpected('createIncomingWebhook'),
+  postIncomingWebhook: unexpected('postIncomingWebhook'),
   revokeIncomingWebhook: unexpected('revokeIncomingWebhook'),
   regenerateGitHubFeedSecret: unexpected('regenerateGitHubFeedSecret'),
   unfurl: unexpected('unfurl'),

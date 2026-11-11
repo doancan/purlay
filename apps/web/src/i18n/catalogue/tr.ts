@@ -1474,10 +1474,22 @@ export const tr = {
   'hooks.setup.title': '{name} webhook’unun adresi',
   'hooks.setup.steps':
     'Bu adrese application/json içerik türüyle JSON gönder, örneğin {example}. Metin markdown’dır.',
-  'hooks.setup.example': 'Dağıtım bitti',
+  'hooks.setup.example': 'Sipariş durumu güncellendi',
   'hooks.setup.copy': 'Adresi kopyala',
   'hooks.setup.once':
     'Adres gizli anahtarını taşır ve yalnızca şimdi gösteriliyor. Kaybedilirse webhook’u iptal edip yenisini oluşturmak gerekir.',
+  'hooks.workspace.title': 'Dış sistemlerden mesajlar',
+  'hooks.workspace.description':
+    'ERP, n8n veya CRM’den bir kanala mesaj gönderin. Webhook mesajları anlık bildirim göndermez.',
+  'hooks.workspace.channel': 'Kanal',
+  'hooks.workspace.choose': 'Bir kanal seçin',
+  'hooks.workspace.noChannels': 'Uygun bir kanal yok. Önce kenar çubuğundan bir kanal oluşturun.',
+  'hooks.setup.copyExample': 'Örnek JSON’u kopyala',
+  'hooks.setup.test': 'Test mesajı gönder',
+  'hooks.setup.testText': 'Purlay webhook bağlantı testi',
+  'hooks.setup.testAccepted': 'Test mesajı kanal tarafından kabul edildi.',
+  'hooks.setup.testUnconfirmed':
+    'Sonuç doğrulanamadı. Yeniden göndermeden önce kanalı kontrol edin.',
   'hooks.setup.done': 'Tamam',
 
   // ── Bir mesajın önceki sürümleri (D-135) ────────────────────────────────

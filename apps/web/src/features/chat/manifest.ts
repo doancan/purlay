@@ -92,6 +92,9 @@ export const chat = defineModule({
   settings: [
     {
       id: 'notifications',
+      load: async (): Promise<{ readonly default: React.ComponentType }> => ({
+        default: (await import('../settings/pages/notifications')).NotificationsPage,
+      }),
       group: 'account',
       glyph: 'notifications',
       for: 'everyone',
@@ -99,6 +102,9 @@ export const chat = defineModule({
     },
     {
       id: 'integrations',
+      load: async (): Promise<{ readonly default: React.ComponentType }> => ({
+        default: (await import('./settings/integrations')).IntegrationsPage,
+      }),
       group: 'workspace',
       glyph: 'integration',
       for: 'admins',

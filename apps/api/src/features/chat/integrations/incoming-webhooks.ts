@@ -292,8 +292,28 @@ export const receivePost = async (
     throw new AppError({ code: 'RATE_LIMITED', message: 'Too many posts. Slow down.' });
   }
 
-  const now = clock.now();
   const posted = await atomicallyOn(database)(async (transaction) => {
+    // The credential lookup is not authority after the bucket wait. UPDATE conflicts with a normal
+    // send's message FK KEY SHARE before either can hold the other's counter rows (as guest admission
+    // does). NO KEY UPDATE would invert the sender's member-then-channel order and deadlock.
+    // Closure already committed wins; a later archive/deletion waits for this post.
+    const channel = await transaction
+      .selectFrom('channels')
+      .select('id')
+      .where('id', '=', hook.channel_id)
+      .where('deleted_at', 'is', null)
+      .forUpdate()
+      .executeTakeFirst();
+    if (channel === undefined) return null;
+    const workspace = await transaction
+      .selectFrom('workspaces')
+      .select('id')
+      .where('id', '=', hook.workspace_id)
+      .where('deleted_at', 'is', null)
+      .forShare()
+      .executeTakeFirst();
+    if (workspace === undefined) return null;
+    const now = clock.now();
     // Marked used first: the row lock it takes makes a revocation racing this post wait for it, or win
     // outright — then there is no row, and nothing is posted.
     const used = await transaction

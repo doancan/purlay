@@ -10,6 +10,7 @@ import {
   GitHubRepositoryList,
   GitHubWorkLink,
   IncomingWebhookList,
+  IncomingWebhookAnswer,
   UnfurlResponse,
   WebLinkPreviewResponse,
   type CreateGitHubFeedRequest,
@@ -85,6 +86,10 @@ export interface GitHubApi {
     channelId: string,
     input: CreateIncomingWebhookRequest,
   ) => Promise<CreatedIncomingWebhook>;
+  readonly postIncomingWebhook: (
+    path: CreatedIncomingWebhook['path'],
+    text: string,
+  ) => Promise<IncomingWebhookAnswer>;
   readonly revokeIncomingWebhook: (channelId: string, webhookId: string) => Promise<void>;
 }
 
@@ -206,6 +211,8 @@ export const createGitHubApi = (http: Http): GitHubApi => ({
       CreatedIncomingWebhook,
       options({ body: input }),
     ),
+  postIncomingWebhook: (path, text) =>
+    http.request('POST', path, IncomingWebhookAnswer, options({ body: { text } })),
   revokeIncomingWebhook: (channelId, webhookId) =>
     http.send(
       'DELETE',
