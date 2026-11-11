@@ -1048,6 +1048,10 @@ export const createEngine = (options: EngineOptions): Engine => {
     },
     lose: (channelIds): void => {
       dropUnsent(channelIds);
+      // HTTP loss removes authority immediately; a separate subscription only asks why (D-264).
+      connection?.explainDepartures(
+        channelIds.filter((id) => !watched.has(id) && store.getState().gone[id] === undefined),
+      );
     },
     announceTyping: (channelId): void => {
       if (connection === null) return;

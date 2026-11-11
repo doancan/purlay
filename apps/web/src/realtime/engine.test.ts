@@ -1797,6 +1797,58 @@ describe('Deep Work changed in another tab (#526)', () => {
 });
 
 describe('watching channels', () => {
+  test('HTTP refresh before reconnect preserves the departure explanation without retaining an unsent message', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    answerAll(w);
+    w.engine.networkLost();
+    w.engine.send({ channelId: CH, content: 'must not be resent' });
+    w.client.setQueryData(keys.channels(WS), []);
+    w.engine.watch([]);
+    w.engine.lose([CH]);
+    expect(w.pending()).toHaveLength(0);
+    w.engine.networkBack();
+    w.timers.advance(1_000);
+    w.open();
+    expect(w.sockets).toHaveLength(2);
+    const probe = w.sentOps('SUBSCRIBE').at(-1);
+    if (probe === undefined) throw new Error('No explanation request was sent');
+    expect(probe.payload['channels']).toEqual([{ channelId: CH, afterMessageId: null }]);
+    expect(w.sentOps('SUBSCRIBE')).toHaveLength(2);
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+      refId: probe.id,
+      ts: T0,
+    });
+    w.deliver({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason: 'archived' }, ts: T0 });
+    expect(w.engine.store.getState().gone).toEqual({ [CH]: 'archived' });
+    expect(w.engine.store.getState().degraded).toEqual({});
+    expect(w.sentOps('MESSAGE_SEND')).toHaveLength(0);
+    w.engine.networkLost();
+    w.engine.networkBack();
+    w.timers.advance(1_000);
+    w.open();
+    expect(w.sentOps('SUBSCRIBE')).toHaveLength(2);
+    w.engine.stop();
+  });
+
+  test('HTTP loss with an already known departure does not request another explanation', () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    answerAll(w);
+    w.deliver({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason: 'removed' }, ts: T0 });
+    w.engine.watch([]);
+    w.engine.lose([CH]);
+    expect(w.sentOps('SUBSCRIBE')).toHaveLength(1);
+    w.engine.stop();
+  });
+
   test('channels asked for before the connection exists are subscribed when it does; later changes are differences', () => {
     const w = world();
     w.engine.watch([CH, CH2]);
