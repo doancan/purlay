@@ -36,6 +36,7 @@ import type {
 import { families, keys } from './keys';
 import { channelAccessRevoked } from './access-change';
 import type { FeedPages } from './queries';
+import { captureAccess } from './access-revision';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 type CatchUpPages = InfiniteData<ChannelCatchUp, string | undefined>;
@@ -53,22 +54,19 @@ const editFollowed = (
     queryKey: families.followedThreads,
   })) {
     if (held === undefined) continue;
-    const pages = held.pages.map((page) => ({
-      ...page,
-      data: page.data.flatMap((row) => {
+    let changed = false;
+    const pages: FollowedThreadsPage[] = [];
+    for (const page of held.pages) {
+      const data: FollowedThread[] = [];
+      for (const row of page.data) {
         const next = edit(row);
-        return next === null ? [] : [next];
-      }),
-    }));
-    const changed = pages.some((page, index) => {
-      const before = held.pages[index];
-      return (
-        page.data.length !== before?.data.length ||
-        page.data.some((row, rowIndex) => row !== before.data[rowIndex])
-      );
-    });
+        changed ||= next !== row;
+        if (next !== null) data.push(next);
+      }
+      pages.push({ ...page, data });
+    }
     if (changed) client.setQueryData<FollowedPages>(key, { ...held, pages });
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
   }
 };
 
@@ -114,7 +112,7 @@ export const profileTimeZoneChanged = (client: QueryClient, timeZone: string | n
 };
 
 const byIdDescending = (a: Message, b: Message): number => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
-const byIdAscending = (a: Message, b: Message): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const byIdAscending = (a: Message, b: Message): number => byIdDescending(b, a);
 
 /** The message, replacing any row with its id, in its place by id. */
 const placed = (
@@ -131,9 +129,6 @@ const mapMessages = (pages: Pages, edit: (message: Message) => Message): Pages =
   ...pages,
   pages: pages.pages.map((page) => ({ ...page, data: page.data.map(edit) })),
 });
-
-const hasMessage = (pages: Pages, id: string): boolean =>
-  pages.pages.some((page) => page.data.some((m) => m.id === id));
 
 /** Every cached list that carries messages, as `[key, data]`. */
 const messageLists = (client: QueryClient): [QueryKey, Pages][] => {
@@ -155,13 +150,13 @@ const messageLists = (client: QueryClient): [QueryKey, Pages][] => {
  * again, the in-flight request is cancelled — which keeps what is cached, change included — in favour
  * of one that starts after the change.
  */
-const askAgainIfOnItsWay = (client: QueryClient, key: readonly unknown[]): void => {
-  if (client.isFetching({ queryKey: key, exact: true }) === 0) return;
-  // Invalidating alone would join the request already in flight when there is no data yet to
-  // set aside; it has to be let go of first.
-  void client
-    .cancelQueries({ queryKey: key, exact: true })
-    .then(() => client.invalidateQueries({ queryKey: key, exact: true, refetchType: 'all' }));
+const askAgainIfOnItsWay = async (client: QueryClient, key: readonly unknown[]): Promise<void> => {
+  if (client.getQueryState(key)?.fetchStatus !== 'fetching') return;
+  const query = { queryKey: key, exact: true };
+  const current = captureAccess(client, key);
+  // Cancel first even when no data is cached: invalidation alone would join the old request.
+  await client.cancelQueries(query);
+  if (current()) await client.invalidateQueries({ ...query, refetchType: 'all' });
 };
 
 /**
@@ -204,18 +199,12 @@ export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
     if (queuedRereads.has(query)) continue;
     queuedRereads.add(query);
     const unsubscribe = cache.subscribe((event) => {
-      if (event.query !== query) return;
-      // Gone from the cache first: nothing left to read again, and nothing left to listen for.
-      if (event.type === 'removed') {
-        queuedRereads.delete(query);
-        unsubscribe();
-        return;
-      }
-      if (!settled(query)) return;
+      if (event.query !== query || (event.type !== 'removed' && !settled(query))) return;
       queuedRereads.delete(query);
       unsubscribe();
-      if (!holdsData(query)) return;
-      void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
+      // Removal ends the old Query's lifetime; only a settled value can ask for a follow-up.
+      if (event.type !== 'removed' && holdsData(query))
+        void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
     });
   }
 };
@@ -242,7 +231,7 @@ const patchPins = (
         pin.message.id === messageId ? { ...pin, message: edit(pin.message) } : pin,
       ),
     );
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
   }
 };
 
@@ -274,7 +263,7 @@ const patchCatchUpMessage = (
         threads: page.threads.map((thread) => ({ ...thread, root: patch(thread.root) })),
       })),
     });
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
   }
 };
 
@@ -289,12 +278,12 @@ export const patchMessage = (
   patchCatchUpMessage(client, messageId, edit);
   patchPins(client, messageId, edit);
   for (const [key, data] of messageLists(client)) {
-    if (!hasMessage(data, messageId)) continue;
+    if (!data.pages.some((page) => page.data.some((message) => message.id === messageId))) continue;
     client.setQueryData<Pages>(
       key,
       mapMessages(data, (m) => (m.id === messageId ? edit(m) : m)),
     );
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
   }
 };
 
@@ -322,7 +311,7 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
           pages: [{ ...first, data: placed(first.data, message, byIdDescending) }, ...rest],
         });
       }
-      askAgainIfOnItsWay(client, key);
+      void askAgainIfOnItsWay(client, key);
     }
   } else {
     const key = keys.thread(message.parentId);
@@ -337,7 +326,7 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
         ],
       });
     }
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
     // A readable reply can be the guest's first knowledge of an earlier thread. The global
     // root summary stays private; the feed re-reads its own sanitized, permitted containers.
     const guestWorkspaces = new Set(
@@ -366,14 +355,17 @@ const editChannels = (
   client: QueryClient,
   channelId: string,
   edit: (channel: Channel) => Channel,
-): void => {
+): readonly QueryKey[] => {
+  const changed: QueryKey[] = [];
   for (const [key, list] of client.getQueriesData<Channel[]>({ queryKey: families.channels })) {
     if (list?.some((c) => c.id === channelId) !== true) continue;
     client.setQueryData<Channel[]>(
       key,
       list.map((c) => (c.id === channelId ? edit(c) : c)),
     );
+    changed.push(key);
   }
+  return changed;
 };
 
 /**
@@ -483,7 +475,7 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
   for (const query of client
     .getQueryCache()
     .findAll({ queryKey: keys.unreadsFor(revision.channelId) })) {
-    askAgainIfOnItsWay(client, query.queryKey);
+    void askAgainIfOnItsWay(client, query.queryKey);
   }
   if (revision.parentId !== null)
     patchMessage(client, revision.parentId, (root) => {
@@ -545,7 +537,7 @@ export const messageRevised = (client: QueryClient, revision: MessageRevision): 
           }
         : mapMessages(data, revise),
     );
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
   }
   if (deletedRoot) readAgain(client, families.unresolved);
 };
@@ -560,7 +552,11 @@ export const channelStateChanged = (
   channelId: string,
   state: ChannelState,
 ): void => {
-  editChannels(client, channelId, (c) => ({ ...c, state }));
+  const known = editChannels(client, channelId, (channel) => ({ ...channel, state }));
+  for (const key of known) void askAgainIfOnItsWay(client, key);
+  // A newly created DM can be heard before its channel list arrives. Discover it through a fresh
+  // authorized read; do not retain an unowned map of counters for channels that are not cached.
+  if (known.length === 0) readAgain(client, families.channels);
   readAgain(client, families.followedThreads);
   // A reused count can still describe a newer snapshot, including a receipt from another tab.
   readAgain(client, keys.unreads(channelId, state.lastReadMessageId, state.unreadCount));
@@ -666,6 +662,7 @@ export const channelAdded = (client: QueryClient, channel: Channel): void => {
     return;
   }
   client.setQueryData<Channel[]>(key, [...list.filter((c) => c.id !== channel.id), channel]);
+  void askAgainIfOnItsWay(client, key);
 };
 
 /** Delivery for these channels stopped. They leave the list and their messages leave the cache. */
@@ -682,13 +679,16 @@ export const channelsRevoked = (client: QueryClient, channelIds: readonly string
   }
   for (const id of channelIds) {
     void client.cancelQueries({ queryKey: keys.webLinkPreviews(id) });
-    client.removeQueries({ queryKey: keys.webLinkPreviews(id) });
-    client.removeQueries({ queryKey: keys.messages(id) });
-    client.removeQueries({ queryKey: keys.unreadsFor(id) });
-    client.removeQueries({ queryKey: keys.channelMembers(id) });
-    client.removeQueries({ queryKey: keys.files(id) });
-    client.removeQueries({ queryKey: keys.pins(id) });
-    client.removeQueries({ queryKey: keys.bookmarks(id) });
+    for (const queryKey of [
+      keys.webLinkPreviews(id),
+      keys.messages(id),
+      keys.unreadsFor(id),
+      keys.channelMembers(id),
+      keys.files(id),
+      keys.pins(id),
+      keys.bookmarks(id),
+    ])
+      client.removeQueries({ queryKey });
   }
   // A thread is keyed by its root, not its channel: one whose messages are the channel's goes too.
   client.removeQueries({
@@ -750,13 +750,13 @@ export const messageHidden = (
   patchCatchUpMessage(client, messageId, hide);
   if (channelId !== undefined) {
     for (const query of client.getQueryCache().findAll({ queryKey: keys.unreadsFor(channelId) }))
-      askAgainIfOnItsWay(client, query.queryKey);
+      void askAgainIfOnItsWay(client, query.queryKey);
     readAgain(client, keys.unreadsFor(channelId));
   } else readAgain(client, families.unreads);
 
   for (const [key, data] of messageLists(client)) {
     client.setQueryData<Pages>(key, mapMessages(data, hide));
-    askAgainIfOnItsWay(client, key);
+    void askAgainIfOnItsWay(client, key);
   }
   for (const family of [
     families.messages,

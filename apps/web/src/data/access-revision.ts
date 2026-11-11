@@ -27,12 +27,8 @@ export const captureAccess = (client: QueryClient, queryKey: QueryKey): (() => b
   const cache = client.getQueryCache();
   const query = cache.get(client.defaultQueryOptions({ queryKey }).queryHash);
   if (query === undefined) return (): boolean => false;
-  let marker = queryAccess.get(query);
-  if (marker === undefined) {
-    marker = {};
-    queryAccess.set(query, marker);
-  }
-  const captured = marker;
+  const captured = queryAccess.get(query) ?? {};
+  queryAccess.set(query, captured);
   return (): boolean => cache.get(query.queryHash) === query && queryAccess.get(query) === captured;
 };
 

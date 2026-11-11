@@ -13,7 +13,8 @@
  * touches.
  */
 import type { Page } from '@playwright/test';
-import type { Channel, ChannelState } from '@purlay/types';
+import { ServerFrame, type Channel, type ChannelState } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
 import { expect, test, workspaceFor } from './fixtures';
 import { navLink, openNav, shellReady } from './support';
 
@@ -101,6 +102,133 @@ test.describe('a tab in the background', () => {
     () => test.info().project.name !== 'chromium-dark',
     'a notice and an icon look the same in every theme and width',
   );
+
+  test('the first DM alert survives an older channel snapshot arriving after its live counter', async ({
+    newcomer,
+  }) => {
+    const viewer = await newcomer('snapshot-viewer');
+    const writer = await newcomer('snapshot-writer');
+    const workspace = await workspaceFor(viewer, writer);
+    const dm = await writer.api.post<Channel>(`/api/workspaces/${workspace.id}/dms`, {
+      userId: viewer.userId,
+    });
+    const page = await viewer.page();
+    await recordNotices(page, viewer.userId);
+    await page.addInitScript(() => {
+      window.elsewhere = true;
+    });
+    const live = Promise.withResolvers<undefined>();
+    const connected = Promise.withResolvers<() => void>();
+    await page.routeWebSocket('**/ws', (socket) => {
+      const server = socket.connectToServer();
+      connected.resolve(() => {
+        void socket.close({ code: 1012, reason: 'Controlled reconnect for snapshot ordering' });
+      });
+      server.onMessage((payload) => {
+        socket.send(payload);
+        const frame: unknown = JSON.parse(String(payload));
+        if (
+          Value.Check(ServerFrame, frame) &&
+          frame.event === 'CHANNEL_STATE' &&
+          frame.data.channelId === dm.id &&
+          frame.data.state.unreadMentionCount === 1
+        )
+          live.resolve(undefined);
+      });
+    });
+    const tell = Promise.withResolvers<undefined>();
+    const requestedTell = Promise.withResolvers<undefined>();
+    await page.route('**/assets/tell-*.js', async (route) => {
+      requestedTell.resolve(undefined);
+      await tell.promise;
+      await route.continue();
+    });
+    const firstSubscription = socketSubscribed(page);
+    await page.goto(`/w/${workspace.slug}/inbox`);
+    await shellReady(page);
+    await firstSubscription;
+    const row = page.locator(`a[href="/w/${workspace.slug}/c/${dm.id}"]`);
+    await expect(row).toBeVisible();
+    await expect(row).not.toContainText('unread');
+
+    const subscribed = Promise.withResolvers<undefined>();
+    const captured = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const delivered = Promise.withResolvers<undefined>();
+    let reads = 0;
+    await page.route(`**/api/workspaces/${workspace.id}/channels`, async (route) => {
+      reads += 1;
+      if (reads === 1) {
+        // The subscription ACK queues the final follow-up while this first refresh is pending.
+        await subscribed.promise;
+        await route.continue();
+        return;
+      }
+      if (reads !== 2) {
+        await route.continue();
+        return;
+      }
+      // Capture actual SQL-backed HTTP bytes before the message exists; subsequent reads stay real.
+      const response = await route.fetch();
+      const body = await response.body();
+      const snapshot: unknown = JSON.parse(body.toString());
+      expect(snapshot).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: dm.id,
+            state: expect.objectContaining({ unreadMentionCount: 0 }),
+          }),
+        ]),
+      );
+      captured.resolve(undefined);
+      await release.promise;
+      try {
+        await route.fulfill({ response, body });
+      } catch (error) {
+        // A corrected client cancels this obsolete fetch. Other routing failures remain failures.
+        if (route.request().failure()?.errorText !== 'net::ERR_ABORTED') throw error;
+      } finally {
+        delivered.resolve(undefined);
+      }
+    });
+    try {
+      const nextSubscription = socketSubscribed(page);
+      const reconnect = await connected.promise;
+      reconnect();
+      await nextSubscription;
+      subscribed.resolve(undefined);
+      await captured.promise;
+      await writer.api.say(dm.id, 'first message while an older list is delayed');
+      await live.promise;
+      await expect(row).toContainText('unread');
+      await requestedTell.promise;
+      release.resolve(undefined);
+      await delivered.promise;
+      tell.resolve(undefined);
+      await expect
+        .poll(async () => ({
+          unread: (await row.textContent())?.includes('unread') === true,
+          notices: await page.evaluate(
+            () => window.shownNotices?.filter((notice) => !notice.closed).length ?? 0,
+          ),
+        }))
+        .toEqual({ unread: true, notices: 1 });
+      await writer.api.say(dm.id, 'second ordinary message');
+      await expect.poll(() => page.evaluate(() => window.shownNotices?.length ?? 0)).toBe(2);
+      const messages = await viewer.api.get<{ data: { id: string }[] }>(
+        `/api/channels/${dm.id}/messages`,
+      );
+      const last = messages.data[0]?.id;
+      if (last === undefined) throw new Error('Missing current DM message');
+      await viewer.api.markRead(dm.id, last);
+      await expect(row).not.toContainText('unread');
+      await expect.poll(() => page.evaluate(() => window.shownNotices?.at(-1)?.closed)).toBe(true);
+    } finally {
+      subscribed.resolve(undefined);
+      release.resolve(undefined);
+      tell.resolve(undefined);
+    }
+  });
 
   test('two tabs share one alert, the focused tab shows its card, and preferences follow both tabs', async ({
     newcomer,

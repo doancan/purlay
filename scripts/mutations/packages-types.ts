@@ -196,8 +196,8 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     id: 'guest-conversion-false-acknowledgment-accepted',
     why: 'A false acknowledgment is not permission to widen history and public-channel access.',
     file: 'packages/types/src/workspace-guests.ts',
-    find: 'confirmFullAccess: Type.Literal(true)',
-    replace: 'confirmFullAccess: Type.Boolean()',
+    find: 'confirmFullAccess: /* @__PURE__ */ Type.Literal(true)',
+    replace: 'confirmFullAccess: /* @__PURE__ */ Type.Boolean()',
     tests: ['packages/types/src/workspace-guests.test.ts'],
   },
   {
@@ -220,8 +220,8 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     id: 'invite-mail-per-request-cap-lifted',
     why: 'one request names any number of addresses',
     file: 'packages/types/src/api.ts',
-    find: '{ maxItems: INVITATION_EMAILS_PER_REQUEST }',
-    replace: '{ maxItems: 100_000 }',
+    find: 'maxItems: INVITATION_EMAILS_PER_REQUEST,',
+    replace: 'maxItems: 100_000,',
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {
