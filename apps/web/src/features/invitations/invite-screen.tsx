@@ -37,6 +37,7 @@ import { GitHubButton } from '../sign-in/github-button';
 import { GoogleButton } from '../sign-in/google-button';
 import { OidcButton } from '../sign-in/oidc-button';
 import { browserInvitationPorts, forgetInvitation, pendingInvitation } from './pending';
+import { GuestInvitationSummary } from './guest-invitation-summary';
 
 const doesNotOpen = (failure: unknown): boolean =>
   isApiError(failure) && failure.code === 'INVITATION_NOT_FOUND';
@@ -127,7 +128,7 @@ const JoinInvitation = (): React.JSX.Element => {
     );
   }
 
-  const { workspace, expiresAt, member } = preview.data;
+  const { workspace, expiresAt, member, guest } = preview.data;
   const enter = (): void => {
     forgetInvitation(ports);
     navigate(href('workspace', { slug: workspace.slug }), { replace: true });
@@ -141,8 +142,9 @@ const JoinInvitation = (): React.JSX.Element => {
     setJoining(true);
     setFailed(null);
     try {
-      await joinWorkspace(token);
-      welcome();
+      const membership = await joinWorkspace(token);
+      if (membership.access?.kind === 'guest') enter();
+      else welcome();
     } catch (failure) {
       setJoining(false);
       setFailed(failure);
@@ -159,6 +161,7 @@ const JoinInvitation = (): React.JSX.Element => {
             ? t('invite.member', { workspace: workspace.name })
             : t('invite.body', { until: format.absolute(expiresAt) })}
         </p>
+        {guest !== undefined && <GuestInvitationSummary value={guest} history />}
       </section>
       {failed !== null && (
         <p role="alert" className="text-label text-danger-text">

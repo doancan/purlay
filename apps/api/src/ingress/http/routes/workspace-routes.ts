@@ -3,6 +3,7 @@
  * storage, search, audit trail, deletion, deep work and inbox. A module's own routes are the module's (`module-routes.ts`).
  */
 import { askForExport, downloadExport, readExports } from '../exports';
+import { convertWorkspaceGuest, editWorkspaceGuest, readWorkspaceGuests } from '../guests';
 import {
   createMyWorkspace,
   listMyWorkspaces,
@@ -31,6 +32,8 @@ import {
   joinByInvitation,
   lookAtInvitation,
   makeInvitation,
+  makeGuestInvitation,
+  readGuestInvitationAvailability,
   openPassport,
   readInvitations,
   type InvitationMailDependencies,
@@ -53,6 +56,7 @@ export const workspaceRoutes = (
     appUrl: dependencies.config.APP_URL,
     outbox: dependencies.auth.signInLinks?.outbox,
     later: invitationLater,
+    guestAccessReady: dependencies.config.GUEST_ACCESS_READY,
   });
 
   return new Elysia()
@@ -81,6 +85,21 @@ export const workspaceRoutes = (
       '/api/workspaces/:workspaceId/members',
       async ({ request, params }) =>
         await listWorkspaceMembers(dependencies, request, params.workspaceId),
+    )
+    .get(
+      '/api/workspaces/:workspaceId/guests',
+      async ({ request, params }) =>
+        await readWorkspaceGuests(dependencies, request, params.workspaceId),
+    )
+    .patch(
+      '/api/workspaces/:workspaceId/guests/:userId',
+      async ({ request, params, body }) =>
+        await editWorkspaceGuest(sending, request, params.workspaceId, params.userId, body),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/guests/:userId/conversion',
+      async ({ request, params, body }) =>
+        await convertWorkspaceGuest(sending, request, params.workspaceId, params.userId, body),
     )
     .get(
       '/api/workspaces/:workspaceId/invitation-recipients',
@@ -116,6 +135,18 @@ export const workspaceRoutes = (
       return await makeInvitation(invitationMail(), request, params.workspaceId, body);
     })
     .get(
+      '/api/workspaces/:workspaceId/guest-invitations',
+      async ({ request, params }) =>
+        await readGuestInvitationAvailability(invitationMail(), request, params.workspaceId),
+    )
+    .post(
+      '/api/workspaces/:workspaceId/guest-invitations',
+      async ({ request, params, body, set }) => {
+        set.status = 201;
+        return await makeGuestInvitation(invitationMail(), request, params.workspaceId, body);
+      },
+    )
+    .get(
       '/api/workspaces/:workspaceId/invitations',
       async ({ request, params }) =>
         await readInvitations(dependencies, request, params.workspaceId),
@@ -142,7 +173,12 @@ export const workspaceRoutes = (
       '/api/invitations/accept',
       async ({ request, body }) =>
         await joinByInvitation(
-          { ...dependencies, bus: sockets.bus, effectiveModules: modules.effectiveModules },
+          {
+            ...dependencies,
+            bus: sockets.bus,
+            effectiveModules: modules.effectiveModules,
+            guestAccessReady: dependencies.config.GUEST_ACCESS_READY,
+          },
           request,
           body,
         ),

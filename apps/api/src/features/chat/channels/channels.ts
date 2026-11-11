@@ -24,7 +24,7 @@ import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
 import type { ChannelContext } from './guard';
 import { visibleChannelIds } from './guard';
-import type { WorkspaceContext } from '../../../platform/tenancy';
+import { requireFullMembership, type WorkspaceContext } from '../../../platform/tenancy';
 
 interface ChannelRow {
   readonly id: string;
@@ -280,6 +280,7 @@ export const createChannel = async (
   context: WorkspaceContext,
   input: NewChannel,
 ): Promise<Channel> => {
+  requireFullMembership(context, 'Only a full member can create a channel.');
   const taken = await executor
     .selectFrom('channels')
     .select('id')

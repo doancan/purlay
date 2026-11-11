@@ -9,13 +9,23 @@ import {
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { limitOf } from '../../../platform/pagination';
 import type { ChatDb } from '../schema';
-import { visibleChannelIdsQuery } from '../channels/guard';
+import {
+  visibleChannelIdsQuery,
+  withinCurrentMessageHistory,
+  withinThreadHistory,
+} from '../channels/guard';
+import { guestMessageHistoryFor } from '../channels/history-access';
 import { memberReadScope } from '../channels/read-scope';
 import { unreadCondition } from '../channels/unread';
 import { notHiddenBy } from './hidden';
-import { buildMessages, MESSAGE_COLUMNS } from './reader';
+import { MESSAGE_COLUMNS } from './reader';
+import { buildHistoryMessages } from './history-reader';
 
-const activity = sql<Date>`coalesce(messages.thread_last_reply_at, messages.created_at)`;
+const activity = sql<Date>`case when workspace_members.access_kind = 'member'
+  then coalesce(messages.thread_last_reply_at, messages.created_at)
+  else coalesce((select max(activity_reply.created_at) from messages as activity_reply
+    where activity_reply.parent_id = messages.id and activity_reply.channel_id = messages.channel_id
+      and ${guestMessageHistoryFor('activity_reply')}), messages.created_at) end`;
 const activityText = sql<string>`to_char(${activity} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 export const followedThreads = async (
@@ -38,9 +48,16 @@ export const followedThreads = async (
         .onRef('channel_members.channel_id', '=', 'messages.channel_id')
         .on('channel_members.user_id', '=', context.userId),
     )
+    .innerJoin('workspace_members', (join) =>
+      join
+        .onRef('workspace_members.workspace_id', '=', 'messages.workspace_id')
+        .on('workspace_members.user_id', '=', context.userId),
+    )
     .select(MESSAGE_COLUMNS)
+    .select(withinCurrentMessageHistory(executor, context).as('content_visible'))
     .select(activityText.as('activity_at'))
     .where('messages.channel_id', 'in', visibleChannelIdsQuery(executor, context))
+    .where(withinThreadHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where(notHiddenBy(context.userId))
     .where(
@@ -111,7 +128,7 @@ export const followedThreads = async (
           : { count: row.unread_count, firstUnreadMessageId: row.first_unread_id },
     ]),
   );
-  const messages = await buildMessages(executor, selected, context.userId);
+  const messages = await buildHistoryMessages(executor, selected, context.userId);
   const byId = new Map(messages.map((message) => [message.id, message]));
   const last = selected.at(-1);
   return {

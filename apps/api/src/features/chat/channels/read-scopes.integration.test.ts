@@ -15,6 +15,7 @@ import { leaveChannel } from './settings';
 import { catchUpIn } from './catch-up';
 import { requireChannelById, type ChannelContext } from './guard';
 import { markAllRead, markRead, markUnread } from './read-state';
+import { loadReadScope } from './read-scope';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -91,6 +92,32 @@ const unread = async (db: Executor, setup: Room): Promise<number> =>
   ).unread_count;
 
 describe('integration: catch-up read scopes', () => {
+  test('a missing or removed membership has an unknown read scope and cannot borrow its old join baseline', async () => {
+    await withRollback(async (db) => {
+      const setup = await room(db);
+      const unknown = {
+        unread_since: null,
+        history_floor: null,
+        unread_history_from: null,
+        thread_read_baseline_id: null,
+      };
+      expect(await loadReadScope(db, setup.context.channelId, setup.reader.userId)).toEqual(
+        unknown,
+      );
+      await joinChannel(db, clock, setup.context);
+      expect(
+        (await loadReadScope(db, setup.context.channelId, setup.reader.userId)).unread_since,
+      ).toEqual(joinedAt);
+      await leaveChannel(
+        db,
+        await requireChannelById(db, setup.reader.userId, setup.context.channelId),
+      );
+      expect(await loadReadScope(db, setup.context.channelId, setup.reader.userId)).toEqual(
+        unknown,
+      );
+    });
+  });
+
   test('a post-join message with an earlier client id cannot resurrect pre-join history', async () => {
     await withRollback(async (db) => {
       const setup = await room(db);

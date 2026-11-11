@@ -746,6 +746,7 @@ describe('integration: the shape of an export', () => {
  * link of a file to its message and channel, which `attachments.ndjson` carried as two columns until chat/0005.) (`audit_log` has one row more in the
  * second export: the first records that it was made.)
  */
+// D-300 adds membership/invitation access metadata so exports preserve the restricted authority.
 const FROZEN_SHAPES: Record<string, unknown> = {
   all: {
     files: [
@@ -807,7 +808,17 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       },
       workspace_members: {
         rows: 2,
-        columns: ['id', 'joined_at', 'role', 'user_id', 'workspace_id'],
+        columns: [
+          'access_kind',
+          'guest_expires_at',
+          'guest_modules',
+          'guest_since',
+          'id',
+          'joined_at',
+          'role',
+          'user_id',
+          'workspace_id',
+        ],
       },
       channels: {
         rows: 1,
@@ -980,7 +991,19 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       },
       workspace_invitations: {
         rows: 1,
-        columns: ['created_at', 'created_by', 'expires_at', 'id', 'revoked_at', 'workspace_id'],
+        columns: [
+          'access_kind',
+          'created_at',
+          'created_by',
+          'expires_at',
+          'guest_access_expires_at',
+          'guest_channels',
+          'guest_email',
+          'guest_modules',
+          'id',
+          'revoked_at',
+          'workspace_id',
+        ],
       },
       audit_log: {
         rows: 1,
@@ -1057,7 +1080,17 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       },
       workspace_members: {
         rows: 2,
-        columns: ['id', 'joined_at', 'role', 'user_id', 'workspace_id'],
+        columns: [
+          'access_kind',
+          'guest_expires_at',
+          'guest_modules',
+          'guest_since',
+          'id',
+          'joined_at',
+          'role',
+          'user_id',
+          'workspace_id',
+        ],
       },
       channels: {
         rows: 1,
@@ -1230,7 +1263,19 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       },
       workspace_invitations: {
         rows: 1,
-        columns: ['created_at', 'created_by', 'expires_at', 'id', 'revoked_at', 'workspace_id'],
+        columns: [
+          'access_kind',
+          'created_at',
+          'created_by',
+          'expires_at',
+          'guest_access_expires_at',
+          'guest_channels',
+          'guest_email',
+          'guest_modules',
+          'id',
+          'revoked_at',
+          'workspace_id',
+        ],
       },
       audit_log: {
         rows: 2,

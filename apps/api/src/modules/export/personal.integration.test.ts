@@ -692,6 +692,7 @@ describe('integration: a person’s export that fails', () => {
  * `message_attachments` is chat's link of a file to its message and channel, which `attachments` carried as two
  * columns until chat/0005; `inbox_entries` is the core's inbox of what modules told a person, D-286.)
  */
+// D-300 adds membership/invitation access metadata so exports preserve the restricted authority.
 const FROZEN_SHAPE: Record<string, unknown> = {
   order: [
     'users',
@@ -822,7 +823,11 @@ const FROZEN_SHAPE: Record<string, unknown> = {
     workspace_members: {
       rows: 2,
       columns: [
+        'access_kind',
         'deep_work_until',
+        'guest_expires_at',
+        'guest_modules',
+        'guest_since',
         'id',
         'is_deep_work_active',
         'joined_at',

@@ -56,6 +56,8 @@ x-environment: &environment
   MODULES: ${MODULES:-}
   # What a workspace with no grant of its own may use of them: `open` (blank is open) or `managed` (D-289).
   WORKSPACE_MODULES: ${WORKSPACE_MODULES:-}
+  # Enable only after every API, scheduler and job reader runs guest-capable code (D-300).
+  GUEST_ACCESS_READY: ${GUEST_ACCESS_READY:-false}
   # Optional operator receipts: mount their metadata-only directory read-only through an override (D-278).
   BACKUP_STATUS_DIRECTORY: ${BACKUP_STATUS_DIRECTORY:-}
   DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay

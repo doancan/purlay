@@ -41,7 +41,12 @@ export const chatModule = {
     // Only what acts for chat's users.
     jobs: ['mail:missed'],
     // What keeps the rows within their retention keeps running whether chat does or not: the rows are there.
-    retention: ['purge:retention', 'sweep:link-previews', 'sweep:github-deliveries'],
+    retention: [
+      'purge:retention',
+      'sweep:link-previews',
+      'sweep:github-deliveries',
+      'sweep:guest-expiry',
+    ],
     // What a person does in a channel over the socket: watch it, write in it, say they are typing.
     frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],
     // What chat's services send to a socket. The core's own — a workspace changing, an access revoked, a session

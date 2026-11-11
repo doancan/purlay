@@ -27,6 +27,18 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **Guests** — Continue new replies beneath an earlier hidden conversation without revealing its old messages or files (D-300).
+
+### Fixed
+
+- **Notifications** — A first direct message and a new thread reply keep their unread state when an older conversation list arrives late (D-301).
+- **Incidents** — Responder removal uses matching visible and accessible action names (D-137).
+
+### Security
+
+- **Sign-in** — Switching accounts stops old messages, queued files and callbacks from affecting the new account; refused sends preserve current words and files, and background session checks release stalled requests (D-300).
+- **Guests** — Restricted conversations hide earlier links and incident content, recheck current access on reads, writes and existing member connections, let guests share a known link with fresh attribution, and clean pending attention after access expires (D-300).
 
 ---

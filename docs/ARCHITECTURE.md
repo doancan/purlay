@@ -238,7 +238,7 @@ What the shape is for, which the types do not say:
   carries `parentId`), subscribes, unsubscribes and pings. Resolution, reactions and read state are
   HTTP and are heard here as `THREAD_UPDATED`, `REACTIONS_UPDATED` and, on the person's own `user:`
   topic, `CHANNEL_STATE`, `CHANNEL_ADDED` and `WORKSPACE_UPDATED` — a workspace renamed, read again
-  rather than patched from the frame (D-98, D-99, D-124). An edit and a delete are heard as
+  rather than patched from the frame (D-98, D-99, D-124). Live channel counters cancel an older pending list read and refresh under the current Query/access lifetime; a settled list needs no extra read (D-301). An edit and a delete are heard as
   `MESSAGE_REVISED` on the channel's topic: the words, the times and the mentions, at the message's
   version, never its reactions or thread (D-103). A rename or a new topic is `CHANNEL_UPDATED` on the
   channel's topic, at the channel's version; an archive and a leave are `ACCESS_REVOKED`, saying why

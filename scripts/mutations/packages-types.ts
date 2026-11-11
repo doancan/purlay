@@ -193,6 +193,14 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     ],
   },
   {
+    id: 'guest-conversion-false-acknowledgment-accepted',
+    why: 'A false acknowledgment is not permission to widen history and public-channel access.',
+    file: 'packages/types/src/workspace-guests.ts',
+    find: 'confirmFullAccess: /* @__PURE__ */ Type.Literal(true)',
+    replace: 'confirmFullAccess: /* @__PURE__ */ Type.Boolean()',
+    tests: ['packages/types/src/workspace-guests.test.ts'],
+  },
+  {
     id: 'idle-timeout-takes-any-number',
     why: 'an idle timeout the page does not offer is saved, and the server cannot read its settings back (D-244)',
     file: 'packages/types/src/api.ts',
@@ -208,13 +216,12 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     replace: '  ...EmailSignInToken.properties,\n  invitation: Type.Optional(Type.String()),\n',
     tests: ['apps/api/src/ingress/http/invitation-passport.integration.test.ts'],
   },
-
   {
     id: 'invite-mail-per-request-cap-lifted',
     why: 'one request names any number of addresses',
     file: 'packages/types/src/api.ts',
-    find: '{ maxItems: INVITATION_EMAILS_PER_REQUEST }',
-    replace: '{ maxItems: 100_000 }',
+    find: 'maxItems: INVITATION_EMAILS_PER_REQUEST,',
+    replace: 'maxItems: 100_000,',
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {

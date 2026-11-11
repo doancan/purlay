@@ -55,7 +55,6 @@ export const EXTRA = {
     ['modules/push/sender'],
     ['modules/setup/settings'],
     ['modules/users/erasure'],
-    ['modules/users/profile'],
     ['modules/workspaces/channels-port'],
     ['modules/workspaces/deep-work'],
     ['modules/workspaces/invitation-mail'],

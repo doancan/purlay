@@ -349,6 +349,45 @@ describe('the audit log', () => {
     await expectNoAxeViolations(view.getByRole('main'));
   });
 
+  test('distinguishes guest access edits from full conversion and filters by that action', async () => {
+    const entries = [
+      anEntry(2, {
+        action: 'member.guest_access_changed',
+        targetType: 'user',
+        targetId: ALICE.id,
+        metadata: { channelCount: '2' },
+      }),
+      anEntry(1, {
+        action: 'member.guest_converted',
+        targetType: 'user',
+        targetId: BOB.id,
+        metadata: { channelCount: '1' },
+      }),
+    ];
+    const asked: Parameters<Api['audit']>[1][] = [];
+    const view = await openPage({
+      audit: (_workspaceId, filter) => {
+        asked.push(filter);
+        return Promise.resolve(
+          page(
+            filter.action === undefined
+              ? entries
+              : entries.filter((entry) => entry.action === filter.action),
+          ),
+        );
+      },
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} changed ${ALICE.displayName}’s guest access`,
+      `${ME.displayName} made ${BOB.displayName} a full member`,
+    ]);
+    await person().selectOptions(view.getByLabelText('Action'), 'member.guest_converted');
+    await waitFor(() => {
+      expect(asked.at(-1)).toEqual({ action: 'member.guest_converted' });
+      expect(lines(view)).toEqual([`${ME.displayName} made ${BOB.displayName} a full member`]);
+    });
+  });
+
   test('a repository connected to a channel and disconnected is said with the repository (D-134)', async () => {
     const view = await openPage({
       audit: () =>

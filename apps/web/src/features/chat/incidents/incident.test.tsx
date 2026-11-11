@@ -655,7 +655,9 @@ describe('a channel’s incident', () => {
       await person().click(view.getByRole('menuitem', { name: 'Bob' }));
       await settle();
       expect(within(panel).getByText('Bob')).toBeDefined();
-      await person().click(within(panel).getByRole('button', { name: 'Take Bob off responding' }));
+      await person().click(
+        within(panel).getByRole('button', { name: 'Remove Bob from responders' }),
+      );
       await settle();
       // Refused: back as the server last said, and said.
       expect(within(panel).getByText('Bob')).toBeDefined();

@@ -324,6 +324,9 @@ describe('integration: upgrading from the previous release', () => {
         '0096_server_audit_grant_detail',
         '0097_server_push_settings',
         '0098_push_subscription_sound',
+        '0099_workspace_guest_access',
+        '0100_guest_invitation_token_encoding',
+        '0101_workspace_guest_directory',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -335,6 +338,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0009_thread_read_baseline',
         'chat/0010_membership_read_scopes',
         'chat/0011_personal_channel_groups',
+        'chat/0012_removed_membership_scope',
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
@@ -451,6 +455,7 @@ describe('integration: the contract release on a database that has run the expan
         'chat/0009_thread_read_baseline',
         'chat/0010_membership_read_scopes',
         'chat/0011_personal_channel_groups',
+        'chat/0012_removed_membership_scope',
       ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
@@ -667,6 +672,7 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0009_thread_read_baseline',
         'chat/0010_membership_read_scopes',
         'chat/0011_personal_channel_groups',
+        'chat/0012_removed_membership_scope',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -737,6 +743,7 @@ describe('integration: moving development read scopes into chat’s own table', 
         expect(after.results?.map((result) => result.migrationName)).toEqual([
           'chat/0010_membership_read_scopes',
           'chat/0011_personal_channel_groups',
+          'chat/0012_removed_membership_scope',
         ]);
         expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([
           {

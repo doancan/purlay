@@ -25,12 +25,16 @@ export interface RouteContext {
 }
 
 /** Dependencies of a write that tells the sockets: through the bus, inside the transaction the write is in. */
-export type Sending = LeasedDependencies & Pick<SocketLifecycle, 'bus' | 'atomically'>;
+export type Sending = LeasedDependencies &
+  Pick<SocketLifecycle, 'bus' | 'atomically'> & {
+    readonly guestAccessReady: boolean;
+  };
 
 export const sendingOf = ({ dependencies, sockets }: RouteContext): Sending => ({
   ...dependencies,
   bus: sockets.bus,
   atomically: sockets.atomically,
+  guestAccessReady: dependencies.config.GUEST_ACCESS_READY,
 });
 
 /** Dependencies of what makes or lists a workspace: who may, and which modules are run, stopped and granted. */

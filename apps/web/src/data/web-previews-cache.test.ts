@@ -37,6 +37,11 @@ test.each(['hide', 'hide-without-channel', 'revoke', 'delete'] as const)(
     expect(client.getQueryData(late)).toBeUndefined();
     expect(client.getQueryData(other)).toEqual(card);
     expect(client.getQueryData(sameChannel)).toEqual(change === 'revoke' ? undefined : card);
+    if (change === 'revoke') {
+      expect(client.getQueryState(key)).toBeUndefined();
+      expect(client.getQueryState(late)).toBeUndefined();
+      expect(client.getQueryState(sameChannel)).toBeUndefined();
+    }
     pending.resolve(card);
     await task;
     expect(client.getQueryData(late)).toBeUndefined();

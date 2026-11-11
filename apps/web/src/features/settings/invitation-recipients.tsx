@@ -20,6 +20,7 @@ import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { useWorkspace } from '../shell/workspace';
 import { SettingsCard } from './page';
 import { invitationRecipientFilterIn } from './invitation-recipient-filter';
+import { GuestInvitationSummary } from '../invitations/guest-invitation-summary';
 
 const Delivery = ({ value }: { readonly value: InvitationDelivery }): React.JSX.Element => {
   const { t, format } = useI18n();
@@ -130,6 +131,7 @@ const Recipient = ({ value }: { readonly value: InvitationRecipient }): React.JS
           <p id={`recipient-${value.id}`} className="text-body text-ink break-words">
             {value.address}
           </p>
+          {value.guest !== undefined && <GuestInvitationSummary value={value.guest} />}
           <p className="text-label text-ink-muted" role="status">
             {t(`invite.delivery.${value.status}`)}
           </p>

@@ -6,6 +6,7 @@
  * - `--changed=<ref>`: the entries this tree adds or changes since the merge-base with `<ref>`; none is a pass.
  *   What every pull request that touches the list runs (`ci.yml`'s `mutations-changed`).
  * - `--shard=2/6`: the second of six divisions of the list by area file (the weekly run, `mutations.yml`).
+ *   With `--changed`, divides only the changed entries evenly; every entry runs in exactly one shard.
  */
 import { join } from 'node:path';
 import { acceptable, report, runMutations } from './mutate';
@@ -24,7 +25,10 @@ const select = async (): Promise<readonly (typeof MUTATIONS)[number][]> => {
     console.log(
       `added or changed since ${changedSince}: ${ids.length === 0 ? 'none' : ids.join(', ')}`,
     );
-    return MUTATIONS.filter((m) => ids.includes(m.id));
+    const changed = MUTATIONS.filter((m) => ids.includes(m.id));
+    if (shard === undefined) return changed;
+    const { index, count } = parseShard(shard);
+    return changed.filter((_mutation, at) => at % count === index - 1);
   }
   if (shard !== undefined) {
     const { index, count } = parseShard(shard);

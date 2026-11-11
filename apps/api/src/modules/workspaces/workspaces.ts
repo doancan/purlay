@@ -19,7 +19,7 @@
  * member are both Phase 1 (`API.md` §3). The guard belongs with those endpoints,
  * where it can be tested against something that actually tries.
  */
-import type { Executor, Transaction } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import {
   MODULE_IDS,
   type MeResponse,
@@ -30,7 +30,7 @@ import {
 } from '@purlay/types';
 import { asGrants, grantColumns } from '../../platform/grants';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
-import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { requireWorkspaceMembership, workspaceNotFound } from '../../platform/tenancy';
 import { AppError } from '../../platform/errors';
 import type { Clock } from '../../platform/clock';
 import type { Hooks } from '../../platform/hooks';
@@ -39,6 +39,8 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, isNameGitHubs, PROFILE_COLUMNS } from '../users/profile';
 import { mayCreateWorkspace, type WorkspaceCreators } from './creators';
 import { scheduledDeletionsOf } from './deletion';
+import { activeWorkspaceMembership } from '../../platform/membership-access';
+import { noWorkspaceChannels, type WorkspaceChannels } from './channels-port';
 
 /** The database speaks snake_case; the wire speaks camelCase. Mapped here, once. */
 interface WorkspaceRow {
@@ -151,27 +153,53 @@ export const membershipsOf = async (
       'workspace_members.joined_at',
       'workspace_members.is_deep_work_active',
       'workspace_members.deep_work_until',
+      'workspace_members.access_kind',
+      'workspace_members.guest_since',
+      'workspace_members.guest_expires_at',
+      'workspace_members.guest_modules',
       ...grantColumns,
     ])
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
+    .where(activeWorkspaceMembership)
     .orderBy('workspace_members.joined_at', 'asc');
   if (workspaceId !== undefined) statement = statement.where('workspaces.id', '=', workspaceId);
   const rows = await statement.execute();
 
-  return rows.map((row) => ({
-    workspace: asWorkspace(row),
-    role: row.role,
-    joinedAt: new Date(row.joined_at).toISOString(),
-    // Over when its instant has passed: ended by the clock, with no job to end it (D-108).
-    deepWorkUntil:
-      row.is_deep_work_active && row.deep_work_until !== null && new Date(row.deep_work_until) > now
-        ? new Date(row.deep_work_until).toISOString()
-        : null,
-    ...(effective === undefined
-      ? {}
-      : { modules: moduleIdsIn(effective(asGrants(row.grants), row.read_at)) }),
-  }));
+  return rows.map((row) => {
+    const granted = effective?.(asGrants(row.grants), row.read_at);
+    if (row.access_kind === 'guest' && (row.guest_since === null || row.guest_modules === null))
+      throw new Error('A restricted membership is missing its authority metadata');
+    return {
+      workspace: asWorkspace(row),
+      role: row.role,
+      joinedAt: new Date(row.joined_at).toISOString(),
+      // Over when its instant has passed: ended by the clock, with no job to end it (D-108).
+      deepWorkUntil:
+        row.is_deep_work_active &&
+        row.deep_work_until !== null &&
+        new Date(row.deep_work_until) > now
+          ? new Date(row.deep_work_until).toISOString()
+          : null,
+      ...(row.access_kind === 'guest' && row.guest_since !== null && row.guest_modules !== null
+        ? {
+            access: {
+              kind: 'guest' as const,
+              historySince: new Date(row.guest_since).toISOString(),
+              expiresAt:
+                row.guest_expires_at === null ? null : new Date(row.guest_expires_at).toISOString(),
+            },
+            modules: moduleIdsIn(
+              new Set(
+                row.guest_modules.filter((module) => granted === undefined || granted.has(module)),
+              ),
+            ),
+          }
+        : granted === undefined
+          ? {}
+          : { modules: moduleIdsIn(granted) }),
+    };
+  });
 };
 
 /**
@@ -304,12 +332,13 @@ export const renameWorkspace = async (
   return { workspace: asWorkspace(row), memberIds: members.map((member) => member.user_id) };
 };
 
-/** Everyone in the workspace, as the rest of it may see them — never their email. */
+/** Workspace people, restricted to shared conversations for a guest — never their email. */
 export const membersIn = async (
   executor: Executor,
   context: WorkspaceContext,
+  channels: WorkspaceChannels = noWorkspaceChannels,
 ): Promise<readonly WorkspaceMember[]> => {
-  const rows = await executor
+  let query = executor
     .selectFrom('workspace_members')
     .innerJoin('users', 'users.id', 'workspace_members.user_id')
     .select([
@@ -320,11 +349,16 @@ export const membersIn = async (
       ...PROFILE_COLUMNS,
       'workspace_members.role',
       'workspace_members.joined_at',
+      'workspace_members.access_kind',
     ])
     .where('workspace_members.workspace_id', '=', context.workspaceId)
     .where('users.deleted_at', 'is', null)
-    .orderBy('workspace_members.joined_at', 'asc')
-    .execute();
+    .orderBy('workspace_members.joined_at', 'asc');
+  if (context.guest !== undefined) {
+    if (channels.guests === undefined) throw workspaceNotFound();
+    query = query.where(channels.guests.people(executor, context, sql.ref<string>('users.id')));
+  }
+  const rows = await query.execute();
 
   return rows.map((row) => ({
     user: {
@@ -336,5 +370,6 @@ export const membersIn = async (
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
     profile: asProfile(row),
+    ...(row.access_kind === 'guest' ? { accessKind: 'guest' as const } : {}),
   }));
 };

@@ -36,10 +36,10 @@ const ThreadedMessageRowView = (row: ThreadedMessageRowProps): React.JSX.Element
   const label = t('thread.reply');
   const actions = useMemo(
     () =>
-      threaded ? (
+      threaded && message.replyAllowed !== false ? (
         <IconButton size="bar" label={label} glyph="reply" shortcut="R" onClick={reply} />
       ) : undefined,
-    [threaded, label, reply],
+    [threaded, message.replyAllowed, label, reply],
   );
   const summary = useMemo(
     () =>

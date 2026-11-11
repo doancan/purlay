@@ -24,7 +24,7 @@ import { memberReadScope } from '../channels/read-scope';
 import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
 import type { ChannelState, NEEDS_YOU } from '@purlay/types';
-import type { ChannelContext } from '../channels/guard';
+import { channelAudienceQuery, type ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
 import { unreadMessage } from '../channels/unread';
@@ -80,23 +80,7 @@ export const stillSeeing = async (
   userIds: readonly string[],
 ): Promise<ReadonlySet<string>> => {
   if (userIds.length === 0) return new Set();
-  let query = executor
-    .selectFrom('users')
-    .innerJoin('workspace_members', (join) =>
-      join
-        .onRef('workspace_members.user_id', '=', 'users.id')
-        .on('workspace_members.workspace_id', '=', context.workspaceId),
-    )
-    .select('users.id')
-    .where('users.id', 'in', userIds)
-    .where('users.deleted_at', 'is', null);
-  if (context.channelType !== 'public') {
-    query = query.innerJoin('channel_members', (join) =>
-      join
-        .onRef('channel_members.user_id', '=', 'users.id')
-        .on('channel_members.channel_id', '=', context.channelId),
-    );
-  }
+  const query = channelAudienceQuery(executor, context.channelId).where('users.id', 'in', userIds);
   return new Set((await query.execute()).map((row) => row.id));
 };
 
@@ -104,30 +88,16 @@ export const resolveMentions = async (
   executor: ChatDb,
   context: ChannelContext,
   names: readonly string[],
+  messageId?: string,
 ): Promise<readonly string[]> => {
   if (names.length === 0) return [];
-  let query = executor
-    .selectFrom('users')
-    .innerJoin('workspace_members', (join) =>
-      join
-        .onRef('workspace_members.user_id', '=', 'users.id')
-        .on('workspace_members.workspace_id', '=', context.workspaceId),
-    )
-    .select('users.id')
+  const query = channelAudienceQuery(executor, context.channelId, messageId)
     .where(
       sql<string>`lower(users.username)`,
       'in',
       names.map((name) => name.toLowerCase()),
     )
-    .where('users.id', '<>', context.userId)
-    .where('users.deleted_at', 'is', null);
-  if (context.channelType !== 'public') {
-    query = query.innerJoin('channel_members', (join) =>
-      join
-        .onRef('channel_members.user_id', '=', 'users.id')
-        .on('channel_members.channel_id', '=', context.channelId),
-    );
-  }
+    .where('users.id', '<>', context.userId);
   return (await query.execute()).map((row) => row.id);
 };
 
@@ -164,7 +134,13 @@ export const notify = async (
   writtenAt?: Date,
 ): Promise<readonly string[]> => {
   const messageId = message.id;
-  const candidates = [...reasons.keys()].filter((userId) => userId !== context.userId);
+  const proposed = [...reasons.keys()].filter((userId) => userId !== context.userId);
+  if (proposed.length === 0) return [];
+  const candidates = (
+    await channelAudienceQuery(executor, context.channelId, messageId)
+      .where('users.id', 'in', proposed)
+      .execute()
+  ).map((row) => row.id);
   if (candidates.length === 0) return [];
   const muted = new Set<string>();
   const alreadyRead = new Set<string>();
@@ -368,8 +344,8 @@ export const countArrival = async (
   notified: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
   const messageId = message.id;
-  const needs = sql<boolean>`(user_id = any(${notified}::uuid[]))`;
-  const counted = unreadMessage(memberReadScope('channel_members'), messageId);
+  const needs = sql<boolean>`(channel_members.user_id = any(${notified}::uuid[]))`;
+  const counted = unreadMessage(memberReadScope('channel_members', true, 'read_scope'), messageId);
   // The rows are locked first, in one order (#668). An `UPDATE` of several rows locks them in the
   // order it reaches them, which follows where each row's newest version happens to lie for this
   // snapshot: two senders could each hold a row the other needed, and one send failed with a
@@ -379,6 +355,7 @@ export const countArrival = async (
       .selectFrom('channel_members')
       .select('user_id')
       .where('channel_id', '=', channelId)
+      .where('user_id', 'in', channelAudienceQuery(executor, channelId, messageId))
       .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))
       .orderBy('user_id')
       .forNoKeyUpdate()
@@ -388,18 +365,35 @@ export const countArrival = async (
   // Exactly the rows locked above: somebody who joins between the two statements is not reached here
   // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.
   const changed = await executor
+    .with(
+      (cte) => cte('arrival').materialized(),
+      (db) =>
+        db
+          .selectFrom('channel_members')
+          .leftJoin('channel_read_scopes as read_scope', (join) =>
+            join
+              .onRef('read_scope.channel_id', '=', 'channel_members.channel_id')
+              .onRef('read_scope.user_id', '=', 'channel_members.user_id'),
+          )
+          .select(['channel_members.channel_id', 'channel_members.user_id', counted.as('counted')])
+          .where('channel_members.channel_id', '=', channelId)
+          .where('channel_members.user_id', 'in', locked),
+    )
     .updateTable('channel_members')
+    .from('arrival')
     .set({
-      unread_count: sql<number>`unread_count + case when ${counted} then 1 else 0 end`,
-      unread_mention_count: sql<number>`unread_mention_count + case when ${counted} and ${needs} then 1 else 0 end`,
+      // One current-snapshot history calculation serves both counters; materialization keeps the
+      // planner from duplicating its correlated reads in the two update expressions.
+      unread_count: sql<number>`unread_count + case when arrival.counted then 1 else 0 end`,
+      unread_mention_count: sql<number>`unread_mention_count + case when arrival.counted and ${needs} then 1 else 0 end`,
       // Counted with the numbers it describes, in the one statement, under the row lock it
       // takes: the order of versions is the order of commits (0015).
       state_version: sql<number>`state_version + 1`,
     })
-    .where('channel_id', '=', channelId)
-    .where('user_id', 'in', locked)
+    .whereRef('channel_members.channel_id', '=', 'arrival.channel_id')
+    .whereRef('channel_members.user_id', '=', 'arrival.user_id')
     .returning([
-      'user_id',
+      'channel_members.user_id',
       'last_read_message_id',
       'unread_count',
       'unread_mention_count',
@@ -436,6 +430,7 @@ export const currentStates = async (
         'state_version',
       ])
       .where('channel_id', '=', context.channelId)
+      .where('user_id', 'in', channelAudienceQuery(executor, context.channelId))
       .where('user_id', '<>', context.userId)
       .execute()
   ).map((row) => ({

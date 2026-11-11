@@ -3,10 +3,71 @@
  * it, and chat — whose channels they are — implements it where the application is put together. With chat
  * absent there are no channels, and `noWorkspaceChannels` says so.
  */
-import type { Executor } from '@purlay/db';
+import type { Executor, RawBuilder, Transaction } from '@purlay/db';
 import type { WorkspaceContext } from '../../platform/tenancy';
+import type { Clock } from '../../platform/clock';
+
+/** Admission is implemented by the module that owns the granted conversations. */
+export interface WorkspaceGuestChannels {
+  readonly moduleId: string;
+  /** Prepare ordered channel locks before core takes the workspace mutex; apply rechecks the captured scope. */
+  prepareEdit(
+    executor: Transaction,
+    context: WorkspaceContext,
+    userId: string,
+    channelIds: readonly string[] | undefined,
+  ): Promise<{
+    apply(
+      at: Date,
+      resetHistory: boolean,
+    ): Promise<{
+      readonly visibleIds: readonly string[];
+      readonly hiddenCount: number;
+      readonly previousIds: readonly string[];
+      readonly removedIds: readonly string[];
+      readonly addedCount: number;
+      readonly changed: boolean;
+    }>;
+  }>;
+  /** Scope for one administrator page: only visible identities, and a count for everything else. */
+  scopes(
+    executor: Executor,
+    context: WorkspaceContext,
+    userIds: readonly string[],
+  ): Promise<
+    ReadonlyMap<
+      string,
+      {
+        readonly visibleIds: readonly string[];
+        readonly hiddenCount: number;
+      }
+    >
+  >;
+  /** A guest's directory contains only active people in their explicitly shared conversations. */
+  people(
+    executor: Executor,
+    context: WorkspaceContext,
+    personId: RawBuilder<string>,
+  ): RawBuilder<boolean>;
+  /** Lock selected channels before the workspace mutex, then recheck administrator visibility. */
+  prepare(
+    executor: Transaction,
+    context: WorkspaceContext,
+    channelIds: readonly string[],
+  ): Promise<void>;
+  /** Grant only a restricted member, under the current administrator's authority, in the same transaction. */
+  grant(
+    executor: Transaction,
+    clock: Clock,
+    context: WorkspaceContext,
+    userId: string,
+    channelIds: readonly string[],
+    newAdmission?: boolean,
+  ): Promise<void>;
+}
 
 export interface WorkspaceChannels {
+  readonly guests?: WorkspaceGuestChannels;
   /**
    * Takes the person out of every channel of the workspace and answers the channels they could see, read
    * by the one visibility rule before it stops being theirs. Inside the caller's transaction, before the

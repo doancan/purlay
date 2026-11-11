@@ -27,12 +27,17 @@ import { recordAudit } from '../../../modules/audit/audit';
 import type { Clock } from '../../../platform/clock';
 import {
   channelNotFound,
+  channelAudienceQuery,
   isChannelMember,
   requireChannelMember,
   type ChannelContext,
 } from './guard';
 import { AppError } from '../../../platform/errors';
-import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
+import {
+  requireFullMembership,
+  requireWorkspaceMembership,
+  type WorkspaceContext,
+} from '../../../platform/tenancy';
 import { channelFor } from './channels';
 import { recordDeparture } from './departures';
 
@@ -100,6 +105,7 @@ export const updateChannel = async (
   context: ChannelContext,
   input: UpdateChannelRequest,
 ): Promise<Updated> => {
+  requireFullMembership(context, 'Only a full member can change channel settings.');
   const current = await lockNamed(executor, context);
   await requireChannelMember(executor, context, 'Join the channel to change it.');
   const name = input.name ?? current.name;
@@ -538,6 +544,9 @@ export const channelMembers = async (
     ])
     .where('channel_members.channel_id', '=', context.channelId)
     .where('users.deleted_at', 'is', null)
+    .$if(context.guest !== undefined, (query) =>
+      query.where('users.id', 'in', channelAudienceQuery(executor, context.channelId)),
+    )
     .orderBy('channel_members.joined_at', 'asc')
     .orderBy('users.username', 'asc')
     .execute();

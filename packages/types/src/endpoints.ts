@@ -94,6 +94,7 @@ import {
   UnresolvedPage,
   UnresolvedQuery,
   UploadQuery,
+  WorkspaceMember,
   WorkspaceMemberList,
 } from './api';
 import { FindQuery, FindResponse } from './find';
@@ -102,6 +103,16 @@ import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } 
 import { Attachment, Channel, Message, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
 import { WebLinkPreviewRequest, WebLinkPreviewResponse } from './web-link-previews';
+import {
+  CreateGuestInvitationRequest,
+  CreatedGuestInvitation,
+  GuestInvitationAvailability,
+  UpdatedGuestAccess,
+  ConvertGuestRequest,
+  UpdateGuestAccessRequest,
+  WorkspaceGuestPage,
+  WorkspaceGuestQuery,
+} from './workspace-guests';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -231,6 +242,45 @@ export const ENDPOINTS = [
     path: '/api/workspaces/:workspaceId/members',
     auth: 'session',
     responses: { 200: WorkspaceMemberList },
+  }),
+  read({
+    id: 'readGuestInvitationAvailability',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/guest-invitations',
+    auth: 'session',
+    responses: { 200: GuestInvitationAvailability },
+  }),
+  read({
+    id: 'createWorkspaceGuestInvitation',
+    method: 'POST',
+    path: '/api/workspaces/:workspaceId/guest-invitations',
+    auth: 'session',
+    body: CreateGuestInvitationRequest,
+    responses: { 201: CreatedGuestInvitation },
+  }),
+  read({
+    id: 'listWorkspaceGuests',
+    method: 'GET',
+    path: '/api/workspaces/:workspaceId/guests',
+    auth: 'session',
+    query: WorkspaceGuestQuery,
+    responses: { 200: WorkspaceGuestPage },
+  }),
+  read({
+    id: 'updateWorkspaceGuest',
+    method: 'PATCH',
+    path: '/api/workspaces/:workspaceId/guests/:userId',
+    auth: 'session',
+    body: UpdateGuestAccessRequest,
+    responses: { 200: UpdatedGuestAccess },
+  }),
+  read({
+    id: 'convertWorkspaceGuest',
+    method: 'POST',
+    path: '/api/workspaces/:workspaceId/guests/:userId/conversion',
+    auth: 'session',
+    body: ConvertGuestRequest,
+    responses: { 200: WorkspaceMember },
   }),
   read({
     id: 'getPresence',

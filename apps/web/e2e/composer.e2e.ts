@@ -7,6 +7,8 @@
  * Every test has a room of its own (`support.ts`); what "sent" means is read from the server.
  */
 import type { Locator, Page, WebSocketRoute } from '@playwright/test';
+import { Value } from '@sinclair/typebox/value';
+import { MeResponse } from '@purlay/types';
 import { expect, test } from './fixtures';
 import { navLink, onEngine } from './support';
 
@@ -631,6 +633,105 @@ test.describe('without a connection', () => {
 });
 
 test.describe('@ and a name', () => {
+  for (const state of ['loading', 'failure'] as const) {
+    test(`guest public-channel mentions recover from ${state} and stay scoped at 320, 820 and 1440 pixels`, async ({
+      page,
+      signIn,
+      room,
+      world,
+      api,
+      expectNoAxe,
+    }, testInfo) => {
+      const made = await room({ members: ['dogancan', 'alice'] });
+      // Controlled role data exercises the browser's guest branch. Real guest authorization is proved
+      // separately through SQL and HTTP; this test does not enable production guest admission.
+      await page.route('**/api/me', async (route) => {
+        const response = await route.fetch();
+        const body: unknown = await response.json();
+        if (!Value.Check(MeResponse, body))
+          throw new Error('The fixture session did not match its contract');
+        await route.fulfill({
+          response,
+          json: {
+            ...body,
+            memberships: body.memberships.map((membership) =>
+              membership.workspace.id === world.workspace.id
+                ? {
+                    ...membership,
+                    role: 'member',
+                    access: { kind: 'guest', historySince: membership.joinedAt, expiresAt: null },
+                  }
+                : membership,
+            ),
+          },
+        });
+      });
+      const release = Promise.withResolvers<undefined>();
+      let failing = state === 'failure';
+      await page.route(`**/api/channels/${made.id}/members`, async (route) => {
+        if (failing) {
+          await route.fulfill({
+            status: 503,
+            json: { error: { code: 'DATABASE_UNAVAILABLE', message: 'Try again.' } },
+          });
+          return;
+        }
+        await release.promise;
+        await route.continue();
+      });
+      await signIn();
+      await page.setViewportSize({ width: 320, height: 900 });
+      await page.goto(made.path);
+      const box = boxOf(page, made.name);
+      await box.fill('@ali');
+      if (state === 'failure') {
+        const failed = page.getByRole('status', { name: /could not be read/i });
+        await expect(failed).toBeVisible();
+        await expect(box).toHaveValue('@ali');
+        await expectNoAxe();
+        // Returning to the unfinished mention starts another real read. The error audited above
+        // need not still be the state drawn when that read has begun.
+        const rereading = page.waitForRequest(
+          (request) => new URL(request.url()).pathname === `/api/channels/${made.id}/members`,
+        );
+        await page.getByRole('button', { name: 'Channel menu' }).focus();
+        await box.focus();
+        await rereading;
+        await expect(failed).toBeVisible();
+        failing = false;
+        await failed.getByRole('button', { name: 'Retry' }).click();
+        await expect(box).toBeFocused();
+      }
+      await expect(page.getByRole('status', { name: /reading/i })).toBeVisible();
+      await expect(page.getByRole('listbox', { name: 'People to mention' })).toHaveCount(0);
+      release.resolve(undefined);
+      const list = page.getByRole('listbox', { name: 'People to mention' });
+      for (const width of [320, 820, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await box.fill('@ali');
+        await expect(list.getByRole('option', { name: /Alice Chen/ })).toBeVisible();
+        await expectNoAxe();
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath(`guest-mentions-${String(width)}.png`) });
+        await box.press('Escape');
+        await expect(list).toHaveCount(0);
+        await expect(box).toHaveValue('@ali');
+        await expect(box).toBeFocused();
+        await box.fill('Hello @bob');
+        await expect(page.getByRole('option', { name: /Bob/ })).toHaveCount(0);
+        await box.fill('Can you check, @ali');
+        await expect(list.getByRole('option', { name: /Alice Chen/ })).toBeVisible();
+        await box.press('Enter');
+        await expect(box).toHaveValue('Can you check, @alice ');
+        await expect(box).toBeFocused();
+        expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([]);
+        await box.fill('');
+      }
+    });
+  }
+
   test('typing @ali offers Alice; choosing her writes her handle, and what is sent is a mention', async ({
     page,
     signIn,

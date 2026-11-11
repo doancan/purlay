@@ -465,6 +465,12 @@ CREATE TABLE workspace_members (
     user_id      UUID NOT NULL REFERENCES users(id)      ON DELETE CASCADE,
     role         user_role NOT NULL DEFAULT 'member',
 
+    -- Existing rows remain full members; guest authority is independent of mutable unread state (D-300).
+    access_kind TEXT NOT NULL DEFAULT 'member',
+    guest_since TIMESTAMPTZ,
+    guest_expires_at TIMESTAMPTZ,
+    guest_modules TEXT[],
+
     -- Server-side, so it holds across devices and so the server itself stops
     -- delivering. A purely client-side mute would still wake a phone. (D-15)
     is_deep_work_active BOOLEAN NOT NULL DEFAULT FALSE,
@@ -472,14 +478,45 @@ CREATE TABLE workspace_members (
 
     joined_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    CONSTRAINT workspace_members_access_kind CHECK (access_kind IN ('member', 'guest')),
+    CONSTRAINT workspace_members_guest_authority CHECK (
+        (access_kind = 'member' AND guest_since IS NULL AND guest_expires_at IS NULL AND guest_modules IS NULL)
+        OR
+        (access_kind = 'guest' AND role = 'member' AND guest_since IS NOT NULL
+         AND guest_modules IS NOT NULL AND cardinality(guest_modules) > 0
+         AND (guest_expires_at IS NULL OR guest_expires_at > guest_since))
+    ),
     UNIQUE (workspace_id, user_id)
 );
 
 CREATE INDEX idx_workspace_members_user ON workspace_members (user_id);
+CREATE INDEX idx_workspace_members_guest_expiry ON workspace_members (guest_expires_at, workspace_id, user_id)
+    WHERE access_kind = 'guest' AND guest_expires_at IS NOT NULL;
+CREATE INDEX idx_workspace_guest_directory ON workspace_members (workspace_id, joined_at DESC, user_id DESC)
+    WHERE access_kind = 'guest';
 
 -- Every workspace must retain at least one owner. Not expressible as a constraint;
 -- enforced in the membership service and covered by a test. (D-21)
 ```
+
+
+The access constraints in `packages/db/migrations/0099_workspace_guest_access.sql` require guest history and
+module scope, keep guests in the member role and bind expiry to their admission. Full memberships carry no
+guest authority fields. `packages/db/migrations/0101_workspace_guest_directory.sql` adds the partial pagination
+index without changing existing rows. A guest access extension after expiry starts a fresh admission (D-300).
+The wire `Message` may carry `historyHidden:true` and `replyAllowed:boolean` for an earlier root with readable
+post-join replies (D-300). These are projected capabilities, not stored columns: root/channel IDs and readable
+reply count/activity remain; earlier content, identity, original time, files and metadata are not serialized.
+`createdAt` is the first readable reply's activity time. Ordinary messages omit both fields.
+The guest metadata/index migrations run outside a wrapping transaction: constant-default expansion is followed
+by separately validated constraints and concurrent indexes. Legacy guest-token digests are tagged in committed
+batches of at most 1,000; an interrupted run resumes safely without changing normal invitation digests.
+
+Once chat's schema is installed, `chat/0012_removed_membership_scope.sql` attaches an `AFTER DELETE`
+trigger to `workspace_members`. It removes only the departing person's channel memberships and remembered
+channel departures in that workspace, including when the running process has chat disabled. Fresh core-only
+databases have no chat trigger. A fresh named guest admission also clears legacy orphan assignments before
+installing its explicit channel selection; an old private assignment cannot reopen through a new invitation.
 
 ### 4.3. `workspace_invitations`
 
@@ -498,16 +535,42 @@ CREATE TABLE workspace_invitations (
     expires_at    TIMESTAMPTZ NOT NULL,
     revoked_at    TIMESTAMPTZ,
 
+    access_kind TEXT NOT NULL DEFAULT 'member',
+    guest_email TEXT,
+    guest_channels UUID[],
+    guest_modules TEXT[],
+    guest_access_expires_at TIMESTAMPTZ,
+
     CONSTRAINT workspace_invitations_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
-    CONSTRAINT workspace_invitations_token_is_a_digest CHECK (token_hash ~ '^[0-9a-f]{64}$'),
-    CONSTRAINT workspace_invitations_expire_after_made CHECK (expires_at > created_at)
+    -- The encoding is bound to access_kind by 0100 (D-300).
+    CONSTRAINT workspace_invitations_token_is_a_digest CHECK (
+        (access_kind = 'member' AND token_hash ~ '^[0-9a-f]{64}$')
+        OR (access_kind = 'guest' AND token_hash ~ '^guest:[0-9a-f]{64}$')
+    ),
+    CONSTRAINT workspace_invitations_expire_after_made CHECK (expires_at > created_at),
+    CONSTRAINT workspace_invitations_access_kind CHECK (access_kind IN ('member', 'guest')),
+    CONSTRAINT workspace_invitations_guest_authority CHECK (
+        (access_kind = 'member' AND guest_email IS NULL AND guest_channels IS NULL
+         AND guest_modules IS NULL AND guest_access_expires_at IS NULL)
+        OR
+        (access_kind = 'guest' AND guest_email IS NOT NULL AND length(guest_email) BETWEEN 3 AND 254
+         AND guest_channels IS NOT NULL AND cardinality(guest_channels) BETWEEN 1 AND 20
+         AND guest_modules IS NOT NULL AND cardinality(guest_modules) > 0
+         AND (guest_access_expires_at IS NULL OR guest_access_expires_at > created_at))
+    )
 );
 
 CREATE INDEX idx_workspace_invitations_workspace ON workspace_invitations (workspace_id, id DESC);
 CREATE INDEX idx_workspace_invitations_created_by ON workspace_invitations (created_by)
     WHERE created_by IS NOT NULL;
 ```
+
+
+Guest constraints in `packages/db/migrations/0099_workspace_guest_access.sql` bind the named address,
+selected channel/module scope and optional access end; normal invitations carry no guest fields. A guest token's
+digest is tagged so an old normal-invitation reader cannot accidentally admit a full member. That encoding is
+not a substitute for all-reader readiness before guest admission (D-300).
 
 #### Recipient and mail-attempt evidence (D-279)
 
@@ -3096,6 +3159,9 @@ file that leaves its transaction runs statement by statement and must be safe to
 0096_server_audit_grant_detail.sql  server_audit_log: what a grant replaced, until when, and the operator's word that the cluster reads grants  (D-289)
 0097_server_push_settings.sql      server_settings: live browser push, sealed stable pair and one-time environment import  (D-126)
 0098_push_subscription_sound.sql  push_subscriptions.sound (D-148)
+0099_workspace_guest_access.sql   workspace membership and invitation access descriptors, guest history/expiry/module scope  (D-300)
+0100_guest_invitation_token_encoding.sql  guest digests tagged and bound to invitation access kind  (D-300)
+0101_workspace_guest_directory.sql  partial workspace guest directory pagination index  (D-300)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
@@ -3107,6 +3173,7 @@ chat/0008_unread_history_range.sql channel_members.unread_history_from: explicit
 chat/0009_thread_read_baseline.sql channel_members.thread_read_baseline_id: independent lazy legacy reply baseline (D-282)
 chat/0010_membership_read_scopes.sql channel_read_scopes: moves the three prototype scope columns into chat's own table, preserving known scopes and restoring the core's shape (D-282)
 chat/0011_personal_channel_groups.sql channel_groups and channel_group_channels: private headings and one placement per membership (D-284)
+chat/0012_removed_membership_scope.sql chat-owned membership deletion trigger removes scoped channel grants/departures even without a chat runtime (D-300)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```

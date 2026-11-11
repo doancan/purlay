@@ -18,6 +18,8 @@ import {
   type ServerFrame,
 } from '@purlay/types';
 import { ApiError } from '../data/errors';
+import { keys } from '../data/keys';
+import { aSession } from '../testing/fixtures';
 import { anApi } from '../testing/fake-api';
 import { fakeSchedule } from '../testing/fakes';
 import type { Api } from '../data/api';
@@ -57,9 +59,12 @@ const aTab = (api: Partial<Api> = {}, roundTripMs = 20): Tab => {
   let at = 0;
   const sent: Sent[] = [];
   const sockets: { handlers: SocketHandlers }[] = [];
+  // A real page reaches the engine only after SessionGate commits its current account receipt.
+  const client = new QueryClient();
+  client.setQueryData(keys.me, aSession());
   const engine = createEngine({
     api: anApi(api),
-    client: new QueryClient(),
+    client,
     userId: ME,
     url: 'ws://purlay.test/ws',
     openSocket: (_url, handlers) => {

@@ -9,10 +9,20 @@ import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { Message, PinList, PinnedMessage, ThreadPage } from '@purlay/types';
 import { ApiError } from '../../../data/errors';
+import { workspaceAccessChanged } from '../../../data/access-change';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../../testing/channel-harness';
 import { installDom } from '../../../testing/dom';
-import { ALICE, BOB, IDS, aMessage, messageIdAt, someChannels } from '../../../testing/fixtures';
+import {
+  ALICE,
+  BOB,
+  IDS,
+  aMessage,
+  aSession,
+  messageIdAt,
+  someChannels,
+} from '../../../testing/fixtures';
 import { expectFocusOn } from '../../../testing/focus';
 import { person } from '../../../testing/user';
 
@@ -75,6 +85,244 @@ const panelOf = (view: ChannelView): HTMLElement =>
   view.getByRole('complementary', { name: /^Pinned/ });
 
 describe('pinning a message', () => {
+  test.each(['pending-overlay', 'late-confirmed-fallback'] as const)(
+    'changed access cannot restore earlier words through a %s',
+    async (mode) => {
+      const pending = Promise.withResolvers<undefined>();
+      let changed = false;
+      const view = await mountChannel({
+        messages: () => Promise.resolve(page(changed ? [] : [first])),
+        api: {
+          pin: () => pending.promise,
+          pins: () =>
+            changed && mode === 'late-confirmed-fallback'
+              ? Promise.reject(new ApiError(0, 'NETWORK', 'Fresh list unavailable'))
+              : Promise.resolve([]),
+        },
+      });
+      try {
+        await person().click(pinButton(view, 1));
+        await openPins(view);
+        expect(panelOf(view).textContent.includes(first.content)).toBe(true);
+        changed = true;
+        act(() => {
+          workspaceAccessChanged(view.world.client, IDS.workspace);
+        });
+        await settle();
+        if (mode === 'late-confirmed-fallback') {
+          pending.resolve(undefined);
+          await settle();
+          expect(
+            (view.world.client.getQueryData<PinList>(keys.pins(IDS.api)) ?? []).some(
+              (pin) => pin.message.id === first.id,
+            ),
+          ).toBe(false);
+        } else {
+          expect(panelOf(view).textContent.includes(first.content)).toBe(false);
+        }
+      } finally {
+        pending.resolve(undefined);
+        await settle();
+        view.unmountAll();
+      }
+    },
+  );
+
+  test('a proven other workspace access change preserves this channel optimistic pin and its pending operation', async () => {
+    const pending = Promise.withResolvers<undefined>();
+    const view = await mountChannel({
+      messages: page([first]),
+      api: { pin: () => pending.promise },
+    });
+    try {
+      await person().click(pinButton(view, 1));
+      await openPins(view);
+      act(() => {
+        workspaceAccessChanged(view.world.client, 'unrelated-workspace');
+      });
+      await settle();
+      expect(panelOf(view).textContent.includes(first.content)).toBe(true);
+      expect(pinButton(view, 1).getAttribute('aria-busy')).toBe('true');
+    } finally {
+      pending.resolve(undefined);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
+  test('access changed during the confirmed pin refetch cannot write the old message through its failed fallback', async () => {
+    const previousRead = Promise.withResolvers<PinList>();
+    let reads = 0;
+    let changed = false;
+    const view = await mountChannel({
+      messages: () => Promise.resolve(page(changed ? [] : [first])),
+      api: {
+        pin: () => Promise.resolve(),
+        pins: () => {
+          reads++;
+          return reads === 1
+            ? Promise.resolve([])
+            : reads === 2
+              ? previousRead.promise
+              : Promise.reject(new ApiError(0, 'NETWORK', 'Fresh access unavailable'));
+        },
+      },
+    });
+    try {
+      await person().click(pinButton(view, 1));
+      await settle();
+      expect(reads).toBe(2);
+      changed = true;
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      previousRead.reject(new ApiError(0, 'NETWORK', 'Old read failed late'));
+      await settle();
+      expect(
+        (view.world.client.getQueryData<PinList>(keys.pins(IDS.api)) ?? []).some(
+          (pin) => pin.message.id === first.id,
+        ),
+      ).toBe(false);
+    } finally {
+      previousRead.resolve([]);
+      view.unmountAll();
+    }
+  });
+
+  test.each(['accepted', 'refused'] as const)(
+    'a prior %s pin cannot refetch or discard a newer valid intent for the same message',
+    async (outcome) => {
+      const old = Promise.withResolvers<undefined>();
+      const current = Promise.withResolvers<undefined>();
+      let requests = 0;
+      let reads = 0;
+      let pinned: PinList = [];
+      const view = await mountChannel({
+        messages: page([first]),
+        api: {
+          pin: () => {
+            requests++;
+            return requests === 1 ? old.promise : current.promise;
+          },
+          pins: () => {
+            reads++;
+            return Promise.resolve(pinned);
+          },
+        },
+      });
+      try {
+        await person().click(pinButton(view, 1));
+        act(() => {
+          workspaceAccessChanged(view.world.client, IDS.workspace);
+        });
+        await settle();
+        await person().click(pinButton(view, 1));
+        expect(requests).toBe(2);
+        const beforeOld = reads;
+        if (outcome === 'accepted') old.resolve(undefined);
+        else old.reject(new ApiError(0, 'NETWORK', 'Old pin failed late'));
+        await settle();
+        expect(reads).toBe(beforeOld);
+        expect(pinButton(view, 1).getAttribute('aria-busy')).toBe('true');
+        pinned = [aPin(first)];
+        current.resolve(undefined);
+        await settle();
+        expect(pinButton(view, 1).getAttribute('aria-busy')).toBe('false');
+        expect(pinButton(view, 1).getAttribute('aria-pressed')).toBe('true');
+      } finally {
+        old.resolve(undefined);
+        current.resolve(undefined);
+        await settle();
+        view.unmountAll();
+      }
+    },
+  );
+
+  test('an old Retry cannot restart a pin under replaced access', async () => {
+    let requests = 0;
+    let changed = false;
+    const view = await mountChannel({
+      messages: () => Promise.resolve(page(changed ? [] : [first])),
+      api: {
+        pin: () => {
+          requests++;
+          return Promise.reject(new ApiError(0, 'NETWORK', 'Pin unavailable'));
+        },
+      },
+    });
+    try {
+      await person().click(pinButton(view, 1));
+      await settle();
+      const retry = view.getByRole('button', { name: 'Retry' });
+      changed = true;
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      await person().click(retry);
+      await settle();
+      expect(requests).toBe(1);
+    } finally {
+      view.unmountAll();
+    }
+  });
+
+  test('an actual account switch in the same workspace cannot keep the old optimistic message in Pins', async () => {
+    const pending = Promise.withResolvers<undefined>();
+    let changed = false;
+    const view = await mountChannel({
+      messages: () => Promise.resolve(page(changed ? [] : [first])),
+      api: {
+        pin: () => pending.promise,
+        me: () => {
+          const session = aSession();
+          return Promise.resolve(
+            changed
+              ? {
+                  ...session,
+                  user: { ...session.user, ...BOB, email: 'bob@example.test' },
+                  memberships: session.memberships.map((membership) => ({
+                    ...membership,
+                    role: 'member' as const,
+                    access: {
+                      kind: 'guest' as const,
+                      historySince: '2026-11-10T12:00:00.000Z',
+                      expiresAt: null,
+                    },
+                  })),
+                }
+              : session,
+          );
+        },
+      },
+    });
+    try {
+      await person().click(pinButton(view, 1));
+      await openPins(view);
+      expect(panelOf(view).textContent.includes(first.content)).toBe(true);
+      changed = true;
+      await act(async () => {
+        await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+      });
+      await settle();
+      await view.findByRole('button', { name: 'Pinned messages' });
+      await openPins(view);
+      expect(panelOf(view).textContent.includes(first.content)).toBe(false);
+      pending.resolve(undefined);
+      await settle();
+      expect(
+        (view.world.client.getQueryData<PinList>(keys.pins(IDS.api)) ?? []).some(
+          (pin) => pin.message.id === first.id,
+        ),
+      ).toBe(false);
+    } finally {
+      pending.resolve(undefined);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
   test('is marked at once, before the server answers, and the server is asked once', async () => {
     const asked: string[] = [];
     const view = await mountChannel({

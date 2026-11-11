@@ -15,6 +15,13 @@ const names = (people: readonly { readonly username: string }[]): string[] =>
   people.map((person) => person.username);
 
 describe('who the @ list may offer', () => {
+  test('a guest in a public channel is offered only its known current participants', () => {
+    const channel = aChannel(IDS.api, 'api');
+    expect(names(candidatesFor(channel, members, [ME, BOB], ME.id, true))).toEqual(['bob']);
+    expect(candidatesFor(channel, members, undefined, ME.id, true)).toEqual([]);
+    expect(candidatesFor(channel, members, [FORMER], ME.id, true)).toEqual([]);
+  });
+
   test('in a public channel, everybody in the workspace but the writer', () => {
     expect(names(candidatesFor(aChannel(IDS.api, 'api'), members, undefined, ME.id))).toEqual([
       'alice',

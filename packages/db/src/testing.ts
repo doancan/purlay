@@ -176,6 +176,8 @@ export const dropDatabases = async (names: readonly string[]): Promise<void> => 
 
 export interface ClonedDatabase {
   readonly db: Kysely<DB>;
+  /** A restarted worker's own pool against the same durable rows; the harness closes it on every outcome. */
+  readonly withFreshPool: <T>(work: (database: Kysely<DB>) => Promise<T>) => Promise<T>;
   /** Where the clone lives — for a test that opens a pool of its own, as a restarted process would. */
   readonly connectionString: string;
   /** Closes the pool and drops the database. What `afterAll` must call. */
@@ -353,6 +355,14 @@ export const cloneIntegrationDatabase = async (): Promise<ClonedDatabase> => {
   return {
     db,
     connectionString,
+    withFreshPool: async <T>(work: (database: Kysely<DB>) => Promise<T>): Promise<T> => {
+      const fresh = connect<DB>(connectionString, 1);
+      try {
+        return await work(fresh);
+      } finally {
+        await fresh.destroy();
+      }
+    },
     drop: async (): Promise<void> => {
       await db.destroy();
       await dropDatabases([clone]);

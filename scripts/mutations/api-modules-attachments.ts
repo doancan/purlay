@@ -18,8 +18,9 @@ export const API_MODULES_ATTACHMENTS: readonly Mutation[] = [
     id: 'attachment-unsent-readable-after-leaving',
     why: 'somebody removed from a workspace still reads what they uploaded into it',
     file: 'apps/api/src/modules/attachments/readable.ts',
-    find: "        .where('workspace_members.user_id', '=', userId)\n        .where('workspaces.deleted_at', 'is', null),\n",
-    replace: "        .where('workspaces.deleted_at', 'is', null),\n",
+    find: "        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership)\n        .where('workspaces.deleted_at', 'is', null),\n",
+    replace:
+      "        .where(activeWorkspaceMembership)\n        .where('workspaces.deleted_at', 'is', null),\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {
@@ -34,8 +35,9 @@ export const API_MODULES_ATTACHMENTS: readonly Mutation[] = [
     id: 'attachment-unsent-readable-in-a-deleted-workspace',
     why: 'an upload in a workspace that was deleted is still read by its id',
     file: 'apps/api/src/modules/attachments/readable.ts',
-    find: "        .where('workspace_members.user_id', '=', userId)\n        .where('workspaces.deleted_at', 'is', null),\n",
-    replace: "        .where('workspace_members.user_id', '=', userId),\n",
+    find: "        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership)\n        .where('workspaces.deleted_at', 'is', null),\n",
+    replace:
+      "        .where(activeWorkspaceMembership)\n        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership),\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {

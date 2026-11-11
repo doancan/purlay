@@ -181,6 +181,53 @@ const aChannelIn = async (
 };
 
 describe('integration: removing a member', () => {
+  test('the channel adapter revokes grants before core membership deletion and preserves another workspace', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob']);
+      const secret = await aChannelIn(db, room, 'private-handover', 'private', ['alice', 'bob']);
+      const former = await aChannelIn(db, room, 'former-private', 'private', ['alice']);
+      const elsewhere = await aRoom(db, ['carol']);
+      const foreignFormer = await aChannelIn(db, elsewhere, 'other-former-private', 'private', [
+        'carol',
+      ]);
+      await db
+        .insertInto('channel_departures')
+        .values([
+          { channel_id: former, user_id: idOf(room, 'bob'), reason: 'left' },
+          { channel_id: foreignFormer, user_id: idOf(room, 'bob'), reason: 'left' },
+        ])
+        .execute();
+      await db
+        .insertInto('channel_members')
+        .values({
+          channel_id: elsewhere.channelId,
+          user_id: idOf(room, 'bob'),
+          joined_at: new Date(0),
+        })
+        .execute();
+      const departed = await chatWorkspaceChannels.leaveAll(
+        db,
+        room.workspaceId,
+        idOf(room, 'bob'),
+      );
+      expect(departed).toContain(secret);
+      // Core membership is deliberately still present, as it is during an admission reset.
+      expect(await roleOf(db, room, 'bob')).toBe('member');
+      const remaining = await db
+        .selectFrom('channel_members')
+        .select('channel_id')
+        .where('user_id', '=', idOf(room, 'bob'))
+        .execute();
+      expect(remaining.map((row) => row.channel_id)).toEqual([elsewhere.channelId]);
+      const reasons = await db
+        .selectFrom('channel_departures')
+        .select('channel_id')
+        .where('user_id', '=', idOf(room, 'bob'))
+        .execute();
+      expect(reasons.map((row) => row.channel_id)).toEqual([foreignFormer]);
+    });
+  });
+
   test('takes their membership and their channels here, and names every channel they could see', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

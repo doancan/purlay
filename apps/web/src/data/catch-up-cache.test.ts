@@ -100,6 +100,8 @@ describe('live catch-up cache', () => {
     channelsRevoked(client, [IDS.api]);
     expect(client.getQueryData(gone)).toBeUndefined();
     expect(client.getQueryData(older)).toBeUndefined();
+    expect(client.getQueryState(gone)).toBeUndefined();
+    expect(client.getQueryState(older)).toBeUndefined();
     expect(client.getQueryData(remains)).toBeDefined();
     client.clear();
   });

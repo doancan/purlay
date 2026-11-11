@@ -133,6 +133,20 @@ describe('integration: the changes of a channel, read by ids and read as a chann
       await insertAt(db, room, ago(30 * DAY));
       // Another channel's change, which only a read that forgets the channel would bring.
       await insertAt(db, await aRoom(db, ['alice']), ago(2 * MINUTE));
+      const other = await db
+        .insertInto('channels')
+        .values({
+          workspace_id: room.workspaceId,
+          name: 'another-readable-channel',
+          type: 'public',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      // Current visibility also permits this public channel; it still does not belong in this walk.
+      await db
+        .insertInto('messages')
+        .values({ ...rowAt(room, ago(2 * MINUTE)), channel_id: other.id })
+        .execute();
       const first = await insertAt(db, room, ago(3 * MINUTE));
       const second = await insertAt(db, room, ago(2 * MINUTE));
       // Arrived late: its id is older than the first's, its change is newer than the second's.

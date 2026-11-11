@@ -17,12 +17,18 @@
  * they were not in.
  */
 import { Value } from '@sinclair/typebox/value';
-import { Uuid, type ChannelType } from '@purlay/types';
-import { sql, type SelectQueryBuilder } from '@purlay/db';
-import type { ChatDb, ChatSchema } from '../schema';
+import { Uuid, type ChannelType, type GuestMembershipAccess } from '@purlay/types';
+import { sql, type RawBuilder, type SelectQueryBuilder } from '@purlay/db';
+import type { ChatDb, ChatSchema, ChatTx } from '../schema';
 import { isUnsentUploadOf, type ReadableAttachment } from '../../../modules/attachments/readable';
 import { AppError, attachmentNotFound } from '../../../platform/errors';
-import type { WorkspaceContext } from '../../../platform/tenancy';
+import { activeWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
+import {
+  guestContentHistory,
+  guestMessageHistory,
+  guestMessageHistoryFor,
+  guestThreadHistoryFor,
+} from './history-access';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const visibility: unique symbol = Symbol('ChannelContext');
@@ -32,6 +38,7 @@ export interface ChannelContext {
   readonly channelId: string;
   readonly channelType: ChannelType;
   readonly userId: string;
+  readonly guest?: GuestMembershipAccess;
   readonly [visibility]: true;
 }
 
@@ -47,6 +54,9 @@ interface VisibleChannel {
   readonly id: string;
   readonly workspaceId: string;
   readonly type: ChannelType;
+  readonly guestSince: Date | string | null;
+  readonly guestExpiresAt: Date | string | null;
+  readonly channelJoinedAt: Date | string | null;
 }
 
 interface Scope {
@@ -73,7 +83,10 @@ type VisibilityQuery = SelectQueryBuilder<
   object
 >;
 
-const visibleChannels = (executor: ChatDb, userId: string): VisibilityQuery =>
+export const visibleChannels = (
+  executor: ChatDb,
+  userId: string | RawBuilder<string>,
+): VisibilityQuery =>
   executor
     .selectFrom('channels')
     .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
@@ -89,9 +102,126 @@ const visibleChannels = (executor: ChatDb, userId: string): VisibilityQuery =>
     )
     .where('channels.deleted_at', 'is', null)
     .where('workspaces.deleted_at', 'is', null)
+    .where(activeWorkspaceMembership)
+    .where(
+      sql<boolean>`(workspace_members.access_kind = 'member'
+      or workspace_members.guest_modules @> ARRAY['chat']::text[])`,
+    )
     .where((eb) =>
-      eb.or([eb('channels.type', '=', 'public'), eb('channel_members.user_id', 'is not', null)]),
+      eb.or([
+        eb.and([
+          eb('channels.type', '=', 'public'),
+          eb('workspace_members.access_kind', '=', 'member'),
+        ]),
+        eb('channel_members.user_id', 'is not', null),
+      ]),
     );
+
+/** Final-statement authority for timestamped channel content, including formerly unrestricted contexts. */
+export const channelContentVisible = (
+  executor: ChatDb,
+  context: ChannelContext,
+  sharedAt: RawBuilder<Date>,
+): RawBuilder<boolean> =>
+  sql<boolean>`exists (${visibleChannels(executor, context.userId)
+    .select('channels.id')
+    .where('channels.id', '=', context.channelId)
+    .where('channels.workspace_id', '=', context.workspaceId)
+    .where(guestContentHistory(sharedAt))
+    .where((eb) =>
+      eb.exists(audiencePeople(executor).select('users.id').where('users.id', '=', context.userId)),
+    )})`;
+
+/** The canonical reader's audience in one SQL statement, for notices and counter delivery. */
+export const channelAudienceQuery = (
+  executor: ChatDb,
+  channelId: string | RawBuilder<string>,
+  messageId?: string | RawBuilder<string>,
+): SelectQueryBuilder<ChatSchema, 'users', { id: string }> => {
+  const visible = visibleChannels(executor, sql.ref<string>('users.id'))
+    .select('channels.id')
+    .where('channels.id', '=', channelId)
+    .$if(messageId !== undefined, (query) =>
+      query.where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('messages as audience_message')
+            .select('audience_message.id')
+            .whereRef('audience_message.channel_id', '=', 'channels.id')
+            .where('audience_message.id', '=', messageId ?? '')
+            .where('audience_message.deleted_at', 'is', null)
+            .where(guestMessageHistoryFor('audience_message')),
+        ),
+      ),
+    );
+  return audiencePeople(executor)
+    .select('users.id')
+    .where((eb) => eb.exists(visible));
+};
+
+/** The account status rule shared by notice recipients and live authority reads. */
+const audiencePeople = (executor: ChatDb): SelectQueryBuilder<ChatSchema, 'users', object> =>
+  executor
+    .selectFrom('users')
+    .where('users.deleted_at', 'is', null)
+    .where('users.suspended_at', 'is', null);
+
+/** Bounds both the statement parameters and its private result map; a broadcast is paged by recipient. */
+export const LIVE_AUDIENCE_BATCH_MAX = 500;
+
+/** Internal authority, never part of a frame or an API receipt. */
+export interface LiveChannelAuthority {
+  readonly userId: string;
+  readonly accessKind: string;
+  readonly historySince: Date | null;
+  readonly expiresAt: Date | null;
+  readonly messageCreatedAt: Date | null;
+}
+
+/** One canonical visibility read for a bounded live batch, including its current history and trusted source time. */
+export const readLiveChannelAudience = async (
+  executor: ChatDb,
+  context: ChannelContext,
+  userIds: readonly string[],
+  messageId: string | undefined,
+): Promise<readonly LiveChannelAuthority[]> => {
+  if (userIds.length === 0) return [];
+  if (userIds.length > LIVE_AUDIENCE_BATCH_MAX)
+    throw new RangeError('Live audience batch is too large.');
+  const access = visibleChannels(executor, sql.ref<string>('users.id'))
+    .select([
+      'workspace_members.access_kind as accessKind',
+      'workspace_members.guest_expires_at as expiresAt',
+      sql<Date | null>`greatest(workspace_members.guest_since, channel_members.joined_at)`.as(
+        'historySince',
+      ),
+    ])
+    .where('channels.workspace_id', '=', context.workspaceId)
+    .where('channels.id', '=', context.channelId)
+    .as('live_access');
+  return await audiencePeople(executor)
+    .innerJoinLateral(access, (join) => join.onTrue())
+    .select([
+      'users.id as userId',
+      'live_access.accessKind',
+      'live_access.historySince',
+      'live_access.expiresAt',
+    ])
+    .select((eb) =>
+      messageId === undefined
+        ? sql<Date | null>`null`.as('messageCreatedAt')
+        : eb
+            .selectFrom('messages as live_message')
+            .select('live_message.created_at')
+            .where('live_message.id', '=', messageId)
+            .where('live_message.channel_id', '=', context.channelId)
+            .where('live_message.workspace_id', '=', context.workspaceId)
+            .$asScalar()
+            .as('messageCreatedAt'),
+    )
+    .where('users.id', 'in', [...new Set(userIds)])
+    .execute();
+};
 
 const visible = async (
   executor: ChatDb,
@@ -102,6 +232,9 @@ const visible = async (
     'channels.id as id',
     'channels.workspace_id as workspaceId',
     'channels.type as type',
+    'workspace_members.guest_since as guestSince',
+    'workspace_members.guest_expires_at as guestExpiresAt',
+    'channel_members.joined_at as channelJoinedAt',
   ]);
   if (scope.channelIds !== undefined) query = query.where('channels.id', 'in', scope.channelIds);
   if (scope.workspaceId !== undefined) {
@@ -115,6 +248,21 @@ const mint = (userId: string, channel: VisibleChannel): ChannelContext => ({
   channelId: channel.id,
   channelType: channel.type,
   userId,
+  ...(channel.guestSince === null
+    ? {}
+    : {
+        guest: {
+          kind: 'guest' as const,
+          historySince: new Date(
+            Math.max(
+              new Date(channel.guestSince).getTime(),
+              channel.channelJoinedAt === null ? 0 : new Date(channel.channelJoinedAt).getTime(),
+            ),
+          ).toISOString(),
+          expiresAt:
+            channel.guestExpiresAt === null ? null : new Date(channel.guestExpiresAt).toISOString(),
+        },
+      }),
   [visibility]: true,
 });
 
@@ -194,6 +342,21 @@ export const requireChannelById = async (
   return channel;
 };
 
+/** Serialize collaboration writes with guest scope edits, then recheck after the channel lock wait. */
+export const lockChannelForContentWrite = async (
+  executor: ChatTx,
+  context: ChannelContext,
+): Promise<void> => {
+  await executor
+    .selectFrom('channels')
+    .select('id')
+    .where('id', '=', context.channelId)
+    .where('workspace_id', '=', context.workspaceId)
+    .forNoKeyUpdate()
+    .execute();
+  await requireChannelById(executor, context.userId, context.channelId);
+};
+
 /** Several channels at once, all or nothing, in one query — what a subscription needs. */
 export const requireChannelsById = async (
   executor: ChatDb,
@@ -240,6 +403,50 @@ export const visibleChannelIdsQuery = (
     .where('channels.workspace_id', '=', context.workspaceId)
     .select('channels.id');
 
+/** Current message authority for a bound reader, including one bound by a batched replay row. */
+export const messageHistoryVisibleTo = (
+  executor: ChatDb,
+  userId: string | RawBuilder<string>,
+  workspaceId: string | RawBuilder<string>,
+  message = 'messages',
+): RawBuilder<boolean> => {
+  const permitted = visibleChannels(executor, userId)
+    .select('channels.id')
+    .where('channels.workspace_id', '=', workspaceId)
+    .where('channels.id', '=', sql.ref<string>(`${message}.channel_id`))
+    .where(guestMessageHistoryFor(message));
+  return sql<boolean>`exists (${permitted})`;
+};
+
+/** Apply the same live channel and history authority before a list's limit or cursor is computed. */
+export const withinMessageHistory = (
+  executor: ChatDb,
+  context: WorkspaceContext | ChannelContext,
+  message = 'messages',
+): RawBuilder<boolean> =>
+  messageHistoryVisibleTo(executor, context.userId, context.workspaceId, message);
+
+/** Content projections use the same current authority as lists, even for captured full contexts. */
+export const withinCurrentMessageHistory = (
+  executor: ChatDb,
+  context: WorkspaceContext | ChannelContext,
+  message = 'messages',
+): RawBuilder<boolean> => withinMessageHistory(executor, context, message);
+
+/** Traversal only: older roots need a current readable continuation and must be projected separately. */
+export const withinThreadHistory = (
+  executor: ChatDb,
+  context: WorkspaceContext | ChannelContext,
+  message = 'messages',
+): RawBuilder<boolean> => {
+  const permitted = visibleChannels(executor, context.userId)
+    .select('channels.id')
+    .where('channels.workspace_id', '=', context.workspaceId)
+    .where('channels.id', '=', sql.ref<string>(`${message}.channel_id`))
+    .where(guestThreadHistoryFor(message));
+  return sql<boolean>`exists (${permitted})`;
+};
+
 /** The one refusal for a message that is not there for the caller; reused, never copied. */
 export const messageNotFound = (): AppError =>
   new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
@@ -250,6 +457,8 @@ export interface VisibleMessage {
   readonly messageId: string;
   /** Null for a root. Threads are two levels deep, so a reply's is always a root (I-1). */
   readonly parentId: string | null;
+  /** Only a thread container was authorized; its earlier content remains unavailable. */
+  readonly historyHidden?: true;
 }
 
 /**
@@ -286,8 +495,12 @@ export const requireMessageById = async (
       'channels.id as id',
       'channels.workspace_id as workspaceId',
       'channels.type as type',
+      'workspace_members.guest_since as guestSince',
+      'workspace_members.guest_expires_at as guestExpiresAt',
+      'channel_members.joined_at as channelJoinedAt',
       'messages.parent_id as parentId',
     ])
+    .where(guestMessageHistory)
     .where('messages.id', '=', messageId);
   if (options.deleted !== 'include') statement = statement.where('messages.deleted_at', 'is', null);
   const row = await statement.executeTakeFirst();
@@ -296,6 +509,39 @@ export const requireMessageById = async (
     context: mint(userId, row),
     messageId,
     parentId: row.parentId,
+  };
+};
+
+/** A feed/window/thread traversal capability; never use it for original-content actions or files. */
+export const requireThreadContextById = async (
+  executor: ChatDb,
+  userId: string,
+  messageId: string,
+  options: { readonly deleted?: 'include' } = {},
+): Promise<VisibleMessage> => {
+  if (!Value.Check(Uuid, messageId)) throw messageNotFound();
+  let statement = visibleChannels(executor, userId)
+    .innerJoin('messages', 'messages.channel_id', 'channels.id')
+    .select([
+      'channels.id as id',
+      'channels.workspace_id as workspaceId',
+      'channels.type as type',
+      'workspace_members.guest_since as guestSince',
+      'workspace_members.guest_expires_at as guestExpiresAt',
+      'channel_members.joined_at as channelJoinedAt',
+      'messages.parent_id as parentId',
+    ])
+    .select(guestMessageHistory.as('content_visible'))
+    .where(guestThreadHistoryFor())
+    .where('messages.id', '=', messageId);
+  if (options.deleted !== 'include') statement = statement.where('messages.deleted_at', 'is', null);
+  const row = await statement.executeTakeFirst();
+  if (row === undefined) throw messageNotFound();
+  return {
+    context: mint(userId, row),
+    messageId,
+    parentId: row.parentId,
+    ...(row.content_visible ? {} : { historyHidden: true as const }),
   };
 };
 
@@ -335,7 +581,8 @@ export const requireAttachmentById = async (
             .select('messages.id')
             .innerJoin('message_attachments', 'message_attachments.message_id', 'messages.id')
             .where('message_attachments.attachment_id', '=', sql.ref<string>('attachments.id'))
-            .where('messages.deleted_at', 'is', null),
+            .where('messages.deleted_at', 'is', null)
+            .where(guestMessageHistory),
         ),
       ]),
     )

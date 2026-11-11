@@ -5,9 +5,11 @@
  * to show them, and the frame that reads them again. Through the real channel screen.
  */
 import { describe, expect, test } from 'bun:test';
-import { act, within } from '@testing-library/react';
+import { act, fireEvent, within } from '@testing-library/react';
 import type { AddBookmarkRequest, BookmarkList, ChannelBookmark } from '@purlay/types';
 import { ApiError } from '../../../data/errors';
+import { workspaceAccessChanged } from '../../../data/access-change';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { mountChannel, page, settle, type ChannelView } from '../../../testing/channel-harness';
 import { installDom } from '../../../testing/dom';
@@ -104,6 +106,181 @@ describe('what a person types for a bookmark', () => {
 });
 
 describe('a channel’s bookmarks', () => {
+  test('a bookmark accepted before access changed cannot restore its private link when its response arrives late', async () => {
+    const pending = Promise.withResolvers<ChannelBookmark>();
+    const bookmark = aBookmark({ title: 'Prior access private link' });
+    let requests = 0;
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...aServer(),
+        addBookmark: () => {
+          requests++;
+          return pending.promise;
+        },
+      },
+    });
+    try {
+      await addThrough(view, bookmark.url, bookmark.title);
+      expect(requests).toBe(1);
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      pending.resolve(bookmark);
+      await settle();
+      expect(
+        (view.world.client.getQueryData<BookmarkList>(keys.bookmarks(IDS.api)) ?? []).some(
+          (entry) => entry.id === bookmark.id,
+        ),
+      ).toBe(false);
+      expect(view.container.textContent.includes(bookmark.title)).toBe(false);
+    } finally {
+      pending.resolve(bookmark);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
+  test('a bookmark accepted while only another proven workspace changes still appears', async () => {
+    const pending = Promise.withResolvers<ChannelBookmark>();
+    const bookmark = aBookmark();
+    const view = await mountChannel({
+      messages: page([]),
+      api: { ...aServer(), addBookmark: () => pending.promise },
+    });
+    try {
+      await addThrough(view, bookmark.url, bookmark.title);
+      act(() => {
+        workspaceAccessChanged(view.world.client, 'unrelated-workspace');
+      });
+      await settle();
+      pending.resolve(bookmark);
+      await settle();
+      expect(
+        within(barOf(view)).getByRole('link', { name: bookmark.title }).getAttribute('href'),
+      ).toBe(bookmark.url);
+    } finally {
+      pending.resolve(bookmark);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
+  test('an old bookmark Undo cannot re-share its URL after access is replaced', async () => {
+    const bookmark = aBookmark();
+    const server = aServer([bookmark]);
+    const view = await mountChannel({ messages: page([]), api: server });
+    try {
+      await person().click(
+        within(barOf(view)).getByRole('button', { name: 'Remove the bookmark Runbook' }),
+      );
+      await settle();
+      const undo = view.getByRole('button', { name: 'Undo' });
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      await person().click(undo);
+      await settle();
+      expect(server.added).toHaveLength(0);
+      expect(
+        (view.world.client.getQueryData<BookmarkList>(keys.bookmarks(IDS.api)) ?? []).length,
+      ).toBe(0);
+    } finally {
+      view.unmountAll();
+    }
+  });
+
+  test('a late bookmark removal confirmation cannot announce the prior private title', async () => {
+    const bookmark = aBookmark({ title: 'Previous private runbook' });
+    const pending = Promise.withResolvers<undefined>();
+    let changed = false;
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...aServer([bookmark]),
+        removeBookmark: () => pending.promise,
+        bookmarks: () => Promise.resolve(changed ? [] : [bookmark]),
+      },
+    });
+    try {
+      await person().click(
+        within(barOf(view)).getByRole('button', {
+          name: 'Remove the bookmark Previous private runbook',
+        }),
+      );
+      changed = true;
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      pending.resolve(undefined);
+      await settle();
+      expect(view.container.textContent.includes(bookmark.title)).toBe(false);
+    } finally {
+      pending.resolve(undefined);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
+  test('a queued remove click cannot use the prior rendered bookmark after its access was replaced', async () => {
+    const bookmark = aBookmark();
+    const server = aServer([bookmark]);
+    const view = await mountChannel({ messages: page([]), api: server });
+    try {
+      const remove = within(barOf(view)).getByRole('button', {
+        name: 'Remove the bookmark Runbook',
+      });
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+        fireEvent.click(remove);
+      });
+      await settle();
+      expect(server.removed).toHaveLength(0);
+    } finally {
+      view.unmountAll();
+    }
+  });
+
+  test('a prior removal failure cannot refresh or report an error against the new access', async () => {
+    const bookmark = aBookmark();
+    const pending = Promise.withResolvers<undefined>();
+    let reads = 0;
+    let changed = false;
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...aServer([bookmark]),
+        removeBookmark: () => pending.promise,
+        bookmarks: () => {
+          reads++;
+          return Promise.resolve(changed ? [] : [bookmark]);
+        },
+      },
+    });
+    try {
+      await person().click(
+        within(barOf(view)).getByRole('button', { name: 'Remove the bookmark Runbook' }),
+      );
+      changed = true;
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      const beforeOld = reads;
+      pending.reject(new ApiError(0, 'NETWORK', 'Old removal failed late'));
+      await settle();
+      expect(reads).toBe(beforeOld);
+      expect(view.queryByText(/^The bookmark was not removed\./) === null).toBe(true);
+    } finally {
+      pending.resolve(undefined);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
   test('are shown under the header as links that open in a new tab, without the referrer', async () => {
     const view = await mountChannel({
       messages: page([]),

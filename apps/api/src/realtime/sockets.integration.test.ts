@@ -125,6 +125,7 @@ const aRoom = async (): Promise<{
   alice: string;
   aliceId: string;
   bob: string;
+  bobId: string;
   channelId: string;
 }> => {
   const alice = await aUser('alice');
@@ -141,7 +142,7 @@ const aRoom = async (): Promise<{
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   expect((await http('POST', `/api/channels/${channelId}/join`, bob.cookie)).ok).toBe(true);
-  return { alice: alice.cookie, aliceId: alice.id, bob: bob.cookie, channelId };
+  return { alice: alice.cookie, aliceId: alice.id, bob: bob.cookie, bobId: bob.id, channelId };
 };
 
 interface Client {
@@ -1008,6 +1009,11 @@ describe('integration: two real sockets', () => {
           ),
         );
         await seen(subscribeId);
+        const socketId = recorded.lines.findLast(
+          (line) => line['msg'] === 'socket opened' && line['userId'] === room.bobId,
+        )?.['socketId'];
+        if (typeof socketId !== 'string')
+          throw new Error('The subscribed connection was not recorded');
 
         // Stop reading, then send until the server gives up on the socket. How many
         // messages that takes is the machine's business — the kernel's buffers on
@@ -1017,16 +1023,16 @@ describe('integration: two real sockets', () => {
         // sequence is not what is under test, the buffer filling is.
         socket.pause();
         const long = 'x'.repeat(MESSAGE_CONTENT_MAX);
-        const logged = (): number =>
-          recorded.lines.filter(
-            (line) => line['msg'] === 'socket fell behind and was closed to resync',
-          ).length;
-        const alreadyLogged = logged();
-        const fellBehind = (): boolean => logged() > alreadyLogged;
+        // Either pending authority projections or the wire buffer can fill first. Stop at this
+        // connection's actual closure; the wire assertion below still requires the RESYNC code.
+        const wasClosed = (): boolean =>
+          recorded.lines.some(
+            (line) => line['msg'] === 'socket closed' && line['socketId'] === socketId,
+          );
         const BATCH = 20;
         const MOST_BATCHES = 100;
         let sent = 0;
-        while (!fellBehind()) {
+        while (!wasClosed()) {
           if (sent >= BATCH * MOST_BATCHES) {
             throw new Error(
               `${String(sent)} messages of ${String(long.length)} bytes and the socket never fell behind`,
@@ -1054,7 +1060,7 @@ describe('integration: two real sockets', () => {
         ]);
         expect(outcome).toBe('closed');
         expect(closeCodeIn(Buffer.concat(received))).toBe(CLOSE_CODES.RESYNC);
-        expect(fellBehind()).toBe(true);
+        expect(wasClosed()).toBe(true);
       },
       FILLING_TEST_MS,
     );

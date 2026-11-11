@@ -3,8 +3,9 @@
  * found again — against the real provider tree, a socket the test drives and storage and
  * time it holds.
  */
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, within } from '@testing-library/react';
+import { notifyManager } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ATTACHMENT_BYTES_MAX,
@@ -12,13 +13,16 @@ import {
   MESSAGE_CONTENT_MAX,
   type Attachment,
   type ServerFrame,
+  type MeResponse,
 } from '@purlay/types';
 import { ApiError } from '../../../data/errors';
 import { keys } from '../../../data/keys';
+import { watchAccessChanges } from '../../../data/access-revision';
 import { SessionGate } from '../../session/session';
 import { WorkspaceScopeProvider } from '../../shell/workspace';
 import { DeepWorkProvider } from '../../shell/deep-work';
-import { RealtimeProvider } from '../../../realtime/realtime-provider';
+import { RealtimeProvider, useEngine } from '../../../realtime/realtime-provider';
+import type { Engine } from '../../../realtime/engine';
 import { Toaster } from '../../../ui/toast';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
@@ -46,13 +50,24 @@ import { DRAFT_DEBOUNCE_MS } from './drafts';
 import { ComposerPortsContext } from './composer-ports';
 import { OutboxProvider } from './uploads';
 import { draftKey, type DraftStorage } from './drafts';
-import { PERSON_KEY } from '../../../data/browser-storage';
+import { PERSON_KEY, isClaimedBy } from '../../../data/browser-storage';
 import { expectFocusOn } from '../../../testing/focus';
 
 installDom();
 
 /** Who is signed in, in every mount here; the page is theirs (#694). */
 const ME = aSession().user.id;
+const guestSession = (): MeResponse => {
+  const session = aSession();
+  return {
+    ...session,
+    memberships: session.memberships.map((membership) => ({
+      ...membership,
+      role: 'member' as const,
+      access: { kind: 'guest' as const, historySince: WHEN, expiresAt: null },
+    })),
+  };
+};
 /** Where this person's draft for a place lives. */
 const mine = (channelId: string, parentId?: string): string => draftKey(ME, channelId, parentId);
 
@@ -92,6 +107,8 @@ interface Options {
   readonly touchOnly?: boolean;
   /** Deep Work kept for the workspace, as the shell keeps it; absent, nothing keeps it. */
   readonly deepWork?: boolean;
+  readonly inspect?: (engine: Engine) => void;
+  readonly sharedStorage?: boolean;
 }
 
 interface Mounted {
@@ -122,6 +139,8 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
   let setShown: (next: boolean) => void = () => undefined;
   /** Holds the composer's props in state, so a test can change them the way a route change does. */
   const Holder = (): React.JSX.Element | null => {
+    const engine = useEngine();
+    options.inspect?.(engine);
     const [current, set] = useState(props);
     const [visible, show] = useState(true);
     setProps = set;
@@ -156,6 +175,7 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
   );
   const view = await renderApp(tree(), {
     api: options.api ?? aSignedInApi(),
+    ...(options.sharedStorage === true ? { storage } : {}),
     ...(options.locale === undefined ? {} : { locale: options.locale }),
   });
   await settle();
@@ -1541,6 +1561,59 @@ describe('@ offers people (UX §5)', () => {
     expect(asked).toBe(0);
   });
 
+  test('a guest reads public-channel participants before offering names, then keeps keyboard selection', async () => {
+    const waiting = Promise.withResolvers<{ user: typeof BOB_USER; joinedAt: string }[]>();
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        me: () => Promise.resolve(guestSession()),
+        channelMembers: () => waiting.promise,
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    expect(view.getByRole('status', { name: /reading/i })).toBeDefined();
+    expect(list(view)).toBeNull();
+    await act(async () => {
+      waiting.resolve([{ user: BOB_USER, joinedAt: WHEN }]);
+      await waiting.promise;
+    });
+    await settle();
+    expect(options(view)).toEqual(['Bob @bob']);
+    await expectNoAxeViolations(view.container);
+    await user.keyboard('{Enter}');
+    expect(box().value).toBe('@bob ');
+    expectFocusOn(box());
+    expect(list(view)).toBeNull();
+    expect(view.world.sockets.sent('MESSAGE_SEND')).toHaveLength(0);
+    await user.clear(box());
+    await user.keyboard('@a');
+    expect(options(view)).toEqual([]);
+  });
+
+  test('a guest public-channel lookup failure offers Retry and preserves the draft and focus', async () => {
+    let fails = true;
+    const { view, box, user } = await mount({
+      api: aSignedInApi({
+        me: () => Promise.resolve(guestSession()),
+        channelMembers: () =>
+          fails
+            ? Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'busy'))
+            : Promise.resolve([{ user: BOB_USER, joinedAt: WHEN }]),
+      }),
+    });
+    await user.click(box());
+    await user.keyboard('@b');
+    await settle();
+    const status = view.getByRole('status', { name: /could not be read/i });
+    expect(list(view)).toBeNull();
+    expect(box().value).toBe('@b');
+    fails = false;
+    await user.click(within(status).getByRole('button', { name: 'Retry' }));
+    await settle();
+    expectFocusOn(box());
+    expect(options(view)).toEqual(['Bob @bob']);
+  });
+
   test('passes the accessibility audit while the list is open, and says its words in Turkish', async () => {
     const { view, box, user } = await mount({ locale: 'tr' });
     await user.click(box());
@@ -1606,6 +1679,185 @@ describe('attaching files (D-109, #370)', () => {
       fireEvent.paste(box, { clipboardData: { files, getData: () => '' } });
     });
   };
+
+  test('an explicit enqueue refusal keeps the current words and ready files and lets the person send again', async () => {
+    const uploads = held();
+    const observed: { engine: Engine | null } = { engine: null };
+    let reported = 0;
+    const { view, box, user, sent, storage, timers } = await mount({
+      api: aSignedInApi(uploads.api),
+      inspect: (engine) => {
+        observed.engine = engine;
+      },
+      props: {
+        onSent: () => {
+          reported += 1;
+        },
+      },
+    });
+    paste(box(), [new File(['private'], 'review.txt')]);
+    uploads.finish(0);
+    await settle();
+    await user.type(box(), 'Please review this message');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    if (observed.engine === null) throw new Error('Missing actual composer engine');
+    const enqueue = spyOn(observed.engine, 'send').mockImplementation(() => {
+      throw new ApiError(401, 'UNAUTHENTICATED', 'Account changed before enqueue');
+    });
+    try {
+      await user.keyboard('{Enter}');
+      expect(box().value).toBe('Please review this message');
+      expect(view.queryByText('review.txt') !== null).toBe(true);
+      expect(storage?.getItem(mine(IDS.api))).toBe('Please review this message');
+      expect(sent()).toHaveLength(0);
+      expect(reported).toBe(0);
+      expect(
+        view.queryByText('Your account changed. Review this message and send again.') !== null,
+      ).toBe(true);
+      await expectNoAxeViolations(view.container);
+    } finally {
+      enqueue.mockRestore();
+    }
+    await user.keyboard('{Enter}');
+    expect(sent()).toHaveLength(1);
+    expect(reported).toBe(1);
+    expect(box().value).toBe('');
+    expect(view.queryByText('review.txt') === null).toBe(true);
+  });
+
+  test.each([false, true])(
+    'queued old files cannot be rebound to a new account engine, receipt roundtrip=%s',
+    async (roundtrip) => {
+      const uploads = held();
+      let receipt = aSession();
+      const { view, box, user, sent, shown, storage } = await mount({
+        sharedStorage: true,
+        api: aSignedInApi({ ...uploads.api, me: () => Promise.resolve(receipt) }),
+      });
+      paste(box(), [new File(['private'], 'previous-account.txt')]);
+      await user.type(box(), 'Previous private message{Enter}');
+      shown(false);
+      receipt = {
+        ...receipt,
+        user: { ...receipt.user, id: IDS.alice, username: 'alice', displayName: 'Alice' },
+      };
+      await act(async () => {
+        await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+        if (roundtrip) {
+          receipt = aSession();
+          await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+        }
+      });
+      await settle();
+      // A queued upload's callback sees the latest provider by now; the old engine has stopped.
+      act(() => {
+        view.world.sockets.open();
+      });
+      const freshKey = draftKey(roundtrip ? ME : IDS.alice, IDS.api, undefined);
+      storage?.setItem(freshKey, 'Fresh account draft');
+      uploads.finish(0);
+      await settle();
+      expect(sent()).toHaveLength(0);
+      expect(storage?.getItem(freshKey)).toBe('Fresh account draft');
+      expect(view.queryByText('previous-account.txt') === null).toBe(true);
+      expect(
+        view.queryByText('Not sent to api: a file did not upload. The message is still there.') ===
+          null,
+      ).toBe(true);
+      shown(true);
+      await settle();
+      await user.type(box(), 'Fresh send{Enter}');
+      expect(sent()).toHaveLength(1);
+      const attachmentIds = sent()[0]?.attachmentIds;
+      expect(
+        attachmentIds === undefined || (Array.isArray(attachmentIds) && attachmentIds.length === 0),
+      ).toBe(true);
+    },
+  );
+
+  test('a coalesced A to B to A receipt cannot keep old composer words or flush them on unmount', async () => {
+    let receipt = aSession();
+    const { view, box, user, shown, storage, timers } = await mount({
+      sharedStorage: true,
+      api: aSignedInApi({ me: () => Promise.resolve(receipt) }),
+    });
+    await user.type(box(), 'Old lifetime private draft');
+    let committedReturn = false;
+    // Hold observer notifications through both real network receipts: React sees only the final A.
+    // Query success reconciliation and storage claims still execute at their real synchronous seam.
+    const queued: (() => void)[] = [];
+    notifyManager.setScheduler((callback) => {
+      queued.push(callback);
+    });
+    const unwatch = watchAccessChanges(view.world.client, () => {
+      if (view.world.client.getQueryData<MeResponse>(keys.me)?.user.id !== ME) return;
+      committedReturn = true;
+      expect(box().value).toBe('Old lifetime private draft');
+      expect(isClaimedBy(storage, ME)).toBe(true);
+      storage?.setItem(mine(IDS.api), 'Fresh returned-account draft');
+      timers.advance(DRAFT_DEBOUNCE_MS);
+      expect(storage?.getItem(mine(IDS.api))).toBe('Fresh returned-account draft');
+    });
+    try {
+      receipt = {
+        ...receipt,
+        user: { ...receipt.user, id: IDS.alice, username: 'alice', displayName: 'Alice' },
+      };
+      await act(async () => {
+        await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+        receipt = aSession();
+        await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+      });
+      expect(committedReturn).toBe(true);
+      // Unmount the stale composer while the storage owner has already returned to A.
+      shown(false);
+      expect(storage?.getItem(mine(IDS.api))).toBe('Fresh returned-account draft');
+    } finally {
+      unwatch();
+      notifyManager.setScheduler((callback) => {
+        setTimeout(callback, 0);
+      });
+      act(() => {
+        for (const callback of queued.splice(0)) callback();
+      });
+    }
+    await settle();
+    shown(true);
+    await settle();
+    expect(box().value).toBe('Fresh returned-account draft');
+    shown(false);
+    expect(storage?.getItem(mine(IDS.api))).toBe('Fresh returned-account draft');
+  });
+
+  test('an old discard rejection cannot reveal its file name to the replacement account', async () => {
+    const uploads = held();
+    let receipt = aSession();
+    const response = Promise.withResolvers<undefined>();
+    const { view, box, user } = await mount({
+      sharedStorage: true,
+      api: aSignedInApi({
+        ...uploads.api,
+        me: () => Promise.resolve(receipt),
+        discardAttachment: () => response.promise,
+      }),
+    });
+    paste(box(), [new File(['private'], 'confidential-old-name.txt')]);
+    uploads.finish(0);
+    await settle();
+    await user.click(view.getByRole('button', { name: 'Remove confidential-old-name.txt' }));
+    receipt = {
+      ...receipt,
+      user: { ...receipt.user, id: IDS.alice, username: 'alice', displayName: 'Alice' },
+    };
+    await act(async () => {
+      await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+    });
+    response.reject(new ApiError(503, 'STORAGE_UNAVAILABLE', 'Down'));
+    await settle();
+    expect(view.queryByText(/confidential-old-name/) === null).toBe(true);
+  });
 
   /** A paste whose clipboard has files, and perhaps words, as a spreadsheet's or a screenshot's does. */
   const pasteWith = (

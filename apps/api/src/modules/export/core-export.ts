@@ -82,6 +82,10 @@ const head = [
       user_id: 'export',
       role: 'export',
       joined_at: 'export',
+      access_kind: 'export',
+      guest_since: 'export',
+      guest_expires_at: 'export',
+      guest_modules: 'export',
       // A person's own state.
       deep_work_until: 'omit',
       is_deep_work_active: 'omit',
@@ -100,6 +104,11 @@ const tail = [
       created_at: 'export',
       expires_at: 'export',
       revoked_at: 'export',
+      access_kind: 'export',
+      guest_email: 'export',
+      guest_channels: 'export',
+      guest_modules: 'export',
+      guest_access_expires_at: 'export',
       // The link's secret, digested: it would still open nothing, and says nothing either.
       token_hash: 'omit',
     },

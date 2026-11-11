@@ -7,7 +7,12 @@ import {
   type MessageReminder,
   type MessageReminderList,
 } from '@purlay/types';
-import { messageNotFound, requireMessageById, visibleChannelIds } from '../channels/guard';
+import {
+  messageNotFound,
+  requireMessageById,
+  visibleChannelIds,
+  withinMessageHistory,
+} from '../channels/guard';
 import { DAY_MS, type Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { WorkspaceContext } from '../../../platform/tenancy';
@@ -115,6 +120,7 @@ export const reminderList = async (
     .where('message_reminders.user_id', '=', context.userId)
     .where('message_reminders.workspace_id', '=', context.workspaceId)
     .where('message_reminders.channel_id', 'in', visible)
+    .where(withinMessageHistory(db, context))
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .orderBy('message_reminders.remind_at')

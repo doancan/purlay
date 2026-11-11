@@ -421,7 +421,13 @@ const aWorld = async (db: Executor): Promise<World> => {
     outsider: outsider.cookie,
     // What a body may need: the outsider, who is certainly in the workspace, and a message
     // of the visible channel (a read position names one).
-    ids: { userId: outsider.id, messageId: threads.visible, replyId: reply.id, workspaceId },
+    ids: {
+      userId: outsider.id,
+      messageId: threads.visible,
+      replyId: reply.id,
+      workspaceId,
+      channelId: visible,
+    },
     workspaceId,
     visible,
     feed: await aFeed(db, workspaceId, visible),

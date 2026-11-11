@@ -11,12 +11,13 @@
  * The ports are the browser's by default and a test's when given: the socket, the
  * timers, the dice and the clock are arguments (D-46).
  */
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { RevokedReason } from '@purlay/types';
 import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useApi } from '../data/api-provider';
 import { keys } from '../data/keys';
+import { captureAccess } from '../data/access-revision';
 import { useClientStorage } from '../data/storage-provider';
 import { useChannels } from '../data/queries';
 import { useRuns, useSession } from '../features/session/session';
@@ -57,6 +58,19 @@ export const RealtimeProvider = ({
   const { workspace } = useWorkspace();
   const { user } = useSession();
   const storage = useClientStorage();
+  const account = useRef<{
+    readonly client: QueryClient;
+    readonly isCurrent: () => boolean;
+    readonly generation: number;
+  } | null>(null);
+  if (account.current?.client !== client || !account.current.isCurrent())
+    account.current = {
+      client,
+      isCurrent: captureAccess(client, keys.me),
+      generation: (account.current?.generation ?? 0) + 1,
+    };
+  // Coalesced A→B→A receipts still need a new engine; unrelated access changes keep this lifetime.
+  const accountLifetime = account.current.isCurrent;
   // The socket carries the core's frames too (a revoked session, a changed workspace), so it stays; which
   // channels to watch is chat's to say, and a server without it has none.
   const channels = useChannels(workspace.id, useRuns('chat'));
@@ -81,6 +95,7 @@ export const RealtimeProvider = ({
     [
       api,
       client,
+      accountLifetime,
       user.id,
       storage,
       ports.url,
@@ -143,7 +158,11 @@ export const RealtimeProvider = ({
     if (gone.length > 0) engine.lose(gone);
   }, [engine, channels.data, memberOf, workspace.id]);
 
-  return <EngineContext.Provider value={engine}>{children}</EngineContext.Provider>;
+  return (
+    <EngineContext.Provider key={account.current.generation} value={engine}>
+      {children}
+    </EngineContext.Provider>
+  );
 };
 
 export const useEngine = (): Engine => {

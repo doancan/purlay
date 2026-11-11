@@ -122,7 +122,7 @@ failure of the tests that use it.
 | `bun run job <name>` | A scheduled job (D-30), which owns the list; an unknown name prints every job. `jobs:status` says what each last did and exits non-zero when one is overdue or never ran; `jobs:first` runs, once, each that never succeeded (what the scheduler does as it starts). Reads the same configuration as the API |
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |
-| `bun run lint:fix` | Fix what the linter can fix on its own |
+| `bun run lint` · `bun run lint:fix` | The same whole-repository ESLint rules, in serial workspace processes so TypeScript project-service heaps are released between them; `lint:fix` fixes what the linter can fix on its own. The wrapper accepts only `--fix`; custom report options use ESLint directly |
 | `python3 scripts/check-docs.py -v` | Every cross-document reference, with the title of the section it lands on |
 | `python3 scripts/check-docs.py --write-sections` | Re-lock the section numbering after deliberately renumbering a document |
 
@@ -243,7 +243,8 @@ What belongs here is the discipline around them:
   `scripts/mutations/index.ts` does not import.
   **What runs when.** Every pull request that adds or changes an entry runs exactly those entries, in CI's
   `mutations-changed` job (part of `verify`: the ids are what differs in `scripts/mutations/` from the merge-base,
-  and each must be caught, so an equivalent or broken mutant fails the change that adds it); a pull request that
+  divided over four isolated shards, with every changed entry run exactly once and every shard required),
+  and each must be caught, so an equivalent or broken mutant fails the change that adds it; a pull request that
   touches no mutation file skips the job, and the gate accepts only that skip. The whole list is applied weekly by
   `mutations.yml`, sharded by area file (`bun run mutate --shard=2/12`), which is not a required check: a survivor or a
   stale entry turns the run red and opens one tracking issue. In between, a test weakened by a change that

@@ -3,13 +3,22 @@
  * lists the screens read come out. No React, no network.
  */
 import { describe, expect, test } from 'bun:test';
+import { aSession } from '../testing/fixtures';
 import {
   InfiniteQueryObserver,
   QueryClient,
   QueryObserver,
   type InfiniteData,
 } from '@tanstack/react-query';
-import type { Channel, ChannelState, FilePage, Message, MessagePage, PinList } from '@purlay/types';
+import type {
+  Channel,
+  ChannelState,
+  FilePage,
+  Message,
+  MessagePage,
+  PinList,
+  MeResponse,
+} from '@purlay/types';
 import {
   allChannelsRead,
   channelAdded,
@@ -27,6 +36,7 @@ import {
   threadUpdated,
 } from './cache';
 import { keys } from './keys';
+import { workspaceAccessChanged } from './access-change';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -377,6 +387,130 @@ describe('a message changes', () => {
 });
 
 describe('the channel list', () => {
+  test('a channel added during a list read survives the older response without needing a message frame', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const old = Promise.withResolvers<Channel[]>();
+    const dm = channel({ id: id(50), name: null, type: 'direct_message', peer: user });
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: keys.channels(WS),
+      initialData: [channel()],
+      queryFn: (): Promise<Channel[]> =>
+        ++reads === 1 ? old.promise : Promise.resolve([channel(), dm]),
+    });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      channelAdded(client, dm);
+      old.resolve([channel()]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.map((item) => item.id)).toEqual([
+        CH,
+        dm.id,
+      ]);
+      expect(reads).toBe(2);
+    } finally {
+      old.resolve([]);
+      stop();
+      client.clear();
+    }
+  });
+
+  test('a later live read wins over an older HTTP unread snapshot', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const old = Promise.withResolvers<Channel[]>();
+    const unread = channel({ state: { ...state, unreadCount: 1, unreadMentionCount: 1 } });
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: keys.channels(WS),
+      initialData: [unread],
+      queryFn: (): Promise<Channel[]> =>
+        ++reads === 1 ? old.promise : Promise.resolve([channel()]),
+    });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      channelStateChanged(client, CH, state);
+      old.resolve([unread]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state).toEqual(state);
+      expect(reads).toBe(2);
+    } finally {
+      old.resolve([]);
+      stop();
+      client.clear();
+    }
+  });
+
+  test('an old channel snapshot cannot replace live counters or fresh channel metadata', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const old = Promise.withResolvers<Channel[]>();
+    let reads = 0;
+    let server = [
+      channel({ name: 'fresh name', state: { ...state, unreadCount: 1, unreadMentionCount: 1 } }),
+    ];
+    const observer = new QueryObserver(client, {
+      queryKey: keys.channels(WS),
+      initialData: [channel()],
+      queryFn: (): Promise<Channel[]> => (++reads === 1 ? old.promise : Promise.resolve(server)),
+    });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      expect(reads).toBe(1);
+      channelStateChanged(client, CH, server[0]?.state ?? state);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      old.resolve([channel()]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]).toMatchObject({
+        name: 'fresh name',
+        state: server[0]?.state,
+      });
+      expect(reads).toBe(2);
+      server = [channel({ name: 'fresh name', state })];
+      for (let n = 0; n < 100; n++) channelStateChanged(client, CH, state);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(reads).toBe(2);
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state).toEqual(state);
+    } finally {
+      old.resolve([]);
+      stop();
+      client.clear();
+    }
+  });
+
+  test.each(['replace', 'reset'] as const)(
+    'a cancelled channel read cannot schedule work after access %s',
+    async (operation) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const old = Promise.withResolvers<Channel[]>();
+      let reads = 0;
+      const observer = new QueryObserver(client, {
+        queryKey: keys.channels(WS),
+        initialData: [channel()],
+        queryFn: (): Promise<Channel[]> =>
+          ++reads === 1 ? old.promise : Promise.resolve([channel({ name: 'current access' })]),
+      });
+      const stop = observer.subscribe(() => undefined);
+      try {
+        expect(reads).toBe(1);
+        channelStateChanged(client, CH, { ...state, unreadCount: 1 });
+        if (operation === 'replace') {
+          client.removeQueries({ queryKey: keys.channels(WS), exact: true });
+          client.setQueryData(keys.channels(WS), [channel({ name: 'another account' })]);
+        } else workspaceAccessChanged(client, WS);
+        old.resolve([channel({ name: 'old access' })]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(reads).toBe(operation === 'reset' ? 2 : 1);
+        expect(client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(false);
+        expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.name).toBe(
+          operation === 'reset' ? 'current access' : 'another account',
+        );
+      } finally {
+        old.resolve([]);
+        stop();
+        client.clear();
+      }
+    },
+  );
+
   test("takes the server's counters for the channel the frame names, in whichever workspace", () => {
     const client = seeded();
     const next = { lastReadMessageId: id(2), unreadCount: 4, unreadMentionCount: 1 };
@@ -810,4 +944,95 @@ test('starring a grouped channel clears its placement before an unstar can resur
     starred: false,
     sidebarGroupId: null,
   });
+});
+
+describe('hidden thread continuations refresh without a request storm', () => {
+  const settle = async (): Promise<void> => {
+    for (let turn = 0; turn < 6; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  test('many updates during a read schedule one follow-up, including a later burst', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const slots = Array.from({ length: 5 }, () => Promise.withResolvers<string[]>());
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: ['thread', 'hidden-burst'],
+      queryFn: (): Promise<string[]> => {
+        reads += 1;
+        return slots[reads - 1]?.promise ?? Promise.resolve(['readable']);
+      },
+    });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      for (let n = 0; n < 100; n += 1) readAgain(client, ['thread', 'hidden-burst']);
+      slots[0]?.resolve(['first']);
+      await settle();
+      expect(reads).toBe(2);
+      slots[1]?.resolve(['latest']);
+      await settle();
+      expect(reads).toBe(2);
+      const third = observer.refetch();
+      await settle();
+      expect(reads).toBe(3);
+      for (let n = 0; n < 100; n += 1) readAgain(client, ['thread', 'hidden-burst']);
+      slots[2]?.resolve(['next']);
+      await third;
+      await settle();
+      expect(reads).toBe(4);
+      slots[3]?.resolve(['current']);
+      await settle();
+      expect(reads).toBe(4);
+    } finally {
+      stop();
+      client.clear();
+      for (const slot of slots) slot.resolve([]);
+    }
+  });
+
+  test.each(['guest', 'member'] as const)(
+    'a fresh reply discovers a missing permitted root only for %s access',
+    async (kind) => {
+      const client = seeded();
+      const session = aSession();
+      const membership = session.memberships[0];
+      if (membership === undefined) throw new Error('Missing session membership');
+      client.setQueryData<MeResponse>(keys.me, {
+        ...session,
+        memberships: [
+          {
+            ...membership,
+            workspace: { ...membership.workspace, id: WS },
+            access:
+              kind === 'guest'
+                ? { kind: 'guest', historySince: '2026-09-09T07:00:00.000Z', expiresAt: null }
+                : { kind: 'member' },
+          },
+        ],
+      });
+      client.setQueryData(keys.messages(CH), pages([]));
+      let reads = 0;
+      const observer = new QueryObserver(client, {
+        queryKey: keys.messages(CH),
+        initialData: pages([]),
+        staleTime: Infinity,
+        queryFn: (): Promise<Pages> => {
+          reads += 1;
+          return Promise.resolve(
+            pages([
+              message(1, { historyHidden: true, replyAllowed: true, content: '', sender: null }),
+            ]),
+          );
+        },
+      });
+      const stop = observer.subscribe(() => undefined);
+      try {
+        messageCreated(client, message(2, { parentId: id(1), thread: null }));
+        await settle();
+        expect(reads).toBe(kind === 'guest' ? 1 : 0);
+        expect(feed(client)).toEqual(kind === 'guest' ? [id(1)] : []);
+      } finally {
+        stop();
+        client.clear();
+      }
+    },
+  );
 });

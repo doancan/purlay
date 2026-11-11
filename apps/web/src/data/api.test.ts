@@ -5,7 +5,12 @@
  */
 import { NO_PROFILE } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
-import type { Attachment, DeviceSession } from '@purlay/types';
+import type {
+  Attachment,
+  CreatedGuestInvitation,
+  CreateGuestInvitationRequest,
+  DeviceSession,
+} from '@purlay/types';
 import { createApi, type Api } from './api';
 import { ApiError } from './errors';
 import { createHttp, type UploadRequest } from './http';
@@ -69,6 +74,49 @@ const harness = (body: unknown): { api: Api; calls: Call[] } => {
 };
 
 describe('the endpoints', () => {
+  test('named guest invitations validate readiness and keep the email, scope and one-time token in their contracts', async () => {
+    const ready = harness({ enabled: true, email: false });
+    expect(await ready.api.guestInvitationAvailability(ID)).toEqual({
+      enabled: true,
+      email: false,
+    });
+    expect(ready.calls).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/guest-invitations`, body: undefined },
+    ]);
+    const answer: CreatedGuestInvitation = {
+      invitation: {
+        id: ID,
+        createdBy: user,
+        createdAt: WHEN,
+        expiresAt: '2026-12-01T12:00:00.000Z',
+        guest: { channelCount: 1, accessExpiresAt: null },
+      },
+      token: 'a'.repeat(64),
+      guest: { email: 'partner@example.test', channelIds: [ID], accessExpiresAt: null },
+      mail: [{ address: 'partner@example.test', outcome: 'unavailable' }],
+    };
+    const input: CreateGuestInvitationRequest = {
+      email: 'partner@example.test',
+      channelIds: [ID],
+      accessExpiresAt: null,
+      locale: 'en',
+    };
+    const create = harness(answer);
+    expect(await create.api.createGuestInvitation(ID, input)).toEqual(answer);
+    expect(create.calls).toEqual([
+      { method: 'POST', url: `/api/workspaces/${ID}/guest-invitations`, body: input },
+    ]);
+    expect(
+      await harness({ enabled: 'yes', email: false })
+        .api.guestInvitationAvailability(ID)
+        .catch((error: unknown) => error),
+    ).toBeInstanceOf(ApiError);
+    expect(
+      await harness({ ...answer, token: 'invalid' })
+        .api.createGuestInvitation(ID, input)
+        .catch((error: unknown) => error),
+    ).toBeInstanceOf(ApiError);
+  });
   test('a public link preview is bound to a message and validates its nullable answer', async () => {
     const card = { title: 'Report', description: null, imageUrl: null };
     const h = harness(card);
@@ -267,6 +315,69 @@ describe('the endpoints', () => {
     const members = harness([{ user, role: 'member', joinedAt: WHEN, profile: NO_PROFILE }]);
     await members.api.members(ID);
     expect(members.calls[0]?.url).toBe(`/api/workspaces/${ID}/members`);
+  });
+
+  test('guest paging and access edits use scoped paths and validate accepted receipts', async () => {
+    const guest = {
+      user,
+      joinedAt: WHEN,
+      access: { kind: 'guest' as const, historySince: WHEN, expiresAt: null },
+      channelIds: [ID],
+      hiddenChannelCount: 1,
+    };
+    const list = harness({ data: [guest], nextCursor: ID });
+    expect(await list.api.guests(ID, { q: '50%_ Görkem', before: ID, limit: 1 })).toEqual({
+      data: [guest],
+      nextCursor: ID,
+    });
+    const url = new URL(list.calls[0]?.url ?? '', 'https://purlay.test');
+    expect(url.pathname).toBe(`/api/workspaces/${ID}/guests`);
+    expect(url.searchParams.get('q')).toBe('50%_ Görkem');
+    expect(url.searchParams.get('before')).toBe(ID);
+    expect(url.searchParams.get('limit')).toBe('1');
+    const receipt = { joinedAt: WHEN, access: guest.access, channelIds: [], hiddenChannelCount: 1 };
+    const edited = harness(receipt);
+    expect(await edited.api.updateGuestAccess(ID, ID, { channelIds: [] })).toEqual(receipt);
+    expect(edited.calls[0]).toEqual({
+      method: 'PATCH',
+      url: `/api/workspaces/${ID}/guests/${ID}`,
+      body: { channelIds: [] },
+    });
+    const malformed = harness({ channelIds: [] });
+    expect(
+      await malformed.api.updateGuestAccess(ID, ID, { accessExpiresAt: null }).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof ApiError ? error.code : 'unexpected'),
+      ),
+    ).toBe('MALFORMED');
+  });
+
+  test('guest conversion posts the acknowledgment and validates full-member receipts', async () => {
+    const guestId = '0199155c-6200-7b7f-8c11-2a4d3f9e1b71';
+    const member = {
+      user: { ...user, id: guestId },
+      role: 'member' as const,
+      joinedAt: WHEN,
+      profile: NO_PROFILE,
+    };
+    const converted = harness(member);
+    expect(await converted.api.convertGuest(ID, guestId, { confirmFullAccess: true })).toEqual(
+      member,
+    );
+    expect(converted.calls).toEqual([
+      {
+        method: 'POST',
+        url: `/api/workspaces/${ID}/guests/${guestId}/conversion`,
+        body: { confirmFullAccess: true },
+      },
+    ]);
+    const malformed = harness({ ...member, role: 'guest' });
+    expect(
+      await malformed.api.convertGuest(ID, guestId, { confirmFullAccess: true }).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof ApiError ? error.code : 'unexpected'),
+      ),
+    ).toBe('MALFORMED');
   });
 
   test('a device told by push, and the language it is told in (D-126)', async () => {

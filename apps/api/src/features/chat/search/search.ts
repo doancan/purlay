@@ -30,7 +30,7 @@ import {
   type SearchCriteria,
 } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import { channelNotFound } from '../channels/guard';
+import { channelNotFound, withinMessageHistory } from '../channels/guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { MESSAGE_COLUMNS } from '../messages/reader';
 import { asPage } from '../messages/threads';
@@ -125,6 +125,7 @@ export const searchIn = async (
       .leftJoin('messages as parent', 'parent.id', 'messages.parent_id')
       .where('messages.workspace_id', '=', context.workspaceId)
       .where('messages.channel_id', 'in', channelIds)
+      .where(withinMessageHistory(executor, context))
       .where('messages.deleted_at', 'is', null)
       .where(notHiddenBy(context.userId));
     if (query.question === 'yes') candidates = candidates.where('messages.is_question', '=', true);

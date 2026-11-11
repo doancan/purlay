@@ -236,9 +236,14 @@ jobs:
   mutations-changed:
     needs: changes
     if: needs.changes.outputs.mutations == 'true'
+    name: mutations-changed (${{ matrix.index }}/${{ strategy.job-total }})
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3, 4]
     runs-on: ubuntu-latest
-    # A pull request that adds a handful of entries takes a few minutes (each runs the tests it names once); the
-    # ceiling is for one that adds dozens, and catches a hang.
+    # A large changed list exceeded one job's 30 minutes. Disjoint shards retain every entry and
+    # the same ceiling; needs.mutations-changed.result succeeds only when every shard does.
     timeout-minutes: 30
     env:
       DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
@@ -262,7 +267,7 @@ jobs:
         env:
           # A pull request is measured against its base branch; a push to main against the commit it moved on from.
           BASE: ${{ github.base_ref && format('origin/{0}', github.base_ref) || github.event.before }}
-        run: bun run mutate --changed="$BASE"
+        run: bun run mutate --changed="$BASE" --shard=${{ matrix.index }}/${{ strategy.job-total }}
 
   # The browser tests: the production build and a seeded real API, in real Chromium,
   # in both themes and at two widths (#139). A job of its own because it needs a

@@ -15,7 +15,7 @@ import { MadeLink, type Invitations } from '../settings/invitations';
 import { AddressChips, sendable } from '../../ui/address-chips';
 
 /** What became of the addresses, one sentence for each thing that happened. */
-const MailOutcome = ({
+export const InvitationMailOutcome = ({
   results,
 }: {
   readonly results: readonly InvitationMailResult[];
@@ -114,7 +114,7 @@ const MailForm = ({ invitations }: { readonly invitations: Invitations }): React
             : t('invite.mail.send', { count: valid.length })}
         </Button>
       </div>
-      {invitations.mail !== null && <MailOutcome results={invitations.mail} />}
+      {invitations.mail !== null && <InvitationMailOutcome results={invitations.mail} />}
     </div>
   );
 };

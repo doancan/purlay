@@ -214,7 +214,8 @@ export default defineConfig({
   webServer: servers.map((name, index) => ({
     command: `bun --no-env-file --env-file=.env.test run scripts/demo.ts ${index === 0 ? '' : '--no-build '}${coreOnly ? '--modules none ' : ''}${overTls(name) ? `--tls-cert ${TLS_CERT} --tls-key ${TLS_KEY} ` : ''}--db purlay_e2e_${String(portOf(index))} --port ${String(portOf(index))} --manifest apps/web/e2e/.world-${name}.json`,
     cwd: '../..',
-    env: { VITE_GALLERY: '1' },
+    // Each scratch world runs only this revision's readers; exercise the complete guest journey.
+    env: { VITE_GALLERY: '1', GUEST_ACCESS_READY: 'true' },
     url: `${schemeOf(name)}://localhost:${String(portOf(index))}/health`,
     ignoreHTTPSErrors: overTls(name),
     // Building, migrating and seeding two hundred messages through the real API.

@@ -12,6 +12,7 @@
  *   sweep:inbox        notices read for 30 days, and every notice past 180 (D-286)
  *   sweep:outbox       facts between modules delivered a day ago, dead or discarded for OUTBOX_DEAD_KEPT_DAYS, or expired (D-288)
  *   sweep:deletions    objects whose rows are gone, tried again until the store lets them go (D-141)
+ *   sweep:guest-expiry  expired guests' pending sends, reservations, reminders and unread attention (D-300)
  *   mail:missed        one letter to each person who asked, about what waited unread for them (D-240)
  *   jobs:status        what each job last did; exits non-zero when one is overdue or never ran
  *   jobs:first         each job that has never succeeded, once; what the scheduler runs as it starts

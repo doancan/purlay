@@ -23,6 +23,7 @@ import { recordAudit } from '../audit/audit';
 import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, PROFILE_COLUMNS } from '../users/profile';
+import { guestAccessRecipients } from './guest-audience';
 
 /** Whether a caller of this role may move a member from one role to another, or remove them (`to` absent). */
 const mayManage = (caller: UserRole, from: UserRole, to?: UserRole): boolean =>
@@ -49,19 +50,19 @@ const rolesUnderLock = async (
   executor: Executor,
   context: WorkspaceContext,
   userId: string,
-): Promise<{ caller: UserRole; target: UserRole }> => {
+): Promise<{ caller: UserRole; target: UserRole; targetIsGuest: boolean }> => {
   await lockWorkspace(executor, context);
   const rows = await executor
     .selectFrom('workspace_members')
-    .select(['user_id', 'role'])
+    .select(['user_id', 'role', 'access_kind'])
     .where('workspace_id', '=', context.workspaceId)
     .where('user_id', 'in', [context.userId, userId])
     .execute();
   const caller = rows.find((row) => row.user_id === context.userId)?.role;
   if (caller === undefined || caller === 'member') throw forbidden();
-  const target = rows.find((row) => row.user_id === userId)?.role;
+  const target = rows.find((row) => row.user_id === userId);
   if (target === undefined) throw notFound();
-  return { caller, target };
+  return { caller, target: target.role, targetIsGuest: target.access_kind === 'guest' };
 };
 
 /**
@@ -95,7 +96,12 @@ export const changeRole = async (
 ): Promise<WorkspaceMember> => {
   if (context.role === 'member') throw forbidden();
   if (!Value.Check(Uuid, userId)) throw notFound();
-  const { caller, target } = await rolesUnderLock(executor, context, userId);
+  const { caller, target, targetIsGuest } = await rolesUnderLock(executor, context, userId);
+  if (targetIsGuest && role !== 'member')
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Convert guest access to full membership before changing its role.',
+    });
   if (!mayManage(caller, target, role)) throw forbidden();
   if (target === 'owner' && role !== 'owner') await keepAnOwner(executor, context);
   // The same role again changes nothing, and records nothing.
@@ -131,6 +137,7 @@ export const changeRole = async (
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
     profile: asProfile(user),
+    ...(targetIsGuest ? { accessKind: 'guest' as const } : {}),
   };
 };
 
@@ -160,10 +167,13 @@ export const removeMember = async (
   context: WorkspaceContext,
   userId: string,
   channels: WorkspaceChannels,
-): Promise<{ readonly channelIds: readonly string[] }> => {
+): Promise<{
+  readonly channelIds: readonly string[];
+  readonly notifyUserIds?: readonly string[];
+}> => {
   if (context.role === 'member') throw forbidden();
   if (!Value.Check(Uuid, userId)) throw notFound();
-  const { caller, target } = await rolesUnderLock(executor, context, userId);
+  const { caller, target, targetIsGuest } = await rolesUnderLock(executor, context, userId);
   if (!mayManage(caller, target)) throw forbidden();
   if (target === 'owner') await keepAnOwner(executor, context);
   const channelIds = await takeOut(executor, channels, context.workspaceId, userId);
@@ -175,7 +185,12 @@ export const removeMember = async (
     targetId: userId,
     metadata: { role: target },
   });
-  return { channelIds };
+  return {
+    channelIds,
+    ...(targetIsGuest
+      ? { notifyUserIds: await guestAccessRecipients(executor, context, userId) }
+      : {}),
+  };
 };
 
 /**
@@ -188,11 +203,14 @@ export const leaveWorkspace = async (
   clock: Clock,
   context: WorkspaceContext,
   channels: WorkspaceChannels,
-): Promise<{ readonly channelIds: readonly string[] }> => {
+): Promise<{
+  readonly channelIds: readonly string[];
+  readonly notifyUserIds?: readonly string[];
+}> => {
   await lockWorkspace(executor, context);
   const row = await executor
     .selectFrom('workspace_members')
-    .select('role')
+    .select(['role', 'access_kind'])
     .where('workspace_id', '=', context.workspaceId)
     .where('user_id', '=', context.userId)
     .executeTakeFirstOrThrow();
@@ -206,5 +224,10 @@ export const leaveWorkspace = async (
     targetId: context.userId,
     metadata: { role: row.role },
   });
-  return { channelIds };
+  return {
+    channelIds,
+    ...(row.access_kind === 'guest'
+      ? { notifyUserIds: await guestAccessRecipients(executor, context, context.userId) }
+      : {}),
+  };
 };

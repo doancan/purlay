@@ -29,6 +29,7 @@ import { markRead } from '../channels/read-state';
 import { leaveChannel } from '../channels/settings';
 import { REACTION_KINDS_MAX, setReaction } from '../reactions/reactions';
 import { sendMessage } from './messages';
+import { countArrival } from './delivery';
 import { setResolved } from './threads';
 import { reviseMessage } from './edit';
 import { removeMessage } from './delete';
@@ -470,6 +471,79 @@ describe('integration: a delete while the person it named reads the channel', ()
 });
 
 describe('integration: several people writing into one channel at once (#668)', () => {
+  test('a member joining after the arrival snapshot is not updated without being locked', async () => {
+    const db = cloned.db;
+    const room = await aRoom(db, ['alice', 'bob'], { outsiders: ['carol'] });
+    const writer = idOf(room, 'alice');
+    const late = room.outsiders['carol']?.userId;
+    if (late === undefined) throw new Error('Missing late member');
+    const id = nextId();
+    await db
+      .insertInto('messages')
+      .values({
+        id,
+        channel_id: room.channelId,
+        workspace_id: room.workspaceId,
+        sender_id: writer,
+        content: 'Before the new membership',
+        created_at: NOW,
+      })
+      .execute();
+    let reached: () => void = () => undefined;
+    const snapshot = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    let resume: () => void = () => undefined;
+    const continuing = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    let firstResult = true;
+    const pending = atomicallyOn(db)(
+      async (tx) =>
+        await countArrival(
+          tx.withPlugin({
+            transformQuery: (args) => args.node,
+            transformResult: async (args) => {
+              if (firstResult) {
+                firstResult = false;
+                reached();
+                await continuing;
+              }
+              return args.result;
+            },
+          }),
+          room.channelId,
+          { id, reply: false },
+          writer,
+          [],
+        ),
+    );
+    // The completed recipient read is held at the real executor seam, before its update.
+    await snapshot;
+    try {
+      await db
+        .insertInto('channel_members')
+        .values({
+          channel_id: room.channelId,
+          user_id: late,
+          joined_at: new Date(NOW.getTime() + 1_000),
+        })
+        .execute();
+    } finally {
+      resume();
+    }
+    const arrivals = await pending;
+    expect(arrivals.some((entry) => entry.userId === late)).toBe(false);
+    const membership = await db
+      .selectFrom('channel_members')
+      .select(['state_version', 'unread_count'])
+      .where('channel_id', '=', room.channelId)
+      .where('user_id', '=', late)
+      .executeTakeFirstOrThrow();
+    expect(membership.state_version).toBe(0);
+    expect(membership.unread_count).toBe(0);
+  });
+
   test('every send succeeds — the members are counted in one lock order — and every count is right', async () => {
     const db = cloned.db;
     const names = ['alice', 'bob', 'carol', 'dave', 'erin'];

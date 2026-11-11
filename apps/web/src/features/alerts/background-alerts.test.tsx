@@ -12,6 +12,7 @@ import { act } from '@testing-library/react';
 import type { Channel, MeResponse, Notification, QuietHours } from '@purlay/types';
 import { Outlet } from '../../app/outlet';
 import { keys } from '../../data/keys';
+import { channelAdded, channelStateChanged } from '../../data/cache';
 import { settle } from '../../testing/channel-harness';
 import { installDom } from '../../testing/dom';
 import {
@@ -64,7 +65,7 @@ const aNotifier = (permission: NotificationPermission = 'granted'): FakeNotifier
   return fake;
 };
 
-const waiting = (unreadMentionCount: number): Channel['state'] => ({
+const waiting = (unreadMentionCount: number): NonNullable<Channel['state']> => ({
   lastReadMessageId: null,
   unreadCount: unreadMentionCount,
   unreadMentionCount,
@@ -106,6 +107,7 @@ const open = async ({
   me = aSession(),
   path = `/w/acme/c/${IDS.api}`,
   quietHours = null,
+  channels = (): Promise<Channel[]> => Promise.resolve(withBadge({})),
 }: {
   notifier?: FakeNotifier;
   owner?: string | null;
@@ -113,6 +115,7 @@ const open = async ({
   me?: MeResponse;
   path?: string;
   quietHours?: QuietHours | null;
+  channels?: () => Promise<Channel[]>;
 } = {}): Promise<Awaited<ReturnType<typeof renderApp>>> => {
   // A returning browser already owns its preference when the page mounts. Seeding it after
   // render races the first reconciliation on a fast runner and tests an off device by accident.
@@ -130,7 +133,7 @@ const open = async ({
       notifier: notifier.notifier,
       api: aSignedInApi({
         me: () => Promise.resolve(me),
-        channels: () => Promise.resolve(withBadge({})),
+        channels,
         notifications: async () => ({ data: await inbox, nextCursor: null }),
         quietHours: () => Promise.resolve({ quietHours, timeZone: 'UTC' }),
       }),
@@ -295,6 +298,85 @@ describe('a tab in the background', () => {
       if (change !== 'unmount') view.unmount();
     });
   }
+
+  test.each([true, false])(
+    'the first DM alerts after an older channel-list response, already known=%s',
+    async (known) => {
+      const fake = aNotifier();
+      const inbox = Promise.withResolvers<Notification[]>();
+      const snapshot = Promise.withResolvers<Channel[]>();
+      const reading = Promise.withResolvers<undefined>();
+      const template = someChannels()[0];
+      if (template === undefined) throw new Error('Missing channel fixture');
+      const dm: Channel = {
+        ...template,
+        id: '00000000-0000-4000-8000-00000000d001',
+        type: 'direct_message',
+        name: null,
+        peer: ALICE,
+        peers: [ALICE],
+        state: waiting(0),
+        lastMessageAt: null,
+      };
+      let server = withBadge({});
+      let held = false;
+      const view = await open({
+        notifier: fake,
+        inbox: inbox.promise,
+        channels: () => {
+          if (!held) return Promise.resolve(server);
+          reading.resolve(undefined);
+          return snapshot.promise;
+        },
+      });
+      try {
+        if (known) {
+          act(() => {
+            channelAdded(view.world.client, dm);
+          });
+          await settle();
+        }
+        // The server has created this DM, but this HTTP snapshot still predates its first message.
+        const old = [...withBadge({}), dm];
+        held = true;
+        const pending = view.world.client.invalidateQueries({
+          queryKey: keys.channels(IDS.workspace),
+          exact: true,
+        });
+        await reading.promise;
+        expect(view.world.client.getQueryState(keys.channels(IDS.workspace))?.fetchStatus).toBe(
+          'fetching',
+        );
+        // Every subsequent real API read sees the committed message; only the held response is old.
+        server = [...withBadge({}), { ...dm, state: waiting(1) }];
+        held = false;
+        act(() => {
+          channelStateChanged(view.world.client, dm.id, waiting(1));
+        });
+        await settle();
+        snapshot.resolve(old);
+        await pending;
+        await settle();
+        inbox.resolve([
+          mention({
+            type: 'direct_message',
+            channelId: dm.id,
+            message: aMessage(7, { channelId: dm.id, sender: ALICE }),
+          }),
+        ]);
+        await settle();
+        const current = view.world.client.getQueryData<Channel[]>(keys.channels(IDS.workspace));
+        expect({
+          notices: fake.shown.length,
+          unread: current?.find((channel) => channel.id === dm.id)?.state?.unreadMentionCount,
+        }).toEqual({ notices: 1, unread: 1 });
+      } finally {
+        snapshot.resolve([]);
+        inbox.resolve([]);
+        view.unmount();
+      }
+    },
+  );
 
   test('an unrelated badge update does not discard a pending notice that is still needed', async () => {
     let release: (inbox: Notification[]) => void = () => undefined;

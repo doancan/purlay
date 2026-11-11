@@ -15,7 +15,7 @@ import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
 import { CHANGES_OVERLAP_MS, PAGE_LIMIT, type ChangePage, type ChangesQuery } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
-import type { ChannelContext } from '../channels/guard';
+import { withinMessageHistory, type ChannelContext } from '../channels/guard';
 import { buildMessages, MESSAGE_COLUMNS, type MessageRow } from './reader';
 
 /** The database's own clock, to the millisecond a stamp is kept to. */
@@ -138,6 +138,7 @@ export const changedRows = async (
     .select(MESSAGE_COLUMNS)
     .select(changedAt.as('changed_at'))
     .where('messages.channel_id', '=', context.channelId)
+    .where(withinMessageHistory(executor, context))
     .where(changedAt, '<=', window.asOf)
     .orderBy(changedAt, 'asc')
     .orderBy('messages.id', 'asc')

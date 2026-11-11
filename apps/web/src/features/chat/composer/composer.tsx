@@ -34,6 +34,7 @@ import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useEngine } from '../../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
+import { isApiError } from '../../../data/errors';
 import { useSession } from '../../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
 import { cn } from '../../../ui/cn';
@@ -169,7 +170,11 @@ const Inner = ({
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
-  useDraftWriter({ ...ports, userId: session.user.id, key }, text, latest);
+  useDraftWriter(
+    { ...ports, userId: session.user.id, key, isCurrent: engine.isCurrent },
+    text,
+    latest,
+  );
 
   useEffect(() => {
     if (autoFocus) field.current?.focus();
@@ -365,14 +370,22 @@ const Inner = ({
       setError(null);
       return;
     }
-    const id = engine.send({
-      channelId,
-      content,
-      ...(parentId === undefined ? {} : { parentId }),
-      attachments: uploads.items.flatMap((item) =>
-        item.status === 'ready' ? [item.attachment] : [],
-      ),
-    });
+    let id: string;
+    try {
+      id = engine.send({
+        channelId,
+        content,
+        ...(parentId === undefined ? {} : { parentId }),
+        attachments: uploads.items.flatMap((item) =>
+          item.status === 'ready' ? [item.attachment] : [],
+        ),
+      });
+    } catch (failure) {
+      if (!isApiError(failure) || failure.code !== 'UNAUTHENTICATED') throw failure;
+      setWaiting(false);
+      setError(t('composer.accountChanged'));
+      return;
+    }
     if (hasPartyPopper(content)) celebrate();
     uploads.clear();
     setWaiting(false);

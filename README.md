@@ -1,21 +1,22 @@
 # Purlay
 
-**A modular, self-hostable team workspace. A small core, and modules you switch on per server or per
-workspace. Nothing is thrown away, and nothing interrupts you by default.**
+**Team chat for small businesses and corporate teams. Searchable conversations, direct messages and
+shared files, with optional modules. Self-host it or use our cloud.**
 
 Purlay is open source (AGPL-3.0) and ships two ways: **run it yourself for free**, or let us run it
 for a flat price per workspace. Both are the same code, with no features held back from
 self-hosters. **Adding a teammate never costs more**, on either one.
 
-> **Status: pre-1.0.** The current version is **0.5.0**, and the maintainers run the newest commit
-> on their own server. The API and schema still change between releases; read
+> **Status: pre-1.0.** See [releases](https://github.com/doancan/purlay/releases) for the current
+> version. The API and schema still change between releases; read
 > [What is not built yet](#status-and-what-is-not-built-yet) before depending on it.
 
 ---
 
 ## What it is
 
-Purlay is a workspace platform made of a **core** and **modules**.
+Purlay centers everyday work on team chat. Its **core** and optional **modules** let a small
+business or a corporate department use the parts it needs without a development workflow.
 
 The core owns what every workspace needs whatever else it runs: workspaces and members, sign-in,
 a personal inbox, search, a transactional outbox for facts between modules, editions and
@@ -139,7 +140,7 @@ documents.
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here: orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when, non-goals |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 299 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 301 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/MODULES.md`](docs/MODULES.md) | How a module is declared, loaded, kept apart and removed |
 | [`docs/MODULE-GUIDE.md`](docs/MODULE-GUIDE.md) | What to run and write to add a module |

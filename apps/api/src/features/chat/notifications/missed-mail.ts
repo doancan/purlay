@@ -9,10 +9,12 @@
  * - **Quiet is kept.** A workspace in which the person is in Deep Work, or every workspace in their quiet
  *   hours (`inDeepWork`, D-15, D-234), is held: nothing of it is mailed now, and it is mailed after, if it is
  *   still unread then — nothing is lost and nothing interrupts.
- * - **Only what they can still read**, decided when the letter is written: a workspace they are in, a channel
- *   the one visibility rule shows them (`visibleChannelIds`, D-34), a message not deleted. Anything else is
+ * - **Only what they can still read**, checked at composition and again before relay handoff: a workspace they
+ *   are in, a channel the canonical guard shows them, and a live message inside their guest history. Anything else is
  *   passed over for good (`mailed_at` set, no letter), so it never holds a place in the next run's batch.
  *   An erased or suspended account, or one whose address was never verified, is never mailed.
+ *   A changed address, opt-out, read, revoked scope or quiet period after composition returns the claim without
+ *   spending its hourly slot; a later run rebuilds a smaller current letter.
  * - **At least once, and a repeat is recognisable (D-297).** Each person is taken in a transaction of their own,
  *   under their row's lock taken with `SKIP LOCKED`: a second run passes over a person the first holds. The
  *   hour between two letters and `mailed_at IS NULL` are read under that lock, and the rows are marked before
@@ -25,8 +27,8 @@
  * - **The link that stops it** opens without a session: a random token, whose digest alone is kept with the
  *   letter (`platform/tokens.ts`), good for `STOP_LINK_DAYS`. The job forgets letters past that.
  */
-import { sql } from '@purlay/db';
-import type { ChatDb, ChatTx } from '../schema';
+import { sql, type Selectable, type SelectQueryBuilder } from '@purlay/db';
+import type { ChatDb, ChatSchema, ChatTx } from '../schema';
 import {
   CHAT_NOTIFICATION_KINDS,
   type MissedMailSetting,
@@ -35,7 +37,7 @@ import {
   type StopMissedMailRequest,
 } from '@purlay/types';
 import { DAY_MS, HOUR_MS, type Clock } from '../../../platform/clock';
-import { visibleChannelIds } from '../channels/guard';
+import { channelAudienceQuery, visibleChannelIds } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import type { Logger } from '../../../platform/logging';
 import { codeOf, type MailMessage, type SendMail } from '../../../platform/mail';
@@ -151,10 +153,29 @@ export interface MissedMailDependencies {
 
 /** A letter written and its rows marked, committed, waiting to be sent. */
 interface Taken {
+  readonly userId: string;
   readonly letterId: string;
   readonly notificationIds: readonly string[];
   readonly letter: MailMessage;
 }
+
+/** The same account eligibility at claim and handoff; only the claim takes its row lock. */
+const mailablePerson = (
+  transaction: ChatTx,
+  userId: string,
+): SelectQueryBuilder<
+  ChatSchema,
+  'users',
+  Pick<Selectable<ChatSchema['users']>, 'email' | 'locale' | 'missed_mail_since'>
+> =>
+  transaction
+    .selectFrom('users')
+    .select(['email', 'locale', 'missed_mail_since'])
+    .where('id', '=', userId)
+    .where('missed_mail_since', 'is not', null)
+    .where('deleted_at', 'is', null)
+    .where('suspended_at', 'is', null)
+    .where('email_verified', '=', true);
 
 /** The person's context in a workspace, or null where they are no longer in it. */
 const memberOf = async (
@@ -195,6 +216,7 @@ const standing = async (
 const messagesOf = async (
   transaction: ChatTx,
   messageIds: readonly string[],
+  userId: string,
 ): Promise<
   readonly {
     readonly id: string;
@@ -226,6 +248,15 @@ const messagesOf = async (
         ])
         .where('m.id', 'in', messageIds)
         .where('m.deleted_at', 'is', null)
+        .where((eb) =>
+          eb.exists(
+            channelAudienceQuery(
+              transaction,
+              sql.ref<string>('m.channel_id'),
+              sql.ref<string>('m.id'),
+            ).where('users.id', '=', userId),
+          ),
+        )
         .orderBy('m.id')
         .execute();
 
@@ -279,14 +310,7 @@ const takeLetter = async (
   userId: string,
   appUrl: string,
 ): Promise<Taken | null> => {
-  const person = await transaction
-    .selectFrom('users')
-    .select(['email', 'locale', 'missed_mail_since'])
-    .where('id', '=', userId)
-    .where('missed_mail_since', 'is not', null)
-    .where('deleted_at', 'is', null)
-    .where('suspended_at', 'is', null)
-    .where('email_verified', '=', true)
+  const person = await mailablePerson(transaction, userId)
     .forUpdate()
     .skipLocked()
     .executeTakeFirst();
@@ -322,7 +346,11 @@ const takeLetter = async (
     const seen = where.get(row.workspace_id);
     return seen !== 'held' && seen?.has(row.channel_id) === true;
   });
-  const quoted = await messagesOf(transaction, [...new Set(readable.map((row) => row.message_id))]);
+  const quoted = await messagesOf(
+    transaction,
+    [...new Set(readable.map((row) => row.message_id))],
+    userId,
+  );
   const live = new Set(quoted.map((row) => row.id));
   const mailable = readable.filter((row) => live.has(row.message_id));
   // Settled now: what is mailed, and what never can be — a channel or a workspace no longer theirs, a
@@ -368,6 +396,7 @@ const takeLetter = async (
     .returning('id')
     .executeTakeFirstOrThrow();
   return {
+    userId,
     letterId: letter.id,
     notificationIds: mailed.map((row) => row.id),
     letter: {
@@ -427,6 +456,41 @@ const giveBack = async (transaction: ChatTx, taken: Taken): Promise<void> => {
   await transaction.deleteFrom('missed_mail_letters').where('id', '=', taken.letterId).execute();
 };
 
+/** The claim is no longer authority after its commit: recheck before handing content to the relay. */
+const letterStillReadable = async (
+  transaction: ChatTx,
+  now: Date,
+  taken: Taken,
+): Promise<boolean> => {
+  const person = await mailablePerson(transaction, taken.userId).executeTakeFirst();
+  if (person?.missed_mail_since == null || person.email !== taken.letter.to) return false;
+  const pending = await transaction
+    .selectFrom('notifications')
+    .select(['id', 'workspace_id', 'channel_id', 'message_id'])
+    .where('id', 'in', taken.notificationIds)
+    .where('user_id', '=', taken.userId)
+    .where('read_at', 'is', null)
+    .where('type', 'in', MISSED_MAIL_TYPES)
+    .where('created_at', '>=', person.missed_mail_since)
+    .execute();
+  if (pending.length !== taken.notificationIds.length) return false;
+  const where = await standing(
+    transaction,
+    taken.userId,
+    [...new Set(pending.map((row) => row.workspace_id))],
+    now,
+  );
+  if (
+    pending.some((row) => {
+      const scope = where.get(row.workspace_id);
+      return scope === 'held' || scope?.has(row.channel_id) !== true;
+    })
+  )
+    return false;
+  const ids = [...new Set(pending.map((row) => row.message_id))];
+  return (await messagesOf(transaction, ids, taken.userId)).length === ids.length;
+};
+
 /** `mail:missed`: every letter due now, and the letters past their stop link forgotten. */
 export const mailMissedMessages = async (
   dependencies: MissedMailDependencies,
@@ -473,6 +537,13 @@ export const mailMissedMessages = async (
       async (transaction) => await takeLetter(transaction, now, id, appUrl),
     );
     if (taken === null) continue;
+    const ready = await atomicallyOn(database)(async (transaction) => {
+      if (await letterStillReadable(transaction, clock.now(), taken)) return true;
+      // No SMTP attempt and no hourly slot spent. A later run rebuilds a smaller, current letter.
+      await giveBack(transaction, taken);
+      return false;
+    });
+    if (!ready) continue;
     try {
       await send(taken.letter);
       outcome.letters += 1;

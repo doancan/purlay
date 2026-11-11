@@ -16,6 +16,40 @@ const head = (over: Partial<Letterhead> = {}): Letterhead => ({
 });
 
 describe('the invitation letter', () => {
+  test.each(['en', 'tr'] as const)(
+    'explains named guest scope and separates invitation expiry from access expiry in %s',
+    (locale) => {
+      const letter = invitationLetter(
+        'guest@example.test',
+        head({ locale, guest: { channelCount: 2, accessExpiresAt: '2026-11-03T09:30:00.000Z' } }),
+      );
+      expect(letter.text).toContain(
+        locale === 'en'
+          ? 'only for the account verified with this email address'
+          : 'yalnızca bu e-posta adresiyle doğrulanan hesap',
+      );
+      expect(letter.text).toContain(
+        locale === 'en'
+          ? 'only messages and files shared after you join'
+          : 'yalnızca katıldıktan sonraki mesaj ve dosyaları',
+      );
+      expect(letter.text).toContain(
+        locale === 'en' ? 'Guest access ends:' : 'Misafir erişiminin bitişi:',
+      );
+      expect(letter.text).toContain(
+        locale === 'en' ? 'invitation link expires:' : 'Davet bağlantısının bitişi:',
+      );
+      expect(letter.text).not.toContain(locale === 'en' ? 'anyone' : 'elinde olan herkes');
+      const permanent = invitationLetter(
+        'guest@example.test',
+        head({ locale, guest: { channelCount: 1, accessExpiresAt: null } }),
+      );
+      expect(permanent.text).not.toContain(
+        locale === 'en' ? 'Guest access ends:' : 'Misafir erişiminin bitişi:',
+      );
+    },
+  );
+
   test('says who invited, to what, the link with its token in the fragment, until when, and that it may be ignored', () => {
     const letter = invitationLetter('bob@example.test', head());
     expect(letter.to).toBe('bob@example.test');

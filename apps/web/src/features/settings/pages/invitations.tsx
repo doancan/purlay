@@ -9,6 +9,7 @@ import { useAuthMethods } from '../../../data/queries';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { InvitationForm } from '../../invitations/invitation-form';
+import { GuestInvitationSummary } from '../../invitations/guest-invitation-summary';
 import { useInvitations } from '../invitations';
 import { SettingsCard, SettingsPage } from '../page';
 
@@ -64,7 +65,7 @@ export const InvitationsPage = (): React.JSX.Element => {
               >
                 {/* Whole, never cut: the end of it is the time, and "11:22 …" hides AM from PM. It
                     is also what tells the Revoke beside it from the others. */}
-                <span
+                <div
                   id={`invitation-${invitation.id}`}
                   className="min-w-0 flex-1 text-body text-ink"
                 >
@@ -72,7 +73,10 @@ export const InvitationsPage = (): React.JSX.Element => {
                     name: invitation.createdBy?.displayName ?? t('invite.admin.someone'),
                     until: format.absolute(invitation.expiresAt),
                   })}
-                </span>
+                  {invitation.guest !== undefined && (
+                    <GuestInvitationSummary value={invitation.guest} />
+                  )}
+                </div>
                 <Button
                   variant="dangerQuiet"
                   busy={invitations.revoking.has(invitation.id)}

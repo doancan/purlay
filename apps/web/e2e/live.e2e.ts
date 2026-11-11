@@ -7,6 +7,8 @@
  * Every test makes a room of its own (`support.ts`).
  */
 import type { Locator, Page } from '@playwright/test';
+import { ClientFrame } from '@purlay/types';
+import { Value } from '@sinclair/typebox/value';
 import { expect, test } from './fixtures';
 import { navLink } from './support';
 
@@ -88,55 +90,71 @@ test.describe('a message', () => {
   }) => {
     const made = await room({ messages: [{ by: 'alice', text: 'something above it' }] });
     await signIn();
-    // The server's answers are held for half a second, so the sending state can be looked at.
+    // Hold the actual outgoing write until its optimistic row is observed. Delaying only socket
+    // replies leaves HTTP refreshes free to confirm the row before the Sending assertion runs.
+    const queued: (() => void)[] = [];
+    let released = false;
+    const release = (): void => {
+      released = true;
+      for (const send of queued.splice(0)) send();
+    };
     await page.routeWebSocket(/\/ws$/, (ws) => {
       const server = ws.connectToServer();
       ws.onMessage((message) => {
-        server.send(message);
+        const frame: unknown = JSON.parse(String(message));
+        if (!released && Value.Check(ClientFrame, frame) && frame.op === 'MESSAGE_SEND') {
+          queued.push(() => {
+            server.send(message);
+          });
+        } else server.send(message);
       });
       server.onMessage((message) => {
-        setTimeout(() => {
-          ws.send(message);
-        }, 500);
+        ws.send(message);
       });
     });
     await page.goto(made.path);
     await expect(rowWith(page, 'something above it')).toBeVisible();
 
-    const box = composer(page, made.name);
-    await box.fill('painted before the server answers');
-    await box.press('Enter');
-    const row = rowWith(page, 'painted before the server answers');
-    await expect(row).toBeVisible();
-    await expect(row.getByRole('img', { name: 'Sending' })).toBeVisible();
-    const id = await row.getAttribute('data-message-id');
-    const before = (await row.boundingBox())?.y ?? -1;
-    const order = await page
-      .locator('[data-message-row]')
-      .evaluateAll(
-        (rows, wanted) => rows.map((r) => r.getAttribute('data-message-id')).indexOf(wanted),
-        id,
-      );
-
-    await expect(row.getByRole('img', { name: 'Sending' })).toHaveCount(0, { timeout: 3_000 });
-    // The same element, the same id, the same place in the list and on the screen: nothing moved.
-    expect(await row.getAttribute('data-message-id')).toBe(id);
-    expect(Math.abs(((await row.boundingBox())?.y ?? -1) - before)).toBeLessThan(0.5);
-    expect(
-      await page
+    try {
+      const box = composer(page, made.name);
+      await box.fill('painted before the server answers');
+      await box.press('Enter');
+      const row = rowWith(page, 'painted before the server answers');
+      await expect(row).toBeVisible();
+      await expect(row.getByRole('img', { name: 'Sending' })).toBeVisible();
+      await expect.poll(() => queued.length).toBe(1);
+      const id = await row.getAttribute('data-message-id');
+      const before = (await row.boundingBox())?.y ?? -1;
+      const order = await page
         .locator('[data-message-row]')
         .evaluateAll(
           (rows, wanted) => rows.map((r) => r.getAttribute('data-message-id')).indexOf(wanted),
           id,
-        ),
-    ).toBe(order);
-    // And exactly one message of that text exists on the server.
-    const list = await api('dogancan').get<{ data: { content: string }[] }>(
-      `/api/channels/${made.id}/messages?limit=20`,
-    );
-    expect(list.data.filter((m) => m.content === 'painted before the server answers')).toHaveLength(
-      1,
-    );
+        );
+
+      release();
+      await expect(row.getByRole('img', { name: 'Sending' })).toHaveCount(0, { timeout: 3_000 });
+      // The same element, the same id, the same place in the list and on the screen: nothing moved.
+      expect(await row.getAttribute('data-message-id')).toBe(id);
+      expect(Math.abs(((await row.boundingBox())?.y ?? -1) - before)).toBeLessThan(0.5);
+      expect(
+        await page
+          .locator('[data-message-row]')
+          .evaluateAll(
+            (rows, wanted) => rows.map((r) => r.getAttribute('data-message-id')).indexOf(wanted),
+            id,
+          ),
+      ).toBe(order);
+      // And exactly one message of that text exists on the server.
+      const list = await api('dogancan').get<{ data: { content: string }[] }>(
+        `/api/channels/${made.id}/messages?limit=20`,
+      );
+      expect(
+        list.data.filter((m) => m.content === 'painted before the server answers'),
+      ).toHaveLength(1);
+    } finally {
+      release();
+    }
   });
 
   test('that names someone raises their badge live, and reading the channel clears it', async ({

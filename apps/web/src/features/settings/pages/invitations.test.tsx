@@ -92,6 +92,21 @@ const openPage = async (api: Partial<Api>, role: UserRole = 'owner'): Promise<Vi
 const main = (view: View): Scope => within(view.getByRole('main'));
 
 describe('invitations', () => {
+  test('open named guest links show restricted scope separately from their link expiry', async () => {
+    const view = await openPage({
+      invitations: () =>
+        Promise.resolve(
+          page({
+            ...anInvitation(FIRST),
+            guest: { channelCount: 2, accessExpiresAt: null },
+          }),
+        ),
+    });
+    expect(view.getByText('Guest invitation · 2 conversations')).toBeDefined();
+    expect(view.getByText('Guest access has no end date.')).toBeDefined();
+    await expectNoAxeViolations(view.container);
+  });
+
   test('are an owner’s and an admin’s; a member is not offered them, and their address is not found', async () => {
     const member = await render('/w/acme/settings/invitations', {}, 'member');
     expect(await member.findByText('Nothing here')).toBeDefined();

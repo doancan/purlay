@@ -8,6 +8,11 @@ import {
   Workspace,
   WorkspaceMember,
   WorkspaceMemberList,
+  WorkspaceGuestPage,
+  UpdatedGuestAccess,
+  type WorkspaceGuestQuery,
+  type UpdateGuestAccessRequest,
+  type ConvertGuestRequest,
   type AuditFilter,
   type CreateWorkspaceRequest,
   type SetDeepWorkRequest,
@@ -25,6 +30,21 @@ export interface WorkspacesApi {
   /** A new name, an owner's or an admin's; the slug stays (D-124). */
   readonly renameWorkspace: (workspaceId: string, name: string) => Promise<Workspace>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
+  readonly guests: (
+    workspaceId: string,
+    query: WorkspaceGuestQuery,
+    signal?: AbortSignal,
+  ) => Promise<WorkspaceGuestPage>;
+  readonly updateGuestAccess: (
+    workspaceId: string,
+    userId: string,
+    input: UpdateGuestAccessRequest,
+  ) => Promise<UpdatedGuestAccess>;
+  readonly convertGuest: (
+    workspaceId: string,
+    userId: string,
+    input: ConvertGuestRequest,
+  ) => Promise<WorkspaceMember>;
   /** An owner's or an admin's (`ARCHITECTURE.md` §7.4): a member's new role. */
   readonly updateMemberRole: (
     workspaceId: string,
@@ -77,6 +97,27 @@ export const createWorkspacesApi = (http: Http): WorkspacesApi => ({
       `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`,
       WorkspaceMember,
       options({ body: { role } }),
+    ),
+  guests: (workspaceId, query, signal) =>
+    http.request(
+      'GET',
+      `/api/workspaces/${at(workspaceId)}/guests`,
+      WorkspaceGuestPage,
+      options({ query }, signal),
+    ),
+  updateGuestAccess: (workspaceId, userId, input) =>
+    http.request(
+      'PATCH',
+      `/api/workspaces/${at(workspaceId)}/guests/${at(userId)}`,
+      UpdatedGuestAccess,
+      options({ body: input }),
+    ),
+  convertGuest: (workspaceId, userId, input) =>
+    http.request(
+      'POST',
+      `/api/workspaces/${at(workspaceId)}/guests/${at(userId)}/conversion`,
+      WorkspaceMember,
+      options({ body: input }),
     ),
   removeMember: (workspaceId, userId) =>
     http.send('DELETE', `/api/workspaces/${at(workspaceId)}/members/${at(userId)}`, options()),

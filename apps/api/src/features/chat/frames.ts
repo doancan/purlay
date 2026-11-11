@@ -13,6 +13,8 @@ import { departuresFrom } from './channels/departures';
 import { isChannelMember, requireChannelById, requireChannelsById } from './channels/guard';
 import { missedIn, send } from './messages/messages';
 import { replaySince } from './messages/replay';
+import type { ChannelDeliveryGate } from '../../platform/ports/channel-delivery';
+import { liveChannelScope } from './channels/live-history';
 
 /** Who is typing where: what `TYPING` asks of the node's registry. */
 interface TypingWindows {
@@ -25,7 +27,7 @@ interface TypingWindows {
 }
 
 /** What a subscription asks of the connection it is for. */
-interface SocketGate {
+interface SocketGate extends ChannelDeliveryGate {
   /** Live frames are kept, not written, until the hub's `reply` (subscribe before replay). */
   readonly hold: (socketId: string) => void;
   /** False once the connection has closed: nothing more may be subscribed for it. */
@@ -151,6 +153,7 @@ const channelWrites: FrameHandlers<ChatFrameContext> = {
 export const chatFrames = (
   readReplay: typeof missedIn = missedIn,
 ): FrameHandlers<ChatFrameContext> => {
+  const channelScope = liveChannelScope();
   const subscriptions: FrameHandlers<ChatFrameContext> = {
     SUBSCRIBE: async (context, frame) => {
       const { identity, socket, bus, database, clock } = context;
@@ -191,6 +194,14 @@ export const chatFrames = (
         // and what was subscribed above is undone. One query, however many channels
         // (#196).
         const contexts = await requireChannelsById(database, identity.userId, channelIds);
+        for (const channel of contexts) {
+          const scope = channelScope(database, channel);
+          // Any member can later be readmitted as a guest, even when a control publication is lost.
+          // An older transport cannot safely retain an unguarded subscription across that change.
+          if (socket.restrictChannel === undefined || socket.releaseChannels === undefined)
+            throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
+          socket.restrictChannel(identity.socketId, channel.channelId, scope);
+        }
         // Gone while its channels were being authorised: the close already forgot
         // every subscription, and nothing below adds one.
         if (!socket.isOpen(identity.socketId)) return [];
@@ -230,6 +241,7 @@ export const chatFrames = (
     },
 
     UNSUBSCRIBE: (context, frame) => {
+      context.socket.releaseChannels?.(context.identity.socketId, frame.payload.channelIds);
       for (const channelId of frame.payload.channelIds) {
         context.bus.unsubscribe(channelTopic(channelId), context.identity.socketId);
       }

@@ -115,6 +115,43 @@ describe('followed conversation caches', () => {
     client.clear();
   });
 
+  test('a first followed page with no cached rows cannot publish revoked words after arriving late', async () => {
+    const client = clientOf();
+    const key = keys.followedThreads(IDS.workspace);
+    const pending = Promise.withResolvers<Pages>();
+    const current = list();
+    const visible = {
+      ...current,
+      pages: current.pages.map((page) => ({
+        ...page,
+        data: page.data.filter((row) => row.root.channelId !== IDS.api),
+      })),
+    };
+    let calls = 0;
+    const fetch = (): Promise<Pages> => {
+      calls++;
+      return calls === 1 ? pending.promise : Promise.resolve(visible);
+    };
+    const first = client.query({ queryKey: key, queryFn: fetch }).catch(() => undefined);
+    expect(client.getQueryData(key) === undefined).toBe(true);
+    const exposed: boolean[] = [];
+    const stop = client.getQueryCache().subscribe(() => {
+      exposed.push(rootIds(client).includes(aMessage(1).id));
+    });
+    try {
+      channelsRevoked(client, [IDS.api]);
+      pending.resolve(current);
+      await first;
+      await client.query({ queryKey: key, queryFn: fetch });
+      expect(rootIds(client)).toEqual([aMessage(2).id]);
+      expect(exposed.includes(true)).toBe(false);
+    } finally {
+      pending.resolve(current);
+      stop();
+      client.clear();
+    }
+  });
+
   test('hiding or deleting a root while an unfollow is pending invalidates its undo', () => {
     for (const hide of [true, false]) {
       const client = clientOf();

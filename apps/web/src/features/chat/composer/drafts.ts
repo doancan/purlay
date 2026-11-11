@@ -102,26 +102,27 @@ export const useDraftWriter = (
     readonly schedule: Schedule;
     readonly userId: string;
     readonly key: string;
+    readonly isCurrent: () => boolean;
   },
   text: string,
   latest: RefObject<string>,
 ): void => {
-  const { storage, schedule, userId, key } = place;
+  const { storage, schedule, userId, key, isCurrent } = place;
   // Debounced: written a moment after typing stops — while the page is still this person's.
   useEffect(() => {
     const cancel = schedule(() => {
-      if (isClaimedBy(storage, userId)) writeDraft(storage, key, text);
+      if (isCurrent() && isClaimedBy(storage, userId)) writeDraft(storage, key, text);
     }, DRAFT_DEBOUNCE_MS);
     return cancel;
-  }, [text, key, storage, schedule, userId]);
+  }, [text, key, storage, schedule, userId, isCurrent]);
 
   // Written for certain as the composer goes — a channel switch or a closed screen —
   // so the last keystrokes are never inside a timer that never fires. Not after a sign-out, or
   // after somebody else signed in in another tab: that would put the words back for them (#694).
   useEffect(
     () => (): void => {
-      if (isClaimedBy(storage, userId)) writeDraft(storage, key, latest.current);
+      if (isCurrent() && isClaimedBy(storage, userId)) writeDraft(storage, key, latest.current);
     },
-    [key, storage, userId, latest],
+    [key, storage, userId, latest, isCurrent],
   );
 };

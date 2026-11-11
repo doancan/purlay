@@ -601,6 +601,14 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     tests: [GOOGLE_SIGN_IN_TESTS],
   },
   {
+    id: 'guest-provider-address-forgotten',
+    why: 'The actual provider hook must carry the verified identity into guest passport validation.',
+    file: 'apps/api/src/modules/auth/better-auth.ts',
+    find: ": { cookie: readCookie(headers?.get('cookie') ?? null, INVITE_COOKIE), email };",
+    replace: ": { cookie: readCookie(headers?.get('cookie') ?? null, INVITE_COOKIE) };",
+    tests: ['apps/api/src/ingress/http/invitation-passport.integration.test.ts'],
+  },
+  {
     id: 'lapse-told-twice',
     why: 'two requests at the instant a session lapses each tell its sockets it ended (D-244)',
     file: 'apps/api/src/modules/auth/better-auth.ts',

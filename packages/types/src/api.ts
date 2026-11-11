@@ -46,6 +46,7 @@ import {
   Timestamp,
   User,
   Workspace,
+  WorkspaceAccess,
   UserRole,
   Uuid,
 } from './models';
@@ -270,6 +271,8 @@ export const WorkspaceMember = Type.Object({
   joinedAt: Type.String({ format: 'date-time' }),
   /** What they say about themselves: shown in a conversation with them and where people are picked. */
   profile: Profile,
+  /** General directory classification only; guest expiry/history remain administrator-only. */
+  accessKind: Type.Optional(Type.Index(WorkspaceAccess, ['kind'])),
 });
 export type WorkspaceMember = Static<typeof WorkspaceMember>;
 
@@ -844,6 +847,8 @@ export type OlderPageQuery = Static<typeof OlderPageQuery>;
  */
 export const AUDIT_ACTIONS = [
   'member.role_changed',
+  'member.guest_access_changed',
+  'member.guest_converted',
   'member.removed',
   'member.left',
   'member.joined',
@@ -898,6 +903,8 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
  */
 export const CORE_AUDIT_ACTIONS = [
   'member.role_changed',
+  'member.guest_access_changed',
+  'member.guest_converted',
   'member.removed',
   'member.left',
   'member.joined',
@@ -1041,6 +1048,13 @@ export const INVITATION_TTL_DAYS = 7;
  */
 export const InvitationToken = Type.String({ pattern: '^[0-9a-f]{64}$' });
 
+/** Count-only guest scope for link lists and previews; never hidden conversation identities. */
+export const InvitationGuestAccess = Type.Object({
+  channelCount: Type.Integer({ minimum: 1 }),
+  accessExpiresAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type InvitationGuestAccess = Static<typeof InvitationGuestAccess>;
+
 /** One of a workspace's links as its admins see it — never the token, which is shown once. */
 export const Invitation = Type.Object({
   id: Uuid,
@@ -1048,6 +1062,7 @@ export const Invitation = Type.Object({
   createdBy: Type.Union([User, Type.Null()]),
   createdAt: Timestamp,
   expiresAt: Timestamp,
+  guest: Type.Optional(InvitationGuestAccess),
 });
 export type Invitation = Static<typeof Invitation>;
 
@@ -1066,11 +1081,13 @@ export const INVITATION_EMAILS_PER_WORKSPACE_PER_DAY = 200;
  * (D-279), in the interface's language (D-41). No role or address is bound to any link. The body may
  * be empty, as it was.
  */
-export const CreateInvitationRequest = FromClient({
-  emails: Type.Optional(
-    Type.Array(Type.String({ maxLength: EMAIL_MAX }), { maxItems: INVITATION_EMAILS_PER_REQUEST }),
+export const CreateInvitationRequest = /* @__PURE__ */ FromClient({
+  emails: /* @__PURE__ */ Type.Optional(
+    /* @__PURE__ */ Type.Array(/* @__PURE__ */ Type.String({ maxLength: EMAIL_MAX }), {
+      maxItems: INVITATION_EMAILS_PER_REQUEST,
+    }),
   ),
-  locale: Type.Optional(SignInLocale),
+  locale: /* @__PURE__ */ Type.Optional(SignInLocale),
 });
 export type CreateInvitationRequest = Static<typeof CreateInvitationRequest>;
 
@@ -1150,16 +1167,19 @@ export const InvitationRecipientStatus = Type.Union([
 ]);
 export type InvitationRecipientStatus = Static<typeof InvitationRecipientStatus>;
 export const INVITATION_RECIPIENT_SEARCH_MAX = 254;
-export const InvitationRecipientQuery = FromClient({
+export const InvitationRecipientQuery = /* @__PURE__ */ FromClient({
   ...OlderPageQuery.properties,
-  q: Type.Optional(Type.String({ maxLength: INVITATION_RECIPIENT_SEARCH_MAX })),
-  status: Type.Optional(InvitationRecipientStatus),
+  q: /* @__PURE__ */ Type.Optional(
+    /* @__PURE__ */ Type.String({ maxLength: INVITATION_RECIPIENT_SEARCH_MAX }),
+  ),
+  status: /* @__PURE__ */ Type.Optional(InvitationRecipientStatus),
 });
 export type InvitationRecipientQuery = Static<typeof InvitationRecipientQuery>;
 export const InvitationRecipient = Type.Object({
   id: Uuid,
   status: InvitationRecipientStatus,
   address: Type.String(),
+  guest: Type.Optional(InvitationGuestAccess),
   createdAt: Timestamp,
   requestedAt: Type.Union([Timestamp, Type.Null()]),
   joinedAt: Type.Union([Timestamp, Type.Null()]),
@@ -1178,7 +1198,7 @@ export const InvitationDeliveryPage = Page(InvitationDelivery);
 export type InvitationDeliveryPage = Static<typeof InvitationDeliveryPage>;
 
 /** `POST /api/invitations/preview` and `…/accept` — the link's token, in the body. */
-export const InvitationTokenRequest = FromClient({ token: InvitationToken });
+export const InvitationTokenRequest = /* @__PURE__ */ FromClient({ token: InvitationToken });
 export type InvitationTokenRequest = Static<typeof InvitationTokenRequest>;
 
 /**
@@ -1186,9 +1206,11 @@ export type InvitationTokenRequest = Static<typeof InvitationTokenRequest>;
  * this link (D-179 §5). With `email`, the pass is for that address and the mail's link; without, it is
  * for the browser asking, which GitHub's return will be told apart by (a cookie). The link in `token`.
  */
-export const InvitationPassportRequest = FromClient({
+export const InvitationPassportRequest = /* @__PURE__ */ FromClient({
   token: InvitationToken,
-  email: Type.Optional(Type.String({ format: 'email', maxLength: EMAIL_MAX })),
+  email: /* @__PURE__ */ Type.Optional(
+    /* @__PURE__ */ Type.String({ format: 'email', maxLength: EMAIL_MAX }),
+  ),
 });
 export type InvitationPassportRequest = Static<typeof InvitationPassportRequest>;
 
@@ -1198,6 +1220,7 @@ export const InvitationPreview = Type.Object({
   expiresAt: Timestamp,
   /** Already in it: the page offers to open the workspace rather than to join. */
   member: Type.Boolean(),
+  guest: Type.Optional(InvitationGuestAccess),
 });
 export type InvitationPreview = Static<typeof InvitationPreview>;
 
@@ -1205,9 +1228,11 @@ export type InvitationPreview = Static<typeof InvitationPreview>;
  * `PUT /api/notifications/read` — these, by id; or everything in a workspace, up to and including
  * `before` when given, so what arrived after the person looked is not read for them (D-106).
  */
-export const ReadNotificationsRequest = Type.Union([
-  FromClient({ ids: Type.Array(Uuid, { minItems: 1, maxItems: PAGE_LIMIT.max }) }),
-  FromClient({ workspaceId: Uuid, before: Type.Optional(Uuid) }),
+export const ReadNotificationsRequest = /* @__PURE__ */ Type.Union([
+  /* @__PURE__ */ FromClient({
+    ids: /* @__PURE__ */ Type.Array(Uuid, { minItems: 1, maxItems: PAGE_LIMIT.max }),
+  }),
+  /* @__PURE__ */ FromClient({ workspaceId: Uuid, before: /* @__PURE__ */ Type.Optional(Uuid) }),
 ]);
 export type ReadNotificationsRequest = Static<typeof ReadNotificationsRequest>;
 
@@ -1219,9 +1244,9 @@ export const DEEP_WORK_MAX_HOURS = 24;
  * `DEEP_WORK_MAX_HOURS`, or end it (D-108). Whether `until` is in that window is the server's to say:
  * it is a question about the clock.
  */
-export const SetDeepWorkRequest = Type.Union([
-  FromClient({ active: Type.Literal(true), until: Timestamp }),
-  FromClient({ active: Type.Literal(false) }),
+export const SetDeepWorkRequest = /* @__PURE__ */ Type.Union([
+  /* @__PURE__ */ FromClient({ active: /* @__PURE__ */ Type.Literal(true), until: Timestamp }),
+  /* @__PURE__ */ FromClient({ active: /* @__PURE__ */ Type.Literal(false) }),
 ]);
 export type SetDeepWorkRequest = Static<typeof SetDeepWorkRequest>;
 export const DeepWorkResponse = Type.Object({ until: Type.Union([Timestamp, Type.Null()]) });
@@ -1249,11 +1274,11 @@ export type PushLocale = Static<typeof PushLocale>;
  * and the language it is told in. The endpoint is the push service's address for this browser:
  * `https:` only, and bounded.
  */
-export const PushSubscribeRequest = FromClient({
-  endpoint: Type.String({ pattern: '^https://', maxLength: 2048 }),
-  keys: FromClient({ p256dh: Base64Url(65), auth: Base64Url(16) }),
+export const PushSubscribeRequest = /* @__PURE__ */ FromClient({
+  endpoint: /* @__PURE__ */ Type.String({ pattern: '^https://', maxLength: 2048 }),
+  keys: /* @__PURE__ */ FromClient({ p256dh: Base64Url(65), auth: Base64Url(16) }),
   locale: PushLocale,
-  sound: Type.Optional(Type.Boolean()),
+  sound: /* @__PURE__ */ Type.Optional(/* @__PURE__ */ Type.Boolean()),
 });
 export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
 
@@ -1261,19 +1286,21 @@ export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
  * `POST /api/me/erase` — the person erases their own account (D-27 §2, D-139 §5): their username, typed,
  * so a slip of the hand erases nothing. From a session signed in within `ERASURE_SIGN_IN_MINUTES`.
  */
-export const EraseAccountRequest = FromClient({ confirm: Type.String({ maxLength: 64 }) });
+export const EraseAccountRequest = /* @__PURE__ */ FromClient({
+  confirm: /* @__PURE__ */ Type.String({ maxLength: 64 }),
+});
 export type EraseAccountRequest = Static<typeof EraseAccountRequest>;
 
 /** How recent a sign-in erasing an account needs (D-139 §5). */
 export const ERASURE_SIGN_IN_MINUTES = 15;
 
 /** `PUT /api/me/locale` — the language the server writes this person's notifications in (D-41). */
-export const SetLocaleRequest = FromClient({ locale: PushLocale });
+export const SetLocaleRequest = /* @__PURE__ */ FromClient({ locale: PushLocale });
 export type SetLocaleRequest = Static<typeof SetLocaleRequest>;
 
 /** `POST /api/push/subscriptions/remove` — this device stops being told. */
-export const PushUnsubscribeRequest = FromClient({
-  endpoint: Type.String({ pattern: '^https://', maxLength: 2048 }),
+export const PushUnsubscribeRequest = /* @__PURE__ */ FromClient({
+  endpoint: /* @__PURE__ */ Type.String({ pattern: '^https://', maxLength: 2048 }),
 });
 export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
 

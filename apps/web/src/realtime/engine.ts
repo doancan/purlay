@@ -62,10 +62,12 @@ import {
   readAgain,
   threadUpdated,
 } from '../data/cache';
-import type { ClientStorage } from '../data/browser-storage';
+import { isClaimedBy, type ClientStorage } from '../data/browser-storage';
 import { codeOf, UNREACHED, type FailureCode } from '../data/failure';
-import { isApiError } from '../data/errors';
+import { accountChanged, isApiError } from '../data/errors';
 import { families, keys } from '../data/keys';
+import { workspaceAccessChanged } from '../data/access-change';
+import { captureAccess, watchAccessChanges } from '../data/access-revision';
 import type { Clock } from './clock';
 import {
   createConnection,
@@ -79,6 +81,11 @@ import { createServerClock } from './server-clock';
 
 /** Refused for a reason waiting will not change: the channel is gone, or the person lost it. */
 const PERMANENT: ReadonlySet<string> = new Set(['CHANNEL_NOT_FOUND', 'FORBIDDEN']);
+
+interface ReplayOwner {
+  readonly current: () => boolean;
+  readonly cancel: () => void;
+}
 
 /** The `degraded` key for an error that answers nothing the client can name. */
 export const UNNAMED = '*';
@@ -171,6 +178,8 @@ export interface EngineOptions {
 
 export interface Engine {
   readonly store: StoreApi<RealtimeState>;
+  /** Async producers retain this account lifetime even if their current transport is replaced. */
+  readonly isCurrent: () => boolean;
   readonly start: () => void;
   readonly stop: () => void;
   /** Receive exactly these channels; the others are let go. */
@@ -216,6 +225,11 @@ const isSendAck = (
 
 export const createEngine = (options: EngineOptions): Engine => {
   const { api, client, schedule } = options;
+  // SessionGate commits this receipt before mounting us. Its weak ticket prevents clear/recreate
+  // and account-switch ABA; the current actor also closes the interval before reconciliation runs.
+  const sessionAccess = captureAccess(client, keys.me);
+  const ownsAccount = (): boolean =>
+    sessionAccess() && client.getQueryData<MeResponse>(keys.me)?.user.id === options.userId;
   const storage = options.storage ?? null;
   // What a reload interrupted comes back as failed: it may have reached the server or not,
   // and Retry — the same id — is right either way (D-8).
@@ -254,14 +268,24 @@ export const createEngine = (options: EngineOptions): Engine => {
   let opened = false;
   // A stop that left sends waiting: the next open owes them what a reconnect owes.
   let resumeOnOpen = false;
-  // Moves on every stop, so a continuation that was asleep when the page stopped does not wake into a dead engine.
+  // Moves on every stop, so asynchronous replies cannot write into a later engine life.
   let epoch = 0;
-  const wakers = new Set<() => void>();
-  const continuing = new Set<string>();
+  let endedOnce = false;
+  const notifySessionEnded = (): void => {
+    if (endedOnce) return;
+    endedOnce = true;
+    options.onSessionEnded();
+  };
+  const continuing = new Map<string, ReplayOwner>();
+  const cancelReplays = (): void => {
+    for (const replay of [...continuing.values()]) replay.cancel();
+  };
   // Subscribe frames the connection has already reported as refused, so the ERROR that follows is not reported twice.
   const reported = new Set<string>();
 
   const persist = (pending: readonly PendingMessage[]): void => {
+    // A late ACK/refusal from an unmounted account cannot recreate keys cleared by sign-out/claim.
+    if (storage !== null && !isClaimedBy(storage, options.userId)) return;
     const keep: StoredMessage[] = pending
       .filter((p) => p.delivery !== 'sent')
       .map(({ id, channelId, parentId, content, createdAt, attachments }) => ({
@@ -277,9 +301,12 @@ export const createEngine = (options: EngineOptions): Engine => {
 
   const change = (
     edit: (pending: readonly PendingMessage[]) => readonly PendingMessage[],
-  ): void => {
+  ): boolean => {
+    if (!ownsAccount()) return false;
     store.setState((state) => ({ pending: edit(state.pending) }));
+    if (!ownsAccount()) return false;
     persist(store.getState().pending);
+    return true;
   };
 
   const degrade = (channelIds: readonly string[], reason: DegradedReason): void => {
@@ -361,7 +388,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       timers.get(id)?.();
       timers.delete(id);
     }
-    change((all) => all.filter((p) => !ids.has(p.id)));
+    if (!change((all) => all.filter((p) => !ids.has(p.id)))) return;
     const seq = (store.getState().lost?.seq ?? 0) + 1;
     store.setState({ lost: { count: ids.size, seq } });
   };
@@ -417,8 +444,19 @@ export const createEngine = (options: EngineOptions): Engine => {
       ? {}
       : { attachmentIds: pending.attachments.map((attachment) => attachment.id) };
 
+  /** Track access even before the first feed mounts, using its ordinary, empty Query identity. */
+  const channelAccess = (channelId: string): (() => boolean) => {
+    const key = keys.messages(channelId);
+    client.getQueryCache().build(client, client.defaultQueryOptions({ queryKey: key }));
+    return captureAccess(client, key);
+  };
+
   /** HTTP is the door when the socket is not: the same service, the same id. */
   const overHttp = async (pending: PendingMessage): Promise<void> => {
+    if (!ownsAccount()) return;
+    const mine = epoch;
+    const current = (): boolean => mine === epoch && ownsAccount();
+    const currentAccess = channelAccess(pending.channelId);
     try {
       const message = await api.send(pending.channelId, {
         id: pending.id,
@@ -426,9 +464,11 @@ export const createEngine = (options: EngineOptions): Engine => {
         ...(pending.parentId === null ? {} : { parentId: pending.parentId }),
         ...carried(pending),
       });
-      messageCreated(client, message);
+      if (!current()) return;
+      if (currentAccess()) messageCreated(client, message);
       forget(pending.id);
     } catch (error) {
+      if (!current()) return;
       const code = codeOf(error);
       if (!UNREACHED.has(code)) {
         fail(pending.id, code);
@@ -522,26 +562,38 @@ export const createEngine = (options: EngineOptions): Engine => {
     readAgain(client, families.channelGroups);
   };
 
-  /** Waits on the injected schedule; false when the page stopped meanwhile. */
-  const sleep = (ms: number): Promise<boolean> =>
+  /** Only a current replay may begin a wait; its cancellation also releases this timer. */
+  const sleep = (ms: number, signal: AbortSignal): Promise<boolean> =>
     new Promise((resolve) => {
-      const cancel = schedule(() => {
-        wakers.delete(wake);
-        resolve(true);
-      }, ms);
-      const wake = (): void => {
+      const finish = (completed: boolean): void => {
         cancel();
-        resolve(false);
+        signal.removeEventListener('abort', abort);
+        resolve(completed);
       };
-      wakers.add(wake);
+      const abort = (): void => {
+        finish(false);
+      };
+      const cancel = schedule(() => {
+        finish(true);
+      }, ms);
+      signal.addEventListener('abort', abort, { once: true });
     });
 
   /** One pass over the pages from a cursor to the present. */
-  const readThrough = async (channelId: string, from: string): Promise<void> => {
+  const readThrough = async (
+    channelId: string,
+    from: string,
+    current: () => boolean,
+    signal: AbortSignal,
+  ): Promise<void> => {
     let cursor: string | null = from;
-    while (cursor !== null) {
-      const page = await api.messages(channelId, { after: cursor });
-      for (const message of page.data) messageCreated(client, message);
+    while (cursor !== null && current()) {
+      const page = await api.messages(channelId, { after: cursor }, signal);
+      if (!current()) return;
+      for (const message of page.data) {
+        if (!current()) return;
+        messageCreated(client, message);
+      }
       cursor = page.nextCursor;
     }
   };
@@ -555,28 +607,49 @@ export const createEngine = (options: EngineOptions): Engine => {
    * parallel read.
    */
   const continueReplay = async (channelId: string, from: string): Promise<void> => {
+    // Cancellation releases the owner immediately, including when its transport ignores abort.
     if (continuing.has(channelId)) return;
-    continuing.add(channelId);
-    const mine = epoch;
+    const controller = new AbortController();
+    const currentAccess = channelAccess(channelId);
+    const release = (): void => {
+      unwatchAccess();
+      unwatchQuery();
+      if (continuing.get(channelId) === replay) continuing.delete(channelId);
+    };
+    const replay: ReplayOwner = {
+      current: (): boolean => continuing.get(channelId) === replay && currentAccess(),
+      cancel: (): void => {
+        release();
+        controller.abort();
+      },
+    };
+    continuing.set(channelId, replay);
+    const unwatchAccess = watchAccessChanges(client, () => {
+      if (!currentAccess()) replay.cancel();
+    });
+    const queryHash = client.defaultQueryOptions({ queryKey: keys.messages(channelId) }).queryHash;
+    const unwatchQuery = client.getQueryCache().subscribe((event) => {
+      if (event.type === 'removed' && event.query.queryHash === queryHash) replay.cancel();
+    });
     try {
       for (let attempt = 0; ; attempt += 1) {
         try {
-          await readThrough(channelId, from);
-          if (mine !== epoch) return;
+          await readThrough(channelId, from, replay.current, controller.signal);
+          if (!replay.current()) return;
           connection?.continuationDone(channelId, from);
           recover(channelId);
           return;
         } catch {
-          if (mine !== epoch) return;
+          if (!replay.current()) return;
           const wait = REPLAY_RETRY_DELAYS_MS[attempt];
           if (wait === undefined) break;
-          if (!(await sleep(wait)) || mine !== epoch) return;
+          if (!(await sleep(wait, controller.signal)) || !replay.current()) return;
         }
       }
       degrade([channelId], 'REPLAY');
       void client.invalidateQueries({ queryKey: keys.messages(channelId) });
     } finally {
-      continuing.delete(channelId);
+      release();
     }
   };
 
@@ -587,6 +660,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       // Refused, so never subscribed: let go without a frame (#523).
       connection?.forget(channelIds);
       for (const id of channelIds) {
+        continuing.get(id)?.cancel();
         watched.delete(id);
         recover(id);
       }
@@ -597,6 +671,7 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
 
   const onFrame = (frame: ServerFrame): void => {
+    if (!ownsAccount()) return;
     switch (frame.event) {
       case 'ACK': {
         if (isSendAck(frame)) {
@@ -704,6 +779,8 @@ export const createEngine = (options: EngineOptions): Engine => {
         channelsRevoked(client, frame.data.channelIds);
         dropUnsent(frame.data.channelIds);
         const { reason } = frame.data;
+        // An unnamed revocation includes workspace removal and the end of guest access.
+        if (reason === undefined) void client.invalidateQueries({ queryKey: keys.me });
         if (reason === undefined) forgetWhyGone(frame.data.channelIds);
         else {
           const gone = { ...store.getState().gone };
@@ -727,7 +804,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         deepWorkChanged(client, frame.data.workspaceId, frame.data.until);
         return;
       case 'SESSION_ENDED':
-        options.onSessionEnded();
+        notifySessionEnded();
         return;
       case 'PINS_UPDATED':
         // No state in the frame (D-130): the channel's pins are read again, wherever they are shown.
@@ -765,6 +842,9 @@ export const createEngine = (options: EngineOptions): Engine => {
         readAgain(client, keys.inbox(frame.data.workspaceId));
         return;
       case 'WORKSPACE_UPDATED':
+        if (frame.data.accessChanged === true) {
+          workspaceAccessChanged(client, frame.data.workspaceId);
+        }
         // No state in the frame (D-124): the memberships are read again, newest wins — and the
         // workspace's members, whose profiles it also says changed (D-131).
         void client.invalidateQueries({ queryKey: keys.me });
@@ -782,6 +862,7 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
 
   const applyPresence = (changes: readonly PresenceChange[]): void => {
+    if (!ownsAccount()) return;
     const now = store.getState().presence;
     const newer = changes.filter((change) => (now[change.userId]?.version ?? -1) < change.version);
     if (newer.length === 0) return;
@@ -809,6 +890,10 @@ export const createEngine = (options: EngineOptions): Engine => {
   let forgetPresence: (() => void) | null = null;
 
   const onStatus = (status: ConnectionStatus): void => {
+    cancelReplays();
+    if (!ownsAccount()) return;
+    if (status === 'open') endedOnce = false;
+    if (status === 'ended') notifySessionEnded();
     store.setState(status === 'open' ? { status, connectedOnce: true } : { status });
     if (status !== 'open') {
       // A gap longer than the grace has missed whoever left in it: nothing is drawn, rather than the
@@ -848,18 +933,23 @@ export const createEngine = (options: EngineOptions): Engine => {
       random: options.random,
       clock: options.clock,
       serverClock,
-      checkSession: async () => {
+      canUse: ownsAccount,
+      checkSession: async (signal) => {
+        if (!ownsAccount()) return 'ended';
         try {
-          await api.me();
-          return 'active';
+          const me = await api.me(signal);
+          return ownsAccount() && me.user.id === options.userId ? 'active' : 'ended';
         } catch (error) {
-          return isApiError(error) && error.status === 401 ? 'ended' : 'unknown';
+          return !ownsAccount() || (isApiError(error) && error.status === 401)
+            ? 'ended'
+            : 'unknown';
         }
       },
       newId: () => messageId(serverClock.now()),
       onFrame,
       onStatus,
       onSubscribeRefused: (channelIds, code, refId) => {
+        if (!ownsAccount()) return;
         reported.add(refId);
         refused(channelIds, code);
       },
@@ -867,6 +957,7 @@ export const createEngine = (options: EngineOptions): Engine => {
 
   return {
     store,
+    isCurrent: ownsAccount,
     networkLost: (): void => {
       // The socket is known gone, so no ACK can come: a send waiting for one is not failed on its
       // deadline but stays `sending`, and the reconnect sends it again with the same id (D-33).
@@ -898,11 +989,8 @@ export const createEngine = (options: EngineOptions): Engine => {
       for (const cancel of typingEnds.values()) cancel();
       typingEnds.clear();
       store.setState({ typing: {} });
-      // Continuations asleep between attempts wake and end; the epoch tells a running one it is stale.
+      // Socket status has cancelled replays; delayed HTTP send replies also lose this life.
       epoch += 1;
-      for (const wake of [...wakers]) wake();
-      wakers.clear();
-      continuing.clear();
       // A send still waiting has lost its deadline timer with the rest: the next open owes it a re-send.
       resumeOnOpen = store.getState().pending.some((p) => p.delivery === 'sending');
     },
@@ -910,6 +998,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       const wanted = new Set(channelIds);
       const dropped = [...watched].filter((id) => !wanted.has(id));
       for (const id of dropped) watched.delete(id);
+      for (const id of dropped) continuing.get(id)?.cancel();
       // One frame for all of them, not one each (#523).
       if (dropped.length > 0) connection?.unwatch(dropped);
       for (const id of wanted) {
@@ -934,7 +1023,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         attachments: attachments ?? [],
       };
       // Painted before anything leaves: the store is what the screen reads.
-      change((all) => [...all, pending]);
+      if (!change((all) => [...all, pending])) throw accountChanged();
       transmit(pending);
       return id;
     },
@@ -983,6 +1072,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       }
     },
     retryDegraded: (): void => {
+      if (!ownsAccount()) return;
       const stale = Object.keys(store.getState().degraded).filter((id) => id !== UNNAMED);
       store.setState({ degraded: {} });
       // Unwatched and watched again, the channel is subscribed from its cursor as if new.

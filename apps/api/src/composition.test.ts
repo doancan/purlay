@@ -743,16 +743,23 @@ describe('the work of the jobs a module names', () => {
       'mail:missed',
       'purge:retention',
       'sweep:github-deliveries',
+      'sweep:guest-expiry',
       'sweep:link-previews',
     ]);
     expect(chatModule.manifest.retention).toEqual([
       'purge:retention',
       'sweep:link-previews',
       'sweep:github-deliveries',
+      'sweep:guest-expiry',
     ]);
     expect(
-      ['purge:retention', 'sweep:link-previews', 'sweep:github-deliveries'].map(alone.closedJob),
-    ).toEqual([false, false, false]);
+      [
+        'purge:retention',
+        'sweep:link-previews',
+        'sweep:github-deliveries',
+        'sweep:guest-expiry',
+      ].map(alone.closedJob),
+    ).toEqual([false, false, false, false]);
     expect(alone.closedJob('mail:missed')).toBe(true);
   });
 });

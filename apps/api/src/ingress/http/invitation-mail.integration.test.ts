@@ -7,6 +7,8 @@ import { aScriptedRelay } from '../../testing/smtp-relay';
  * On a database of its own, with real connections: a failed transaction must be seen to end.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { Value } from '@sinclair/typebox/value';
+import { testNeeding } from '../../testing/needs';
 import {
   cloneIntegrationDatabase,
   sql,
@@ -16,6 +18,8 @@ import {
 } from '@purlay/db';
 import {
   INVITATION_EMAILS_PER_REQUEST,
+  Channel,
+  CreatedGuestInvitation,
   type CreatedInvitation,
   type InvitationRecipientPage,
   type InvitationDeliveryPage,
@@ -449,4 +453,101 @@ describe('integration: inviting by e-mail over HTTP', () => {
     await restarted.settled();
     expect(second.posted).toHaveLength(10);
   });
+  testNeeding('chat')(
+    'a named guest invitation survives a throwing outbox with committed scope and redacted diagnostics',
+    async () => {
+      const log = aRecordingLogger();
+      const app = anApp(
+        {
+          post: (message) => {
+            throw Object.assign(new Error(`${message.to}: ${message.text}`), { code: 'EQUEUE' });
+          },
+          flush: () => Promise.resolve(),
+        },
+        log.log,
+      );
+      const { owner, id } = await aWorkspace(app, 'guest-mail-throws');
+      const channelResponse = await call(app, 'POST', `/api/workspaces/${id}/channels`, owner, {
+        name: 'supplier',
+        type: 'public',
+      });
+      const channel: unknown = await channelResponse.json();
+      if (!Value.Check(Channel, channel)) throw new Error('Missing guest mail channel');
+      const address = 'guest.hidden@example.test';
+      const response = await call(app, 'POST', `/api/workspaces/${id}/guest-invitations`, owner, {
+        email: address,
+        channelIds: [channel.id],
+        accessExpiresAt: null,
+      });
+      expect(response.status).toBe(201);
+      const made: unknown = await response.json();
+      if (!Value.Check(CreatedGuestInvitation, made)) throw new Error('Invalid guest mail receipt');
+      expect(made.mail).toEqual([{ address, outcome: 'queued' }]);
+      expect(
+        await cloned.db
+          .selectFrom('workspace_invitations')
+          .select(['guest_email', 'guest_channels'])
+          .where('id', '=', made.invitation.id)
+          .executeTakeFirstOrThrow(),
+      ).toEqual({ guest_email: address, guest_channels: [channel.id] });
+      await app.settled();
+      const failures = log.lines.filter(
+        (line) => line['msg'] === 'work left for after an answer failed',
+      );
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toMatchObject({ purpose: 'invitation', reason: 'EQUEUE' });
+      expect(JSON.stringify(log.lines)).not.toContain(address);
+      expect(JSON.stringify(log.lines)).not.toContain(made.token);
+    },
+  );
+
+  testNeeding('chat')(
+    'a failed named guest transaction leaves no invitation, recipient, quota or outgoing letter',
+    async () => {
+      const mail = aRecordingOutbox();
+      const app = anApp(mail);
+      const { owner, id } = await aWorkspace(app, 'guest-mail-rollback');
+      const channelResponse = await call(app, 'POST', `/api/workspaces/${id}/channels`, owner, {
+        name: 'supplier',
+        type: 'public',
+      });
+      const channel: unknown = await channelResponse.json();
+      if (!Value.Check(Channel, channel)) throw new Error('Missing guest rollback channel');
+      const before = await counters();
+      await sql`create function refuse_guest_mail_audit() returns trigger language plpgsql as
+      $$ begin raise exception 'guest audit refused'; end $$`.execute(cloned.db);
+      await sql`create trigger refuse_guest_mail before insert on audit_log for each row execute function refuse_guest_mail_audit()`.execute(
+        cloned.db,
+      );
+      let response: Response;
+      try {
+        response = await call(app, 'POST', `/api/workspaces/${id}/guest-invitations`, owner, {
+          email: 'rollback.guest@example.test',
+          channelIds: [channel.id],
+          accessExpiresAt: null,
+        });
+      } finally {
+        await sql`drop trigger refuse_guest_mail on audit_log`.execute(cloned.db);
+        await sql`drop function refuse_guest_mail_audit()`.execute(cloned.db);
+      }
+      expect(response.status).toBe(500);
+      await app.settled();
+      expect(mail.posted).toEqual([]);
+      expect(await counters()).toBe(before);
+      expect(
+        await cloned.db
+          .selectFrom('workspace_invitations')
+          .select('id')
+          .where('workspace_id', '=', id)
+          .execute(),
+      ).toEqual([]);
+      expect(
+        await cloned.db
+          .selectFrom('workspace_invitation_recipients')
+          .select('id')
+          .where('workspace_id', '=', id)
+          .execute(),
+      ).toEqual([]);
+    },
+  );
 });

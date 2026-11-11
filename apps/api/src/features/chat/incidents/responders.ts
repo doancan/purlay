@@ -10,13 +10,14 @@
  *   nothing and tells nobody.
  * - **Still kept after the incident is resolved**: who worked on it is part of what is written up
  *   afterwards, as the postmortem is; only its status and severity are fixed once resolved.
- * - **On the timeline**, each change with who made it, under the incident's row lock.
+ * - **On the timeline**, each change with who made it, under the channel's row lock.
  */
 import { Value } from '@sinclair/typebox/value';
 import type { ChatTx } from '../schema';
+import { sql } from '@purlay/db';
 import { INCIDENT_RESPONDERS_MAX, Uuid } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import type { ChannelContext } from '../channels/guard';
+import { channelContentVisible, type ChannelContext } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import {
   incidentNotFound,
@@ -29,7 +30,7 @@ import {
 const personNotFound = (): AppError =>
   new AppError({ code: 'USER_NOT_FOUND', message: 'There is nobody by that id in this channel.' });
 
-/** The incident is this channel's, locked for the change: two at once are one after the other. */
+/** The incident is currently readable in this channel, whose write mutex is already held. */
 const lockIncident = async (
   executor: ChatTx,
   context: ChannelContext,
@@ -41,7 +42,7 @@ const lockIncident = async (
     .select('id')
     .where('id', '=', incidentId)
     .where('channel_id', '=', context.channelId)
-    .forNoKeyUpdate()
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incidents.declared_at')))
     .executeTakeFirst();
   if (row === undefined) throw incidentNotFound();
 };
@@ -70,7 +71,7 @@ export const addResponder = async (
     .where('incident_id', '=', incidentId)
     .where('user_id', '=', userId)
     .executeTakeFirst();
-  if (already !== undefined) return await unchanged(executor, incidentId);
+  if (already !== undefined) return await unchanged(executor, context, incidentId);
   const counted = await executor
     .selectFrom('incident_responders')
     .select((eb) => eb.fn.countAll<string>().as('count'))
@@ -84,7 +85,7 @@ export const addResponder = async (
   }
   const now = clock.now();
   // After the last brought in, whatever the clock says: two in one millisecond still list in the
-  // order they were brought in. The incident's row lock makes this read the last.
+  // order they were brought in. The channel's row lock makes this read the last.
   const last = await executor
     .selectFrom('incident_responders')
     .select((eb) => eb.fn.max('added_at').as('at'))
@@ -106,7 +107,7 @@ export const addResponder = async (
     from: null,
     to: userId,
   });
-  return { ...(await unchanged(executor, incidentId)), changed: true };
+  return { ...(await unchanged(executor, context, incidentId)), changed: true };
 };
 
 /** Takes somebody off; not responding, nothing changes. */
@@ -125,11 +126,11 @@ export const removeResponder = async (
     .where('incident_id', '=', incidentId)
     .where('user_id', '=', userId)
     .executeTakeFirst();
-  if (removed.numDeletedRows === 0n) return await unchanged(executor, incidentId);
+  if (removed.numDeletedRows === 0n) return await unchanged(executor, context, incidentId);
   await record(executor, incidentId, context.userId, clock.now(), {
     kind: 'responder_removed',
     from: null,
     to: userId,
   });
-  return { ...(await unchanged(executor, incidentId)), changed: true };
+  return { ...(await unchanged(executor, context, incidentId)), changed: true };
 };

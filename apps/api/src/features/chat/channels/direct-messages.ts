@@ -19,7 +19,7 @@ import type { ChatTx } from '../schema';
 import type { Channel } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import type { WorkspaceContext } from '../../../platform/tenancy';
+import { requireFullMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { channelFor } from './channels';
 import { requireWorkspacePeople } from './members';
 
@@ -53,6 +53,7 @@ export const openConversation = async (
   context: WorkspaceContext,
   others: readonly string[],
 ): Promise<OpenedConversation> => {
+  requireFullMembership(context, 'Guests can use only the channels granted by an administrator.');
   const self = others.length === 1 && others[0] === context.userId;
   if (!self && others.includes(context.userId)) {
     throw new AppError({

@@ -125,6 +125,8 @@ export const someMembers = (): WorkspaceMember[] =>
 
 export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
   anApi({
+    // This signed-in UI fixture runs the capable guest deployment unless the test closes it.
+    guestInvitationAvailability: () => Promise.resolve({ enabled: true, email: false }),
     me: () => Promise.resolve(aSession()),
     channels: () => Promise.resolve(someChannels()),
     channelGroups: () => Promise.resolve({ data: [], nextCursor: null }),

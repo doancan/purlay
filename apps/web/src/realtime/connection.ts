@@ -65,15 +65,25 @@ export type Schedule = (fn: () => void, ms: number) => () => void;
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'waiting' | 'ended';
 
 /**
- * What asking the API about the session found. `ended` is a 401 and nothing
- * else; a network error or a 5xx is `unknown` — an outage is not a sign-out, and
+ * What asking the API about the session found. `ended` means a 401 or an account
+ * that no longer owns this connection; a network error or a 5xx is `unknown` — an outage is not a sign-out, and
  * reading one as the other would sign people out whenever the server is down.
  */
 export type SessionCheck = 'active' | 'ended' | 'unknown';
 
+/** A background identity read may wait this long; a timeout says nothing about sign-in. */
+export const SESSION_CHECK_DEADLINE_MS = 30_000;
+
+interface SessionProbe {
+  readonly controller: AbortController;
+  readonly cancelDeadline: () => void;
+}
+
 export interface ConnectionOptions {
   readonly url: string;
   readonly openSocket: OpenSocket;
+  /** A supplied owner must still authorize every physical connection and write. */
+  readonly canUse?: () => boolean;
   readonly schedule: Schedule;
   readonly random: () => number;
   /** The local clock: when a `PING` left and when its `PONG` arrived. */
@@ -84,7 +94,7 @@ export interface ConnectionOptions {
    * Asks the API whether the session still exists (`GET /api/me`). Injected so
    * this module never names `fetch`. A rejection is read as `unknown`.
    */
-  readonly checkSession: () => Promise<SessionCheck>;
+  readonly checkSession: (signal: AbortSignal) => Promise<SessionCheck>;
   /** A fresh UUIDv7 for a frame's correlation id; the caller owns the clock it is made on. */
   readonly newId: () => string;
   readonly onFrame: (frame: ServerFrame) => void;
@@ -168,10 +178,16 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   let cancelBeat: (() => void) | null = null;
   // The PING whose answer is still wanted for the clock, and when it left.
   let pingSent: { readonly id: string; readonly at: Date } | null = null;
-  // A session check is in flight, and which life of the connection asked. The
-  // epoch moves on anything that makes an answer stale: `stop`, an `open`, an end.
-  let checking = false;
-  let checkEpoch = 0;
+  // Only the active diagnostic can end this connection. Release its slot before abort:
+  // even an ignored abort or a reentrant transport listener cannot retain/clear its replacement.
+  let checking: SessionProbe | null = null;
+  const releaseCheck = (abort: boolean): void => {
+    const check = checking;
+    if (check === null) return;
+    checking = null;
+    check.cancelDeadline();
+    if (abort) check.controller.abort();
+  };
 
   const setStatus = (next: ConnectionStatus): void => {
     if (next === status) return;
@@ -191,10 +207,32 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     inFlight = null;
   };
 
+  const stop = (): void => {
+    generation += 1;
+    releaseCheck(true);
+    pingSent = null;
+    clearTimers();
+    socket?.close();
+    socket = null;
+    setStatus('idle');
+  };
+
+  const usable = (): boolean => {
+    if (options.canUse?.() !== false) return true;
+    stop();
+    return false;
+  };
+
   const write = (frame: ClientFrame): boolean => {
+    if (!usable()) return false;
     if (status !== 'open' || socket === null) return false;
-    socket.send(JSON.stringify(frame));
-    return true;
+    try {
+      socket.send(JSON.stringify(frame));
+      return true;
+    } catch {
+      dead();
+      return false;
+    }
   };
 
   // Channels waiting for a SUBSCRIBE, the one chunk on the wire, and the pause
@@ -282,6 +320,8 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   };
 
   const end = (): void => {
+    generation += 1;
+    socket?.close();
     socket = null;
     pingSent = null;
     clearTimers();
@@ -289,25 +329,31 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     // not inherit a backoff earned by the last session.
     failures = 0;
     neverOpened = 0;
-    checkEpoch += 1;
+    releaseCheck(true);
     setStatus('ended');
   };
 
   const askAboutSession = (): void => {
-    if (checking) return;
-    checking = true;
-    const epoch = checkEpoch;
+    if (checking !== null) return;
+    const check: SessionProbe = {
+      controller: new AbortController(),
+      cancelDeadline: options.schedule(() => {
+        if (checking === check) releaseCheck(true);
+      }, SESSION_CHECK_DEADLINE_MS),
+    };
+    checking = check;
     const answer = async (): Promise<SessionCheck> => {
       try {
-        return await options.checkSession();
+        return await options.checkSession(check.controller.signal);
       } catch {
         // The question failing says nothing about the session: an outage.
         return 'unknown';
       }
     };
-    void answer().then((check) => {
-      checking = false;
-      if (epoch === checkEpoch && check === 'ended') end();
+    void answer().then((answer) => {
+      if (checking !== check) return;
+      releaseCheck(false);
+      if (answer === 'ended') end();
     });
   };
 
@@ -377,6 +423,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
 
   function connect(): void {
     cancelRetry = null;
+    if (!usable()) return;
     generation += 1;
     const mine = generation;
     setStatus('connecting');
@@ -386,7 +433,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         if (mine !== generation) return;
         setStatus('open');
         neverOpened = 0;
-        checkEpoch += 1;
+        releaseCheck(true);
         // Whatever the last connection owed is superseded by this one's replay.
         pending.clear();
         cancelStable = options.schedule(() => {
@@ -444,15 +491,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       // channels watched and the cursors held are still the right ones to resume. (D-82)
       if (status === 'idle' || status === 'ended') connect();
     },
-    stop: (): void => {
-      generation += 1;
-      checkEpoch += 1;
-      pingSent = null;
-      clearTimers();
-      socket?.close();
-      socket = null;
-      setStatus('idle');
-    },
+    stop,
     status: (): ConnectionStatus => status,
     watch: (channelId): void => {
       if (watched.has(channelId)) return;

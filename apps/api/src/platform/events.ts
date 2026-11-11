@@ -366,11 +366,12 @@ export const publishWorkspaceUpdated = async (
   clock: Clock,
   userIds: readonly string[],
   workspaceId: string,
+  accessChanged?: true,
 ): Promise<void> => {
   for (const userId of userIds) {
     await bus.publish(userTopic(userId), {
       event: 'WORKSPACE_UPDATED',
-      data: { workspaceId },
+      data: { workspaceId, ...(accessChanged === true ? { accessChanged } : {}) },
       ts: clock.now().getTime(),
     });
   }

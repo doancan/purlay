@@ -36,9 +36,14 @@ import type { Clock } from '../../../platform/clock';
 import {
   messageNotFound,
   requireChannelMember,
+  messageHistoryVisibleTo,
+  withinMessageHistory,
+  withinCurrentMessageHistory,
+  withinThreadHistory,
   type ChannelContext,
   type VisibleMessage,
 } from '../channels/guard';
+import { buildHistoryMessages } from './history-reader';
 import {
   channelTopic,
   inboxPublications,
@@ -117,6 +122,7 @@ const requireRoot = async (
     .selectFrom('messages')
     .select(['channel_id', 'parent_id', 'sender_id'])
     .where('id', '=', parentId)
+    .where(withinThreadHistory(executor, context))
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
   // Another channel's message and none at all are one answer: which of the two it was
@@ -249,7 +255,17 @@ export const sendMessage = async (
   input: OutgoingMessage,
   engine?: Engine,
 ): Promise<Sent> => {
-  const again = async (row: MessageRow): Promise<Sent> => {
+  const again = async (existing: MessageRow): Promise<Sent> => {
+    // Ownership identifies a retry; it cannot grant access to history after guest re-admission.
+    // Select the content under current authority before any sidecar or thread summary is read.
+    const row = await executor
+      .selectFrom('messages')
+      .leftJoin('users', 'users.id', 'messages.sender_id')
+      .select(MESSAGE_COLUMNS)
+      .where('messages.id', '=', existing.id)
+      .where(withinMessageHistory(executor, context))
+      .executeTakeFirst();
+    if (row === undefined) throw messageNotFound();
     const [message] = await buildMessages(executor, [row]);
     if (message === undefined) {
       throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
@@ -393,10 +409,11 @@ export const sendMessage = async (
   }
 
   // The mentions, the notifications and the counters: one place decides who is told (D-99 §1).
+  const mentioned = await resolveMentions(executor, context, names, input.id);
   const { recipients, told } = await recordDelivery(executor, {
     context,
     messageId: input.id,
-    mentioned: await resolveMentions(executor, context, names),
+    mentioned,
     thread:
       input.parentId === undefined || root === undefined
         ? null
@@ -404,7 +421,11 @@ export const sendMessage = async (
     now: clock.now(),
   });
 
-  const written = await readBuilt(executor, input.id);
+  const written = await readBuilt(executor, input.id, undefined, {
+    id: input.id,
+    mentioned,
+    hasAttachments: (input.attachmentIds?.length ?? 0) > 0,
+  });
   if (written === undefined) {
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
@@ -487,7 +508,9 @@ export const messageHistory = async (
     .selectFrom('messages')
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
+    .select(withinCurrentMessageHistory(executor, context).as('content_visible'))
     .where('messages.channel_id', '=', context.channelId)
+    .where(withinThreadHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where((eb) => eb.or([notHiddenBy(context.userId), eb('messages.thread_reply_count', '>', 0)]))
     // A deleted root keeps its place while it has replies, as their tombstone (D-103 §7).
@@ -507,7 +530,7 @@ export const messageHistory = async (
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
   return {
-    data: await buildMessages(executor, page, context.userId),
+    data: await buildHistoryMessages(executor, page, context.userId),
     // The cursor to pass back **in the direction you were travelling**: the last
     // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
@@ -535,10 +558,12 @@ export const messageWindow = async (
       .selectFrom('messages')
       .leftJoin('users', 'users.id', 'messages.sender_id')
       .select(MESSAGE_COLUMNS)
+      .select(withinCurrentMessageHistory(executor, visible.context).as('content_visible'))
       .where('messages.id', 'in', [...new Set([rootId, visible.messageId])])
+      .where(withinThreadHistory(executor, visible.context))
       .execute(),
   ]);
-  const built = await buildMessages(executor, rows, visible.context.userId);
+  const built = await buildHistoryMessages(executor, rows, visible.context.userId);
   const target = built.find((m) => m.id === visible.messageId);
   const root = built.find((m) => m.id === rootId);
   // `requireMessageById` found both a moment ago; a row gone between is said, never drawn as a gap.
@@ -572,14 +597,21 @@ export const missedIn = async (
 ): Promise<ReadonlyMap<string, Replay>> => {
   const replays = new Map<string, Replay>();
   if (wanted.length === 0) return replays;
+  const history = messageHistoryVisibleTo(
+    executor,
+    sql.ref<string>('wanted.user_id'),
+    sql.ref<string>('wanted.workspace_id'),
+  );
 
   const rows = await executor
     .selectFrom(
-      sql<{ channel_id: string; after_id: string }>`(
+      sql<{ channel_id: string; after_id: string; user_id: string; workspace_id: string }>`(
         select * from unnest(
           ${wanted.map((w) => w.context.channelId)}::uuid[],
-          ${wanted.map((w) => w.after)}::uuid[]
-        ) as pairs(channel_id, after_id)
+          ${wanted.map((w) => w.after)}::uuid[],
+          ${wanted.map((w) => w.context.userId)}::uuid[],
+          ${wanted.map((w) => w.context.workspaceId)}::uuid[]
+        ) as pairs(channel_id, after_id, user_id, workspace_id)
       )`.as('wanted'),
     )
     .innerJoinLateral(
@@ -589,6 +621,7 @@ export const missedIn = async (
           .selectAll('messages')
           .whereRef('messages.channel_id', '=', 'wanted.channel_id')
           .whereRef('messages.id', '>', 'wanted.after_id')
+          .where(history)
           .where('messages.parent_id', 'is', null)
           .where('messages.deleted_at', 'is', null)
           .orderBy('messages.id', 'asc')

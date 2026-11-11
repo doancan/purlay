@@ -49,6 +49,17 @@ const production = {
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
+test('guest admission requires an explicit rollout attestation and never infers it from Redis or production', () => {
+  expect(loadConfig(valid).GUEST_ACCESS_READY).toBe(false);
+  expect(loadConfig({ ...valid, GUEST_ACCESS_READY: '' }).GUEST_ACCESS_READY).toBe(false);
+  expect(loadConfig({ ...valid, GUEST_ACCESS_READY: 'false' }).GUEST_ACCESS_READY).toBe(false);
+  expect(loadConfig({ ...valid, GUEST_ACCESS_READY: 'true' }).GUEST_ACCESS_READY).toBe(true);
+  expect(loadConfig(production).GUEST_ACCESS_READY).toBe(false);
+  expect(loadConfig({ ...valid, REDIS_URL: 'redis://localhost:6379' }).GUEST_ACCESS_READY).toBe(
+    false,
+  );
+});
+
 /** The same 32 bytes spelled differently: the last character's two unused low bits flipped. */
 const aliasOf = (key: string): string => {
   const last = ALPHABET.indexOf(key.charAt(42));

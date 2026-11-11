@@ -2,7 +2,7 @@
  * Who the `@` list may offer in one channel — the people a mention written there would reach
  * (`resolveMentions`, `apps/api/src/features/chat/messages/delivery.ts`).
  *
- * - **A public channel:** everybody in the workspace. The server resolves a name there workspace-wide.
+ * - **A public channel:** the workspace for full members; its current participants for a restricted guest.
  * - **A direct message:** the other person.
  * - **A private channel:** its members now (`GET /api/channels/:id/members`, D-123), and still in the
  *   workspace. The server tells nobody outside a private channel, so offering anybody else there would
@@ -21,10 +21,11 @@ export const candidatesFor = (
   members: readonly WorkspaceMember[],
   inChannel: readonly User[] | undefined,
   selfId: string,
+  guest = false,
 ): readonly User[] => {
   if (channel === undefined) return [];
   const people = members.map((member) => member.user);
-  if (channel.type === 'public') return offerable(people, selfId);
+  if (channel.type === 'public' && !guest) return offerable(people, selfId);
   // A direct message's people are its key's (D-127): two, or a group — offered while they are
   // still people of the workspace.
   if (channel.type === 'direct_message') {
@@ -42,7 +43,7 @@ export const candidatesFor = (
   );
 };
 
-/** Who may be offered, and whether that is known yet: a private channel's members are read first. */
+/** Who may be offered, and whether the current channel's permitted participants are known yet. */
 export interface MentionCandidates {
   readonly people: readonly User[];
   readonly state: 'ready' | 'reading' | 'failed';
@@ -51,26 +52,28 @@ export interface MentionCandidates {
 }
 
 export const useMentionCandidates = (channelId: string): MentionCandidates => {
-  const { workspace } = useWorkspace();
+  const { workspace, access } = useWorkspace();
   const session = useSession();
   const members = useMembers(workspace.id);
   const channels = useChannels(workspace.id);
   const channel = channels.data?.find((each) => each.id === channelId);
-  const isPrivate = channel?.type === 'private';
-  const inChannel = useChannelMembers(channelId, isPrivate);
+  const guest = access.kind === 'guest';
+  const needsParticipants = channel?.type === 'private' || (guest && channel?.type === 'public');
+  const inChannel = useChannelMembers(channelId, needsParticipants);
   const { refetch, isStale } = inChannel;
   const refresh = useCallback((): void => {
-    if (isPrivate && isStale) void refetch();
-  }, [isPrivate, isStale, refetch]);
+    if (needsParticipants && isStale) void refetch();
+  }, [needsParticipants, isStale, refetch]);
   return {
     people: candidatesFor(
       channel,
       members.data ?? [],
       inChannel.data?.map((member) => member.user),
       session.user.id,
+      guest,
     ),
     state:
-      !isPrivate || inChannel.data !== undefined
+      !needsParticipants || inChannel.data !== undefined
         ? 'ready'
         : inChannel.isError
           ? 'failed'

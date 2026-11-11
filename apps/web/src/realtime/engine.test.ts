@@ -2,10 +2,12 @@
  * What a person's own send does between the keystroke and the acknowledgement, and what
  * every frame means to the cache — against a socket and timers driven by hand.
  */
-import { describe, expect, test } from 'bun:test';
-import { QueryClient, QueryObserver, type InfiniteData } from '@tanstack/react-query';
+import { describe, expect, spyOn, test } from 'bun:test';
+import { getEventListeners } from 'node:events';
+import { QueryCache, QueryClient, QueryObserver, type InfiniteData } from '@tanstack/react-query';
 import {
   CLOSE_CODES,
+  CHECK_SESSION_AFTER_FAILURES,
   PRESENCE_GRACE_MS,
   type Attachment,
   type Channel,
@@ -21,14 +23,23 @@ import {
 } from '@purlay/types';
 import { ApiError } from '../data/errors';
 import { families, keys } from '../data/keys';
+import {
+  workspaceAccessChanged,
+  reconcileAccountOnCommit,
+  accountAccessChanged,
+} from '../data/access-change';
 import { anApi } from '../testing/fake-api';
 import { IDS, aSession, NO_PROFILE } from '../testing/fixtures';
 import { fakeSchedule, memoryStorage, type MemoryStorage } from '../testing/fakes';
-import type { Api } from '../data/api';
+import { createApi, type Api } from '../data/api';
+import { createHttp } from '../data/http';
+import { createActions } from '../data/actions';
+import { advanceAccessRevision } from '../data/access-revision';
 import type { Clock } from './clock';
 import type { SocketHandlers } from './connection';
 import { UNNAMED, createEngine, type Engine, type PendingMessage } from './engine';
-import { pendingKey } from './pending-store';
+import { pendingKey, saveStored, loadStored } from './pending-store';
+import { claimFor, forgetPersonalData, PERSON_KEY } from '../data/browser-storage';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
 
@@ -109,15 +120,32 @@ interface World {
 }
 
 interface Extras {
+  readonly client?: QueryClient;
+  readonly queryCache?: QueryCache;
   readonly storage?: MemoryStorage | null;
   readonly userId?: string;
   readonly clock?: Clock;
 }
 
 const world = (api: Partial<Api> = {}, extras: Extras = {}): World => {
+  // SessionGate has already claimed storage when a real engine mounts. Seed that ownership here;
+  // tests of an account change perform the actual claim/forget after this engine has been created.
+  try {
+    extras.storage?.setItem(PERSON_KEY, extras.userId ?? ME.id);
+  } catch {
+    // A deliberately blocked store cannot be claimed, as in the real session gate.
+  }
   const timers = fakeSchedule();
   const sockets: Socket[] = [];
-  const client = new QueryClient();
+  const client =
+    extras.client ??
+    new QueryClient(extras.queryCache === undefined ? {} : { queryCache: extras.queryCache });
+  // The real SessionGate has committed this receipt before an engine can mount.
+  const receipt = aSession();
+  client.setQueryData<MeResponse>(keys.me, {
+    ...receipt,
+    user: { ...receipt.user, id: extras.userId ?? ME.id },
+  });
   const ended = { count: 0 };
   const clock: Clock = extras.clock ?? { now: () => new Date(T0) };
   const engine = createEngine({
@@ -423,6 +451,143 @@ describe('a send carrying attachments (D-109 §7)', () => {
 });
 
 describe('a send while the socket is down goes over HTTP, the same service', () => {
+  test('an old HTTP refusal cannot fail the retry sent by a resumed engine', async () => {
+    const answer = Promise.withResolvers<Message>();
+    const w = world({ send: () => answer.promise });
+    const id = w.engine.send({ channelId: CH, content: 'Still awaiting the resumed socket' });
+    w.engine.start();
+    w.open();
+    w.engine.stop();
+    w.engine.start();
+    w.open();
+    answer.reject(new ApiError(400, 'VALIDATION_FAILED', 'Old refused attempt'));
+    await answer.promise.catch(() => undefined);
+    expect(w.pending().find((row) => row.id === id)?.delivery).toBe('sending');
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test.each(['accepted', 'refused', 'signed-out'] as const)(
+    'a late %s HTTP answer cannot restore the previous person’s private pending storage after an account claim changes',
+    async (outcome) => {
+      const answer = Promise.withResolvers<Message>();
+      const other = Promise.withResolvers<Message>();
+      const storage = memoryStorage();
+      claimFor(storage, ME.id);
+      let reads = 0;
+      const w = world(
+        {
+          send: () => {
+            reads++;
+            return reads === 1 ? answer.promise : other.promise;
+          },
+        },
+        { storage },
+      );
+      const old = w.engine.send({ channelId: CH, content: 'Old accepted personal words' });
+      const remaining = w.engine.send({
+        channelId: CH,
+        content: 'Old other private pending words',
+      });
+      expect(storage.getItem(pendingKey(ME.id))?.includes('Old other private pending words')).toBe(
+        true,
+      );
+      const nextPerson = '00000000-0000-4000-8000-0000000000e9';
+      if (outcome === 'signed-out') forgetPersonalData(storage);
+      else claimFor(storage, nextPerson);
+      w.client.clear();
+      if (outcome !== 'refused') answer.resolve(echo(old));
+      else answer.reject(new ApiError(500, 'INTERNAL', 'offline'));
+      await answer.promise.catch(() => undefined);
+      await Promise.resolve();
+      expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+      expect(storage.getItem(PERSON_KEY)).toBe(outcome === 'signed-out' ? null : nextPerson);
+      w.engine.stop();
+      other.resolve(echo(remaining));
+      await other.promise;
+      w.client.clear();
+    },
+  );
+
+  test.each(['first-feed', 'other-workspace'] as const)(
+    'a current HTTP acceptance still teaches a %s feed',
+    async (control) => {
+      const accepted = Promise.withResolvers<Message>();
+      const w = world({ send: () => accepted.promise });
+      w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+      const id = w.engine.send({ channelId: CH, content: 'Current accepted send' });
+      if (control === 'other-workspace') workspaceAccessChanged(w.client, 'other-workspace');
+      w.client.setQueryData<Pages>(keys.messages(CH), {
+        pageParams: [undefined],
+        pages: [{ data: [], nextCursor: null }],
+      });
+      accepted.resolve(echo(id, { content: 'Current accepted send' }));
+      await accepted.promise;
+      await Promise.resolve();
+      expect(
+        w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.id),
+      ).toEqual([id]);
+      expect(w.pending()).toEqual([]);
+      w.engine.stop();
+      w.client.clear();
+    },
+  );
+
+  test('an old HTTP acceptance after stop and restart cannot enter current content or retire a new pending send', async () => {
+    const accepted = Promise.withResolvers<Message>();
+    const w = world({ send: () => accepted.promise });
+    w.client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [], nextCursor: null }],
+    });
+    const old = w.engine.send({ channelId: CH, content: 'Old lifecycle words' });
+    w.engine.start();
+    w.open();
+    w.engine.stop();
+    w.engine.start();
+    w.open();
+    const current = w.engine.send({ channelId: CH, content: 'Keep new lifecycle send' });
+    accepted.resolve(echo(old, { content: 'Old lifecycle words' }));
+    await accepted.promise;
+    await Promise.resolve();
+    expect(w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data).toEqual([]);
+    expect(w.pending().some((row) => row.id === current)).toBe(true);
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('an accepted HTTP answer from prior access cannot enter freshly authorized history, but retires only its own send', async () => {
+    const accepted = Promise.withResolvers<Message>();
+    const w = world({ send: () => accepted.promise });
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [], nextCursor: null }],
+    });
+    const old = w.engine.send({ channelId: CH, content: 'Words from the previous admission' });
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS, accessChanged: true }, ts: T0 }),
+    );
+    const fresh = echo(C2, { content: 'Current readable history' });
+    w.client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [fresh], nextCursor: null }],
+    });
+    const current = w.engine.send({ channelId: CH, content: 'Keep this current pending message' });
+    expect(w.pending().map((row) => row.id)).toEqual([old, current]);
+    accepted.resolve(echo(old, { content: 'Words from the previous admission' }));
+    await accepted.promise;
+    await Promise.resolve();
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.content),
+    ).toEqual([fresh.content]);
+    expect(w.pending().map((row) => row.id)).toEqual([current]);
+    w.engine.stop();
+    w.client.clear();
+  });
+
   test('a success teaches the cache and retires the row', async () => {
     const sent: unknown[] = [];
     const w = world({
@@ -525,7 +690,7 @@ describe('a reconnect', () => {
 
   test('the first open reads the person’s own topic again: what changed between the page’s reads and the socket is in no frame', () => {
     const w = world();
-    w.client.setQueryData(keys.me, { stale: false });
+    w.client.setQueryData<MeResponse>(keys.me, aSession());
     w.client.setQueryData(keys.members(WS), []);
     w.client.setQueryData(keys.notifications(WS), { pageParams: [], pages: [] });
     w.client.setQueryData(keys.saved(WS), { pageParams: [], pages: [] });
@@ -542,27 +707,32 @@ describe('a reconnect', () => {
 
   test('a change made after the page read the person and before its socket opened shows once it has', async () => {
     const w = world();
-    let served = { deepWorkUntil: null as string | null };
+    let served = aSession();
     const observer = new QueryObserver(w.client, {
       queryKey: keys.me,
-      queryFn: (): Promise<{ deepWorkUntil: string | null }> => Promise.resolve({ ...served }),
+      queryFn: (): Promise<MeResponse> => Promise.resolve({ ...served }),
       staleTime: Infinity,
     });
     const unsubscribe = observer.subscribe(() => undefined);
     for (let turn = 0; turn < 4; turn++) await Promise.resolve();
-    expect(w.client.getQueryData(keys.me)).toEqual({ deepWorkUntil: null });
+    expect(w.client.getQueryData(keys.me)).toEqual(served);
     // Another device starts Deep Work now: its frame goes to a socket that does not exist yet.
-    served = { deepWorkUntil: '2026-10-09T14:00:00.000Z' };
+    const membership = served.memberships[0];
+    if (membership === undefined) throw new Error('Missing test membership');
+    served = {
+      ...served,
+      memberships: [{ ...membership, deepWorkUntil: '2026-10-09T14:00:00.000Z' }],
+    };
     w.engine.start();
     w.open();
     for (let turn = 0; turn < 4; turn++) await Promise.resolve();
-    expect(w.client.getQueryData(keys.me)).toEqual({ deepWorkUntil: '2026-10-09T14:00:00.000Z' });
+    expect(w.client.getQueryData(keys.me)).toEqual(served);
     unsubscribe();
   });
 
   test('reads the memberships again: a workspace renamed while the socket was down is not replayed', () => {
     const w = world();
-    w.client.setQueryData(keys.me, { stale: false });
+    w.client.setQueryData<MeResponse>(keys.me, aSession());
     w.engine.start();
     w.open();
     w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
@@ -570,7 +740,7 @@ describe('a reconnect', () => {
       w.timers.advance(100);
     }
     // The first open read it again; what is read now is the reconnect's.
-    w.client.setQueryData(keys.me, { stale: false });
+    w.client.setQueryData<MeResponse>(keys.me, aSession());
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
     w.open();
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
@@ -1056,14 +1226,264 @@ describe('the frames', () => {
 
   test('a workspace that changed has the memberships read again, not patched from the frame', () => {
     const w = world();
-    w.client.setQueryData(keys.me, { stale: false });
+    w.client.setQueryData<MeResponse>(keys.me, aSession());
     w.engine.start();
     w.open();
     // Read again by the open itself; settled again, it is the frame's to read once more.
-    w.client.setQueryData(keys.me, { stale: false });
+    w.client.setQueryData<MeResponse>(keys.me, aSession());
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
     w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
     expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
+  });
+
+  test('reasonless access revocation refreshes membership while channel-only reasons leave it alone', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    for (const reason of ['archived', 'left', 'removed'] as const) {
+      w.client.setQueryData(keys.me, aSession());
+      w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason }, ts: T0 }));
+      expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(false);
+    }
+    w.client.setQueryData(keys.me, aSession());
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH] }, ts: T0 }));
+    expect(w.client.getQueryState(keys.me)?.isInvalidated).toBe(true);
+  });
+
+  test('an expiry frame reads the account again and removes only the expired workspace receipt', async () => {
+    const session = aSession();
+    const membership = session.memberships[0];
+    if (membership === undefined) throw new Error('Missing account membership');
+    const retained = { ...membership, workspace: { ...membership.workspace, id: IDS.browse } };
+    const initial: MeResponse = {
+      ...session,
+      memberships: [{ ...membership, workspace: { ...membership.workspace, id: WS } }, retained],
+    };
+    const after: MeResponse = { ...initial, memberships: [retained] };
+    const w = world({}, { userId: initial.user.id });
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.me, initial);
+    const finished = Promise.withResolvers<undefined>();
+    let reads = 0;
+    const observer = new QueryObserver<MeResponse>(w.client, {
+      queryKey: keys.me,
+      staleTime: Infinity,
+      queryFn: (): Promise<MeResponse> => {
+        reads += 1;
+        return Promise.resolve(after);
+      },
+    });
+    const stop = observer.subscribe((result) => {
+      if (
+        result.data?.memberships.length === 1 &&
+        result.data.memberships[0]?.workspace.id === IDS.browse
+      )
+        finished.resolve(undefined);
+    });
+    try {
+      expect(reads).toBe(0);
+      w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH] }, ts: T0 }));
+      await finished.promise;
+      expect(reads).toBe(1);
+      expect(
+        w.client.getQueryData<MeResponse>(keys.me)?.memberships.map((one) => one.workspace.id),
+      ).toEqual([IDS.browse]);
+    } finally {
+      stop();
+      w.engine.stop();
+      w.client.clear();
+    }
+  });
+
+  test('access refresh removes old history immediately while a fresh read waits, preserving pending sends', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.client.setQueryData(keys.messages(CH), {
+      pages: [{ data: [echo(C1)], nextCursor: null }],
+      pageParams: [undefined],
+    });
+    w.client.setQueryData(keys.channels('another-workspace'), [
+      channel(OTHER_CH, { workspaceId: 'another-workspace' }),
+    ]);
+    w.client.setQueryData(keys.messages(OTHER_CH), { pages: [], pageParams: [] });
+    const response = Promise.withResolvers<Pages>();
+    const observer = new QueryObserver<Pages>(w.client, {
+      queryKey: keys.messages(CH),
+      queryFn: (): Promise<Pages> => response.promise,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    expect(observer.getCurrentResult().data?.pages[0]?.data[0]?.content).toBe('hello');
+    const pending = w.engine.send({ channelId: CH, content: 'preserve this queued send' });
+    w.deliver(
+      frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS, accessChanged: true }, ts: T0 }),
+    );
+    expect(observer.getCurrentResult().data === undefined).toBe(true);
+    expect(w.client.getQueryData(keys.messages(CH)) === undefined).toBe(true);
+    expect(w.client.getQueryState(keys.messages(OTHER_CH))?.isInvalidated).toBe(false);
+    expect(w.pending().map((row) => row.id)).toEqual([pending]);
+    response.resolve({
+      pages: [{ data: [echo(C2, { content: 'new readable history' })], nextCursor: null }],
+      pageParams: [undefined],
+    });
+    await observer.refetch({ cancelRefetch: false });
+    expect(observer.getCurrentResult().data?.pages[0]?.data[0]?.content).toBe(
+      'new readable history',
+    );
+    expect(w.pending().map((row) => row.id)).toEqual([pending]);
+    unsubscribe();
+    w.engine.stop();
+    w.client.clear();
+  });
+  test('access refresh forgets content with no channel list and preserves content proven to belong elsewhere', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const otherWorkspace = 'other-workspace';
+    w.client.setQueryData(keys.channels(otherWorkspace), [
+      channel(OTHER_CH, { workspaceId: otherWorkspace }),
+    ]);
+    const hereFile: Attachment = {
+      id: 'file-here',
+      fileName: 'memo.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 30,
+      kind: 'file',
+      width: null,
+      height: null,
+    };
+    const otherFile: Attachment = { ...hereFile, id: 'file-elsewhere' };
+    w.client.setQueryData(keys.message(C1), echo(C1, { attachments: [hereFile] }));
+    w.client.setQueryData(
+      keys.message(C2),
+      echo(C2, { channelId: OTHER_CH, attachments: [otherFile] }),
+    );
+    const forgotten = [
+      keys.messages(CH),
+      keys.messagesAround(CH, C1),
+      keys.thread(C1),
+      keys.threadFollow(C1),
+      keys.messageVersions(C1),
+      keys.attachmentText(hereFile.id),
+      keys.files(CH),
+      keys.sent(WS, ME.id),
+      keys.unfurl(WS, 'https://example.test'),
+    ];
+    const preserved = [
+      keys.messages(OTHER_CH),
+      keys.thread(C2),
+      keys.threadFollow(C2),
+      keys.messageVersions(C2),
+      keys.attachmentText(otherFile.id),
+      keys.files(OTHER_CH),
+      keys.sent(otherWorkspace, ME.id),
+      keys.unfurl(otherWorkspace, 'https://example.test'),
+    ];
+    for (const key of [...forgotten, ...preserved])
+      w.client.setQueryData(key, { pages: [], pageParams: [] });
+    const pending = w.engine.send({ channelId: CH, content: 'Keep my send' });
+    w.deliver(
+      frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS, accessChanged: true }, ts: T0 }),
+    );
+    expect(
+      [...forgotten, keys.message(C1)].map((key) => w.client.getQueryData(key) === undefined),
+    ).toEqual(Array.from({ length: forgotten.length + 1 }, () => true));
+    expect(
+      [...preserved, keys.message(C2)].map((key) => w.client.getQueryData(key) === undefined),
+    ).toEqual(Array.from({ length: preserved.length + 1 }, () => false));
+    expect(w.pending().map((row) => row.id)).toEqual([pending]);
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('a channel revocation forgets cards, versions, file text and aggregate content while preserving known other-channel content', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.client.setQueryData(keys.message(C1), echo(C1));
+    w.client.setQueryData(keys.message(C2), echo(C2, { channelId: CH2 }));
+    const revoked = [
+      keys.messageVersions(C1),
+      keys.threadFollow(C1),
+      keys.attachmentText('unknown-file'),
+      keys.search(WS, 'old', null, null),
+      keys.saved(WS),
+      keys.sent(WS, ME.id),
+    ];
+    const kept = [keys.messageVersions(C2), keys.threadFollow(C2), keys.messages(CH2)];
+    for (const key of [...revoked, ...kept])
+      w.client.setQueryData(key, { pages: [], pageParams: [] });
+    w.deliver(
+      frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason: 'removed' }, ts: T0 }),
+    );
+    expect(
+      [...revoked, keys.message(C1)].map((key) => w.client.getQueryData(key) === undefined),
+    ).toEqual(Array.from({ length: revoked.length + 1 }, () => true));
+    expect(
+      [...kept, keys.message(C2)].map((key) => w.client.getQueryData(key) === undefined),
+    ).toEqual(Array.from({ length: kept.length + 1 }, () => false));
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('an access change cancels an unknown-owner read before old words can return, even when the new read fails', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const before = Promise.withResolvers<string>();
+    const after = Promise.withResolvers<string>();
+    let calls = 0;
+    const observer = new QueryObserver(w.client, {
+      queryKey: keys.attachmentText('unknown-owner'),
+      retry: false,
+      queryFn: (): Promise<string> => {
+        calls++;
+        return calls === 1 ? before.promise : after.promise;
+      },
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    try {
+      expect(calls).toBe(1);
+      w.deliver(
+        frame({
+          event: 'WORKSPACE_UPDATED',
+          data: { workspaceId: WS, accessChanged: true },
+          ts: T0,
+        }),
+      );
+      expect(calls).toBe(2);
+      before.resolve('Words returned by the old authority');
+      for (let turn = 0; turn < 6; turn++) await Promise.resolve();
+      expect(observer.getCurrentResult().data === undefined).toBe(true);
+      after.reject(new Error('Fresh read is unavailable'));
+      await observer.refetch({ cancelRefetch: false });
+      expect(observer.getCurrentResult().data === undefined).toBe(true);
+      expect(observer.getCurrentResult().isError).toBe(true);
+    } finally {
+      before.resolve('late');
+      after.resolve('late');
+      unsubscribe();
+      w.engine.stop();
+      w.client.clear();
+    }
+  });
+
+  test('workspace invalidation includes every guest search page, without reaching another workspace', () => {
+    const w = world();
+    const keysHere = [keys.guests(WS, ''), keys.guests(WS, 'partner')];
+    const elsewhere = keys.guests('another-workspace', 'partner');
+    w.engine.start();
+    w.open();
+    for (const key of [...keysHere, elsewhere])
+      w.client.setQueryData(key, { pages: [], pageParams: [] });
+    w.deliver(frame({ event: 'WORKSPACE_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    expect(keysHere.map((key) => w.client.getQueryState(key)?.isInvalidated)).toEqual([true, true]);
+    expect(w.client.getQueryState(elsewhere)?.isInvalidated).toBe(false);
   });
 
   test('back from a gap, every workspace’s members are read again: a profile may have changed (D-131)', () => {
@@ -1414,7 +1834,653 @@ describe('watching channels', () => {
   });
 });
 
+class ReplayListenerCache extends QueryCache {
+  listenerCount(): number {
+    return this.listeners.size;
+  }
+}
+
+describe('replay transport cancellation', () => {
+  test('a subsequent replay page shares the live controller and aborts when the subscription leaves', async () => {
+    const next = Promise.withResolvers<MessagePage>();
+    const reading = Promise.withResolvers<undefined>();
+    const signals: (AbortSignal | undefined)[] = [];
+    const w = world({
+      messages: (_channel, _query, signal) => {
+        signals.push(signal);
+        if (signals.length === 1) return Promise.resolve({ data: [], nextCursor: C2 });
+        reading.resolve(undefined);
+        return next.promise;
+      },
+    });
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    try {
+      await reading.promise;
+      expect(signals).toHaveLength(2);
+      expect(signals[0] === signals[1]).toBe(true);
+      expect(signals[1]?.aborted).toBe(false);
+      w.engine.watch([]);
+      expect(signals[1]?.aborted).toBe(true);
+    } finally {
+      w.engine.stop();
+      next.resolve({ data: [], nextCursor: null });
+      await next.promise;
+      await Promise.resolve();
+      w.client.clear();
+    }
+  });
+
+  test('an exhausted replay releases its subscriptions without making later access changes abort its completed signal', async () => {
+    const cache = new ReplayListenerCache();
+    let signal: AbortSignal | undefined;
+    const w = world(
+      {
+        messages: (_id, _query, received) => {
+          signal = received;
+          return Promise.reject(new ApiError(0, 'NETWORK', 'offline'));
+        },
+      },
+      { queryCache: cache },
+    );
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(cache.listenerCount()).toBe(1);
+    for (const wait of REPLAY_RETRY_DELAYS_MS) {
+      w.timers.advance(wait);
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    }
+    expect(w.engine.store.getState().degraded).toEqual({ [CH]: 'REPLAY' });
+    expect(cache.listenerCount()).toBe(0);
+    workspaceAccessChanged(w.client, WS);
+    expect(signal?.aborted).toBe(false);
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('an abandoned transport releases both subscriptions before an adapter that ignores abort settles', async () => {
+    const cache = new ReplayListenerCache();
+    const page = Promise.withResolvers<MessagePage>();
+    let signal: AbortSignal | undefined;
+    const w = world(
+      {
+        messages: (_channel, _query, received) => {
+          signal = received;
+          return page.promise;
+        },
+      },
+      { queryCache: cache },
+    );
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    const lookup = spyOn(cache, 'get');
+    try {
+      expect(cache.listenerCount()).toBe(1);
+      advanceAccessRevision(w.client);
+      expect(lookup.mock.calls.length > 0).toBe(true);
+      w.engine.watch([]);
+      expect(signal?.aborted).toBe(true);
+      expect(cache.listenerCount()).toBe(0);
+      lookup.mockClear();
+      advanceAccessRevision(w.client);
+      expect(lookup.mock.calls).toHaveLength(0);
+    } finally {
+      lookup.mockRestore();
+      w.engine.stop();
+      page.resolve({ data: [], nextCursor: null });
+      await page.promise;
+      await Promise.resolve();
+      w.client.clear();
+    }
+  });
+
+  test('successful completion releases listeners without aborting its signal on a later access change', async () => {
+    const cache = new ReplayListenerCache();
+    const page = Promise.withResolvers<MessagePage>();
+    let signal: AbortSignal | undefined;
+    let reads = 0;
+    const w = world(
+      {
+        messages: (_channel, _query, received) => {
+          reads++;
+          signal = received;
+          return page.promise;
+        },
+      },
+      { queryCache: cache },
+    );
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    expect(cache.listenerCount()).toBe(1);
+    page.resolve({ data: [], nextCursor: null });
+    await page.promise;
+    await Promise.resolve();
+    expect(cache.listenerCount()).toBe(0);
+    expect(signal?.aborted).toBe(false);
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    expect(reads).toBe(2);
+    await page.promise;
+    await Promise.resolve();
+    expect(cache.listenerCount()).toBe(0);
+    workspaceAccessChanged(w.client, WS);
+    expect(signal?.aborted).toBe(false);
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('selective access loss cancels only its own replay and leaves an unrelated query removal and current replay usable', async () => {
+    const otherWorkspace = 'other-workspace';
+    const pages = new Map([
+      [CH, Promise.withResolvers<MessagePage>()],
+      [CH2, Promise.withResolvers<MessagePage>()],
+    ]);
+    const signals = new Map<string, AbortSignal | undefined>();
+    const w = world({
+      messages: (id, _query, signal) => {
+        signals.set(id, signal);
+        return pages.get(id)?.promise ?? Promise.reject(new Error('unexpected replay'));
+      },
+    });
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.client.setQueryData(keys.channels(otherWorkspace), [
+      channel(CH2, { workspaceId: otherWorkspace }),
+    ]);
+    w.client.setQueryData(keys.message('unrelated'), echo('unrelated'));
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({
+        event: 'ACK',
+        data: {
+          channels: [
+            { channelId: CH, nextCursor: C1 },
+            { channelId: CH2, nextCursor: C1 },
+          ],
+        },
+        ts: T0,
+      }),
+    );
+    try {
+      w.client.removeQueries({ queryKey: keys.message('unrelated'), exact: true });
+      expect(signals.get(CH)?.aborted).toBe(false);
+      expect(signals.get(CH2)?.aborted).toBe(false);
+      workspaceAccessChanged(w.client, otherWorkspace);
+      expect(signals.get(CH)?.aborted).toBe(false);
+      expect(signals.get(CH2)?.aborted).toBe(true);
+      pages.get(CH)?.resolve({ data: [], nextCursor: null });
+      await pages.get(CH)?.promise;
+      await Promise.resolve();
+      expect(signals.get(CH)?.aborted).toBe(false);
+    } finally {
+      w.engine.stop();
+      for (const page of pages.values()) page.resolve({ data: [], nextCursor: null });
+      await Promise.all([...pages.values()].map((page) => page.promise));
+      w.client.clear();
+    }
+  });
+
+  test.each(['continue', 'cancel'] as const)(
+    'a replay retry wait can %s with the same signal and no abandoned timer',
+    async (choice) => {
+      const first = Promise.withResolvers<MessagePage>();
+      const signals: (AbortSignal | undefined)[] = [];
+      let reads = 0;
+      const w = world({
+        messages: (_id, _query, signal) => {
+          reads++;
+          signals.push(signal);
+          return reads === 1 ? first.promise : Promise.resolve({ data: [], nextCursor: null });
+        },
+      });
+      w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+      w.engine.watch([CH]);
+      w.engine.start();
+      w.open();
+      const timersBefore = w.timers.pending();
+      w.deliver(
+        frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+      );
+      first.reject(new ApiError(0, 'NETWORK', 'offline'));
+      await first.promise.catch(() => undefined);
+      await Promise.resolve();
+      expect(w.timers.pending()).toBe(timersBefore + 1);
+      const signal = signals[0];
+      if (signal === undefined) throw new Error('The replay did not receive its transport signal');
+      expect(getEventListeners(signal, 'abort')).toHaveLength(1);
+      workspaceAccessChanged(w.client, choice === 'cancel' ? WS : 'unrelated-workspace');
+      expect(w.timers.pending()).toBe(choice === 'cancel' ? timersBefore : timersBefore + 1);
+      w.timers.advance(REPLAY_RETRY_DELAYS_MS[0] ?? 0);
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+      expect(reads).toBe(choice === 'cancel' ? 1 : 2);
+      expect(getEventListeners(signal, 'abort')).toHaveLength(0);
+      expect(signals[0]?.aborted).toBe(choice === 'cancel');
+      if (choice === 'continue') expect(signals[0] === signals[1]).toBe(true);
+      w.engine.stop();
+      w.client.clear();
+    },
+  );
+
+  test.each([
+    'stop',
+    'unwatch',
+    'socket-loss',
+    'workspace',
+    'channel',
+    'sign-out',
+    'query-removal',
+    'refused',
+  ] as const)('%s aborts the actual request signal while the old page waits', async (cause) => {
+    const page = Promise.withResolvers<MessagePage>();
+    let signal: AbortSignal | undefined;
+    let reads = 0;
+    const w = world({
+      messages: (_channel, _query, received) => {
+        reads++;
+        signal = received;
+        return page.promise;
+      },
+    });
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    try {
+      expect(reads).toBe(1);
+      if (cause === 'stop') w.engine.stop();
+      else if (cause === 'unwatch') w.engine.watch([]);
+      else if (cause === 'socket-loss') w.engine.networkLost();
+      else if (cause === 'workspace') workspaceAccessChanged(w.client, WS);
+      else if (cause === 'channel')
+        w.deliver(
+          frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH], reason: 'removed' }, ts: T0 }),
+        );
+      else if (cause === 'sign-out')
+        await createActions(anApi({ signOut: () => Promise.resolve() }), w.client).signOut();
+      else if (cause === 'query-removal')
+        w.client.removeQueries({ queryKey: keys.messages(CH), exact: true });
+      else {
+        const refId = w.sentOps('SUBSCRIBE').at(-1)?.id;
+        if (refId === undefined) throw new Error('No live subscription request');
+        w.deliver(
+          frame({
+            event: 'ERROR',
+            refId,
+            data: { code: 'CHANNEL_NOT_FOUND', message: 'closed' },
+            ts: T0,
+          }),
+        );
+      }
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      w.engine.stop();
+      page.resolve({ data: [], nextCursor: null });
+      await page.promise;
+      await Promise.resolve();
+      w.client.clear();
+    }
+  });
+
+  test('the API and HTTP adapter abort a response body already being read and release the request', async () => {
+    const reading = Promise.withResolvers<undefined>();
+    const settled = Promise.withResolvers<undefined>();
+    let signal: AbortSignal | null | undefined;
+    let aborts = 0;
+    let failBody: (reason: Error) => void = () => undefined;
+    const api = createApi(
+      createHttp((_input, init) => {
+        signal = init.signal;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller): void {
+            failBody = (reason): void => {
+              controller.error(reason);
+            };
+          },
+          pull(): void {
+            reading.resolve(undefined);
+          },
+        });
+        signal?.addEventListener(
+          'abort',
+          () => {
+            aborts++;
+            failBody(new DOMException('aborted', 'AbortError'));
+          },
+          { once: true },
+        );
+        return Promise.resolve(
+          new Response(body, { headers: { 'content-type': 'application/json' } }),
+        );
+      }),
+    );
+    const w = world({
+      messages: (channelId, query, received) =>
+        api.messages(channelId, query, received).finally(() => {
+          settled.resolve(undefined);
+        }),
+    });
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+    );
+    try {
+      await reading.promise;
+      workspaceAccessChanged(w.client, WS);
+      expect(signal?.aborted).toBe(true);
+      expect(aborts).toBe(1);
+      await settled.promise;
+      expect(w.engine.store.getState().degraded).toEqual({});
+    } finally {
+      w.engine.stop();
+      failBody(new Error('test teardown'));
+      await settled.promise;
+      w.client.clear();
+    }
+  });
+});
+
 describe('a replay that was one page', () => {
+  test('a page from a released subscription cannot replace the current edit after watching that channel again', async () => {
+    const old = Promise.withResolvers<MessagePage>();
+    const current = Promise.withResolvers<MessagePage>();
+    let asks = 0;
+    const w = world({
+      messages: () => {
+        asks++;
+        return asks === 1 ? old.promise : current.promise;
+      },
+    });
+    w.client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [], nextCursor: null }],
+    });
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const replay = (): void => {
+      w.deliver(
+        frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+      );
+    };
+    replay();
+    w.engine.watch([]);
+    w.engine.watch([CH]);
+    replay();
+    expect(asks).toBe(2);
+    current.resolve({
+      data: [echo(C2, { content: 'Current subscription edit' })],
+      nextCursor: null,
+    });
+    await current.promise;
+    old.resolve({
+      data: [echo(C2, { content: 'Old released subscription text' })],
+      nextCursor: null,
+    });
+    await old.promise;
+    await Promise.resolve();
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.content),
+    ).toEqual(['Current subscription edit']);
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test.each(['next-message', 'next-page'] as const)(
+    'a scope change during a replay projection stops the %s without restoring old words',
+    async (boundary) => {
+      const page = Promise.withResolvers<MessagePage>();
+      const asked: (string | undefined)[] = [];
+      const w = world({
+        messages: (_channel, query) => {
+          asked.push(query?.after);
+          return asked.length === 1
+            ? page.promise
+            : Promise.resolve({ data: [], nextCursor: null });
+        },
+      });
+      w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+      w.client.setQueryData<Pages>(keys.messages(CH), {
+        pageParams: [undefined],
+        pages: [{ data: [], nextCursor: null }],
+      });
+      const fresh = echo(C2, { content: 'Current authorized projection' });
+      let changed = false;
+      const feedHash = w.client.defaultQueryOptions({ queryKey: keys.messages(CH) }).queryHash;
+      const stop = w.client.getQueryCache().subscribe((event) => {
+        if (changed || event.query.queryHash !== feedHash) return;
+        const data = w.client.getQueryData<Pages>(keys.messages(CH));
+        if (!data?.pages.some((one) => one.data.some((row) => row.id === C1))) return;
+        changed = true;
+        workspaceAccessChanged(w.client, WS);
+        w.client.setQueryData<Pages>(keys.messages(CH), {
+          pageParams: [undefined],
+          pages: [{ data: [fresh], nextCursor: null }],
+        });
+      });
+      try {
+        w.engine.watch([CH]);
+        w.engine.start();
+        w.open();
+        w.deliver(
+          frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+        );
+        page.resolve({
+          data:
+            boundary === 'next-message'
+              ? [echo(C1), echo(C2, { content: 'Forbidden later projection' })]
+              : [echo(C1)],
+          nextCursor: boundary === 'next-page' ? C2 : null,
+        });
+        await page.promise;
+        await Promise.resolve();
+        expect(changed).toBe(true);
+        expect(
+          w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.content),
+        ).toEqual([fresh.content]);
+        expect(asked).toEqual([C1]);
+      } finally {
+        stop();
+        w.engine.stop();
+        w.client.clear();
+      }
+    },
+  );
+
+  test('an obsolete replay completion cannot acknowledge a replacement gap and advance past unread messages', async () => {
+    const old = Promise.withResolvers<MessagePage>();
+    const current = Promise.withResolvers<MessagePage>();
+    let asks = 0;
+    const w = world({
+      messages: () => {
+        asks++;
+        return asks === 1 ? old.promise : current.promise;
+      },
+    });
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'MESSAGE_CREATED', data: echo(C1), ts: T0 }));
+    const replay = (): void => {
+      w.deliver(
+        frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+      );
+    };
+    replay();
+    w.engine.stop();
+    w.engine.start();
+    w.open();
+    replay();
+    expect(asks).toBe(2);
+    old.resolve({ data: [], nextCursor: null });
+    await old.promise;
+    await Promise.resolve();
+    const later = '0199155c-6200-7b7f-8c11-0000000000d9';
+    w.deliver(frame({ event: 'MESSAGE_CREATED', data: echo(later), ts: T0 }));
+    w.engine.networkLost();
+    w.engine.networkBack();
+    w.timers.advance(2_000);
+    w.open();
+    w.timers.advance(2_000);
+    const channels = w.sentOps('SUBSCRIBE').at(-1)?.payload['channels'];
+    expect(channels).toEqual([{ channelId: CH, afterMessageId: C1 }]);
+    current.resolve({ data: [], nextCursor: null });
+    await current.promise;
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('an old continuation finishing after restart cannot release its still-pending replacement', async () => {
+    const old = Promise.withResolvers<MessagePage>();
+    const current = Promise.withResolvers<MessagePage>();
+    let asks = 0;
+    const w = world({
+      messages: () => {
+        asks++;
+        return asks === 1 ? old.promise : current.promise;
+      },
+    });
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const replay = (): void => {
+      w.deliver(
+        frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+      );
+    };
+    replay();
+    expect(asks).toBe(1);
+    w.engine.stop();
+    w.engine.start();
+    w.open();
+    replay();
+    expect(asks).toBe(2);
+    old.resolve({ data: [], nextCursor: null });
+    await old.promise;
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    replay();
+    expect(asks).toBe(2);
+    current.resolve({ data: [], nextCursor: null });
+    await current.promise;
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test('a new socket replay starts while an older socket page waits and its late words cannot replace a current edit', async () => {
+    const old = Promise.withResolvers<MessagePage>();
+    const current = Promise.withResolvers<MessagePage>();
+    let asks = 0;
+    const w = world({
+      messages: () => {
+        asks++;
+        return asks === 1 ? old.promise : current.promise;
+      },
+    });
+    w.client.setQueryData<Pages>(keys.messages(CH), {
+      pageParams: [undefined],
+      pages: [{ data: [], nextCursor: null }],
+    });
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const replay = (): void => {
+      w.deliver(
+        frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+      );
+    };
+    replay();
+    expect(asks).toBe(1);
+    w.engine.networkLost();
+    w.engine.networkBack();
+    w.timers.advance(2_000);
+    w.open();
+    replay();
+    expect(asks).toBe(2);
+    current.resolve({ data: [echo(C2, { content: 'Current edit' })], nextCursor: null });
+    await current.promise;
+    old.resolve({ data: [echo(C2, { content: 'Obsolete old socket text' })], nextCursor: null });
+    await old.promise;
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.content),
+    ).toEqual(['Current edit']);
+    w.engine.stop();
+    w.client.clear();
+  });
+
+  test.each(['access-change', 'stopped-engine'] as const)(
+    'a held replay page under %s cannot overwrite fresh history or request another old page',
+    async (change) => {
+      const page = Promise.withResolvers<MessagePage>();
+      const requested = Promise.withResolvers<undefined>();
+      const asked: (string | undefined)[] = [];
+      const w = world({
+        messages: (_channel, query) => {
+          asked.push(query?.after);
+          requested.resolve(undefined);
+          return asked.length === 1
+            ? page.promise
+            : Promise.resolve({ data: [], nextCursor: null });
+        },
+      });
+      w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+      w.client.setQueryData<Pages>(keys.messages(CH), {
+        pageParams: [undefined],
+        pages: [{ data: [], nextCursor: null }],
+      });
+      w.engine.watch([CH]);
+      w.engine.start();
+      w.open();
+      w.deliver(
+        frame({ event: 'ACK', data: { channels: [{ channelId: CH, nextCursor: C1 }] }, ts: T0 }),
+      );
+      await requested.promise;
+      if (change === 'access-change') workspaceAccessChanged(w.client, WS);
+      else w.engine.stop();
+      const fresh = echo(C2, { content: 'Fresh authorized replay history' });
+      w.client.setQueryData<Pages>(keys.messages(CH), {
+        pageParams: [undefined],
+        pages: [{ data: [fresh], nextCursor: null }],
+      });
+      page.resolve({ data: [echo(C1, { content: 'Old private replay words' })], nextCursor: C2 });
+      await page.promise;
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+      expect(
+        w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.content),
+      ).toEqual([fresh.content]);
+      expect(asked).toEqual([C1]);
+      w.engine.stop();
+      w.client.clear();
+    },
+  );
+
   test('is read on from its cursor until the present, and a failure leaves it for the next reconnect', async () => {
     const asked: (string | undefined)[] = [];
     const w = world({
@@ -1466,7 +2532,9 @@ describe('is the session still there', () => {
     w.engine.start();
     for (let i = 0; i < 4; i++) {
       w.sockets.at(-1)?.handlers.closed(1006);
-      w.timers.advance(120_000);
+      const count = w.sockets.length;
+      for (let waited = 0; w.sockets.length === count && waited < 20_000; waited += 100)
+        w.timers.advance(100);
     }
   };
 
@@ -2423,4 +3491,764 @@ describe('every family of cached reads is read again after the gap a frame can f
       expect(w.client.getQueryState(DECIDED[name].key)?.isInvalidated).toBe(false);
     },
   );
+});
+
+/** The actual QueryClient network-success reconciliation, before a provider's passive cleanup. */
+const receiveAccount = async (w: World, actorId: string): Promise<void> => {
+  const before = w.client.getQueryData<MeResponse>(keys.me);
+  const receipt = aSession();
+  await w.client.query({
+    queryKey: keys.me,
+    queryFn: ({ signal }) => {
+      reconcileAccountOnCommit(w.client, before, signal);
+      return Promise.resolve({ ...receipt, user: { ...receipt.user, id: actorId } });
+    },
+  });
+};
+
+const seedCurrentFeed = (w: World): void => {
+  w.client.setQueryData<Pages>(keys.messages(CH), {
+    pageParams: [undefined],
+    pages: [{ data: [echo(C1, { content: 'Current account snapshot' })], nextCursor: null }],
+  });
+};
+
+const OTHER_ACTOR = '00000000-0000-4000-8000-0000000000e2';
+
+describe('live callbacks belong to the current account receipt', () => {
+  test('a late old-account message cannot enter a new account feed before the old provider stops', async () => {
+    const w = world();
+    seedCurrentFeed(w);
+    w.engine.start();
+    w.open();
+    w.deliver(
+      frame({
+        event: 'MESSAGE_CREATED',
+        data: echo(C2, { content: 'Valid old-account positive control' }),
+        ts: T0,
+      }),
+    );
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.some((row) => row.id === C2),
+    ).toBe(true);
+    await receiveAccount(w, OTHER_ACTOR);
+    expect(w.client.getQueryData(keys.messages(CH)) === undefined).toBe(true);
+    seedCurrentFeed(w);
+    expect(w.sockets[0]?.closed).toBe(false);
+    w.deliver(
+      frame({
+        event: 'MESSAGE_CREATED',
+        data: echo(C2, { content: 'Private prior-account message' }),
+        ts: T0,
+      }),
+    );
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.id),
+    ).toEqual([C1]);
+    w.engine.stop();
+  });
+
+  test('an old-account revocation cannot remove the current account feed', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    await receiveAccount(w, OTHER_ACTOR);
+    seedCurrentFeed(w);
+    w.deliver(frame({ event: 'ACCESS_REVOKED', data: { channelIds: [CH] }, ts: T0 }));
+    expect(w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0]?.content).toBe(
+      'Current account snapshot',
+    );
+    w.engine.stop();
+  });
+
+  test('an old-account session-end frame cannot act on the current session', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.deliver(frame({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: T0 }));
+    expect(w.ended.count).toBe(1);
+    await receiveAccount(w, OTHER_ACTOR);
+    w.deliver(frame({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: T0 }));
+    expect(w.ended.count).toBe(1);
+    w.engine.stop();
+  });
+
+  test('old personal presence cannot change the new account preference', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    await receiveAccount(w, OTHER_ACTOR);
+    w.deliver(
+      frame({
+        event: 'PRESENCE',
+        data: { changes: [{ userId: ME.id, online: true, away: true, chosen: true, version: 1 }] },
+        ts: T0,
+      }),
+    );
+    expect(w.client.getQueryData<MeResponse>(keys.me)?.awayChosen).toBe(false);
+    w.engine.stop();
+  });
+
+  test('a clear and recreated receipt cannot revive an old engine even for the same account ID', () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.client.clear();
+    w.client.setQueryData<MeResponse>(keys.me, aSession());
+    seedCurrentFeed(w);
+    w.deliver(frame({ event: 'MESSAGE_CREATED', data: echo(C2), ts: T0 }));
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.id),
+    ).toEqual([C1]);
+    w.engine.stop();
+  });
+
+  test('A to B to A on the same session Query retires the old engine but permits a replacement', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const original = w.client.getQueryCache().find({ queryKey: keys.me, exact: true });
+    await receiveAccount(w, OTHER_ACTOR);
+    await receiveAccount(w, ME.id);
+    expect(w.client.getQueryCache().find({ queryKey: keys.me, exact: true }) === original).toBe(
+      true,
+    );
+    seedCurrentFeed(w);
+    w.deliver(
+      frame({ event: 'MESSAGE_CREATED', data: echo(C2, { content: 'Obsolete A life' }), ts: T0 }),
+    );
+    expect(
+      w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data.map((row) => row.id),
+    ).toEqual([C1]);
+    const replacement = world({}, { client: w.client });
+    replacement.engine.start();
+    replacement.open();
+    replacement.deliver(
+      frame({
+        event: 'MESSAGE_CREATED',
+        data: echo(C2, { content: 'Current replacement life' }),
+        ts: T0,
+      }),
+    );
+    expect(w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0]?.content).toBe(
+      'Current replacement life',
+    );
+    w.engine.stop();
+    replacement.engine.stop();
+  });
+
+  test('same-actor receipt refresh keeps its current live projection', async () => {
+    const w = world();
+    seedCurrentFeed(w);
+    w.engine.start();
+    w.open();
+    await receiveAccount(w, ME.id);
+    w.deliver(
+      frame({
+        event: 'MESSAGE_CREATED',
+        data: echo(C2, { content: 'Allowed current live message' }),
+        ts: T0,
+      }),
+    );
+    expect(w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0]?.content).toBe(
+      'Allowed current live message',
+    );
+    w.engine.stop();
+  });
+
+  test('an old subscribe refusal cannot revoke the new account snapshot', async () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const subscribe = w.sentOps('SUBSCRIBE')[0];
+    if (subscribe === undefined) throw new Error('Missing subscription');
+    await receiveAccount(w, OTHER_ACTOR);
+    seedCurrentFeed(w);
+    const invalidated = spyOn(w.client, 'invalidateQueries');
+    try {
+      w.deliver(
+        frame({
+          event: 'ERROR',
+          refId: subscribe.id,
+          data: { code: 'CHANNEL_NOT_FOUND', message: 'Prior scope ended' },
+          ts: T0,
+        }),
+      );
+      expect(invalidated).not.toHaveBeenCalled();
+      expect(w.client.getQueryData<Pages>(keys.messages(CH))?.pages[0]?.data[0]?.content).toBe(
+        'Current account snapshot',
+      );
+    } finally {
+      invalidated.mockRestore();
+      w.engine.stop();
+    }
+  });
+
+  test('an old reconnect cannot invalidate or reread the new account queries', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.sockets[0]?.handlers.closed(CLOSE_CODES.RESYNC);
+    w.timers.advance(1_000);
+    expect(w.sockets.length > 1).toBe(true);
+    await receiveAccount(w, OTHER_ACTOR);
+    const invalidated = spyOn(w.client, 'invalidateQueries');
+    try {
+      w.open();
+      expect(invalidated).not.toHaveBeenCalled();
+    } finally {
+      invalidated.mockRestore();
+      w.engine.stop();
+    }
+  });
+
+  test('the new receipt actor is checked even before the account-success cleanup listener runs', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    let observedSafe = false;
+    const receiptQuery = w.client.getQueryCache().find({ queryKey: keys.me, exact: true });
+    const stop = w.client.getQueryCache().subscribe((event) => {
+      if (
+        event.type !== 'updated' ||
+        event.action.type !== 'success' ||
+        event.action.manual === true ||
+        event.query !== receiptQuery
+      )
+        return;
+      if (w.client.getQueryData<MeResponse>(keys.me)?.user.id !== OTHER_ACTOR) return;
+      seedCurrentFeed(w);
+      w.deliver(
+        frame({
+          event: 'MESSAGE_CREATED',
+          data: echo(C2, { content: 'Old actor at the new receipt commit' }),
+          ts: T0,
+        }),
+      );
+      observedSafe =
+        w.client
+          .getQueryData<Pages>(keys.messages(CH))
+          ?.pages[0]?.data.every((row) => row.id !== C2) === true;
+    });
+    try {
+      await receiveAccount(w, OTHER_ACTOR);
+      expect(observedSafe).toBe(true);
+    } finally {
+      stop();
+      w.engine.stop();
+    }
+  });
+});
+
+describe('outgoing work belongs to the current account lifetime', () => {
+  test('a stale socket send is explicitly refused before a new pending row or wire frame', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const valid = w.engine.send({ channelId: CH, content: 'Allowed initial send' });
+    w.deliver(frame({ event: 'MESSAGE_CREATED', data: echo(valid), ts: T0 }));
+    expect(w.sentOps('MESSAGE_SEND')).toHaveLength(1);
+    expect(w.pending()).toHaveLength(0);
+    await receiveAccount(w, OTHER_ACTOR);
+    let rejected: unknown;
+    try {
+      w.engine.send({ channelId: CH, content: 'Do not send another actor’s words' });
+    } catch (failure) {
+      rejected = failure;
+    }
+    expect(w.sentOps('MESSAGE_SEND')).toHaveLength(1);
+    expect(w.pending()).toHaveLength(0);
+    expect(rejected instanceof ApiError && rejected.code === 'UNAUTHENTICATED').toBe(true);
+    w.engine.stop();
+  });
+
+  test('a stale HTTP send cannot use the new browser session and is explicitly refused', async () => {
+    const requests: string[] = [];
+    const w = world({
+      send: (_channel, input) => {
+        requests.push(input.content);
+        return Promise.resolve(echo(input.id));
+      },
+    });
+    w.engine.send({ channelId: CH, content: 'Allowed initial HTTP send' });
+    expect(requests).toEqual(['Allowed initial HTTP send']);
+    await receiveAccount(w, OTHER_ACTOR);
+    let rejected: unknown;
+    try {
+      w.engine.send({ channelId: CH, content: 'Old-account words through a new cookie' });
+    } catch (failure) {
+      rejected = failure;
+    }
+    expect(requests).toEqual(['Allowed initial HTTP send']);
+    expect(rejected instanceof ApiError && rejected.code === 'UNAUTHENTICATED').toBe(true);
+    w.engine.stop();
+  });
+
+  test('a stale retry leaves the old failed row untouched and transmits nothing', async () => {
+    let http = 0;
+    const w = world({
+      send: (_channel, input) => {
+        http += 1;
+        return Promise.resolve(echo(input.id));
+      },
+    });
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: 'Prior account retry' });
+    w.timers.advance(ACK_DEADLINE_MS);
+    expect(w.pending()[0]?.delivery).toBe('failed');
+    expect(http).toBe(0);
+    await receiveAccount(w, OTHER_ACTOR);
+    w.engine.retry(id);
+    expect(w.sentOps('MESSAGE_SEND')).toHaveLength(1);
+    expect(w.pending()[0]?.delivery).toBe('failed');
+    expect(http).toBe(0);
+    w.engine.stop();
+  });
+
+  test.each(['typing', 'active'] as const)(
+    'old %s announcements cannot leave after receipt replacement',
+    async (kind) => {
+      const w = world();
+      w.engine.start();
+      w.open();
+      if (kind === 'typing') w.engine.announceTyping(CH);
+      else w.engine.announceActive(WS);
+      const op = kind === 'typing' ? 'TYPING' : 'ACTIVE';
+      expect(w.sentOps(op)).toHaveLength(1);
+      await receiveAccount(w, OTHER_ACTOR);
+      if (kind === 'typing') w.engine.announceTyping(CH2);
+      else w.engine.announceActive('00000000-0000-4000-8000-0000000000a2');
+      expect(w.sentOps(op)).toHaveLength(1);
+      expect(w.sockets[0]?.closed).toBe(true);
+      expect(w.timers.pending()).toBe(0);
+      w.engine.stop();
+    },
+  );
+
+  test('a late public presence snapshot cannot change the new actor preference', async () => {
+    const w = world();
+    w.engine.applyPresence([
+      { userId: ME.id, online: true, away: false, chosen: false, version: 1 },
+    ]);
+    expect(w.engine.store.getState().presence[ME.id]?.version).toBe(1);
+    await receiveAccount(w, OTHER_ACTOR);
+    w.engine.applyPresence([{ userId: ME.id, online: true, away: true, chosen: true, version: 2 }]);
+    expect(w.client.getQueryData<MeResponse>(keys.me)?.awayChosen).toBe(false);
+    expect(w.engine.store.getState().presence[ME.id]?.version).toBe(1);
+    w.engine.stop();
+  });
+
+  test('an old stopped engine cannot open a socket using a later account cookie', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    expect(w.sockets).toHaveLength(1);
+    w.engine.stop();
+    await receiveAccount(w, OTHER_ACTOR);
+    w.engine.start();
+    expect(w.sockets).toHaveLength(1);
+    w.engine.stop();
+  });
+
+  test('an already scheduled reconnect cannot start after the engine loses its account', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.sockets[0]?.handlers.closed(CLOSE_CODES.RESTARTING);
+    await receiveAccount(w, OTHER_ACTOR);
+    w.timers.advance(1_000);
+    expect(w.sockets).toHaveLength(1);
+    w.engine.stop();
+  });
+
+  test('stale channel watches cannot subscribe or unsubscribe on another account lifetime', async () => {
+    const w = world();
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    answerAll(w);
+    const count = w.sentOps('SUBSCRIBE').length + w.sentOps('UNSUBSCRIBE').length;
+    expect(count).toBeGreaterThan(0);
+    await receiveAccount(w, OTHER_ACTOR);
+    w.engine.watch([CH2]);
+    expect(w.sentOps('SUBSCRIBE').length + w.sentOps('UNSUBSCRIBE').length).toBe(count);
+    w.engine.stop();
+  });
+
+  test('another tab claiming personal storage prevents late ACKs and deadlines from recreating old pending keys', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.engine.start();
+    w.open();
+    const first = w.engine.send({ channelId: CH, content: 'Previous account first pending' });
+    const second = w.engine.send({ channelId: CH, content: 'Previous account second pending' });
+    expect(storage.getItem(pendingKey(ME.id)) === null).toBe(false);
+    // Another tab can clear and claim localStorage before this tab's session receipt changes.
+    claimFor(storage, OTHER_ACTOR);
+    saveStored(storage, OTHER_ACTOR, [
+      {
+        id: C2,
+        channelId: CH2,
+        parentId: null,
+        content: 'Other account pending',
+        createdAt: new Date(T0).toISOString(),
+      },
+    ]);
+    expect(w.client.getQueryData<MeResponse>(keys.me)?.user.id).toBe(ME.id);
+    try {
+      w.deliver(ack(first));
+      expect(w.engine.store.getState().pending.find((entry) => entry.id === first)?.delivery).toBe(
+        'sent',
+      );
+      expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+      w.timers.advance(ACK_DEADLINE_MS);
+      expect(w.engine.store.getState().pending.find((entry) => entry.id === second)?.delivery).toBe(
+        'failed',
+      );
+      expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+      expect(storage.getItem(PERSON_KEY)).toBe(OTHER_ACTOR);
+      expect(loadStored(storage, OTHER_ACTOR).map((entry) => entry.content)).toEqual([
+        'Other account pending',
+      ]);
+    } finally {
+      w.engine.stop();
+    }
+  });
+
+  test('an old deadline cannot resurrect cleared personal pending keys after account A to B to A', async () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH, content: 'Private previous-lifetime pending words' });
+    expect(storage.getItem(pendingKey(ME.id)) === null).toBe(false);
+    await receiveAccount(w, OTHER_ACTOR);
+    claimFor(storage, OTHER_ACTOR);
+    await receiveAccount(w, ME.id);
+    claimFor(storage, ME.id);
+    expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+    w.timers.advance(ACK_DEADLINE_MS);
+    expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+    w.engine.stop();
+  });
+
+  test('a session check returning a different actor retires its physical socket', async () => {
+    let checks = 0;
+    const response = Promise.withResolvers<MeResponse>();
+    const w = world({
+      me: () => {
+        checks += 1;
+        return response.promise;
+      },
+    });
+    w.engine.start();
+    for (let attempt = 0; attempt < CHECK_SESSION_AFTER_FAILURES; attempt += 1) {
+      w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.RESTARTING);
+      const count = w.sockets.length;
+      for (let waited = 0; w.sockets.length === count && waited < 20_000; waited += 100)
+        w.timers.advance(100);
+    }
+    expect(checks).toBe(1);
+    const last = w.sockets.at(-1);
+    if (last === undefined) throw new Error('Missing session-check socket');
+    const base = aSession();
+    response.resolve({ ...base, user: { ...base.user, id: OTHER_ACTOR } });
+    for (let step = 0; step < 20 && !last.closed; step += 1) await Promise.resolve();
+    expect(last.closed).toBe(true);
+    expect(w.ended.count).toBe(1);
+    w.engine.stop();
+  });
+});
+
+test('a native socket send exception falls back to HTTP with the same pending message ID', async () => {
+  const requests: { id: string; content: string }[] = [];
+  const w = world({
+    send: (_channel, input) => {
+      requests.push({ id: input.id, content: input.content });
+      return Promise.resolve(echo(input.id));
+    },
+  });
+  w.engine.start();
+  w.open();
+  const socket = w.sockets[0];
+  if (socket === undefined) throw new Error('Missing physical socket');
+  const write = spyOn(socket.sent, 'push').mockImplementation(() => {
+    throw new Error('Native socket closed before send');
+  });
+  let id = '';
+  try {
+    expect(() => {
+      id = w.engine.send({ channelId: CH, content: 'Same id on the available HTTP door' });
+    }).not.toThrow();
+    expect(requests).toEqual([{ id, content: 'Same id on the available HTTP door' }]);
+    expect(socket.closed).toBe(true);
+    for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
+    expect(w.pending()).toHaveLength(0);
+  } finally {
+    write.mockRestore();
+    w.engine.stop();
+  }
+});
+
+describe('outbound account ownership at asynchronous boundaries', () => {
+  test('a synchronous pending observer changing A to B to A rejects the old enqueue without overwriting the new pending record', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.engine.start();
+    w.open();
+    let switched = false;
+    const stop = w.engine.store.subscribe((state) => {
+      if (switched || state.pending.length === 0) return;
+      switched = true;
+      const before = w.client.getQueryData<MeResponse>(keys.me);
+      const other = { ...aSession(), user: { ...aSession().user, id: OTHER_ACTOR } };
+      claimFor(storage, OTHER_ACTOR);
+      w.client.setQueryData(keys.me, other);
+      accountAccessChanged(w.client, before, other);
+      const returned = { ...aSession(), user: { ...aSession().user, id: ME.id } };
+      claimFor(storage, ME.id);
+      w.client.setQueryData(keys.me, returned);
+      accountAccessChanged(w.client, other, returned);
+      saveStored(storage, ME.id, [
+        {
+          id: C2,
+          channelId: CH2,
+          parentId: null,
+          content: 'New account lifetime work',
+          createdAt: new Date(T0).toISOString(),
+        },
+      ]);
+    });
+    try {
+      let rejected: unknown;
+      try {
+        w.engine.send({ channelId: CH, content: 'Previous lifetime enqueue' });
+      } catch (failure) {
+        rejected = failure;
+      }
+      expect(switched).toBe(true);
+      expect(rejected instanceof ApiError && rejected.code === 'UNAUTHENTICATED').toBe(true);
+      expect(w.sentOps('MESSAGE_SEND')).toHaveLength(0);
+      expect(loadStored(storage, ME.id).map((item) => item.content)).toEqual([
+        'New account lifetime work',
+      ]);
+    } finally {
+      stop();
+      w.engine.stop();
+    }
+  });
+
+  test('an old loss callback cannot report discarded new-account work', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.engine.send({ channelId: CH, content: 'Old pending send' });
+    await receiveAccount(w, OTHER_ACTOR);
+    w.engine.lose([CH]);
+    expect(w.pending()).toHaveLength(1);
+    expect(w.engine.store.getState().lost === null).toBe(true);
+    w.engine.stop();
+  });
+
+  test('an old degraded retry cannot invalidate the current account channel queries', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'INTERNAL', message: 'Prior connection issue' },
+      ts: T0,
+    });
+    expect(w.engine.store.getState().degraded[UNNAMED]).toBe('INTERNAL');
+    await receiveAccount(w, OTHER_ACTOR);
+    const invalidate = spyOn(w.client, 'invalidateQueries');
+    try {
+      w.engine.retryDegraded();
+      expect(invalidate).not.toHaveBeenCalled();
+      expect(w.engine.store.getState().degraded[UNNAMED]).toBe('INTERNAL');
+    } finally {
+      invalidate.mockRestore();
+      w.engine.stop();
+    }
+  });
+
+  test('an old HTTP rejection cannot allocate a fresh deadline after ownership changes', async () => {
+    const response = Promise.withResolvers<Message>();
+    const w = world({ send: () => response.promise });
+    w.engine.send({ channelId: CH, content: 'Old in-flight HTTP' });
+    await receiveAccount(w, OTHER_ACTOR);
+    expect(w.timers.pending()).toBe(0);
+    response.reject(new ApiError(0, 'NETWORK', 'Offline response'));
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+    expect(w.timers.pending()).toBe(0);
+    expect(w.pending()[0]?.delivery).toBe('sending');
+    w.engine.stop();
+  });
+});
+
+describe('real session diagnostic transport', () => {
+  const checking = (w: World): void => {
+    w.engine.start();
+    for (let attempt = 0; attempt < CHECK_SESSION_AFTER_FAILURES; attempt += 1) {
+      w.sockets.at(-1)?.handlers.closed(1006);
+      const count = w.sockets.length;
+      for (let waited = 0; w.sockets.length === count && waited < 20_000; waited += 100)
+        w.timers.advance(100);
+    }
+  };
+
+  for (const phase of ['fetch', 'body'] as const) {
+    test.each(['stop', 'open', 'deadline'] as const)(
+      `${phase}: %s aborts the actual diagnostic fetch/body and releases its listeners`,
+      async (action) => {
+        const reading = Promise.withResolvers<undefined>();
+        const settled = Promise.withResolvers<undefined>();
+        const observed: { signal: AbortSignal | null; aborts: number } = {
+          signal: null,
+          aborts: 0,
+        };
+        let failBody: (error: Error) => void = () => undefined;
+        const api = createApi(
+          createHttp((_input, init) => {
+            const signal = init.signal;
+            if (signal === undefined || signal === null)
+              throw new Error('Diagnostic lost its transport signal');
+            observed.signal = signal;
+            if (phase === 'fetch') {
+              reading.resolve(undefined);
+              return new Promise<Response>((_resolve, reject) => {
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    observed.aborts += 1;
+                    reject(new DOMException('aborted', 'AbortError'));
+                  },
+                  { once: true },
+                );
+              });
+            }
+            const body = new ReadableStream<Uint8Array>({
+              start(controller): void {
+                failBody = (error): void => {
+                  controller.error(error);
+                };
+              },
+              pull(): void {
+                reading.resolve(undefined);
+              },
+            });
+            signal.addEventListener(
+              'abort',
+              () => {
+                observed.aborts += 1;
+                failBody(new DOMException('aborted', 'AbortError'));
+              },
+              { once: true },
+            );
+            return Promise.resolve(
+              new Response(body, { headers: { 'content-type': 'application/json' } }),
+            );
+          }),
+        );
+        const w = world({
+          me: (signal) =>
+            api.me(signal).finally(() => {
+              settled.resolve(undefined);
+            }),
+        });
+        checking(w);
+        try {
+          expect(observed.signal instanceof AbortSignal).toBe(true);
+          await reading.promise;
+          if (action === 'stop') w.engine.stop();
+          else if (action === 'open') w.open();
+          else w.timers.advance(30_000);
+          expect(observed.signal?.aborted).toBe(true);
+          expect(observed.aborts).toBe(1);
+          await settled.promise;
+          for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+          expect(w.ended.count).toBe(0);
+          expect(
+            observed.signal === null ? -1 : getEventListeners(observed.signal, 'abort').length,
+          ).toBe(0);
+        } finally {
+          w.engine.stop();
+          failBody(new Error('test teardown'));
+        }
+      },
+    );
+  }
+
+  test.each(['UNAUTHENTICATED', 'NETWORK', 'INTERNAL'] as const)(
+    'current %s diagnostic result distinguishes session loss from outage and only announces once',
+    async (code) => {
+      const w = world({
+        me: () =>
+          Promise.reject(
+            new ApiError(code === 'UNAUTHENTICATED' ? 401 : 503, code, 'Diagnostic response'),
+          ),
+      });
+      checking(w);
+      for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+      expect(w.ended.count).toBe(code === 'UNAUTHENTICATED' ? 1 : 0);
+      if (code === 'UNAUTHENTICATED') {
+        w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.SESSION_ENDED);
+        expect(w.ended.count).toBe(1);
+      }
+      w.engine.stop();
+    },
+  );
+
+  test('a diagnostic reply after an account change cannot announce that the new actor session ended', async () => {
+    const answer = Promise.withResolvers<MeResponse>();
+    const w = world({ me: () => answer.promise });
+    checking(w);
+    await receiveAccount(w, OTHER_ACTOR);
+    answer.reject(new ApiError(401, 'UNAUTHENTICATED', 'Prior request session ended'));
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+    expect(w.sockets.at(-1)?.closed).toBe(true);
+    expect(w.ended.count).toBe(0);
+    expect(w.client.getQueryData<MeResponse>(keys.me)?.user.id).toBe(OTHER_ACTOR);
+    w.engine.stop();
+  });
+});
+
+test('a stale handshake failure cannot start a fresh identity request with a later account cookie', async () => {
+  let requests = 0;
+  const w = world({
+    me: () => {
+      requests += 1;
+      return Promise.resolve(aSession());
+    },
+  });
+  w.engine.start();
+  for (let attempt = 0; attempt < CHECK_SESSION_AFTER_FAILURES - 1; attempt += 1) {
+    w.sockets.at(-1)?.handlers.closed(1006);
+    const count = w.sockets.length;
+    for (let waited = 0; w.sockets.length === count && waited < 20_000; waited += 100)
+      w.timers.advance(100);
+  }
+  await receiveAccount(w, OTHER_ACTOR);
+  w.sockets.at(-1)?.handlers.closed(1006);
+  for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+  expect(requests).toBe(0);
+  expect(w.ended.count).toBe(0);
+  w.engine.stop();
+});
+
+test('session-ended frame and physical close notify once, and a fresh authenticated open may notify again', () => {
+  const w = world();
+  w.engine.start();
+  w.open();
+  w.deliver({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: T0 });
+  w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.SESSION_ENDED);
+  expect(w.ended.count).toBe(1);
+  w.engine.start();
+  w.open();
+  w.deliver({ event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: T0 });
+  w.sockets.at(-1)?.handlers.closed(CLOSE_CODES.SESSION_ENDED);
+  expect(w.ended.count).toBe(2);
+  w.engine.stop();
 });

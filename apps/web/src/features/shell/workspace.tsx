@@ -8,12 +8,13 @@
  * role in it and does not ask again.
  */
 import { createContext, useContext } from 'react';
-import type { UserRole, Workspace } from '@purlay/types';
+import type { UserRole, Workspace, WorkspaceAccess } from '@purlay/types';
 import { useSession, WorkspaceModulesProvider } from '../session/session';
 
 interface WorkspaceScope {
   readonly workspace: Workspace;
   readonly role: UserRole;
+  readonly access: WorkspaceAccess;
 }
 
 const WorkspaceContext = createContext<WorkspaceScope | null>(null);
@@ -41,7 +42,13 @@ export const WorkspaceScopeProvider = ({
   const membership = memberships.find((m) => m.workspace.slug === slug);
   if (membership === undefined) return <>{notFound}</>;
   return (
-    <WorkspaceContext.Provider value={{ workspace: membership.workspace, role: membership.role }}>
+    <WorkspaceContext.Provider
+      value={{
+        workspace: membership.workspace,
+        role: membership.role,
+        access: membership.access ?? { kind: 'member' },
+      }}
+    >
       <WorkspaceModulesProvider value={membership.modules ?? null}>
         {children}
       </WorkspaceModulesProvider>
