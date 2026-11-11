@@ -14,6 +14,7 @@ export * from './contract-version';
 export * from './errors';
 export * from './models';
 export * from './web-link-previews';
+export * from './shared-content';
 export * from './modules';
 export * from './fact-declaration';
 export * from './facts';

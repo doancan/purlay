@@ -557,6 +557,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     readAgain(client, families.notifications);
     readAgain(client, families.inbox);
     readAgain(client, families.saved);
+    readAgain(client, families.shared);
     readAgain(client, families.followedThreads);
     readAgain(client, families.unreads);
     readAgain(client, families.channelGroups);
@@ -706,6 +707,7 @@ export const createEngine = (options: EngineOptions): Engine => {
           readAgain(client, families.unresolved);
           readAgain(client, families.followedThreads);
           readAgain(client, families.search);
+          readAgain(client, families.shared);
           readAgain(client, families.messageVersions);
         }
         return;

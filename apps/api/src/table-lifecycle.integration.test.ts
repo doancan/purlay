@@ -570,6 +570,36 @@ const UNSEEDED_ERASURE: Readonly<Record<Table, string>> = {};
  * that names them, which the soft deletion keeps pointing at the same (anonymised) account.
  */
 const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
+  message_shared_jobs: by(
+    'message_shared_jobs',
+    'workspace_id',
+    (world) => world.workspaceId,
+    async (db, world) => {
+      await sendMessage(db, clock, world.adaContext, {
+        id: anId(),
+        content: 'A queued derived source',
+      });
+    },
+  ),
+  message_shared_links: {
+    seed: async (db, world) => {
+      await sendMessage(db, clock, world.adaContext, {
+        id: anId(),
+        content: 'http://intranet/kept-policy',
+      });
+    },
+    rows: async (db, world) =>
+      Number(
+        (
+          await db
+            .selectFrom('message_shared_links as link')
+            .innerJoin('messages as source', 'source.id', 'link.message_id')
+            .select((eb) => eb.fn.countAll<string>().as('count'))
+            .where('source.sender_id', '=', world.adaId)
+            .executeTakeFirstOrThrow()
+        ).count,
+      ),
+  },
   workspace_invitation_recipients: by(
     'workspace_invitation_recipients',
     'created_by',

@@ -33,6 +33,8 @@ import { requireLiveSession } from '../../../modules/auth/sessions';
 import { notify, resolveMentions, type ChannelStateUpdate } from './delivery';
 import { unreadMessage } from '../channels/unread';
 import { readBody } from './body';
+import { sharedLinksOf } from '@purlay/markdown';
+import { replaceSharedLinks } from '../shared/projection';
 import { readBuilt } from './reader';
 import type { PushSender } from '../../../modules/push/sender';
 import { keepVersion } from './versions';
@@ -133,6 +135,7 @@ export const reviseMessage = async (
     .where('id', '=', messageId)
     .returning('state_version')
     .executeTakeFirstOrThrow();
+  await replaceSharedLinks(executor, { ...context, messageId }, sharedLinksOf(reading.tree));
 
   // The mention rows follow the content; what was told is not taken back (D-103 §5).
   const named = await resolveMentions(executor, context, names, messageId);

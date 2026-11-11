@@ -54,6 +54,9 @@ code as a known gap any longer. What an append-only trail keeps of a person's ow
 
 | Table | Personal data | Why | How long |
 |---|---|---|---|
+| `message_shared_links` | Rendered source URLs and plain labels | Find a currently readable conversation link | Rebuildable; removed with source tombstones/content erasure or hard deletion; source author anonymisation applies (D-306) |
+| `message_shared_jobs` | Source message and scope identifiers, when queued | Capture every writer and recover derived indexing after restart | Deleted after projection; source deletion cascades, account erasure follows the anonymised source (D-306) |
+| `shared_link_backfill` | No person/content; one internal cursor | Durably enqueue historical intervals once | Bounded singleton retained for restart safety (D-306) |
 | `users` | GitHub id, username, display name, avatar address, email, whether it is verified, whether they run the server, whether and since when it is suspended (D-233), whether a password sign-in asks for a second step (D-236), since when they asked to be emailed about what they missed (D-240), language, title, time zone, status, when last seen | Who the person is, and how they sign in | Until erasure, which clears or replaces every one of these but the interface language (D-139 §5) |
 | `sessions` | When, from which address and with which browser the person signed in, and the name of the Mac the native application signed in on | Keeping them signed in, listing where (by name and time, never address or browser) and ending one place from another (D-11, D-81, D-193) | Deleted when the session ends — sign-out, sign-out everywhere, a password reset, erasure (D-179), or the server's lifetime policy when it is next presented (D-244) — and within the hour once expired (`sweep:sessions`); `SESSION_TTL_DAYS` at most |
 | `accounts` | GitHub's id for the person, or a password's hash (the library's scrypt, on the `credential` row — only the setup's administrator has one); never a password, never a provider's token | How a person signs in, one row for each way (D-179) | Until erasure, which deletes them — the password's hash with them; with the user |
@@ -126,6 +129,12 @@ code as a known gap any longer. What an append-only trail keeps of a person's ow
 Server admission state and whether the account requires email verification are account metadata, included in the person's own export but omitted from workspace exports (D-278). Erasure clears both on the tombstone. Pending/denied accounts get no workspace metadata through a session; administrators see status, not content. The operator's backup evidence files hold only times, digests, byte counts and scope, outside the database; no archive path, credential or recipient.
 
 ---
+
+Shared catalogue (D-306): `message_shared_links` is a rebuildable copy of rendered message URLs and
+plain labels, scoped by both source channel and workspace. Source tombstones/content erasure remove
+it, hard deletion cascades, and normal source author anonymisation applies. It has no separate
+retention period. Workspace/personal exports omit this projection, pending-source jobs and internal historical cursor; ordinary scoped message content carries the links. Indexing
+makes no network request to a link's target.
 
 ## 3. Retention runbook
 

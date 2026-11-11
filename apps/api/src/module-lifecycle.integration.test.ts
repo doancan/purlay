@@ -353,7 +353,7 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
       });
       return sent.message.id;
     };
-    const recent = await say('ada', new Date(NOW.getTime() - 1000), 'hello');
+    const recent = await say('ada', new Date(NOW.getTime() - 1000), 'hello http://intranet/policy');
     const old = await say('ada', new Date(NOW.getTime() - 40 * DAY_MS), 'long ago');
     const bobs = await say('bob', new Date(NOW.getTime() - 2000), 'hi');
     const recentFile = await upload(tx, store, workspaceId, ada.userId);

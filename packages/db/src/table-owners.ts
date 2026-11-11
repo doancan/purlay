@@ -77,6 +77,9 @@ export const TABLE_OWNERS = {
   // Which message a file was sent with: made in chat's own migration set, with keys to the core's `attachments` and
   // to chat's `messages`, so no key runs from the core to chat (`MODULES.md` §10, step 8).
   message_attachments: 'chat',
+  message_shared_links: 'chat',
+  message_shared_jobs: 'chat',
+  shared_link_backfill: 'chat',
   messages: 'chat',
   // A person's own drafts, reminders and messages deleted for them alone (chat's set, 0002–0004).
   hidden_messages: 'chat',

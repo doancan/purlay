@@ -721,6 +721,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     alsoWith: { 'one of its people as the author': 'senderId=:userId' },
     visibility: { kind: 'workspace-wide', query: 'q=question' },
   },
+  'GET /api/workspaces/:workspaceId/shared': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    alsoWith: { 'one of its channels': 'channelId=:channelId' },
+    visibility: { kind: 'workspace-wide', query: 'view=links' },
+  },
   'GET /api/workspaces/:workspaceId/find': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'workspace-wide', query: 'q=question' },
@@ -1009,6 +1014,7 @@ export const EMPTY_FOR_THE_SEED: Readonly<Record<string, string>> = {
  * private conversation leaks (search, the open questions and the find, D-285). When one is served it must be `workspace-wide`.
  */
 export const WORKSPACE_WIDE_READS: readonly string[] = [
+  'GET /api/workspaces/:workspaceId/shared',
   'GET /api/workspaces/:workspaceId/followed-threads',
   'GET /api/workspaces/:workspaceId/search',
   'GET /api/workspaces/:workspaceId/find',

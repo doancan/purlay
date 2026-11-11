@@ -433,6 +433,22 @@ export interface Messages {
   workspace_id: string;
 }
 
+export interface MessageSharedJobs {
+  channel_id: string;
+  message_id: string;
+  queued_at: Generated<Timestamp>;
+  workspace_id: string;
+}
+
+export interface MessageSharedLinks {
+  channel_id: string;
+  label: string;
+  link_key: string;
+  message_id: string;
+  url: string;
+  workspace_id: string;
+}
+
 export interface MessageVersions {
   channel_id: string;
   content: string;
@@ -695,6 +711,12 @@ export interface SetupState {
   step_reached_at: Timestamp | null;
 }
 
+export interface SharedLinkBackfill {
+  before_message_id: string | null;
+  complete: Generated<boolean>;
+  name: string;
+}
+
 export interface SuspendedModules {
   module: string;
   reason: string;
@@ -897,6 +919,8 @@ export interface DB {
   mentions: Mentions;
   message_attachments: MessageAttachments;
   message_reminders: MessageReminders;
+  message_shared_jobs: MessageSharedJobs;
+  message_shared_links: MessageSharedLinks;
   message_versions: MessageVersions;
   messages: Messages;
   missed_mail_claims: MissedMailClaims;
@@ -919,6 +943,7 @@ export interface DB {
   server_settings: ServerSettings;
   sessions: Sessions;
   setup_state: SetupState;
+  shared_link_backfill: SharedLinkBackfill;
   suspended_modules: SuspendedModules;
   thread_follows: ThreadFollows;
   thread_reads: ThreadReads;

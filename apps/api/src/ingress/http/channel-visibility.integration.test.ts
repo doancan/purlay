@@ -20,6 +20,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from './app';
+import { addSharedLinks } from '../../features/chat/shared/projection';
 import {
   CROSS_TENANT,
   pathFor,
@@ -314,11 +315,14 @@ const aWorld = async (db: Executor): Promise<World> => {
         ...base,
         sender_id: author,
         id: root,
-        content: 'a question',
+        content: 'a question [Policy](http://intranet/policy)',
         thread_reply_count: 1,
         thread_last_reply_at: NOW,
       })
       .execute();
+    await addSharedLinks(db, { messageId: root, workspaceId, channelId }, [
+      { url: 'http://intranet/policy', label: 'Policy' },
+    ]);
     await db
       .insertInto('messages')
       .values({ ...base, id: Bun.randomUUIDv7(), content: 'an answer', parent_id: root })

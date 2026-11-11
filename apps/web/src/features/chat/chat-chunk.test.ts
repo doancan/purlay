@@ -21,6 +21,7 @@ const SCREENS = [
   'questions/questions-screen',
   'saved/saved-screen',
   'search/search-screen',
+  'shared/shared-screen',
   'unreads/unreads-screen',
 ];
 
@@ -64,6 +65,7 @@ describe("chat's chunk", () => {
       'questions',
       'saved',
       'search',
+      'shared',
       'unreads',
     ]);
   });

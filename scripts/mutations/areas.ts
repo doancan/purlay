@@ -39,6 +39,7 @@ export const AREAS = [
   },
   { name: 'api-cli', prefixes: ['apps/api/src/cli/'] },
   { name: 'api-chat', prefixes: ['apps/api/src/features/chat/'] },
+  { name: 'api-chat-shared', prefixes: ['apps/api/src/features/chat/shared/'] },
   { name: 'api-chat-channels', prefixes: ['apps/api/src/features/chat/channels/'] },
   {
     name: 'api-chat-guest-expiry',
@@ -118,6 +119,7 @@ export const AREAS = [
   },
   { name: 'web-realtime', prefixes: ['apps/web/src/realtime/'] },
   { name: 'web-features', prefixes: ['apps/web/src/features/'] },
+  { name: 'web-features-shared', prefixes: ['apps/web/src/features/chat/shared/'] },
   { name: 'web-features-channel', prefixes: ['apps/web/src/features/chat/channel/'] },
   { name: 'web-features-composer', prefixes: ['apps/web/src/features/chat/composer/'] },
   { name: 'web-features-content', prefixes: ['apps/web/src/features/content/'] },

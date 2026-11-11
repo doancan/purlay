@@ -10,6 +10,7 @@ import type {
   CreatedGuestInvitation,
   CreateGuestInvitationRequest,
   DeviceSession,
+  SharedPage,
 } from '@purlay/types';
 import { createApi, type Api } from './api';
 import { ApiError } from './errors';
@@ -1022,6 +1023,66 @@ describe('the endpoints', () => {
       `/api/workspaces/${ID}/search?q=a+b%26c`,
       `/api/workspaces/${ID}/search?q=deploy&before=b`,
     ]);
+  });
+
+  test('Shared carries link filters, the opaque cursor and cancellation through the authenticated HTTP boundary', async () => {
+    const page: SharedPage = {
+      data: [
+        {
+          kind: 'link',
+          key: 'a'.repeat(64),
+          messageId: ID,
+          channelId: ID,
+          parentId: null,
+          sender: user,
+          sourceName: null,
+          sentAt: WHEN,
+          link: { url: 'http://intranet/purchasing', label: 'Satın alma' },
+        },
+      ],
+      nextCursor: 'opaque_next',
+      indexing: true,
+    };
+    const seen: { url: string; init: RequestInit }[] = [];
+    const fetchFn = ((url: string, init: RequestInit): Promise<Response> => {
+      seen.push({ url, init });
+      return Promise.resolve(new Response(JSON.stringify(page), { status: 200 }));
+    }) as unknown as typeof fetch;
+    const signal = new AbortController().signal;
+    const query = {
+      view: 'links',
+      q: 'satın alma & %_',
+      channelId: ID,
+      senderId: ID,
+      since: WHEN,
+      until: '2026-11-12T08:00:00.000Z',
+      before: 'opaque_before',
+    } as const;
+    expect(await createApi(createHttp(fetchFn)).shared(ID, query, signal)).toEqual(page);
+    const url = new URL(seen[0]?.url ?? '', 'https://purlay.example');
+    expect(url.pathname).toBe(`/api/workspaces/${ID}/shared`);
+    expect(Object.fromEntries(url.searchParams)).toEqual(query);
+    expect(seen[0]?.init).toMatchObject({ method: 'GET', credentials: 'same-origin' });
+    expect(seen[0]?.init.signal).toBe(signal);
+    expect(seen[0]?.init.body).toBeUndefined();
+  });
+
+  test('Shared files carry their type and omit absent filters; an answer without indexing state is refused', async () => {
+    const page: SharedPage = { data: [], nextCursor: null, indexing: false };
+    const found = harness(page);
+    expect(await found.api.shared(ID, { view: 'files', type: 'pdf', before: undefined })).toEqual(
+      page,
+    );
+    expect(found.calls).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/shared?view=files&type=pdf`, body: undefined },
+    ]);
+    const refused = await harness({ data: [], nextCursor: null })
+      .api.shared(ID, { view: 'links' })
+      .then(
+        () => 'believed',
+        (error: unknown) => (error instanceof ApiError ? error.code : 'not an ApiError'),
+      );
+    expect(refused).toBe('MALFORMED');
   });
 
   test('resolution and reactions, the emoji percent-encoded into the path', async () => {

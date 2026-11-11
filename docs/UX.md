@@ -1393,3 +1393,19 @@ Open questions keeps existing unresolved threads and adds explicitly marked root
 Search keeps words, channel and author in the URL and adds explicit status, question, content, date (whole days in the viewer's time zone, D-224) and repository controls. A filter can be used with no words. Results show selected-answer previews and decision notes with the original root. Saved searches opens a personal list with loading, retry and empty states; a named current search can be saved, revisited or removed, with pagination. Errors retain names and filters. Current visibility is always applied when running the search.
 
 **Search operators (D-224).** The field takes filters typed with the words: `in:#channel` or `in:@person`, `from:@person` or `from:me`, `has:code`, `has:file`, `is:open`, `is:resolved`, `is:question`, `repo:owner/name`, and `on:`, `before:` or `after:` a `YYYY-MM-DD` day in the viewer's time zone (`after:` starts the next day). Keys ignore case; anything not a known key is words, and `"exact words"` keeps what looks like a filter as words. On Enter — and on any change of a control, which searches with what the field holds — the operators become the controls' own filters and the address keeps those and the remaining words; the field then shows those words, quoting one that would read as a filter. What is typed wins over a control changed with it, and the last of a kind wins. An operator that names nobody, or has a value no filter takes, stays in the words, is searched for as words and is said under the field in a polite status — never silently dropped, never blocking. Too few characters, too many, or an end before the start are said in the field. A *Search operators* disclosure under the field lists them. `/search` and the palette's *Search messages for* read the same operators.
+
+
+### Shared across conversations (D-306)
+
+Shared on the workspace rail/palette opens Files and Links. Search submits a literal file name or
+link title/address; Advanced filters offer a current visible conversation, a person, file kind and
+calendar days in the viewer's time zone (the end day is excluded). Filters and tab survive Back/reload.
+Each row says who, where and when, reuses authenticated file previews/downloads, and offers Go to
+message for its exact conversation or thread reply. Intranet links open as ordinary links; indexing
+does not visit them. Only currently readable sources appear, including strict guest join history.
+
+The existing list-screen header, controls and divided list cards adapt to a phone-width column.
+Loading, no files/links yet, no matches, older links being added, initial error with Retry and a retained
+stale/offline list all explain the next action. Load more is bounded. Source edits and reconnect refresh
+the list; hidden/deleted sources disappear at once, and removed content cannot remain in an open
+preview. Access changes clear cached content and old in-flight reads before another grant is observed.

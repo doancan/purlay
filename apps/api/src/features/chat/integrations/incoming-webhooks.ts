@@ -17,6 +17,8 @@
  * secret or the words.
  */
 import { Value } from '@sinclair/typebox/value';
+import { parseMarkdown, sharedLinksOf } from '@purlay/markdown';
+import { addSharedLinks } from '../shared/projection';
 import type { ChatDb, ChatTx } from '../schema';
 import {
   INCOMING_WEBHOOKS_PER_CHANNEL_MAX,
@@ -337,6 +339,11 @@ export const receivePost = async (
         created_at: now,
       })
       .execute();
+    await addSharedLinks(
+      transaction,
+      { messageId: id, workspaceId: hook.workspace_id, channelId: hook.channel_id },
+      sharedLinksOf(parseMarkdown(post.text)),
+    );
     // Unread for everybody, and needing nobody: a hook names nobody and tells nobody (D-245).
     const recipients = await countArrival(
       transaction,

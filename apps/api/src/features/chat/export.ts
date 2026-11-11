@@ -321,6 +321,9 @@ const tables = [
 
 /** The tables of chat that are not in an export, and why. */
 type ChatExcluded =
+  | 'message_shared_links'
+  | 'message_shared_jobs'
+  | 'shared_link_backfill'
   | 'channel_departures'
   | 'hidden_messages'
   | 'message_reminders'
@@ -347,6 +350,11 @@ type ChatExcluded =
   | 'link_previews';
 
 const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
+  message_shared_jobs:
+    'Durable source ids for the derived link worker; exported content remains the source messages.',
+  shared_link_backfill: 'Internal bounded historical indexing checkpoint; no user content.',
+  message_shared_links:
+    'a rebuildable index of the original message links; the source content follows the normal export scope',
   channel_departures:
     'how each person left a channel, kept only to tell their own socket why it is gone (D-264): their own state',
   hidden_messages: 'messages each person deleted for themselves alone: their own state',

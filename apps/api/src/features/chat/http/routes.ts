@@ -15,6 +15,7 @@ import { integrationRoutes } from './integrations';
 import { webhookRoutes } from './webhooks';
 import { incomingWebhookRoutes } from './incoming-webhooks';
 import { messageRoutes } from './messages';
+import { sharedRoutes } from './shared';
 import { missedMailRoutes } from './missed-mail';
 import { pinRoutes } from './pins';
 import { reactionRoutes } from './reactions';
@@ -38,6 +39,7 @@ export const chatRoutes = (context: PreviewRouteDependencies): AnyElysia => {
     .use(bookmarkRoutes(context))
     .use(channelRoutes(context))
     .use(messageRoutes(context))
+    .use(sharedRoutes(context))
     .use(webPreviewRoutes(context))
     .use(missedMailRoutes(context))
     .use(hiddenRoutes(context))

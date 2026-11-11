@@ -70,6 +70,7 @@ export const TabTitle = (): null => {
   let place: string | null = null;
   if (match.name === 'inbox') place = t('inbox.title');
   else if (match.name === 'search') place = t('search.title');
+  else if (match.name === 'shared') place = t('shared.title');
   else if (match.name === 'saved') place = t('saved.title');
   else if (match.name === 'welcome') place = t('welcome.title');
   else if (match.name === 'questions') place = t('questions.title');

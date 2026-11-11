@@ -162,6 +162,14 @@ export const PACKAGES_MARKDOWN: readonly Mutation[] = [
     tests: ['packages/markdown/src/prose.test.ts'],
   },
   {
+    id: 'shared-duplicate-links-retained',
+    why: 'Repeated canonical URLs become multiple catalogue entries.',
+    file: 'packages/markdown/src/shared-links.ts',
+    find: '!seen.has(url.href)',
+    replace: 'true',
+    tests: ['packages/markdown/src/shared-links.test.ts'],
+  },
+  {
     id: 'web-preview-candidates-duplicate-fragments',
     why: 'Two fragments of one document consume both preview slots.',
     file: 'packages/markdown/src/web-links.ts',

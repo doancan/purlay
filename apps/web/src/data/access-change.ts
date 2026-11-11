@@ -12,6 +12,7 @@ const WORKSPACE_CONTENT = new Set<string>([
   families.notifications[0],
   families.inbox[0],
   families.search[0],
+  families.shared[0],
   families.channels[0],
   families.members[0],
   keys.sent('', '')[0],

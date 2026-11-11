@@ -62,6 +62,7 @@ export const tombstoneRows = async (
     .execute();
   const removed = rows.map((row) => row.id);
   if (removed.length > 0) {
+    await executor.deleteFrom('message_shared_links').where('message_id', 'in', removed).execute();
     await executor.deleteFrom('mentions').where('message_id', 'in', removed).execute();
     await executor.deleteFrom('pinned_messages').where('message_id', 'in', removed).execute();
     await executor.deleteFrom('message_versions').where('message_id', 'in', removed).execute();

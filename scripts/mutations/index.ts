@@ -13,6 +13,7 @@
 import type { Mutation } from '../mutate';
 import type { AreaName } from './areas';
 import { API_CHAT } from './api-chat';
+import { API_CHAT_SHARED } from './api-chat-shared';
 import { API_CHAT_CHANNELS } from './api-chat-channels';
 import { API_CHAT_GUEST_EXPIRY } from './api-chat-guest-expiry';
 import { API_CHAT_INTEGRATIONS } from './api-chat-integrations';
@@ -55,6 +56,7 @@ import { REPO } from './repo';
 import { SCRIPTS } from './scripts';
 import { WEB_CORE } from './web-core';
 import { WEB_FEATURES } from './web-features';
+import { WEB_FEATURES_SHARED } from './web-features-shared';
 import { WEB_FEATURES_CHANNEL } from './web-features-channel';
 import { WEB_FEATURES_COMPOSER } from './web-features-composer';
 import { WEB_FEATURES_CONTENT } from './web-features-content';
@@ -73,6 +75,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-root': API_ROOT,
   'api-cli': API_CLI,
   'api-chat': API_CHAT,
+  'api-chat-shared': API_CHAT_SHARED,
   'api-chat-channels': API_CHAT_CHANNELS,
   'api-chat-guest-expiry': API_CHAT_GUEST_EXPIRY,
   'api-chat-integrations': API_CHAT_INTEGRATIONS,
@@ -108,6 +111,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'web-core': WEB_CORE,
   'web-realtime': WEB_REALTIME,
   'web-features': WEB_FEATURES,
+  'web-features-shared': WEB_FEATURES_SHARED,
   'web-features-channel': WEB_FEATURES_CHANNEL,
   'web-features-composer': WEB_FEATURES_COMPOSER,
   'web-features-content': WEB_FEATURES_CONTENT,
