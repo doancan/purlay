@@ -122,7 +122,7 @@ failure of the tests that use it.
 | `bun run job <name>` | A scheduled job (D-30), which owns the list; an unknown name prints every job. `jobs:status` says what each last did and exits non-zero when one is overdue or never ran; `jobs:first` runs, once, each that never succeeded (what the scheduler does as it starts). Reads the same configuration as the API |
 | `bun run db:generate` | Regenerate the database types from the applied migrations |
 | `bun run config:example` | Regenerate `.env.example` from the configuration loader |
-| `bun run lint:fix` | Fix what the linter can fix on its own |
+| `bun run lint` · `bun run lint:fix` | The same whole-repository ESLint rules, in serial workspace processes so TypeScript project-service heaps are released between them; `lint:fix` fixes what the linter can fix on its own. The wrapper accepts only `--fix`; custom report options use ESLint directly |
 | `python3 scripts/check-docs.py -v` | Every cross-document reference, with the title of the section it lands on |
 | `python3 scripts/check-docs.py --write-sections` | Re-lock the section numbering after deliberately renumbering a document |
 
