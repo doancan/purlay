@@ -564,22 +564,28 @@ describe('integration: a node that loses Redis', () => {
       const socket = await connect(b, room.bob.cookie);
       await subscribe(socket, room.channelId);
 
-      proxy.drop();
-      await until(() => !b.link.subscribed(), 'node B to notice');
-      // Redis is away: the socket stays open, and writes through node B itself still reach it.
-      const id = messageId(new Date(NOW.getTime() + 500));
-      expect(
-        (
-          await http(b, 'POST', `/api/channels/${room.channelId}/messages`, room.alice.cookie, {
-            id,
-            content: 'during',
-          })
-        ).status,
-      ).toBe(201);
-      await socket.until(
-        (frames) => created(frames).includes(id),
-        'the write to reach its own node',
-      );
+      await proxy.pause();
+      try {
+        await until(() => !b.link.subscribed(), 'node B to notice');
+        // Hold Redis away until the real local delivery is observed; restoration must not win this race.
+        const id = messageId(new Date(NOW.getTime() + 500));
+        expect(
+          (
+            await http(b, 'POST', `/api/channels/${room.channelId}/messages`, room.alice.cookie, {
+              id,
+              content: 'during',
+            })
+          ).status,
+        ).toBe(201);
+        await socket.until(
+          (frames) => created(frames).includes(id),
+          'the write to reach its own node',
+        );
+
+        expect(b.link.subscribed()).toBe(false);
+      } finally {
+        await proxy.resume();
+      }
 
       expect(await socket.ended).toBe(CLOSE_CODES.RESTARTING);
     },

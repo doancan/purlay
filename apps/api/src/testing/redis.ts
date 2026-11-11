@@ -120,6 +120,10 @@ export interface DroppableProxy {
   readonly url: string;
   /** Cuts every connection now. New ones are accepted again at once, like a Redis that restarted. */
   readonly drop: () => void;
+  /** Stops accepting and cuts connections until resume, so an outage cannot end before its assertion. */
+  readonly pause: () => Promise<void>;
+  /** Listens on the same address again after a pause. */
+  readonly resume: () => Promise<void>;
   /** Stops accepting and cuts what is open. */
   readonly stop: () => void;
 }
@@ -158,6 +162,20 @@ export const aDroppableProxy = async (target: string): Promise<DroppableProxy> =
   return {
     url: `redis://127.0.0.1:${String(address.port)}`,
     drop,
+    pause: async (): Promise<void> => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error === undefined) resolve();
+          else reject(error);
+        });
+        drop();
+      });
+    },
+    resume: async (): Promise<void> => {
+      await new Promise<void>((resolve) => {
+        server.listen(address.port, '127.0.0.1', resolve);
+      });
+    },
     stop: (): void => {
       drop();
       server.close();

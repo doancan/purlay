@@ -93,9 +93,26 @@ describe('integration: a thread reply goes to people who can still see the chann
       const names = ['alice', ...Array.from({ length: 60 }, (_, n) => `r${String(n)}`), 'last'];
       const room = await aRoom(db, names);
       const root = await post(db, room, 'alice', 'a thread everybody joined');
-      for (const name of names.slice(1, 61)) {
-        await post(db, room, name, 'me too', { parentId: root.message.id });
-      }
+      // This case measures the final reply's audience, not sixty earlier notification fan-outs.
+      // Seed the same real history in one statement; the final reply still uses the actual writer.
+      const previous = names.slice(1, 61).map((name) => ({
+        id: nextId(),
+        workspace_id: room.workspaceId,
+        channel_id: room.channelId,
+        sender_id: idOf(room, name),
+        parent_id: root.message.id,
+        content: 'me too',
+        created_at: NOW,
+      }));
+      await db.insertInto('messages').values(previous).execute();
+      await db
+        .updateTable('messages')
+        .set({
+          thread_reply_count: previous.length,
+          thread_last_reply_at: NOW,
+        })
+        .where('id', '=', root.message.id)
+        .execute();
       await post(db, room, 'last', 'the final word', { parentId: root.message.id });
 
       const rows = await db
