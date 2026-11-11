@@ -94,7 +94,7 @@ describe('the pinned CI browser server', () => {
   test('pins the matching official image by immutable digest', () => {
     expect(start.env?.['CI_BROWSER_IMAGE']).toMatch(
       new RegExp(
-        `^mcr\\.microsoft\\.com/playwright:v${dependency.replaceAll('.', '\\.')}\-resolute@sha256:[a-f0-9]{64}$`,
+        `^mcr\\.microsoft\\.com/playwright:v${dependency.replaceAll('.', '\\.')}-resolute@sha256:[a-f0-9]{64}$`,
       ),
     );
   });
