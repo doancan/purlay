@@ -329,6 +329,7 @@ export const resendRecipient = async (
           appUrl: deps.appUrl,
         },
         deps.workspaceChannels,
+        deps.guestAccessReady ?? false,
       ),
   );
   const outbox = deps.outbox;

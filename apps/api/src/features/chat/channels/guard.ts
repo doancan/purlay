@@ -403,34 +403,35 @@ export const visibleChannelIdsQuery = (
     .where('channels.workspace_id', '=', context.workspaceId)
     .select('channels.id');
 
-/** Apply the same live channel and history authority before a list's limit or cursor is computed. */
-export const withinMessageHistory = (
+/** Current message authority for a bound reader, including one bound by a batched replay row. */
+export const messageHistoryVisibleTo = (
   executor: ChatDb,
-  context: WorkspaceContext | ChannelContext,
+  userId: string | RawBuilder<string>,
+  workspaceId: string | RawBuilder<string>,
   message = 'messages',
 ): RawBuilder<boolean> => {
-  if (context.guest === undefined) return sql<boolean>`true`;
-  const permitted = visibleChannels(executor, context.userId)
+  const permitted = visibleChannels(executor, userId)
     .select('channels.id')
-    .where('channels.workspace_id', '=', context.workspaceId)
+    .where('channels.workspace_id', '=', workspaceId)
     .where('channels.id', '=', sql.ref<string>(`${message}.channel_id`))
     .where(guestMessageHistoryFor(message));
   return sql<boolean>`exists (${permitted})`;
 };
 
-/** Current canonical content visibility, also when the supplied context used to be a full member. */
+/** Apply the same live channel and history authority before a list's limit or cursor is computed. */
+export const withinMessageHistory = (
+  executor: ChatDb,
+  context: WorkspaceContext | ChannelContext,
+  message = 'messages',
+): RawBuilder<boolean> =>
+  messageHistoryVisibleTo(executor, context.userId, context.workspaceId, message);
+
+/** Content projections use the same current authority as lists, even for captured full contexts. */
 export const withinCurrentMessageHistory = (
   executor: ChatDb,
   context: WorkspaceContext | ChannelContext,
   message = 'messages',
-): RawBuilder<boolean> => {
-  const permitted = visibleChannels(executor, context.userId)
-    .select('channels.id')
-    .where('channels.workspace_id', '=', context.workspaceId)
-    .where('channels.id', '=', sql.ref<string>(`${message}.channel_id`))
-    .where(guestMessageHistoryFor(message));
-  return sql<boolean>`exists (${permitted})`;
-};
+): RawBuilder<boolean> => withinMessageHistory(executor, context, message);
 
 /** Traversal only: older roots need a current readable continuation and must be projected separately. */
 export const withinThreadHistory = (

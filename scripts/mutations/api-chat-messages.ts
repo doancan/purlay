@@ -668,12 +668,29 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     ],
   },
   {
+    id: 'guest-history-replay-captured-member',
+    why: 'A replay captured as a full member bypasses current guest history after re-admission.',
+    file: MESSAGES,
+    find: "  const history = messageHistoryVisibleTo(\n    executor,\n    sql.ref<string>('wanted.user_id'),\n    sql.ref<string>('wanted.workspace_id'),\n  );",
+    replace:
+      "  const history = wanted.some(({ context }) => context.guest !== undefined) ? messageHistoryVisibleTo(\n    executor,\n    sql.ref<string>('wanted.user_id'),\n    sql.ref<string>('wanted.workspace_id'),\n  ) : sql<boolean>`true`;",
+    tests: ['apps/api/src/ingress/http/guest-current-authority.integration.test.ts'],
+  },
+  {
     id: 'guest-history-replay-floor-ignored',
     why: 'A reconnect with an earlier cursor replays messages before admission.',
     file: 'apps/api/src/features/chat/messages/messages.ts',
-    find: 'wanted.some(({ context }) => context.guest !== undefined)',
-    replace: 'false',
+    find: "          .whereRef('messages.id', '>', 'wanted.after_id')\n          .where(history)\n",
+    replace: "          .whereRef('messages.id', '>', 'wanted.after_id')\n",
     tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
+  },
+  {
+    id: 'guest-history-retry-unrestricted',
+    why: 'A sender-owned retry returns content and knowledge from before guest re-admission.',
+    file: MESSAGES,
+    find: "      .where('messages.id', '=', existing.id)\n      .where(withinMessageHistory(executor, context))\n",
+    replace: "      .where('messages.id', '=', existing.id)\n",
+    tests: ['apps/api/src/ingress/http/guest-current-authority.integration.test.ts'],
   },
   {
     id: 'guest-history-window-root-leak',

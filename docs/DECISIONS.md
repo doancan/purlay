@@ -15023,6 +15023,11 @@ changes are administrator actions with atomic audit records and live revocation.
 is explicit and explains the wider access. Guest admission is not enabled before every reader enforces the
 contract; mixed-server rollout must not create guest rows for an unrestricted reader.
 
+List and replay statements recheck current membership even when their context was captured as a full member
+before removal and restricted re-admission. A sender-owned message ID identifies an idempotent retry; it does
+not authorize earlier content. Every retry return applies current message visibility before building content,
+knowledge, attachments or other sidecars. A hidden earlier message returns the same message-not-found refusal.
+
 Admission is closed by default through the boot setting `GUEST_ACCESS_READY=false`. Setting it true
 is the operator's explicit attestation, following D-292/D-296's cluster-ready model, that every API,
 scheduler and job/outbox reader runs the guest-capable revision. API presence, an empty peer registry
@@ -15033,6 +15038,10 @@ remain available. An idempotent acceptance creates no new membership and stays i
 admission does not make an old unrestricted binary safe over existing guest rows: retain capable
 readers until those memberships have been removed or explicitly converted. In the managed deployment,
 verify every actual API/scheduler/job image revision before enabling admission.
+
+The same admission gate covers guest recipient resends: a replacement is a new mint/mail operation.
+While closed it leaves the existing invitation, recipient attempts and mail quota unchanged; ordinary
+recipient resends remain available.
 
 Guest creation has one verified-recipient email, one to twenty explicit conversations, an optional
 access end and the interface locale. Email queues through the existing quota/receipt relay after commit;

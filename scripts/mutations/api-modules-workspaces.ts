@@ -773,6 +773,23 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     ],
   },
   {
+    id: 'guest-rollout-resend-default-open',
+    why: 'A caller omitting readiness can mint a guest replacement during a closed rollout.',
+    file: 'apps/api/src/modules/workspaces/invitation-mail.ts',
+    find: '  channels: WorkspaceChannels = noWorkspaceChannels,\n  guestAccessReady = false,\n): Promise<InvitationLetter>',
+    replace:
+      '  channels: WorkspaceChannels = noWorkspaceChannels,\n  guestAccessReady = true,\n): Promise<InvitationLetter>',
+    tests: ['apps/api/src/ingress/http/guest-current-authority.integration.test.ts'],
+  },
+  {
+    id: 'guest-rollout-resend-unguarded',
+    why: 'A resend mints and mails another guest invitation before every reader is ready.',
+    file: 'apps/api/src/modules/workspaces/invitation-mail.ts',
+    find: '    requireGuestAdmissionReady(\n      guestInvitationAvailability(current, channels, guestAccessReady, mail.on).enabled,\n    );\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/guest-current-authority.integration.test.ts'],
+  },
+  {
     id: 'invitation-accept-forgets-the-workspaces-modules',
     why: 'a person who joins is told the workspace has every module the server runs until they reload (D-289)',
     file: 'apps/api/src/modules/workspaces/invitations.ts',

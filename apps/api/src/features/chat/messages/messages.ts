@@ -36,6 +36,7 @@ import type { Clock } from '../../../platform/clock';
 import {
   messageNotFound,
   requireChannelMember,
+  messageHistoryVisibleTo,
   withinMessageHistory,
   withinCurrentMessageHistory,
   withinThreadHistory,
@@ -254,7 +255,17 @@ export const sendMessage = async (
   input: OutgoingMessage,
   engine?: Engine,
 ): Promise<Sent> => {
-  const again = async (row: MessageRow): Promise<Sent> => {
+  const again = async (existing: MessageRow): Promise<Sent> => {
+    // Ownership identifies a retry; it cannot grant access to history after guest re-admission.
+    // Select the content under current authority before any sidecar or thread summary is read.
+    const row = await executor
+      .selectFrom('messages')
+      .leftJoin('users', 'users.id', 'messages.sender_id')
+      .select(MESSAGE_COLUMNS)
+      .where('messages.id', '=', existing.id)
+      .where(withinMessageHistory(executor, context))
+      .executeTakeFirst();
+    if (row === undefined) throw messageNotFound();
     const [message] = await buildMessages(executor, [row]);
     if (message === undefined) {
       throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
@@ -586,23 +597,21 @@ export const missedIn = async (
 ): Promise<ReadonlyMap<string, Replay>> => {
   const replays = new Map<string, Replay>();
   if (wanted.length === 0) return replays;
-  const history = wanted.some(({ context }) => context.guest !== undefined)
-    ? sql<boolean>`(${sql.join(
-        wanted.map(
-          ({ context }) =>
-            sql<boolean>`(messages.channel_id = ${context.channelId}::uuid and ${withinMessageHistory(executor, context)})`,
-        ),
-        sql` or `,
-      )})`
-    : sql<boolean>`true`;
+  const history = messageHistoryVisibleTo(
+    executor,
+    sql.ref<string>('wanted.user_id'),
+    sql.ref<string>('wanted.workspace_id'),
+  );
 
   const rows = await executor
     .selectFrom(
-      sql<{ channel_id: string; after_id: string }>`(
+      sql<{ channel_id: string; after_id: string; user_id: string; workspace_id: string }>`(
         select * from unnest(
           ${wanted.map((w) => w.context.channelId)}::uuid[],
-          ${wanted.map((w) => w.after)}::uuid[]
-        ) as pairs(channel_id, after_id)
+          ${wanted.map((w) => w.after)}::uuid[],
+          ${wanted.map((w) => w.context.userId)}::uuid[],
+          ${wanted.map((w) => w.context.workspaceId)}::uuid[]
+        ) as pairs(channel_id, after_id, user_id, workspace_id)
       )`.as('wanted'),
     )
     .innerJoinLateral(

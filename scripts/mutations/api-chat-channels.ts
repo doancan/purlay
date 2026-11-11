@@ -716,6 +716,15 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
   },
   {
+    id: 'guest-history-captured-member-trusted',
+    why: 'A context captured before removal bypasses the current guest admission and channel grant.',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
+    find: "export const withinMessageHistory = (\n  executor: ChatDb,\n  context: WorkspaceContext | ChannelContext,\n  message = 'messages',\n): RawBuilder<boolean> =>\n  messageHistoryVisibleTo(executor, context.userId, context.workspaceId, message);",
+    replace:
+      "export const withinMessageHistory = (\n  executor: ChatDb,\n  context: WorkspaceContext | ChannelContext,\n  message = 'messages',\n): RawBuilder<boolean> => context.guest === undefined ? sql<boolean>`true` : messageHistoryVisibleTo(executor, context.userId, context.workspaceId, message);",
+    tests: ['apps/api/src/ingress/http/guest-current-authority.integration.test.ts'],
+  },
+  {
     id: 'guest-history-direct-message-id',
     why: 'A guessed identifier cannot bypass the trusted guest share boundary.',
     file: 'apps/api/src/features/chat/channels/history-access.ts',
@@ -730,8 +739,9 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'guest-history-list-bypassed',
     why: 'Paged readers and cursors reopen pre-admission history.',
     file: 'apps/api/src/features/chat/channels/guard.ts',
-    find: '  if (context.guest === undefined) return sql<boolean>`true`;',
-    replace: '  if (true) return sql<boolean>`true`;',
+    find: "export const withinMessageHistory = (\n  executor: ChatDb,\n  context: WorkspaceContext | ChannelContext,\n  message = 'messages',\n): RawBuilder<boolean> =>\n  messageHistoryVisibleTo(executor, context.userId, context.workspaceId, message);",
+    replace:
+      "export const withinMessageHistory = (\n  executor: ChatDb,\n  context: WorkspaceContext | ChannelContext,\n  message = 'messages',\n): RawBuilder<boolean> => sql<boolean>`true`;",
     tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
   },
   {

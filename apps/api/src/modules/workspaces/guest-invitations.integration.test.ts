@@ -380,6 +380,7 @@ describe('integration: named guest invitations', () => {
         attemptRow.recipient_id,
         mail,
         chatWorkspaceChannels,
+        true,
       );
       const newToken = /\/invite#([0-9a-f]{64})/.exec(again.text)?.[1] ?? '';
       expect(newToken).not.toBe(oldToken);

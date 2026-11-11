@@ -33,7 +33,7 @@ import type { Clock } from '../../platform/clock';
 import { composeLetter } from '../../platform/letter';
 import type { MailMessage } from '../../platform/mail';
 import { takeDaily, type Allowance } from '../../platform/quota';
-import type { WorkspaceContext } from '../../platform/tenancy';
+import { requireWorkspaceMembership, type WorkspaceContext } from '../../platform/tenancy';
 import { createInvitation, revokeInvitation, notFound } from './invitations';
 import { createGuestInvitation } from './guest-invitations';
 import { noWorkspaceChannels, type WorkspaceChannels } from './channels-port';
@@ -371,6 +371,7 @@ export const resendInvitationRecipient = async (
   recipientId: string,
   mail: { readonly on: boolean; readonly appUrl: string },
   channels: WorkspaceChannels = noWorkspaceChannels,
+  guestAccessReady = false,
 ): Promise<InvitationLetter> => {
   // Guest creation locks conversations before the workspace/membership mutex. Prepare its replacement
   // before the normal resend locks, then recheck the attempt under those locks below. Any refusal
@@ -406,6 +407,14 @@ export const resendInvitationRecipient = async (
       scoped.guest_modules[0] !== channels.guests?.moduleId
     )
       throw notFound();
+    const current = await requireWorkspaceMembership(
+      transaction,
+      context.userId,
+      context.workspaceId,
+    );
+    requireGuestAdmissionReady(
+      guestInvitationAvailability(current, channels, guestAccessReady, mail.on).enabled,
+    );
     replacement = await createGuestInvitation(
       transaction,
       clock,
