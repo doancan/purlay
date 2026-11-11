@@ -159,6 +159,18 @@ describe('integration: a channel’s files', () => {
       const second = await sendWith(world, world.publicChannel, ['c.txt']);
       const reply = await sendWith(world, world.publicChannel, ['d.txt'], first.message);
       await sendWith(world, world.privateChannel, ['elsewhere.txt']);
+      const otherResponse = await world.call(
+        'POST',
+        `/api/workspaces/${world.workspaceId}/channels`,
+        world.owner,
+        { name: 'other-readable-files' },
+      );
+      expect(otherResponse.status).toBe(201);
+      const other = (await otherResponse.json()) as { id: string };
+      await sendWith(world, other.id, ['other-public.txt']);
+      expect(
+        (await filesOf(world, other.id, world.member)).data.map((file) => file.attachment.fileName),
+      ).toEqual(['other-public.txt']);
       await upload(world, 'never-sent.txt');
 
       const page = await filesOf(world, world.publicChannel, world.member);

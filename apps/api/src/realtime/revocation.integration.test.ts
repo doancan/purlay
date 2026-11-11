@@ -27,6 +27,7 @@ import { requireWorkspaceMembership } from '../platform/tenancy';
 import { createGuestInvitation } from '../modules/workspaces/guest-invitations';
 import { acceptInvitation } from '../modules/workspaces/invitations';
 import { chatWorkspaceChannels } from '../features/chat/channels/workspace-channels';
+import { announcePresence } from '../features/chat/presence/presence';
 import {
   publishAccessRevoked,
   publishChannelRevoked,
@@ -43,6 +44,7 @@ const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
 
 let cloned: ClonedDatabase;
+let nodeBDatabase: ClonedDatabase['db'];
 let nodeA: HttpApplication;
 let nodeB: HttpApplication;
 let portB = 0;
@@ -50,19 +52,17 @@ let portB = 0;
 let publisher: InspectableEventBus;
 /**
  * Set by a test that wants something to happen inside the read that authorises the next
- * subscription of node B — the one that reads `channel_members`, and no other. "The next read"
+ * subscription of node B — its top-level channel-scope SELECT, not a nested presence lookup. "The next read"
  * would be spent by whichever read that follows the socket's identity is still in flight when it is set (its
  * presence, its workspaces), and the removal would then land before the subscription instead of
  * inside its authorisation.
  */
 let duringAuthorisation: (() => Promise<void>) | undefined;
-/**
- * Set by a test that wants the reads that follow the socket's identity (not the authorisation) to finish
- * only once `duringAuthorisation` is armed: the order a loaded runner can produce.
- */
-let holdAfterIdentityReads = false;
+let authorisationChannelId: string | undefined;
+/** Hold a real presence result without stalling the socket's identity or PING/PONG. */
+let beforePresenceResult: (() => Promise<void>) | undefined;
 const authorisations = new Set<unknown>();
-const afterIdentityReads = new Set<unknown>();
+const presenceReads = new Set<unknown>();
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
@@ -72,29 +72,50 @@ beforeAll(async () => {
   nodeA = createApp(testDependencies({ database: cloned.db, clock, config, backplane }));
   // Node B reads through a plugin that can run something inside a read, so a
   // revocation can be published at the exact point a subscription is authorised.
-  const database = cloned.db.withPlugin({
+  nodeBDatabase = cloned.db.withPlugin({
     transformQuery: (args) => {
-      const sql = JSON.stringify(args.node);
-      if (sql.includes('"name":"channel_members"')) authorisations.add(args.queryId);
-      // What runs after the identity is known (workspaces, presence); the sessions it is
-      // resolved with must finish for it to be known at all.
-      else if (!sql.includes('"name":"sessions"')) afterIdentityReads.add(args.queryId);
+      const channelAuthority =
+        authorisationChannelId !== undefined &&
+        args.node.kind === 'SelectQueryNode' &&
+        args.node.selections?.some(
+          ({ selection }) =>
+            selection.kind === 'AliasNode' &&
+            selection.alias.kind === 'IdentifierNode' &&
+            'name' in selection.alias &&
+            selection.alias.name === 'guestSince',
+        ) === true &&
+        JSON.stringify(args.node.where).includes('"operator":"in"') &&
+        JSON.stringify(args.node.where).includes(JSON.stringify(authorisationChannelId));
+      if (channelAuthority) authorisations.add(args.queryId);
+      if (
+        args.node.kind === 'SelectQueryNode' &&
+        args.node.from?.froms.some(
+          (from) =>
+            from.kind === 'AliasNode' &&
+            'alias' in from &&
+            typeof from.alias === 'object' &&
+            from.alias !== null &&
+            'kind' in from.alias &&
+            from.alias.kind === 'IdentifierNode' &&
+            'name' in from.alias &&
+            from.alias.name === 'mine',
+        ) === true
+      )
+        presenceReads.add(args.queryId);
       return args.node;
     },
     transformResult: async (args) => {
-      if (afterIdentityReads.delete(args.queryId)) {
-        while (holdAfterIdentityReads && duringAuthorisation === undefined) await Bun.sleep(1);
-        return args.result;
-      }
+      if (presenceReads.delete(args.queryId)) await beforePresenceResult?.();
       if (authorisations.delete(args.queryId)) {
         const run = duringAuthorisation;
         duringAuthorisation = undefined;
+        authorisationChannelId = undefined;
         if (run !== undefined) await run();
       }
       return args.result;
     },
   });
-  nodeB = createApp(testDependencies({ database, clock, config, backplane }));
+  nodeB = createApp(testDependencies({ database: nodeBDatabase, clock, config, backplane }));
   portB = nodeB.listen(0);
 }, CLONE_HOOK_MS);
 
@@ -1011,17 +1032,52 @@ describe('integration: a membership that ends', () => {
    * went. Subscribed only after that read, the socket would find the revocation
    * already past and keep the channel for good.
    */
-  const removalDuringAuthorisation = async (): Promise<void> => {
+  const removalDuringAuthorisation = async (
+    presenceFirst = false,
+    presenceInFlight = false,
+  ): Promise<void> => {
     const room = await aRoom();
     const bob = await connect(room.bob.cookie);
     // Its identity is resolved by a read of its own; let that finish.
     await settle(bob);
 
-    duringAuthorisation = async (): Promise<void> => {
-      await publishAccessRevoked(publisher, clock, room.bob.userId, [room.channelId]);
+    const announce = async (): Promise<void> => {
+      await announcePresence(
+        { database: nodeBDatabase, bus: publisher, clock, log: createLogger({ level: 'silent' }) },
+        { userId: room.bob.userId, online: true, away: false, version: 1 },
+      );
     };
-    await subscribe(bob, room.channelId);
-    expect(duringAuthorisation).toBeUndefined();
+    const reached = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    let presence: Promise<void> | undefined;
+    try {
+      if (presenceInFlight) {
+        beforePresenceResult = async (): Promise<void> => {
+          reached.resolve(undefined);
+          await resume.promise;
+        };
+        presence = announce();
+        await reached.promise;
+      }
+      authorisationChannelId = room.channelId;
+      duringAuthorisation = async (): Promise<void> => {
+        await publishAccessRevoked(publisher, clock, room.bob.userId, [room.channelId]);
+      };
+      if (presenceFirst) {
+        // A genuine presence read contains a nested channel-membership query. Complete it after
+        // arming the hook, before SUBSCRIBE: it must not spend the authorization interception.
+        await announce();
+        expect(duringAuthorisation).toBeDefined();
+      }
+      await subscribe(bob, room.channelId);
+      expect(duringAuthorisation).toBeUndefined();
+    } finally {
+      resume.resolve(undefined);
+      beforePresenceResult = undefined;
+      await presence;
+      authorisationChannelId = undefined;
+      duringAuthorisation = undefined;
+    }
 
     await post(room.alice.cookie, room.channelId, 4);
     await settle(bob);
@@ -1034,12 +1090,11 @@ describe('integration: a membership that ends', () => {
     await removalDuringAuthorisation();
   });
 
+  test('a presence read finishing before subscription cannot consume its authorization interception', async () => {
+    await removalDuringAuthorisation(true);
+  });
+
   test('and so does one while a read of the socket’s own is still in flight', async () => {
-    holdAfterIdentityReads = true;
-    try {
-      await removalDuringAuthorisation();
-    } finally {
-      holdAfterIdentityReads = false;
-    }
+    await removalDuringAuthorisation(false, true);
   });
 });

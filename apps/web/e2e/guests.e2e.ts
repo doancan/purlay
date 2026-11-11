@@ -583,11 +583,23 @@ test('a live new reply opens an earlier hidden thread without granting its old c
   expect((await page.request.get(`/api/messages/${oldRoot.id}`)).status()).toBe(404);
   expect((await page.request.get(`/api/attachments/${file.id}`)).status()).toBe(404);
   await container.focus();
+  // The fixture also has an owner's window. Reading requires this guest's window in front,
+  // which keyboard focus in a background headless page does not establish.
+  await page.bringToFront();
+  await expect
+    .poll(() => page.evaluate(() => document.visibilityState === 'visible' && document.hasFocus()))
+    .toBe(true);
+  const read = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname === `/api/messages/${oldRoot.id}/thread/read`,
+  );
   await container.press('t');
   const panel = page.getByRole('complementary', { name: 'Thread · #partner-discussion' });
   await expect(panel).toBeVisible();
   await expect(panel.getByRole('heading', { name: 'Thread · #partner-discussion' })).toBeFocused();
   await expect(panel.getByText(fresh.content, { exact: true })).toBeVisible();
+  expect((await read).ok()).toBe(true);
   await expect(panel.getByRole('button', { name: /Resolve/ })).toHaveCount(0);
   await expect(panel.getByText('Private earlier reply', { exact: true })).toHaveCount(0);
   const follow = panel.getByRole('button', { name: 'Follow', exact: true });
