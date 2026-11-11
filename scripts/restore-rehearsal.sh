@@ -83,6 +83,11 @@ echo "== WAL archiving is off by default, and a backup then has no base backup"
 [ "$(compose exec -T postgres psql -U purlay -d postgres -Atc 'show archive_timeout')" = 0 ] \
   || { echo "archive_timeout is set on a stack that did not ask for archiving" >&2; exit 1; }
 
+# Keep the fixture fixed through its dump and exact comparisons. Background indexing may
+# legitimately change derived rows after a snapshot, which is not a failed restoration.
+# One-shot bucket/backup commands still run; the ordinary API was proved ready above.
+compose stop api
+
 echo "== data: a database and a bucket worth restoring"
 compose exec -T postgres psql -U purlay -d purlay -v ON_ERROR_STOP=1 -q <docs/spikes/backup-restore.seed.sql >/dev/null
 compose run --rm --no-deps -T \
@@ -140,7 +145,7 @@ compose exec -T postgres psql -U purlay -d purlay_restore -q -c 'drop table rest
 echo "== the database alone can be restored with --no-bucket"
 scripts/restore.sh "$BACKUP" --database purlay_restore_nb --no-bucket | tee "$WORK/nobucket.out"
 grep -q 'not restored (--no-bucket)' "$WORK/nobucket.out"
-scripts/compare-databases.sh purlay purlay_restore_nb >/dev/null
+scripts/compare-databases.sh purlay purlay_restore_nb
 
 echo "== compare"
 scripts/compare-databases.sh purlay purlay_restore
@@ -176,8 +181,6 @@ diff "$WORK/live-before.txt" "$WORK/live-after.txt" >/dev/null \
 leftover="$(compose exec -T postgres psql -U purlay -d postgres -Atc "select datname from pg_database where datname like '%\_incoming\_%' or datname like '%before_restore%'")"
 [ -z "$leftover" ] || { echo "a refused restore left databases behind: $leftover" >&2; exit 1; }
 echo "  refused, and the live database is as it was"
-compose start api
-compose up -d --wait api
 
 # The case a backup is for: the server is gone. Record what the live database
 # looks like, destroy every volume, rebuild the stack empty, and restore from the
@@ -191,13 +194,13 @@ compose run --rm --no-deps -T storage-init
 LOGICAL_STARTED=$SECONDS
 scripts/restore.sh "$BACKUP" --database purlay --replace --bucket live
 LOGICAL_SECONDS=$((SECONDS - LOGICAL_STARTED))
-compose up -d --wait api
 scripts/compare-databases.sh purlay purlay >"$WORK/after.txt"
 diff "$WORK/before.txt" "$WORK/after.txt" || {
   echo "the rebuilt database differs from the one that was lost" >&2
   exit 1
 }
 echo "rebuilt database: every table's count and checksum is what it was before the loss"
+compose up -d --wait api
 compose run --rm --no-deps -T --user "$(id -u):$(id -g)" \
   -v "$BACKUP/bucket:/backup:ro" \
   -v "$PWD/scripts/bucket-copy.ts:/ops/bucket-copy.ts:ro" \
