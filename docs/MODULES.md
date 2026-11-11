@@ -437,6 +437,7 @@ chunk comes (`waiting`: the shell's bar with a skeleton, or the skeleton alone).
 - **Rail, palette, shortcuts, settings, audit filter.** Each draws, for the modules the session lists, what the manifests say. An entry
   that is more than a link (the inbox's dot and panel, the open-questions count) draws itself, by route, in `rail.tsx`.
   What chat's palette lists from its data (channels, people, mark all read) stays in `use-palette-items.ts`, gated on chat.
+- **Module settings.** Each settings entry supplies its own `load` function. The settings screen checks the workspace role and enabled module before loading that page behind `Suspense`; core pages remain an exhaustive static map. Module settings therefore reuse their own UI without a core-to-module import (D-303).
 - **The shell holds no module code.** A manifest imports types only, so the registry the shell carries holds no screen,
   and a manifest that imported a component which imports the router would fail at start-up. The chunk is asked for in
   the first commit of a `preload` module's route (chat's), beside the request for the session; `budget:web` reads the

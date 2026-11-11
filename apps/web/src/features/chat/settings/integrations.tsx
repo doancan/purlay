@@ -22,8 +22,15 @@ import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
 import { useWorkspace } from '../../shell/workspace';
-import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
-import { GitHubInstallationCard } from './github-issues';
+import {
+  SaveOutcome,
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsTextRow,
+} from '../../settings/page';
+import { GitHubInstallationCard } from '../../settings/pages/github-issues';
+import { WorkspaceWebhooks } from '../channel/workspace-webhooks';
 
 /** `SetGitHubTokenRequest`'s rule: printable ASCII, no spaces. */
 const TOKEN = /^[\x21-\x7e]+$/;
@@ -118,6 +125,7 @@ export const IntegrationsPage = (): React.JSX.Element => {
       title={t('settings.integrations.title')}
       description={t('settings.integrations.description')}
     >
+      <WorkspaceWebhooks key={workspace.id} />
       <form
         id={formId}
         onSubmit={(event) => {

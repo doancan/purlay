@@ -167,6 +167,22 @@ export const WEB_FEATURES_CHANNEL: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/sidebar/starred.test.tsx'],
   },
   {
+    id: 'incoming-webhook-channel-secret-retained',
+    why: 'Switching target channels retains a late secret created for the previous channel.',
+    file: 'apps/web/src/features/chat/channel/incoming-webhooks.tsx',
+    find: '  <ChannelWebhooks key={channel.id} channel={channel} />',
+    replace: '  <ChannelWebhooks channel={channel} />',
+    tests: ['apps/web/src/features/settings/pages/integrations.test.tsx'],
+  },
+  {
+    id: 'incoming-webhook-test-double-clicks',
+    why: 'An unresolved test accepts a second click and posts a duplicate message.',
+    file: 'apps/web/src/features/chat/channel/incoming-webhooks.tsx',
+    find: '          busy={sending}\n',
+    replace: '          busy={false}\n',
+    tests: ['apps/web/src/features/settings/pages/integrations.test.tsx'],
+  },
+  {
     id: 'level-not-painted-first',
     why: 'the bell keeps the old level until the server answers, and on a slow network the choice looks ignored',
     file: 'apps/web/src/features/chat/channel/notification-level-menu.tsx',

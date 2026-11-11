@@ -15,8 +15,10 @@ import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
 } from '@purlay/db';
-import { INCOMING_WEBHOOKS_PER_CHANNEL_MAX } from '@purlay/types';
+import { INCOMING_WEBHOOKS_PER_CHANNEL_MAX, messageId } from '@purlay/types';
 import type { ChannelContext } from '../channels/guard';
+import { archiveChannel } from '../channels/settings';
+import { sendMessage } from '../messages/messages';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { EventBus } from '../../../platform/events';
@@ -178,5 +180,253 @@ describe('integration: incoming webhooks at once', () => {
     );
     expect(new Set(ids).size).toBe(8);
     expect((await counters(cloned.db, { channelId }, bob)).unread).toBe(8);
+  });
+  for (const closing of ['channel', 'workspace'] as const) {
+    test(`a ${closing} closed after lookup accepts no post or side effects`, async () => {
+      const { context, channelId, bob } = await aliceOf();
+      const made = await cloned.db
+        .transaction()
+        .execute(
+          async (transaction) => await createWebhook(transaction, clock, context, { name: 'ERP' }),
+        );
+      const { webhookId, secret } = partsOf(made.path);
+      let published = 0;
+      const outcome = await outcomeOf(
+        receivePost(
+          {
+            database: cloned.db,
+            clock,
+            log: aRecordingLogger().log,
+            bus: {
+              ...NOBODY_LISTENS,
+              publish: () => {
+                published++;
+                return Promise.resolve();
+              },
+            },
+            mayPost: async () => {
+              if (closing === 'channel')
+                await cloned.db.transaction().execute(async (transaction) => {
+                  await archiveChannel(transaction, clock, context);
+                });
+              else
+                await cloned.db
+                  .updateTable('workspaces')
+                  .set({ deleted_at: clock.now() })
+                  .where('id', '=', context.workspaceId)
+                  .execute();
+              return true;
+            },
+          },
+          { webhookId, secret, text: 'Order confirmed' },
+        ),
+      );
+      expect(outcome).toBe('INCOMING_WEBHOOK_NOT_FOUND');
+      expect(
+        await cloned.db
+          .selectFrom('messages')
+          .select('id')
+          .where('channel_id', '=', channelId)
+          .execute(),
+      ).toEqual([]);
+      expect(
+        (
+          await cloned.db
+            .selectFrom('incoming_webhooks')
+            .select('last_used_at')
+            .where('id', '=', webhookId)
+            .executeTakeFirstOrThrow()
+        ).last_used_at,
+      ).toBeNull();
+      expect((await counters(cloned.db, { channelId }, bob)).unread).toBe(0);
+      expect(published).toBe(0);
+    });
+  }
+  for (const closing of ['channel', 'workspace'] as const) {
+    test(`a post admitted first holds a later ${closing} closure until commit`, async () => {
+      const { context, channelId } = await aliceOf();
+      const made = await cloned.db
+        .transaction()
+        .execute(
+          async (transaction) => await createWebhook(transaction, clock, context, { name: 'ERP' }),
+        );
+      const { webhookId, secret } = partsOf(made.path);
+      const written = Promise.withResolvers<undefined>();
+      const commit = Promise.withResolvers<undefined>();
+      const first = outcomeOf(
+        cloned.db.transaction().execute(async (transaction) => {
+          await receivePost(
+            {
+              database: transaction,
+              clock,
+              bus: NOBODY_LISTENS,
+              log: aRecordingLogger().log,
+              mayPost: () => Promise.resolve(true),
+            },
+            { webhookId, secret, text: 'Accepted before closure' },
+          );
+          written.resolve(undefined);
+          await commit.promise;
+        }),
+      );
+      await written.promise;
+      const closed = outcomeOf(
+        cloned.db.transaction().execute(async (transaction) => {
+          if (closing === 'channel') await archiveChannel(transaction, clock, context);
+          else
+            await transaction
+              .updateTable('workspaces')
+              .set({ deleted_at: clock.now() })
+              .where('id', '=', context.workspaceId)
+              .execute();
+        }),
+      );
+      const waited = await waitingOnALock();
+      commit.resolve(undefined);
+      expect({ waited, outcomes: [await first, await closed] }).toEqual({
+        waited: true,
+        outcomes: ['done', 'done'],
+      });
+      expect(
+        await cloned.db
+          .selectFrom('messages')
+          .select('id')
+          .where('channel_id', '=', channelId)
+          .execute(),
+      ).toHaveLength(1);
+    });
+  }
+
+  test('the message clock is read after a channel lock wait', async () => {
+    const { context, channelId } = await aliceOf();
+    const made = await cloned.db
+      .transaction()
+      .execute(
+        async (transaction) => await createWebhook(transaction, clock, context, { name: 'ERP' }),
+      );
+    const held = Promise.withResolvers<undefined>();
+    const unlock = Promise.withResolvers<undefined>();
+    const locking = cloned.db.transaction().execute(async (transaction) => {
+      await transaction
+        .selectFrom('channels')
+        .select('id')
+        .where('id', '=', channelId)
+        .forNoKeyUpdate()
+        .execute();
+      held.resolve(undefined);
+      await unlock.promise;
+    });
+    await held.promise;
+    let now = clock.now();
+    const posted = receivePost(
+      {
+        database: cloned.db,
+        clock: { now: () => now },
+        bus: NOBODY_LISTENS,
+        log: aRecordingLogger().log,
+        mayPost: () => Promise.resolve(true),
+      },
+      { ...partsOf(made.path), text: 'Current message time' },
+    );
+    const waited = await waitingOnALock();
+    now = new Date(now.getTime() + 60_000);
+    unlock.resolve(undefined);
+    await locking;
+    const id = await posted;
+    expect(waited).toBe(true);
+    expect(
+      (
+        await cloned.db
+          .selectFrom('messages')
+          .select('created_at')
+          .where('id', '=', id)
+          .executeTakeFirstOrThrow()
+      ).created_at,
+    ).toEqual(now);
+  });
+  test('a normal human send and a webhook both finish when they overlap on counters', async () => {
+    const { context, channelId, bob } = await aliceOf();
+    const made = await cloned.db
+      .transaction()
+      .execute(
+        async (transaction) => await createWebhook(transaction, clock, context, { name: 'ERP' }),
+      );
+    const waitingFor = async (name: string): Promise<boolean> => {
+      for (let look = 0; look < 500; look++) {
+        const { rows } = await sql<{
+          present: boolean;
+        }>`select exists(select 1 from pg_stat_activity
+          where datname=current_database() and application_name=${name} and wait_event_type='Lock') as present`.execute(
+          cloned.db,
+        );
+        if (rows[0]?.present === true) return true;
+      }
+      return false;
+    };
+    const locked = Promise.withResolvers<undefined>();
+    const unlock = Promise.withResolvers<undefined>();
+    await sql`create function pause_human_counter() returns trigger language plpgsql as
+      ${sql.raw(`$$ begin if new.user_id='${bob}'::uuid then perform pg_advisory_xact_lock(723302819); end if; return new; end $$`)}`.execute(
+      cloned.db,
+    );
+    await sql`create trigger pause_human_counter after update on channel_members for each row execute function pause_human_counter()`.execute(
+      cloned.db,
+    );
+    try {
+      const barrier = cloned.db.transaction().execute(async (transaction) => {
+        await sql`select pg_advisory_xact_lock(723302819)`.execute(transaction);
+        locked.resolve(undefined);
+        await unlock.promise;
+      });
+      await locked.promise;
+      const human = outcomeOf(
+        cloned.db.transaction().execute(async (transaction) => {
+          await sql`select set_config('application_name','webhook-human',true)`.execute(
+            transaction,
+          );
+          await sendMessage(transaction, clock, context, {
+            id: messageId(clock.now()),
+            content: 'Human order note',
+          });
+        }),
+      );
+      const humanWaited = await waitingFor('webhook-human');
+      const bot = outcomeOf(
+        cloned.db.transaction().execute(async (transaction) => {
+          await sql`select set_config('application_name','webhook-bot',true)`.execute(transaction);
+          await receivePost(
+            {
+              database: transaction,
+              clock,
+              bus: NOBODY_LISTENS,
+              log: aRecordingLogger().log,
+              mayPost: () => Promise.resolve(true),
+            },
+            { ...partsOf(made.path), text: 'ERP order note' },
+          );
+        }),
+      );
+      const botWaited = await waitingFor('webhook-bot');
+      unlock.resolve(undefined);
+      await barrier;
+      const outcomes = [await human, await bot];
+      expect({ humanWaited, botWaited, outcomes }).toEqual({
+        humanWaited: true,
+        botWaited: true,
+        outcomes: ['done', 'done'],
+      });
+      expect(
+        await cloned.db
+          .selectFrom('messages')
+          .select('id')
+          .where('channel_id', '=', channelId)
+          .execute(),
+      ).toHaveLength(2);
+      expect((await counters(cloned.db, { channelId }, bob)).unread).toBe(2);
+    } finally {
+      unlock.resolve(undefined);
+      await sql`drop trigger pause_human_counter on channel_members`.execute(cloned.db);
+      await sql`drop function pause_human_counter()`.execute(cloned.db);
+    }
   });
 });

@@ -1463,10 +1463,9 @@ export const en = {
 
   // ── A channel's incoming webhooks (D-245) ───────────────────────────────
   'hooks.title': 'Incoming webhooks',
-  'hooks.empty':
-    'No incoming webhook. Make one, and a CI job or a monitor can post a message here with its address.',
+  'hooks.empty': 'No incoming webhook. Connect ERP, n8n or another system to post here.',
   'hooks.name': 'Posts as',
-  'hooks.nameHint': 'What its messages say they are from, such as CI or Alerts.',
+  'hooks.nameHint': 'What its messages say they are from, such as ERP, Sales or Alerts.',
   'hooks.nameRequired': 'Give the webhook a name.',
   'hooks.nameInvalid': 'Use a shorter name, of letters people can see.',
   'hooks.make': 'Make webhook',
@@ -1483,10 +1482,21 @@ export const en = {
   'hooks.setup.title': 'The address of {name}',
   'hooks.setup.steps':
     'Post JSON to it with the content type application/json, such as {example}. The text is markdown.',
-  'hooks.setup.example': 'Deploy finished',
+  'hooks.setup.example': 'Order status updated',
   'hooks.setup.copy': 'Copy the address',
   'hooks.setup.once':
-    'The address holds its secret and is shown only now. Lost, it means revoking the webhook and making another.',
+    'Copy this secret address now. You cannot view it again; revoke and recreate it if lost.',
+  'hooks.workspace.title': 'Messages from other systems',
+  'hooks.workspace.description':
+    'Post ERP, n8n or CRM updates to a channel. These messages do not send push notifications.',
+  'hooks.workspace.channel': 'Channel',
+  'hooks.workspace.choose': 'Choose a channel',
+  'hooks.workspace.noChannels': 'No channels available. Create one from the sidebar.',
+  'hooks.setup.copyExample': 'Copy JSON example',
+  'hooks.setup.test': 'Send test message',
+  'hooks.setup.testText': 'Purlay webhook connection test',
+  'hooks.setup.testAccepted': 'Test message accepted by the channel.',
+  'hooks.setup.testUnconfirmed': 'Delivery unconfirmed. Check the channel before sending again.',
   'hooks.setup.done': 'Done',
 
   // ── A message's earlier versions (D-135) ────────────────────────────────

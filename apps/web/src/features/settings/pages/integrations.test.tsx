@@ -6,14 +6,20 @@
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { BoundFunctions, queries } from '@testing-library/react';
-import type { GitHubIntegration, UserRole } from '@purlay/types';
+import type {
+  Channel,
+  CreatedIncomingWebhook,
+  IncomingWebhookAnswer,
+  GitHubIntegration,
+  UserRole,
+} from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import { ApiError, type ApiErrorCode } from '../../../data/errors';
 import type { Api } from '../../../data/api';
 import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
-import { IDS, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
+import { IDS, WHEN, aSession, aSignedInApi, aChannel } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { person } from '../../../testing/user';
 import { Toaster } from '../../../ui/toast';
@@ -367,5 +373,171 @@ describe('the GitHub connection', () => {
   test('passes the accessibility audit', async () => {
     const view = await openPage({ githubIntegration: () => Promise.resolve(CONNECTED) });
     await expectNoAxeViolations(view.getByRole('main'));
+  });
+});
+
+describe('incoming messages from business systems', () => {
+  const created: CreatedIncomingWebhook = {
+    webhook: {
+      id: '0199155c-6200-7b7f-8c11-000000000a01',
+      channelId: IDS.api,
+      name: 'ERP',
+      createdBy: null,
+      createdAt: WHEN,
+      lastUsedAt: null,
+    },
+    path: '/api/webhooks/incoming/0199155c-6200-7b7f-8c11-000000000a01/' + 'b'.repeat(64),
+  };
+  const receipt: IncomingWebhookAnswer = { messageId: '0199155c-6200-7b7f-8c11-000000000a03' };
+  const targets = (): Promise<Channel[]> =>
+    Promise.resolve([
+      aChannel(IDS.api, 'orders'),
+      aChannel(IDS.deploys, 'team', { type: 'private' }),
+      aChannel('0199155c-6200-7b7f-8c11-000000000a04', null, { type: 'direct_message' }),
+    ]);
+  const choose = async (view: View): Promise<void> => {
+    await person().selectOptions(view.getByRole('combobox', { name: 'Channel' }), IDS.api);
+    await settle();
+  };
+  const make = async (view: View): Promise<void> => {
+    await choose(view);
+    await person().type(view.getByRole('textbox', { name: 'Posts as' }), 'ERP');
+    await person().click(view.getByRole('button', { name: 'Make webhook' }));
+    await settle();
+  };
+
+  test('an admin selects a named channel, creates its address and sends one real test', async () => {
+    let made = false;
+    let posted = false;
+    const sent: { path: string; text: string }[] = [];
+    const view = await openPage(
+      {
+        channels: targets,
+        githubIntegration: () =>
+          Promise.reject(new ApiError(503, 'GITHUB_UNAVAILABLE', 'Unavailable')),
+        incomingWebhooks: () =>
+          Promise.resolve(made ? [{ ...created.webhook, lastUsedAt: posted ? WHEN : null }] : []),
+        createIncomingWebhook: (_channelId, input) => {
+          expect(input.name).toBe('ERP');
+          made = true;
+          return Promise.resolve(created);
+        },
+        postIncomingWebhook: (path, text) => {
+          sent.push({ path, text });
+          posted = true;
+          return Promise.resolve(receipt);
+        },
+      },
+      'admin',
+    );
+    const picker = view.getByRole('combobox', { name: 'Channel' });
+    expect(within(picker).getAllByRole('option')).toHaveLength(3);
+    await make(view);
+    expect(view.container.querySelector('[data-hook-address]')?.textContent).toContain(
+      created.path,
+    );
+    await person().click(view.getByRole('button', { name: 'Send test message' }));
+    await settle();
+    expect(sent).toEqual([{ path: created.path, text: 'Purlay webhook connection test' }]);
+    expect(
+      within(view.getByRole('region', { name: 'The address of ERP' })).getByRole('status')
+        .textContent,
+    ).toContain('Test message accepted by the channel');
+    await person().click(view.getByRole('button', { name: 'Done' }));
+    expect(view.container.querySelector('[data-hook-address]')).toBeNull();
+    expect(view.getByText(/Last posted/)).toBeDefined();
+    await expectNoAxeViolations(view.container);
+  });
+
+  test('an unanswered test is not retried or said to have arrived, and double clicks send once', async () => {
+    const pending = Promise.withResolvers<IncomingWebhookAnswer>();
+    let calls = 0;
+    const view = await openPage({
+      channels: targets,
+      githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+      incomingWebhooks: () => Promise.resolve([]),
+      createIncomingWebhook: () => Promise.resolve(created),
+      postIncomingWebhook: () => {
+        calls++;
+        return pending.promise;
+      },
+    });
+    await make(view);
+    const send = view.getByRole('button', { name: 'Send test message' });
+    await person().click(send);
+    await person().click(send);
+    expect(calls).toBe(1);
+    pending.reject(new ApiError(0, 'NETWORK', 'No answer'));
+    await settle();
+    expect(view.getByRole('alert').textContent).toContain('Check the channel before sending again');
+    expect(view.queryByText('Test message accepted by the channel')).toBeNull();
+    expect(calls).toBe(1);
+  });
+
+  test('switching channels discards a late secret from the old channel', async () => {
+    const pending = Promise.withResolvers<CreatedIncomingWebhook>();
+    const view = await openPage({
+      channels: targets,
+      githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+      incomingWebhooks: () => Promise.resolve([]),
+      createIncomingWebhook: () => pending.promise,
+    });
+    await make(view);
+    await person().selectOptions(view.getByRole('combobox', { name: 'Channel' }), IDS.deploys);
+    pending.resolve(created);
+    await settle();
+    expect(view.container.querySelector('[data-hook-address]')).toBeNull();
+    expect(view.getByRole('button', { name: 'Make webhook' })).toBeDefined();
+  });
+
+  test('the target list says when it is loading, then resolves without offering direct messages', async () => {
+    const pending = Promise.withResolvers<Channel[]>();
+    const view = await openPage({
+      channels: () => pending.promise,
+      githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+    });
+    const card = within(view.getByRole('region', { name: 'Messages from other systems' }));
+    expect(card.getByRole('status')).toBeDefined();
+    pending.resolve([]);
+    await settle();
+    expect(card.getByText(/No channels available/)).toBeDefined();
+    expect(card.getByRole('combobox')).toHaveProperty('disabled', true);
+  });
+
+  test('a failed target list can be retried without reconnecting GitHub', async () => {
+    let reads = 0;
+    const view = await openPage({
+      channels: () =>
+        ++reads === 1 ? Promise.reject(new ApiError(0, 'NETWORK', 'offline')) : targets(),
+      githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+    });
+    const card = within(view.getByRole('region', { name: 'Messages from other systems' }));
+    expect(card.getByRole('alert')).toBeDefined();
+    await person().click(card.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(card.getByRole('combobox')).toBeDefined();
+    expect(card.queryByRole('alert')).toBeNull();
+  });
+
+  test('a target removed by a refreshed list clears its one-time address', async () => {
+    const view = await openPage({
+      channels: targets,
+      githubIntegration: () => Promise.resolve(NOT_CONNECTED),
+      incomingWebhooks: () => Promise.resolve([]),
+      createIncomingWebhook: () => Promise.resolve(created),
+    });
+    await make(view);
+    expect(view.container.querySelector('[data-hook-address]')).not.toBeNull();
+    act(() => {
+      view.world.client.setQueryData(keys.channels(IDS.workspace), []);
+    });
+    await settle();
+    expect(view.container.querySelector('[data-hook-address]') === null).toBe(true);
+    expect(view.queryByRole('button', { name: 'Send test message' })).toBeNull();
+  });
+
+  test('members are not offered workspace webhook configuration', async () => {
+    const view = await render('/w/acme/settings/integrations', {}, 'member');
+    expect(view.queryByRole('combobox', { name: 'Channel' })).toBeNull();
   });
 });

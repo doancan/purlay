@@ -32,14 +32,10 @@ const CORE_SECTIONS = [
 
 type ModulePage = ModuleManifestOf['settings'][number];
 
-export interface SettingsSection {
-  readonly id: (typeof CORE_SECTIONS)[number]['id'] | ModulePage['id'];
-  readonly group: SettingsGroup;
-  readonly glyph: GlyphName;
-  readonly for: SettingsAudience;
-  /** The module whose page it is (D-250); absent is the core's. A server that does not run it has no such page. */
-  readonly module?: ModuleId;
-}
+export type CoreSettingsSectionId = (typeof CORE_SECTIONS)[number]['id'];
+export type SettingsSection =
+  | ((typeof CORE_SECTIONS)[number] & { readonly module?: never; readonly load?: never })
+  | (ModulePage & { readonly module: ModuleId });
 
 export type SettingsSectionId = SettingsSection['id'];
 

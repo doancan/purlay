@@ -11,7 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Channel, CreatedIncomingWebhook, IncomingWebhook } from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
-import { isApiError } from '../../../data/errors';
+import { isApiError, isUnconfirmedMutation } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
@@ -38,6 +38,11 @@ const Setup = ({
   const { t } = useI18n();
   const { show } = useToast();
   const ports = useContentPorts();
+  const api = useApi();
+  const client = useQueryClient();
+  const describe = useDescribeFailure();
+  const [sending, setSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; words: string } | null>(null);
   const titleId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   // The person's attention goes where the secret is, the one time it can be read.
@@ -45,8 +50,8 @@ const Setup = ({
     heading.current?.focus();
   }, []);
   const address = addressOf(created);
-  const copy = (): void => {
-    ports.copy(address).then(
+  const copy = (text: string): void => {
+    ports.copy(text).then(
       () => {
         show({ message: t('common.copied') });
       },
@@ -54,6 +59,25 @@ const Setup = ({
         show({ message: t('failure.copy') });
       },
     );
+  };
+  const test = async (): Promise<void> => {
+    setSending(true);
+    setTestResult(null);
+    try {
+      await api.postIncomingWebhook(created.path, t('hooks.setup.testText'));
+      setTestResult({ ok: true, words: t('hooks.setup.testAccepted') });
+      // The receipt is authoritative even if this status refresh fails; the query owns that error.
+      void client.invalidateQueries({ queryKey: keys.incomingWebhooks(created.webhook.channelId) });
+    } catch (failure) {
+      setTestResult({
+        ok: false,
+        words: isUnconfirmedMutation(failure)
+          ? t('hooks.setup.testUnconfirmed')
+          : describe(failure),
+      });
+    } finally {
+      setSending(false);
+    }
   };
   return (
     <section
@@ -75,12 +99,42 @@ const Setup = ({
         >
           {address}
         </span>
-        <Button variant="ghost" aria-label={t('hooks.setup.copy')} onClick={copy}>
+        <Button
+          variant="ghost"
+          aria-label={t('hooks.setup.copy')}
+          onClick={() => {
+            copy(address);
+          }}
+        >
           {t('common.copy')}
         </Button>
       </div>
       <p className="text-label text-warning-text">{t('hooks.setup.once')}</p>
-      <div className="flex justify-end">
+      {testResult !== null && (
+        <p
+          role={testResult.ok ? 'status' : 'alert'}
+          className={testResult.ok ? 'text-label text-success-text' : 'text-label text-danger-text'}
+        >
+          {testResult.words}
+        </p>
+      )}
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          variant="ghost"
+          onClick={() => {
+            copy(JSON.stringify({ text: t('hooks.setup.example') }));
+          }}
+        >
+          {t('hooks.setup.copyExample')}
+        </Button>
+        <Button
+          busy={sending}
+          onClick={() => {
+            void test();
+          }}
+        >
+          {t('hooks.setup.test')}
+        </Button>
         <Button onClick={onDone}>{t('hooks.setup.done')}</Button>
       </div>
     </section>
@@ -172,7 +226,7 @@ const Hook = ({
   );
 };
 
-export const IncomingWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
+const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
@@ -296,3 +350,8 @@ export const IncomingWebhooks = ({ channel }: { readonly channel: Channel }): Re
     </section>
   );
 };
+
+/** A new target must never inherit a previous channel's one-time credential or pending result. */
+export const IncomingWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
+  <ChannelWebhooks key={channel.id} channel={channel} />
+);

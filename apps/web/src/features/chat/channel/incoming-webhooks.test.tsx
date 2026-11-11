@@ -126,11 +126,14 @@ describe('a channel’s incoming webhooks, as an owner sees them', () => {
     const setup = within(hooks).getByRole('region', { name: 'The address of CI' });
     const address = `${window.location.origin}/api/webhooks/incoming/${HOOK_ID}/${SECRET}`;
     expect(within(setup).getByText(address)).toBeDefined();
-    expect(within(setup).getByText(/\{"text":"Deploy finished"\}/)).toBeDefined();
+    expect(within(setup).getByText(/\{"text":"Order status updated"\}/)).toBeDefined();
     expectFocusOn(within(setup).getByRole('heading'));
     await person().click(within(setup).getByRole('button', { name: 'Copy the address' }));
     await settle();
     expect(copied).toEqual([address]);
+    await person().click(within(setup).getByRole('button', { name: 'Copy JSON example' }));
+    await settle();
+    expect(copied).toEqual([address, JSON.stringify({ text: 'Order status updated' })]);
     await expectNoAxeViolations(dialog);
 
     await person().click(within(setup).getByRole('button', { name: 'Done' }));

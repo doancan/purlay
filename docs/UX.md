@@ -340,6 +340,14 @@ their messages stay and they can join again, and for a private one that they sto
 yes the row goes at once; a refusal puts it back and is said under the list. The person removed, if
 they are reading the channel, is told *You were removed from this channel* in its place (a private
 one) or sees it as one not joined (a public one), and their sidebar loses it at once.
+Workspace **Settings → Integrations** also offers incoming messages from ERP, n8n or other systems
+(D-303). An owner/admin chooses a readable named channel; loading, an unavailable channel list and an
+empty list are said beside the choice, with Retry where it can help. The channel's existing list/create/
+revoke section then opens. Its one-time address and JSON example can be copied, and **Send test message**
+posts through that exact address. Success means the chat message was accepted, never an OS push; an
+uncertain result asks the person to check the channel before sending again. A channel or workspace
+change clears the previous address and pending UI result. GitHub setup is independent of this path.
+
 **Integrations**, for an owner or an admin only — nobody else has the tab: the **GitHub repositories**
 the channel hears from (D-134) — each with what it posts, its last delivery and why it last failed,
 **Disconnect** asking in place, and a form to **Connect** one, which answers with the payload URL, the

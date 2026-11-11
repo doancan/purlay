@@ -399,6 +399,7 @@ describe('integration: a post through an incoming webhook', () => {
         .execute();
       expect(await world.post('x')).toBe('INCOMING_WEBHOOK_NOT_FOUND');
       expect(await messagesIn(db, world.room.channelId)).toBe(0);
+      expect(world.charged).toEqual([]);
     });
   });
 
