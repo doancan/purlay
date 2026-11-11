@@ -3877,6 +3877,46 @@ describe('outgoing work belongs to the current account lifetime', () => {
     w.engine.stop();
   });
 
+  test('another tab claiming personal storage prevents late ACKs and deadlines from recreating old pending keys', () => {
+    const storage = memoryStorage();
+    const w = world({}, { storage });
+    w.engine.start();
+    w.open();
+    const first = w.engine.send({ channelId: CH, content: 'Previous account first pending' });
+    const second = w.engine.send({ channelId: CH, content: 'Previous account second pending' });
+    expect(storage.getItem(pendingKey(ME.id)) === null).toBe(false);
+    // Another tab can clear and claim localStorage before this tab's session receipt changes.
+    claimFor(storage, OTHER_ACTOR);
+    saveStored(storage, OTHER_ACTOR, [
+      {
+        id: C2,
+        channelId: CH2,
+        parentId: null,
+        content: 'Other account pending',
+        createdAt: new Date(T0).toISOString(),
+      },
+    ]);
+    expect(w.client.getQueryData<MeResponse>(keys.me)?.user.id).toBe(ME.id);
+    try {
+      w.deliver(ack(first));
+      expect(w.engine.store.getState().pending.find((entry) => entry.id === first)?.delivery).toBe(
+        'sent',
+      );
+      expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+      w.timers.advance(ACK_DEADLINE_MS);
+      expect(w.engine.store.getState().pending.find((entry) => entry.id === second)?.delivery).toBe(
+        'failed',
+      );
+      expect(storage.getItem(pendingKey(ME.id)) === null).toBe(true);
+      expect(storage.getItem(PERSON_KEY)).toBe(OTHER_ACTOR);
+      expect(loadStored(storage, OTHER_ACTOR).map((entry) => entry.content)).toEqual([
+        'Other account pending',
+      ]);
+    } finally {
+      w.engine.stop();
+    }
+  });
+
   test('an old deadline cannot resurrect cleared personal pending keys after account A to B to A', async () => {
     const storage = memoryStorage();
     const w = world({}, { storage });

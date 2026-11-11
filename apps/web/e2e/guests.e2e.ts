@@ -221,19 +221,23 @@ test('an administrator edits a real guest without learning private scope; live r
   await row.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(row.getByRole('button', { name: /^Remove guest / })).toBeFocused();
   await row.getByRole('button', { name: /^Remove guest / }).click();
-  const lostMembership = guestPage.waitForResponse(async (response) => {
-    if (new URL(response.url()).pathname !== '/api/me' || response.status() !== 200) return false;
-    const me = (await response.json()) as MeResponse;
-    return !me.memberships.some((membership) => membership.workspace.id === workspace.id);
-  });
   await row.getByRole('button', { name: 'Remove guest', exact: true }).click();
   await expect(main.getByRole('status')).toHaveText('Guest removed.');
   await expect(main.getByRole('textbox', { name: 'Find a guest' })).toBeFocused();
-  await lostMembership;
+  // A superseded in-page /me read may be cancelled while the session changes. Check the
+  // committed membership separately, then the live screen and home without reloading it.
+  const removedMe = await guest.api.get<MeResponse>('/api/me');
+  expect(removedMe.memberships.some((membership) => membership.workspace.id === workspace.id)).toBe(
+    false,
+  );
   await expect(guestPage.getByRole('heading', { name: 'Nothing here', exact: true })).toBeVisible();
   expect(
     (await guestPage.request.get(`/api/channels/${privateChannel.id}/messages`)).status(),
   ).toBe(404);
+  await guestPage.getByRole('link', { name: 'Go to your channels', exact: true }).click();
+  await expect(
+    guestPage.getByRole('heading', { name: 'You are not in a workspace yet', exact: true }),
+  ).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

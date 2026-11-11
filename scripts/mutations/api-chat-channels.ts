@@ -1158,7 +1158,10 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     find: ".deleteFrom('channel_departures')",
     replace:
       ".deleteFrom('channel_departures')\n    .where('channel_id', '=', crypto.randomUUID())",
-    tests: ['apps/api/src/realtime/departed-subscribe.integration.test.ts'],
+    tests: [
+      'apps/api/src/realtime/departed-subscribe.integration.test.ts',
+      'apps/api/src/modules/workspaces/members.integration.test.ts',
+    ],
   },
   {
     id: 'level-recount-forgets-channel-messages',
