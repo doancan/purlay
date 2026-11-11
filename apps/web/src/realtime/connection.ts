@@ -166,7 +166,8 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   const cursors = createCursors();
   const watched = new Set<string>();
   // Object identity separates a new loss from a prior probe of the same channel.
-  const explanations = new Map<string, object>();
+  const lifetimes = new Map<string, object>();
+  const explanations = new Set<string>();
   const conclusions = new Map<
     string,
     { readonly owners: ReadonlyMap<string, object>; readonly barrier: string }
@@ -226,6 +227,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     clearTimers();
     socket?.close();
     socket = null;
+    lifetimes.clear();
     explanations.clear();
     conclusions.clear();
     retiring.clear();
@@ -256,10 +258,16 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   let inFlight: {
     readonly id: string;
     readonly channelIds: readonly string[];
-    readonly diagnostic: ReadonlyMap<string, object> | null;
+    readonly diagnostic: boolean;
+    readonly owners: ReadonlyMap<string, object>;
   } | null = null;
   let limitedTimes = 0;
   let cancelResend: (() => void) | null = null;
+
+  const currentMembers = (request: NonNullable<typeof inFlight>): string[] =>
+    request.channelIds.filter(
+      (id) => watched.has(id) && lifetimes.get(id) === request.owners.get(id),
+    );
 
   /** Stops watching these, and returns the ones that were watched, each once. */
   const letGo = (channelIds: readonly string[]): string[] => {
@@ -313,14 +321,12 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       return;
     }
     const id = options.newId();
-    const owners = diagnostic ? new Map<string, object>() : null;
-    if (owners !== null) {
-      for (const channelId of live) {
-        const owner = explanations.get(channelId);
-        if (owner !== undefined) owners.set(channelId, owner);
-      }
+    const owners = new Map<string, object>();
+    for (const channelId of live) {
+      const owner = lifetimes.get(channelId);
+      if (owner !== undefined) owners.set(channelId, owner);
     }
-    inFlight = { id, channelIds: live, diagnostic: owners };
+    inFlight = { id, channelIds: live, diagnostic, owners };
     write({
       id,
       op: 'SUBSCRIBE',
@@ -347,11 +353,11 @@ export const createConnection = (options: ConnectionOptions): Connection => {
   const answered = (frame: ServerFrame): void => {
     if (inFlight === null || frame.refId !== inFlight.id) return;
     if (frame.event === 'ACK' && 'channels' in frame.data) {
-      const { channelIds, diagnostic } = inFlight;
+      const { channelIds, diagnostic, owners } = inFlight;
       inFlight = null;
-      if (diagnostic !== null) {
-        for (const [id, owner] of diagnostic) {
-          if (explanations.get(id) === owner) explanations.delete(id);
+      if (diagnostic) {
+        for (const [id, owner] of owners) {
+          if (lifetimes.get(id) === owner) explanations.delete(id);
         }
         const released = channelIds.filter((id) => !watched.has(id));
         for (const id of released) retiring.add(id);
@@ -365,28 +371,38 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         cancelResend = options.schedule(
           () => {
             cancelResend = null;
-            sendChunk(again, diagnostic !== null);
+            sendChunk(again, diagnostic);
           },
           reconnectDelay(limitedTimes, options.random),
         );
         limitedTimes += 1;
       } else {
         // Refused for a reason waiting will not change: say so, and go on with the next chunk.
-        const { channelIds, id, diagnostic } = inFlight;
+        const request = inFlight;
+        const { channelIds, id, diagnostic, owners } = request;
+        const current = currentMembers(request);
+        const missing = frame.data.code === 'CHANNEL_NOT_FOUND';
         inFlight = null;
-        if (diagnostic !== null) {
-          if (frame.data.code === 'CHANNEL_NOT_FOUND') {
-            // ERROR is followed by a separate reason. A later PONG proves the server's FIFO reply
-            // finished; a disconnect before it retains this intent for the next socket.
-            const barrier = options.newId();
-            conclusions.set(id, { owners: diagnostic, barrier });
-            write({ id: barrier, op: 'PING', payload: {} });
-          } else {
-            for (const [channelId, owner] of diagnostic) {
-              if (explanations.get(channelId) === owner) explanations.delete(channelId);
-            }
+        if (!diagnostic) {
+          if (missing && current.length < channelIds.length) {
+            // A batch containing an obsolete watch says nothing about the remaining members.
+            for (const channelId of current) if (!queue.includes(channelId)) queue.push(channelId);
+          } else if (current.length > 0) options.onSubscribeRefused?.(current, frame.data.code, id);
+        }
+        if (missing) {
+          for (const [channelId, owner] of owners) {
+            if (lifetimes.get(channelId) === owner && !watched.has(channelId))
+              explanations.add(channelId);
           }
-        } else options.onSubscribeRefused?.(channelIds, frame.data.code, id);
+          // ERROR and reason are separate frames; a later FIFO reply completes their handoff.
+          const barrier = options.newId();
+          conclusions.set(id, { owners, barrier });
+          write({ id: barrier, op: 'PING', payload: {} });
+        } else if (diagnostic) {
+          for (const [channelId, owner] of owners) {
+            if (lifetimes.get(channelId) === owner) explanations.delete(channelId);
+          }
+        }
         pump();
       }
     }
@@ -403,6 +419,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     failures = 0;
     neverOpened = 0;
     releaseCheck(true);
+    lifetimes.clear();
     explanations.clear();
     conclusions.clear();
     retiring.clear();
@@ -517,7 +534,11 @@ export const createConnection = (options: ConnectionOptions): Connection => {
         }, STABLE_AFTER_MS);
         retiring.clear();
         conclusions.clear();
-        queue = [...watched, ...explanations.keys()];
+        for (const id of watched) if (!lifetimes.has(id)) lifetimes.set(id, {});
+        for (const id of lifetimes.keys()) {
+          if (!watched.has(id) && !explanations.has(id)) lifetimes.delete(id);
+        }
+        queue = [...watched, ...explanations];
         limitedTimes = 0;
         pump();
         ping();
@@ -543,7 +564,10 @@ export const createConnection = (options: ConnectionOptions): Connection => {
           for (const [requestId, conclusion] of conclusions) {
             if (conclusion.barrier !== frame.refId) continue;
             for (const [id, owner] of conclusion.owners) {
-              if (explanations.get(id) === owner) explanations.delete(id);
+              if (lifetimes.get(id) === owner) {
+                explanations.delete(id);
+                if (!watched.has(id) && !retiring.has(id)) lifetimes.delete(id);
+              }
             }
             conclusions.delete(requestId);
             completed = true;
@@ -556,28 +580,44 @@ export const createConnection = (options: ConnectionOptions): Connection => {
           if (conclusion !== undefined) {
             const ids = frame.data.channelIds.filter((id) => {
               const owner = conclusion.owners.get(id);
-              return owner !== undefined && explanations.get(id) === owner;
+              return owner !== undefined && lifetimes.get(id) === owner;
             });
             if (ids.length === 0) return;
             for (const id of ids) explanations.delete(id);
             frame = { ...frame, data: { ...frame.data, channelIds: ids } };
           }
         }
-        const diagnostic =
-          inFlight !== null &&
-          inFlight.diagnostic !== null &&
-          frame.refId === inFlight.id &&
-          (frame.event === 'ERROR' || (frame.event === 'ACK' && 'channels' in frame.data));
-        if (!diagnostic) noteReplay(frame);
+        const reply =
+          frame.event === 'ERROR' || (frame.event === 'ACK' && 'channels' in frame.data);
+        const request = reply && inFlight?.id === frame.refId ? inFlight : null;
+        const current = request === null ? [] : currentMembers(request);
+        const diagnostic = request?.diagnostic === true;
+        const obsolete =
+          request !== null &&
+          !diagnostic &&
+          (current.length === 0 ||
+            (frame.event === 'ERROR' &&
+              frame.data.code === 'CHANNEL_NOT_FOUND' &&
+              current.length < request.channelIds.length));
+        if (request !== null && !diagnostic && frame.event === 'ACK' && 'channels' in frame.data) {
+          frame = {
+            ...frame,
+            data: { channels: frame.data.channels.filter((c) => current.includes(c.channelId)) },
+          };
+        }
+        if (!diagnostic && !obsolete) noteReplay(frame);
         answered(frame);
-        if (diagnostic) return;
+        if (diagnostic || obsolete) return;
         if (
           'channelId' in frame.data &&
           (explanations.has(frame.data.channelId) || retiring.has(frame.data.channelId))
         )
           return;
         if (frame.event === 'ACK' && 'channelIds' in frame.data) {
-          for (const id of frame.data.channelIds) retiring.delete(id);
+          for (const id of frame.data.channelIds) {
+            retiring.delete(id);
+            if (!watched.has(id) && !explanations.has(id)) lifetimes.delete(id);
+          }
         }
         if (frame.event === 'MESSAGE_CREATED') advance(frame.data.channelId, frame.data.id);
         options.onFrame(frame);
@@ -614,6 +654,7 @@ export const createConnection = (options: ConnectionOptions): Connection => {
       if (watched.has(channelId)) return;
       explanations.delete(channelId);
       retiring.delete(channelId);
+      lifetimes.set(channelId, {});
       watched.add(channelId);
       if (!queue.includes(channelId)) queue.push(channelId);
       pump();
@@ -621,12 +662,14 @@ export const createConnection = (options: ConnectionOptions): Connection => {
     explainDepartures: (channelIds): void => {
       for (const id of channelIds) {
         if (watched.has(id) || explanations.has(id) || retiring.has(id)) continue;
-        explanations.set(id, {});
+        lifetimes.set(id, {});
+        explanations.add(id);
         if (!queue.includes(id)) queue.push(id);
       }
       pump();
     },
     unwatch: (channelIds): void => {
+      for (const id of channelIds) lifetimes.delete(id);
       unsubscribe(letGo(channelIds));
     },
     forget: (channelIds): void => {

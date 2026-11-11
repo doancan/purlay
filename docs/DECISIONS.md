@@ -15344,10 +15344,12 @@ is unknown, an isolated diagnostic subscription requests the existing departure 
 cursor. It never shares a subscription chunk with current memberships. Ordinary chunk bounds and transient
 backoff apply; a refused diagnostic cannot refuse other channels or degrade their content stream.
 
-Each channel loss owns an object identity captured by its request. Completion can retire only that intent:
+Every normal watch or departure intent owns an object identity captured by its request. Completion can retire only that intent:
 a membership returned and lost again has a new owner. Named departure replies carry their subscription's
 id in the existing optional `refId` envelope field. The client drops a correlated proof belonging to an old
 intent; legacy uncorrelated revocation remains conservative. Existing clients can ignore the correlation.
+A late normal-subscription reply is subject to the same ownership check. A refused batch containing
+an obsolete watch rechecks the remaining memberships without discarding their pending sends.
 No response restores content or sending authority.
 
 A not-found error is not the end of a diagnostic: its named reason is a separate frame. Keep the intent

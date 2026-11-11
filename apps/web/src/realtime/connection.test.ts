@@ -1906,3 +1906,113 @@ test('3,500 departure probes settle under a tighter frame budget, including refu
   expect(h.subscribes(h.last())).toHaveLength(0);
   h.connection.stop();
 });
+
+describe('normal subscription completion ownership', () => {
+  test('an old normal proof cannot revoke a later loss intent', () => {
+    const h = harness();
+    const id = channel(1);
+    h.connection.watch(id);
+    h.connection.start();
+    h.last().handlers.opened();
+    const old = h.subscribes(h.last())[0];
+    if (old === undefined) throw new Error('No original subscription');
+    h.connection.unwatch([id]);
+    h.connection.explainDepartures([id]);
+    h.connection.watch(id);
+    h.connection.unwatch([id]);
+    h.connection.explainDepartures([id]);
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: old.id,
+        ts: T0,
+      }),
+    );
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [id], reason: 'left' },
+        refId: old.id,
+        ts: T0,
+      }),
+    );
+    expect(h.frames).toEqual([]);
+    expect(h.subscribes(h.last())).toHaveLength(2);
+    const next = h.subscribes(h.last())[1];
+    if (next === undefined) throw new Error('No new probe');
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ERROR',
+        data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+        refId: next.id,
+        ts: T0,
+      }),
+    );
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [id], reason: 'removed' },
+        refId: next.id,
+        ts: T0,
+      }),
+    );
+    expect(h.frames.map((f) => f.data)).toEqual([{ channelIds: [id], reason: 'removed' }]);
+    h.connection.stop();
+  });
+
+  test('a normal replay ACK after HTTP removal does not continue the retired membership', () => {
+    const h = harness();
+    const id = channel(1);
+    h.connection.watch(id);
+    h.connection.start();
+    h.last().handlers.opened();
+    const old = h.subscribes(h.last())[0];
+    if (old === undefined) throw new Error('No original subscription');
+    h.connection.unwatch([id]);
+    h.connection.explainDepartures([id]);
+    h.last().handlers.message(
+      JSON.stringify({
+        event: 'ACK',
+        data: { channels: [{ channelId: id, nextCursor: idAt(9) }] },
+        refId: old.id,
+        ts: T0,
+      }),
+    );
+    expect(h.frames).toEqual([]);
+    expect(h.connection.pendingContinuations().size).toBe(0);
+    h.connection.stop();
+  });
+});
+
+test('a partial obsolete ACK refreshes only the still-owned channel and creates no retired replay', () => {
+  const h = harness();
+  const gone = channel(1);
+  const kept = channel(2);
+  h.connection.watch(gone);
+  h.connection.watch(kept);
+  h.connection.start();
+  h.last().handlers.opened();
+  const old = h.subscribes(h.last())[0];
+  if (old === undefined) throw new Error('No original subscription');
+  h.connection.unwatch([gone]);
+  h.connection.explainDepartures([gone]);
+  h.last().handlers.message(
+    JSON.stringify({
+      event: 'ACK',
+      data: {
+        channels: [
+          { channelId: gone, nextCursor: idAt(9) },
+          { channelId: kept, nextCursor: null },
+        ],
+      },
+      refId: old.id,
+      ts: T0,
+    }),
+  );
+  expect(h.connection.pendingContinuations().size).toBe(0);
+  expect(h.frames.map((f) => f.data)).toEqual([
+    { channels: [{ channelId: kept, nextCursor: null }] },
+  ]);
+  h.connection.stop();
+});

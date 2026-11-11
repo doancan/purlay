@@ -801,7 +801,7 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'refusal-is-not-followed-by-the-notice-it-missed',
     why: 'a refused subscription says only "not found", so a channel archived while the socket was down shows no reason',
     file: 'apps/api/src/features/chat/frames.ts',
-    find: '...(await missedRevocations(context, channelIds))',
+    find: '...(await missedRevocations(context, channelIds, frame.id))',
     replace: '',
     tests: ['apps/api/src/realtime/departed-subscribe.integration.test.ts'],
   },

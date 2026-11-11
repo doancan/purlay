@@ -1797,6 +1797,110 @@ describe('Deep Work changed in another tab (#526)', () => {
 });
 
 describe('watching channels', () => {
+  test('an old normal refusal cannot discard sends after the channel membership was given back', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const old = w.sentOps('SUBSCRIBE')[0];
+    if (old === undefined) throw new Error('No original subscription');
+    w.engine.watch([]);
+    w.engine.watch([CH]);
+    const sent = w.engine.send({ channelId: CH, content: 'new membership' });
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'old loss' },
+      refId: old.id,
+      ts: T0,
+    });
+    w.deliver({
+      event: 'ACCESS_REVOKED',
+      data: { channelIds: [CH], reason: 'left' },
+      refId: old.id,
+      ts: T0,
+    });
+    expect(w.pending().map((p) => p.id)).toEqual([sent]);
+    expect(w.engine.store.getState().gone).toEqual({});
+    expect(w.engine.store.getState().degraded).toEqual({});
+    expect(w.sentOps('SUBSCRIBE')).toHaveLength(2);
+    w.engine.stop();
+  });
+
+  test('an obsolete member in a refused batch does not lose another current channel’s unsent message', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH), channel(CH2)]);
+    w.engine.watch([CH, CH2]);
+    w.engine.start();
+    w.open();
+    const original = w.sentOps('SUBSCRIBE')[0];
+    if (original === undefined) throw new Error('No original subscription');
+    const messageId = w.engine.send({ channelId: CH2, content: 'still allowed' });
+    w.client.setQueryData(keys.channels(WS), [channel(CH2)]);
+    w.engine.watch([CH2]);
+    w.engine.lose([CH]);
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+      refId: original.id,
+      ts: T0,
+    });
+    expect(w.pending().map((p) => p.id)).toEqual([messageId]);
+    expect(w.engine.store.getState().degraded).toEqual({});
+    const diagnostic = w.sentOps('SUBSCRIBE')[1];
+    if (diagnostic === undefined) throw new Error('No departure probe');
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+      refId: diagnostic.id,
+      ts: T0,
+    });
+    w.deliver({
+      event: 'ACCESS_REVOKED',
+      data: { channelIds: [CH], reason: 'archived' },
+      refId: diagnostic.id,
+      ts: T0,
+    });
+    const normal = w.sentOps('SUBSCRIBE')[2];
+    expect(normal?.payload['channels']).toEqual([{ channelId: CH2, afterMessageId: null }]);
+    expect(w.pending().map((p) => p.id)).toEqual([messageId]);
+    w.deliver(ack(messageId));
+    expect(w.pending()[0]?.delivery).toBe('sent');
+    w.engine.stop();
+  });
+
+  test('HTTP loss while the original subscription is in flight survives its error and the next disconnect', () => {
+    const w = world();
+    w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+    w.engine.watch([CH]);
+    w.engine.start();
+    w.open();
+    const original = w.sentOps('SUBSCRIBE')[0];
+    if (original === undefined) throw new Error('No original subscription');
+    w.client.setQueryData(keys.channels(WS), []);
+    w.engine.watch([]);
+    w.engine.lose([CH]);
+    w.deliver({
+      event: 'ERROR',
+      data: { code: 'CHANNEL_NOT_FOUND', message: 'gone' },
+      refId: original.id,
+      ts: T0,
+    });
+    w.engine.networkLost();
+    w.engine.networkBack();
+    w.timers.advance(1_000);
+    w.open();
+    expect(w.sockets).toHaveLength(2);
+    const current = w.sockets[1]?.sent
+      .map((text) => JSON.parse(text) as { op: string; payload: unknown })
+      .filter((f) => f.op === 'SUBSCRIBE');
+    expect(current?.map((f) => f.payload)).toEqual([
+      { channels: [{ channelId: CH, afterMessageId: null }] },
+    ]);
+    expect(w.engine.store.getState().degraded).toEqual({});
+    w.engine.stop();
+  });
+
   test('HTTP refresh before reconnect preserves the departure explanation without retaining an unsent message', () => {
     const w = world();
     w.client.setQueryData(keys.channels(WS), [channel(CH)]);
@@ -2670,6 +2774,12 @@ describe('a subscription the server refuses', () => {
     (code) => {
       const w = opened([CH, CH2]);
       refuse(w, code);
+      if (code === 'CHANNEL_NOT_FOUND') {
+        // The later FIFO reply proves the server completed its separate departure frames.
+        const barrier = w.sentOps('PING').at(-1);
+        if (barrier === undefined) throw new Error('No completion barrier');
+        w.deliver({ event: 'PONG', data: {}, refId: barrier.id, ts: T0 });
+      }
       expect(w.engine.store.getState().degraded).toEqual({});
       expect(w.client.getQueryState(keys.channels(WS))?.isInvalidated).toBe(true);
       // Let go: a reconnect does not ask for them again.
