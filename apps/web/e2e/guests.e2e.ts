@@ -635,11 +635,13 @@ test('a live new reply opens an earlier hidden thread without granting its old c
   for (const width of [320, 820, 1440]) {
     await page.setViewportSize({ width, height: 960 });
     await expect(panel).toBeVisible();
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-      ),
-    ).toBe(true);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+      )
+      .toBe(true);
     await expectNoAxe(panel);
     await page.screenshot({
       path: info.outputPath(`hidden-thread-${String(width)}.png`),
@@ -663,11 +665,13 @@ test('a live new reply opens an earlier hidden thread without granting its old c
   await boundary.evaluate((element) => {
     for (const paragraph of element.querySelectorAll('p')) paragraph.style.fontSize = '2rem';
   });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-    ),
-  ).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
   await expectNoAxe(page.getByRole('complementary'));
   await page.screenshot({
     path: info.outputPath('hidden-thread-tr-large-text.png'),
