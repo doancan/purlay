@@ -1,4 +1,5 @@
 import { ACCEPTED_ANSWER_PREVIEW_MAX } from '@purlay/types';
+import { forgetSharedSource } from './shared-cache';
 /**
  * What the cache does when the world changes.
  *
@@ -295,6 +296,7 @@ export const patchMessage = (
  * Either way the channel moves to the top of the sidebar's order.
  */
 export const messageCreated = (client: QueryClient, message: Message): void => {
+  readAgain(client, families.shared);
   readAgain(client, families.followedThreads);
   // A channel's files list has no frame of its own: a message carrying files reads it again (D-129).
   if (message.attachments.length > 0) readAgain(client, keys.files(message.channelId));
@@ -399,6 +401,7 @@ export const threadUpdated = (
   readAgain(client, families.unresolved);
   readAgain(client, families.followedThreads);
   readAgain(client, ['search']);
+  readAgain(client, families.shared);
 };
 
 /** A message's whole reaction set, replacing what was there. */
@@ -427,6 +430,8 @@ const forgetWebPreviews = (client: QueryClient, messageId: string): void => {
 
 export const messageRevised = (client: QueryClient, revision: MessageRevision): void => {
   const id = revision.messageId;
+  if (revision.deletedAt !== null) forgetSharedSource(client, id);
+  readAgain(client, families.shared);
   if (revision.deletedAt !== null) forgetWebPreviews(client, id);
   const revise: (message: Message) => Message = (m) =>
     m.id === id
@@ -731,6 +736,7 @@ export const messageHidden = (
   channelId?: string,
 ): void => {
   forgetWebPreviews(client, messageId);
+  forgetSharedSource(client, messageId);
   editFollowed(client, (row) => (row.root.id === messageId ? null : row), true);
   readAgain(client, families.followedThreads);
   const hide: (message: Message) => Message = (message) =>
@@ -762,6 +768,7 @@ export const messageHidden = (
     families.messages,
     families.thread,
     families.search,
+    families.shared,
     families.saved,
     families.notifications,
     families.pins,

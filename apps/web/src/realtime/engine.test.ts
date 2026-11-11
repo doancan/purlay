@@ -3572,6 +3572,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     },
     unreads: { where: 'both', key: keys.unreads(CH, null, 1) },
     search: { where: 'answer', key: keys.search(WS, 'words', null, null) },
+    shared: { where: 'all', key: keys.shared(WS, { view: 'links' }) },
     saved: { where: 'open', key: keys.saved(WS) },
     followedThreads: { where: 'all', key: keys.followedThreads(WS) },
     files: { where: 'answer', key: keys.files(CH) },

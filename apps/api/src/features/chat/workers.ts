@@ -7,11 +7,19 @@
 import type { ModuleWorker } from '../../modules/workers/module-workers';
 import { deliverReminders } from './reminders/delivery';
 import { deliverScheduled } from './scheduled/delivery';
+import { backfillSharedLinks } from './shared/projection';
 
 /** How soon after its time a message or a reminder is delivered: what a person who set one waits at most, a node idle. */
 const DELIVERY_INTERVAL_MS = 15_000;
 
 export const chatWorkers: readonly ModuleWorker[] = [
+  {
+    name: 'index:shared-links',
+    intervalMs: 1_000,
+    work: async (context): Promise<void> => {
+      await backfillSharedLinks(context.database);
+    },
+  },
   {
     name: 'deliver:scheduled',
     intervalMs: DELIVERY_INTERVAL_MS,

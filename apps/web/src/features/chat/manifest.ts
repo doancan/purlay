@@ -10,6 +10,7 @@ const routes = {
   questions: '/w/:slug/questions',
   inbox: '/w/:slug/inbox',
   search: '/w/:slug/search',
+  shared: '/w/:slug/shared',
   saved: '/w/:slug/saved',
   drafts: '/w/:slug/drafts',
   unreads: '/w/:slug/unreads',
@@ -33,6 +34,7 @@ export const chat = defineModule({
     { route: 'inbox', glyph: 'inbox', label: 'inbox.title' },
     { route: 'questions', glyph: 'open-question', label: 'sidebar.questions' },
     { route: 'search', glyph: 'search', label: 'search.title' },
+    { route: 'shared', glyph: 'file', label: 'shared.title' },
     { route: 'saved', glyph: 'saved', label: 'saved.title' },
     { route: 'drafts', glyph: 'edit', label: 'drafts.title' },
   ],
@@ -43,6 +45,7 @@ export const chat = defineModule({
     { route: 'drafts', glyph: 'edit', label: 'drafts.title' },
     { route: 'unreads', glyph: 'channels', label: 'unreads.title' },
     { route: 'followed', glyph: 'notifications', label: 'followed.title' },
+    { route: 'shared', glyph: 'file', label: 'shared.title' },
     { route: 'search', glyph: 'search', label: 'search.title' },
   ],
   shortcuts: [

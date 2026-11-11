@@ -5,14 +5,21 @@ import {
   SavedSearch,
   SavedSearchPage,
   SearchPage,
+  SharedPage,
   type SaveSearchRequest,
   type SavedState,
   type SearchQuery,
+  type SharedFilters,
 } from '@purlay/types';
 import type { Http } from '../http';
 import { at, options } from './request';
 
 export interface SearchApi {
+  readonly shared: (
+    workspaceId: string,
+    query: SharedFilters & { readonly before?: string | undefined },
+    signal?: AbortSignal,
+  ) => Promise<SharedPage>;
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
@@ -43,6 +50,13 @@ export interface SearchApi {
 }
 
 export const createSearchApi = (http: Http): SearchApi => ({
+  shared: (workspaceId, query, signal) =>
+    http.request(
+      'GET',
+      `/api/workspaces/${at(workspaceId)}/shared`,
+      SharedPage,
+      options({ query: { ...query } }, signal),
+    ),
   search: (workspaceId, query, signal) =>
     http.request(
       'GET',

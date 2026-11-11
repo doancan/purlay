@@ -152,6 +152,12 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   notifications: decided('deleted', 'with-parent'),
   message_versions: decided('anonymised', 'with-parent'),
   message_attachments: decided({ nobody: 'ids only' }, 'with-parent'),
+  message_shared_links: decided('anonymised', 'with-parent'),
+  message_shared_jobs: decided('anonymised', 'with-parent'),
+  shared_link_backfill: decided(
+    { nobody: 'internal indexing checkpoint, no person or content' },
+    { kept: 'one bounded cursor for the historical link pass' },
+  ),
   messages: decided('anonymised', 'window'),
   hidden_messages: decided('deleted', 'with-parent'),
   message_reminders: decided('deleted', 'until-removed'),

@@ -105,6 +105,7 @@ export const chatModule = {
       '/api/workspaces/:workspaceId/saved-searches/:searchId',
       '/api/workspaces/:workspaceId/scheduled',
       '/api/workspaces/:workspaceId/search',
+      '/api/workspaces/:workspaceId/shared',
       '/api/workspaces/:workspaceId/unresolved',
     ],
   },

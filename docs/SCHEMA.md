@@ -1403,6 +1403,77 @@ process does and checks the claim, the link, each key on its own, that the colum
 link or an unclaimed sent file is refused with nothing changed, the core alone and chat later, and that starting again
 changes nothing.
 
+#### Shared catalogue (D-306)
+
+Three chat-owned tables keep rendered links, durable pending source identifiers and one historical
+interval cursor. Sources remain unchanged. Capture includes older writers; historical enqueue locks
+sources before child writes and advances only after jobs are durable. Workers replace current links
+and clear jobs under the source lock. Source cascades and tombstones/content erasure remove derived
+content; exports omit all three tables. The two composite keys bind each source's channel/workspace.
+
+```sql
+-- Chat-owned derived index and durable progress; source/core columns remain unchanged (D-306).
+CREATE TABLE message_shared_links (
+    message_id UUID NOT NULL,
+    link_key TEXT NOT NULL CHECK (link_key ~ '^[0-9a-f]{64}$'),
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    url TEXT NOT NULL CHECK (length(url) BETWEEN 1 AND 144016 AND url ~ '^https?://'),
+    label TEXT NOT NULL CHECK (length(label) BETWEEN 1 AND 16000),
+    PRIMARY KEY (message_id, link_key),
+    CONSTRAINT message_shared_links_channel_fkey FOREIGN KEY (message_id, channel_id)
+        REFERENCES messages (id, channel_id) ON DELETE CASCADE,
+    CONSTRAINT message_shared_links_workspace_fkey FOREIGN KEY (message_id, workspace_id)
+        REFERENCES messages (id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_message_shared_links_workspace ON message_shared_links (workspace_id, message_id DESC, link_key);
+CREATE INDEX idx_message_shared_links_channel ON message_shared_links (channel_id, message_id DESC, link_key);
+
+-- Pending source ids, not another copy of content. Writers and workers lock the source before this child.
+CREATE TABLE message_shared_jobs (
+    message_id UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    queued_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    CONSTRAINT message_shared_jobs_channel_fkey FOREIGN KEY (message_id, channel_id)
+        REFERENCES messages (id, channel_id) ON DELETE CASCADE,
+    CONSTRAINT message_shared_jobs_workspace_fkey FOREIGN KEY (message_id, workspace_id)
+        REFERENCES messages (id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_message_shared_jobs_due ON message_shared_jobs (queued_at, message_id);
+CREATE INDEX idx_message_shared_jobs_workspace ON message_shared_jobs (workspace_id);
+
+-- A bounded singleton; the anchor may be deleted without losing the remaining historical interval.
+CREATE TABLE shared_link_backfill (
+    name TEXT PRIMARY KEY CHECK (name = 'links'),
+    before_message_id UUID,
+    complete BOOLEAN NOT NULL DEFAULT false
+);
+INSERT INTO shared_link_backfill (name) VALUES ('links');
+
+-- D-306: capture source changes from every writer, including a previous node during a rolling upgrade.
+-- The source is already locked by its INSERT/UPDATE before the derived child is touched.
+CREATE FUNCTION enqueue_message_shared_links() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO message_shared_jobs (message_id, workspace_id, channel_id)
+        VALUES (NEW.id, NEW.workspace_id, NEW.channel_id)
+        ON CONFLICT (message_id) DO NOTHING;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER messages_shared_links_changed
+    AFTER INSERT OR UPDATE OF content, metadata, deleted_at, message_type ON messages
+    FOR EACH ROW EXECUTE FUNCTION enqueue_message_shared_links();
+
+-- purlay: no-transaction
+-- D-306: build the workspace file keyset index without blocking source writers (D-86).
+-- Drop the owned index first so an interrupted/invalid concurrent build can be retried.
+DROP INDEX CONCURRENTLY IF EXISTS idx_message_attachments_workspace;
+CREATE INDEX CONCURRENTLY idx_message_attachments_workspace
+    ON message_attachments (workspace_id, message_id DESC, attachment_id DESC);
+
+```
+
 ### 7.3. `mentions`
 
 Resolved by the parser at write time, so notification fan-out never re-parses message bodies.
@@ -3194,6 +3265,9 @@ chat/0010_membership_read_scopes.sql channel_read_scopes: moves the three protot
 chat/0011_personal_channel_groups.sql channel_groups and channel_group_channels: private headings and one placement per membership (D-284)
 chat/0012_removed_membership_scope.sql chat-owned membership deletion trigger removes scoped channel grants/departures even without a chat runtime (D-300)
 chat/0013_missed_mail_claims.sql durable missed-mail leases and released attempt markers, without replaying legacy letters (D-302)
+chat/0014_shared_catalogue.sql    rendered link projection, durable source jobs and historical cursor (D-306)
+chat/0015_shared_source_changes.sql capture source writes for rolling-upgrade/restart recovery (D-306)
+chat/0016_shared_source_indexes.sql restartable concurrent workspace-file keyset index (D-306)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```

@@ -27,6 +27,9 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **Shared** — find and filter conversation files and links, preview or download files and return to
+  their message. Private conversations and guest history keep their access rules (D-306).
 
 ---

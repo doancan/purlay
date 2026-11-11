@@ -4,6 +4,7 @@ export * from './scan';
 export * from './parse';
 export * from './metadata';
 export * from './web-links';
+export * from './shared-links';
 export * from './mentions';
 export * from './prose';
 export * from './plain';

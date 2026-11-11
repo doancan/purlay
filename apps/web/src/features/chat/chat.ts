@@ -15,6 +15,9 @@ import type { ChatScreens } from './manifest';
 const FollowedScreen = lazy(async () => ({
   default: (await import('./followed/followed-screen')).FollowedScreen,
 }));
+const SharedScreen = lazy(async () => ({
+  default: (await import('./shared/shared-screen')).SharedScreen,
+}));
 
 /** What the manifest's `load` reads: the screen of each of chat's routes, given what its address names. */
 export const screens: ChatScreens = {
@@ -24,6 +27,7 @@ export const screens: ChatScreens = {
   questions: QuestionsScreen,
   saved: SavedScreen,
   search: SearchScreen,
+  shared: () => createElement(SharedScreen),
   unreads: UnreadsScreen,
   followed: () => createElement(FollowedScreen),
 };

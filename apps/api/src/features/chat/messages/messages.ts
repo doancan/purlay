@@ -65,6 +65,8 @@ import {
 } from './delivery';
 import { type Engine, type Reading } from '@purlay/markdown';
 import { readBody } from './body';
+import { sharedLinksOf } from '@purlay/markdown';
+import { addSharedLinks } from '../shared/projection';
 import {
   buildMessages,
   MESSAGE_COLUMNS,
@@ -370,6 +372,7 @@ export const sendMessage = async (
   }
 
   const sentAt = clock.now();
+  await addSharedLinks(executor, { ...context, messageId: input.id }, sharedLinksOf(reading.tree));
 
   const carried = await linkAttachments(
     executor,

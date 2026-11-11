@@ -59,6 +59,8 @@ export const chatWorkspacePurge: WorkspacePurge = {
   ],
   after: [{ batch: channelBatch, size: CHANNEL_BATCH, messages: false }],
   tables: [
+    'message_shared_links',
+    'message_shared_jobs',
     'scheduled_messages',
     'message_reminders',
     'hidden_messages',

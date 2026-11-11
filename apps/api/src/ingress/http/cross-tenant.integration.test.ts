@@ -145,7 +145,7 @@ const aTenant = async (
   await created(
     await call(db, 'POST', `/api/channels/${channelId}/messages`, cookie, {
       id: root,
-      content: 'a question',
+      content: 'a question [Policy](http://intranet/policy)',
       attachmentIds: [attachmentId],
     }),
   );
@@ -239,8 +239,11 @@ const aTenant = async (
   ).toBe(201);
   // An earlier version of the root, to remove: the root edited once.
   expect(
-    (await call(db, 'PATCH', `/api/messages/${root}`, cookie, { content: 'an edited question' }))
-      .status,
+    (
+      await call(db, 'PATCH', `/api/messages/${root}`, cookie, {
+        content: 'an edited question [Policy](http://intranet/policy)',
+      })
+    ).status,
   ).toBe(200);
   const version = await db
     .selectFrom('message_versions')

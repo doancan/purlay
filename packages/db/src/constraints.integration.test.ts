@@ -13,6 +13,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { sql } from 'kysely';
 import pg from 'pg';
 import type { Executor } from './client';
+import { tableExists } from './table-exists';
 import { closeIntegrationDatabase, integrationDatabase, withRollback } from './testing';
 
 afterAll(async () => {
@@ -137,6 +138,9 @@ describe('integration: a message belongs to the tenant of its channel', () => {
   test('a message cannot be moved to another workspace while it stays in its channel', async () => {
     await withRollback(async (db) => {
       const t = await twoTenants(db);
+      // Isolate the source constraint from a chat worker's captured child reference.
+      if (await tableExists(db, 'message_shared_jobs'))
+        await db.deleteFrom('message_shared_jobs').where('message_id', '=', t.messageA).execute();
       const refusal = await refusedWith(
         async () =>
           await db

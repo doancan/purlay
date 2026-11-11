@@ -5,6 +5,7 @@
  * committed; it is never edited by hand, and CI fails on any diff against a
  * fresh generation. The migrations are the single source. (D-45)
  */
+export { jsonArrayFrom } from 'kysely/helpers/postgres';
 export {
   createDatabase,
   createMigrationDatabase,

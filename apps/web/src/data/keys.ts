@@ -2,6 +2,7 @@ import type {
   AuditFilter,
   QuestionFilters,
   SearchFilters,
+  SharedFilters,
   InvitationRecipientQuery,
 } from '@purlay/types';
 /**
@@ -14,6 +15,10 @@ import type {
  * frame names a channel and not the workspace it is in.
  */
 export const keys = {
+  shared: (workspaceId: string, filters?: SharedFilters) =>
+    filters === undefined
+      ? (['shared', workspaceId] as const)
+      : (['shared', workspaceId, filters] as const),
   webLinkPreviews: (channelId: string) => ['web-link-preview', channelId] as const,
   webLinkPreview: (channelId: string, messageId: string, url: string) =>
     ['web-link-preview', channelId, messageId, url] as const,
@@ -160,6 +165,7 @@ export const keys = {
 
 /** The families, for the code that addresses one of them whole. */
 export const families = {
+  shared: ['shared'] as const,
   webLinkPreviews: ['web-link-preview'] as const,
   followedThreads: ['followed-threads'] as const,
   unreads: ['unreads'] as const,

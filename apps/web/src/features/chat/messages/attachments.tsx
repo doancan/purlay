@@ -189,7 +189,11 @@ const FilePreview = ({
   );
 };
 
-const FileAttachment = ({ attachment }: { readonly attachment: Attachment }): React.JSX.Element => {
+export const FileAttachment = ({
+  attachment,
+}: {
+  readonly attachment: Attachment;
+}): React.JSX.Element => {
   const { t, format } = useI18n();
   const size = format.bytes(attachment.sizeBytes);
   const preview = previewOf(attachment.fileName, attachment.sizeBytes);

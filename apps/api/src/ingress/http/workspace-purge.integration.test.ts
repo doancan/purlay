@@ -363,6 +363,7 @@ describe('integration: the workspace purge', () => {
           'incidents',
           'issues',
           'mentions',
+          'message_shared_jobs',
           'messages',
           'notifications',
           'outbox',

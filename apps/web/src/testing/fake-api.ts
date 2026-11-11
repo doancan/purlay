@@ -11,6 +11,7 @@ const unexpected = (name: string) => (): never => {
 };
 
 export const anApi = (overrides: Partial<Api> = {}): Api => ({
+  shared: unexpected('shared'),
   me: unexpected('me'),
   channelGroups: unexpected('channelGroups'),
   saveChannelGroup: unexpected('saveChannelGroup'),
