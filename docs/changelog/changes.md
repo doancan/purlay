@@ -33,6 +33,7 @@ have it.
 
 ### Fixed
 
+- **Channels** — Counter updates share current access checks across connected recipients to keep busy conversations responsive (D-300).
 - **Notifications** — A first direct message and a new thread reply keep their unread state when an older conversation list arrives late (D-301).
 - **Incidents** — Responder removal uses matching visible and accessible action names (D-137).
 

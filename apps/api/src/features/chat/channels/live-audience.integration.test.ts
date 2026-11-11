@@ -33,6 +33,15 @@ const publication = (context: ChannelContext): ServerFrame => ({
   data: { channelId: context.channelId, userId: context.userId, ttlMs: 5_000 },
   ts: Date.now(),
 });
+const counterPublication = (context: ChannelContext): ServerFrame => ({
+  event: 'CHANNEL_STATE',
+  data: {
+    channelId: context.channelId,
+    state: { lastReadMessageId: null, unreadCount: 1, unreadMentionCount: 0 },
+  },
+  version: 1,
+  ts: Date.now(),
+});
 const fixture = async (db: Executor): Promise<ChannelContext> => {
   const room = await aRoom(db, ['owner', 'guest']);
   const userId = room.members['guest']?.userId ?? '';
@@ -417,7 +426,45 @@ describe('integration: current live guest audience', () => {
     });
   });
 
-  test('1, 500, 501 and 1001 queued recipients use bounded publication batches with user-specific answers', async () => {
+  test('pending counters keep each channel history separate for a guest in both channels', async () => {
+    await withRollback(async (db) => {
+      const first = await fixture(db);
+      const channel = await db
+        .insertInto('channels')
+        .values({ workspace_id: first.workspaceId, name: 'later-grant', type: 'private' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('channel_members')
+        .values({
+          channel_id: channel.id,
+          user_id: first.userId,
+          joined_at: new Date(Date.now() - 10_000),
+        })
+        .execute();
+      const second = await requireChannelById(db, first.userId, channel.id);
+      expect(first.guest?.historySince === second.guest?.historySince).toBe(false);
+      let reads = 0;
+      const counted = db.withPlugin({
+        transformQuery: (args) => args.node,
+        transformResult: (args) => {
+          reads++;
+          return Promise.resolve(args.result);
+        },
+      });
+      const project = liveChannelScope();
+      expect(
+        await Promise.all(
+          [first, second].map((context) =>
+            project(counted, context).accepts(counterPublication(context), signal()),
+          ),
+        ),
+      ).toEqual([true, true]);
+      expect(reads).toBe(2);
+    });
+  });
+
+  test('shared publications and distinct recipient counters use bounded batches with user-specific answers', async () => {
     await withRollback(async (db) => {
       const context = await fixture(db);
       const suffix = crypto.randomUUID().slice(0, 8);
@@ -483,7 +530,7 @@ describe('integration: current live guest audience', () => {
       const scopes = contexts.map((recipient) => projector(counted, recipient));
       expect(contexts.some((recipient) => recipient.guest === undefined)).toBe(true);
       expect(contexts.some((recipient) => recipient.guest !== undefined)).toBe(true);
-      for (const size of [1, 500, 501, 1_001]) {
+      for (const size of [1, 10, 100, 500, 501, 1_001]) {
         reads = 0;
         const rows = await Promise.all(
           contexts
@@ -508,108 +555,131 @@ describe('integration: current live guest audience', () => {
             .slice(0, size)
             .map((recipient) => (recipient.userId === refused.userId ? 'revoked' : true)),
         );
+        reads = 0;
+        const counters = await Promise.all(
+          scopes
+            .slice(0, size)
+            .map((scope) => scope.accepts(counterPublication(context), signal())),
+        );
+        expect(reads).toBe(Math.ceil(size / LIVE_AUDIENCE_BATCH_MAX));
+        expect(counters).toEqual(accepted);
       }
     });
   }, 30_000);
 
-  test('aborts and query failures never become allowed or a cached answer, and executors stay separate', async () => {
-    await withRollback(async (db) => {
-      const context = await fixture(db);
-      let reads = 0;
-      const counted = db.withPlugin({
-        transformQuery: (args) => args.node,
-        transformResult: (args) => {
-          reads++;
-          return Promise.resolve(args.result);
-        },
-      });
-      const failure = new Error('Controlled unavailable authority');
-      const unavailable = db.withPlugin({
-        transformQuery: (args) => args.node,
-        transformResult: () => Promise.reject(failure),
-      });
-      const read = liveAudienceReader();
-      const frame = publication(context);
-      const aborted = new AbortController();
-      aborted.abort(failure);
-      expect(await failureOf(read(counted, context, frame, undefined, aborted.signal))).toBe(
-        failure,
-      );
-      expect(reads).toBe(0);
-      const results = await Promise.all([
-        read(counted, context, frame, undefined, signal()),
-        read(unavailable, context, frame, undefined, signal()).catch((error: unknown) => error),
-      ]);
-      expect(results[0]).toMatchObject({ userId: context.userId });
-      expect(results[1]).toBe(failure);
-      expect(reads).toBe(1);
-      const cancelled = new AbortController();
-      const afterRead = db.withPlugin({
-        transformQuery: (args) => args.node,
-        transformResult: (args) => {
-          cancelled.abort(failure);
-          return Promise.resolve(args.result);
-        },
-      });
-      expect(await failureOf(read(afterRead, context, frame, undefined, cancelled.signal))).toBe(
-        failure,
-      );
-      expect(await failureOf(read(unavailable, context, frame, undefined, signal()))).toBe(failure);
-    });
-  });
-
-  test('a recipient arriving after dispatch cannot join an old snapshot held across an independent revocation', async () => {
-    const cloned = await cloneIntegrationDatabase();
-    try {
-      const context = await fixture(cloned.db);
-      const materialized = Promise.withResolvers<undefined>();
-      const release = Promise.withResolvers<undefined>();
-      let reads = 0;
-      let constructions = 0;
-      const held = cloned.db.withPlugin({
-        transformQuery: (args) => {
-          constructions++;
-          return args.node;
-        },
-        transformResult: async (args) => {
-          reads++;
-          if (reads === 1) {
-            materialized.resolve(undefined);
-            await release.promise;
-          }
-          return args.result;
-        },
-      });
-      const read = liveAudienceReader();
-      const frame = publication(context);
-      const earlier = read(held, context, frame, undefined, signal());
-      try {
-        await materialized.promise;
-        await cloned.db
-          .deleteFrom('channel_members')
-          .where('channel_id', '=', context.channelId)
-          .where('user_id', '=', context.userId)
-          .execute();
-        const beforeLate = constructions;
-        const pending = read(held, context, frame, undefined, signal());
-        // The next microtask dispatches a fresh batch. Construction is only a dispatch witness;
-        // `reads` below separately counts real materialized SQL results.
-        await new Promise<void>((resolve) => {
-          queueMicrotask(resolve);
+  test.each(['publication', 'counter'] as const)(
+    '%s aborts and query failures never become allowed or cached, and executors stay separate',
+    async (kind) => {
+      await withRollback(async (db) => {
+        const context = await fixture(db);
+        let reads = 0;
+        const counted = db.withPlugin({
+          transformQuery: (args) => args.node,
+          transformResult: (args) => {
+            reads++;
+            return Promise.resolve(args.result);
+          },
         });
-        expect(constructions > beforeLate).toBe(true);
-        const later = await pending;
-        expect(later === undefined).toBe(true);
-        expect(reads).toBe(2);
+        const failure = new Error('Controlled unavailable authority');
+        const unavailable = db.withPlugin({
+          transformQuery: (args) => args.node,
+          transformResult: () => Promise.reject(failure),
+        });
+        const read = liveAudienceReader();
+        const frame = kind === 'counter' ? counterPublication(context) : publication(context);
+        const aborted = new AbortController();
+        aborted.abort(failure);
+        expect(await failureOf(read(counted, context, frame, undefined, aborted.signal))).toBe(
+          failure,
+        );
+        expect(reads).toBe(0);
+        const results = await Promise.all([
+          read(counted, context, frame, undefined, signal()),
+          read(unavailable, context, frame, undefined, signal()).catch((error: unknown) => error),
+        ]);
+        expect(results[0]).toMatchObject({ userId: context.userId });
+        expect(results[1]).toBe(failure);
+        expect(reads).toBe(1);
+        const cancelled = new AbortController();
+        const afterRead = db.withPlugin({
+          transformQuery: (args) => args.node,
+          transformResult: (args) => {
+            cancelled.abort(failure);
+            return Promise.resolve(args.result);
+          },
+        });
+        expect(await failureOf(read(afterRead, context, frame, undefined, cancelled.signal))).toBe(
+          failure,
+        );
+        expect(await failureOf(read(unavailable, context, frame, undefined, signal()))).toBe(
+          failure,
+        );
+      });
+    },
+  );
+
+  test.each(['publication', 'counter'] as const)(
+    'a %s recipient arriving after dispatch cannot join an old snapshot held across an independent revocation',
+    async (kind) => {
+      const cloned = await cloneIntegrationDatabase();
+      try {
+        const context = await fixture(cloned.db);
+        const materialized = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        let reads = 0;
+        let constructions = 0;
+        const held = cloned.db.withPlugin({
+          transformQuery: (args) => {
+            constructions++;
+            return args.node;
+          },
+          transformResult: async (args) => {
+            reads++;
+            if (reads === 1) {
+              materialized.resolve(undefined);
+              await release.promise;
+            }
+            return args.result;
+          },
+        });
+        const read = liveAudienceReader();
+        const frame = kind === 'counter' ? counterPublication(context) : publication(context);
+        const earlier = read(held, context, frame, undefined, signal());
+        try {
+          await materialized.promise;
+          await cloned.db
+            .deleteFrom('channel_members')
+            .where('channel_id', '=', context.channelId)
+            .where('user_id', '=', context.userId)
+            .execute();
+          const beforeLate = constructions;
+          const pending = read(
+            held,
+            context,
+            kind === 'counter' ? counterPublication(context) : frame,
+            undefined,
+            signal(),
+          );
+          // The next microtask dispatches a fresh batch. Construction is only a dispatch witness;
+          // `reads` below separately counts real materialized SQL results.
+          await new Promise<void>((resolve) => {
+            queueMicrotask(resolve);
+          });
+          expect(constructions > beforeLate).toBe(true);
+          const later = await pending;
+          expect(later === undefined).toBe(true);
+          expect(reads).toBe(2);
+        } finally {
+          release.resolve(undefined);
+          await earlier;
+        }
+        expect(await earlier).toMatchObject({ userId: context.userId });
+        expect((await read(held, context, frame, undefined, signal())) === undefined).toBe(true);
+        expect(reads).toBe(3);
       } finally {
-        release.resolve(undefined);
-        await earlier;
+        await cloned.drop();
       }
-      expect(await earlier).toMatchObject({ userId: context.userId });
-      expect((await read(held, context, frame, undefined, signal())) === undefined).toBe(true);
-      expect(reads).toBe(3);
-    } finally {
-      await cloned.drop();
-    }
-  }, 30_000);
+    },
+    30_000,
+  );
 });

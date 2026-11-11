@@ -17,6 +17,8 @@ interface Waiting {
   readonly reject: (error: unknown) => void;
 }
 
+type Batches = Map<string, Waiting[]>;
+
 /** A factory belongs to the transport's guest history projector; executor identity is part of its namespace. */
 export const liveAudienceReader = (): ((
   database: ChatDb,
@@ -25,12 +27,21 @@ export const liveAudienceReader = (): ((
   messageId: string | undefined,
   signal: AbortSignal,
 ) => Promise<LiveChannelAuthority | undefined>) => {
-  const executors = new WeakMap<ChatDb, WeakMap<ServerFrame, Map<string, Waiting[]>>>();
+  const executors = new WeakMap<ChatDb, WeakMap<ServerFrame, Batches>>();
+  const counters = new WeakMap<ChatDb, Batches>();
   return (database, context, frame, messageId, signal) => {
-    const frames = executors.get(database) ?? new WeakMap<ServerFrame, Map<string, Waiting[]>>();
-    executors.set(database, frames);
-    const scopes = frames.get(frame) ?? new Map<string, Waiting[]>();
-    frames.set(frame, scopes);
+    let scopes: Batches;
+    if (frame.event === 'CHANNEL_STATE') {
+      // Each recipient's counters have a distinct frame. Only their pending authority reads
+      // share a batch; the transport still delivers each frame through its own ordered queue.
+      scopes = counters.get(database) ?? new Map<string, Waiting[]>();
+      counters.set(database, scopes);
+    } else {
+      const frames = executors.get(database) ?? new WeakMap<ServerFrame, Batches>();
+      executors.set(database, frames);
+      scopes = frames.get(frame) ?? new Map<string, Waiting[]>();
+      frames.set(frame, scopes);
+    }
     const key = JSON.stringify([context.workspaceId, context.channelId, messageId]);
     let waiting = scopes.get(key);
     if (waiting === undefined) {
