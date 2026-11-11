@@ -69,11 +69,36 @@ test.describe('Deep Work', () => {
     await page.reload();
     await shellReady(page);
     await expect(bar).toBeVisible();
-    await palette(page, 'End Deep Work');
-    await expect(bar).toHaveCount(0);
-    await page.reload();
-    await shellReady(page);
-    await expect(bar).toHaveCount(0);
+    // Hold the real end request: the bar goes immediately, while the server still holds the start.
+    // Reloading at that instant cancels the PUT; only the committed answer proves persistence.
+    let releaseEnd: () => void = () => undefined;
+    const mayEnd = new Promise<void>((resolve) => {
+      releaseEnd = resolve;
+    });
+    let sawEnd: () => void = () => undefined;
+    const endRequested = new Promise<void>((resolve) => {
+      sawEnd = resolve;
+    });
+    await page.route(`**/api/workspaces/${workspace.id}/deep-work`, async (route) => {
+      sawEnd();
+      await mayEnd;
+      await route.continue();
+    });
+    try {
+      await palette(page, 'End Deep Work');
+      await endRequested;
+      await expect(bar).toHaveCount(0);
+      expect(await heldUntil(page, workspace.id)).toBe(until);
+      releaseEnd();
+      await expect
+        .poll(() => heldUntil(page, workspace.id), { message: 'the server keeps Deep Work ended' })
+        .toBeNull();
+      await page.reload();
+      await shellReady(page);
+      await expect(bar).toHaveCount(0);
+    } finally {
+      releaseEnd();
+    }
   });
 
   test('started in one tab is drawn in the person’s other tab, and so is its end (#526)', async ({

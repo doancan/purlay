@@ -199,23 +199,45 @@ const authorship = (
 };
 
 /** The contract's messages for these rows, in the order the rows came. */
+/** The text writer's own uncommitted row: only its mentions and uploads exist; knowledge is still version zero. */
+interface InsertedMessageParts {
+  readonly id: string;
+  readonly mentioned: readonly string[];
+  readonly hasAttachments: boolean;
+}
+
 export const buildMessages = async (
   executor: ChatDb,
   rows: readonly MessageRow[],
   userId?: string,
+  inserted?: InsertedMessageParts,
 ): Promise<Message[]> => {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
+  const existingIds = ids.filter((id) => id !== inserted?.id);
   const resolvers = rows.flatMap((row) => (row.resolved_by === null ? [] : [row.resolved_by]));
   const roots = rows.filter((row) => row.parent_id === null).map((row) => row.id);
   const [reactions, mentions, attachments, people, knowledge, work] = await Promise.all([
-    reactionSets(executor, ids),
-    mentionSets(executor, ids),
-    attachmentSets(executor, ids),
+    reactionSets(executor, existingIds),
+    mentionSets(executor, existingIds),
+    attachmentSets(
+      executor,
+      ids.filter((id) => id !== inserted?.id || inserted.hasAttachments),
+    ),
     usersByIds(executor, [...new Set(resolvers)]),
-    knowledgeFor(executor, roots),
-    githubWorkFor(executor, roots),
+    knowledgeFor(
+      executor,
+      roots.filter((id) => id !== inserted?.id),
+    ),
+    githubWorkFor(
+      executor,
+      roots.filter((id) => id !== inserted?.id),
+    ),
   ]);
+  const knownMentions =
+    inserted === undefined
+      ? mentions
+      : new Map(mentions).set(inserted.id, [...inserted.mentioned].sort());
   return await hideForReader(
     executor,
     userId,
@@ -241,7 +263,7 @@ export const buildMessages = async (
               }
             : null,
         reactions: [...(reactions.get(row.id) ?? [])] satisfies Reaction[],
-        mentions: [...(mentions.get(row.id) ?? [])],
+        mentions: [...(knownMentions.get(row.id) ?? [])],
         // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
         attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
       };
@@ -254,9 +276,10 @@ export const readBuilt = async (
   executor: ChatDb,
   messageId: string,
   userId?: string,
+  inserted?: InsertedMessageParts,
 ): Promise<Message | undefined> => {
   const row = await readMessage(executor, messageId);
   if (row === undefined) return undefined;
-  const [message] = await buildMessages(executor, [row], userId);
+  const [message] = await buildMessages(executor, [row], userId, inserted);
   return message;
 };

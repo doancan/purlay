@@ -398,10 +398,11 @@ export const sendMessage = async (
   }
 
   // The mentions, the notifications and the counters: one place decides who is told (D-99 §1).
+  const mentioned = await resolveMentions(executor, context, names, input.id);
   const { recipients, told } = await recordDelivery(executor, {
     context,
     messageId: input.id,
-    mentioned: await resolveMentions(executor, context, names, input.id),
+    mentioned,
     thread:
       input.parentId === undefined || root === undefined
         ? null
@@ -409,7 +410,11 @@ export const sendMessage = async (
     now: clock.now(),
   });
 
-  const written = await readBuilt(executor, input.id);
+  const written = await readBuilt(executor, input.id, undefined, {
+    id: input.id,
+    mentioned,
+    hasAttachments: (input.attachmentIds?.length ?? 0) > 0,
+  });
   if (written === undefined) {
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }

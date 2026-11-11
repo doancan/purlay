@@ -770,6 +770,14 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/live-audience.integration.test.ts'],
   },
   {
+    id: 'guest-live-audience-history-omitted',
+    why: 'A guest or mixed batch drops the trusted message timestamp, suppressing readable messages or bypassing the admission check.',
+    file: 'apps/api/src/features/chat/channels/live-audience.ts',
+    find: 'recipients.some((recipient) => recipient.needsHistory) ? messageId : undefined',
+    replace: 'undefined',
+    tests: ['apps/api/src/features/chat/channels/live-audience.integration.test.ts'],
+  },
+  {
     id: 'guest-live-audience-recipient-substituted',
     why: 'A permitted recipient cannot authorize a different person in the same batch.',
     file: 'apps/api/src/features/chat/channels/live-audience.ts',

@@ -243,7 +243,8 @@ What belongs here is the discipline around them:
   `scripts/mutations/index.ts` does not import.
   **What runs when.** Every pull request that adds or changes an entry runs exactly those entries, in CI's
   `mutations-changed` job (part of `verify`: the ids are what differs in `scripts/mutations/` from the merge-base,
-  and each must be caught, so an equivalent or broken mutant fails the change that adds it); a pull request that
+  divided over four isolated shards, with every changed entry run exactly once and every shard required),
+  and each must be caught, so an equivalent or broken mutant fails the change that adds it; a pull request that
   touches no mutation file skips the job, and the gate accepts only that skip. The whole list is applied weekly by
   `mutations.yml`, sharded by area file (`bun run mutate --shard=2/12`), which is not a required check: a survivor or a
   stale entry turns the run red and opens one tracking issue. In between, a test weakened by a change that

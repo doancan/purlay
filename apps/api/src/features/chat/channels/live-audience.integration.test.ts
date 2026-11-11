@@ -287,6 +287,43 @@ describe('integration: current live guest audience', () => {
     });
   });
 
+  test('a mixed full-member and guest batch retains trusted message time for both recipients', async () => {
+    await withRollback(async (db) => {
+      const guest = await fixture(db);
+      if (guest.guest === undefined) throw new Error('Missing guest scope');
+      const owner = await db
+        .selectFrom('workspace_members')
+        .select('user_id')
+        .where('workspace_id', '=', guest.workspaceId)
+        .where('access_kind', '=', 'member')
+        .executeTakeFirstOrThrow();
+      const member = await requireChannelById(db, owner.user_id, guest.channelId);
+      const createdAt = new Date(new Date(guest.guest.historySince).getTime() + 1_000);
+      const id = messageId(createdAt);
+      await db
+        .insertInto('messages')
+        .values({
+          id,
+          workspace_id: guest.workspaceId,
+          channel_id: guest.channelId,
+          sender_id: owner.user_id,
+          content: 'A shared live publication',
+          created_at: createdAt,
+        })
+        .execute();
+      const read = liveAudienceReader();
+      const frame = publication(member);
+      const [full, restricted] = await Promise.all([
+        read(db, member, frame, id, signal()),
+        read(db, guest, frame, id, signal()),
+      ]);
+      expect(full?.accessKind).toBe('member');
+      expect(restricted?.accessKind).toBe('guest');
+      expect(full?.messageCreatedAt?.getTime()).toBe(createdAt.getTime());
+      expect(restricted?.messageCreatedAt?.getTime()).toBe(createdAt.getTime());
+    });
+  });
+
   test('a captured full-member scope stays useful and requests reauthorization when current membership becomes restricted', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['owner', 'member']);

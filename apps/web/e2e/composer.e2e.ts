@@ -689,6 +689,15 @@ test.describe('@ and a name', () => {
         await expect(failed).toBeVisible();
         await expect(box).toHaveValue('@ali');
         await expectNoAxe();
+        // Returning to the unfinished mention starts another real read. The error audited above
+        // need not still be the state drawn when that read has begun.
+        const rereading = page.waitForRequest(
+          (request) => new URL(request.url()).pathname === `/api/channels/${made.id}/members`,
+        );
+        await page.getByRole('button', { name: 'Channel menu' }).focus();
+        await box.focus();
+        await rereading;
+        await expect(failed).toBeVisible();
         failing = false;
         await failed.getByRole('button', { name: 'Retry' }).click();
         await expect(box).toBeFocused();

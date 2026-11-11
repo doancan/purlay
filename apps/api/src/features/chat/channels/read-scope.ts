@@ -93,16 +93,22 @@ const scopeValue = (member: MemberAlias, column: ScopeColumn): RawBuilder<unknow
     and read_scope.user_id = ${sql.ref(`${member}.user_id`)}
 )`;
 
-/** The common SQL projection for arrivals, late mentions, deletion and inbox/thread recounts. */
-export const memberReadScope = (member: MemberAlias, legacyJoinFloor = true): ReadScope => {
-  const since = scopeValue(member, 'unread_since');
+/** The common projection; a bulk writer may supply its own current-statement read_scope join. */
+export const memberReadScope = (
+  member: MemberAlias,
+  legacyJoinFloor = true,
+  joinedScope?: 'read_scope',
+): ReadScope => {
+  const read = (column: ScopeColumn): RawBuilder<unknown> =>
+    joinedScope === undefined ? scopeValue(member, column) : sql.ref(`${joinedScope}.${column}`);
+  const since = read('unread_since');
   const position = sql.ref(`${member}.last_read_message_id`);
   return {
     historyFloor: guestHistoryFloor(member),
     userId: sql.ref(`${member}.user_id`),
     position,
     since: legacyJoinFloor ? sql`coalesce(${since}, ${sql.ref(`${member}.joined_at`)})` : since,
-    historyFrom: scopeValue(member, 'unread_history_from'),
-    threadBaseline: sql`case when ${since} is null then ${position} else ${scopeValue(member, 'thread_read_baseline_id')} end`,
+    historyFrom: read('unread_history_from'),
+    threadBaseline: sql`case when ${since} is null then ${position} else ${read('thread_read_baseline_id')} end`,
   };
 };

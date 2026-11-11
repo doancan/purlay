@@ -11,6 +11,7 @@ import {
 
 interface Waiting {
   readonly userId: string;
+  readonly needsHistory: boolean;
   readonly signal: AbortSignal;
   readonly resolve: (authority: LiveChannelAuthority | undefined) => void;
   readonly reject: (error: unknown) => void;
@@ -67,7 +68,15 @@ export const liveAudienceReader = (): ((
                   module: 'chat',
                   signal: active.signal,
                 },
-                async () => await readLiveChannelAudience(database, context, selected, messageId),
+                async () =>
+                  await readLiveChannelAudience(
+                    database,
+                    context,
+                    selected,
+                    // Full scopes still recheck current authority; only guest scopes compare the
+                    // trusted message time. A mixed batch retains that lookup for its guests.
+                    recipients.some((recipient) => recipient.needsHistory) ? messageId : undefined,
+                  ),
               );
               const known = new Map(rows.map((row) => [row.userId, row]));
               for (const recipient of recipients) {
@@ -84,7 +93,13 @@ export const liveAudienceReader = (): ((
     }
     const queued = waiting;
     return new Promise<LiveChannelAuthority | undefined>((resolve, reject) => {
-      queued.push({ userId: context.userId, signal, resolve, reject });
+      queued.push({
+        userId: context.userId,
+        needsHistory: context.guest !== undefined,
+        signal,
+        resolve,
+        reject,
+      });
       if (queued.length >= LIVE_AUDIENCE_BATCH_MAX && scopes.get(key) === queued)
         scopes.delete(key);
     });

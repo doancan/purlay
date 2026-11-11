@@ -18,7 +18,7 @@ import {
   type WorkspaceGuestPage,
 } from '@purlay/types';
 import { expect, test, workspaceFor } from './fixtures';
-import { openSettings, skipReleaseNotes, wallClock } from './support';
+import { isNarrow, openSettings, skipReleaseNotes, wallClock } from './support';
 
 const run = promisify(execFile);
 const ROOT = join(import.meta.dirname, '../../..');
@@ -336,7 +336,13 @@ test('guest channel links and incident words respect admission while fresh shari
   await page.goto(`/w/${workspace.slug}/c/${channel.id}`);
   await expect(page.getByText('Current conversation is available', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: oldBookmark.title, exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Incident', exact: true }).click();
+  const openIncident = async (): Promise<void> => {
+    if (isNarrow(page)) {
+      await page.getByRole('button', { name: 'Channel menu' }).click();
+      await page.getByRole('menuitem', { name: 'Incident', exact: true }).click();
+    } else await page.getByRole('button', { name: 'Incident', exact: true }).click();
+  };
+  await openIncident();
   const panel = page.getByRole('complementary', { name: /Incident/ });
   await expect(panel.getByText('No incident', { exact: true })).toBeVisible();
   await expect(page.getByText('Private earlier incident writeup', { exact: true })).toHaveCount(0);
@@ -356,7 +362,7 @@ test('guest channel links and incident words respect admission while fresh shari
     title: 'Current shared link',
   });
   await expect(page.getByRole('link', { name: 'Current shared link', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Incident', exact: true }).click();
+  await openIncident();
   await expect(panel.getByText('Current shared incident writeup', { exact: true })).toBeVisible();
   await expect(panel.getByRole('button', { name: /^Remove .+ from responders$/ })).toBeVisible();
   for (const width of [320, 820, 1440]) {

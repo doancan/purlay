@@ -43,9 +43,9 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'arrival-counted-as-it-is-reached',
     why: 'the fix of #668 undone: the members counted by one update over the channel, locked in the order its snapshot reaches them — a deadlock',
     file: 'apps/api/src/features/chat/messages/delivery.ts',
-    find: "      .forNoKeyUpdate()\n      .execute()\n  ).map((row) => row.user_id);\n  if (locked.length === 0) return [];\n  // Exactly the rows locked above: somebody who joins between the two statements is not reached here\n  // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.\n  const changed = await executor\n    .updateTable('channel_members')\n    .set({\n      unread_count: sql<number>`unread_count + case when ${counted} then 1 else 0 end`,\n      unread_mention_count: sql<number>`unread_mention_count + case when ${counted} and ${needs} then 1 else 0 end`,\n      // Counted with the numbers it describes, in the one statement, under the row lock it\n      // takes: the order of versions is the order of commits (0015).\n      state_version: sql<number>`state_version + 1`,\n    })\n    .where('channel_id', '=', channelId)\n    .where('user_id', 'in', locked)\n",
+    find: "      .forNoKeyUpdate()\n      .execute()\n  ).map((row) => row.user_id);\n  if (locked.length === 0) return [];\n  // Exactly the rows locked above: somebody who joins between the two statements is not reached here\n  // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.\n  const changed = await executor\n    .with(\n      (cte) => cte('arrival').materialized(),\n      (db) =>\n        db\n          .selectFrom('channel_members')\n          .leftJoin('channel_read_scopes as read_scope', (join) =>\n            join\n              .onRef('read_scope.channel_id', '=', 'channel_members.channel_id')\n              .onRef('read_scope.user_id', '=', 'channel_members.user_id'),\n          )\n          .select(['channel_members.channel_id', 'channel_members.user_id', counted.as('counted')])\n          .where('channel_members.channel_id', '=', channelId)\n          .where('channel_members.user_id', 'in', locked),\n    )\n    .updateTable('channel_members')\n    .from('arrival')\n    .set({\n      // One current-snapshot history calculation serves both counters; materialization keeps the\n      // planner from duplicating its correlated reads in the two update expressions.\n      unread_count: sql<number>`unread_count + case when arrival.counted then 1 else 0 end`,\n      unread_mention_count: sql<number>`unread_mention_count + case when arrival.counted and ${needs} then 1 else 0 end`,\n      // Counted with the numbers it describes, in the one statement, under the row lock it\n      // takes: the order of versions is the order of commits (0015).\n      state_version: sql<number>`state_version + 1`,\n    })\n",
     replace:
-      "      .execute()\n  ).map((row) => row.user_id);\n  if (locked.length === 0) return [];\n  // Exactly the rows locked above: somebody who joins between the two statements is not reached here\n  // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.\n  const changed = await executor\n    .updateTable('channel_members')\n    .set({\n      unread_count: sql<number>`unread_count + case when ${counted} then 1 else 0 end`,\n      unread_mention_count: sql<number>`unread_mention_count + case when ${counted} and ${needs} then 1 else 0 end`,\n      // Counted with the numbers it describes, in the one statement, under the row lock it\n      // takes: the order of versions is the order of commits (0015).\n      state_version: sql<number>`state_version + 1`,\n    })\n    .where('channel_id', '=', channelId)\n    .where((eb) => (writer === null ? eb.lit(true) : eb('user_id', '<>', writer)))\n",
+      "      .execute()\n  ).map((row) => row.user_id);\n  if (locked.length === 0) return [];\n  // Exactly the rows locked above: somebody who joins between the two statements is not reached here\n  // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.\n  const changed = await executor\n    .with(\n      (cte) => cte('arrival').materialized(),\n      (db) =>\n        db\n          .selectFrom('channel_members')\n          .leftJoin('channel_read_scopes as read_scope', (join) =>\n            join\n              .onRef('read_scope.channel_id', '=', 'channel_members.channel_id')\n              .onRef('read_scope.user_id', '=', 'channel_members.user_id'),\n          )\n          .select(['channel_members.channel_id', 'channel_members.user_id', counted.as('counted')])\n          .where('channel_members.channel_id', '=', channelId)\n          .where((eb) => (writer === null ? eb.lit(true) : eb('channel_members.user_id', '<>', writer))),\n    )\n    .updateTable('channel_members')\n    .from('arrival')\n    .set({\n      // One current-snapshot history calculation serves both counters; materialization keeps the\n      // planner from duplicating its correlated reads in the two update expressions.\n      unread_count: sql<number>`unread_count + case when arrival.counted then 1 else 0 end`,\n      unread_mention_count: sql<number>`unread_mention_count + case when arrival.counted and ${needs} then 1 else 0 end`,\n      // Counted with the numbers it describes, in the one statement, under the row lock it\n      // takes: the order of versions is the order of commits (0015).\n      state_version: sql<number>`state_version + 1`,\n    })\n",
     tests: ['apps/api/src/features/chat/messages/concurrency.integration.test.ts'],
   },
   {
@@ -62,8 +62,8 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'backdated-message-counted-as-unread',
     why: 'a message that sorts behind the reader’s position is counted unread, leaving a badge a read cannot clear',
     file: 'apps/api/src/features/chat/messages/delivery.ts',
-    find: "memberReadScope('channel_members')",
-    replace: "{ ...memberReadScope('channel_members'), position: null }",
+    find: "memberReadScope('channel_members', true, 'read_scope')",
+    replace: "{ ...memberReadScope('channel_members', true, 'read_scope'), position: null }",
     tests: ['apps/api/src/features/chat/messages/delivery-backdated.integration.test.ts'],
   },
   {
@@ -575,6 +575,30 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     find: "        .on(unreadCondition(scope, 'waiting')),",
     replace: '        .on(sql<boolean>`true`),',
     tests: ['apps/api/src/features/chat/messages/followed.integration.test.ts'],
+  },
+  {
+    id: 'fresh-send-attachments-lost',
+    why: 'The initial response and publication omit uploads that were linked by this send.',
+    file: 'apps/api/src/features/chat/messages/reader.ts',
+    find: 'ids.filter((id) => id !== inserted?.id || inserted.hasAttachments)',
+    replace: 'ids.filter((id) => id !== inserted?.id)',
+    tests: ['apps/api/src/features/chat/messages/send-attachments.integration.test.ts'],
+  },
+  {
+    id: 'fresh-send-empty-sidecars-reread',
+    why: 'The new text response reads sidecars known not to exist before its own commit, restoring SQL round trips.',
+    file: 'apps/api/src/features/chat/messages/reader.ts',
+    find: 'const existingIds = ids.filter((id) => id !== inserted?.id);',
+    replace: 'const existingIds = ids;',
+    tests: ['apps/api/src/features/chat/messages/reader.integration.test.ts'],
+  },
+  {
+    id: 'fresh-send-mentions-lost',
+    why: 'The new message names colleagues but its response and live publication omit their resolved mention IDs.',
+    file: 'apps/api/src/features/chat/messages/reader.ts',
+    find: 'new Map(mentions).set(inserted.id, [...inserted.mentioned].sort())',
+    replace: 'new Map(mentions).set(inserted.id, [])',
+    tests: ['apps/api/src/features/chat/messages/reader.integration.test.ts'],
   },
   {
     id: 'guest-delivery-arrival-unrestricted',

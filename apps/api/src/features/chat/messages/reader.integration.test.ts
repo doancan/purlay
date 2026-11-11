@@ -8,6 +8,7 @@ import { messageId } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { aRoom, type Room } from '../../../testing/rooms';
 import { messageHistory, missedIn, sendMessage } from './messages';
+import { readBuilt } from './reader';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -53,6 +54,58 @@ const counting = async <T>(
 };
 
 describe('integration: building a page of messages', () => {
+  test('a new text send uses at most eight SQL statements and retries rebuild later reactions and knowledge', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob', 'carol']);
+      const alice = room.members['alice'];
+      const bob = room.members['bob'];
+      const carol = room.members['carol'];
+      if (alice === undefined || bob === undefined || carol === undefined)
+        throw new Error('Missing send fixture');
+      await db
+        .updateTable('channel_members')
+        .set({ notification_level: 'mentions' })
+        .where('channel_id', '=', room.channelId)
+        .execute();
+      const id = messageId(NOW);
+      const first = await counting(
+        db,
+        async (counted) =>
+          await sendMessage(counted, fixedClock(NOW), alice.context, { id, content: 'A handover' }),
+      );
+      expect(first.queries).toBeLessThanOrEqual(8);
+      expect(await readBuilt(db, id)).toEqual(first.result.message);
+
+      const tagged = await sendMessage(db, fixedClock(at(1)), alice.context, {
+        id: messageId(at(1)),
+        content: `@${carol.username} and @${bob.username}`,
+      });
+      expect(tagged.message.mentions).toEqual([bob.userId, carol.userId].sort());
+      expect(await readBuilt(db, tagged.message.id)).toEqual(tagged.message);
+
+      await db
+        .insertInto('reactions')
+        .values({ message_id: id, user_id: bob.userId, emoji: '👍' })
+        .execute();
+      await db
+        .updateTable('messages')
+        .set({
+          is_question: true,
+          knowledge_version: 1,
+          decision_note: 'A later handover decision',
+        })
+        .where('id', '=', id)
+        .execute();
+      const retried = await sendMessage(db, fixedClock(at(2)), alice.context, {
+        id,
+        content: 'This retry must not replace the words',
+      });
+      expect(retried.message.content).toBe('A handover');
+      expect(retried.message.reactions.some((reaction) => reaction.emoji === '👍')).toBe(true);
+      expect(retried.message.thread?.knowledge?.decisionNote).toBe('A later handover decision');
+      expect(await readBuilt(db, id)).toEqual(retried.message);
+    });
+  });
   test('counts actual SQL execution without counting nested query compilation', async () => {
     await withRollback(async (db) => {
       const measured = await counting(db, async (counted) => {

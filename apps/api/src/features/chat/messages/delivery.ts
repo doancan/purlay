@@ -344,8 +344,8 @@ export const countArrival = async (
   notified: readonly string[],
 ): Promise<readonly ChannelStateUpdate[]> => {
   const messageId = message.id;
-  const needs = sql<boolean>`(user_id = any(${notified}::uuid[]))`;
-  const counted = unreadMessage(memberReadScope('channel_members'), messageId);
+  const needs = sql<boolean>`(channel_members.user_id = any(${notified}::uuid[]))`;
+  const counted = unreadMessage(memberReadScope('channel_members', true, 'read_scope'), messageId);
   // The rows are locked first, in one order (#668). An `UPDATE` of several rows locks them in the
   // order it reaches them, which follows where each row's newest version happens to lie for this
   // snapshot: two senders could each hold a row the other needed, and one send failed with a
@@ -365,18 +365,35 @@ export const countArrival = async (
   // Exactly the rows locked above: somebody who joins between the two statements is not reached here
   // unlocked, out of order (a deadlock of its own), and was not in the channel when it was written.
   const changed = await executor
+    .with(
+      (cte) => cte('arrival').materialized(),
+      (db) =>
+        db
+          .selectFrom('channel_members')
+          .leftJoin('channel_read_scopes as read_scope', (join) =>
+            join
+              .onRef('read_scope.channel_id', '=', 'channel_members.channel_id')
+              .onRef('read_scope.user_id', '=', 'channel_members.user_id'),
+          )
+          .select(['channel_members.channel_id', 'channel_members.user_id', counted.as('counted')])
+          .where('channel_members.channel_id', '=', channelId)
+          .where('channel_members.user_id', 'in', locked),
+    )
     .updateTable('channel_members')
+    .from('arrival')
     .set({
-      unread_count: sql<number>`unread_count + case when ${counted} then 1 else 0 end`,
-      unread_mention_count: sql<number>`unread_mention_count + case when ${counted} and ${needs} then 1 else 0 end`,
+      // One current-snapshot history calculation serves both counters; materialization keeps the
+      // planner from duplicating its correlated reads in the two update expressions.
+      unread_count: sql<number>`unread_count + case when arrival.counted then 1 else 0 end`,
+      unread_mention_count: sql<number>`unread_mention_count + case when arrival.counted and ${needs} then 1 else 0 end`,
       // Counted with the numbers it describes, in the one statement, under the row lock it
       // takes: the order of versions is the order of commits (0015).
       state_version: sql<number>`state_version + 1`,
     })
-    .where('channel_id', '=', channelId)
-    .where('user_id', 'in', locked)
+    .whereRef('channel_members.channel_id', '=', 'arrival.channel_id')
+    .whereRef('channel_members.user_id', '=', 'arrival.user_id')
     .returning([
-      'user_id',
+      'channel_members.user_id',
       'last_read_message_id',
       'unread_count',
       'unread_mention_count',
