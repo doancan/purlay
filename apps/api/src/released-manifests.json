@@ -52,6 +52,7 @@
       "retention": [
         "purge:retention",
         "sweep:github-deliveries",
+        "sweep:guest-expiry",
         "sweep:link-previews"
       ]
     },
