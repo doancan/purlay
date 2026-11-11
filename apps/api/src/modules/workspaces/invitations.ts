@@ -25,6 +25,7 @@ import type {
   SqlBool,
   Transaction,
 } from '@purlay/db';
+import { sql } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
 import {
   INVITATION_TTL_DAYS,
@@ -50,6 +51,7 @@ import { randomToken, tokenDigest } from '../../platform/tokens';
 import { recordAudit } from '../audit/audit';
 import { recordInvitationApplicant } from './invitation-delivery';
 import { membershipsOf } from './workspaces';
+import { requireGuestAdmissionReady } from './guest-readiness';
 
 export const notFound = (): AppError =>
   new AppError({
@@ -96,6 +98,9 @@ export const linkOpens = (
   ]);
 
 interface InvitationRow {
+  readonly access_kind: string;
+  readonly guest_channel_count: number | null;
+  readonly guest_access_expires_at: Date | string | null;
   readonly id: string;
   readonly created_at: Date | string;
   readonly expires_at: Date | string;
@@ -118,6 +123,17 @@ const asInvitation = (row: InvitationRow): Invitation => ({
         },
   createdAt: new Date(row.created_at).toISOString(),
   expiresAt: new Date(row.expires_at).toISOString(),
+  ...(row.access_kind !== 'guest'
+    ? {}
+    : {
+        guest: {
+          channelCount: row.guest_channel_count ?? 0,
+          accessExpiresAt:
+            row.guest_access_expires_at === null
+              ? null
+              : new Date(row.guest_access_expires_at).toISOString(),
+        },
+      }),
 });
 
 /** The context's links that still let people in, with who made each, newest first. */
@@ -134,11 +150,18 @@ const openInvitations = async (
       'workspace_invitations.id',
       'workspace_invitations.created_at',
       'workspace_invitations.expires_at',
+      'workspace_invitations.access_kind',
+      'workspace_invitations.guest_access_expires_at',
       'users.id as user_id',
       'users.username',
       'users.display_name',
       'users.avatar_url',
     ])
+    .select(
+      sql<number | null>`cardinality(workspace_invitations.guest_channels)`.as(
+        'guest_channel_count',
+      ),
+    )
     .where('workspace_invitations.workspace_id', '=', context.workspaceId)
     .where('workspace_invitations.revoked_at', 'is', null)
     .where('workspace_invitations.expires_at', '>', now)
@@ -397,7 +420,7 @@ export const previewInvitation = async (
   userId: string,
   token: string,
 ): Promise<InvitationPreview> => {
-  const { workspace, expiresAt } = await opened(executor, clock.now(), userId, token, false);
+  const { workspace, expiresAt, guest } = await opened(executor, clock.now(), userId, token, false);
   const member = await executor
     .selectFrom('workspace_members')
     .select('id')
@@ -408,6 +431,14 @@ export const previewInvitation = async (
     workspace,
     expiresAt: new Date(expiresAt).toISOString(),
     member: member !== undefined,
+    ...(guest === undefined
+      ? {}
+      : {
+          guest: {
+            channelCount: guest.access.channelIds.length,
+            accessExpiresAt: guest.access.accessExpiresAt,
+          },
+        }),
   };
 };
 
@@ -429,6 +460,7 @@ export const acceptInvitation = async (
   token: string,
   effective?: EntitlementPolicy['effective'],
   channels?: WorkspaceChannels,
+  guestAccessReady = false,
 ): Promise<AcceptedInvitation> => {
   const now = clock.now();
   // A guest locks its selected conversations before the workspace mutex used by role changes.
@@ -468,6 +500,16 @@ export const acceptInvitation = async (
     (guest?.access.accessExpiresAt != null && new Date(guest.access.accessExpiresAt) <= joinedAt)
   )
     throw notFound();
+  if (guest !== undefined && !guestAccessReady) {
+    const existing = await transaction
+      .selectFrom('workspace_members')
+      .select('id')
+      .where('workspace_id', '=', workspace.id)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    // Reopening an already accepted link does not create or reactivate a membership.
+    if (existing === undefined) requireGuestAdmissionReady(guestAccessReady);
+  }
   const inserted = await transaction
     .insertInto('workspace_members')
     .values({
@@ -496,6 +538,7 @@ export const acceptInvitation = async (
         guest.manager,
         userId,
         guest.access.channelIds,
+        true,
       );
     }
     await recordAudit(transaction, clock, {

@@ -145,7 +145,8 @@ export const buildFeed = ({
 export const newestConfirmedId = (items: readonly FeedItem[]): string | null => {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
-    if (item?.kind === 'message' && item.delivery === 'sent') return item.message.id;
+    if (item?.kind === 'message' && item.delivery === 'sent' && item.message.historyHidden !== true)
+      return item.message.id;
   }
   return null;
 };

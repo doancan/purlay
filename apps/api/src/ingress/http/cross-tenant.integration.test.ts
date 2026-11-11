@@ -114,6 +114,7 @@ const aTenant = async (
   db: Executor,
   cookie: string,
   slug: string,
+  guestMember = false,
 ): Promise<Ids & { readonly replyId: string }> => {
   const workspaceId = await created(
     await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug: aUniqueSlug(slug) }),
@@ -184,7 +185,13 @@ const aTenant = async (
   const member = await aSignedInUser(db, clock, `${slug}-member`);
   await db
     .insertInto('workspace_members')
-    .values({ workspace_id: workspaceId, user_id: member.userId, role: 'member', joined_at: NOW })
+    .values({
+      workspace_id: workspaceId,
+      user_id: member.userId,
+      role: 'member',
+      joined_at: NOW,
+      ...(guestMember ? { access_kind: 'guest', guest_since: NOW, guest_modules: ['chat'] } : {}),
+    })
     .execute();
   // In the channel too: somebody to bring in to respond to its incident.
   await db
@@ -413,13 +420,14 @@ describe('integration: cross-tenant isolation', () => {
           const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
           const owner = ownerUser.cookie;
           const stranger = await signedIn(db, 'xt-stranger');
-          const theirs = await aTenant(db, owner, 'xt-theirs');
+          const theirs = await aTenant(db, owner, 'xt-theirs', crossing.guestMember);
           await aTenant(db, stranger, 'xt-own');
           if (crossing.archived === true) {
             const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
             expect(archived.status).toBe(204);
           }
           const body = crossing.body?.(NOW, {
+            channelId: theirs.channelId,
             userId: ownerUser.userId,
             workspaceId: theirs.workspaceId,
             messageId: theirs.messageId,
@@ -487,8 +495,8 @@ describe('integration: one member, two workspaces', () => {
     test(`${key} lists nothing of the member's other workspace`, async () => {
       await withRollback(async (db) => {
         const member = await signedIn(db, 'xt-both');
-        const first = await aTenant(db, member, 'xt-first');
-        const second = await aTenant(db, member, 'xt-second');
+        const first = await aTenant(db, member, 'xt-first', crossing.guestMember);
+        const second = await aTenant(db, member, 'xt-second', crossing.guestMember);
 
         const directions: readonly (readonly [Ids, Ids])[] = [
           [first, second],

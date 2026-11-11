@@ -560,7 +560,7 @@ export const PresenceFrame = Type.Object({
  */
 export const WorkspaceUpdatedFrame = Type.Object({
   event: Type.Literal('WORKSPACE_UPDATED'),
-  data: Type.Object({ workspaceId: Uuid }),
+  data: Type.Object({ workspaceId: Uuid, accessChanged: Type.Optional(Type.Literal(true)) }),
   ...envelope,
 });
 

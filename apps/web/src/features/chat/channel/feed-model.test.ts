@@ -29,6 +29,14 @@ const input = (over: Partial<FeedInput> = {}): FeedInput => ({
 const kinds = (items: readonly FeedItem[]): string[] =>
   items.map((item) => (item.kind === 'message' ? item.message.content : item.kind));
 
+test('an earlier thread container never advances the channel read receipt', () => {
+  const hidden = aMessage(2, { historyHidden: true, sender: null, content: '' });
+  expect(newestConfirmedId(buildFeed(input({ messages: [hidden] })))).toBeNull();
+  expect(newestConfirmedId(buildFeed(input({ messages: [aMessage(1), hidden] })))).toBe(
+    messageIdAt(1),
+  );
+});
+
 const pendingOf = (n: number, over: Partial<PendingMessage> = {}): PendingMessage => ({
   id: messageIdAt(n),
   channelId: IDS.api,

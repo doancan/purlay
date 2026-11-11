@@ -27,7 +27,7 @@ import {
 } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { useApi } from '../../../data/api-provider';
-import { isApiError } from '../../../data/errors';
+import { accountChanged, isApiError } from '../../../data/errors';
 import { codeOf, useDescribeFailure, type FailureCode } from '../../../data/failure';
 import { useI18n } from '../../../i18n/i18n-provider';
 import type { Formatters } from '../../../i18n/format';
@@ -56,25 +56,35 @@ export const OutboxProvider = ({
   const { show } = useToast();
   const { t } = useI18n();
   // Read when an answer arrives, which may be long after this rendered.
-  const latest = useRef({ engine, show, t });
-  latest.current = { engine, show, t };
-  const [outbox] = useState(() =>
-    createOutbox({
-      upload: (workspaceId, item, progress) => api.upload(workspaceId, item, progress),
+  const latest = useRef({ api, engine, show, t });
+  latest.current = { api, engine, show, t };
+  const [outbox] = useState(() => {
+    // Transport updates may use the latest engine; old-account work never acquires its lifetime.
+    const isCurrent = engine.isCurrent;
+    return createOutbox({
+      upload: (workspaceId, item, progress) =>
+        isCurrent()
+          ? latest.current.api.upload(workspaceId, item, progress)
+          : Promise.reject(accountChanged()),
       refusal: (failure) => ({
         reason: codeOf(failure),
         remainingBytes: isApiError(failure) ? failure.remainingBytes : null,
       }),
       send: (message) => {
+        if (!isCurrent()) throw accountChanged();
         latest.current.engine.send(message);
       },
-      refused: (channelName) => {
+      refused: (channelName, reason) => {
+        if (!isCurrent()) return;
         latest.current.show({
-          message: latest.current.t('composer.notSent', { channel: channelName }),
+          message: latest.current.t(
+            reason === 'account' ? 'composer.notSentAccount' : 'composer.notSent',
+            { channel: channelName },
+          ),
         });
       },
-    }),
-  );
+    });
+  });
   return <OutboxContext.Provider value={outbox}>{children}</OutboxContext.Provider>;
 };
 
@@ -103,6 +113,7 @@ export const useUploads = (key: string, content: () => string): Uploads => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const api = useApi();
+  const { isCurrent } = useEngine();
   const clock = useContext(RealtimePortsContext).clock ?? systemClock;
   const place = useSyncExternalStore(outbox.subscribe, () => outbox.read(key));
   const words = useRef(content);
@@ -116,6 +127,7 @@ export const useUploads = (key: string, content: () => string): Uploads => {
   }, [outbox, key]);
 
   const add = (files: readonly File[]): void => {
+    if (!isCurrent()) return;
     const room = ATTACHMENTS_PER_MESSAGE_MAX - place.items.length;
     if (files.length > room) {
       show({ message: t('composer.tooManyFiles', { count: ATTACHMENTS_PER_MESSAGE_MAX }) });
@@ -135,10 +147,12 @@ export const useUploads = (key: string, content: () => string): Uploads => {
   };
 
   const remove = (id: string): void => {
+    if (!isCurrent()) return;
     const item = outbox.remove(key, id);
     // Only an upload that landed is on the server; one in flight is let go, and left to the sweep.
     if (item?.status === 'ready') {
       api.discardAttachment(id).catch((failure: unknown) => {
+        if (!isCurrent()) return;
         show({ message: `${t('upload.discardFailed', { name: item.name })} ${describe(failure)}` });
       });
     }

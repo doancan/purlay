@@ -32,6 +32,11 @@ import { testConfig, testDependencies } from '../../testing/doubles';
 import { twoColourPng } from '../../testing/png';
 import { aMemoryStore } from '../../testing/storage';
 import { aUniqueSlug } from '../../testing/users';
+import { atomicallyOn } from '../../platform/transactions';
+import { requireWorkspaceMembership } from '../../platform/tenancy';
+import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import { createGuestInvitation } from '../../modules/workspaces/guest-invitations';
+import { acceptInvitation } from '../../modules/workspaces/invitations';
 
 const origin = 'https://purlay.test';
 const NOW = new Date('2026-10-26T12:00:00.000Z');
@@ -91,6 +96,7 @@ interface Context {
   /** The id of a third session of Alice's, which the device list ends. */
   aliceDeviceId: string;
   workspaceId: string;
+  guestId: string;
   channelId: string;
   extraChannelId: string;
   rootId: string;
@@ -144,6 +150,44 @@ const STEPS: readonly Step[] = [
   {
     id: 'listWorkspaceMembers',
     spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  {
+    id: 'readGuestInvitationAvailability',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
+    status: 200,
+  },
+  {
+    id: 'createWorkspaceGuestInvitation',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId },
+      json: {
+        email: 'endpoint-guest@example.test',
+        channelIds: [c.channelId],
+        accessExpiresAt: null,
+      },
+    }),
+    status: 201,
+  },
+  {
+    id: 'listWorkspaceGuests',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId }, query: { limit: 1 } }),
+    status: 200,
+  },
+  {
+    id: 'updateWorkspaceGuest',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, userId: c.guestId },
+      json: { channelIds: [] },
+    }),
+    status: 200,
+  },
+  {
+    id: 'convertWorkspaceGuest',
+    spec: (c) => ({
+      params: { workspaceId: c.workspaceId, userId: c.guestId },
+      json: { confirmFullAccess: true },
+    }),
     status: 200,
   },
   { id: 'getPresence', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
@@ -623,12 +667,39 @@ const world = async (): Promise<Context> => {
     .values({ channel_id: channel.id, user_id: bob.userId, joined_at: NOW })
     .onConflict((conflict) => conflict.doNothing())
     .execute();
+  const guest = await aSignedInUser(db, clock, 'contract-guest');
+  const recipient = await db
+    .updateTable('users')
+    .set({ email_verified: true })
+    .where('id', '=', guest.userId)
+    .returning('email')
+    .executeTakeFirstOrThrow();
+  await atomicallyOn(db)(async (transaction) => {
+    const owner = await requireWorkspaceMembership(transaction, alice.userId, workspaceId);
+    const invitation = await createGuestInvitation(
+      transaction,
+      clock,
+      owner,
+      { email: recipient.email, channelIds: [channel.id], accessExpiresAt: null },
+      chatWorkspaceChannels,
+    );
+    await acceptInvitation(
+      transaction,
+      clock,
+      guest.userId,
+      invitation.token,
+      undefined,
+      chatWorkspaceChannels,
+      true,
+    );
+  });
   return {
     alice,
     bob,
     aliceElsewhere,
     aliceDeviceId: device.sessionId,
     workspaceId,
+    guestId: guest.userId,
     channelId: channel.id,
     extraChannelId: '',
     rootId: '',

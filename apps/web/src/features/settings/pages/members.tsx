@@ -31,10 +31,11 @@ import { useToast } from '../../../ui/toast';
 import { Icon } from '../../../components/icon';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { fold } from '../../chat/composer/mention-suggest';
-import { useSession } from '../../session/session';
+import { useRuns, useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage } from '../page';
 import { useWorkspaceRole } from '../role';
+import { GuestAdministration } from '../guests';
 
 const ROLES: readonly UserRole[] = ['owner', 'admin', 'member'];
 const ALL = 'all';
@@ -82,6 +83,8 @@ export const MembersPage = (): React.JSX.Element => {
   const [problem, setProblem] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<UserRole | typeof ALL>(ALL);
+  const [guestView, setGuestView] = useState(false);
+  const hasChat = useRuns('chat');
 
   const reread = async (): Promise<void> => {
     await client.invalidateQueries({ queryKey: keys.members(workspace.id) });
@@ -91,11 +94,13 @@ export const MembersPage = (): React.JSX.Element => {
    * Whose role this person may change (D-111): an owner's only if an owner — their own included, so an
    * owner steps down once there is another — and an admin anyone else's, themself included.
    */
-  const mayChangeRole = (member: WorkspaceMember): boolean =>
+  const mayManage = (member: WorkspaceMember): boolean =>
     actor === 'owner' || (actor === 'admin' && member.role !== 'owner');
+  const mayChangeRole = (member: WorkspaceMember): boolean =>
+    member.accessKind !== 'guest' && mayManage(member);
   /** Whom this person may remove: as above, but never themself — that is leaving (Sessions & account). */
   const mayRemove = (member: WorkspaceMember): boolean =>
-    member.user.id !== user.id && mayChangeRole(member);
+    member.user.id !== user.id && mayManage(member);
   const offered = ROLES.filter((option) => actor === 'owner' || option !== 'owner');
 
   const start = (userId: string, action: 'role' | 'remove'): boolean => {
@@ -185,7 +190,7 @@ export const MembersPage = (): React.JSX.Element => {
     }
   };
 
-  const all = members.data ?? [];
+  const all = (members.data ?? []).filter((member) => !hasChat || member.accessKind !== 'guest');
   const wanted = fold(query.trim());
   const shown = all
     .filter((member) => role === ALL || member.role === role)
@@ -205,244 +210,285 @@ export const MembersPage = (): React.JSX.Element => {
   return (
     <SettingsPage
       title={t('settings.members.title')}
-      description={t('members.description')}
+      description={t(guestView && hasChat ? 'guests.pageDescription' : 'members.description')}
       action={
-        <Link
-          to="settings"
-          params={{ slug: workspace.slug, section: 'invitations' }}
-          className={buttonStyle('primary')}
-        >
-          <Icon name="invite" />
-          {t('settings.members.invite')}
-        </Link>
+        !guestView || !hasChat ? (
+          <Link
+            to="settings"
+            params={{ slug: workspace.slug, section: 'invitations' }}
+            className={buttonStyle('primary')}
+          >
+            <Icon name="invite" />
+            {t('settings.members.invite')}
+          </Link>
+        ) : undefined
       }
     >
-      {members.data !== undefined && (
-        <dl className="grid grid-cols-4 overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-card">
-          {(
-            [
-              ['total', all.length],
-              ['owner', count('owner')],
-              ['admin', count('admin')],
-              ['member', count('member')],
-            ] as const
-          ).map(([kind, value]) => (
-            <div
-              key={kind}
-              className="flex min-w-0 flex-col gap-1 not-first:border-l-hairline border-border-subtle px-6 py-4 max-narrow:px-3"
-            >
-              <dt className="truncate text-caption text-ink-muted">
-                {t(`settings.members.count.${kind}`)}
-              </dt>
-              <dd className="font-mono text-title text-ink">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      <SettingsCard
-        {...(problem === null
-          ? {}
-          : { footer: <SaveOutcome outcome={{ ok: false, words: problem }} /> })}
-      >
-        <div className="flex items-center gap-3 border-b-hairline border-border-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
-          <label htmlFor={searchId} className="relative flex min-w-0 flex-1 items-center">
-            <span className="pointer-events-none absolute left-3 text-ink-muted">
-              <Icon name="search" size="sm" />
-            </span>
-            <VisuallyHidden>{t('settings.members.search')}</VisuallyHidden>
-            <input
-              id={searchId}
-              type="search"
-              value={query}
-              placeholder={t('settings.members.search')}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => {
-                setQuery(event.target.value);
-              }}
-              className="h-control w-full rounded-md border-hairline border-border-strong bg-surface-100 pr-3 pl-8 text-body text-ink placeholder:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
-            />
-          </label>
-          <Select
-            aria-label={t('settings.members.filter')}
-            value={role}
-            onChange={(event) => {
-              const next = ROLES.find((option) => option === event.target.value);
-              setRole(next ?? ALL);
+      {hasChat && (
+        <div role="group" aria-label={t('guests.view')} className="flex flex-wrap gap-2">
+          <Button
+            className="aria-pressed:border-accent aria-pressed:bg-accent-subtle aria-pressed:text-accent-text"
+            aria-pressed={!guestView}
+            onClick={() => {
+              setGuestView(false);
             }}
           >
-            <option value={ALL}>{t('settings.members.everyRole')}</option>
-            {ROLES.map((option) => (
-              <option key={option} value={option}>
-                {t(`members.role.${option}`)}
-              </option>
-            ))}
-          </Select>
+            {t('guests.members')}
+          </Button>
+          <Button
+            className="aria-pressed:border-accent aria-pressed:bg-accent-subtle aria-pressed:text-accent-text"
+            aria-pressed={guestView}
+            onClick={() => {
+              setGuestView(true);
+            }}
+          >
+            {t('guests.title')}
+          </Button>
         </div>
-
-        {members.isError && (
-          <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
-            <p role="alert" className="min-w-0 flex-1 text-body text-ink-muted">
-              {members.data !== undefined && t('members.refreshFailed')} {describe(members.error)}
-            </p>
-            <Button
-              busy={members.isFetching}
-              onClick={() => {
-                void members.refetch();
-              }}
-            >
-              {t('common.retry')}
-            </Button>
-          </div>
-        )}
-        {members.data === undefined ? (
-          !members.isError && (
-            <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
-              <Skeleton />
-              <Skeleton />
-              <Skeleton />
-            </LoadingStatus>
-          )
-        ) : shown.length === 0 ? (
-          <p className="px-6 py-8 text-center text-body text-ink-muted">
-            {t('settings.members.noMatch')}
-          </p>
-        ) : (
-          <ul aria-label={t('settings.members.title')} className="flex flex-col">
-            {shown.map((member) => {
-              const name = member.user.displayName;
-              const manage = mayChangeRole(member);
-              const removable = mayRemove(member);
-              const you = member.user.id === user.id;
-              return (
-                <li
-                  key={member.user.id}
-                  className="flex flex-col not-first:border-t-hairline border-border-subtle"
+      )}
+      {guestView && hasChat ? (
+        <GuestAdministration key={workspace.id} />
+      ) : (
+        <>
+          {members.data !== undefined && (
+            <dl className="grid grid-cols-4 overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-card">
+              {(
+                [
+                  ['total', all.length],
+                  ['owner', count('owner')],
+                  ['admin', count('admin')],
+                  ['member', count('member')],
+                ] as const
+              ).map(([kind, value]) => (
+                <div
+                  key={kind}
+                  className="flex min-w-0 flex-col gap-1 not-first:border-l-hairline border-border-subtle px-6 py-4 max-narrow:px-3"
                 >
-                  <div className="flex items-center gap-4 px-6 py-3 max-narrow:flex-wrap max-narrow:px-4">
-                    <Avatar name={name} username={member.user.username} size="md" />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="flex items-center gap-2 truncate text-label text-ink">
-                        {name}
-                        {you && (
-                          <span className="inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption text-ink-muted">
-                            {t('members.you')}
-                          </span>
-                        )}
-                      </span>
-                      <span className="truncate font-mono text-caption text-ink-muted">
-                        @{member.user.username}
-                      </span>
-                    </span>
-                    {/* Role and action as two columns of one width on every row, so an owner's role in
-                        words sits where another row's select does. */}
-                    <span className="grid w-full max-w-field shrink-0 grid-cols-2 items-center gap-2 max-narrow:max-w-none">
-                      {manage ? (
-                        <Select
-                          aria-label={t('members.roleOf', { name })}
-                          disabled={working.has(member.user.id) || members.isError}
-                          aria-busy={working.has(member.user.id) || undefined}
-                          value={member.role}
-                          className="w-full"
-                          onChange={(event) => {
-                            const next = ROLES.find((option) => option === event.target.value);
-                            if (next === undefined || next === member.role) return;
-                            if (you) setStepping(next);
-                            else void changeRole(member, next);
-                          }}
-                        >
-                          {offered.map((option) => (
-                            <option key={option} value={option}>
-                              {t(`members.role.${option}`)}
-                            </option>
-                          ))}
-                        </Select>
-                      ) : (
-                        // Beside a column of menus, under their words; on a phone, at the row's edge as they are.
-                        <span className="pl-3 text-label font-normal text-ink-muted max-narrow:pl-0">
-                          {t(`members.role.${member.role}`)}
-                        </span>
-                      )}
-                      {removable && (
-                        <span className="flex justify-end">
-                          <Button
-                            variant="dangerQuiet"
-                            aria-label={t('members.removeLabel', { name })}
-                            disabled={working.has(member.user.id) || members.isError}
-                            busy={working.get(member.user.id) === 'remove'}
-                            onClick={() => {
-                              setAsking(member.user.id);
-                            }}
-                          >
-                            {t('members.remove')}
-                          </Button>
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  {you && stepping !== null && (
-                    <div className="flex items-center gap-3 bg-warning-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
-                      <p className="min-w-0 flex-1 text-label text-warning-text">
-                        {t('members.selfAsk', { role: t(`members.role.${stepping}`) })}
-                      </p>
-                      <span className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setStepping(null);
-                          }}
-                        >
-                          {t('common.cancel')}
-                        </Button>
-                        <Button
-                          variant="primary"
-                          disabled={members.isError || working.has(member.user.id)}
-                          onClick={() => {
-                            const next = stepping;
-                            setStepping(null);
-                            void changeRole(member, next);
-                          }}
-                        >
-                          {t('members.selfConfirm')}
-                        </Button>
-                      </span>
-                    </div>
-                  )}
-                  {asking === member.user.id && (
-                    <div className="flex items-center gap-3 bg-danger-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
-                      <p className="min-w-0 flex-1 text-label text-danger-text">
-                        {t('members.removeAsk', { name })}
-                      </p>
-                      <span className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setAsking(null);
-                          }}
-                        >
-                          {t('common.cancel')}
-                        </Button>
-                        <Button
-                          variant="danger"
-                          disabled={members.isError || working.has(member.user.id)}
-                          onClick={() => {
-                            void remove(member);
-                          }}
-                        >
-                          {t('members.remove')}
-                        </Button>
-                      </span>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </SettingsCard>
+                  <dt className="truncate text-caption text-ink-muted">
+                    {t(`settings.members.count.${kind}`)}
+                  </dt>
+                  <dd className="font-mono text-title text-ink">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
-      <RoleGuide />
+          <SettingsCard
+            {...(problem === null
+              ? {}
+              : { footer: <SaveOutcome outcome={{ ok: false, words: problem }} /> })}
+          >
+            <div className="flex items-center gap-3 border-b-hairline border-border-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
+              <label htmlFor={searchId} className="relative flex min-w-0 flex-1 items-center">
+                <span className="pointer-events-none absolute left-3 text-ink-muted">
+                  <Icon name="search" size="sm" />
+                </span>
+                <VisuallyHidden>{t('settings.members.search')}</VisuallyHidden>
+                <input
+                  id={searchId}
+                  type="search"
+                  value={query}
+                  placeholder={t('settings.members.search')}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                  }}
+                  className="h-control w-full rounded-md border-hairline border-border-strong bg-surface-100 pr-3 pl-8 text-body text-ink placeholder:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
+                />
+              </label>
+              <Select
+                aria-label={t('settings.members.filter')}
+                value={role}
+                onChange={(event) => {
+                  const next = ROLES.find((option) => option === event.target.value);
+                  setRole(next ?? ALL);
+                }}
+              >
+                <option value={ALL}>{t('settings.members.everyRole')}</option>
+                {ROLES.map((option) => (
+                  <option key={option} value={option}>
+                    {t(`members.role.${option}`)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {members.isError && (
+              <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+                <p role="alert" className="min-w-0 flex-1 text-body text-ink-muted">
+                  {members.data !== undefined && t('members.refreshFailed')}{' '}
+                  {describe(members.error)}
+                </p>
+                <Button
+                  busy={members.isFetching}
+                  onClick={() => {
+                    void members.refetch();
+                  }}
+                >
+                  {t('common.retry')}
+                </Button>
+              </div>
+            )}
+            {members.data === undefined ? (
+              !members.isError && (
+                <LoadingStatus
+                  label={t('common.loading')}
+                  className="flex flex-col gap-3 px-6 py-5"
+                >
+                  <Skeleton />
+                  <Skeleton />
+                  <Skeleton />
+                </LoadingStatus>
+              )
+            ) : shown.length === 0 ? (
+              <p className="px-6 py-8 text-center text-body text-ink-muted">
+                {t('settings.members.noMatch')}
+              </p>
+            ) : (
+              <ul aria-label={t('settings.members.title')} className="flex flex-col">
+                {shown.map((member) => {
+                  const name = member.user.displayName;
+                  const manage = mayChangeRole(member);
+                  const removable = mayRemove(member);
+                  const you = member.user.id === user.id;
+                  return (
+                    <li
+                      key={member.user.id}
+                      className="flex flex-col not-first:border-t-hairline border-border-subtle"
+                    >
+                      <div className="flex items-center gap-4 px-6 py-3 max-narrow:flex-wrap max-narrow:px-4">
+                        <Avatar name={name} username={member.user.username} size="md" />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-center gap-2 truncate text-label text-ink">
+                            {name}
+                            {you && (
+                              <span className="inline-flex h-badge items-center rounded-pill bg-surface-200 px-2 text-caption text-ink-muted">
+                                {t('members.you')}
+                              </span>
+                            )}
+                          </span>
+                          <span className="truncate font-mono text-caption text-ink-muted">
+                            @{member.user.username}
+                          </span>
+                          {member.accessKind === 'guest' && (
+                            <span className="text-caption text-ink-muted">
+                              {t('guests.unavailableHint')}
+                            </span>
+                          )}
+                        </span>
+                        {/* Role and action as two columns of one width on every row, so an owner's role in
+                        words sits where another row's select does. */}
+                        <span className="grid w-full max-w-field shrink-0 grid-cols-2 items-center gap-2 max-narrow:max-w-none">
+                          {manage ? (
+                            <Select
+                              aria-label={t('members.roleOf', { name })}
+                              disabled={working.has(member.user.id) || members.isError}
+                              aria-busy={working.has(member.user.id) || undefined}
+                              value={member.role}
+                              className="w-full"
+                              onChange={(event) => {
+                                const next = ROLES.find((option) => option === event.target.value);
+                                if (next === undefined || next === member.role) return;
+                                if (you) setStepping(next);
+                                else void changeRole(member, next);
+                              }}
+                            >
+                              {offered.map((option) => (
+                                <option key={option} value={option}>
+                                  {t(`members.role.${option}`)}
+                                </option>
+                              ))}
+                            </Select>
+                          ) : (
+                            // Beside a column of menus, under their words; on a phone, at the row's edge as they are.
+                            <span className="pl-3 text-label font-normal text-ink-muted max-narrow:pl-0">
+                              {member.accessKind === 'guest'
+                                ? t('guests.memberKind')
+                                : t(`members.role.${member.role}`)}
+                            </span>
+                          )}
+                          {removable && (
+                            <span className="flex justify-end">
+                              <Button
+                                variant="dangerQuiet"
+                                aria-label={t('members.removeLabel', { name })}
+                                disabled={working.has(member.user.id) || members.isError}
+                                busy={working.get(member.user.id) === 'remove'}
+                                onClick={() => {
+                                  setAsking(member.user.id);
+                                }}
+                              >
+                                {t('members.remove')}
+                              </Button>
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {you && stepping !== null && (
+                        <div className="flex items-center gap-3 bg-warning-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
+                          <p className="min-w-0 flex-1 text-label text-warning-text">
+                            {t('members.selfAsk', { role: t(`members.role.${stepping}`) })}
+                          </p>
+                          <span className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                setStepping(null);
+                              }}
+                            >
+                              {t('common.cancel')}
+                            </Button>
+                            <Button
+                              variant="primary"
+                              disabled={members.isError || working.has(member.user.id)}
+                              onClick={() => {
+                                const next = stepping;
+                                setStepping(null);
+                                void changeRole(member, next);
+                              }}
+                            >
+                              {t('members.selfConfirm')}
+                            </Button>
+                          </span>
+                        </div>
+                      )}
+                      {asking === member.user.id && (
+                        <div className="flex items-center gap-3 bg-danger-subtle px-6 py-3 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
+                          <p className="min-w-0 flex-1 text-label text-danger-text">
+                            {t('members.removeAsk', { name })}
+                          </p>
+                          <span className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              onClick={() => {
+                                setAsking(null);
+                              }}
+                            >
+                              {t('common.cancel')}
+                            </Button>
+                            <Button
+                              variant="danger"
+                              disabled={members.isError || working.has(member.user.id)}
+                              onClick={() => {
+                                void remove(member);
+                              }}
+                            >
+                              {t('members.remove')}
+                            </Button>
+                          </span>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </SettingsCard>
+
+          <RoleGuide />
+        </>
+      )}
     </SettingsPage>
   );
 };

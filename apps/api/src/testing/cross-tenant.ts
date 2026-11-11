@@ -155,6 +155,7 @@ type Visibility =
  * the body was read is told from one that came after.
  */
 export interface OwnerIds {
+  readonly channelId: string;
   readonly replyId: string;
   readonly userId: string;
   readonly messageId: string;
@@ -169,6 +170,8 @@ export interface CrossTenantCase {
   >;
   /** It acts on an upload not sent yet, so the crossing names that one (`unsentAttachmentId`). */
   readonly unsent?: true;
+  /** The case's member target is a restricted guest; positive list and edit controls use actual scope. */
+  readonly guestMember?: true;
   /**
    * A body the owner's identical request succeeds with. Without it a `POST` would
    * be refused for its body, and the `404` would never have been reached.
@@ -290,6 +293,55 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId/members': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'workspace membership, which is not per channel' },
+  },
+  'POST /api/workspaces/:workspaceId/guests/:userId/conversion': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    guestMember: true,
+    body: () => ({ confirmFullAccess: true }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'widens a membership explicitly without naming or disclosing hidden channels; current explicit scope is preserved (D-300)',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/guest-invitations': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    visibility: {
+      kind: 'none',
+      reason: 'manager capability flags only; no conversation identities or content',
+    },
+  },
+  'POST /api/workspaces/:workspaceId/guest-invitations': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: (_now, owner) => ({
+      email: 'crossing-guest@example.test',
+      channelIds: [owner.channelId],
+      accessExpiresAt: null,
+    }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'selected private channel refusal is exercised by the actual creation handler in guest-invitation-creation.integration.test.ts',
+    },
+  },
+  'GET /api/workspaces/:workspaceId/guests': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    guestMember: true,
+    visibility: {
+      kind: 'none',
+      reason:
+        'administrative membership metadata; hidden channel identities are separately proved absent in guest-management.integration.test.ts (D-300)',
+    },
+  },
+  'PATCH /api/workspaces/:workspaceId/guests/:userId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    guestMember: true,
+    body: () => ({ channelIds: [] }),
+    visibility: {
+      kind: 'none',
+      reason:
+        'edits a named guest membership; private scope is preserved and tested in guest-management.integration.test.ts (D-300)',
+    },
   },
   'GET /api/workspaces/:workspaceId/channels': {
     refusal: 'WORKSPACE_NOT_FOUND',

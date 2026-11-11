@@ -571,6 +571,10 @@ export const Message = Type.Object({
   /** A UUIDv7 the client generated. It is also the pagination cursor. (D-8) */
   id: Uuid,
   channelId: Uuid,
+  /** Sanitized earlier thread container: createdAt is its first readable reply's activity time. */
+  historyHidden: Type.Optional(Type.Literal(true)),
+  /** An action capability of that container, without revealing the earlier root's metadata. */
+  replyAllowed: Type.Optional(Type.Boolean()),
   /**
    * Who wrote it; null for a message nobody wrote — a repository's event (D-134 §6), which carries
    * `githubEvent` instead, or an incoming webhook's, which carries `incomingWebhook` (D-245). At most

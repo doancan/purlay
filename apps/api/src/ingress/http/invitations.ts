@@ -7,6 +7,9 @@
  */
 import {
   CreateInvitationRequest,
+  CreateGuestInvitationRequest,
+  type CreatedGuestInvitation,
+  type GuestInvitationAvailability,
   type InvitationRecipientPage,
   InvitationRecipientQuery,
   type InvitationDeliveryPage,
@@ -21,6 +24,7 @@ import {
 } from '@purlay/types';
 import {
   makeAndMailInvitation,
+  makeAndMailGuestInvitation,
   resendInvitationRecipient,
   revokeInvitationRecipient,
   type InvitationLetter,
@@ -49,6 +53,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { requireSession } from './session';
 import { queryOf, validated } from './validate';
 import type { WorkspaceDependencies, MemberWriteDependencies } from './workspaces';
+import { guestInvitationAvailability } from '../../modules/workspaces/guest-readiness';
 import {
   NO_LOG,
   publication,
@@ -58,6 +63,7 @@ import {
 
 /** What making a link needs to send it by e-mail (D-179 §5). */
 export interface InvitationMailDependencies extends WorkspaceDependencies {
+  readonly guestAccessReady?: boolean;
   /** The origin the link opens at. */
   readonly appUrl: string;
   /** Where letters are posted; absent where the server has no relay, and then nothing is sent. */
@@ -65,6 +71,52 @@ export interface InvitationMailDependencies extends WorkspaceDependencies {
   /** Runs work after the answer is on its way (`platform/after-answer.ts`). */
   readonly later: (work: () => Promise<void>) => void;
 }
+
+export const readGuestInvitationAvailability = async (
+  dependencies: InvitationMailDependencies,
+  request: Request,
+  workspaceId: string,
+): Promise<GuestInvitationAvailability> => {
+  const { userId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(dependencies.database, userId, workspaceId);
+  return guestInvitationAvailability(
+    context,
+    dependencies.workspaceChannels,
+    dependencies.guestAccessReady ?? false,
+    dependencies.outbox !== undefined,
+  );
+};
+
+export const makeGuestInvitation = async (
+  dependencies: InvitationMailDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<CreatedGuestInvitation> => {
+  const { auth, database, clock, appUrl, outbox, later, workspaceChannels } = dependencies;
+  const { userId } = await requireSession(auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const wanted = validated(CreateGuestInvitationRequest, body);
+  const { created, letters } = await atomicallyOn(database)(
+    async (transaction) =>
+      await makeAndMailGuestInvitation(
+        transaction,
+        clock,
+        context,
+        wanted,
+        { on: outbox !== undefined, appUrl },
+        workspaceChannels,
+        dependencies.guestAccessReady ?? false,
+      ),
+  );
+  if (outbox !== undefined && letters.length > 0) {
+    later(() => {
+      post({ database, clock, outbox }, letters);
+      return Promise.resolve();
+    });
+  }
+  return created;
+};
 
 /**
  * `POST /api/workspaces/:workspaceId/invitations` — a new link, its token shown this once, and the
@@ -159,6 +211,7 @@ export const joinByInvitation = async (
     log = NO_LOG,
     effectiveModules,
     workspaceChannels,
+    guestAccessReady = false,
   }: MemberWriteDependencies,
   request: Request,
   body: unknown,
@@ -174,6 +227,7 @@ export const joinByInvitation = async (
         token,
         effectiveModules,
         workspaceChannels,
+        guestAccessReady,
       ),
   );
   await publishAfterCommit(log, [

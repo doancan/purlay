@@ -188,12 +188,13 @@ const ThreadPanelView = ({
     if (focusRequest === null) return;
     if (focusRequest === 'reply') {
       if (!ready) return;
-      panel.current?.querySelector<HTMLElement>('[data-composer]')?.focus();
+      if (root.replyAllowed === false) heading.current?.focus();
+      else panel.current?.querySelector<HTMLElement>('[data-composer]')?.focus();
     } else {
       heading.current?.focus();
     }
     clearFocusRequest();
-  }, [focusRequest, ready, rootId, clearFocusRequest]);
+  }, [focusRequest, ready, rootId, root?.replyAllowed, clearFocusRequest]);
 
   // ── A reply arriving near the end keeps the end in view ─────────────────
   const lastHeight = useRef<number | null>(null);
@@ -304,30 +305,34 @@ const ThreadPanelView = ({
             dimmed={resolved}
             tabIndex={tabbable === rootId ? 0 : -1}
           />
-          <KnowledgePanel
-            root={root}
-            replies={replies}
-            member={
-              channels.data?.some(
-                (channel) => channel.id === channelId && channel.state !== null,
-              ) ?? false
-            }
-          />
-          <GitHubWorkPanel
-            root={root}
-            member={
-              channels.data?.some(
-                (channel) => channel.id === channelId && channel.state !== null,
-              ) ?? false
-            }
-            channelIsPublic={
-              channels.data?.find((channel) => channel.id === channelId)?.type === 'public'
-            }
-          />
+          {root.historyHidden !== true && (
+            <>
+              <KnowledgePanel
+                root={root}
+                replies={replies}
+                member={
+                  channels.data?.some(
+                    (channel) => channel.id === channelId && channel.state !== null,
+                  ) ?? false
+                }
+              />
+              <GitHubWorkPanel
+                root={root}
+                member={
+                  channels.data?.some(
+                    (channel) => channel.id === channelId && channel.state !== null,
+                  ) ?? false
+                }
+                channelIsPublic={
+                  channels.data?.find((channel) => channel.id === channelId)?.type === 'public'
+                }
+              />
+            </>
+          )}
           {/* Wraps rather than widening the panel: on a narrow window the button takes a line of its own. */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-2">
             {replyCount > 0 && <ThreadStatus root={root} nowMinute={nowMinute} />}
-            {replyCount > 0 && (
+            {replyCount > 0 && root.historyHidden !== true && (
               <Button
                 variant="secondary"
                 glyph="resolved"
@@ -413,12 +418,20 @@ const ThreadPanelView = ({
           </div>
         </div>
       )}
-      {root !== undefined && (
+      {root !== undefined && root.replyAllowed !== false && (
         <Composer
           channelId={channelId}
           channelName={t('thread.composerName', { channel: channelName })}
           parentId={rootId}
         />
+      )}
+      {root?.replyAllowed === false && (
+        <p
+          role="status"
+          className="border-t-hairline border-border-subtle p-4 text-body text-ink-muted"
+        >
+          {t('thread.replyUnavailable')}
+        </p>
       )}
     </aside>
   );

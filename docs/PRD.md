@@ -9,36 +9,36 @@
 
 ## 1. The Problem
 
-A 5–30 person engineering team on Slack's free plan loses every message older than 90 days.
-The answer to "why is the retry backoff 4 seconds?" was written down — in a thread, by someone
-who has since left — and it is gone. The team's options are to pay per seat, forever, for
-software whose feature surface they use maybe a fifth of, or to keep losing the answers.
+A small business or a department in a larger organization needs decisions and files to stay
+findable after a conversation ends. Sales, operations, purchasing, customer support and engineering
+all depend on those answers. Per-seat costs, lost conversation history and unnecessary interruptions
+make everyday coordination harder.
 
-Meanwhile the tool itself is heavy: hundreds of megabytes of RAM for a chat window, a sidebar
-full of features nobody on the team has ever opened, and a notification model whose default is
-to interrupt.
-
-**Purlay exists to be sufficient for that team, self-hosted, at zero per-seat cost, with
-nothing thrown away.**
+**Purlay is team chat with durable, searchable conversations, portable data and no per-seat charge.**
+Channels, direct messages and threads are the main product. Optional modules support that work;
+they do not turn chat into an ERP or require a software development workflow.
 
 ### 1.1. Who this is for
 
-**Primary — "the team lead who self-hosts."** Runs a 5–30 person engineering team. Comfortable
-with `docker compose`. Already self-hosts something (Gitea, Plausible, an internal wiki).
-Resents the Slack bill more than the Slack UI. Wants the team's knowledge on disks they
-control.
+**Primary — the small business or department lead.** Coordinates colleagues and outside partners,
+needs conversations and shared files to stay organized, and manages membership without needing
+to understand a source repository or run a server. Uses the cloud or an installation managed by IT.
 
-**Also primary — "the same lead, who would rather not."** Identical in every respect except that
-they do not want to be woken up by a database. They pay us to run it, and they can stop paying and
-take the export with them — which is the only thing that makes this persona and the one above the
-same product rather than two. (D-1, D-43)
+**Also primary — the colleague doing daily work.** Uses direct messages, department or project
+channels and threads to ask questions, share documents and find an earlier decision. May work in
+operations, sales, purchasing, support, administration or engineering.
 
-**Secondary — "the engineer who lives in threads."** Asks a design question, gets three
-answers, and wants the thread to end in a decision that stays findable. Pastes stack traces and
-PR links all day.
+**Secondary — the IT administrator.** May self-host with Docker Compose, controls sign-in and
+access, and needs a recoverable deployment and portable data. An organization that uses the cloud
+needs the same membership and access controls without operating the database.
 
-**Not for:** enterprises needing SAML and third-party compliance attestations · non-technical
-organizations · communities (that is Discord's job) · anyone who needs calls or screen sharing.
+**Secondary — the outside collaborator.** Accepts a named invitation to specific conversations;
+sees content shared after joining and loses access when the agreed period ends (D-300).
+
+**Not for:** public communities · organizations whose purchase requires SAML or third-party
+compliance attestations that Purlay has not implemented · anyone who needs built-in calls or
+screen sharing. Existing ERP and purchasing systems remain the source of their business records;
+future integrations can bring their discussion into chat without replacing those systems.
 
 ### 1.2. Why not the tools that already exist
 
@@ -61,7 +61,7 @@ survive contact with a real user. Full analysis in `DECISIONS.md` D-2.
 - **License & model:** open source under **AGPL-3.0** (D-24), shipped two ways — self-hosted for
   free, or a cloud we operate for teams who would rather not (D-1). **No open core:** the cloud
   runs the same code, with nothing held back.
-- **One-line positioning:** *Team chat for engineers — nothing is thrown away, nothing interrupts
+- **One-line positioning:** *Team chat for small businesses and corporate teams — nothing is thrown away, nothing interrupts
   you by default. Run it yourself, or let us run it.*
 
 ### 2.1. Tenets

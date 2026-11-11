@@ -29,18 +29,17 @@ import { useApi } from '../../../data/api-provider';
 import { isTransient } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
+import { captureAccess, useAccessRevision } from '../../../data/access-revision';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { IconButton } from '../../../ui/icon-button';
 import { MenuItem } from '../../../ui/menu';
 import { useToast } from '../../../ui/toast';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 
-const idsKey = (workspaceId: string): readonly unknown[] => [...keys.saved(workspaceId), 'ids'];
-
 /** What the person asked for each message — kept, or let go — until the server's list says it too. */
 interface Intents {
   readonly byMessage: ReadonlyMap<string, boolean>;
-  readonly put: (messageId: string, keeping: boolean) => void;
+  readonly put: (messageId: string, keeping: boolean, stillCurrent: () => boolean) => void;
   readonly drop: (messageId: string) => void;
   /** The intent for a message as it is now, not as the last render saw it. */
   readonly current: (messageId: string) => boolean | undefined;
@@ -54,26 +53,49 @@ export const SaveIntentsProvider = ({
 }: {
   readonly children: React.ReactNode;
 }): React.JSX.Element => {
-  const [byMessage, setByMessage] = useState<ReadonlyMap<string, boolean>>(new Map());
-  const latest = useRef(byMessage);
-  latest.current = byMessage;
-  const put = useCallback((messageId: string, keeping: boolean): void => {
-    const next = new Map(latest.current).set(messageId, keeping);
-    latest.current = next;
-    setByMessage(next);
-  }, []);
+  const client = useQueryClient();
+  const revision = useAccessRevision(client);
+  const [held, setHeld] = useState<
+    ReadonlyMap<string, { readonly keeping: boolean; readonly stillCurrent: () => boolean }>
+  >(new Map());
+  const latest = useRef(held);
+  latest.current = held;
+  const snapshot = useMemo(
+    () => ({
+      revision,
+      byMessage: new Map(
+        [...held]
+          .filter(([, intent]) => intent.stillCurrent())
+          .map(([id, intent]) => [id, intent.keeping]),
+      ),
+    }),
+    [held, revision],
+  );
+  const put = useCallback(
+    (messageId: string, keeping: boolean, stillCurrent: () => boolean): void => {
+      const next = new Map(
+        [...latest.current].filter(([, previous]) => previous.stillCurrent()),
+      ).set(messageId, { keeping, stillCurrent });
+      latest.current = next;
+      setHeld(next);
+    },
+    [],
+  );
   const drop = useCallback((messageId: string): void => {
     if (!latest.current.has(messageId)) return;
     const next = new Map(latest.current);
     next.delete(messageId);
     latest.current = next;
-    setByMessage(next);
+    setHeld(next);
   }, []);
-  const current = useCallback(
-    (messageId: string): boolean | undefined => latest.current.get(messageId),
-    [],
+  const current = useCallback((messageId: string): boolean | undefined => {
+    const intent = latest.current.get(messageId);
+    return intent?.stillCurrent() === true ? intent.keeping : undefined;
+  }, []);
+  const value = useMemo(
+    () => ({ ...snapshot, put, drop, current }),
+    [snapshot, put, drop, current],
   );
-  const value = useMemo(() => ({ byMessage, put, drop, current }), [byMessage, put, drop, current]);
   return createElement(IntentsContext.Provider, { value }, children);
 };
 
@@ -81,7 +103,7 @@ export const SaveIntentsProvider = ({
 const useSavedIds = (workspaceId: string): UseQueryResult<SavedIds> => {
   const api = useApi();
   return useQuery({
-    queryKey: idsKey(workspaceId),
+    queryKey: keys.savedIds(workspaceId),
     queryFn: ({ signal }) => api.savedIds(workspaceId, signal),
   });
 };
@@ -114,7 +136,7 @@ const useSave = ({ message, workspaceId, intents }: Scoped): SaveControl => {
   const { show } = useToast();
   const describe = useDescribeFailure();
   const ids = useSavedIds(workspaceId);
-  const key = idsKey(workspaceId);
+  const key = keys.savedIds(workspaceId);
   const intent = intents.byMessage.get(message.id);
   const saved = intent ?? (ids.data ?? []).some((entry) => entry.messageId === message.id);
 
@@ -131,20 +153,27 @@ const useSave = ({ message, workspaceId, intents }: Scoped): SaveControl => {
       : without;
   };
 
+  const stillCurrent = captureAccess(client, key);
   const change = (keeping: boolean): void => {
+    if (!stillCurrent()) return;
     // One request a message at a time, and none for what is already so.
     if (intents.current(message.id) !== undefined || savedNow() === keeping) return;
-    intents.put(message.id, keeping);
+    intents.put(message.id, keeping, stillCurrent);
     (keeping ? api.saveMessage(message.id) : api.unsaveMessage(message.id)).then(
       async () => {
+        if (!stillCurrent()) return;
         // The mark holds until the list has been read again with the change in it. A read that
         // fails is not the save failing: the change the server confirmed is set on the list as it
         // is, and the next read brings the rest.
+        let refreshed = true;
         try {
           await client.refetchQueries({ queryKey: key, exact: true }, { throwOnError: true });
         } catch {
-          client.setQueryData<SavedIds>(key, (held) => confirmed(held ?? [], keeping));
+          refreshed = false;
         }
+        if (!stillCurrent()) return;
+        if (!refreshed)
+          client.setQueryData<SavedIds>(key, (held) => confirmed(held ?? [], keeping));
         intents.drop(message.id);
         // The other views of the saves — the Saved list, if it is open — are read again too.
         void client.invalidateQueries({
@@ -153,6 +182,7 @@ const useSave = ({ message, workspaceId, intents }: Scoped): SaveControl => {
         });
       },
       (failure: unknown) => {
+        if (!stillCurrent()) return;
         intents.drop(message.id);
         show({
           message: `${t(keeping ? 'saved.failed' : 'saved.unsaveFailed')} ${describe(failure)}`,

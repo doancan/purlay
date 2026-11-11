@@ -167,7 +167,10 @@ export const listInvitationRecipients = async (
             'a.failure',
             'i.expires_at',
             'i.revoked_at',
+            'i.access_kind',
+            'i.guest_access_expires_at',
           ])
+          .select(sql<number | null>`cardinality(i.guest_channels)`.as('guest_channel_count'))
           .whereRef('a.recipient_id', '=', 'r.id')
           .whereRef('a.workspace_id', '=', 'r.workspace_id')
           .orderBy('a.id', 'desc')
@@ -191,6 +194,9 @@ export const listInvitationRecipients = async (
       'last.failure',
       'last.expires_at',
       'last.revoked_at',
+      'last.access_kind',
+      'last.guest_access_expires_at',
+      'last.guest_channel_count',
     ])
     .select(status.as('status'))
     .where('r.workspace_id', '=', context.workspaceId)
@@ -207,6 +213,14 @@ export const listInvitationRecipients = async (
       id: row.recipient_id,
       status: row.status,
       address: row.email,
+      ...(row.access_kind !== 'guest'
+        ? {}
+        : {
+            guest: {
+              channelCount: row.guest_channel_count ?? 0,
+              accessExpiresAt: iso(row.guest_access_expires_at),
+            },
+          }),
       createdAt: new Date(row.recipient_created_at).toISOString(),
       requestedAt: iso(row.requested_at),
       joinedAt: iso(row.joined_at),

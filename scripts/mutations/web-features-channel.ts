@@ -151,6 +151,14 @@ export const WEB_FEATURES_CHANNEL: readonly Mutation[] = [
     ],
   },
   {
+    id: 'guest-thread-hidden-root-read-receipt',
+    why: 'An earlier container advances a strict channel read receipt.',
+    file: 'apps/web/src/features/chat/channel/feed-model.ts',
+    find: ' && item.message.historyHidden !== true',
+    replace: '',
+    tests: ['apps/web/src/features/chat/channel/feed-model.test.ts'],
+  },
+  {
     id: 'header-star-back-in-the-cluster',
     why: 'the star goes back to the row of actions on the right, one more icon in a crowded cluster (D-181 follow-up)',
     file: 'apps/web/src/features/chat/channel/channel-header.tsx',

@@ -30,7 +30,11 @@ import { excerptOf } from '@purlay/markdown';
 import { NEEDS_YOU, THREAD_EXCERPT_MAX, NotificationType } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-import { requireMessageById, withinMessageHistory } from '../channels/guard';
+import {
+  requireThreadContextById,
+  withinCurrentMessageHistory,
+  withinMessageHistory,
+} from '../channels/guard';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { waitingNotifications } from '../channels/read-state';
 import { HISTORY_BEGINNING, unreadMessages } from '../channels/unread';
@@ -238,7 +242,7 @@ export const readThreadNotifications = async (
   input: ReadThreadRequest,
 ): Promise<readonly Told[]> => {
   // A deleted root with replies keeps its thread, and so what is waiting in it (D-103 §7).
-  const root = await requireMessageById(transaction, userId, rootId, { deleted: 'include' });
+  const root = await requireThreadContextById(transaction, userId, rootId, { deleted: 'include' });
   if (root.parentId !== null) {
     throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });
   }
@@ -249,6 +253,7 @@ export const readThreadNotifications = async (
     .where('id', '=', input.lastReadMessageId)
     .where('channel_id', '=', channelId)
     .where('parent_id', '=', rootId)
+    .where(withinCurrentMessageHistory(transaction, root.context))
     .executeTakeFirst();
   if (bound === undefined) {
     throw new AppError({ code: 'MESSAGE_NOT_FOUND', message: 'Message not found.' });

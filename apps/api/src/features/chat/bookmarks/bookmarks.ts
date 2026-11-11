@@ -2,14 +2,15 @@
  * A channel's bookmarks (D-218): links its members keep at hand, under the channel's header.
  *
  * - **Read by whoever can see the channel**, as its pins are; **added and removed by its members**.
- * - **The same address again is the same bookmark**: added twice, the first stays and nothing changes,
- *   so a double click or a retry is not a second chip.
+ * - **The same visible address again is the same bookmark**: the first stays and nothing changes,
+ *   so a double click or a retry is not a second chip. A guest resharing a hidden address creates a fresh share (D-300).
  * - **Bounded**: at most `BOOKMARKS_MAX` a channel, counted under the channel's row lock, so two members
  *   adding the last one at once cannot both get in.
  * - **Only the web**: an address is `http:` or `https:` as the contract's pattern says, and parsed here
  *   as a URL too, so nothing a browser would run (`javascript:`) is ever kept.
  */
 import type { ChatDb, ChatTx } from '../schema';
+import { sql } from '@purlay/db';
 import {
   BOOKMARKS_MAX,
   messageId as newId,
@@ -18,7 +19,12 @@ import {
 } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { Uuid } from '@purlay/types';
-import { requireChannelMember, type ChannelContext } from '../channels/guard';
+import {
+  channelContentVisible,
+  lockChannelForContentWrite,
+  requireChannelMember,
+  type ChannelContext,
+} from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 
@@ -34,14 +40,8 @@ const notFound = (): AppError =>
 
 /** The channel's row, held for the rest of the transaction: two members' adds take turns. */
 const lockForMember = async (transaction: ChatTx, context: ChannelContext): Promise<void> => {
+  await lockChannelForContentWrite(transaction, context);
   await requireChannelMember(transaction, context, 'Join the channel to change its bookmarks.');
-  await transaction
-    .selectFrom('channels')
-    .select('id')
-    .where('id', '=', context.channelId)
-    // NO KEY UPDATE: the lock a send's own write takes, so a message pointing here is not made to wait.
-    .forNoKeyUpdate()
-    .executeTakeFirstOrThrow();
 };
 
 const columns = [
@@ -112,6 +112,7 @@ export const channelBookmarks = async (
     .leftJoin('users', 'users.id', 'channel_bookmarks.added_by')
     .select(columns)
     .where('channel_bookmarks.channel_id', '=', context.channelId)
+    .where(channelContentVisible(executor, context, sql.ref<Date>('channel_bookmarks.added_at')))
     .orderBy('channel_bookmarks.added_at', 'asc')
     .orderBy('channel_bookmarks.id', 'asc')
     .limit(BOOKMARKS_MAX)
@@ -142,6 +143,9 @@ export const addBookmark = async (
       .select(columns)
       .where('channel_bookmarks.channel_id', '=', context.channelId)
       .where('channel_bookmarks.url', '=', url)
+      .where(
+        channelContentVisible(transaction, context, sql.ref<Date>('channel_bookmarks.added_at')),
+      )
       .executeTakeFirst();
     return row === undefined ? undefined : bookmarkOf(row);
   };
@@ -149,6 +153,13 @@ export const addBookmark = async (
   if (existing !== undefined) {
     return { bookmark: existing, change: { channelId: context.channelId, changed: false } };
   }
+  // A deliberate new share of a known hidden URL uses only this request's words and identity.
+  // Replacing the slot and inserting its new share are in the same transaction and channel mutex.
+  await transaction
+    .deleteFrom('channel_bookmarks')
+    .where('channel_id', '=', context.channelId)
+    .where('url', '=', url)
+    .execute();
   const counted = await transaction
     .selectFrom('channel_bookmarks')
     .select((eb) => eb.fn.countAll<string>().as('count'))
@@ -173,7 +184,7 @@ export const addBookmark = async (
     })
     .execute();
   const added = await read();
-  if (added === undefined) throw new Error('a bookmark just added is not there');
+  if (added === undefined) throw notFound();
   return { bookmark: added, change: { channelId: context.channelId, changed: true } };
 };
 
@@ -192,6 +203,7 @@ export const removeBookmark = async (
     .deleteFrom('channel_bookmarks')
     .where('id', '=', bookmarkId)
     .where('channel_id', '=', context.channelId)
+    .where(channelContentVisible(transaction, context, sql.ref<Date>('channel_bookmarks.added_at')))
     .executeTakeFirst();
   if (removed.numDeletedRows === 0n) throw notFound();
   return { channelId: context.channelId, changed: true };

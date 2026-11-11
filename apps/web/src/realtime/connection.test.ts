@@ -20,6 +20,7 @@ import { reconnectDelay } from './backoff';
 import type { Clock } from './clock';
 import {
   createConnection,
+  SESSION_CHECK_DEADLINE_MS,
   type Connection,
   type OpenSocket,
   type SessionCheck,
@@ -48,10 +49,10 @@ interface FakeSocket {
 interface Harness {
   readonly connection: Connection;
   readonly sockets: FakeSocket[];
-  readonly timers: { fn: () => void; ms: number; live: boolean }[];
+  readonly timers: { fn: () => void; ms: number; at: number; live: boolean }[];
   readonly frames: ServerFrame[];
   readonly statuses: string[];
-  readonly live: () => { fn: () => void; ms: number; live: boolean }[];
+  readonly live: () => { fn: () => void; ms: number; at: number; live: boolean }[];
   readonly subscribes: (socket: FakeSocket) => SubscribeFrame[];
   readonly last: () => FakeSocket;
   /** Fire the one timer that is waiting, and say how long it waited. */
@@ -62,13 +63,18 @@ interface Harness {
   readonly local: Clock & { advance: (ms: number) => void };
   readonly serverClock: ServerClock;
   /** One entry per `checkSession` call, in order; settle it to answer. */
-  readonly checks: { resolve: (check: SessionCheck) => void; reject: () => void }[];
+  readonly checks: {
+    signal: AbortSignal;
+    resolve: (check: SessionCheck) => void;
+    reject: () => void;
+  }[];
   readonly pings: (socket: FakeSocket) => { id: string; op: 'PING' }[];
 }
 
-const harness = (random = (): number => 0): Harness => {
+const harness = (random = (): number => 0, canUse?: () => boolean): Harness => {
   const sockets: FakeSocket[] = [];
-  const timers: { fn: () => void; ms: number; live: boolean }[] = [];
+  const timers: { fn: () => void; ms: number; at: number; live: boolean }[] = [];
+  let timerNow = 0;
   const frames: ServerFrame[] = [];
   const statuses: string[] = [];
   let counter = 0;
@@ -99,7 +105,7 @@ const harness = (random = (): number => 0): Harness => {
     url: 'ws://test/ws',
     openSocket,
     schedule: (fn, ms) => {
-      const timer = { fn, ms, live: true };
+      const timer = { fn, ms, at: timerNow + ms, live: true };
       timers.push(timer);
       return (): void => {
         timer.live = false;
@@ -108,9 +114,11 @@ const harness = (random = (): number => 0): Harness => {
     random,
     clock: local,
     serverClock,
-    checkSession: () =>
+    ...(canUse === undefined ? {} : { canUse }),
+    checkSession: (signal: AbortSignal) =>
       new Promise<SessionCheck>((resolve, reject) => {
         checks.push({
+          signal,
           resolve,
           reject: (): void => {
             reject(new Error('offline'));
@@ -139,9 +147,10 @@ const harness = (random = (): number => 0): Harness => {
   };
   /** Fire the one timer that is waiting, and say how long it waited. */
   const fireNext = (): number => {
-    const timer = live()[0];
+    const timer = live().toSorted((a, b) => a.at - b.at)[0];
     if (timer === undefined) throw new Error('nothing is scheduled');
     timer.live = false;
+    timerNow = Math.max(timerNow, timer.at);
     timer.fn();
     return timer.ms;
   };
@@ -150,6 +159,7 @@ const harness = (random = (): number => 0): Harness => {
     const timer = live().find((candidate) => candidate.ms === ms);
     if (timer === undefined) throw new Error(`no timer is waiting ${String(ms)} ms`);
     timer.live = false;
+    timerNow = Math.max(timerNow, timer.at);
     timer.fn();
   };
   const pings = (socket: FakeSocket): { id: string; op: 'PING' }[] =>
@@ -197,6 +207,13 @@ const created = (channelId: string, id: string): string => {
     },
   };
   return JSON.stringify(frame);
+};
+
+/** Advance real due-time ordering through diagnostic deadlines until the next physical attempt. */
+const retrySocket = (h: Harness): void => {
+  const before = h.sockets.length;
+  for (let turn = 0; turn < 20 && h.sockets.length === before; turn += 1) h.fireNext();
+  expect(h.sockets.length).toBe(before + 1);
 };
 
 describe('connecting', () => {
@@ -248,7 +265,7 @@ describe('reconnecting', () => {
     h.connection.start();
     for (let i = 0; i < 3; i += 1) {
       h.last().handlers.closed(1006);
-      h.fireNext();
+      retrySocket(h);
     }
     h.last().handlers.opened();
     h.fireNext(); // the stability timer: the connection held
@@ -695,15 +712,21 @@ describe('the browser says the network went or came back (#626)', () => {
     // A long outage: the backoff has climbed to its cap.
     for (let i = 0; i < 12; i += 1) {
       h.last().handlers.closed(1006);
-      h.fireNext();
+      retrySocket(h);
     }
     h.last().handlers.closed(1006);
-    expect(waits(h)).toEqual([reconnectDelay(13, () => 0)]);
+    expect(waits(h).toSorted((a, b) => a - b)).toEqual([
+      reconnectDelay(13, () => 0),
+      SESSION_CHECK_DEADLINE_MS,
+    ]);
     expect(waits(h)[0]).toBeGreaterThan(reconnectDelay(0, () => 1));
     h.connection.networkBack();
     // Not at once: a network back for every page on it at the same moment is a herd, so each
     // waits the first rung's jittered half-second to a second (D-76).
-    expect(waits(h)).toEqual([reconnectDelay(0, () => 0)]);
+    expect(waits(h).toSorted((a, b) => a - b)).toEqual([
+      reconnectDelay(0, () => 0),
+      SESSION_CHECK_DEADLINE_MS,
+    ]);
     expect(h.connection.status()).toBe('waiting');
     h.fireNext();
     expect(h.connection.status()).toBe('connecting');
@@ -715,14 +738,17 @@ describe('the browser says the network went or came back (#626)', () => {
     openOne(h);
     for (let i = 0; i < 12; i += 1) {
       h.last().handlers.closed(1006);
-      h.fireNext();
+      retrySocket(h);
     }
     h.last().handlers.closed(1006);
     h.connection.networkBack();
     h.fireNext();
     // The browser often says online before the route works: that attempt fails.
     h.last().handlers.closed(1006);
-    expect(waits(h)).toEqual([reconnectDelay(1, () => 0)]);
+    expect(waits(h).toSorted((a, b) => a - b)).toEqual([
+      reconnectDelay(1, () => 0),
+      SESSION_CHECK_DEADLINE_MS,
+    ]);
   });
 
   test('back while open: a PING asks at once whether the socket lived through it', () => {
@@ -840,7 +866,7 @@ describe('a refusal is not an outage', () => {
     h.connection.start();
     for (let i = 0; i < times; i += 1) {
       h.last().handlers.closed(1006);
-      if (i < times - 1) h.fireNext();
+      if (i < times - 1) retrySocket(h);
     }
   };
 
@@ -940,7 +966,7 @@ describe('an ended session', () => {
     h.connection.start();
     for (let i = 0; i < 3; i += 1) {
       h.last().handlers.closed(1006);
-      h.fireNext();
+      retrySocket(h);
     }
     h.last().handlers.closed(CLOSE_CODES.SESSION_ENDED);
     expect(h.connection.status()).toBe('ended');
@@ -1325,7 +1351,7 @@ describe('pacing a large subscription', () => {
     h.connection.start();
     for (let i = 0; i < TOO_BUSY_BACKOFF_STEP + 2; i += 1) {
       h.last().handlers.closed(1006);
-      h.fireNext();
+      retrySocket(h);
     }
     h.last().handlers.closed(CLOSE_CODES.TOO_BUSY);
     expect(h.fireNext()).toBe(reconnectDelay(TOO_BUSY_BACKOFF_STEP + 2, () => 0));
@@ -1405,4 +1431,139 @@ describe('pacing a large subscription', () => {
       expect(result.acked.size).toBe(3_500);
     });
   });
+});
+
+test('an authoritative ended session closes its in-flight handshake and cannot be revived by late native callbacks', async () => {
+  const h = harness();
+  h.connection.start();
+  for (let attempt = 0; attempt < CHECK_SESSION_AFTER_FAILURES; attempt += 1) {
+    h.last().handlers.closed(CLOSE_CODES.RESTARTING);
+    h.fireNext();
+  }
+  expect(h.checks).toHaveLength(1);
+  const old = h.last();
+  h.checks[0]?.resolve('ended');
+  for (let step = 0; step < 20 && h.connection.status() !== 'ended'; step += 1)
+    await Promise.resolve();
+  expect(h.connection.status()).toBe('ended');
+  old.handlers.opened();
+  expect(h.connection.status()).toBe('ended');
+  expect(old.closedByClient).toBe(true);
+  expect(h.live()).toHaveLength(0);
+  const before = h.frames.length;
+  old.handlers.message(JSON.stringify({ event: 'PONG', data: {}, ts: T0 }));
+  expect(h.frames).toHaveLength(before);
+  h.connection.stop();
+});
+
+describe('bounded session diagnostics', () => {
+  const ask = (h: Harness): void => {
+    h.connection.start();
+    for (let attempt = 0; attempt < CHECK_SESSION_AFTER_FAILURES; attempt += 1) {
+      h.last().handlers.closed(1006);
+      retrySocket(h);
+    }
+    expect(h.checks).toHaveLength(1);
+  };
+  const drain = async (): Promise<void> => {
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+  };
+  test.each(['stop', 'open', 'ended', 'owner'] as const)(
+    '%s releases and aborts the actual old diagnostic request',
+    async (kind) => {
+      let current = true;
+      const h = harness(
+        () => 0,
+        () => current,
+      );
+      ask(h);
+      const check = h.checks[0];
+      if (check === undefined) throw new Error('Missing diagnostic request');
+      expect(check.signal instanceof AbortSignal).toBe(true);
+      expect(check.signal.aborted).toBe(false);
+      if (kind === 'stop') h.connection.stop();
+      else if (kind === 'open') h.last().handlers.opened();
+      else if (kind === 'ended') h.last().handlers.closed(CLOSE_CODES.SESSION_ENDED);
+      else {
+        current = false;
+        h.connection.send({ id: idAt(900), op: 'PING', payload: {} });
+      }
+      expect(check.signal.aborted).toBe(true);
+      expect(h.live().some((timer) => timer.ms === 30_000)).toBe(false);
+      const status = h.connection.status();
+      check.resolve('ended');
+      await drain();
+      expect(h.connection.status()).toBe(status);
+      h.connection.stop();
+      expect(h.live()).toHaveLength(0);
+    },
+  );
+
+  test('a hung check releases the slot at its deadline even if the transport ignores abort', async () => {
+    const h = harness();
+    ask(h);
+    const old = h.checks[0];
+    if (old === undefined) throw new Error('Missing old check');
+    h.fireWaiting(30_000);
+    expect(old.signal.aborted).toBe(true);
+    expect(h.connection.status()).toBe('connecting');
+    h.last().handlers.closed(1006);
+    expect(h.checks).toHaveLength(2);
+    const current = h.checks[1];
+    if (current === undefined) throw new Error('Missing replacement check');
+    old.resolve('ended');
+    await drain();
+    expect(h.connection.status()).toBe('waiting');
+    expect(current.signal.aborted).toBe(false);
+    // An obsolete completion cannot release the replacement's single-flight slot.
+    h.fireNext();
+    h.last().handlers.closed(1006);
+    expect(h.checks).toHaveLength(2);
+    current.resolve('active');
+    await drain();
+    expect(h.live().some((timer) => timer.ms === 30_000)).toBe(false);
+    h.connection.stop();
+    expect(current.signal.aborted).toBe(false);
+  });
+
+  test('deadline releases ownership before an abort listener starts a replacement diagnostic', async () => {
+    const h = harness();
+    ask(h);
+    const old = h.checks[0];
+    if (old === undefined) throw new Error('Missing old diagnostic');
+    old.signal.addEventListener(
+      'abort',
+      () => {
+        h.last().handlers.closed(1006);
+      },
+      { once: true },
+    );
+    h.fireWaiting(30_000);
+    expect(h.checks).toHaveLength(2);
+    const replacement = h.checks[1];
+    if (replacement === undefined) throw new Error('Missing replacement diagnostic');
+    old.resolve('ended');
+    await drain();
+    expect(h.connection.status()).toBe('waiting');
+    expect(replacement.signal.aborted).toBe(false);
+    replacement.resolve('active');
+    await drain();
+    h.connection.stop();
+  });
+
+  test.each(['active', 'unknown'] as const)(
+    'a completed %s check releases its deadline without aborting a completed request',
+    async (answer) => {
+      const h = harness();
+      ask(h);
+      const check = h.checks[0];
+      if (check === undefined) throw new Error('Missing completed check');
+      check.resolve(answer);
+      await drain();
+      expect(h.live().some((timer) => timer.ms === 30_000)).toBe(false);
+      expect(check.signal.aborted).toBe(false);
+      h.connection.stop();
+      expect(check.signal.aborted).toBe(false);
+    },
+  );
 });

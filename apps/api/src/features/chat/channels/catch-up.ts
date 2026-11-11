@@ -3,10 +3,16 @@ import { loadReadScope } from './read-scope';
 import { sql } from '@purlay/db';
 import { CATCH_UP_PAGE, type CatchUpQuery, type ChannelCatchUp } from '@purlay/types';
 import type { ChatDb } from '../schema';
-import { channelNotFound, withinMessageHistory, type ChannelContext } from './guard';
+import {
+  channelNotFound,
+  withinCurrentMessageHistory,
+  withinThreadHistory,
+  type ChannelContext,
+} from './guard';
 import { unreadCondition, type ReadScope } from './unread';
 import { notHiddenBy } from '../messages/hidden';
-import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
+import { MESSAGE_COLUMNS } from '../messages/reader';
+import { buildHistoryMessages } from '../messages/history-reader';
 import { limitOf } from '../../../platform/pagination';
 
 export const catchUpIn = async (
@@ -36,8 +42,9 @@ export const catchUpIn = async (
     .selectFrom('messages')
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
+    .select(withinCurrentMessageHistory(executor, context).as('content_visible'))
     .where('messages.channel_id', '=', context.channelId)
-    .where(withinMessageHistory(executor, context))
+    .where(withinCurrentMessageHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
@@ -56,7 +63,7 @@ export const catchUpIn = async (
     ])
     .where('messages.channel_id', '=', context.channelId)
     .where('messages.parent_id', 'is not', null)
-    .where(withinMessageHistory(executor, context))
+    .where(withinCurrentMessageHistory(executor, context))
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))
     .where(sql<boolean>`messages.sender_id is distinct from ${context.userId}`)
@@ -76,8 +83,9 @@ export const catchUpIn = async (
           .selectFrom('messages')
           .leftJoin('users', 'users.id', 'messages.sender_id')
           .select(MESSAGE_COLUMNS)
+          .select(withinCurrentMessageHistory(executor, context).as('content_visible'))
           .where('messages.channel_id', '=', context.channelId)
-          .where(withinMessageHistory(executor, context))
+          .where(withinThreadHistory(executor, context))
           .where('messages.parent_id', 'is', null)
           .where(
             'messages.id',
@@ -86,7 +94,7 @@ export const catchUpIn = async (
           )
           .execute();
   const rows = new Map([...rootPage, ...threadRoots].map((row) => [row.id, row]));
-  const messages = await buildMessages(executor, [...rows.values()], context.userId);
+  const messages = await buildHistoryMessages(executor, [...rows.values()], context.userId);
   const byId = new Map(messages.map((message) => [message.id, message]));
   const rootIds = new Set(rootPage.map((row) => row.id));
   return {

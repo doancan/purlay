@@ -20,6 +20,7 @@
  */
 import type { Attachment } from '@purlay/types';
 import type { FailureCode } from '../../../data/failure';
+import { isApiError } from '../../../data/errors';
 import { writeDraft, type DraftStorage } from './drafts';
 
 export type Upload = {
@@ -78,7 +79,7 @@ export interface OutboxPorts {
     readonly attachments: readonly Attachment[];
   }) => void;
   /** A send that was waiting while nobody was looking cannot go: a file did not upload. */
-  readonly refused: (channelName: string) => void;
+  readonly refused: (channelName: string, reason: 'upload' | 'account') => void;
 }
 
 export interface Outbox {
@@ -127,15 +128,22 @@ export const createOutbox = (ports: OutboxPorts): Outbox => {
     if (items.some((item) => item.status === 'failed' || item.status === 'too-large')) {
       // Kept, words and files, for the person to retry or remove when they go back — and said now.
       write(key, { items, waiting: null });
-      ports.refused(waiting.channelName);
+      ports.refused(waiting.channelName, 'upload');
       return;
     }
-    ports.send({
-      channelId: waiting.channelId,
-      content: waiting.content,
-      ...(waiting.parentId === undefined ? {} : { parentId: waiting.parentId }),
-      attachments: items.flatMap((item) => (item.status === 'ready' ? [item.attachment] : [])),
-    });
+    try {
+      ports.send({
+        channelId: waiting.channelId,
+        content: waiting.content,
+        ...(waiting.parentId === undefined ? {} : { parentId: waiting.parentId }),
+        attachments: items.flatMap((item) => (item.status === 'ready' ? [item.attachment] : [])),
+      });
+    } catch (failure) {
+      if (!isApiError(failure) || failure.code !== 'UNAUTHENTICATED') throw failure;
+      write(key, { items, waiting: null });
+      ports.refused(waiting.channelName, 'account');
+      return;
+    }
     writeDraft(waiting.storage, key, '');
     write(key, EMPTY);
   };

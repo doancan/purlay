@@ -94,6 +94,33 @@ describe('an invitation, opened', () => {
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 
+  test('a named guest sees limited post-join access and enters assigned conversations without the channel picker', async () => {
+    window.sessionStorage.setItem(KEY, TOKEN);
+    const view = await visit({
+      previewInvitation: () =>
+        Promise.resolve({
+          ...preview(),
+          guest: { channelCount: 2, accessExpiresAt: null },
+        }),
+      acceptInvitation: () =>
+        Promise.resolve({
+          ...membership(),
+          access: { kind: 'guest', historySince: UNTIL, expiresAt: null },
+        }),
+    });
+    expect(view.getByText('Guest invitation · 2 conversations')).toBeDefined();
+    expect(
+      view.getByText(
+        'You can see only the assigned conversations and messages sent after you join.',
+      ),
+    ).toBeDefined();
+    expect(view.getByText('Guest access has no end date.')).toBeDefined();
+    await person().click(view.getByRole('button', { name: 'Join' }));
+    await settle();
+    expect(here(view)).toBe('/w/atlas');
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+
   test('somebody already in it is offered Open, which joins nothing', async () => {
     window.sessionStorage.setItem(KEY, TOKEN);
     const view = await visit({ previewInvitation: () => Promise.resolve(preview(true)) });

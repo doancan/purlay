@@ -36,6 +36,8 @@ import { finishInvitationAttempt } from './invitation-delivery';
 import { admittedByPassport } from '../auth/better-auth';
 import { INVITE_COOKIE } from '../../platform/cookies';
 import { tokenDigest } from '../../platform/tokens';
+import { changeRole, removeMember } from './members';
+import { AppError } from '../../platform/errors';
 
 let cloned: ClonedDatabase;
 beforeAll(async () => {
@@ -83,6 +85,141 @@ const setup = async (
 };
 
 describe('integration: named guest invitations', () => {
+  test('creator removal after the invitation lookup is materialized is rechecked before admission', async () => {
+    const clock = fixedClock(new Date());
+    const { room, recipient, made } = await cloned.db.transaction().execute(async (db) => {
+      const fixture = await setup(db);
+      const creator = await requireWorkspaceMembership(
+        db,
+        fixture.room.members['owner']?.userId ?? '',
+        fixture.room.workspaceId,
+      );
+      await changeRole(db, clock, creator, fixture.room.members['member']?.userId ?? '', 'owner');
+      return fixture;
+    });
+    const selected = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    let intercepted = false;
+    const accepting = cloned.db
+      .transaction()
+      .execute(
+        async (db) =>
+          await acceptInvitation(
+            db.withPlugin({
+              transformQuery: (args) => args.node,
+              transformResult: async (args) => {
+                if (
+                  !intercepted &&
+                  args.result.rows.some((row) => row['invitation_id'] === made.invitation.id)
+                ) {
+                  intercepted = true;
+                  selected.resolve(undefined);
+                  await resume.promise;
+                }
+                return args.result;
+              },
+            }),
+            clock,
+            recipient.userId,
+            made.token,
+            undefined,
+            chatWorkspaceChannels,
+            true,
+          ),
+      )
+      .then(
+        () => 'taken',
+        (failure: unknown) =>
+          failure instanceof AppError ? failure.body.code : 'unexpected failure',
+      );
+    await Promise.race([
+      selected.promise,
+      accepting.then(() => {
+        throw new Error('Admission finished before the invitation read was held');
+      }),
+    ]);
+    try {
+      await cloned.db.transaction().execute(async (db) => {
+        const successor = await requireWorkspaceMembership(
+          db,
+          room.members['member']?.userId ?? '',
+          room.workspaceId,
+        );
+        await removeMember(
+          db,
+          clock,
+          successor,
+          room.members['owner']?.userId ?? '',
+          chatWorkspaceChannels,
+        );
+      });
+    } finally {
+      resume.resolve(undefined);
+    }
+    expect(await accepting).toBe('INVITATION_NOT_FOUND');
+    expect(
+      await cloned.db
+        .selectFrom('workspace_members')
+        .select('id')
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', recipient.userId)
+        .execute(),
+    ).toEqual([]);
+    expect(
+      await cloned.db
+        .selectFrom('channel_members')
+        .select('id')
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', recipient.userId)
+        .execute(),
+    ).toEqual([]);
+  });
+
+  test('an invitation whose creator was removed cannot admit its named recipient or reveal the missing administrator', async () => {
+    await withRollback(async (db) => {
+      const { room, recipient, made } = await setup(db);
+      const clock = fixedClock(new Date());
+      const creator = await requireWorkspaceMembership(
+        db,
+        room.members['owner']?.userId ?? '',
+        room.workspaceId,
+      );
+      const successorId = room.members['member']?.userId ?? '';
+      await changeRole(db, clock, creator, successorId, 'owner');
+      const successor = await requireWorkspaceMembership(db, successorId, room.workspaceId);
+      await removeMember(db, clock, successor, creator.userId, chatWorkspaceChannels);
+      expect(
+        await attempt(db, () =>
+          acceptInvitation(
+            db,
+            clock,
+            recipient.userId,
+            made.token,
+            undefined,
+            chatWorkspaceChannels,
+            true,
+          ),
+        ),
+      ).toBe('INVITATION_NOT_FOUND');
+      expect(
+        await db
+          .selectFrom('workspace_members')
+          .select('id')
+          .where('workspace_id', '=', room.workspaceId)
+          .where('user_id', '=', recipient.userId)
+          .execute(),
+      ).toEqual([]);
+      expect(
+        await db
+          .selectFrom('channel_members')
+          .select('id')
+          .where('channel_id', '=', room.channelId)
+          .where('user_id', '=', recipient.userId)
+          .execute(),
+      ).toEqual([]);
+    });
+  });
+
   test('creation rechecks module access after the selected conversations were prepared', async () => {
     await withRollback(async (db) => {
       const { room, recipient } = await setup(db);
@@ -187,6 +324,7 @@ describe('integration: named guest invitations', () => {
         },
         mail,
         chatWorkspaceChannels,
+        true,
       );
       expect(made.created.guest).toEqual({
         email: recipient.email,
@@ -270,6 +408,7 @@ describe('integration: named guest invitations', () => {
         newToken,
         undefined,
         chatWorkspaceChannels,
+        true,
       );
       expect(
         (await requireWorkspaceMembership(db, recipient.userId, room.workspaceId)).guest,
@@ -321,6 +460,7 @@ describe('integration: named guest invitations', () => {
         made.token,
         undefined,
         chatWorkspaceChannels,
+        true,
       );
       const owner = await requireWorkspaceMembership(
         db,
@@ -500,7 +640,15 @@ describe('integration: named guest invitations', () => {
       const clock = fixedClock(new Date());
       expect(
         await attempt(db, () =>
-          acceptInvitation(db, clock, recipient.userId, made.token, undefined, noWorkspaceChannels),
+          acceptInvitation(
+            db,
+            clock,
+            recipient.userId,
+            made.token,
+            undefined,
+            noWorkspaceChannels,
+            true,
+          ),
         ),
       ).toBe('INVITATION_NOT_FOUND');
       await revokeInvitation(db, clock, owner, made.invitation.id);
@@ -513,6 +661,7 @@ describe('integration: named guest invitations', () => {
             made.token,
             undefined,
             chatWorkspaceChannels,
+            true,
           ),
         ),
       ).toBe('INVITATION_NOT_FOUND');
@@ -552,6 +701,7 @@ describe('integration: named guest invitations', () => {
             expiring.token,
             undefined,
             chatWorkspaceChannels,
+            true,
           ),
         ),
       ).toBe('INVITATION_NOT_FOUND');
@@ -576,6 +726,7 @@ describe('integration: named guest invitations', () => {
             archived.token,
             undefined,
             chatWorkspaceChannels,
+            true,
           ),
         ),
       ).toBe('INVITATION_NOT_FOUND');
@@ -621,6 +772,7 @@ describe('integration: named guest invitations', () => {
         made.token,
         undefined,
         chatWorkspaceChannels,
+        true,
       );
       const owner = await requireWorkspaceMembership(
         db,
@@ -644,6 +796,7 @@ describe('integration: named guest invitations', () => {
           token,
           undefined,
           chatWorkspaceChannels,
+          true,
         );
         expect(accepted.membership).toEqual(first.membership);
         expect(accepted.memberIds).toEqual([]);
@@ -698,6 +851,7 @@ describe('integration: named guest invitations', () => {
         invite.token,
         undefined,
         chatWorkspaceChannels,
+        true,
       );
       expect(accepted.membership.role).toBe('admin');
       expect(accepted.membership.access).toBeUndefined();
@@ -724,6 +878,7 @@ describe('integration: named guest invitations', () => {
             made.token,
             undefined,
             chatWorkspaceChannels,
+            true,
           ),
         ),
       ).toContain('guest audit failure');
@@ -764,6 +919,7 @@ describe('integration: named guest invitations', () => {
                   made.token,
                   undefined,
                   chatWorkspaceChannels,
+                  true,
                 ),
             ),
       ),
@@ -896,7 +1052,15 @@ describe('integration: named guest invitations', () => {
       const clock = fixedClock(new Date());
       expect(
         await attempt(db, () =>
-          acceptInvitation(db, clock, other.userId, made.token, undefined, chatWorkspaceChannels),
+          acceptInvitation(
+            db,
+            clock,
+            other.userId,
+            made.token,
+            undefined,
+            chatWorkspaceChannels,
+            true,
+          ),
         ),
       ).toBe('INVITATION_NOT_FOUND');
       await db
@@ -913,6 +1077,7 @@ describe('integration: named guest invitations', () => {
             made.token,
             undefined,
             chatWorkspaceChannels,
+            true,
           ),
         ),
       ).toBe('INVITATION_NOT_FOUND');
@@ -928,6 +1093,7 @@ describe('integration: named guest invitations', () => {
         made.token,
         undefined,
         chatWorkspaceChannels,
+        true,
       );
       expect(accepted.membership.access?.kind).toBe('guest');
       expect(accepted.membership.modules).toEqual(['chat']);
@@ -945,6 +1111,7 @@ describe('integration: named guest invitations', () => {
         made.token,
         undefined,
         chatWorkspaceChannels,
+        true,
       );
       expect(again.membership).toEqual(accepted.membership);
       expect(again.memberIds).toEqual([]);

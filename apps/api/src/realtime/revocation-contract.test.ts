@@ -48,7 +48,7 @@ const statementFrom = (text: string, at: number): string => {
 
 const enclosing = (text: string, at: number): string => {
   const before = text.slice(0, at);
-  const found = [...before.matchAll(/^(?:export\s+)?const\s+(\w+)\s*=/gm)].at(-1);
+  const found = [...before.matchAll(/^(?:export\s+)?const\s+(\w+)(?:\s*:[^\n=]+)?\s*=/gm)].at(-1);
   return found?.[1] ?? '(module)';
 };
 
@@ -183,6 +183,9 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   'apps/api/src/features/chat/messages/tombstone.ts#takeBack': {
     none: 'lowers the unread counters of existing memberships and changes no access (#47)',
   },
+  'apps/api/src/features/chat/channels/guest-expiry.ts#cleanOne': {
+    none: 'clears pending attention and existing counters only after access already expired; memberships and channel grants remain, and current SQL authority plus the socket deadline already deny delivery (#1373)',
+  },
   // The \`sweep:sessions\` job calls it (D-30). It deletes rows that are already revoked
   // (announced when they were revoked) or past their expiry (the hub's own timer ends the socket).
   // A new role changes what a member may manage, not what they may see: every role sees the
@@ -193,11 +196,23 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
   // Out of the workspace — removed by an admin, or leaving (D-152), both through `takeOut`, which has chat
   // take them out of its channels (`leaveAll`, D-250): their sockets stop receiving every channel they could
   // see in it.
+  'apps/api/src/features/chat/channels/guest-scope.ts#prepareGuestScopeEdit': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/ingress/http/guests.ts',
+  },
+  'apps/api/src/modules/workspaces/guest-conversion.ts#convertGuest': {
+    publishes: 'publishWorkspaceUpdated',
+    calledFrom: 'apps/api/src/ingress/http/guests.ts',
+  },
+  'apps/api/src/modules/workspaces/guest-access.ts#updateGuestAccess': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/ingress/http/guests.ts',
+  },
   'apps/api/src/modules/workspaces/members.ts#takeOut': {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
   },
-  'apps/api/src/features/chat/channels/workspace-channels.ts#leaveAll': {
+  'apps/api/src/features/chat/channels/workspace-channel-cleanup.ts#forgetWorkspaceChannels': {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
   },
@@ -296,6 +311,20 @@ const sourcesIn = (dir: string): Source[] => {
 const production = (): Source[] => SCANNED.flatMap((dir) => sourcesIn(join(ROOT, dir)));
 
 describe('every write that removes visibility decides what open sockets are told', () => {
+  test('a typed port implementation is the enclosing write, rather than the previous helper', () => {
+    expect(
+      visibilityWrites([
+        {
+          path: 'typed.ts',
+          text: `const earlier = (): void => {};
+export const edit: Port['edit'] = async (db) => {
+  await db.deleteFrom('channel_members').where('user_id', '=', id).execute();
+};`,
+        },
+      ]),
+    ).toEqual([{ site: 'typed.ts#edit', table: 'channel_members' }]);
+  });
+
   test('each production write is in the table, and each row in the table is a write that exists', () => {
     const found = visibilityWrites(production()).map((s) => s.site);
     // The control: the scan sees the writes that are known to exist. Without it an

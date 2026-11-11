@@ -14,7 +14,7 @@ import { DAY_MS, type Clock } from '../../../platform/clock';
 import {
   requireChannelById,
   requireChannelMember,
-  requireMessageById,
+  requireThreadContextById,
   visibleChannelIds,
 } from '../channels/guard';
 import type { WorkspaceContext } from '../../../platform/tenancy';
@@ -129,7 +129,7 @@ export const scheduleMessage = async (
   }
   readBody(input.content);
   if (input.parentId !== undefined) {
-    const parent = await requireMessageById(transaction, userId, input.parentId);
+    const parent = await requireThreadContextById(transaction, userId, input.parentId);
     if (parent.context.channelId !== channelId || parent.parentId !== null) {
       throw new AppError({
         code: 'VALIDATION_FAILED',

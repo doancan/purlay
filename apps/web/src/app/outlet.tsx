@@ -18,8 +18,6 @@
  */
 import { LegacyServerRedirect } from '../features/administration/legacy';
 import { lazy, Suspense, useEffect, type ComponentType } from 'react';
-import { InviteScreen } from '../features/invitations/invite-screen';
-import { MailStopScreen } from '../features/missed-mail/stop-screen';
 import { SessionGate } from '../features/session/session';
 import { Home } from '../features/shell/home';
 import { NotFound } from '../features/shell/not-found';
@@ -32,8 +30,8 @@ import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { isModuleMatch, moduleOf, type Match } from '../router/routes';
 import { Skeleton, LoadingStatus } from '../ui/skeleton';
+import { Main } from '../ui/main';
 import { ModuleRoute, warmModule } from './module-route';
-import { WelcomeScreen } from '../features/invitations/welcome-screen';
 import { LazyNativeSignInScreen } from '../features/native/load';
 import { LazyAdministration, LazySettingsScreen } from '../features/settings/load';
 import { LazySetupScreen, LazyVerifyScreen } from '../features/setup/load';
@@ -61,6 +59,17 @@ export const loadGallery = (): Promise<{ default: ComponentType }> =>
 
 const defaultGallery: ComponentType | null =
   import.meta.env.DEV || import.meta.env.VITE_GALLERY === '1' ? lazy(loadGallery) : null;
+
+// Joining is a route of its own: a regular conversation need not download its screens.
+const InviteScreen = lazy(async () => ({
+  default: (await import('../features/invitations/invite-screen')).InviteScreen,
+}));
+const WelcomeScreen = lazy(async () => ({
+  default: (await import('../features/invitations/welcome-screen')).WelcomeScreen,
+}));
+const MailStopScreen = lazy(async () => ({
+  default: (await import('../features/missed-mail/stop-screen')).MailStopScreen,
+}));
 
 const Loading = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -129,13 +138,44 @@ const draw = (match: Match, gallery: ComponentType | null): Drawn => {
         </SessionGate>,
       );
     case 'invite':
-      return bare(<InviteScreen />);
+      return bare(
+        <Suspense
+          fallback={
+            <Main>
+              <Loading />
+            </Main>
+          }
+        >
+          <InviteScreen />
+        </Suspense>,
+      );
     case 'mailStop':
-      return bare(<MailStopScreen />);
+      return bare(
+        <Suspense
+          fallback={
+            <Main>
+              <Loading />
+            </Main>
+          }
+        >
+          <MailStopScreen />
+        </Suspense>,
+      );
     case 'workspace':
       return shelled(match.params.slug, <WorkspaceHome />);
     case 'welcome':
-      return shelled(match.params.slug, <WelcomeScreen />);
+      return shelled(
+        match.params.slug,
+        <Suspense
+          fallback={
+            <Main>
+              <Loading />
+            </Main>
+          }
+        >
+          <WelcomeScreen />
+        </Suspense>,
+      );
     case 'settingsHome':
       return shelled(match.params.slug, <LazySettingsScreen section={FIRST_SECTION} />);
     case 'settings':

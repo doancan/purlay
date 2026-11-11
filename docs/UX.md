@@ -139,7 +139,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   Max width 1040px bounds only an empty state's sentence or a card drawn inside it.
 - **Member list** — collapsed by default. Presence is decoration, not information.
 - **Thread panel (440px)** — on the right of the channel, only while a thread is open (§4, D-122).
-  The feed keeps the rest of the width.
+  The feed keeps the rest of the width. Restricted guests can continue post-join replies beneath an earlier
+  hidden root: a localized history boundary replaces that root's author, words, time and actions. Only readable
+  replies contribute to the summary. Follow/read and permitted Reply remain; a deleted root offers no composer.
+  Keyboard thread opening and return focus use the existing thread controls (D-300).
 - **Files panel** — the same place, opened by the header's **Files** control (D-129): every file
   shared in the channel, newest first, each with who shared it, when and its size. An image shows its
   thumbnail and opens the image viewer, whose ←/→ step through the panel's images (D-159); any other
@@ -168,7 +171,7 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   member of the channel sets the severity and moves the status between **Investigating** and
   **Mitigating**, each painted at once and put back, said, when refused; **Resolve…** asks first, since
   a resolved incident is never reopened. Who is responding is listed with their avatars, first brought
-  in first — **I'm responding**, **Bring someone in…** from the channel's members, and **Take off** —
+  in first — **I'm responding**, **Bring someone in…** from the channel's members, and **Remove** —
   and the banner shows the first three; somebody who left the channel stays listed. The **runbook** is
   a link opened in a new tab, linked, changed and removed by a member; the **postmortem** is drawn as
   a message is, and **Write**/**Edit** opens it in place — saved from the version it was begun at, so
@@ -859,6 +862,13 @@ the search field's operators, D-224).
 What is done is said in a toast; what is refused, under the box, with the words kept. An unknown `/word` is
 not sent and the line says which commands there are; `//` at the start sends a slash as words; with files
 attached, a line is words.
+
+An account change replaces the previous account's private composer, attached files and queued sends,
+even if the browser quickly switches back to the same account. Old upload completions cannot send
+through the new account. If enqueue itself is refused, the current composer keeps its words and files
+and says *Your account changed. Review this message and send again.* A refused offscreen enqueue keeps
+its draft and files for deliberate review instead of repeatedly trying to send. A normal channel or
+workspace switch within the same account still preserves waiting uploads and drafts (D-300).
 
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.

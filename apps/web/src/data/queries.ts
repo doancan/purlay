@@ -42,6 +42,7 @@ import { isTransient } from './errors';
 import { claimFor } from './browser-storage';
 import { useClientStorage } from './storage-provider';
 import { keys } from './keys';
+import { reconcileAccountOnCommit } from './access-change';
 import { profileTimeZoneChanged } from './cache';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
@@ -54,17 +55,15 @@ export const useMe = (): UseQueryResult<MeResponse> => {
     queryKey: keys.me,
     queryFn: async ({ signal }) => {
       const me = await api.me(signal);
-      // The cookie is the browser's, so a page that held one person can read back another — they
-      // signed in in another tab. Nothing this page cached was theirs (#694).
+      // A transport may still resolve after cancellation. It cannot claim drafts or clear a new account.
+      signal.throwIfAborted();
       const before = client.getQueryData<MeResponse>(keys.me);
-      if (before !== undefined && before.user.id !== me.user.id) {
-        client.removeQueries({ predicate: (query) => query.queryKey[0] !== keys.me[0] });
-      }
       if (before?.user.id === me.user.id && before.profile.timeZone !== me.profile.timeZone) {
         profileTimeZoneChanged(client, me.profile.timeZone);
       }
       // Before the answer reaches a screen, so no composer reads somebody else's draft (#694).
       claimFor(storage, me.user.id);
+      reconcileAccountOnCommit(client, before, signal);
       return me;
     },
   });
@@ -141,12 +140,28 @@ export const useMySessions = (): UseQueryResult<DeviceSessionList> => {
   });
 };
 
+/** A render prepared under the old context may subscribe after the current receipt closes chat. */
+const useChannelReadEnabled = (workspaceId: string | null, requested: boolean): (() => boolean) => {
+  const client = useQueryClient();
+  const available = (): boolean => {
+    if (workspaceId === null) return false;
+    const me = client.getQueryData<MeResponse>(keys.me);
+    if (me === undefined) return true;
+    const membership = me.memberships.find((entry) => entry.workspace.id === workspaceId);
+    return membership !== undefined && (membership.modules ?? me.modules).includes('chat');
+  };
+  // Keep render-time enablement too, so a later reopening is still a false-to-true transition.
+  const allowed = requested && available();
+  return (): boolean => allowed && available();
+};
+
 export const useChannels = (workspaceId: string, enabled = true): UseQueryResult<Channel[]> => {
   const api = useApi();
+  const mayRead = useChannelReadEnabled(workspaceId, enabled);
   return useQuery({
     queryKey: keys.channels(workspaceId),
     queryFn: ({ signal }) => api.channels(workspaceId, signal),
-    enabled,
+    enabled: mayRead,
   });
 };
 
@@ -158,10 +173,11 @@ export const useChannels = (workspaceId: string, enabled = true): UseQueryResult
  */
 export const useCodeRepository = (workspaceId: string | null, channelId: string): string | null => {
   const api = useApi();
+  const mayRead = useChannelReadEnabled(workspaceId, workspaceId !== null);
   const read = useQuery({
     queryKey: keys.channels(workspaceId ?? ''),
     queryFn: ({ signal }) => api.channels(workspaceId ?? '', signal),
-    enabled: workspaceId !== null,
+    enabled: mayRead,
     select: (channels: Channel[]) =>
       channels.find((channel) => channel.id === channelId)?.codeRepository ?? null,
   });

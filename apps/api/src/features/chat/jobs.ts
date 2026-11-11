@@ -8,8 +8,10 @@ import type { JobWork } from '../../modules/jobs/jobs';
 import { purgeRetention } from './messages/retention-purge';
 import { mailMissedMessages } from './notifications/missed-mail';
 import { sweepGitHubDeliveries, sweepLinkPreviews } from './sweeps';
+import { sweepExpiredGuests } from './channels/guest-expiry';
 
 export const chatJobWork: Readonly<Record<string, JobWork>> = {
+  'sweep:guest-expiry': async ({ database }) => ({ ...(await sweepExpiredGuests({ database })) }),
   'purge:retention': async ({ database, clock, log, storage }) =>
     await purgeRetention({ database, clock, log, storage }),
   'sweep:link-previews': async ({ database, clock }) =>

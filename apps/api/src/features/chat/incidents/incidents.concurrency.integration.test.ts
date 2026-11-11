@@ -3,8 +3,8 @@
  * with different ids open one incident, the other told `INCIDENT_OPEN`; two changes at once are one
  * after the other, both on the timeline in the order they were made.
  *
- * Deterministic: the first is held open until the second is seen waiting on a lock. Without the open
- * index the second declaration would not wait, and both would be taken.
+ * Deterministic: the first is held open until the second is seen waiting on the channel mutex.
+ * The unique open index still refuses a second declaration after that mutex is released.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {

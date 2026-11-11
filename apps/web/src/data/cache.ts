@@ -34,6 +34,7 @@ import type {
   FollowedThreadsPage,
 } from '@purlay/types';
 import { families, keys } from './keys';
+import { channelAccessRevoked } from './access-change';
 import type { FeedPages } from './queries';
 
 type Pages = InfiniteData<MessagePage, string | undefined>;
@@ -181,6 +182,9 @@ const settled = (query: { readonly state: { readonly fetchStatus: string } }): b
 const holdsData = (query: { readonly state: { readonly data: unknown } }): boolean =>
   query.state.data !== undefined;
 
+/** One follow-up per actual Query, even when many replies arrive during the same read. */
+const queuedRereads = new WeakSet<object>();
+
 /**
  * Marks what is cached under the key to be read again: what is settled now, and what is being read
  * as soon as that read is done. A read on its way is not cancelled — that stalls the screen driving
@@ -197,14 +201,18 @@ export const readAgain = (client: QueryClient, queryKey: QueryKey): void => {
     predicate: (query) => settled(query) && holdsData(query),
   });
   for (const query of onTheirWay) {
+    if (queuedRereads.has(query)) continue;
+    queuedRereads.add(query);
     const unsubscribe = cache.subscribe((event) => {
       if (event.query !== query) return;
       // Gone from the cache first: nothing left to read again, and nothing left to listen for.
       if (event.type === 'removed') {
+        queuedRereads.delete(query);
         unsubscribe();
         return;
       }
       if (!settled(query)) return;
+      queuedRereads.delete(query);
       unsubscribe();
       if (!holdsData(query)) return;
       void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
@@ -330,6 +338,26 @@ export const messageCreated = (client: QueryClient, message: Message): void => {
       });
     }
     askAgainIfOnItsWay(client, key);
+    // A readable reply can be the guest's first knowledge of an earlier thread. The global
+    // root summary stays private; the feed re-reads its own sanitized, permitted containers.
+    const guestWorkspaces = new Set(
+      (client.getQueryData<MeResponse>(keys.me)?.memberships ?? [])
+        .filter((membership) => membership.access?.kind === 'guest')
+        .map((membership) => membership.workspace.id),
+    );
+    if (
+      guestWorkspaces.size > 0 &&
+      client
+        .getQueriesData<Channel[]>({ queryKey: families.channels })
+        .some(
+          ([, channels]) =>
+            channels?.some(
+              (channel) =>
+                channel.id === message.channelId && guestWorkspaces.has(channel.workspaceId),
+            ) === true,
+        )
+    )
+      readAgain(client, keys.messages(message.channelId));
   }
   touchChannel(client, message.channelId, message.createdAt);
 };
@@ -642,6 +670,7 @@ export const channelAdded = (client: QueryClient, channel: Channel): void => {
 
 /** Delivery for these channels stopped. They leave the list and their messages leave the cache. */
 export const channelsRevoked = (client: QueryClient, channelIds: readonly string[]): void => {
+  channelAccessRevoked(client, channelIds);
   editFollowed(client, (row) => (channelIds.includes(row.root.channelId) ? null : row), true);
   readAgain(client, families.followedThreads);
   for (const [key, list] of client.getQueriesData<Channel[]>({ queryKey: families.channels })) {

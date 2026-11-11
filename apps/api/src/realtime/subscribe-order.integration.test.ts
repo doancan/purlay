@@ -166,6 +166,7 @@ describe('integration: subscribe before replay', () => {
         })),
       ];
       rig.hub.reply('s1', replies);
+      await rig.hub.settled();
       rig.hub.closed('s1');
       outcome = { written: rig.written, first, late, replies };
     });
@@ -217,6 +218,38 @@ describe('integration: subscribe before replay', () => {
       expect(rig.bus.size()).toEqual({ topics: 0, sockets: 0 });
     });
   });
+
+  test.each(['restriction', 'release'] as const)(
+    'a transport missing its %s gate refuses even a full-member subscription before replay',
+    async (missing) => {
+      await withRollback(async (db) => {
+        const alice = await aSignedInUser(db, clock, 'order-legacy');
+        const channelId = await aChannel(db, alice);
+        const rig = await aRig(db, alice);
+        let reads = 0;
+        const read: typeof missedIn = async (...args) => {
+          reads += 1;
+          return await missedIn(...args);
+        };
+        const replies = await rig.route(subscribeFrame(channelId, BEFORE), {
+          frameHandlers: chatFrames(read),
+          socket: {
+            hold: rig.hub.hold,
+            isOpen: rig.hub.isOpen,
+            drop: rig.hub.drop,
+            ...(missing === 'restriction' ? {} : { restrictChannel: rig.hub.restrictChannel }),
+            ...(missing === 'release' ? {} : { releaseChannels: rig.hub.releaseChannels }),
+          },
+        });
+        expect(replies[0]).toMatchObject({ event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } });
+        expect(reads).toBe(0);
+        expect(rig.bus.size()).toEqual({ topics: 0, sockets: 0 });
+        rig.hub.reply('s1', replies);
+        await rig.hub.settled();
+        rig.hub.closed('s1');
+      });
+    },
+  );
 
   test('a subscription that fails leaves nothing subscribed, and a prior one intact', async () => {
     await withRollback(async (db) => {

@@ -204,6 +204,8 @@ export const setMyDeepWork = async (
 export interface MemberWriteDependencies extends WorkspaceDependencies {
   readonly bus: EventBus;
   readonly log?: Logger;
+  /** Explicit deployment attestation; never inferred from this API alone. */
+  readonly guestAccessReady?: boolean;
 }
 
 /**
@@ -263,12 +265,21 @@ export const removeWorkspaceMember = async (
   const { database, clock, bus, log = NO_LOG } = dependencies;
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
-  const { channelIds } = await atomicallyOn(database)(
+  const { channelIds, notifyUserIds } = await atomicallyOn(database)(
     async (transaction) =>
       await removeMember(transaction, clock, context, userId, dependencies.workspaceChannels),
   );
   await publishAfterCommit(log, [
     [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],
+    ...(notifyUserIds === undefined
+      ? []
+      : [
+          [
+            publication('WORKSPACE_UPDATED', () =>
+              publishWorkspaceUpdated(bus, clock, notifyUserIds, workspaceId),
+            ),
+          ],
+        ]),
   ]);
 };
 
@@ -285,7 +296,7 @@ export const leaveWorkspaceMembership = async (
   const { database, clock, bus, log = NO_LOG } = dependencies;
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
-  const { channelIds } = await atomicallyOn(database)(
+  const { channelIds, notifyUserIds } = await atomicallyOn(database)(
     async (transaction) =>
       await leaveWorkspace(transaction, clock, context, dependencies.workspaceChannels),
   );
@@ -295,6 +306,15 @@ export const leaveWorkspaceMembership = async (
         publishAccessRevoked(bus, clock, caller.userId, channelIds),
       ),
     ],
+    ...(notifyUserIds === undefined
+      ? []
+      : [
+          [
+            publication('WORKSPACE_UPDATED', () =>
+              publishWorkspaceUpdated(bus, clock, notifyUserIds, workspaceId),
+            ),
+          ],
+        ]),
   ]);
 };
 

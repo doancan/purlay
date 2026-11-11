@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { CLOSE_CODES, MAX_FRAME_BYTES, type ServerFrame } from '@purlay/types';
 import { anAuthThatMustNotBeTouched } from '../testing/doubles';
 import { fixedClock } from '../platform/clock';
+import { DEFAULT_DEADLINE_MS } from '../platform/request-deadline';
 import { createLogger } from '../platform/logging';
 import {
   after,
@@ -96,6 +97,110 @@ describe('restricted live channel delivery', () => {
     return { hub, sent, closes, timers, clock };
   };
 
+  test('an access expansion bypasses held replay and cancels the old guest expiry before resync', async () => {
+    const { hub, sent, closes, timers, clock } = await rig();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'old-guest',
+      expiresAt: clock.now().getTime() + 1000,
+      accepts: () => Promise.resolve(true),
+    });
+    const expiry = timers.pending.at(-1);
+    if (expiry === undefined) throw new Error('Missing expiry timer');
+    hub.hold('guest');
+    hub.deliver('guest', revision('held-old-revision'));
+    const hint: ServerFrame = {
+      event: 'WORKSPACE_UPDATED',
+      data: { workspaceId: channelId, accessChanged: true },
+      ts: 1,
+    };
+    hub.deliver('guest', hint);
+    expect(sent).toEqual([hint]);
+    expect(closes).toEqual([CLOSE_CODES.RESYNC]);
+    expect(timers.cleared.length).toBeGreaterThan(0);
+    expiry.fire();
+    expect(sent).toEqual([hint]);
+  });
+  test('personal updates and PONG keep their causal order behind a pending channel projection', async () => {
+    const { hub, sent, closes } = await rig();
+    const allowed = Promise.withResolvers<boolean>();
+    if (hub.restrictChannel === undefined)
+      throw new Error('Canonical hub is missing its delivery gate');
+    hub.restrictChannel('guest', channelId, {
+      key: 'current-channel',
+      expiresAt: null,
+      accepts: () => allowed.promise,
+    });
+    const message = revision('held-before-personal');
+    const personal: ServerFrame = {
+      event: 'NOTIFICATIONS_UPDATED',
+      data: { workspaceId: channelId },
+      ts: 2,
+    };
+    const pong: ServerFrame = { event: 'PONG', data: {}, refId: channelId, ts: 3 };
+    hub.deliver('guest', message);
+    hub.deliver('guest', personal);
+    hub.deliver('guest', pong);
+    try {
+      expect(sent).toHaveLength(0);
+    } finally {
+      allowed.resolve(true);
+      await hub.settled();
+    }
+    expect(sent).toEqual([message, personal, pong]);
+    expect(closes).toHaveLength(0);
+  });
+
+  test.each(['session', 'policy'] as const)(
+    '%s end bypasses a pending projection and retires the ordered tail',
+    async (kind) => {
+      const { hub, sent, closes } = await rig();
+      const allowed = Promise.withResolvers<boolean>();
+      if (hub.restrictChannel === undefined)
+        throw new Error('Canonical hub is missing its delivery gate');
+      hub.restrictChannel('guest', channelId, {
+        key: 'old-policy',
+        expiresAt: null,
+        accepts: () => allowed.promise,
+      });
+      hub.deliver('guest', revision('obsolete-projection'));
+      hub.deliver('guest', {
+        event: 'NOTIFICATIONS_UPDATED',
+        data: { workspaceId: channelId },
+        ts: 1,
+      });
+      const terminal: ServerFrame =
+        kind === 'session'
+          ? { event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts: 2 }
+          : {
+              event: 'WORKSPACE_UPDATED',
+              data: { workspaceId: channelId, accessChanged: true },
+              ts: 2,
+            };
+      hub.deliver('guest', terminal);
+      try {
+        expect(sent).toEqual([terminal]);
+        expect(closes).toEqual([
+          kind === 'session' ? CLOSE_CODES.SESSION_ENDED : CLOSE_CODES.RESYNC,
+        ]);
+      } finally {
+        allowed.resolve(true);
+        await hub.settled();
+      }
+      expect(sent).toEqual([terminal]);
+    },
+  );
+
+  test('an ordinary workspace update does not interrupt a restricted connection', async () => {
+    const { hub, sent, closes, clock } = await rig();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'old-guest',
+      expiresAt: clock.now().getTime() + 1000,
+      accepts: () => Promise.resolve(true),
+    });
+    hub.deliver('guest', { event: 'WORKSPACE_UPDATED', data: { workspaceId: channelId }, ts: 1 });
+    expect(sent).toHaveLength(1);
+    expect(closes).toEqual([]);
+  });
   test('live and held revisions pass the subscription policy, while the acknowledgement stays first', async () => {
     const { hub, sent } = await rig();
     hub.hold('guest');
@@ -131,6 +236,362 @@ describe('restricted live channel delivery', () => {
     expect(attempted).toBe(0);
   });
 
+  test('a missed conversion hint rechecks once at the old deadline and resyncs without revoking drafts', async () => {
+    const { hub, sent, closes, clock, timers } = await rig();
+    const answer = Promise.withResolvers<boolean>();
+    let checks = 0;
+    let projected = 0;
+    const expiry = {
+      workspaceId: '11111111-1111-4111-8111-111111111112',
+      recheck: (): Promise<boolean> => {
+        checks += 1;
+        return answer.promise;
+      },
+    };
+    const other = '11111111-1111-4111-8111-111111111113';
+    for (const id of [channelId, other])
+      hub.restrictChannel?.('guest', id, {
+        key: id,
+        expiresAt: clock.now().getTime() + 1,
+        expiry,
+        accepts: () => {
+          projected += 1;
+          return Promise.resolve(true);
+        },
+      });
+    const oldTimers = [...timers.pending];
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.hold('guest');
+    hub.deliver('guest', revision('deadline'));
+    hub.deliver('guest', { event: 'PINS_UPDATED', data: { channelId: other }, ts: 1 });
+    for (const timer of oldTimers) timer.fire();
+    await Promise.resolve();
+    expect(checks).toBe(1);
+    expect(projected).toBe(0);
+    expect(sent.length).toBe(0);
+    let drained = false;
+    const settling = hub.settled().then(() => {
+      drained = true;
+    });
+    await Promise.resolve();
+    expect(drained).toBe(false);
+    answer.resolve(true);
+    await settling;
+    expect(sent).toEqual([
+      {
+        event: 'WORKSPACE_UPDATED',
+        data: { workspaceId: expiry.workspaceId, accessChanged: true },
+        ts: clock.now().getTime(),
+      },
+    ]);
+    expect(closes).toEqual([CLOSE_CODES.RESYNC]);
+    for (const timer of oldTimers) timer.fire();
+    expect(sent.length).toBe(1);
+  });
+
+  test('a denied deadline revokes all expired scopes once and does not release held private output', async () => {
+    const { hub, sent, closes, clock, timers } = await rig();
+    let checks = 0;
+    const other = '11111111-1111-4111-8111-111111111113';
+    for (const id of [channelId, other])
+      hub.restrictChannel?.('guest', id, {
+        key: id,
+        expiresAt: clock.now().getTime() + 1,
+        expiry: {
+          workspaceId: '11111111-1111-4111-8111-111111111112',
+          recheck: () => {
+            checks += 1;
+            return Promise.resolve(false);
+          },
+        },
+        accepts: () => Promise.resolve(true),
+      });
+    hub.hold('guest');
+    hub.deliver('guest', revision('held-private-output'));
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    const deadline = timers.pending.at(-1);
+    if (deadline === undefined) throw new Error('Missing guest deadline');
+    deadline.fire();
+    await hub.settled();
+    expect(sent.length).toBe(0);
+    hub.reply('guest', []);
+    expect(sent).toEqual([
+      {
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [channelId, other] },
+        ts: clock.now().getTime(),
+      },
+    ]);
+    expect(checks).toBe(1);
+    expect(closes).toEqual([]);
+  });
+
+  test('an early guest timer rearms until the absolute deadline instead of losing the expiry', async () => {
+    const { hub, sent, clock, timers } = await rig();
+    let checks = 0;
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'absolute-deadline',
+      expiresAt: clock.now().getTime() + 1000,
+      expiry: {
+        workspaceId: '11111111-1111-4111-8111-111111111112',
+        recheck: () => {
+          checks += 1;
+          return Promise.resolve(false);
+        },
+      },
+      accepts: () => Promise.resolve(true),
+    });
+    const first = timers.pending.at(-1);
+    if (first === undefined) throw new Error('Missing deadline timer');
+    first.fire();
+    expect(checks).toBe(0);
+    expect(sent.length).toBe(0);
+    const rearmed = timers.pending.at(-1);
+    expect(rearmed === first).toBe(false);
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    rearmed?.fire();
+    await hub.settled();
+    expect(checks).toBe(1);
+    expect(sent.map((frame) => frame.event)).toEqual(['ACCESS_REVOKED']);
+  });
+
+  test('membership denial also clears older future and unlimited scopes while another workspace stays usable', async () => {
+    const { hub, sent, clock } = await rig();
+    const answer = Promise.withResolvers<boolean>();
+    const workspaceId = '11111111-1111-4111-8111-111111111112';
+    const future = '11111111-1111-4111-8111-111111111113';
+    const unlimited = '11111111-1111-4111-8111-111111111114';
+    const elsewhere = '11111111-1111-4111-8111-111111111115';
+    let projected = 0;
+    for (const [id, expiresAt] of [
+      [channelId, clock.now().getTime() + 1],
+      [future, clock.now().getTime() + 60_000],
+      [unlimited, null],
+    ] as const)
+      hub.restrictChannel?.('guest', id, {
+        key: id,
+        expiresAt,
+        expiry: { workspaceId, recheck: () => answer.promise },
+        accepts: () => {
+          projected += 1;
+          return Promise.resolve(true);
+        },
+      });
+    hub.restrictChannel?.('guest', elsewhere, {
+      key: 'elsewhere',
+      expiresAt: null,
+      expiry: { workspaceId: elsewhere, recheck: () => Promise.resolve(true) },
+      accepts: () => Promise.resolve(true),
+    });
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.deliver('guest', revision('expired'));
+    for (const id of [future, unlimited, elsewhere])
+      hub.deliver('guest', { event: 'PINS_UPDATED', data: { channelId: id }, ts: 1 });
+    // The healthy workspace's ordered projection is a positive barrier for this microtask queue.
+    for (
+      let turn = 0;
+      turn < 50 &&
+      !sent.some((frame) => frame.event === 'PINS_UPDATED' && frame.data.channelId === elsewhere);
+      turn += 1
+    )
+      await Promise.resolve();
+    expect(
+      sent.some((frame) => frame.event === 'PINS_UPDATED' && frame.data.channelId === elsewhere),
+    ).toBe(true);
+    expect(projected).toBe(0);
+    answer.resolve(false);
+    await hub.settled();
+    expect(sent).toEqual([
+      { event: 'PINS_UPDATED', data: { channelId: elsewhere }, ts: 1 },
+      {
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [channelId, future, unlimited] },
+        ts: clock.now().getTime(),
+      },
+    ]);
+  });
+
+  test.each(['replaced', 'disconnected'] as const)(
+    'a pending expiry result cannot act on a %s scope',
+    async (change) => {
+      const { hub, sent, closes, clock } = await rig();
+      const answer = Promise.withResolvers<boolean>();
+      hub.restrictChannel?.('guest', channelId, {
+        key: 'former',
+        expiresAt: clock.now().getTime() + 1,
+        expiry: {
+          workspaceId: '11111111-1111-4111-8111-111111111112',
+          recheck: () => answer.promise,
+        },
+        accepts: () => Promise.resolve(true),
+      });
+      clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+      hub.deliver('guest', revision('not-delivered'));
+      if (change === 'disconnected') hub.closed('guest');
+      else
+        hub.restrictChannel?.('guest', channelId, {
+          key: 'replacement',
+          expiresAt: null,
+          accepts: () => Promise.resolve(true),
+        });
+      answer.resolve(false);
+      await hub.settled();
+      expect(sent.length).toBe(0);
+      expect(closes).toEqual([]);
+      if (change === 'replaced') {
+        hub.deliver('guest', revision('new-scope'));
+        await hub.settled();
+        expect(sent).toEqual([revision('new-scope')]);
+      }
+    },
+  );
+
+  test('replacing the initiating channel still lets the check revoke the other expired scopes', async () => {
+    const { hub, sent, clock } = await rig();
+    const answer = Promise.withResolvers<boolean>();
+    const other = '11111111-1111-4111-8111-111111111113';
+    for (const id of [channelId, other])
+      hub.restrictChannel?.('guest', id, {
+        key: id,
+        expiresAt: clock.now().getTime() + 1,
+        expiry: {
+          workspaceId: '11111111-1111-4111-8111-111111111112',
+          recheck: () => answer.promise,
+        },
+        accepts: () => Promise.resolve(true),
+      });
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.deliver('guest', revision('old'));
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'replacement',
+      expiresAt: null,
+      accepts: () => Promise.resolve(true),
+    });
+    answer.resolve(false);
+    await hub.settled();
+    expect(sent).toEqual([
+      { event: 'ACCESS_REVOKED', data: { channelIds: [other] }, ts: clock.now().getTime() },
+    ]);
+    hub.deliver('guest', revision('replacement-still-works'));
+    await hub.settled();
+    expect(sent.at(-1)).toEqual(revision('replacement-still-works'));
+  });
+
+  test('a failed expiry lookup resyncs without treating an unavailable database as revocation', async () => {
+    const { hub, sent, closes, clock } = await rig();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'unavailable',
+      expiresAt: clock.now().getTime() + 1,
+      expiry: {
+        workspaceId: '11111111-1111-4111-8111-111111111112',
+        recheck: () => Promise.reject(new Error('Database unavailable')),
+      },
+      accepts: () => Promise.resolve(true),
+    });
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.deliver('guest', revision('not-delivered'));
+    await hub.settled();
+    expect(sent.length).toBe(0);
+    expect(closes).toEqual([CLOSE_CODES.RESYNC]);
+  });
+
+  test('a completed check cannot send an old workspace hint to a replacement connection', async () => {
+    const { hub, sent, clock } = await rig();
+    const answer = Promise.withResolvers<boolean>();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'former-connection',
+      expiresAt: clock.now().getTime() + 1,
+      expiry: {
+        workspaceId: '11111111-1111-4111-8111-111111111112',
+        recheck: () => answer.promise,
+      },
+      accepts: () => Promise.resolve(true),
+    });
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.deliver('guest', revision('not-delivered'));
+    hub.closed('guest');
+    const replacement: ServerFrame[] = [];
+    const closes: number[] = [];
+    await hub.opened(
+      'guest',
+      {
+        send: (payload) => {
+          replacement.push(JSON.parse(payload) as ServerFrame);
+          return payload.length;
+        },
+        buffered: () => 0,
+        close: (code) => {
+          closes.push(code);
+        },
+      },
+      new Request('https://purlay.test/ws'),
+    );
+    closes.length = 0;
+    answer.resolve(true);
+    await hub.settled();
+    expect(sent.length).toBe(0);
+    expect(replacement.length).toBe(0);
+    expect(closes).toEqual([]);
+  });
+
+  test('one recheck splits a large expired scope into valid bounded revocations', async () => {
+    const { hub, sent, clock } = await rig();
+    let checks = 0;
+    const ids = Array.from({ length: 501 }, () => crypto.randomUUID());
+    for (const id of ids)
+      hub.restrictChannel?.('guest', id, {
+        key: id,
+        expiresAt: clock.now().getTime() + 1,
+        expiry: {
+          workspaceId: '11111111-1111-4111-8111-111111111112',
+          recheck: () => {
+            checks += 1;
+            return Promise.resolve(false);
+          },
+        },
+        accepts: () => Promise.resolve(true),
+      });
+    const first = ids[0];
+    if (first === undefined) throw new Error('No restricted scope');
+    clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+    hub.deliver('guest', { event: 'PINS_UPDATED', data: { channelId: first }, ts: 1 });
+    await hub.settled();
+    const revoked = sent.flatMap((frame) =>
+      frame.event === 'ACCESS_REVOKED' ? [frame.data.channelIds] : [],
+    );
+    expect(revoked.map((group) => group.length)).toEqual([500, 1]);
+    expect(revoked.flat()).toEqual(ids);
+    expect(checks).toBe(1);
+  });
+
+  test(
+    'a stalled expiry check is aborted at the unchanged request deadline and resyncs',
+    async () => {
+      const { hub, sent, closes, clock } = await rig();
+      let seen: AbortSignal | undefined;
+      hub.restrictChannel?.('guest', channelId, {
+        key: 'stalled',
+        expiresAt: clock.now().getTime() + 1,
+        expiry: {
+          workspaceId: '11111111-1111-4111-8111-111111111112',
+          recheck: (signal) => {
+            seen = signal;
+            return new Promise<boolean>(() => undefined);
+          },
+        },
+        accepts: () => Promise.resolve(true),
+      });
+      clock.now = (): Date => new Date('2026-11-10T00:00:01Z');
+      hub.deliver('guest', revision('stalled'));
+      await hub.settled();
+      expect(seen?.aborted).toBe(true);
+      expect(sent.length).toBe(0);
+      expect(closes).toEqual([CLOSE_CODES.RESYNC]);
+    },
+    // Exercise the real production deadline: the test must live long enough to observe it.
+    DEFAULT_DEADLINE_MS + 5_000,
+  );
+
   test('revocation drops an authorization result that was already waiting', async () => {
     const { hub, sent } = await rig();
     let finish: (value: boolean) => void = () => {
@@ -150,6 +611,39 @@ describe('restricted live channel delivery', () => {
     finish(true);
     await hub.settled();
     expect(sent.map((frame) => frame.event)).toEqual(['ACCESS_REVOKED']);
+  });
+
+  test.each(['revoked', 'resync'] as const)(
+    'a current %s verdict sends only its control action, never the original words',
+    async (verdict) => {
+      const { hub, sent, closes } = await rig();
+      const workspaceId = '11111111-1111-4111-8111-111111111112';
+      hub.restrictChannel?.('guest', channelId, {
+        key: 'grant',
+        expiresAt: null,
+        expiry: { workspaceId, recheck: () => Promise.resolve(true) },
+        accepts: () => Promise.resolve(verdict),
+      });
+      hub.deliver('guest', revision('never these words'));
+      await hub.settled();
+      expect(sent.map((frame) => frame.event)).toEqual([
+        verdict === 'revoked' ? 'ACCESS_REVOKED' : 'WORKSPACE_UPDATED',
+      ]);
+      expect(closes).toEqual(verdict === 'resync' ? [CLOSE_CODES.RESYNC] : []);
+    },
+  );
+
+  test('a changed policy without workspace metadata still closes rather than exposing words', async () => {
+    const { hub, sent, closes } = await rig();
+    hub.restrictChannel?.('guest', channelId, {
+      key: 'grant',
+      expiresAt: null,
+      accepts: () => Promise.resolve('resync'),
+    });
+    hub.deliver('guest', revision('never these words'));
+    await hub.settled();
+    expect(sent.length).toBe(0);
+    expect(closes).toEqual([CLOSE_CODES.RESYNC]);
   });
 
   test('a failed policy closes to resynchronize without exposing the frame', async () => {

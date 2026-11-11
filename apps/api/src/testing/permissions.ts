@@ -21,6 +21,28 @@ export interface PermissionCase {
 }
 
 export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
+  'read guest invitation availability': {
+    endpoint: 'GET /api/workspaces/:workspaceId/guest-invitations',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'create a named guest invitation': {
+    endpoint: 'POST /api/workspaces/:workspaceId/guest-invitations',
+    allowed: { owner: true, admin: true, member: false },
+  },
+
+  'convert guest access': {
+    endpoint: 'POST /api/workspaces/:workspaceId/guests/:userId/conversion',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'list guest access': {
+    endpoint: 'GET /api/workspaces/:workspaceId/guests',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'edit guest access': {
+    endpoint: 'PATCH /api/workspaces/:workspaceId/guests/:userId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+
   'make a member an admin': {
     endpoint: 'PATCH /api/workspaces/:workspaceId/members/:userId',
     allowed: { owner: true, admin: true, member: false },

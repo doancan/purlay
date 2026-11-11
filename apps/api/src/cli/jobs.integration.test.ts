@@ -1,6 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { cloneIntegrationDatabase, closeIntegrationDatabase } from '@purlay/db';
+import { cloneIntegrationDatabase, closeIntegrationDatabase, sql } from '@purlay/db';
+import { messageId } from '@purlay/types';
+import { aRoom } from '../testing/rooms';
 import { DAY_MS } from '../platform/clock';
 import { anOutboxRow, aWorkspaceRow } from '../testing/facts';
 
@@ -97,7 +99,12 @@ describe('integration: the scheduled jobs of the modules a process runs', () => 
   }, 30_000);
 
   test('the purge and the sweeps of chat’s rows run with chat off, as the core’s own do', async () => {
-    for (const name of ['purge:retention', 'sweep:link-previews', 'sweep:github-deliveries']) {
+    for (const name of [
+      'purge:retention',
+      'sweep:link-previews',
+      'sweep:github-deliveries',
+      'sweep:guest-expiry',
+    ]) {
       const { code, said } = await job(name, 'none');
       expect(code).toBe(0);
       expect(said).toContain('a scheduled job finished');
@@ -159,4 +166,144 @@ describe('integration: sweep:outbox as the scheduler runs it (D-288 §12)', () =
       await cloned.drop();
     }
   }, 60_000);
+});
+
+describe('integration: expired guest cleanup as the scheduler actually runs it', () => {
+  test.each(['omitted', 'stopped'] as const)(
+    'cleans durable pending rows with chat %s and another process safely repeats it',
+    async (mode) => {
+      const cloned = await cloneIntegrationDatabase();
+      try {
+        const room = await aRoom(cloned.db, ['owner', 'guest']);
+        const owner = room.members['owner'];
+        const guest = room.members['guest'];
+        if (owner === undefined || guest === undefined)
+          throw new Error('Missing job fixture users');
+        await cloned.db
+          .updateTable('workspace_members')
+          .set({
+            access_kind: 'guest',
+            guest_modules: ['chat'],
+            guest_since: sql<Date>`statement_timestamp() - interval '2 hours'`,
+            guest_expires_at: sql<Date>`statement_timestamp() - interval '1 hour'`,
+          })
+          .where('workspace_id', '=', room.workspaceId)
+          .where('user_id', '=', guest.userId)
+          .execute();
+        const id = messageId(new Date(Date.now() - 90 * 60_000));
+        await cloned.db
+          .insertInto('messages')
+          .values({
+            id,
+            workspace_id: room.workspaceId,
+            channel_id: room.channelId,
+            sender_id: owner.userId,
+            content: 'Private retained job fixture',
+            created_at: new Date(Date.now() - 90 * 60_000),
+          })
+          .execute();
+        const scheduledId = messageId(new Date());
+        await cloned.db
+          .insertInto('scheduled_messages')
+          .values({
+            id: scheduledId,
+            workspace_id: room.workspaceId,
+            channel_id: room.channelId,
+            user_id: guest.userId,
+            content: 'Pending before expiry',
+            send_at: new Date(Date.now() + 86_400_000),
+          })
+          .execute();
+        await cloned.db
+          .insertInto('message_reminders')
+          .values({
+            workspace_id: room.workspaceId,
+            channel_id: room.channelId,
+            user_id: guest.userId,
+            message_id: id,
+            remind_at: new Date(Date.now() + 86_400_000),
+          })
+          .execute();
+        await cloned.db
+          .insertInto('notifications')
+          .values({
+            workspace_id: room.workspaceId,
+            channel_id: room.channelId,
+            user_id: guest.userId,
+            message_id: id,
+            type: 'mention',
+          })
+          .execute();
+        await cloned.db
+          .updateTable('channel_members')
+          .set({ unread_count: 3, unread_mention_count: 1 })
+          .where('channel_id', '=', room.channelId)
+          .where('user_id', '=', guest.userId)
+          .execute();
+        if (mode === 'stopped')
+          await cloned.db
+            .insertInto('suspended_modules')
+            .values({
+              module: 'chat',
+              reason: 'paused for test',
+              source: 'test',
+              suspended_at: new Date(),
+            })
+            .execute();
+        const modules = mode === 'omitted' ? 'none' : undefined;
+        const first = await job('sweep:guest-expiry', modules, cloned.connectionString);
+        expect(first.code).toBe(0);
+        expect(first.said.includes('a scheduled job finished')).toBe(true);
+        expect(
+          await cloned.db
+            .selectFrom('scheduled_messages')
+            .select(['state', 'failure_code'])
+            .where('id', '=', scheduledId)
+            .executeTakeFirstOrThrow(),
+        ).toEqual({ state: 'failed', failure_code: 'WORKSPACE_NOT_FOUND' });
+        expect(
+          await cloned.db
+            .selectFrom('message_reminders')
+            .select('id')
+            .where('user_id', '=', guest.userId)
+            .execute(),
+        ).toHaveLength(0);
+        expect(
+          await cloned.db
+            .selectFrom('notifications')
+            .select('id')
+            .where('user_id', '=', guest.userId)
+            .execute(),
+        ).toHaveLength(0);
+        expect(
+          await cloned.db
+            .selectFrom('channel_members')
+            .select(['channel_id', 'unread_count'])
+            .where('user_id', '=', guest.userId)
+            .execute(),
+        ).toEqual([{ channel_id: room.channelId, unread_count: 0 }]);
+        const again = await job('sweep:guest-expiry', modules, cloned.connectionString);
+        expect(again.code).toBe(0);
+        const recorded = await cloned.db
+          .selectFrom('job_runs')
+          .select(['last_success_at', 'consecutive_failures'])
+          .where('job_name', '=', 'sweep:guest-expiry')
+          .executeTakeFirstOrThrow();
+        expect(recorded.last_success_at !== null && recorded.consecutive_failures === 0).toBe(true);
+        expect(
+          (
+            await cloned.db
+              .selectFrom('workspace_members')
+              .select('access_kind')
+              .where('workspace_id', '=', room.workspaceId)
+              .where('user_id', '=', guest.userId)
+              .executeTakeFirstOrThrow()
+          ).access_kind,
+        ).toBe('guest');
+      } finally {
+        await cloned.drop();
+      }
+    },
+    60_000,
+  );
 });

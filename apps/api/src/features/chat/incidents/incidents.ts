@@ -15,6 +15,7 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import type { ChatDb, ChatTx } from '../schema';
+import { sql } from '@purlay/db';
 import {
   RunbookUrl,
   Uuid,
@@ -35,7 +36,13 @@ import {
   erasedPerson,
 } from '@purlay/types';
 import type { Clock } from '../../../platform/clock';
-import { channelNotFound, requireChannelMember, type ChannelContext } from '../channels/guard';
+import {
+  channelContentVisible,
+  channelNotFound,
+  lockChannelForContentWrite,
+  requireChannelMember,
+  type ChannelContext,
+} from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
 
@@ -48,6 +55,14 @@ export const incidentNotFound = (): AppError =>
 export interface IncidentWrite {
   readonly incident: Incident;
   readonly changed: boolean;
+}
+
+interface ResponderRow {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string;
+  readonly avatarUrl: string | null;
+  readonly deletedAt: string | null;
 }
 
 interface IncidentRow {
@@ -65,6 +80,7 @@ interface IncidentRow {
   readonly declarer_display_name: string | null;
   readonly declarer_avatar_url: string | null;
   readonly declarer_deleted_at: Date | string | null;
+  readonly responders: readonly ResponderRow[];
 }
 
 /** A value the table's CHECKs hold, read as the contract names it — or loudly not. */
@@ -134,6 +150,7 @@ const asIncident = (row: IncidentRow, responders: readonly User[]): Incident => 
  */
 const findIncident = async (
   executor: ChatDb,
+  context: ChannelContext,
   by: { readonly id: string } | { readonly channelId: string },
 ): Promise<IncidentRow | undefined> => {
   const query = executor
@@ -154,7 +171,20 @@ const findIncident = async (
       'users.display_name as declarer_display_name',
       'users.avatar_url as declarer_avatar_url',
       'users.deleted_at as declarer_deleted_at',
-    ]);
+      // Content and identities share this statement's current authority snapshot.
+      sql<readonly ResponderRow[]>`coalesce((
+        select json_agg(json_build_object(
+          'id', responder.id, 'username', responder.username,
+          'displayName', responder.display_name, 'avatarUrl', responder.avatar_url,
+          'deletedAt', responder.deleted_at
+        ) order by response.added_at, response.user_id)
+        from incident_responders as response
+        join users as responder on responder.id = response.user_id
+        where response.incident_id = incidents.id
+      ), '[]'::json)`.as('responders'),
+    ])
+    .where('incidents.channel_id', '=', context.channelId)
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incidents.declared_at')));
   if ('id' in by) return await query.where('incidents.id', '=', by.id).executeTakeFirst();
   return await query
     .where('incidents.channel_id', '=', by.channelId)
@@ -165,35 +195,22 @@ const findIncident = async (
     .executeTakeFirst();
 };
 
-/** Who is responding to it, first brought in first. Bounded by `INCIDENT_RESPONDERS_MAX`. */
-const respondersOf = async (executor: ChatDb, incidentId: string): Promise<readonly User[]> => {
-  const rows = await executor
-    .selectFrom('incident_responders')
-    .innerJoin('users', 'users.id', 'incident_responders.user_id')
-    .select([
-      'users.id as id',
-      'users.username as username',
-      'users.display_name as displayName',
-      'users.avatar_url as avatarUrl',
-      'users.deleted_at as deletedAt',
-    ])
-    .where('incident_responders.incident_id', '=', incidentId)
-    .orderBy('incident_responders.added_at')
-    .orderBy('incident_responders.user_id')
-    .execute();
-  return rows.flatMap((row) => {
-    const person = personOf(row);
-    return person === null ? [] : [person];
-  });
-};
-
 /** An incident as the contract says it, with its responders; undefined when there is none. */
 const loadIncident = async (
   executor: ChatDb,
+  context: ChannelContext,
   by: { readonly id: string } | { readonly channelId: string },
 ): Promise<Incident | undefined> => {
-  const row = await findIncident(executor, by);
-  return row === undefined ? undefined : asIncident(row, await respondersOf(executor, row.id));
+  const row = await findIncident(executor, context, by);
+  return row === undefined
+    ? undefined
+    : asIncident(
+        row,
+        row.responders.flatMap((entry) => {
+          const person = personOf(entry);
+          return person === null ? [] : [person];
+        }),
+      );
 };
 
 /** The channel's open incident, or once none is open its latest; null when it never had one. */
@@ -202,7 +219,7 @@ export const channelIncident = async (
   context: ChannelContext,
 ): Promise<Incident | null> => {
   if (context.channelType === 'direct_message') return null;
-  return (await loadIncident(executor, { channelId: context.channelId })) ?? null;
+  return (await loadIncident(executor, context, { channelId: context.channelId })) ?? null;
 };
 
 /** One entry of the timeline as it is stored: what kind, from what (a status's or a severity's), to what. */
@@ -260,6 +277,7 @@ export const record = async (
 /** The channel is one an incident may be declared in, and the caller is in it. */
 export const requireWriter = async (executor: ChatTx, context: ChannelContext): Promise<void> => {
   if (context.channelType === 'direct_message') throw channelNotFound();
+  await lockChannelForContentWrite(executor, context);
   await requireChannelMember(executor, context, 'Join the channel to change its incident.');
 };
 
@@ -273,15 +291,28 @@ const sameDeclaration = async (
   context: ChannelContext,
   input: DeclareIncidentRequest,
 ): Promise<IncidentWrite | null> => {
-  const incident = await loadIncident(executor, { id: input.id });
-  if (incident === undefined) return null;
+  // The global UUID collision check contains no words or people from another channel.
+  const used = await executor
+    .selectFrom('incidents')
+    .select(['id', 'channel_id'])
+    .where('id', '=', input.id)
+    .executeTakeFirst();
+  if (used === undefined) return null;
+  if (used.channel_id !== context.channelId) {
+    throw new AppError({
+      code: 'INCIDENT_ID_CONFLICT',
+      message: 'That incident id is already in use.',
+    });
+  }
+  const incident = await loadIncident(executor, context, { id: input.id });
+  if (incident === undefined) throw incidentNotFound();
   const declared = await executor
     .selectFrom('incident_updates')
     .select('to_value')
     .where('incident_id', '=', input.id)
     .where('kind', '=', 'declared')
     .executeTakeFirst();
-  if (incident.channelId !== context.channelId || declared?.to_value !== String(input.severity)) {
+  if (declared?.to_value !== String(input.severity)) {
     throw new AppError({
       code: 'INCIDENT_ID_CONFLICT',
       message: 'That incident id is already in use.',
@@ -344,14 +375,18 @@ export const declareIncident = async (
     now,
     entryOf({ kind: 'declared', severity: input.severity }),
   );
-  const made = await loadIncident(executor, { id: input.id });
-  if (made === undefined) throw new Error(`incident ${input.id} is gone as it was declared`);
+  const made = await loadIncident(executor, context, { id: input.id });
+  if (made === undefined) throw incidentNotFound();
   return { incident: made, changed: true };
 };
 
 /** The incident as it is, for a change that was none. */
-export const unchanged = async (executor: ChatDb, incidentId: string): Promise<IncidentWrite> => {
-  const incident = await loadIncident(executor, { id: incidentId });
+export const unchanged = async (
+  executor: ChatDb,
+  context: ChannelContext,
+  incidentId: string,
+): Promise<IncidentWrite> => {
+  const incident = await loadIncident(executor, context, { id: incidentId });
   if (incident === undefined) throw incidentNotFound();
   return { incident, changed: false };
 };
@@ -381,7 +416,7 @@ const runbookOf = (value: string): string => {
 
 /**
  * Moves the incident, or changes how bad it is, or its runbook; resolving is a status like the others,
- * once. The row is locked for the change, so two at once are one after the other and both are on the
+ * once. The channel is locked for the change, so two at once are one after the other and both are on the
  * timeline in the order they were made. A resolved incident keeps its status and severity; its runbook
  * is part of what is written up, and may still change (D-137 §3).
  */
@@ -399,7 +434,7 @@ export const changeIncident = async (
     .select(['severity', 'status', 'runbook_url'])
     .where('id', '=', incidentId)
     .where('channel_id', '=', context.channelId)
-    .forNoKeyUpdate()
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incidents.declared_at')))
     .executeTakeFirst();
   if (row === undefined) throw incidentNotFound();
   const was = { severity: severityOf(row.severity), status: statusOf(row.status) };
@@ -429,7 +464,7 @@ export const changeIncident = async (
     }
   }
   if (runbook !== row.runbook_url) entries.push({ kind: 'runbook', from: null, to: runbook ?? '' });
-  if (entries.length === 0) return await unchanged(executor, incidentId);
+  if (entries.length === 0) return await unchanged(executor, context, incidentId);
   const now = clock.now();
   await executor
     .updateTable('incidents')
@@ -442,7 +477,7 @@ export const changeIncident = async (
     .where('id', '=', incidentId)
     .execute();
   for (const entry of entries) await record(executor, incidentId, context.userId, now, entry);
-  return { ...(await unchanged(executor, incidentId)), changed: true };
+  return { ...(await unchanged(executor, context, incidentId)), changed: true };
 };
 
 /**
@@ -464,12 +499,12 @@ export const savePostmortem = async (
     .select(['postmortem', 'postmortem_version'])
     .where('id', '=', incidentId)
     .where('channel_id', '=', context.channelId)
-    .forNoKeyUpdate()
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incidents.declared_at')))
     .executeTakeFirst();
   if (row === undefined) throw incidentNotFound();
   // The same words first: a retry of a save that landed is answered as done, whatever version it
   // was edited from — nothing can be lost when the words are the ones already kept.
-  if (row.postmortem === input.content) return await unchanged(executor, incidentId);
+  if (row.postmortem === input.content) return await unchanged(executor, context, incidentId);
   if (row.postmortem_version !== input.version) {
     throw new AppError({
       code: 'INCIDENT_POSTMORTEM_CHANGED',
@@ -487,7 +522,7 @@ export const savePostmortem = async (
     from: null,
     to: String(version),
   });
-  return { ...(await unchanged(executor, incidentId)), changed: true };
+  return { ...(await unchanged(executor, context, incidentId)), changed: true };
 };
 
 /** Reads one timeline value back into the change it was written from. */
@@ -495,12 +530,12 @@ const changeOf = (
   kind: string,
   from: string | null,
   to: string,
-  people: ReadonlyMap<string, User>,
+  responder: User | null,
 ): IncidentChange => {
   switch (kind) {
     case 'responder_added':
     case 'responder_removed':
-      return { kind, user: people.get(to) ?? null };
+      return { kind, user: responder };
     case 'runbook':
       return { kind, url: to === '' ? null : to };
     case 'postmortem':
@@ -529,12 +564,19 @@ export const incidentUpdates = async (
     .select('id')
     .where('id', '=', incidentId)
     .where('channel_id', '=', context.channelId)
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incidents.declared_at')))
     .executeTakeFirst();
   if (owned === undefined) throw incidentNotFound();
   const limit = limitOf(query);
   let statement = executor
     .selectFrom('incident_updates')
+    .innerJoin('incidents', 'incidents.id', 'incident_updates.incident_id')
     .leftJoin('users', 'users.id', 'incident_updates.actor_id')
+    .leftJoin('users as named_responder', (join) =>
+      join.on(sql<boolean>`named_responder.id = case
+          when incident_updates.kind in ('responder_added', 'responder_removed')
+          then incident_updates.to_value::uuid else null end`),
+    )
     .select([
       'incident_updates.id as id',
       'incident_updates.kind as kind',
@@ -546,36 +588,22 @@ export const incidentUpdates = async (
       'users.display_name as actor_display_name',
       'users.avatar_url as actor_avatar_url',
       'users.deleted_at as actor_deleted_at',
+      'named_responder.id as responder_id',
+      'named_responder.username as responder_username',
+      'named_responder.display_name as responder_display_name',
+      'named_responder.avatar_url as responder_avatar_url',
+      'named_responder.deleted_at as responder_deleted_at',
     ])
     .where('incident_updates.incident_id', '=', incidentId)
+    .where('incidents.channel_id', '=', context.channelId)
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incidents.declared_at')))
+    .where(channelContentVisible(executor, context, sql.ref<Date>('incident_updates.at')))
     .orderBy('incident_updates.id', 'desc')
     .limit(limit + 1);
   if (query.before !== undefined)
     statement = statement.where('incident_updates.id', '<', query.before);
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
-  // Who each responder entry names, in one read for the page: never a query an entry.
-  const named = page
-    .filter((row) => row.kind === 'responder_added' || row.kind === 'responder_removed')
-    .map((row) => row.to_value);
-  const people = new Map<string, User>();
-  if (named.length > 0) {
-    const found = await executor
-      .selectFrom('users')
-      .select([
-        'id',
-        'username',
-        'display_name as displayName',
-        'avatar_url as avatarUrl',
-        'deleted_at as deletedAt',
-      ])
-      .where('id', 'in', [...new Set(named)])
-      .execute();
-    for (const row of found) {
-      const person = personOf(row);
-      if (person !== null) people.set(row.id, person);
-    }
-  }
   return {
     data: page.map((row) => ({
       id: row.id,
@@ -587,7 +615,18 @@ export const incidentUpdates = async (
         avatarUrl: row.actor_avatar_url,
         deletedAt: row.actor_deleted_at,
       }),
-      change: changeOf(row.kind, row.from_value, row.to_value, people),
+      change: changeOf(
+        row.kind,
+        row.from_value,
+        row.to_value,
+        personOf({
+          id: row.responder_id,
+          username: row.responder_username,
+          displayName: row.responder_display_name,
+          avatarUrl: row.responder_avatar_url,
+          deletedAt: row.responder_deleted_at,
+        }),
+      ),
     })),
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };

@@ -5,10 +5,14 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act, fireEvent } from '@testing-library/react';
-import type { Attachment } from '@purlay/types';
+import type { Attachment, MeResponse } from '@purlay/types';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
-import { ME, aMessage } from '../../../testing/fixtures';
+import { ME, IDS, aMessage, aSession } from '../../../testing/fixtures';
+import { anApi } from '../../../testing/fake-api';
+import { workspaceAccessChanged } from '../../../data/access-change';
+import { useMe } from '../../../data/queries';
+import { keys } from '../../../data/keys';
 import { renderApp } from '../../../testing/render';
 import { MessageRow, type MessageRowProps } from './message-row';
 
@@ -44,6 +48,110 @@ const row = (over: Parameters<typeof aMessage>[1] = {}): MessageRowProps => ({
 });
 
 describe('a message’s attachments', () => {
+  test('an uncertain preview still readable elsewhere rebinds after the lost-workspace receipt, without refetching under old access', async () => {
+    const initial = aSession();
+    const base = initial.memberships[0];
+    if (base === undefined) throw new Error('Missing workspace fixture');
+    const other = {
+      ...base,
+      workspace: {
+        ...base.workspace,
+        id: '00000000-0000-4000-8000-0000000000bb',
+        slug: 'other',
+        name: 'Other',
+      },
+    };
+    initial.memberships = [base, other];
+    let served = initial;
+    let cachedMemberships = (): number => -1;
+    const counts: number[] = [];
+    const Probe = (): React.JSX.Element => {
+      const me = useMe().data;
+      return <p>{`Memberships ${String(me?.memberships.length ?? 0)}`}</p>;
+    };
+    const view = await renderApp(
+      <>
+        <Probe />
+        <MessageRow
+          {...row({
+            channelId: '00000000-0000-4000-8000-0000000000cc',
+            attachments: [{ ...FILE, fileName: 'other.txt', mimeType: 'text/plain' }],
+          })}
+        />
+      </>,
+      {
+        api: anApi({
+          me: () => Promise.resolve(served),
+          attachmentText: () => {
+            counts.push(cachedMemberships());
+            return Promise.resolve('Other workspace readable file');
+          },
+        }),
+      },
+    );
+    cachedMemberships = (): number =>
+      view.world.client.getQueryData<MeResponse>(keys.me)?.memberships.length ?? 0;
+    try {
+      await view.findByText('Memberships 2');
+      act(() => {
+        fireEvent.click(view.getByRole('button', { name: /^Preview/ }));
+      });
+      await view.findByText('Other workspace readable file');
+      served = { ...initial, memberships: [other] };
+      await act(async () => {
+        await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+      });
+      await view.findByText('Memberships 1');
+      await view.findByText('Other workspace readable file');
+      expect(counts).toEqual([2, 1]);
+    } finally {
+      view.unmount();
+      view.world.client.clear();
+    }
+  });
+
+  test('an open text preview forgets prior access while a fresh read waits and fails', async () => {
+    const fresh = Promise.withResolvers<string>();
+    let calls = 0;
+    const view = await renderApp(
+      <MessageRow
+        {...row({ attachments: [{ ...FILE, fileName: 'notes.txt', mimeType: 'text/plain' }] })}
+      />,
+      {
+        api: anApi({
+          attachmentText: (): Promise<string> => {
+            calls++;
+            return calls === 1 ? Promise.resolve('Private previous admission') : fresh.promise;
+          },
+        }),
+      },
+    );
+    try {
+      act(() => {
+        fireEvent.click(view.getByRole('button', { name: /^Preview/ }));
+      });
+      await view.findByText('Private previous admission');
+      await act(async () => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+      });
+      expect(calls).toBe(2);
+      expect(view.container.textContent.includes('Private previous admission')).toBe(false);
+      await act(async () => {
+        fresh.reject(new Error('Fresh preview unavailable'));
+        await Promise.resolve();
+      });
+      await view.findByRole('button', { name: 'Retry' });
+      expect(view.container.textContent.includes('Private previous admission')).toBe(false);
+    } finally {
+      fresh.resolve('late');
+      view.unmount();
+      view.world.client.clear();
+    }
+  });
+
   test('an image is its thumbnail, in its own shape, opening the full image; a file is a download', async () => {
     const view = await renderApp(<MessageRow {...row({ attachments: [IMAGE, FILE] })} />);
     const thumbnail = view.getByRole('img', { name: 'Ekran görüntüsü.png' });

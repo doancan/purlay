@@ -75,6 +75,30 @@ A digest pin is a manual installation. Following `:main` is also different from 
 that tag is published by `image` independently of `ci`, so it can move before the full test gate passes.
 Existing self-hosted Actions runners are no longer used by any workflow and may be unregistered.
 
+### Expired guest cleanup
+
+The scheduler runs `sweep:guest-expiry` at UTC :03, :18, :33 and :48, including when chat is disabled.
+Access expires immediately; the job removes pending attention afterwards. `bun run job sweep:guest-expiry`
+runs it manually; `bun run job jobs:status` and Administration show its health. Runs are bounded and
+report deferred work when rows are busy; another run resumes from the retained rows. Expired guest
+membership and assigned channels remain available for explicit renewal, which resets the history floor.
+A job failure rolls back that guest. A failed run is a deployment problem to investigate; no mail or
+storage service is needed to release its reservations back to the normal orphan sweep.
+
+### Enabling restricted guest invitations
+
+`GUEST_ACCESS_READY` defaults to `false`. Keep it off while rolling out the guest-capable release.
+Verify the exact version and revision of **every API, scheduler, job and outbox reader**, including
+independently started commands; then set it to `true` for the deployment and recreate the application
+services. Both production Compose files pass this setting to the API and scheduler. This is the
+operator's attestation, not automatic topology detection: an absent Redis peer proves nothing.
+
+While off, new named guest invitations, new guest memberships and expired-guest reactivation are
+refused. Ordinary invitations, existing membership acceptance, guest removal and explicit conversion
+remain usable. Disabling the setting later stops new admissions; it does **not** make an old binary
+safe to run over existing restricted memberships. Keep capable readers until every guest is removed
+or explicitly converted. See D-300 and [CONFIG.md](CONFIG.md).
+
 ## Manual updates and recovery
 
 Use **Actions → deploy → Run workflow** from `main` to retry release publication, optionally giving

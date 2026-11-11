@@ -44,6 +44,15 @@ describe('integration: the work chat supplies for its jobs', () => {
   test('the sweeps and the purge run on an empty database and say what they did', async () => {
     await withRollback(async (db) => {
       const context = contextOn(db);
+      expect(await chatJobWork['sweep:guest-expiry']?.(context)).toEqual({
+        guests: 0,
+        scheduled: 0,
+        reservations: 0,
+        reminders: 0,
+        notifications: 0,
+        channels: 0,
+        deferred: 0,
+      });
       expect(await chatJobWork['sweep:link-previews']?.(context)).toEqual({ removed: 0 });
       expect(await chatJobWork['sweep:github-deliveries']?.(context)).toMatchObject({
         removed: expect.any(Number) as number,

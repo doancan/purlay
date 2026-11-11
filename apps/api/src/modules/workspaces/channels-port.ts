@@ -10,6 +10,39 @@ import type { Clock } from '../../platform/clock';
 /** Admission is implemented by the module that owns the granted conversations. */
 export interface WorkspaceGuestChannels {
   readonly moduleId: string;
+  /** Prepare ordered channel locks before core takes the workspace mutex; apply rechecks the captured scope. */
+  prepareEdit(
+    executor: Transaction,
+    context: WorkspaceContext,
+    userId: string,
+    channelIds: readonly string[] | undefined,
+  ): Promise<{
+    apply(
+      at: Date,
+      resetHistory: boolean,
+    ): Promise<{
+      readonly visibleIds: readonly string[];
+      readonly hiddenCount: number;
+      readonly previousIds: readonly string[];
+      readonly removedIds: readonly string[];
+      readonly addedCount: number;
+      readonly changed: boolean;
+    }>;
+  }>;
+  /** Scope for one administrator page: only visible identities, and a count for everything else. */
+  scopes(
+    executor: Executor,
+    context: WorkspaceContext,
+    userIds: readonly string[],
+  ): Promise<
+    ReadonlyMap<
+      string,
+      {
+        readonly visibleIds: readonly string[];
+        readonly hiddenCount: number;
+      }
+    >
+  >;
   /** A guest's directory contains only active people in their explicitly shared conversations. */
   people(
     executor: Executor,
@@ -29,6 +62,7 @@ export interface WorkspaceGuestChannels {
     context: WorkspaceContext,
     userId: string,
     channelIds: readonly string[],
+    newAdmission?: boolean,
   ): Promise<void>;
 }
 

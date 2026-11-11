@@ -14,7 +14,7 @@ import { isChannelMember, requireChannelById, requireChannelsById } from './chan
 import { missedIn, send } from './messages/messages';
 import { replaySince } from './messages/replay';
 import type { ChannelDeliveryGate } from '../../platform/ports/channel-delivery';
-import { liveGuestHistory } from './channels/live-history';
+import { liveChannelScope } from './channels/live-history';
 
 /** Who is typing where: what `TYPING` asks of the node's registry. */
 interface TypingWindows {
@@ -153,7 +153,7 @@ const channelWrites: FrameHandlers<ChatFrameContext> = {
 export const chatFrames = (
   readReplay: typeof missedIn = missedIn,
 ): FrameHandlers<ChatFrameContext> => {
-  const guestHistory = liveGuestHistory();
+  const channelScope = liveChannelScope();
   const subscriptions: FrameHandlers<ChatFrameContext> = {
     SUBSCRIBE: async (context, frame) => {
       const { identity, socket, bus, database, clock } = context;
@@ -195,15 +195,12 @@ export const chatFrames = (
         // (#196).
         const contexts = await requireChannelsById(database, identity.userId, channelIds);
         for (const channel of contexts) {
-          const scope = guestHistory(database, channel);
-          if (scope === undefined) {
-            socket.releaseChannels?.(identity.socketId, [channel.channelId]);
-          } else {
-            // An older transport must not admit a guest without its narrower live delivery boundary.
-            if (socket.restrictChannel === undefined || socket.releaseChannels === undefined)
-              throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
-            socket.restrictChannel(identity.socketId, channel.channelId, scope);
-          }
+          const scope = channelScope(database, channel);
+          // Any member can later be readmitted as a guest, even when a control publication is lost.
+          // An older transport cannot safely retain an unguarded subscription across that change.
+          if (socket.restrictChannel === undefined || socket.releaseChannels === undefined)
+            throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
+          socket.restrictChannel(identity.socketId, channel.channelId, scope);
         }
         // Gone while its channels were being authorised: the close already forgot
         // every subscription, and nothing below adds one.

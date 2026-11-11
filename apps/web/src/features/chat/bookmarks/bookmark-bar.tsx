@@ -18,6 +18,7 @@ import { useApi } from '../../../data/api-provider';
 import { isApiError } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
+import { captureAccess } from '../../../data/access-revision';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
@@ -199,20 +200,25 @@ export const BookmarkBar = ({
   });
   const member = channel.state !== null;
   const bookmarks = query.data ?? [];
+  const stillCurrent = captureAccess(client, key);
 
   const add = async (input: Added): Promise<void> => {
+    if (!stillCurrent()) return;
     const added = await api.addBookmark(channel.id, input);
+    if (!stillCurrent()) return;
     client.setQueryData<BookmarkList>(key, (held = []) =>
       held.some((each) => each.id === added.id) ? held : [...held, added],
     );
   };
 
   const remove = (bookmark: ChannelBookmark): void => {
+    if (!stillCurrent()) return;
     client.setQueryData<BookmarkList>(key, (held = []) =>
       held.filter((each) => each.id !== bookmark.id),
     );
     api.removeBookmark(channel.id, bookmark.id).then(
       () => {
+        if (!stillCurrent()) return;
         show({
           message: t('bookmarks.removed', { name: bookmark.title }),
           actionLabel: t('common.undo'),
@@ -224,6 +230,7 @@ export const BookmarkBar = ({
         });
       },
       (failure: unknown) => {
+        if (!stillCurrent()) return;
         // Put back as the server has it: removed by someone else meanwhile is still removed.
         void client.invalidateQueries({ queryKey: key, exact: true });
         // Already gone is what was asked for.

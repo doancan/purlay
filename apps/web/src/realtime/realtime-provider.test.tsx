@@ -1,7 +1,11 @@
 /**
  * What a screen reads of the connection: its state, and what is still in flight.
  */
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
+import type { MeResponse } from '@purlay/types';
+import type { FeedPages } from '../data/queries';
+import { watchAccessChanges } from '../data/access-revision';
+import type { Engine } from './engine';
 import { act } from '@testing-library/react';
 import { useState } from 'react';
 import { keys } from '../data/keys';
@@ -14,6 +18,7 @@ import {
   WHEN,
   WORKSPACE,
   aChannel,
+  aMessage,
   aSession,
   aSignedInApi,
   someChannels,
@@ -222,3 +227,115 @@ describe('the connection as a screen sees it', () => {
     expect(errorOf(<Probe />)).toBe('useEngine was called outside a RealtimeProvider');
   });
 });
+
+test.each([false, true])(
+  'a real account receipt retires the old provider and keeps its replacement live, including same-Query roundtrip=%s',
+  async (roundtrip) => {
+    let receipt = aSession();
+    const rendered: { engine: Engine | null } = { engine: null };
+    const Probe = (): null => {
+      rendered.engine = useEngine();
+      return null;
+    };
+    const view = await renderApp(
+      <SessionGate>
+        <WorkspaceScopeProvider slug="acme" notFound={null}>
+          <RealtimeProvider>
+            <Probe />
+          </RealtimeProvider>
+        </WorkspaceScopeProvider>
+      </SessionGate>,
+      { api: aSignedInApi({ me: () => Promise.resolve(receipt) }) },
+    );
+    await settle();
+    act(() => {
+      view.world.sockets.open();
+    });
+    await settle();
+    const oldEngine = rendered.engine;
+    if (oldEngine === null) throw new Error('Missing initial real provider engine');
+    const oldSocket = view.world.sockets.sockets[0];
+    if (oldSocket === undefined) throw new Error('Missing initial real provider socket');
+    const key = keys.messages(IDS.api);
+    const initial = aMessage(90, { content: 'Current account snapshot' });
+    const oldLive = aMessage(91, { content: 'Allowed initial live message' });
+    const late = aMessage(92, { content: 'Private old account message at receipt commit' });
+    const seed = (): void => {
+      view.world.client.setQueryData<FeedPages>(key, {
+        pageParams: [undefined],
+        pages: [{ data: [initial], nextCursor: null }],
+      });
+    };
+    seed();
+    act(() => {
+      oldSocket.handlers.message(
+        JSON.stringify({ event: 'MESSAGE_CREATED', data: oldLive, ts: Date.parse(WHEN) }),
+      );
+    });
+    expect(
+      view.world.client
+        .getQueryData<FeedPages>(key)
+        ?.pages[0]?.data.some((row) => row.id === oldLive.id),
+    ).toBe(true);
+    const stopped = spyOn(oldEngine, 'stop');
+    let observed = false;
+    let observedSafe = false;
+    let stoppedBeforeWitness = true;
+    const unwatch = watchAccessChanges(view.world.client, () => {
+      if (
+        observed ||
+        view.world.client.getQueryData<MeResponse>(keys.me)?.user.id !==
+          (roundtrip ? IDS.me : IDS.alice)
+      )
+        return;
+      observed = true;
+      stoppedBeforeWitness = stopped.mock.calls.length > 0;
+      seed();
+      oldSocket.handlers.message(
+        JSON.stringify({ event: 'MESSAGE_CREATED', data: late, ts: Date.parse(WHEN) }),
+      );
+      observedSafe =
+        view.world.client
+          .getQueryData<FeedPages>(key)
+          ?.pages[0]?.data.every((row) => row.id !== late.id) === true;
+    });
+    try {
+      receipt = {
+        ...receipt,
+        user: { ...receipt.user, id: IDS.alice, username: 'alice', displayName: 'Alice' },
+      };
+      await act(async () => {
+        await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+        if (roundtrip) {
+          receipt = aSession();
+          await view.world.client.invalidateQueries({ queryKey: keys.me, exact: true });
+        }
+      });
+      await settle();
+      expect(observed).toBe(true);
+      expect(stoppedBeforeWitness).toBe(false);
+      expect(observedSafe).toBe(true);
+      expect(rendered.engine === oldEngine).toBe(false);
+      const current = aMessage(93, { content: 'Replacement provider receives current messages' });
+      seed();
+      act(() => {
+        view.world.sockets.open();
+        view.world.sockets.deliver({
+          event: 'MESSAGE_CREATED',
+          data: current,
+          ts: Date.parse(WHEN),
+        });
+      });
+      expect(
+        view.world.client
+          .getQueryData<FeedPages>(key)
+          ?.pages[0]?.data.some((row) => row.id === current.id),
+      ).toBe(true);
+    } finally {
+      unwatch();
+      stopped.mockRestore();
+      view.unmount();
+      view.world.client.clear();
+    }
+  },
+);

@@ -46,6 +46,7 @@ import {
   Timestamp,
   User,
   Workspace,
+  WorkspaceAccess,
   UserRole,
   Uuid,
 } from './models';
@@ -270,6 +271,8 @@ export const WorkspaceMember = Type.Object({
   joinedAt: Type.String({ format: 'date-time' }),
   /** What they say about themselves: shown in a conversation with them and where people are picked. */
   profile: Profile,
+  /** General directory classification only; guest expiry/history remain administrator-only. */
+  accessKind: Type.Optional(Type.Index(WorkspaceAccess, ['kind'])),
 });
 export type WorkspaceMember = Static<typeof WorkspaceMember>;
 
@@ -844,6 +847,8 @@ export type OlderPageQuery = Static<typeof OlderPageQuery>;
  */
 export const AUDIT_ACTIONS = [
   'member.role_changed',
+  'member.guest_access_changed',
+  'member.guest_converted',
   'member.removed',
   'member.left',
   'member.joined',
@@ -898,6 +903,8 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
  */
 export const CORE_AUDIT_ACTIONS = [
   'member.role_changed',
+  'member.guest_access_changed',
+  'member.guest_converted',
   'member.removed',
   'member.left',
   'member.joined',
@@ -1041,6 +1048,13 @@ export const INVITATION_TTL_DAYS = 7;
  */
 export const InvitationToken = Type.String({ pattern: '^[0-9a-f]{64}$' });
 
+/** Count-only guest scope for link lists and previews; never hidden conversation identities. */
+export const InvitationGuestAccess = Type.Object({
+  channelCount: Type.Integer({ minimum: 1 }),
+  accessExpiresAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type InvitationGuestAccess = Static<typeof InvitationGuestAccess>;
+
 /** One of a workspace's links as its admins see it — never the token, which is shown once. */
 export const Invitation = Type.Object({
   id: Uuid,
@@ -1048,6 +1062,7 @@ export const Invitation = Type.Object({
   createdBy: Type.Union([User, Type.Null()]),
   createdAt: Timestamp,
   expiresAt: Timestamp,
+  guest: Type.Optional(InvitationGuestAccess),
 });
 export type Invitation = Static<typeof Invitation>;
 
@@ -1160,6 +1175,7 @@ export const InvitationRecipient = Type.Object({
   id: Uuid,
   status: InvitationRecipientStatus,
   address: Type.String(),
+  guest: Type.Optional(InvitationGuestAccess),
   createdAt: Timestamp,
   requestedAt: Type.Union([Timestamp, Type.Null()]),
   joinedAt: Type.Union([Timestamp, Type.Null()]),
@@ -1198,6 +1214,7 @@ export const InvitationPreview = Type.Object({
   expiresAt: Timestamp,
   /** Already in it: the page offers to open the workspace rather than to join. */
   member: Type.Boolean(),
+  guest: Type.Optional(InvitationGuestAccess),
 });
 export type InvitationPreview = Static<typeof InvitationPreview>;
 

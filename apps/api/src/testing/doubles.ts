@@ -119,6 +119,8 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   SOCKET_MAX_CONNECTIONS: 2_000,
   SOCKET_REPLAY_CONCURRENCY: 50,
   TRUST_PROXY: false,
+  // This fixture runs the current capable readers; production loadConfig defaults admission closed.
+  GUEST_ACCESS_READY: true,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,
   WORKSPACE_MODULES: 'open',

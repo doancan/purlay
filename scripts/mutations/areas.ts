@@ -40,6 +40,10 @@ export const AREAS = [
   { name: 'api-cli', prefixes: ['apps/api/src/cli/'] },
   { name: 'api-chat', prefixes: ['apps/api/src/features/chat/'] },
   { name: 'api-chat-channels', prefixes: ['apps/api/src/features/chat/channels/'] },
+  {
+    name: 'api-chat-guest-expiry',
+    prefixes: ['apps/api/src/features/chat/channels/guest-expiry.ts'],
+  },
   { name: 'api-chat-integrations', prefixes: ['apps/api/src/features/chat/integrations/'] },
   { name: 'api-chat-messages', prefixes: ['apps/api/src/features/chat/messages/'] },
   { name: 'api-chat-notifications', prefixes: ['apps/api/src/features/chat/notifications/'] },
@@ -124,6 +128,7 @@ export const AREAS = [
       'apps/web/src/features/chat/threads/follow-toggle.tsx',
     ],
   },
+  { name: 'web-features-settings', prefixes: ['apps/web/src/features/settings/'] },
   { name: 'web-features-sidebar', prefixes: ['apps/web/src/features/chat/sidebar/'] },
 ] as const satisfies readonly Area[];
 

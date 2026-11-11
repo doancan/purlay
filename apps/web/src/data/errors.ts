@@ -46,6 +46,10 @@ export class ApiError extends Error {
 /** Narrowing for a caught value: a `catch` clause is `unknown`. */
 export const isApiError = (value: unknown): value is ApiError => value instanceof ApiError;
 
+/** This producer's account lifetime changed before enqueue; no request was made. */
+export const accountChanged = (): ApiError =>
+  new ApiError(401, 'UNAUTHENTICATED', 'The account changed before this action could be queued.');
+
 /** These failures do not establish whether a mutation committed; a fresh read must reconcile it. */
 export const isUnconfirmedMutation = (failure: unknown): boolean =>
   !isApiError(failure) ||

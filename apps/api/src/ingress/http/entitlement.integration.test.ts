@@ -141,7 +141,13 @@ const crossings = (
     const [method, template] = key.split(' ') as [string, string];
     const path = pathFor(template, ids);
     if (!ownedByAGrant(path)) return [];
-    const owner = { replyId: fresh(), userId: fresh(), messageId: fresh(), workspaceId };
+    const owner = {
+      replyId: fresh(),
+      userId: fresh(),
+      messageId: fresh(),
+      workspaceId,
+      channelId: ids.channelId,
+    };
     return [{ key, method, path, body: crossing.body?.(NOW, owner) }];
   });
 };

@@ -150,6 +150,7 @@ describe('integration: the frame router', () => {
     // A fresh bucket per call, so no test here is limited unless it means to be.
     limiter: RateLimiter = inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
     lifetime: SessionLifetime = NO_SESSION_LIFETIME,
+    deliverySupported = true,
   ): Promise<readonly ServerFrame[]> =>
     await routeFrame(
       {
@@ -168,7 +169,15 @@ describe('integration: the frame router', () => {
         },
         sessionLifetime: () => lifetime,
         log: createLogger({ level: 'silent' }),
-        socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
+        socket: {
+          // Router-only fixture: real live delivery uses canonical hubs in the socket tests.
+          ...(deliverySupported
+            ? { restrictChannel: () => undefined, releaseChannels: () => undefined }
+            : {}),
+          hold: () => undefined,
+          isOpen: () => true,
+          drop: () => undefined,
+        },
         // The production boundary: inside the harness's transaction it joins it.
         atomically: atomicallyOn(db),
       },
@@ -208,6 +217,9 @@ describe('integration: the frame router', () => {
           },
         },
         bus,
+        undefined,
+        undefined,
+        false,
       );
       expect(replies).toMatchObject([{ event: 'ERROR', data: { code: 'CHANNEL_NOT_FOUND' } }]);
       expect(bus.size()).toEqual({ topics: 0, sockets: 0 });

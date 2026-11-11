@@ -6,6 +6,9 @@
 import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
 import { ApiError } from '../../../data/errors';
+import type { SavedIds } from '@purlay/types';
+import { workspaceAccessChanged } from '../../../data/access-change';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { mountChannel, page, settle } from '../../../testing/channel-harness';
 import { installDom } from '../../../testing/dom';
@@ -56,6 +59,180 @@ const deferred = (): {
 };
 
 describe('saving a message', () => {
+  test.each(['pending-intent', 'late-confirmed-fallback'] as const)(
+    'changed access cannot recover an earlier saved ID through a %s',
+    async (mode) => {
+      const pending = Promise.withResolvers<undefined>();
+      let changed = false;
+      const view = await mountChannel({
+        messages: page([first]),
+        api: {
+          saveMessage: () => pending.promise,
+          savedIds: () =>
+            changed && mode === 'late-confirmed-fallback'
+              ? Promise.reject(new ApiError(0, 'NETWORK', 'Fresh saved list unavailable'))
+              : Promise.resolve([]),
+        },
+      });
+      try {
+        await person().click(saveButton(view));
+        changed = true;
+        act(() => {
+          workspaceAccessChanged(view.world.client, IDS.workspace);
+        });
+        await settle();
+        if (mode === 'late-confirmed-fallback') {
+          pending.resolve(undefined);
+          await settle();
+          expect(
+            (view.world.client.getQueryData<SavedIds>(keys.savedIds(IDS.workspace)) ?? []).some(
+              (entry) => entry.messageId === first.id,
+            ),
+          ).toBe(false);
+        } else expect(saveButton(view).getAttribute('aria-busy')).toBe('false');
+      } finally {
+        pending.resolve(undefined);
+        await settle();
+        view.unmountAll();
+      }
+    },
+  );
+
+  test('a proven other workspace change keeps this save pending', async () => {
+    const pending = Promise.withResolvers<undefined>();
+    const view = await mountChannel({
+      messages: page([first]),
+      api: { saveMessage: () => pending.promise },
+    });
+    try {
+      await person().click(saveButton(view));
+      act(() => {
+        workspaceAccessChanged(view.world.client, 'unrelated-workspace');
+      });
+      await settle();
+      expect(saveButton(view).getAttribute('aria-busy')).toBe('true');
+      expect(saveButton(view).getAttribute('aria-pressed')).toBe('true');
+    } finally {
+      pending.resolve(undefined);
+      await settle();
+      view.unmountAll();
+    }
+  });
+
+  test('access changed during a save confirmation read cannot restore its old ID through fallback', async () => {
+    const previous = Promise.withResolvers<SavedIds>();
+    let reads = 0;
+    const view = await mountChannel({
+      messages: page([first]),
+      api: {
+        saveMessage: () => Promise.resolve(),
+        savedIds: () => {
+          reads++;
+          return reads === 1
+            ? Promise.resolve([])
+            : reads === 2
+              ? previous.promise
+              : Promise.reject(new ApiError(0, 'NETWORK', 'Fresh saved list unavailable'));
+        },
+      },
+    });
+    try {
+      await person().click(saveButton(view));
+      await settle();
+      expect(reads).toBe(2);
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      previous.reject(new ApiError(0, 'NETWORK', 'Old read failed'));
+      await settle();
+      expect(
+        (view.world.client.getQueryData<SavedIds>(keys.savedIds(IDS.workspace)) ?? []).some(
+          (entry) => entry.messageId === first.id,
+        ),
+      ).toBe(false);
+    } finally {
+      previous.resolve([]);
+      view.unmountAll();
+    }
+  });
+
+  test('a stale save Retry cannot start again under replaced access', async () => {
+    let requests = 0;
+    const view = await mountChannel({
+      messages: page([first]),
+      api: {
+        saveMessage: () => {
+          requests++;
+          return Promise.reject(new ApiError(0, 'NETWORK', 'Save unavailable'));
+        },
+      },
+    });
+    try {
+      await person().click(saveButton(view));
+      await settle();
+      const retry = view.getByRole('button', { name: 'Retry' });
+      act(() => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+      });
+      await settle();
+      await person().click(retry);
+      await settle();
+      expect(requests).toBe(1);
+    } finally {
+      view.unmountAll();
+    }
+  });
+
+  test.each(['accepted', 'refused'] as const)(
+    'a prior %s save cannot refetch or clear a newer intent for the same message',
+    async (outcome) => {
+      const old = Promise.withResolvers<undefined>();
+      const current = Promise.withResolvers<undefined>();
+      let requests = 0;
+      let reads = 0;
+      let saved: SavedIds = [];
+      const view = await mountChannel({
+        messages: page([first]),
+        api: {
+          saveMessage: () => {
+            requests++;
+            return requests === 1 ? old.promise : current.promise;
+          },
+          savedIds: () => {
+            reads++;
+            return Promise.resolve(saved);
+          },
+        },
+      });
+      try {
+        await person().click(saveButton(view));
+        act(() => {
+          workspaceAccessChanged(view.world.client, IDS.workspace);
+        });
+        await settle();
+        await person().click(saveButton(view));
+        expect(requests).toBe(2);
+        const beforeOld = reads;
+        if (outcome === 'accepted') old.resolve(undefined);
+        else old.reject(new ApiError(0, 'NETWORK', 'Old save failed late'));
+        await settle();
+        expect(reads).toBe(beforeOld);
+        expect(saveButton(view).getAttribute('aria-busy')).toBe('true');
+        saved = [{ messageId: first.id, channelId: first.channelId, state: 'in_progress' }];
+        current.resolve(undefined);
+        await settle();
+        expect(saveButton(view).getAttribute('aria-busy')).toBe('false');
+        expect(saveButton(view).getAttribute('aria-pressed')).toBe('true');
+      } finally {
+        old.resolve(undefined);
+        current.resolve(undefined);
+        await settle();
+        view.unmountAll();
+      }
+    },
+  );
+
   test('is marked at once, before the server answers, and the server is asked once', async () => {
     const asked: string[] = [];
     const view = await mountChannel({

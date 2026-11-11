@@ -18,6 +18,8 @@ import {
   channelAudienceQuery,
 } from './guard';
 import { beginReadScopes } from './read-scope';
+import { prepareGuestScopeEdit } from './guest-scope';
+import { forgetWorkspaceChannels } from './workspace-channel-cleanup';
 
 const administrator = async (
   executor: ChatDb,
@@ -36,6 +38,42 @@ const administrator = async (
 
 export const chatGuestChannels: WorkspaceGuestChannels = {
   moduleId: 'chat',
+  prepareEdit: async (executor, context, userId, channelIds) =>
+    await prepareGuestScopeEdit(
+      executor,
+      await administrator(executor, context),
+      userId,
+      channelIds,
+    ),
+  scopes: async (executor, context, userIds) => {
+    const current = await administrator(executor, context);
+    const scopes = new Map<string, { visibleIds: string[]; hiddenCount: number }>();
+    if (userIds.length === 0) return scopes;
+    const rows = await executor
+      .selectFrom('channel_members')
+      .innerJoin('channels', 'channels.id', 'channel_members.channel_id')
+      .innerJoin('workspace_members', (join) =>
+        join
+          .onRef('workspace_members.workspace_id', '=', 'channels.workspace_id')
+          .onRef('workspace_members.user_id', '=', 'channel_members.user_id'),
+      )
+      .select(['channel_members.user_id', 'channels.id'])
+      .select((eb) =>
+        eb('channels.id', 'in', visibleChannelIdsQuery(executor, current)).as('visible'),
+      )
+      .where('workspace_members.workspace_id', '=', current.workspaceId)
+      .where('workspace_members.access_kind', '=', 'guest')
+      .where('channel_members.user_id', 'in', userIds)
+      .orderBy('channels.id')
+      .execute();
+    for (const row of rows) {
+      const scope = scopes.get(row.user_id) ?? { visibleIds: [], hiddenCount: 0 };
+      if (row.visible === true) scope.visibleIds.push(row.id);
+      else scope.hiddenCount += 1;
+      scopes.set(row.user_id, scope);
+    }
+    return scopes;
+  },
   people: (executor, context, personId) => {
     assertMinted(context);
     if (!entitledTo(context, 'chat')) return sql<boolean>`false`;
@@ -81,7 +119,7 @@ export const chatGuestChannels: WorkspaceGuestChannels = {
     )
       throw channelNotFound();
   },
-  grant: async (executor, clock, context, userId, channelIds) => {
+  grant: async (executor, clock, context, userId, channelIds, newAdmission = false) => {
     await chatGuestChannels.prepare(executor, context, channelIds);
     await executor
       .selectFrom('workspace_members')
@@ -96,6 +134,7 @@ export const chatGuestChannels: WorkspaceGuestChannels = {
         code: 'FORBIDDEN',
         message: 'This grant requires a restricted guest membership.',
       });
+    if (newAdmission) await forgetWorkspaceChannels(executor, context.workspaceId, userId);
     const existing = await executor
       .selectFrom('channel_members')
       .innerJoin('channels', 'channels.id', 'channel_members.channel_id')

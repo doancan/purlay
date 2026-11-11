@@ -37,9 +37,12 @@ import {
   messageNotFound,
   requireChannelMember,
   withinMessageHistory,
+  withinCurrentMessageHistory,
+  withinThreadHistory,
   type ChannelContext,
   type VisibleMessage,
 } from '../channels/guard';
+import { buildHistoryMessages } from './history-reader';
 import {
   channelTopic,
   inboxPublications,
@@ -118,7 +121,7 @@ const requireRoot = async (
     .selectFrom('messages')
     .select(['channel_id', 'parent_id', 'sender_id'])
     .where('id', '=', parentId)
-    .where(withinMessageHistory(executor, context))
+    .where(withinThreadHistory(executor, context))
     .where('deleted_at', 'is', null)
     .executeTakeFirst();
   // Another channel's message and none at all are one answer: which of the two it was
@@ -489,8 +492,9 @@ export const messageHistory = async (
     .selectFrom('messages')
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
+    .select(withinCurrentMessageHistory(executor, context).as('content_visible'))
     .where('messages.channel_id', '=', context.channelId)
-    .where(withinMessageHistory(executor, context))
+    .where(withinThreadHistory(executor, context))
     .where('messages.parent_id', 'is', null)
     .where((eb) => eb.or([notHiddenBy(context.userId), eb('messages.thread_reply_count', '>', 0)]))
     // A deleted root keeps its place while it has replies, as their tombstone (D-103 §7).
@@ -510,7 +514,7 @@ export const messageHistory = async (
   const rows = await statement.execute();
   const page = rows.slice(0, limit);
   return {
-    data: await buildMessages(executor, page, context.userId),
+    data: await buildHistoryMessages(executor, page, context.userId),
     // The cursor to pass back **in the direction you were travelling**: the last
     // id of this page, whichever end of the channel that is.
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
@@ -538,11 +542,12 @@ export const messageWindow = async (
       .selectFrom('messages')
       .leftJoin('users', 'users.id', 'messages.sender_id')
       .select(MESSAGE_COLUMNS)
+      .select(withinCurrentMessageHistory(executor, visible.context).as('content_visible'))
       .where('messages.id', 'in', [...new Set([rootId, visible.messageId])])
-      .where(withinMessageHistory(executor, visible.context))
+      .where(withinThreadHistory(executor, visible.context))
       .execute(),
   ]);
-  const built = await buildMessages(executor, rows, visible.context.userId);
+  const built = await buildHistoryMessages(executor, rows, visible.context.userId);
   const target = built.find((m) => m.id === visible.messageId);
   const root = built.find((m) => m.id === rootId);
   // `requireMessageById` found both a moment ago; a row gone between is said, never drawn as a gap.

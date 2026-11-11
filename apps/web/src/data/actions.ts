@@ -39,6 +39,7 @@ import {
 } from './cache';
 import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
+import { advanceAccessRevision } from './access-revision';
 import type { Clock } from '../realtime/clock';
 import { systemClock } from '../system-clock';
 
@@ -291,11 +292,13 @@ export const createActions = (
       // they wrote that the browser kept: a draft is keyed by channel and thread ids alone, so
       // the next person opening the same conversation would otherwise find it.
       client.clear();
+      advanceAccessRevision(client);
       forgetPersonalData(storage);
     },
     eraseAccount: async (confirm): Promise<void> => {
       await api.eraseAccount(confirm);
       client.clear();
+      advanceAccessRevision(client);
       forgetPersonalData(storage);
     },
     signInByLink: async (token, invitation): Promise<void> => {
@@ -303,6 +306,7 @@ export const createActions = (
       // The person may not be who was signed in on this page a moment ago: what is cached and what
       // was kept are theirs, for the same reasons as on sign-out.
       client.clear();
+      advanceAccessRevision(client);
       forgetPersonalData(storage);
     },
   };

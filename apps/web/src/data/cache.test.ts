@@ -3,13 +3,22 @@
  * lists the screens read come out. No React, no network.
  */
 import { describe, expect, test } from 'bun:test';
+import { aSession } from '../testing/fixtures';
 import {
   InfiniteQueryObserver,
   QueryClient,
   QueryObserver,
   type InfiniteData,
 } from '@tanstack/react-query';
-import type { Channel, ChannelState, FilePage, Message, MessagePage, PinList } from '@purlay/types';
+import type {
+  Channel,
+  ChannelState,
+  FilePage,
+  Message,
+  MessagePage,
+  PinList,
+  MeResponse,
+} from '@purlay/types';
 import {
   allChannelsRead,
   channelAdded,
@@ -810,4 +819,95 @@ test('starring a grouped channel clears its placement before an unstar can resur
     starred: false,
     sidebarGroupId: null,
   });
+});
+
+describe('hidden thread continuations refresh without a request storm', () => {
+  const settle = async (): Promise<void> => {
+    for (let turn = 0; turn < 6; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  test('many updates during a read schedule one follow-up, including a later burst', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const slots = Array.from({ length: 5 }, () => Promise.withResolvers<string[]>());
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: ['thread', 'hidden-burst'],
+      queryFn: (): Promise<string[]> => {
+        reads += 1;
+        return slots[reads - 1]?.promise ?? Promise.resolve(['readable']);
+      },
+    });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      for (let n = 0; n < 100; n += 1) readAgain(client, ['thread', 'hidden-burst']);
+      slots[0]?.resolve(['first']);
+      await settle();
+      expect(reads).toBe(2);
+      slots[1]?.resolve(['latest']);
+      await settle();
+      expect(reads).toBe(2);
+      const third = observer.refetch();
+      await settle();
+      expect(reads).toBe(3);
+      for (let n = 0; n < 100; n += 1) readAgain(client, ['thread', 'hidden-burst']);
+      slots[2]?.resolve(['next']);
+      await third;
+      await settle();
+      expect(reads).toBe(4);
+      slots[3]?.resolve(['current']);
+      await settle();
+      expect(reads).toBe(4);
+    } finally {
+      stop();
+      client.clear();
+      for (const slot of slots) slot.resolve([]);
+    }
+  });
+
+  test.each(['guest', 'member'] as const)(
+    'a fresh reply discovers a missing permitted root only for %s access',
+    async (kind) => {
+      const client = seeded();
+      const session = aSession();
+      const membership = session.memberships[0];
+      if (membership === undefined) throw new Error('Missing session membership');
+      client.setQueryData<MeResponse>(keys.me, {
+        ...session,
+        memberships: [
+          {
+            ...membership,
+            workspace: { ...membership.workspace, id: WS },
+            access:
+              kind === 'guest'
+                ? { kind: 'guest', historySince: '2026-09-09T07:00:00.000Z', expiresAt: null }
+                : { kind: 'member' },
+          },
+        ],
+      });
+      client.setQueryData(keys.messages(CH), pages([]));
+      let reads = 0;
+      const observer = new QueryObserver(client, {
+        queryKey: keys.messages(CH),
+        initialData: pages([]),
+        staleTime: Infinity,
+        queryFn: (): Promise<Pages> => {
+          reads += 1;
+          return Promise.resolve(
+            pages([
+              message(1, { historyHidden: true, replyAllowed: true, content: '', sender: null }),
+            ]),
+          );
+        },
+      });
+      const stop = observer.subscribe(() => undefined);
+      try {
+        messageCreated(client, message(2, { parentId: id(1), thread: null }));
+        await settle();
+        expect(reads).toBe(kind === 'guest' ? 1 : 0);
+        expect(feed(client)).toEqual(kind === 'guest' ? [id(1)] : []);
+      } finally {
+        stop();
+        client.clear();
+      }
+    },
+  );
 });

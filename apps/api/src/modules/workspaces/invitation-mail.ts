@@ -40,6 +40,7 @@ import { noWorkspaceChannels, type WorkspaceChannels } from './channels-port';
 import type { CreateGuestInvitationRequest, CreatedGuestInvitation } from '@purlay/types';
 import { addInvitationAttempt, INVITATION_RECEIPT_WAIT_MS } from './invitation-delivery';
 import { requireInvitationManagerNow } from './invitation-manager';
+import { guestInvitationAvailability, requireGuestAdmissionReady } from './guest-readiness';
 import { AppError } from '../../platform/errors';
 
 type Locale = NonNullable<CreateInvitationRequest['locale']>;
@@ -236,7 +237,11 @@ export const makeAndMailGuestInvitation = async (
   request: CreateGuestInvitationRequest,
   mail: { readonly on: boolean; readonly appUrl: string },
   channels: WorkspaceChannels,
+  guestAccessReady = false,
 ): Promise<MailedInvitation<CreatedGuestInvitation>> => {
+  requireGuestAdmissionReady(
+    guestInvitationAvailability(context, channels, guestAccessReady, mail.on).enabled,
+  );
   return await makeAndMail(
     transaction,
     clock,

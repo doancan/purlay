@@ -56,6 +56,19 @@ const settle = async (): Promise<void> => {
 };
 
 describe('private invitation history', () => {
+  test('a guest recipient retains its invitation kind and access expiry in delivery tracking', async () => {
+    const view = await render({
+      invitationRecipients: () =>
+        Promise.resolve({
+          data: [row({ guest: { channelCount: 1, accessExpiresAt: '2099-09-08T12:00:00.000Z' } })],
+          nextCursor: null,
+        }),
+    });
+    expect(await view.findByText('Guest invitation · 1 conversation')).toBeDefined();
+    expect((await view.findByText(/Guest access ends/)).textContent).toContain('2099');
+    await expectNoAxeViolations(view.container);
+  });
+
   test('a failed filtered read keeps its fields and Retry, without offering actions for the previous results', async () => {
     let fail = true;
     const view = await render({

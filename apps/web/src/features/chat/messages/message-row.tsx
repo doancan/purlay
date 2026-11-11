@@ -109,8 +109,9 @@ const MessageRowView = ({
 }: MessageRowProps): React.JSX.Element => {
   const { t, format } = useI18n();
   // Where its code references link (D-223): the channel's one feed repository, or none.
+  const workspace = useWorkspaceIfAny();
   const repository = useCodeRepository(
-    useWorkspaceIfAny()?.workspace.id ?? null,
+    message.historyHidden === true ? null : (workspace?.workspace.id ?? null),
     message.channelId,
   );
   const mentionsMe = message.mentions.includes(meId);
@@ -141,6 +142,29 @@ const MessageRowView = ({
   useRowStops(self);
 
   const own = isMine(message, meId);
+
+  if (message.historyHidden === true) {
+    return (
+      <article
+        ref={self}
+        data-message-row=""
+        data-message-id={message.id}
+        data-row-key={rowKey}
+        data-thread-open={threadOpen ? '' : undefined}
+        data-landed={landed ? '' : undefined}
+        tabIndex={tabIndex}
+        aria-label={t('thread.historyHidden')}
+        className="relative flex gap-3 rounded-lg px-2 py-3 text-ink-muted"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-label font-medium">{t('thread.historyHidden')}</p>
+          <p className="text-body">{t('thread.historyBoundary')}</p>
+          {children}
+        </div>
+        {message.replyAllowed !== false && actions}
+      </article>
+    );
+  }
 
   const time = (
     <time

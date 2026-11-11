@@ -634,11 +634,14 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'guest-history-followed-leak',
-    why: 'The followed reader exposes messages before the current guest grant.',
+    why: 'The followed reader serializes an earlier root as ordinary readable content.',
     file: 'apps/api/src/features/chat/messages/followed.ts',
-    find: '    .where(withinMessageHistory(executor, context))\n',
-    replace: '',
-    tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
+    find: "    .select(withinCurrentMessageHistory(executor, context).as('content_visible'))",
+    replace: "    .select(sql<boolean>`true`.as('content_visible'))",
+    tests: [
+      'apps/api/src/ingress/http/guest-hidden-roots.integration.test.ts',
+      'apps/api/src/features/chat/channels/guests.integration.test.ts',
+    ],
   },
   {
     id: 'guest-history-replay-floor-ignored',
@@ -650,11 +653,47 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'guest-history-window-root-leak',
-    why: 'A readable new reply opens its earlier root through the context window.',
+    why: 'A readable new reply exposes the earlier root content in its context window.',
     file: 'apps/api/src/features/chat/messages/messages.ts',
-    find: '      .where(withinMessageHistory(executor, visible.context))\n',
+    find: "      .select(withinCurrentMessageHistory(executor, visible.context).as('content_visible'))",
+    replace: "      .select(sql<boolean>`true`.as('content_visible'))",
+    tests: [
+      'apps/api/src/ingress/http/guest-hidden-roots.integration.test.ts',
+      'apps/api/src/features/chat/channels/guests.integration.test.ts',
+    ],
+  },
+  {
+    id: 'guest-thread-container-sidecars',
+    why: 'Earlier root identities, words and sidecars reach the ordinary message reader.',
+    file: 'apps/api/src/features/chat/messages/history-reader.ts',
+    find: 'const readable = rows.filter((row) => row.content_visible);',
+    replace: 'const readable = rows;',
+    tests: ['apps/api/src/ingress/http/guest-hidden-roots.integration.test.ts'],
+  },
+  {
+    id: 'guest-thread-container-summary-floor',
+    why: 'Earlier replies affect private counts and activity time.',
+    file: 'apps/api/src/features/chat/messages/history-reader.ts',
+    find: "      .where(guestMessageHistoryFor('history_reply'))\n",
     replace: '',
-    tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
+    tests: ['apps/api/src/ingress/http/guest-hidden-roots.integration.test.ts'],
+  },
+  {
+    id: 'guest-thread-container-summary-scope',
+    why: 'The old author scope is substituted for the current reader scope.',
+    file: 'apps/api/src/features/chat/messages/history-reader.ts',
+    find: "await visibleChannels(executor, userId)\n      .innerJoin('messages as history_root'",
+    replace:
+      "await visibleChannels(executor, rows[0]?.sender_id ?? userId)\n      .innerJoin('messages as history_root'",
+    tests: ['apps/api/src/ingress/http/guest-hidden-roots.integration.test.ts'],
+  },
+  {
+    id: 'guest-thread-deleted-container-reply',
+    why: 'A deleted earlier root advertises permission to reply.',
+    file: 'apps/api/src/features/chat/messages/history-reader.ts',
+    find: 'sql<boolean>`history_root.deleted_at is null`',
+    replace: 'sql<boolean>`true`',
+    tests: ['apps/api/src/ingress/http/guest-hidden-roots.integration.test.ts'],
   },
   {
     id: 'history-includes-deleted-messages',
@@ -739,6 +778,15 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     find: "  await executor\n    .insertInto('message_attachments')",
     replace: "  await executor\n    .selectFrom('message_attachments')",
     tests: ['apps/api/src/ingress/http/files.integration.test.ts'],
+  },
+  {
+    id: 'message-reader-n-plus-one-hidden-container-builder',
+    why: 'Building each row adds a real SQL round-trip; the page budget must count executions and catch growth.',
+    file: 'apps/api/src/features/chat/messages/history-reader.ts',
+    find: '  const readable = rows.filter((row) => row.content_visible);',
+    replace:
+      "  const readable = rows.filter((row) => row.content_visible);\n  for (const row of rows) {\n    await executor.selectFrom('messages').select('id').where('id', '=', row.id).execute();\n  }",
+    tests: ['apps/api/src/features/chat/messages/reader.integration.test.ts'],
   },
   {
     id: 'message-send-does-not-claim',

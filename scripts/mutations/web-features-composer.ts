@@ -118,6 +118,48 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/composer/composer-text.test.ts'],
   },
   {
+    id: 'guest-composer-draft-cleanup-revives-old-account',
+    why: 'An old composer cleanup cannot restore private words after a coalesced identity roundtrip.',
+    file: 'apps/web/src/features/chat/composer/drafts.ts',
+    find: '      if (isCurrent() && isClaimedBy(storage, userId)) writeDraft(storage, key, latest.current);',
+    replace: '      if (isClaimedBy(storage, userId)) writeDraft(storage, key, latest.current);',
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
+  },
+  {
+    id: 'guest-composer-draft-debounce-revives-old-account',
+    why: 'A pending debounce cannot overwrite a fresh draft after a coalesced identity roundtrip.',
+    file: 'apps/web/src/features/chat/composer/drafts.ts',
+    find: '      if (isCurrent() && isClaimedBy(storage, userId)) writeDraft(storage, key, text);',
+    replace: '      if (isClaimedBy(storage, userId)) writeDraft(storage, key, text);',
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
+  },
+  {
+    id: 'guest-composer-offscreen-enqueue-refusal-clears-draft',
+    why: 'A refused offscreen enqueue must keep its words and files without an automatic retry loop.',
+    file: 'apps/web/src/features/chat/composer/outbox.ts',
+    find: "      write(key, { items, waiting: null });\n      ports.refused(waiting.channelName, 'account');\n      return;",
+    replace:
+      "      writeDraft(waiting.storage, key, '');\n      write(key, EMPTY);\n      ports.refused(waiting.channelName, 'account');\n      return;",
+    tests: ['apps/web/src/features/chat/composer/outbox.test.ts'],
+  },
+  {
+    id: 'guest-composer-old-discard-refusal-names-private-file',
+    why: 'A late discard error cannot disclose the previous account file name in a new-account toast.',
+    file: 'apps/web/src/features/chat/composer/uploads.tsx',
+    find: '      api.discardAttachment(id).catch((failure: unknown) => {\n        if (!isCurrent()) return;',
+    replace: '      api.discardAttachment(id).catch((failure: unknown) => {',
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
+  },
+  {
+    id: 'guest-composer-rejected-enqueue-clears-message',
+    why: 'An explicit enqueue refusal keeps current typed words and ready files for deliberate resend.',
+    file: 'apps/web/src/features/chat/composer/composer.tsx',
+    find: "      setError(t('composer.accountChanged'));\n      return;",
+    replace:
+      "      setError(t('composer.accountChanged'));\n      setText('');\n      uploads.clear();\n      return;",
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
+  },
+  {
     id: 'guest-mention-mode-not-passed',
     why: 'The hook must pass restricted access to the actual candidate filter.',
     file: 'apps/web/src/features/chat/composer/mention-candidates.ts',

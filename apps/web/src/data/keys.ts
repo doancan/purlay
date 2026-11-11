@@ -36,6 +36,13 @@ export const keys = {
   /** A sign-in link's address, read before it is spent (D-138 §4). */
   emailSignIn: (token: string) => ['email-sign-in', token] as const,
   members: (workspaceId: string) => ['members', workspaceId] as const,
+  /** Guest directory pages belong to member invalidation, including reconnect and other administrators' edits. */
+  guests: (workspaceId: string, search?: string) =>
+    search === undefined
+      ? (['members', workspaceId, 'guests'] as const)
+      : (['members', workspaceId, 'guests', search] as const),
+  guestInvitationAvailability: (workspaceId: string) =>
+    ['guest-invitation-availability', workspaceId] as const,
   channelMembers: (channelId: string) => ['channel-members', channelId] as const,
   channels: (workspaceId: string) => ['channels', workspaceId] as const,
   channelGroups: (workspaceId: string) => ['channel-groups', workspaceId] as const,
@@ -138,6 +145,7 @@ export const keys = {
   pushKey: ['push-key'] as const,
   /** Every view of a person's saved messages in a workspace: the ids, and each state's pages. */
   saved: (workspaceId: string) => ['saved', workspaceId] as const,
+  savedIds: (workspaceId: string) => ['saved', workspaceId, 'ids'] as const,
   /** A workspace's issues, every page of every status (D-254). */
   issues: (workspaceId: string) => ['issues', workspaceId] as const,
   /** A channel's files, every page (D-129). */

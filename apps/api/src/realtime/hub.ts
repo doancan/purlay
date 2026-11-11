@@ -21,14 +21,18 @@
  * Either way the frame is delivered first, so the client knows why, and the
  * connection is closed with `CLOSE_CODES.SESSION_ENDED` (#194).
  */
-import { CLOSE_CODES, type ServerFrame } from '@purlay/types';
+import { ACCESS_REVOKED_MAX_CHANNELS, CLOSE_CODES, type ServerFrame } from '@purlay/types';
 import type { Clock } from '../platform/clock';
 import type { Auth } from '../modules/auth/better-auth';
 import { readCookie, SESSION_COOKIE } from '../platform/cookies';
 import type { Logger } from '../platform/logging';
 import { SESSION_CLOCK, sessionFromHeaders } from '../modules/auth/sessions';
 import type { SocketIdentity } from './router';
-import type { ChannelDeliveryGate, ChannelDeliveryScope } from '../platform/ports/channel-delivery';
+import type {
+  ChannelDeliveryGate,
+  ChannelDeliveryScope,
+  ChannelDeliveryVerdict,
+} from '../platform/ports/channel-delivery';
 import { DEFAULT_DEADLINE_MS, timedOut, withDeadline } from '../platform/request-deadline';
 
 /** How a connection is reached and ended. The transport supplies both. */
@@ -200,14 +204,15 @@ interface Held {
   sessionId?: string;
   /** Set when the hub closes the connection itself, so queued work stops at once. */
   ending: boolean;
-  /** Allocated only for restricted subscriptions; ordinary delivery keeps its synchronous path. */
+  /** Allocated for module subscriptions that require current delivery authority. */
   channels?: Map<string, RestrictedChannel>;
   projected?: { tail: Promise<void>; bytes: number };
 }
 
 interface RestrictedChannel {
   readonly scope: ChannelDeliveryScope;
-  readonly cancel: (() => void) | undefined;
+  cancel: (() => void) | undefined;
+  expiring?: true;
 }
 
 export interface HubOptions {
@@ -323,22 +328,93 @@ export const createSocketHub = (
   };
 
   const expireChannel = (socketId: string, channelId: string): void => {
-    deliver(socketId, {
-      event: 'ACCESS_REVOKED',
-      data: { channelIds: [channelId] },
-      ts: clock.now().getTime(),
+    const socket = held.get(socketId);
+    const restricted = socket?.channels?.get(channelId);
+    if (socket === undefined || restricted === undefined || restricted.expiring === true) return;
+    const expiry = restricted.scope.expiry;
+    if (expiry === undefined) {
+      deliver(socketId, {
+        event: 'ACCESS_REVOKED',
+        data: { channelIds: [channelId] },
+        ts: clock.now().getTime(),
+      });
+      return;
+    }
+    const now = clock.now().getTime();
+    if (restricted.scope.expiresAt === null || restricted.scope.expiresAt > now) return;
+    const expiring = [...(socket.channels ?? [])].filter(
+      ([, channel]) =>
+        channel.scope.expiry?.workspaceId === expiry.workspaceId && channel.expiring !== true,
+    );
+    if (expiring.length === 0) return;
+    for (const [, channel] of expiring) {
+      channel.expiring = true;
+      channel.cancel?.();
+    }
+    const current = (): boolean =>
+      held.get(socketId) === socket &&
+      !socket.ending &&
+      socket.ended !== true &&
+      expiring.some(([id, channel]) => socket.channels?.get(id) === channel);
+    const run = (async (): Promise<void> => {
+      try {
+        const allowed = await withDeadline<boolean | undefined>(
+          DEFAULT_DEADLINE_MS,
+          expiry.recheck,
+          () => undefined,
+        );
+        if (!current()) return;
+        if (allowed === undefined) throw timedOut();
+        if (allowed) {
+          // This does not grant access: the replacement connection authenticates current authority.
+          deliver(socketId, {
+            event: 'WORKSPACE_UPDATED',
+            data: { workspaceId: expiry.workspaceId, accessChanged: true },
+            ts: clock.now().getTime(),
+          });
+        } else {
+          const channelIds = expiring
+            .filter(([id, channel]) => socket.channels?.get(id) === channel)
+            .map(([id]) => id);
+          for (let from = 0; from < channelIds.length; from += ACCESS_REVOKED_MAX_CHANNELS)
+            deliver(socketId, {
+              event: 'ACCESS_REVOKED',
+              data: { channelIds: channelIds.slice(from, from + ACCESS_REVOKED_MAX_CHANNELS) },
+              ts: clock.now().getTime(),
+            });
+        }
+      } catch (error) {
+        if (!current()) return;
+        log.error('guest expiry could not be rechecked; closing to resync', {
+          socketId,
+          err: error,
+        });
+        socket.ending = true;
+        socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+      }
+    })();
+    running.add(run);
+    void run.finally(() => {
+      running.delete(run);
     });
   };
 
   const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
     const channelId = channelOf(frame);
     const restricted = channelId === null ? undefined : socket.channels?.get(channelId);
-    if (restricted === undefined || channelId === null) {
+    // Session loss is immediate; all ordinary writes retain their order behind pending authority reads.
+    if (frame.event === 'SESSION_ENDED') {
       writeNow(socketId, socket, frame);
       return;
     }
     if (socket.ending || socket.ended === true) return;
+    if ((restricted === undefined || channelId === null) && (socket.projected?.bytes ?? 0) === 0) {
+      writeNow(socketId, socket, frame);
+      return;
+    }
     if (
+      restricted !== undefined &&
+      channelId !== null &&
       restricted.scope.expiresAt !== null &&
       restricted.scope.expiresAt <= clock.now().getTime()
     ) {
@@ -359,11 +435,17 @@ export const createSocketHub = (
       held.get(socketId) === socket &&
       !socket.ending &&
       socket.ended !== true &&
-      socket.channels?.get(channelId) === restricted;
+      (restricted === undefined ||
+        channelId === null ||
+        (socket.channels?.get(channelId) === restricted && restricted.expiring !== true));
     const run = queue.tail
       .then(async () => {
         if (!current()) return;
-        const accepted = await withDeadline<boolean | undefined>(
+        if (restricted === undefined || channelId === null) {
+          writeNow(socketId, socket, frame);
+          return;
+        }
+        const accepted = await withDeadline<ChannelDeliveryVerdict | undefined>(
           DEFAULT_DEADLINE_MS,
           async (signal) => await restricted.scope.accepts(frame, signal),
           () => undefined,
@@ -377,7 +459,25 @@ export const createSocketHub = (
           expireChannel(socketId, channelId);
           return;
         }
-        if (accepted) writeNow(socketId, socket, frame);
+        if (accepted === 'revoked') {
+          deliver(socketId, {
+            event: 'ACCESS_REVOKED',
+            data: { channelIds: [channelId] },
+            ts: clock.now().getTime(),
+          });
+        } else if (accepted === 'resync') {
+          const workspaceId = restricted.scope.expiry?.workspaceId;
+          if (workspaceId === undefined) {
+            socket.ending = true;
+            socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+          } else {
+            deliver(socketId, {
+              event: 'WORKSPACE_UPDATED',
+              data: { workspaceId, accessChanged: true },
+              ts: clock.now().getTime(),
+            });
+          }
+        } else if (accepted) writeNow(socketId, socket, frame);
       })
       .catch((error: unknown) => {
         if (!current()) return;
@@ -421,6 +521,15 @@ export const createSocketHub = (
         socket.revokedWhileHolding?.add(channelId);
       }
       purge(socket, new Set(frame.data.channelIds));
+    }
+    // Widening access must replace the former guest projection and absolute expiry on a fresh subscription.
+    // A delayed hint grants nothing: the new socket authenticates the current membership again.
+    if (frame.event === 'WORKSPACE_UPDATED' && frame.data.accessChanged === true) {
+      if (socket.channels !== undefined) releaseChannels(socketId, [...socket.channels.keys()]);
+      writeNow(socketId, socket, frame);
+      socket.ending = true;
+      socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+      return;
     }
     // The end of a session is never kept waiting behind a replay.
     if (socket.holding !== undefined && frame.event !== 'SESSION_ENDED') {
@@ -567,15 +676,22 @@ export const createSocketHub = (
       socket.channels = channels;
       const restricted: RestrictedChannel = {
         scope,
-        cancel:
-          scope.expiresAt === null
-            ? undefined
-            : after(timers, scope.expiresAt - clock.now().getTime(), () => {
-                if (held.get(socketId) === socket && channels.get(channelId) === restricted)
-                  expireChannel(socketId, channelId);
-              }),
+        cancel: undefined,
       };
       channels.set(channelId, restricted);
+      if (scope.expiresAt !== null) {
+        const expiresAt = scope.expiresAt;
+        const expire = (): void => {
+          if (held.get(socketId) !== socket || channels.get(channelId) !== restricted) return;
+          const remaining = expiresAt - clock.now().getTime();
+          if (scope.expiry !== undefined && remaining > 0) {
+            restricted.cancel = after(timers, remaining, expire);
+            return;
+          }
+          expireChannel(socketId, channelId);
+        };
+        restricted.cancel = after(timers, expiresAt - clock.now().getTime(), expire);
+      }
     },
 
     releaseChannels,

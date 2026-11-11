@@ -67,6 +67,7 @@ describe('the next run of a slot', () => {
       'sweep:email-sign-ins',
       'sweep:exports',
       'sweep:github-deliveries',
+      'sweep:guest-expiry',
       'sweep:inbox',
       'sweep:link-previews',
       'sweep:orphans',
@@ -129,7 +130,7 @@ describe('the loop', () => {
       },
       run: (job) => {
         ran.push(`${now.toISOString()} ${job}`);
-        if (ran.length === 7) stop = true;
+        if (ran.length === 9) stop = true;
         return Promise.resolve(job === 'reconcile:storage' ? 1 : 0);
       },
       stopped: () => stop,
@@ -143,8 +144,10 @@ describe('the loop', () => {
       '2026-09-09T02:50:00.000Z jobs:first',
       '2026-09-09T02:52:00.000Z mail:missed',
       '2026-09-09T03:00:00.000Z sweep:orphans',
+      '2026-09-09T03:03:00.000Z sweep:guest-expiry',
       '2026-09-09T03:07:00.000Z mail:missed',
       '2026-09-09T03:15:00.000Z sweep:sessions',
+      '2026-09-09T03:18:00.000Z sweep:guest-expiry',
       '2026-09-09T03:22:00.000Z mail:missed',
       '2026-09-09T03:30:00.000Z reconcile:storage',
     ]);

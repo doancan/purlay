@@ -123,8 +123,51 @@ const aRecipient = async (world: World): Promise<string> => {
   return row.id;
 };
 
+/** Seed restricted membership for the role and audit matrix; the ordinary target remains unchanged for other actions. */
+const guestTarget = async (world: World): Promise<void> => {
+  await world.db
+    .updateTable('workspace_members')
+    .set({ access_kind: 'guest', guest_since: NOW, guest_modules: ['chat'] })
+    .where('workspace_id', '=', world.workspaceId)
+    .where('user_id', '=', world.people.target.userId)
+    .execute();
+};
+
 /** Each case's request, made as one role. */
 const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promise<Response>>> = {
+  'convert guest access': async (world, as) => {
+    await guestTarget(world);
+    return await call(
+      world,
+      'POST',
+      `/api/workspaces/${world.workspaceId}/guests/${world.people.target.userId}/conversion`,
+      as,
+      { confirmFullAccess: true },
+    );
+  },
+  'read guest invitation availability': async (world, as) =>
+    await call(world, 'GET', `/api/workspaces/${world.workspaceId}/guest-invitations`, as),
+  'create a named guest invitation': async (world, as) =>
+    await call(world, 'POST', `/api/workspaces/${world.workspaceId}/guest-invitations`, as, {
+      email: 'guest-permission@example.test',
+      channelIds: [world.channelId],
+      accessExpiresAt: null,
+    }),
+  'list guest access': async (world, as) => {
+    await guestTarget(world);
+    return await call(world, 'GET', `/api/workspaces/${world.workspaceId}/guests`, as);
+  },
+  'edit guest access': async (world, as) => {
+    await guestTarget(world);
+    return await call(
+      world,
+      'PATCH',
+      `/api/workspaces/${world.workspaceId}/guests/${world.people.target.userId}`,
+      as,
+      { channelIds: [] },
+    );
+  },
+
   'list invitation recipients': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/invitation-recipients`, as),
   'list invitation delivery history': async (world, as) =>
@@ -475,7 +518,11 @@ describe('integration: every administrative write is on the trail, once', () => 
   for (const [name, entry] of Object.entries(PERMISSIONS)) {
     const reads =
       (entry.endpoint.startsWith('GET ') && !RECORDED_READS.has(name)) || CHANGES_NOTHING.has(name);
-    test(`${name}: ${reads ? 'no row' : 'one row'}`, async () => {
+    // A resend revokes and replaces; named guest mail creates distinct copy and recipient links.
+    const twoRows =
+      name === 'resend an invitation recipient' || name === 'create a named guest invitation';
+    const expected = twoRows ? 2 : reads ? 0 : 1;
+    test(`${name}: ${twoRows ? 'two rows' : reads ? 'no row' : 'one row'}`, async () => {
       await withRollback(async (db) => {
         const world = await aWorld(db);
         const act = ACTIONS[name];
@@ -485,8 +532,6 @@ describe('integration: every administrative write is on the trail, once', () => 
         expect(response.ok).toBe(true);
         // What an action does on the way (making a link to revoke it) is counted by the action's own case.
         const setUp = SET_UP_ROWS[name] ?? 0;
-        // A resend records both the old link’s revocation and the replacement’s creation.
-        const expected = name === 'resend an invitation recipient' ? 2 : reads ? 0 : 1;
         expect((await rows(db, world.workspaceId)) - before - setUp).toBe(expected);
       });
     });

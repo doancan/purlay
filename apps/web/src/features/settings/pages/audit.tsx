@@ -122,6 +122,16 @@ export const AuditPage = (): React.JSX.Element => {
           from: role(entry.metadata['from']),
           to: role(entry.metadata['to']),
         });
+      case 'member.guest_converted':
+        return t('audit.action.member.guest_converted', {
+          actor,
+          target: person(entry.targetId ?? undefined),
+        });
+      case 'member.guest_access_changed':
+        return t('audit.action.member.guest_access_changed', {
+          actor,
+          target: person(entry.targetId ?? undefined),
+        });
       case 'member.removed':
         return t('audit.action.member.removed', {
           actor,

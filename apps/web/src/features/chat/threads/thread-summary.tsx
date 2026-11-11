@@ -46,6 +46,13 @@ export const ThreadStatus = ({
   const { t, format } = useI18n();
   const summary = root.thread;
   const counted = t('thread.replies', { count: summary?.replyCount ?? 0 });
+  if (root.historyHidden === true) {
+    return (
+      <span className="text-caption text-ink-muted">
+        {t('thread.readableReplies', { count: summary?.replyCount ?? 0 })}
+      </span>
+    );
+  }
   if (summary?.resolvedAt != null) {
     return (
       <span className={cn(PILL, 'bg-success-subtle text-success-text')}>
@@ -96,7 +103,7 @@ const ThreadSummaryView = ({ root, nowMinute, open }: ThreadSummaryProps): React
   const working = useRef(false);
 
   const toggleResolution = useCallback((): void => {
-    if (working.current || replyCount === 0) return;
+    if (working.current || replyCount === 0 || root.historyHidden === true) return;
     working.current = true;
     void (async (): Promise<void> => {
       try {

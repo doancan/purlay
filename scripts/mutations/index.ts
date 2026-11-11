@@ -14,6 +14,7 @@ import type { Mutation } from '../mutate';
 import type { AreaName } from './areas';
 import { API_CHAT } from './api-chat';
 import { API_CHAT_CHANNELS } from './api-chat-channels';
+import { API_CHAT_GUEST_EXPIRY } from './api-chat-guest-expiry';
 import { API_CHAT_INTEGRATIONS } from './api-chat-integrations';
 import { API_CHAT_MESSAGES } from './api-chat-messages';
 import { API_CHAT_NOTIFICATIONS } from './api-chat-notifications';
@@ -58,6 +59,7 @@ import { WEB_FEATURES_CHANNEL } from './web-features-channel';
 import { WEB_FEATURES_COMPOSER } from './web-features-composer';
 import { WEB_FEATURES_CONTENT } from './web-features-content';
 import { WEB_FEATURES_FOLLOWED } from './web-features-followed';
+import { WEB_FEATURES_SETTINGS } from './web-features-settings';
 import { WEB_FEATURES_SIDEBAR } from './web-features-sidebar';
 import { WEB_REALTIME } from './web-realtime';
 
@@ -72,6 +74,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-cli': API_CLI,
   'api-chat': API_CHAT,
   'api-chat-channels': API_CHAT_CHANNELS,
+  'api-chat-guest-expiry': API_CHAT_GUEST_EXPIRY,
   'api-chat-integrations': API_CHAT_INTEGRATIONS,
   'api-chat-messages': API_CHAT_MESSAGES,
   'api-chat-notifications': API_CHAT_NOTIFICATIONS,
@@ -109,6 +112,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'web-features-composer': WEB_FEATURES_COMPOSER,
   'web-features-content': WEB_FEATURES_CONTENT,
   'web-features-followed': WEB_FEATURES_FOLLOWED,
+  'web-features-settings': WEB_FEATURES_SETTINGS,
   'web-features-sidebar': WEB_FEATURES_SIDEBAR,
 };
 

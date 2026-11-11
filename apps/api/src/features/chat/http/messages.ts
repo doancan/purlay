@@ -34,6 +34,7 @@ import {
   messageNotFound,
   requireChannelById,
   requireMessageById,
+  requireThreadContextById,
 } from '../channels/guard';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { visibleChannelIds } from '../channels/guard';
@@ -146,7 +147,7 @@ const readThread = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   // A deleted root with replies keeps its place in the feed, and its thread with it (D-103 §7).
-  const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
+  const root = await requireThreadContextById(database, userId, messageId, { deleted: 'include' });
   const query = validated(PageQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
   return await threadReplies(database, root, query);
 };
@@ -183,7 +184,7 @@ const readAround = async (
 ): Promise<MessageWindow> => {
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
-  return await messageWindow(database, await requireMessageById(database, userId, messageId));
+  return await messageWindow(database, await requireThreadContextById(database, userId, messageId));
 };
 
 /**
@@ -197,7 +198,7 @@ const readThreadFollow = async (
 ): Promise<ThreadFollow> => {
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
-  const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
+  const root = await requireThreadContextById(database, userId, messageId, { deleted: 'include' });
   return await followState(database, root);
 };
 
@@ -215,7 +216,7 @@ const putThreadFollow = async (
   const { database, clock } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const input = validated(SetThreadFollowRequest, body);
-  const root = await requireMessageById(database, userId, messageId, { deleted: 'include' });
+  const root = await requireThreadContextById(database, userId, messageId, { deleted: 'include' });
   return await setFollowing(database, clock, root, input.following);
 };
 

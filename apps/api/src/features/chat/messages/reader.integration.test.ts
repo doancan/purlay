@@ -41,17 +41,30 @@ const counting = async <T>(
 ): Promise<{ result: T; queries: number }> => {
   let queries = 0;
   const counted = db.withPlugin({
-    transformQuery: (args) => {
+    // Building a nested expression also transforms its AST; only a completed result is a SQL call.
+    transformQuery: (args) => args.node,
+    transformResult: (args) => {
       queries += 1;
-      return args.node;
+      return Promise.resolve(args.result);
     },
-    transformResult: (args) => Promise.resolve(args.result),
   });
   const result = await body(counted);
   return { result, queries };
 };
 
 describe('integration: building a page of messages', () => {
+  test('counts actual SQL execution without counting nested query compilation', async () => {
+    await withRollback(async (db) => {
+      const measured = await counting(db, async (counted) => {
+        const nested = counted.selectFrom('users').select('id');
+        const query = counted.selectFrom('users').select('id').where('id', 'in', nested).limit(1);
+        query.compile();
+        await query.execute();
+      });
+      expect(measured.queries).toBe(1);
+    });
+  });
+
   test('carries parent, thread, reactions and mentions, built from the rows', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);

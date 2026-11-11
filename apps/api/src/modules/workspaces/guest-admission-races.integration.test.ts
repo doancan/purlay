@@ -149,6 +149,7 @@ describe('integration: guest admission and simultaneous sends', () => {
               target.token,
               undefined,
               chatWorkspaceChannels,
+              true,
             );
           })
           .then(
@@ -211,6 +212,7 @@ describe('integration: guest admission and simultaneous sends', () => {
               invitation.token,
               undefined,
               channels,
+              true,
             ),
         );
       try {
@@ -284,6 +286,7 @@ describe('integration: guest admission and simultaneous sends', () => {
             invitation.token,
             undefined,
             channels,
+            true,
           );
         const owner = await requireWorkspaceMembership(
           db,

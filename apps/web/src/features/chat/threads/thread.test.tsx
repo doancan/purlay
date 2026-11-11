@@ -45,6 +45,17 @@ const closed = { ...open, resolvedAt: '2026-09-09T11:50:00.000Z', resolvedBy: AL
 
 const rootMessage = (over: Partial<Message> = {}): Message =>
   aMessage(ROOT, { content: 'Why is the backoff 4s?', thread: open, ...over });
+const earlierContainer = (replyAllowed = true): Message =>
+  rootMessage({
+    historyHidden: true,
+    replyAllowed,
+    sender: null,
+    content: '',
+    createdAt: LAST,
+    attachments: [],
+    mentions: [],
+    reactions: [],
+  });
 const reply = (n: number, over: Partial<Message> = {}): Message =>
   aMessage(n, { parentId: messageIdAt(ROOT), thread: null, sender: BOB, ...over });
 const replies = (...ns: number[]): ThreadPage => ({
@@ -1439,5 +1450,55 @@ describe('following it (D-161)', () => {
     });
     expect(reads).toBe(2);
     view.unmountAll();
+  });
+});
+
+describe('a readable continuation beneath an earlier hidden message', () => {
+  test('shows the history boundary, reads and answers new replies, and never offers old-root actions', async () => {
+    const view = await mount({ messages: page([earlierContainer()]) });
+    try {
+      connect(view);
+      const row = rowOf(view, messageIdAt(ROOT));
+      expect(within(row).getByText('Earlier messages are hidden')).toBeDefined();
+      expect(row.querySelector('time') === null).toBe(true);
+      expect(within(row).queryByRole('button', { name: 'Add reaction' }) === null).toBe(true);
+      await showThread(view);
+      const section = sectionOf(view);
+      const inside = within(section);
+      expect(
+        inside.getByText('You can read replies shared after your access began.'),
+      ).toBeDefined();
+      expect(inside.getByText('answer 3')).toBeDefined();
+      expect(inside.getByText('answer 4')).toBeDefined();
+      expect(inside.queryByRole('button', { name: /Resolve/ }) === null).toBe(true);
+      const box = inside.getByLabelText('Message a thread in api');
+      await person().type(box, 'A permitted new reply{Enter}');
+      await settle();
+      expect(view.world.sockets.sent('MESSAGE_SEND').at(-1)?.payload).toMatchObject({
+        channelId: IDS.api,
+        parentId: messageIdAt(ROOT),
+        content: 'A permitted new reply',
+      });
+      await expectNoAxeViolations(view.container);
+    } finally {
+      view.unmountAll();
+    }
+  });
+
+  test('an unavailable earlier root still has readable replies and a clear status instead of a reply box', async () => {
+    const view = await mount({ messages: page([earlierContainer(false)]) });
+    try {
+      await showThread(view);
+      const inside = within(sectionOf(view));
+      expect(inside.getByText('answer 3')).toBeDefined();
+      expect(inside.queryByLabelText('Message a thread in api') === null).toBe(true);
+      expect(inside.getByText('New replies are unavailable for this conversation.')).toBeDefined();
+      expect(
+        within(rowOf(view, messageIdAt(ROOT))).queryByRole('button', { name: 'Reply' }) === null,
+      ).toBe(true);
+      await expectNoAxeViolations(view.container);
+    } finally {
+      view.unmountAll();
+    }
   });
 });

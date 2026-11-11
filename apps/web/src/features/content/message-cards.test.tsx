@@ -3,6 +3,9 @@
  * reader may see — the message when the server gives it, and nothing of it when the server refuses.
  */
 import { describe, expect, test } from 'bun:test';
+import { act } from '@testing-library/react';
+import type { Message } from '@purlay/types';
+import { workspaceAccessChanged } from '../../data/access-change';
 import { installDom } from '../../testing/dom';
 import { BOB, IDS, aMessage, messageIdAt } from '../../testing/fixtures';
 import { mountChannel, page } from '../../testing/channel-harness';
@@ -38,6 +41,44 @@ const linking = (target: string): string =>
   `${window.location.origin}/w/acme/c/${IDS.api}?message=${target}`;
 
 describe('a card', () => {
+  test('a reloaded readable share cannot restore a cached old card while current authority waits or refuses it', async () => {
+    const original = aMessage(1, { sender: BOB, content: 'Previous admission private card' });
+    const fresh = Promise.withResolvers<Message>();
+    let calls = 0;
+    const view = await mountChannel({
+      messages: page([
+        aMessage(2, { content: `Current readable share\n\n${linking(original.id)}` }),
+      ]),
+      api: {
+        message: (): Promise<Message> => {
+          calls++;
+          return calls === 1 ? Promise.resolve(original) : fresh.promise;
+        },
+      },
+    });
+    try {
+      await view.findByRole('button', { name: /Previous admission private card/ });
+      await act(async () => {
+        workspaceAccessChanged(view.world.client, IDS.workspace);
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 0);
+        });
+      });
+      await view.findByText('Current readable share');
+      expect(calls).toBeGreaterThanOrEqual(2);
+      expect(view.container.textContent.includes('Previous admission private card')).toBe(false);
+      await act(async () => {
+        fresh.reject(new ApiError(404, 'MESSAGE_NOT_FOUND', 'Message not found.'));
+        await Promise.resolve();
+      });
+      await view.findByText('This message is not available to you.');
+      expect(view.container.textContent.includes('Previous admission private card')).toBe(false);
+    } finally {
+      fresh.resolve(original);
+      view.unmountAll();
+    }
+  });
+
   test('shows who wrote it and the start of what they wrote', async () => {
     const original = aMessage(1, { sender: BOB, content: 'Pool size is 20 now.' });
     const view = await mountChannel({

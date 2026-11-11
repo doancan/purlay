@@ -1,13 +1,15 @@
 /**
  * Whether a message is pinned in its channel, and pinning or letting it go (D-130).
  *
- * **Two layers, never mixed** (D-18). What the server says is the channel's pins (`GET …/pins`),
- * read once and kept current by `PINS_UPDATED`; it is never written to from here. What the person
+ * **Two layers** (D-18). What the server says is the channel's pins (`GET …/pins`),
+ * read once and kept current by `PINS_UPDATED`. A confirmed current change is applied if its
+ * refresh fails (#605). What the person
  * has asked for and the server has not yet answered is an *intent*, held beside it for the channel
  * visit (`PinIntentsProvider`): a message is pinned as its intent says, and otherwise as the server
  * does. So a refusal only drops its own intent — whatever the list held, read or not, and whatever
  * anyone else changed meanwhile, stays as the server has it — and an answer read while a request is
- * on its way cannot take the painted change back.
+ * on its way cannot take the painted change back. Replaced query access discards both an old
+ * optimistic intent and its late completion; proven unrelated work stays current.
  *
  * **Painted at once, said when refused**: an intent shows before the server answers; a refusal is
  * said, with Retry when trying again could help (CONTRIBUTING §1.9). One request a message at a
@@ -29,6 +31,7 @@ import { useApi } from '../../../data/api-provider';
 import { isTransient } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
+import { captureAccess, useAccessRevision } from '../../../data/access-revision';
 import { useChannels } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useToast } from '../../../ui/toast';
@@ -39,9 +42,11 @@ interface Intent {
   readonly pinning: boolean;
   /** The message, so a pin asked for shows in the panel before the list has it. */
   readonly message: Message;
+  readonly stillCurrent: () => boolean;
 }
 
 interface Intents {
+  readonly revision: number;
   readonly byMessage: ReadonlyMap<string, Intent>;
   readonly put: (intent: Intent) => void;
   readonly drop: (messageId: string) => void;
@@ -57,26 +62,41 @@ export const PinIntentsProvider = ({
 }: {
   readonly children: React.ReactNode;
 }): React.JSX.Element => {
-  const [byMessage, setByMessage] = useState<ReadonlyMap<string, Intent>>(new Map());
-  const latest = useRef(byMessage);
-  latest.current = byMessage;
+  const client = useQueryClient();
+  const revision = useAccessRevision(client);
+  const [held, setHeld] = useState<ReadonlyMap<string, Intent>>(new Map());
+  const latest = useRef(held);
+  latest.current = held;
+  const snapshot = useMemo(
+    () => ({
+      revision,
+      byMessage: new Map([...held].filter(([, intent]) => intent.stillCurrent())),
+    }),
+    [held, revision],
+  );
   const put = useCallback((intent: Intent): void => {
-    const next = new Map(latest.current).set(intent.message.id, intent);
+    const next = new Map([...latest.current].filter(([, previous]) => previous.stillCurrent())).set(
+      intent.message.id,
+      intent,
+    );
     latest.current = next;
-    setByMessage(next);
+    setHeld(next);
   }, []);
   const drop = useCallback((messageId: string): void => {
     if (!latest.current.has(messageId)) return;
     const next = new Map(latest.current);
     next.delete(messageId);
     latest.current = next;
-    setByMessage(next);
+    setHeld(next);
   }, []);
-  const current = useCallback(
-    (messageId: string): Intent | undefined => latest.current.get(messageId),
-    [],
+  const current = useCallback((messageId: string): Intent | undefined => {
+    const intent = latest.current.get(messageId);
+    return intent?.stillCurrent() === true ? intent : undefined;
+  }, []);
+  const value = useMemo(
+    () => ({ ...snapshot, put, drop, current }),
+    [snapshot, put, drop, current],
   );
-  const value = useMemo(() => ({ byMessage, put, drop, current }), [byMessage, put, drop, current]);
   return createElement(IntentsContext.Provider, { value }, children);
 };
 
@@ -170,18 +190,26 @@ export const usePin = (message: Message): PinControl => {
     intents.current(message.id)?.pinning ??
     (client.getQueryData<PinList>(key) ?? []).some((pin) => pin.message.id === message.id);
 
+  const stillCurrent = captureAccess(client, key);
   const change = (pinning: boolean): void => {
+    if (!stillCurrent()) return;
     // One request a message at a time, and none for what is already so.
     if (intents.current(message.id) !== undefined || pinnedNow() === pinning) return;
-    intents.put({ pinning, message });
+    intents.put({ pinning, message, stillCurrent });
     (pinning ? api.pin(message.id) : api.unpin(message.id)).then(
       async () => {
+        if (!stillCurrent()) return;
         // Held until the server's list has been read after the change, so it never flickers back. A
         // read that fails is not the pin failing: the change the server confirmed is set on the list
         // as it is, and the next read brings the rest (#605).
+        let refreshed = true;
         try {
           await client.refetchQueries({ queryKey: key, exact: true }, { throwOnError: true });
         } catch {
+          refreshed = false;
+        }
+        if (!stillCurrent()) return;
+        if (!refreshed) {
           client.setQueryData<PinList>(key, (held) => {
             const without = (held ?? []).filter((pin) => pin.message.id !== message.id);
             return pinning ? [{ message, pinnedBy: null, pinnedAt: '' }, ...without] : without;
@@ -190,6 +218,7 @@ export const usePin = (message: Message): PinControl => {
         intents.drop(message.id);
       },
       (failure: unknown) => {
+        if (!stillCurrent()) return;
         intents.drop(message.id);
         show({
           message: `${t(pinning ? 'pins.failed' : 'pins.unpinFailed')} ${describe(failure)}`,

@@ -94,7 +94,14 @@ const aWorld = async (db: Executor): Promise<World> => {
         online: { active: () => undefined },
         sessionLifetime: () => NO_SESSION_LIFETIME,
         log: createLogger({ level: 'silent' }),
-        socket: { hold: () => undefined, isOpen: () => true, drop: () => undefined },
+        socket: {
+          // Router-only fixture: real live delivery uses canonical hubs in the socket tests.
+          restrictChannel: () => undefined,
+          releaseChannels: () => undefined,
+          hold: () => undefined,
+          isOpen: () => true,
+          drop: () => undefined,
+        },
         atomically: atomicallyOn(db),
       },
       { socketId: 's1', userId: as.userId, sessionId: as.sessionId, expiresAt: NOW },

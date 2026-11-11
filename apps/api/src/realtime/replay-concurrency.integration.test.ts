@@ -87,6 +87,10 @@ const routerOver = (
   log: createLogger({ level: 'silent' }),
   atomically: atomicallyOn(db),
   socket: {
+    // This router-only fixture never writes live frames. Real delivery gates and their
+    // canonical hub wiring are exercised by subscribe-order and two-publisher revocation tests.
+    restrictChannel: () => undefined,
+    releaseChannels: () => undefined,
     hold: () => undefined,
     isOpen: (socketId) => open.has(socketId),
     drop: () => undefined,

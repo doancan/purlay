@@ -188,6 +188,7 @@ const aNamedGuestInvitation = async (
       { email, channelIds: [channel.id], accessExpiresAt: null },
       { on: true, appUrl: ORIGIN },
       chatWorkspaceChannels,
+      true,
     );
     const letter = made.letters[0];
     if (letter === undefined) throw new Error('Missing named guest letter');

@@ -1,18 +1,29 @@
 // Invitations to a workspace: links, mailed recipients, their deliveries and the newcomer’s passport.
 import {
   CreatedInvitation,
+  CreatedGuestInvitation,
+  GuestInvitationAvailability,
   InvitationDeliveryPage,
   InvitationPage,
   InvitationPreview,
   InvitationRecipientPage,
   Membership,
   type CreateInvitationRequest,
+  type CreateGuestInvitationRequest,
   type InvitationRecipientQuery,
 } from '@purlay/types';
 import type { Http } from '../http';
 import { at, options } from './request';
 
 export interface InvitationsApi {
+  readonly guestInvitationAvailability: (
+    workspaceId: string,
+    signal?: AbortSignal,
+  ) => Promise<GuestInvitationAvailability>;
+  readonly createGuestInvitation: (
+    workspaceId: string,
+    input: CreateGuestInvitationRequest,
+  ) => Promise<CreatedGuestInvitation>;
   /** What an invitation's token opens (D-115); the token goes in the body, never the path. */
   readonly previewInvitation: (token: string, signal?: AbortSignal) => Promise<InvitationPreview>;
   readonly acceptInvitation: (token: string) => Promise<Membership>;
@@ -45,6 +56,20 @@ export interface InvitationsApi {
 }
 
 export const createInvitationsApi = (http: Http): InvitationsApi => ({
+  guestInvitationAvailability: (workspaceId, signal) =>
+    http.request(
+      'GET',
+      `/api/workspaces/${at(workspaceId)}/guest-invitations`,
+      GuestInvitationAvailability,
+      options({}, signal),
+    ),
+  createGuestInvitation: (workspaceId, input) =>
+    http.request(
+      'POST',
+      `/api/workspaces/${at(workspaceId)}/guest-invitations`,
+      CreatedGuestInvitation,
+      options({ body: input }),
+    ),
   previewInvitation: (token, signal) =>
     http.request(
       'POST',

@@ -710,7 +710,7 @@ test.describe('@ and a name', () => {
         await expect(list).toHaveCount(0);
         await expect(box).toHaveValue('@ali');
         await expect(box).toBeFocused();
-          await box.fill('Hello @bob');
+        await box.fill('Hello @bob');
         await expect(page.getByRole('option', { name: /Bob/ })).toHaveCount(0);
         await box.fill('Can you check, @ali');
         await expect(list.getByRole('option', { name: /Alice Chen/ })).toBeVisible();
@@ -718,7 +718,7 @@ test.describe('@ and a name', () => {
         await expect(box).toHaveValue('Can you check, @alice ');
         await expect(box).toBeFocused();
         expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([]);
-          await box.fill('');
+        await box.fill('');
       }
     });
   }

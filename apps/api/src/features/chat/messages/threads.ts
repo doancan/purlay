@@ -23,6 +23,7 @@ import {
   requireChannelMember,
   requireMessageById,
   withinMessageHistory,
+  withinCurrentMessageHistory,
   type VisibleMessage,
 } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
@@ -97,7 +98,7 @@ export const threadReplies = async (
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .where('messages.parent_id', '=', root.messageId)
-    .where(withinMessageHistory(executor, root.context))
+    .where(withinCurrentMessageHistory(executor, root.context))
     .orderBy('messages.id', backwards ? 'desc' : 'asc')
     .limit(limit + 1);
   if (query.before !== undefined) statement = statement.where('messages.id', '<', query.before);

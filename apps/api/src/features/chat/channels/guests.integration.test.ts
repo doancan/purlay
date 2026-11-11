@@ -1,7 +1,7 @@
 /** Guest authority is tested through real membership, channel, message and download guards. */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { messageId, type ServerFrame } from '@purlay/types';
 import { aRoom, type Room } from '../../../testing/rooms';
 import { linkFile } from '../../../testing/sent-files';
 import { requireOwnUpload } from '../../../modules/attachments/readable';
@@ -28,9 +28,10 @@ import { markRead, markUnread } from './read-state';
 import { memberReadScope, saveReadScope } from './read-scope';
 import { unreadMessage, unreadMessages } from './unread';
 import { membershipsOf } from '../../../modules/workspaces/workspaces';
+import { convertGuest } from '../../../modules/workspaces/guest-conversion';
 import { changeRole, removeMember } from '../../../modules/workspaces/members';
 import { chatWorkspaceChannels } from './workspace-channels';
-import { liveGuestHistory } from './live-history';
+import { liveChannelScope } from './live-history';
 import { readBuilt } from '../messages/reader';
 import {
   requireAttachmentById,
@@ -200,7 +201,7 @@ describe('integration: restricted workspace guests', () => {
     });
   });
 
-  test('one trusted timestamp read serves recipients with different guest history floors', async () => {
+  test('one current audience read serves a publication with different guest history floors', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['owner', 'guest', 'later']);
       const { userId, since } = await restrict(db, room);
@@ -239,16 +240,15 @@ describe('integration: restricted workspace guests', () => {
       if (message === undefined) throw new Error('Missing live message fixture');
       let statements = 0;
       const counted = db.withPlugin({
-        transformQuery: (args) => {
+        transformQuery: (args) => args.node,
+        transformResult: (args) => {
           statements += 1;
-          return args.node;
+          return Promise.resolve(args.result);
         },
-        transformResult: (args) => Promise.resolve(args.result),
       });
-      const scopes = liveGuestHistory();
+      const scopes = liveChannelScope();
       const a = scopes(counted, first);
       const b = scopes(counted, later);
-      if (a === undefined || b === undefined) throw new Error('Missing guest delivery scope');
       const frame = {
         event: 'MESSAGE_REVISED' as const,
         data: {
@@ -272,21 +272,33 @@ describe('integration: restricted workspace guests', () => {
         ]),
       ).toEqual([true, true, false]);
       expect(statements).toBe(1);
+      const oldId = messageId(new Date(since.getTime() - 1_000));
+      await db
+        .insertInto('messages')
+        .values({
+          id: oldId,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          sender_id: room.members['owner']?.userId ?? '',
+          content: 'Before admission',
+          created_at: new Date(since.getTime() - 1_000),
+        })
+        .execute();
       expect(
         await a.accepts(
           {
             event: 'MESSAGE_CREATED',
             data: {
               ...message,
-              id: messageId(new Date()),
-              createdAt: new Date(since.getTime() - 1_000).toISOString(),
+              id: oldId,
+              createdAt: new Date().toISOString(),
             },
             ts: Date.now(),
           },
           signal,
         ),
       ).toBe(false);
-      expect(statements).toBe(1);
+      expect(statements).toBe(2);
     });
   });
 
@@ -309,6 +321,254 @@ describe('integration: restricted workspace guests', () => {
         .where('user_id', '=', userId)
         .execute();
       expect(await membershipsOf(db, clock, userId)).toEqual([]);
+    });
+  });
+
+  test('a captured expiry checks current extension, conversion and module removal without retaining an earlier answer', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['owner', 'guest']);
+      const end = new Date(Date.now() + 60_000);
+      const { userId, since } = await restrict(db, room, end);
+      const context = await requireChannelById(db, userId, room.channelId);
+      const expiry = liveChannelScope()(db, context).expiry;
+      if (expiry === undefined) throw new Error('Missing current-membership expiry check');
+      const signal = new AbortController().signal;
+      expect(expiry.workspaceId).toBe(room.workspaceId);
+      expect(await expiry.recheck(signal)).toBe(true);
+      await db
+        .updateTable('workspace_members')
+        .set({ guest_expires_at: new Date(Date.now() - 1) })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      expect(await expiry.recheck(signal)).toBe(false);
+      await db
+        .updateTable('workspace_members')
+        .set({ guest_expires_at: new Date(end.getTime() + 60_000) })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      expect(await expiry.recheck(signal)).toBe(true);
+      await db
+        .updateTable('workspace_members')
+        .set({ guest_expires_at: null, guest_modules: ['issues'] })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      expect(await expiry.recheck(signal)).toBe(false);
+      await db
+        .updateTable('workspace_members')
+        .set({ guest_expires_at: new Date(since.getTime() + 1), guest_modules: ['chat'] })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      const owner = await requireWorkspaceMembership(
+        db,
+        room.members['owner']?.userId ?? '',
+        room.workspaceId,
+      );
+      await convertGuest(
+        db,
+        fixedClock(new Date()),
+        owner,
+        userId,
+        { confirmFullAccess: true },
+        chatWorkspaceChannels,
+      );
+      expect(await expiry.recheck(signal)).toBe(true);
+      await db
+        .deleteFrom('workspace_members')
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      expect(await expiry.recheck(signal)).toBe(false);
+    });
+  });
+
+  test('expiry reads share current membership across history floors, but cannot substitute membership in another workspace', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['owner', 'guest']);
+      const end = new Date(Date.now() + 60_000);
+      const { userId, since } = await restrict(db, room, end);
+      const first = await requireChannelById(db, userId, room.channelId);
+      await db
+        .updateTable('channel_members')
+        .set({ joined_at: new Date(since.getTime() + 1000) })
+        .where('channel_id', '=', room.channelId)
+        .where('user_id', '=', userId)
+        .execute();
+      const later = await requireChannelById(db, userId, room.channelId);
+      let queries = 0;
+      const counted = db.withPlugin({
+        transformQuery: (args) => {
+          queries += 1;
+          return args.node;
+        },
+        transformResult: (args) => Promise.resolve(args.result),
+      });
+      const scopes = liveChannelScope();
+      const a = scopes(counted, first).expiry;
+      const b = scopes(counted, later).expiry;
+      if (a === undefined || b === undefined) throw new Error('Missing expiry scopes');
+      const signal = new AbortController().signal;
+      expect(await Promise.all([a.recheck(signal), b.recheck(signal)])).toEqual([true, true]);
+      expect(queries).toBe(1);
+      const other = await aRoom(db, ['owner']);
+      await db
+        .insertInto('workspace_members')
+        .values({
+          workspace_id: other.workspaceId,
+          user_id: userId,
+          role: 'member',
+          access_kind: 'guest',
+          guest_since: since,
+          guest_expires_at: end,
+          guest_modules: ['chat'],
+        })
+        .execute();
+      await db
+        .insertInto('channel_members')
+        .values({ channel_id: other.channelId, user_id: userId, joined_at: since })
+        .execute();
+      const elsewhere = await requireChannelById(db, userId, other.channelId);
+      const otherExpiry = scopes(counted, elsewhere).expiry;
+      if (otherExpiry === undefined) throw new Error('Missing other workspace expiry');
+      await db
+        .deleteFrom('workspace_members')
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      expect(await Promise.all([a.recheck(signal), otherExpiry.recheck(signal)])).toEqual([
+        false,
+        true,
+      ]);
+      expect(queries).toBe(3);
+    });
+  });
+
+  test('an unavailable expiry lookup is a failure, never a false membership denial', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['owner', 'guest']);
+      const { userId } = await restrict(db, room, new Date(Date.now() + 60_000));
+      const context = await requireChannelById(db, userId, room.channelId);
+      const failure = new Error('Membership read unavailable');
+      const unavailable = db.withPlugin({
+        transformQuery: () => {
+          throw failure;
+        },
+        transformResult: (args) => Promise.resolve(args.result),
+      });
+      const scopes = liveChannelScope();
+      const allowed = scopes(db, context).expiry;
+      const expiry = scopes(unavailable, context).expiry;
+      if (expiry === undefined || allowed === undefined) throw new Error('Missing expiry lookup');
+      const signal = new AbortController().signal;
+      const simultaneous = await Promise.all([
+        allowed.recheck(signal),
+        expiry.recheck(signal).then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      ]);
+      expect(simultaneous).toEqual([true, failure]);
+      for (let repeat = 0; repeat < 2; repeat += 1)
+        expect(
+          await expiry.recheck(new AbortController().signal).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+        ).toBe(failure);
+    });
+  });
+
+  test('two users at the same captured deadline cannot share the other person’s membership result', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['owner', 'guest', 'later']);
+      const end = new Date(Date.now() + 60_000);
+      const { userId, since } = await restrict(db, room, end);
+      const laterId = room.members['later']?.userId;
+      if (laterId === undefined) throw new Error('Missing second guest');
+      await db
+        .updateTable('workspace_members')
+        .set({
+          access_kind: 'guest',
+          guest_since: since,
+          guest_expires_at: end,
+          guest_modules: ['chat'],
+        })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', laterId)
+        .execute();
+      const first = await requireChannelById(db, userId, room.channelId);
+      const later = await requireChannelById(db, laterId, room.channelId);
+      const scopes = liveChannelScope();
+      const a = scopes(db, first).expiry;
+      const b = scopes(db, later).expiry;
+      if (a === undefined || b === undefined) throw new Error('Missing two guest expiries');
+      await db
+        .updateTable('workspace_members')
+        .set({ guest_expires_at: new Date(Date.now() - 1000) })
+        .where('workspace_id', '=', room.workspaceId)
+        .where('user_id', '=', userId)
+        .execute();
+      const signal = new AbortController().signal;
+      expect(await Promise.all([a.recheck(signal), b.recheck(signal)])).toEqual([false, true]);
+    });
+  });
+
+  test('a channel guest scope cannot authorize user/session frames for another audience', async () => {
+    await withRollback(async (db) => {
+      const { room, userId } = await historyFixture(db);
+      const guest = await requireChannelById(db, userId, room.channelId);
+      const owner = await requireWorkspaceMembership(
+        db,
+        room.members['owner']?.userId ?? '',
+        room.workspaceId,
+      );
+      const other = await createChannel(db, fixedClock(new Date()), owner, { name: 'not-invited' });
+      const scope = liveChannelScope()(db, guest);
+
+      const ts = Date.now();
+      const frames: readonly ServerFrame[] = [
+        ...(
+          [
+            'CHANNELS_UPDATED',
+            'INBOX_UPDATED',
+            'NOTIFICATIONS_UPDATED',
+            'REMINDERS_UPDATED',
+            'SAVED_UPDATED',
+            'WORKSPACE_UPDATED',
+          ] as const
+        ).map((event) => ({ event, data: { workspaceId: room.workspaceId }, ts })),
+        { event: 'ACCESS_REVOKED', data: { channelIds: [room.channelId] }, ts },
+        { event: 'ACK', data: { id: messageId(new Date()) }, ts },
+        { event: 'CHANNEL_ADDED', data: other, ts },
+        { event: 'DEEP_WORK_UPDATED', data: { workspaceId: room.workspaceId, until: null }, ts },
+        { event: 'ERROR', data: { code: 'FORBIDDEN', message: 'Not this audience.' }, ts },
+        { event: 'PONG', data: {}, ts },
+        {
+          event: 'PRESENCE',
+          data: { changes: [{ userId: owner.userId, online: true, away: false, version: 1 }] },
+          ts,
+        },
+        { event: 'SESSION_ENDED', data: { reason: 'signed-out' }, ts },
+      ];
+      const signal = new AbortController().signal;
+      for (const frame of frames)
+        expect({ event: frame.event, accepted: await scope.accepts(frame, signal) }).toEqual({
+          event: frame.event,
+          accepted: false,
+        });
+      expect(
+        await scope.accepts(
+          {
+            event: 'TYPING',
+            data: { channelId: room.channelId, userId: owner.userId, ttlMs: 1000 },
+            ts,
+          },
+          signal,
+        ),
+      ).toBe(true);
     });
   });
 
@@ -515,11 +775,16 @@ describe('integration: restricted workspace guests', () => {
       expect(page.data.map((n) => n.message.id)).toEqual([replyId]);
       expect(page.nextCursor).toBeNull();
       expect(page.data[0]?.thread).toEqual({ rootId: oldId, excerpt: null, authorId: null });
-      expect(
-        await refusal(
-          async () => await messageWindow(db, await requireMessageById(db, userId, replyId)),
-        ),
-      ).toBe('MESSAGE_NOT_FOUND');
+      const window = await messageWindow(db, await requireMessageById(db, userId, replyId));
+      expect(window.target.id).toBe(replyId);
+      expect(window.data.find((message) => message.id === oldId)).toMatchObject({
+        historyHidden: true,
+        sender: null,
+        content: '',
+        attachments: [],
+        thread: { replyCount: 1, resolvedAt: null, resolvedBy: null },
+      });
+      expect(await refusal(() => requireMessageById(db, userId, oldId))).toBe('MESSAGE_NOT_FOUND');
     });
   });
 

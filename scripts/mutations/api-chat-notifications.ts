@@ -10,8 +10,9 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     id: 'catch-up-receipt-bound-from-other-thread',
     why: 'A caller clears a thread with an unrelated reply boundary.',
     file: 'apps/api/src/features/chat/notifications/notifications.ts',
-    find: "    .where('parent_id', '=', rootId)\n    .executeTakeFirst();",
-    replace: '    .executeTakeFirst();',
+    find: "    .where('parent_id', '=', rootId)\n    .where(withinCurrentMessageHistory(transaction, root.context))\n    .executeTakeFirst();",
+    replace:
+      '    .where(withinCurrentMessageHistory(transaction, root.context))\n    .executeTakeFirst();',
     tests: ['apps/api/src/features/chat/channels/read-scopes.integration.test.ts'],
   },
   {

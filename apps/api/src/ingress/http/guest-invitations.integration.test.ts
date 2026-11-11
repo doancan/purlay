@@ -90,7 +90,20 @@ describe('integration: guest invitation HTTP admission', () => {
       const history = await call('GET', `/api/channels/${room.channelId}/messages`);
       expect(history.status).toBe(200);
       expect(await history.json()).toMatchObject({ data: [], nextCursor: null });
-      expect((await call('GET', `/api/messages/${oldId}/context`)).status).toBe(404);
+      const afterId = messageId(clock.now());
+      await db
+        .insertInto('messages')
+        .values({
+          id: afterId,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          sender_id: owner.userId,
+          content: 'After admission',
+          created_at: clock.now(),
+        })
+        .execute();
+      expect((await call('GET', `/api/messages/${afterId}`)).status).toBe(200);
+      expect((await call('GET', `/api/messages/${oldId}`)).status).toBe(404);
       expect((await call('GET', `/api/channels/${hidden.id}/messages`)).status).toBe(404);
     });
   });

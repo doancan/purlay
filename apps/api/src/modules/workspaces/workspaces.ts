@@ -349,6 +349,7 @@ export const membersIn = async (
       ...PROFILE_COLUMNS,
       'workspace_members.role',
       'workspace_members.joined_at',
+      'workspace_members.access_kind',
     ])
     .where('workspace_members.workspace_id', '=', context.workspaceId)
     .where('users.deleted_at', 'is', null)
@@ -369,5 +370,6 @@ export const membersIn = async (
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
     profile: asProfile(row),
+    ...(row.access_kind === 'guest' ? { accessKind: 'guest' as const } : {}),
   }));
 };
