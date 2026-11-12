@@ -226,42 +226,47 @@ describe('integration harness cost', () => {
     return lowest;
   };
 
-  test('a template is built from nothing, then cloned and dropped, inside the hook budget', async () => {
-    const building = await floorOf(TEMPLATE_BUDGET_MS, async () => {
-      const scratch = `purlay_budget_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
-      try {
-        return (await timed(async () => await buildIntegrationTemplate(scratch))).ms;
-      } finally {
-        await dropDatabases([scratch]);
-      }
-    });
-
-    let applied = 0;
-    let cloning = Number.POSITIVE_INFINITY;
-    let dropping = Number.POSITIVE_INFINITY;
-    for (
-      let trial = 0;
-      trial < 3 && (cloning >= CLONE_BUDGET_MS || dropping >= DROP_BUDGET_MS);
-      trial += 1
-    ) {
-      const cloned = await timed(async () => await cloneIntegrationDatabase());
-      // The control: what was timed has the whole schema in it, so it is not quick for being empty.
-      const migrations = await sql<{
-        n: string;
-      }>`select count(*) as n from kysely_migration`.execute(cloned.result.db);
-      applied = Number(migrations.rows[0]?.n);
-      const dropped = await timed(async () => {
-        await cloned.result.drop();
+  test(
+    'a template is built from nothing, then cloned and dropped, inside the hook budget',
+    async () => {
+      const building = await floorOf(TEMPLATE_BUDGET_MS, async () => {
+        const scratch = `purlay_budget_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
+        try {
+          return (await timed(async () => await buildIntegrationTemplate(scratch))).ms;
+        } finally {
+          await dropDatabases([scratch]);
+        }
       });
-      cloning = Math.min(cloning, cloned.ms);
-      dropping = Math.min(dropping, dropped.ms);
-    }
-    expect(applied).toBeGreaterThan(1);
 
-    expect(building).toBeLessThan(TEMPLATE_BUDGET_MS);
-    expect(cloning).toBeLessThan(CLONE_BUDGET_MS);
-    expect(dropping).toBeLessThan(DROP_BUDGET_MS);
-  });
+      let applied = 0;
+      let cloning = Number.POSITIVE_INFINITY;
+      let dropping = Number.POSITIVE_INFINITY;
+      for (
+        let trial = 0;
+        trial < 3 && (cloning >= CLONE_BUDGET_MS || dropping >= DROP_BUDGET_MS);
+        trial += 1
+      ) {
+        const cloned = await timed(async () => await cloneIntegrationDatabase());
+        // The control: what was timed has the whole schema in it, so it is not quick for being empty.
+        const migrations = await sql<{
+          n: string;
+        }>`select count(*) as n from kysely_migration`.execute(cloned.result.db);
+        applied = Number(migrations.rows[0]?.n);
+        const dropped = await timed(async () => {
+          await cloned.result.drop();
+        });
+        cloning = Math.min(cloning, cloned.ms);
+        dropping = Math.min(dropping, dropped.ms);
+      }
+      expect(applied).toBeGreaterThan(1);
+
+      expect(building).toBeLessThan(TEMPLATE_BUDGET_MS);
+      expect(cloning).toBeLessThan(CLONE_BUDGET_MS);
+      expect(dropping).toBeLessThan(DROP_BUDGET_MS);
+      // Up to three existing measurement trials and their cleanup must finish before the test's timer (see #1420).
+    },
+    CLONE_HOOK_MS,
+  );
 });
 
 describe('integration: the database the rollback harness uses directly', () => {
