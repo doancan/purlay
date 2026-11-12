@@ -431,9 +431,10 @@ jobs:
   # declared in exactly one place. (D-45)
   schema:
     runs-on: ubuntu-latest
-    # The suite takes about ten minutes by itself (582 s of tests on 2026-10-27, and it grows with every
-    # feature), so the ceiling is twice that: it catches a hang, not a suite that got longer.
-    timeout-minutes: 20
+    # Main 2026-11-12: 25,894 passing tests took 1,108 s; setup, schema and the real performance
+    # measurements exhausted the old 20-minute job ceiling during latency trials. Leave headroom
+    # for the complete gate; test timeouts, coverage and performance budgets remain unchanged.
+    timeout-minutes: 30
     # Declared once for the job. The development credentials are the compose
     # file's; a test fails if this, the schema check's default and the compose
     # file stop agreeing.
