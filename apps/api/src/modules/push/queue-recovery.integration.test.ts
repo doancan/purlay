@@ -18,6 +18,80 @@ import { createPushSender } from './sender';
 afterAll(closeIntegrationDatabase);
 
 describe('integration: durable push recovery', () => {
+  test('a crash during the final allowed handoff retires the occurrence without another provider attempt', async () => {
+    await withRollback(async (db) => {
+      const world = await pendingPush(db);
+      const service = aPushService();
+      const queue = world.dependencies(service.post);
+      for (let attempt = 0; attempt < PUSH_ATTEMPTS_MAX; attempt++) {
+        const claim = (await claimPush(queue))!;
+        expect(claim.attempts).toBe(attempt);
+        expect(await beginPushAttempt(db, claim, world.clock.now(), KEYS.publicKey)).toBe(true);
+        // A dead process never settles its handoff; the next node recovers at lease expiry.
+        world.clock.to(new Date(world.clock.now().getTime() + PUSH_LEASE_MS));
+      }
+      const restarted = await createPushSender(queue);
+      await restarted.flush(10_000);
+      expect(service.sent).toHaveLength(0);
+      expect(
+        await db
+          .selectFrom('push_deliveries')
+          .select(['state', 'attempts', 'lease_id'])
+          .where('subscription_id', '=', world.devices[0]!.id)
+          .execute(),
+      ).toEqual([{ state: 'exhausted', attempts: PUSH_ATTEMPTS_MAX, lease_id: null }]);
+      expect(
+        await db
+          .selectFrom('push_intents')
+          .select('state')
+          .where('user_id', '=', world.reader)
+          .execute(),
+      ).toEqual([{ state: 'completed' }]);
+      expect(
+        await db
+          .selectFrom('push_subscriptions')
+          .select('failures')
+          .where('user_id', '=', world.reader)
+          .execute(),
+      ).toEqual([{ failures: 0 }]);
+    });
+  });
+
+  test('a stale occurrence wake-up defers to its pending device deadline without sending early', async () => {
+    await withRollback(async (db) => {
+      const world = await pendingPush(db);
+      const later = new Date(NOW.getTime() + PUSH_LEASE_MS);
+      await db
+        .updateTable('push_deliveries')
+        .set({ next_attempt_at: later })
+        .where('subscription_id', '=', world.devices[0]!.id)
+        .execute();
+      const service = aPushService();
+      const queue = world.dependencies(service.post);
+      expect(await claimPush(queue)).toBeUndefined();
+      expect(
+        await db
+          .selectFrom('push_intents')
+          .select(['state', 'next_check_at'])
+          .where('user_id', '=', world.reader)
+          .execute(),
+      ).toEqual([{ state: 'admitted', next_check_at: later }]);
+      const sender = await createPushSender(queue);
+      await sender.flush(10_000);
+      expect(service.sent).toHaveLength(0);
+      world.clock.to(later);
+      await sender.flush(10_000);
+      expect(service.sent).toHaveLength(1);
+      expect(
+        await db
+          .selectFrom('push_deliveries')
+          .select(['state', 'attempts'])
+          .where('subscription_id', '=', world.devices[0]!.id)
+          .execute(),
+      ).toEqual([{ state: 'delivered', attempts: 1 }]);
+    });
+  });
+
   test('an expired unreplaced lease cannot cancel or acknowledge still-recoverable work', async () => {
     await withRollback(async (db) => {
       const world = await pendingPush(db);
