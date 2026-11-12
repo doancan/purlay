@@ -26,11 +26,13 @@ interface Subscription {
   readonly auth: string;
   readonly locale: string;
   readonly serverKey: string;
+  readonly generation: string;
 }
 
 export interface Device extends Omit<Subscription, 'locale'> {
   readonly workspaceId: string;
-  readonly source: { readonly messageId: string } | { readonly entryId: string };
+  readonly source:
+    { readonly messageId: string; readonly notificationId?: string } | { readonly entryId: string };
   readonly payload: PushPayload;
   /** The module whose notice this is, for the failure counter's label; absent, the sender's owner (chat's messages). */
   readonly module?: string;
@@ -68,6 +70,7 @@ const subscriptionsOf = async (
     .innerJoin('sessions as live', 'live.id', 's.session_id')
     .select([
       's.id',
+      's.generation',
       's.server_key as serverKey',
       's.user_id as userId',
       's.session_id as sessionId',
@@ -77,7 +80,9 @@ const subscriptionsOf = async (
       'person.locale',
     ])
     .where('s.user_id', 'in', userIds)
+    .whereRef('live.user_id', '=', 's.user_id')
     .where('person.deleted_at', 'is', null)
+    .where('person.suspended_at', 'is', null)
     .where('live.expires_at', '>', clock.now())
     .where('s.server_key', '=', current.publicKey)
     // A person's devices in the order they were subscribed: the same order every time.
@@ -93,9 +98,10 @@ export const devicesFor = async (
   dependencies: DeviceFinder,
   messageId: string,
   userIds: readonly string[],
+  notificationId?: string,
 ): Promise<Device[]> => {
   const { database, attention, log, notices } = dependencies;
-  const told = await notices.of(database, messageId, userIds);
+  const told = await notices.of(database, messageId, userIds, notificationId);
   if (told.length === 0) return [];
   const subscriptions = await subscriptionsOf(dependencies, [
     ...new Set(told.map((notice) => notice.userId)),
@@ -127,7 +133,7 @@ export const devicesFor = async (
     return [
       {
         ...row,
-        source: { messageId },
+        source: { messageId, ...(notificationId === undefined ? {} : { notificationId }) },
         payload: {
           // A channel by its name; a group by its people; a direct message by who wrote it.
           title:
@@ -157,7 +163,7 @@ export const routeInbox = async (
     .selectFrom('inbox_entries as e')
     .innerJoin('workspaces as w', 'w.id', 'e.workspace_id')
     .innerJoin('users as person', 'person.id', 'e.user_id')
-    .innerJoin('users as actor', 'actor.id', 'e.actor_id')
+    .leftJoin('users as actor', 'actor.id', 'e.actor_id')
     .select([
       'e.id',
       'e.user_id as userId',
@@ -174,6 +180,7 @@ export const routeInbox = async (
     .where('e.read_at', 'is', null)
     .where('w.deleted_at', 'is', null)
     .where('person.deleted_at', 'is', null)
+    .where('person.suspended_at', 'is', null)
     .execute();
   if (entries.length === 0) return { devices: [], waiting: new Set() };
   const now = clock.now();
@@ -203,7 +210,11 @@ export const routeInbox = async (
     ready
       .filter((entry) => entry.userId === subscription.userId)
       .flatMap((entry) => {
-        const saying = noticeWords(entry.kind, localeOf(subscription.locale), entry.actorName);
+        const saying = noticeWords(
+          entry.kind,
+          localeOf(subscription.locale),
+          entry.actorName ?? 'Purlay',
+        );
         if (saying === undefined) {
           log.warn('push not sent: no words for the kind', { kind: entry.kind });
           return [];

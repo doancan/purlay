@@ -30,6 +30,15 @@ import { OUTBOX_STALE_AFTER_SECONDS } from './platform/outbox-report';
 import { OUTBOX_DEAD_KEPT_DAYS } from './platform/outbox-sweep';
 import { DEFAULT_DEADLINE_MS } from './platform/request-deadline';
 import { SOCKET_FRAME_BUDGET } from './realtime/rate-limiter';
+import {
+  NOTICE_PUSH_BUDGET,
+  PUSH_ATTEMPTS_MAX,
+  PUSH_LEASE_MS,
+  PUSH_PENDING_PER_PERSON,
+  PUSH_POSTS_AT_ONCE,
+  PUSH_POSTS_PER_PERSON,
+  PUSH_TTL_SECONDS,
+} from './platform/push-policy';
 
 /** As prose: a line break in Markdown is a space, and rewrapping a paragraph changes nothing. */
 const prose = (path: string): string => readFileSync(path, 'utf8').replace(/\s+/g, ' ');
@@ -56,14 +65,58 @@ const NUMBER_WORDS = [
   'fifteen',
 ];
 
-/** The number a test file gives a cap constant, read from its text: the file is a test, so it cannot be imported. */
+const numberWord = (value: number): string => {
+  const word = NUMBER_WORDS[value];
+  if (word === undefined) throw new Error(`No prose number for ${String(value)}`);
+  return word;
+};
+
+/** The numeric cap a source file declares; executable test helpers cannot be imported to read it. */
 const capIn = (file: string, name: string): number => {
-  const found = new RegExp(`const ${name} = (\\d+);`).exec(readFileSync(file, 'utf8'));
+  const found = new RegExp(`const ${name} = (\\d[\\d_]*);`).exec(readFileSync(file, 'utf8'));
   if (found?.[1] === undefined) throw new Error(`${file} has no \`const ${name} = <number>;\``);
-  return Number(found[1]);
+  return Number(found[1].replaceAll('_', ''));
 };
 
 describe('numbers the documents state', () => {
+  test('durable push documents state the actual admission, lifetime, retry and maintenance bounds', () => {
+    const decision = prose('docs/DECISIONS.md').split('### D-307.')[1]?.toLowerCase() ?? '';
+    const configuration = prose('docs/CONFIG.md').toLowerCase();
+    const schema = prose('docs/SCHEMA.md').toLowerCase();
+    const push = 'apps/api/src/modules/push/';
+    expect(decision).toContain(`within ${numberWord(PUSH_TTL_SECONDS / 86_400)} day`);
+    expect(decision).toContain(
+      `${new Intl.NumberFormat('en-US').format(PUSH_PENDING_PER_PERSON)} occurrences per recipient`,
+    );
+    expect(decision).toContain(`at most ${String(PUSH_POSTS_AT_ONCE)} handoffs`);
+    expect(decision).toContain(`${numberWord(PUSH_POSTS_PER_PERSON)} live claims per recipient`);
+    expect(decision).toContain(`${numberWord(PUSH_ATTEMPTS_MAX)} eligible attempts`);
+    expect(configuration).toContain(
+      `retry up to ${numberWord(PUSH_ATTEMPTS_MAX)} eligible attempts`,
+    );
+    expect(schema).toContain(
+      `${numberWord(PUSH_ATTEMPTS_MAX)} eligible attempts; ${String(PUSH_LEASE_MS / 1_000)}-second claim`,
+    );
+    expect(decision).toContain(`a ${String(PUSH_LEASE_MS / 1_000)}-second lease`);
+    expect(decision).toContain(
+      `(${numberWord(NOTICE_PUSH_BUDGET.burst)} at once, then ${numberWord(NOTICE_PUSH_BUDGET.perSecond * 60)} a minute)`,
+    );
+    expect(decision).toContain(
+      `a ${numberWord(capIn(push + 'sender.ts', 'POLL_MS') / 1_000)}-second poll`,
+    );
+    expect(configuration).toContain(
+      `for ${numberWord(capIn(push + 'sender.ts', 'FLUSH_BOUND_MS') / 1_000)} seconds`,
+    );
+    expect(decision).toContain(
+      `indexed batches of ${String(capIn(push + 'maintenance.ts', 'SWEEP_BATCH_MAX'))}`,
+    );
+    expect(decision).toContain(
+      `at most ${numberWord(capIn(push + 'sender.ts', 'MAX_MAINTENANCE_PASSES'))} passes`,
+    );
+    expect(decision).toContain(
+      `exponential ${String(capIn(push + 'queue-result.ts', 'BACKOFF_BASE_MS') / 1_000)}-second-to-${String(capIn(push + 'queue-result.ts', 'BACKOFF_MAX_MS') / 60_000)}-minute backoff`,
+    );
+  });
   test('API.md states the page cap and default the contract enforces', () => {
     expect(api).toContain(
       `capped at ${String(PAGE_LIMIT.max)} (default ${String(PAGE_LIMIT.default)})`,

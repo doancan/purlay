@@ -23,7 +23,8 @@ import { memberReadScope } from '../channels/read-scope';
  */
 import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
-import type { ChannelState, NEEDS_YOU } from '@purlay/types';
+import { NEEDS_YOU, type ChannelState } from '@purlay/types';
+import { enqueuePush } from '../../../modules/push/notices';
 import { channelAudienceQuery, type ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
@@ -211,8 +212,29 @@ export const notify = async (
       }),
     )
     .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
-    .returning('user_id')
+    .returning(['id', 'user_id', 'type', 'read_at', 'suppressed_by_deep_work'])
     .execute();
+  await enqueuePush(
+    executor,
+    now,
+    inserted
+      .filter(
+        (row) =>
+          row.read_at === null &&
+          !row.suppressed_by_deep_work &&
+          NEEDS_YOU.some((kind) => kind === row.type),
+      )
+      .map((row) => ({
+        source: 'message',
+        sourceId: row.id,
+        recordId: messageId,
+        workspaceId: context.workspaceId,
+        userId: row.user_id,
+        module: 'chat',
+        kind: row.type,
+        createdAt: now,
+      })),
+  );
   return inserted.map((row) => row.user_id);
 };
 

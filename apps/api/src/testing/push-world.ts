@@ -10,6 +10,7 @@ import type { WrittenNotice } from '../platform/ports/notification-sink';
 import { requireWorkspaceMembership } from '../platform/tenancy';
 import { NOW } from './doubles';
 import { KEYS } from './push-service';
+import { enableTestPush } from './push-config';
 import { aSession } from './signed-in';
 import { aUniqueSlug, aUserRow } from './users';
 import { notificationSink } from '../modules/inbox/sink';
@@ -53,6 +54,7 @@ export interface World {
 
 export const aWorld = async (db: Transaction): Promise<World> => {
   const clock = movable(NOW);
+  await enableTestPush(db, clock);
   const workspaceId = (
     await db
       .insertInto('workspaces')

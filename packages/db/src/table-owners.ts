@@ -28,6 +28,9 @@ export const TABLE_OWNERS = {
   // The facts one module tells another, a row for each consumer (D-288): only `platform/outbox*.ts` names it.
   outbox: 'core',
   personal_exports: 'core',
+  push_intents: 'core',
+  push_deliveries: 'core',
+  push_notice_budgets: 'core',
   push_subscriptions: 'core',
   rate_limits: 'core',
   server_audit_log: 'core',

@@ -545,11 +545,49 @@ export interface PinnedMessages {
   workspace_id: string;
 }
 
+export interface PushDeliveries {
+  attempts: Generated<number>;
+  generation: string;
+  intent_id: string;
+  last_failure: string | null;
+  last_status: number | null;
+  lease_id: string | null;
+  next_attempt_at: Timestamp;
+  session_id: string;
+  state: Generated<string>;
+  subscription_id: string;
+}
+
+export interface PushIntents {
+  created_at: Timestamp;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  kind: string;
+  module: string;
+  next_check_at: Timestamp;
+  record_id: string;
+  reported_at: Timestamp | null;
+  source_id: string;
+  source_kind: string;
+  state: Generated<string>;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface PushNoticeBudgets {
+  kind: string;
+  module: string;
+  next_at: Timestamp;
+  updated_at: Timestamp;
+  user_id: string;
+}
+
 export interface PushSubscriptions {
   auth: string;
   created_at: Generated<Timestamp>;
   endpoint: string;
   failures: Generated<number>;
+  generation: Generated<string>;
   id: Generated<string>;
   p256dh: string;
   server_key: string;
@@ -931,6 +969,9 @@ export interface DB {
   outbox: Outbox;
   personal_exports: PersonalExports;
   pinned_messages: PinnedMessages;
+  push_deliveries: PushDeliveries;
+  push_intents: PushIntents;
+  push_notice_budgets: PushNoticeBudgets;
   push_subscriptions: PushSubscriptions;
   rate_limits: RateLimits;
   reactions: Reactions;

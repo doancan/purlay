@@ -42,7 +42,6 @@ import {
   suspensionPeersBehind,
 } from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
-import { inProcessRateLimiter } from './realtime/rate-limiter';
 import { sharedRealtime } from './realtime/shared';
 import { createApp } from './ingress/http/app';
 import { createLogger } from './platform/logging';
@@ -58,7 +57,7 @@ import { migrateOnStart, untilMigrated } from './platform/migrate-on-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
 import { inMemoryAttention } from './platform/attention';
-import { NOTICE_PUSH_BUDGET, PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
+import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
 import { seamsOfModules } from './module-seams-wiring';
@@ -154,14 +153,17 @@ const browserPush = pushConfiguration(
   systemClock,
   config,
 );
+let pushAvailable = false;
 const push = await createPushSender({
+  available: () => pushAvailable,
   database,
   clock: systemClock,
   log,
   attention,
   notices: modules.pushNotices,
   noticeWords: modules.noticeWords,
-  noticeThrottle: inProcessRateLimiter(systemClock, NOTICE_PUSH_BUDGET),
+  inboxKinds: new Map([...modules.noticeOwners].filter(([kind]) => modules.pushedKinds.has(kind))),
+  effectiveModules: modules.effectiveModules,
   failures: metrics.pushFailures,
   owner: modules.pushOwner,
   // The checked address lookup an external image uses, and the push's own timeout (D-126 §6).
@@ -416,6 +418,8 @@ if (config.MIGRATE_ON_START === true) {
   }
 }
 services.settle(runtime);
+// fromSettings imported push settings after migrations. No durable query may run before that.
+pushAvailable = !workerLifecycle.stopped;
 // From here the table exists: the stopped modules are kept within the TTL on this node whether or not anything asks.
 suspension.start();
 // What the modules that run do on a timer, each iteration held to its module's share and deadline (`modules/workers`).

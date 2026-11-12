@@ -1378,6 +1378,22 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
   },
   {
+    id: 'workspace-push-busy-marked-purged',
+    why: 'Workspace erasure remains retryable until every busy operational push record can be removed.',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: 'if (remaining !== undefined)',
+    replace: 'if (false)',
+    tests: ['apps/api/src/modules/push/workspace-purge.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'workspace-push-step-omitted',
+    why: 'A purged workspace must not retain its notification journal or its captured device targets.',
+    file: 'apps/api/src/modules/workspaces/deletion-purge.ts',
+    find: '    { batch: pushBatch, size: WORKSPACE_PURGE_BATCH, messages: false },\n',
+    replace: '',
+    tests: ['apps/api/src/ingress/http/workspace-purge.integration.test.ts'],
+  },
+  {
     id: 'workspace-read-ignores-deletion',
     why: 'a workspace deleted under a live context is still read and returned',
     file: WORKSPACES,

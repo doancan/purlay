@@ -11,6 +11,7 @@ import {
 } from '../../../platform/events';
 import type { Logger } from '../../../platform/logging';
 import { atomicallyOn } from '../../../platform/transactions';
+import { enqueuePush } from '../../../modules/push/notices';
 import type { PushSender } from '../../../modules/push/sender';
 
 /** A reminder is personal attention to an existing message, not a second unread message. */
@@ -72,7 +73,8 @@ export const deliverReminders = async ({
           .where('message_id', '=', row.message_id)
           .where('type', '=', 'reminder')
           .execute();
-        await tx
+        const createdAt = clock.now();
+        const notice = await tx
           .insertInto('notifications')
           .values({
             user_id: row.user_id,
@@ -80,11 +82,25 @@ export const deliverReminders = async ({
             channel_id: row.channel_id,
             message_id: row.message_id,
             type: 'reminder',
-            created_at: clock.now(),
+            created_at: createdAt,
             suppressed_by_deep_work:
               member?.deep_work_until != null && member.deep_work_until > clock.now(),
           })
-          .execute();
+          .returning(['id', 'suppressed_by_deep_work'])
+          .executeTakeFirstOrThrow();
+        if (!notice.suppressed_by_deep_work)
+          await enqueuePush(tx, createdAt, [
+            {
+              source: 'message',
+              sourceId: notice.id,
+              recordId: row.message_id,
+              workspaceId: row.workspace_id,
+              userId: row.user_id,
+              module: 'chat',
+              kind: 'reminder',
+              createdAt,
+            },
+          ]);
       }
       return { row, visible };
     });

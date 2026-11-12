@@ -9,6 +9,7 @@
 import type { Executor } from '@purlay/db';
 import type { Attention } from '../../platform/attention';
 import type { Clock } from '../../platform/clock';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import type { Logger } from '../../platform/logging';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
@@ -18,12 +19,13 @@ import { encryptPush, freshParts } from './encrypt';
 import type { FailureCount } from './failures';
 import type { PushNotices } from './notices';
 import { vapidAuthorization, vapidSigningKey } from './vapid';
+import { beginPushAttempt, ownsPushClaim, type PushClaim } from './queue';
+import { currentPushDevice, currentPushSource } from './authority';
+import { applyPushResponse } from './response';
+import type { PushOutcome } from './queue-result';
 
 /** The largest recorded failure streak; temporary failures never expire a subscription. */
 export const PUSH_FAILURES_MAX = 5;
-/** How long a push service keeps it for a device that is off: a day, then it is stale. */
-export const PUSH_TTL_SECONDS = 24 * 60 * 60;
-
 /** The answers that are this server's request refused, not the device's absence. */
 const OUR_REQUEST_REFUSED = new Set([400, 401, 403, 413]);
 
@@ -41,111 +43,93 @@ interface DeliveryDependencies {
   readonly post: PushPost;
   readonly attention: Attention;
   readonly notices: PushNotices;
+  readonly effectiveModules: EntitlementPolicy['effective'];
 }
 
 interface DeliveryOptions {
   readonly failed: FailureCount;
-  /** Holds a module's notice (by its entry) because its person went into Deep Work while the push waited. */
-  readonly hold: (entryId: string, now: number, deviceId: string) => void;
 }
 
 export const createDelivery = async (
   dependencies: DeliveryDependencies,
-  { failed, hold }: DeliveryOptions,
-): Promise<(device: Device) => Promise<void>> => {
+  { failed }: DeliveryOptions,
+): Promise<(device: Device, claim: PushClaim) => Promise<PushOutcome>> => {
   const { database, clock, log, keys, post } = dependencies;
   // Imported once, here, so a key that cannot sign stops the start rather than the first push.
   let cached: { readonly publicKey: string; readonly signing: CryptoKey } | undefined;
   if (typeof keys !== 'function')
     cached = { publicKey: keys.publicKey, signing: await vapidSigningKey(keys) };
 
-  const forget = async (device: Device): Promise<void> => {
-    await database
-      .deleteFrom('push_subscriptions')
-      .where('id', '=', device.id)
-      .where('user_id', '=', device.userId)
-      .where('session_id', '=', device.sessionId)
-      .execute();
-  };
+  const forget = async (device: Device, claim: PushClaim): Promise<boolean> =>
+    await applyPushResponse(database, clock, claim, device, async (tx) => {
+      await tx
+        .deleteFrom('push_subscriptions')
+        .where('id', '=', device.id)
+        .where('user_id', '=', device.userId)
+        .where('session_id', '=', device.sessionId)
+        .where('generation', '=', device.generation)
+        .execute();
+    });
 
-  /** Still the person's, in a live session: asked right before the push goes. */
-  const stillTheirs = async (device: Device): Promise<{ readonly sound: boolean } | undefined> =>
-    await database
-      .selectFrom('push_subscriptions as s')
-      .innerJoin('sessions as live', 'live.id', 's.session_id')
-      .select('s.sound')
-      .where('s.id', '=', device.id)
-      .where('s.user_id', '=', device.userId)
-      .where('s.session_id', '=', device.sessionId)
-      .where('live.expires_at', '>', clock.now())
-      .executeTakeFirst();
-
-  const counted = async (device: Device, url: URL, posted: Posted): Promise<void> => {
-    await database
-      .updateTable('push_subscriptions')
-      .set((eb) => ({
-        failures: eb(
-          eb.fn<number>('least', [eb.ref('failures'), eb.val(PUSH_FAILURES_MAX - 1)]),
-          '+',
-          1,
-        ),
-      }))
-      .where('id', '=', device.id)
-      .where('user_id', '=', device.userId)
-      .where('session_id', '=', device.sessionId)
-      .execute();
+  const counted = async (
+    device: Device,
+    url: URL,
+    posted: Posted,
+    claim: PushClaim,
+  ): Promise<boolean> => {
+    const applied = await applyPushResponse(database, clock, claim, device, async (tx) => {
+      await tx
+        .updateTable('push_subscriptions')
+        .set((eb) => ({
+          failures: eb(
+            eb.fn<number>('least', [eb.ref('failures'), eb.val(PUSH_FAILURES_MAX - 1)]),
+            '+',
+            1,
+          ),
+        }))
+        .where('id', '=', device.id)
+        .where('user_id', '=', device.userId)
+        .where('session_id', '=', device.sessionId)
+        .where('generation', '=', device.generation)
+        .execute();
+    });
+    if (!applied) return false;
     const said = {
       host: url.hostname,
-      ...(posted.kind === 'answered' ? { status: posted.status } : { reason: posted.reason }),
+      ...(posted.kind === 'answered' ? { status: posted.status } : { reason: 'network' }),
     };
     failed('not_taken', 1, device.module);
     log.warn('push not taken', said);
+    return true;
   };
 
-  const stillRelevant = async (device: Device): Promise<boolean> => {
-    if ('messageId' in device.source) {
-      return await dependencies.notices.canDeliver(
-        database,
-        device.source.messageId,
-        device.userId,
-      );
-    }
-    return (
-      (await database
-        .selectFrom('inbox_entries as e')
-        .innerJoin('workspace_members as member', (join) =>
-          join
-            .onRef('member.workspace_id', '=', 'e.workspace_id')
-            .onRef('member.user_id', '=', 'e.user_id'),
-        )
-        .innerJoin('workspaces as w', 'w.id', 'e.workspace_id')
-        .innerJoin('users as person', 'person.id', 'e.user_id')
-        .select('e.id')
-        .where('e.id', '=', device.source.entryId)
-        .where('e.user_id', '=', device.userId)
-        .where('e.read_at', 'is', null)
-        .where('w.deleted_at', 'is', null)
-        .where('person.deleted_at', 'is', null)
-        .where('person.suspended_at', 'is', null)
-        .executeTakeFirst()) !== undefined
+  const quiet = async (device: Device): Promise<boolean> =>
+    (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(
+      device.userId,
     );
-  };
 
-  return async (device) => {
+  return async (device, claim) => {
     const url = externalImageAddress(device.endpoint);
     if (url === null) {
       log.info('push device forgotten', { reason: 'not an address push may reach' });
-      await forget(device);
-      return;
+      return { kind: (await forget(device, claim)) ? 'canceled' : 'retry' };
     }
-    const sound = (await stillTheirs(device))?.sound ?? false;
+    const first = await currentPushDevice(dependencies, claim);
+    if (first === undefined || !(await currentPushSource(dependencies, claim)))
+      return { kind: 'canceled' };
+    if (dependencies.attention.active(device.userId, device.workspaceId))
+      return { kind: 'canceled' };
+    if (await quiet(device)) return { kind: 'held' };
+    const current = typeof keys === 'function' ? await keys() : keys;
+    if (current?.publicKey !== device.serverKey) return { kind: 'canceled' };
+    if (!(await beginPushAttempt(database, claim, clock.now(), device.serverKey)))
+      return { kind: 'canceled' };
+    const sound = first.sound;
     const body = await encryptPush(
       device,
       new TextEncoder().encode(JSON.stringify({ ...device.payload, silent: !sound })),
       await freshParts(),
     );
-    const current = typeof keys === 'function' ? await keys() : keys;
-    if (current?.publicKey !== device.serverKey) return;
     if (cached?.publicKey !== current.publicKey)
       cached = { publicKey: current.publicKey, signing: await vapidSigningKey(current) };
     const authorization = await vapidAuthorization(
@@ -154,55 +138,76 @@ export const createDelivery = async (
       device.endpoint,
       clock.now(),
     );
-    const live = await stillTheirs(device);
-    if (live === undefined) return;
-    // Changed while encryption waited: retire this prepared alert, just as a page retires a stale card.
-    if (live.sound !== sound) return;
-    if (!(await stillRelevant(device))) return;
-    if (dependencies.attention.active(device.userId, device.workspaceId)) return;
-    if (
-      (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(
-        device.userId,
-      )
-    ) {
-      if ('entryId' in device.source) hold(device.source.entryId, clock.now().getTime(), device.id);
-      return;
-    }
-    if (typeof keys === 'function' && (await keys())?.publicKey !== device.serverKey) return;
+    const live = await currentPushDevice(dependencies, claim);
+    if (live === undefined) return { kind: 'canceled' };
+    // Rebuild a changed sound preference on the next attempt; never post the stale prepared body.
+    if (live.sound !== sound) return { kind: 'retry' };
+    if (!(await currentPushSource(dependencies, claim))) return { kind: 'canceled' };
+    if (dependencies.attention.active(device.userId, device.workspaceId))
+      return { kind: 'canceled' };
+    if (await quiet(device)) return { kind: 'held' };
+    if (typeof keys === 'function' && (await keys())?.publicKey !== device.serverKey)
+      return { kind: 'canceled' };
+    const topic = Buffer.from(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(`${claim.intentId}:${claim.subscriptionId}:${claim.generation}`),
+      ),
+    )
+      .toString('base64url')
+      .slice(0, 32);
+    if (!(await ownsPushClaim(database, claim, clock.now(), device.serverKey)))
+      return { kind: 'canceled' };
+    const ttl = Math.floor((claim.expiresAt.getTime() - clock.now().getTime()) / 1_000);
+    if (ttl <= 0) return { kind: 'canceled' };
     const posted = await post(
       url,
       {
         authorization,
         'content-encoding': 'aes128gcm',
         'content-type': 'application/octet-stream',
-        ttl: String(PUSH_TTL_SECONDS),
+        ttl: String(ttl),
+        topic,
         urgency: 'high',
       },
       body,
     );
+    if (!(await ownsPushClaim(database, claim, clock.now(), device.serverKey)))
+      return { kind: 'canceled' };
     const status = posted.kind === 'answered' ? posted.status : null;
     if (status !== null && status >= 200 && status < 300) {
-      await database
-        .updateTable('push_subscriptions')
-        .set({ failures: 0 })
-        .where('id', '=', device.id)
-        .where('user_id', '=', device.userId)
-        .where('session_id', '=', device.sessionId)
-        .where('failures', '>', 0)
-        .execute();
-      return;
+      const applied = await applyPushResponse(database, clock, claim, device, async (tx) => {
+        await tx
+          .updateTable('push_subscriptions')
+          .set({ failures: 0 })
+          .where('id', '=', device.id)
+          .where('user_id', '=', device.userId)
+          .where('session_id', '=', device.sessionId)
+          .where('generation', '=', device.generation)
+          .where('failures', '>', 0)
+          .execute();
+      });
+      return applied ? { kind: 'delivered', status } : { kind: 'retry' };
     }
     if (status === 404 || status === 410) {
       log.info('push device forgotten', { host: url.hostname, status });
-      await forget(device);
-      return;
+      return (await forget(device, claim))
+        ? { kind: 'canceled', status }
+        : { kind: 'retry', status };
     }
     if (status !== null && OUR_REQUEST_REFUSED.has(status)) {
       // The keys, the token or the body: this server's to fix, not the browser's to pay for.
       failed('refused', 1, device.module);
       log.error('push refused: this server’s request', { host: url.hostname, status });
-      return;
+      return { kind: 'refused', status };
     }
-    await counted(device, url, posted);
+    if (!(await counted(device, url, posted, claim))) return { kind: 'retry' };
+    return {
+      kind: 'retry',
+      ...(status !== null && status >= 100 && status <= 599 ? { status } : {}),
+      ...(posted.kind === 'answered' && posted.retryAfter !== undefined
+        ? { retryAfter: posted.retryAfter }
+        : {}),
+    };
   };
 };

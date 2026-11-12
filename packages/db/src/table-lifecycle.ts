@@ -74,6 +74,9 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
     kept: 'the row, ids and times only, is the record that it was made',
   }),
   push_subscriptions: decided('deleted', 'until-removed'),
+  push_intents: decided('deleted', 'swept'),
+  push_deliveries: decided('deleted', 'with-parent'),
+  push_notice_budgets: decided('deleted', 'swept'),
   rate_limits: decided('deleted', 'swept'),
   // The actor stays, naming the anonymised account: the key's SET NULL never fires on a soft deletion (D-256).
   server_audit_log: decided('anonymised', {

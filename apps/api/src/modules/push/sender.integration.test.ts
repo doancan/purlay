@@ -9,16 +9,15 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
+import { enqueuePush } from '../../platform/push-work';
+import { movable } from '../../testing/push-world';
 import type { EventBus } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { aSession } from '../../testing/signed-in';
+import { enableTestPush, TEST_PUSH_POLICY } from '../../testing/push-config';
 import { aPushService, aBrowser, KEYS } from '../../testing/push-service';
 import { aRoom, type Room } from '../../testing/rooms';
-import {
-  aDatabaseThatMustNotBeTouched,
-  aNoticeThrottle,
-  aRecordingLogger,
-} from '../../testing/doubles';
+import { aDatabaseThatMustNotBeTouched, aRecordingLogger } from '../../testing/doubles';
 import { edit } from '../../features/chat/messages/edit';
 import { send } from '../../features/chat/messages/messages';
 import { chatPushNotices } from '../../features/chat/notifications/push-notices';
@@ -36,7 +35,7 @@ const clock = fixedClock(NOW);
 const attention = nobodyActive;
 
 const quietBus: EventBus = {
-  publish: () => Promise.resolve(),
+  publish: () => Promise.resolve(undefined),
   subscribe: () => false,
   unsubscribe: () => undefined,
   forget: () => undefined,
@@ -52,6 +51,7 @@ const subscribeDevice = async (
   browser: { p256dh: string; auth: string },
   over: { endpoint?: string; serverKey?: string; failures?: number } = {},
 ): Promise<string> => {
+  await enableTestPush(db, clock);
   const userId = room.members[who]?.userId ?? '';
   const { sessionId } = await aSession(db, clock, userId, 30);
   const row = await db
@@ -77,7 +77,7 @@ const sending = async (
   recording = aRecordingLogger(),
   heard: Attention = attention,
   metrics?: ServerMetrics,
-  overrides: Partial<Pick<PushSenderDependencies, 'keys' | 'notices' | 'queueMax'>> = {},
+  overrides: Partial<Pick<PushSenderDependencies, 'keys' | 'notices'>> = {},
 ): Promise<{
   readonly say: (
     room: Room,
@@ -96,7 +96,7 @@ const sending = async (
     attention: heard,
     notices: chatPushNotices,
     noticeWords: noNoticeWords,
-    noticeThrottle: aNoticeThrottle(clock),
+    ...TEST_PUSH_POLICY,
     post,
     // The notices are chat's, so the failures of what they told are chat's.
     ...(metrics === undefined ? {} : { failures: metrics.pushFailures, owner: 'chat' }),
@@ -139,44 +139,75 @@ const failuresOf = (metrics: ServerMetrics, module = 'chat'): Record<string, num
   );
 
 describe('integration: a device is told', () => {
-  test.each(['sound changed', 'session revoked'] as const)(
-    'a prepared push is retired after %s during encryption',
-    async (change) => {
-      await withRollback(async (db) => {
-        const room = await aRoom(db, ['alice', 'bob']);
-        const browser = await aBrowser();
-        const id = await subscribeDevice(db, room, 'bob', browser);
-        const service = aPushService();
-        let lookups = 0;
-        const { say, settled } = await sending(
-          db,
-          service.post,
-          aRecordingLogger(),
-          attention,
-          undefined,
-          {
-            keys: async () => {
-              lookups += 1;
-              if (lookups === 2) {
-                if (change === 'sound changed')
-                  await db
-                    .updateTable('push_subscriptions')
-                    .set({ sound: false })
-                    .where('id', '=', id)
-                    .execute();
-                else await db.deleteFrom('push_subscriptions').where('id', '=', id).execute();
-              }
-              return KEYS;
-            },
+  test.each([
+    'sound changed',
+    'session revoked',
+    'private access lost',
+    'message read',
+    'active page',
+    'Deep Work',
+  ] as const)('a prepared push is retired after %s during encryption', async (change) => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['alice', 'bob'], { type: 'private' });
+      const browser = await aBrowser();
+      const id = await subscribeDevice(db, room, 'bob', browser);
+      const service = aPushService();
+      const looking = inMemoryAttention(clock);
+      let lookups = 0;
+      const { say, settled } = await sending(
+        db,
+        service.post,
+        aRecordingLogger(),
+        looking,
+        undefined,
+        {
+          keys: async () => {
+            lookups += 1;
+            if (lookups === 2) {
+              if (change === 'sound changed')
+                await db
+                  .updateTable('push_subscriptions')
+                  .set({ sound: false })
+                  .where('id', '=', id)
+                  .execute();
+              else if (change === 'session revoked')
+                await db.deleteFrom('push_subscriptions').where('id', '=', id).execute();
+              else if (change === 'private access lost')
+                await db
+                  .deleteFrom('channel_members')
+                  .where('channel_id', '=', room.channelId)
+                  .where('user_id', '=', room.members['bob']!.userId)
+                  .execute();
+              else if (change === 'message read')
+                await db
+                  .updateTable('notifications')
+                  .set({ read_at: NOW })
+                  .where('channel_id', '=', room.channelId)
+                  .where('user_id', '=', room.members['bob']!.userId)
+                  .execute();
+              else if (change === 'active page')
+                looking.heard(room.members['bob']!.userId, room.workspaceId);
+              else
+                await db
+                  .updateTable('workspace_members')
+                  .set({
+                    is_deep_work_active: true,
+                    deep_work_until: new Date(NOW.getTime() + 60_000),
+                  })
+                  .where('workspace_id', '=', room.workspaceId)
+                  .where('user_id', '=', room.members['bob']!.userId)
+                  .execute();
+            }
+            return KEYS;
           },
-        );
-        await say(room, 'alice', mention(room, 'bob'));
-        await settled();
-        expect(lookups).toBeGreaterThanOrEqual(2);
-        expect(service.sent).toHaveLength(0);
-      });
-    },
-  );
+        },
+      );
+      await say(room, 'alice', mention(room, 'bob'));
+      await settled();
+      expect(lookups).toBeGreaterThanOrEqual(2);
+      expect(service.sent).toHaveLength(0);
+    });
+  });
   test('each device receives its own sound choice in the encrypted payload', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
@@ -314,7 +345,7 @@ describe('integration: a device is told', () => {
         attention,
         notices: chatPushNotices,
         noticeWords: noNoticeWords,
-        noticeThrottle: aNoticeThrottle(clock),
+        ...TEST_PUSH_POLICY,
         post: service.post,
       });
       const { say } = await sending(db, service.post);
@@ -787,7 +818,7 @@ describe('integration: what the push service answers', () => {
     });
   });
 
-  test('a database that fails while the devices are found is said, with the message', async () => {
+  test('a database that fails while claiming is said without throwing at the source write', async () => {
     const recording = aRecordingLogger();
     const metrics = serverMetrics(undefined, ['chat']);
     const push = await createPushSender({
@@ -798,7 +829,7 @@ describe('integration: what the push service answers', () => {
       attention,
       notices: chatPushNotices,
       noticeWords: noNoticeWords,
-      noticeThrottle: aNoticeThrottle(clock),
+      ...TEST_PUSH_POLICY,
       post: () => Promise.reject(new Error('nothing is posted')),
       failures: metrics.pushFailures,
       owner: 'chat',
@@ -808,48 +839,79 @@ describe('integration: what the push service answers', () => {
     expect(failuresOf(metrics)).toMatchObject({ error: 1 });
     expect(
       recording.lines.map((line) => [line['level'], line['msg'], line['messageId'], line['stage']]),
-    ).toContainEqual(['error', 'push delivery failed', 'm-1', 'finding devices']);
+    ).toContainEqual(['error', 'push delivery failed', undefined, 'claiming durable pushes']);
   });
 
-  test('past the pushes that may wait, the oldest are dropped and said, and the newest told', async () => {
+  test('past the durable work bound the oldest occurrences are dropped, and the newest delivered', async () => {
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
-      const userId = room.members['bob']?.userId ?? '';
-      const { sessionId } = await aSession(db, clock, userId, 30);
-      const browser = await aBrowser();
-      const LINE = 3;
-      await db
-        .insertInto('push_subscriptions')
-        .values(
-          Array.from({ length: LINE + 1 }, (_, n) => ({
-            user_id: userId,
-            session_id: sessionId,
-            // Subscribed one after the other: device 0 is the oldest in line, the last the newest.
-            created_at: new Date(clock.now().getTime() - (LINE + 1 - n) * 1_000),
-            endpoint: `https://push.example.com/many/${String(n)}`,
-            p256dh: browser.p256dh,
-            auth: browser.auth,
-            server_key: KEYS.publicKey,
-          })),
-        )
-        .execute();
+      const recipient = room.members['bob']!.userId;
+      await subscribeDevice(db, room, 'bob', await aBrowser());
+      const time = movable(NOW);
+      const sent: string[] = [];
+      for (let n = 0; n < 4; n += 1) {
+        time.to(new Date(NOW.getTime() + n + 1));
+        const message = await send(
+          { atomically: atomicallyOn(db), clock: time, bus: quietBus },
+          room.members['alice']!.context,
+          { id: messageId(time.now()), content: `${mention(room, 'bob')} look ${String(n)}` },
+        );
+        sent.push(message.id);
+      }
+      const notice = await db
+        .selectFrom('notifications')
+        .selectAll()
+        .where('message_id', '=', sent[3]!)
+        .where('user_id', '=', recipient)
+        .executeTakeFirstOrThrow();
+      // The same production admission bound, with three instead of a thousand occurrences.
+      await enqueuePush(
+        db,
+        time.now(),
+        [
+          {
+            source: 'message',
+            sourceId: notice.id,
+            recordId: notice.message_id,
+            workspaceId: notice.workspace_id,
+            userId: recipient,
+            module: 'chat',
+            kind: notice.type,
+            createdAt: notice.created_at,
+          },
+        ],
+        3,
+      );
+      expect(
+        (
+          await db
+            .selectFrom('push_intents')
+            .select('record_id')
+            .where('state', '=', 'overflow')
+            .execute()
+        ).map((row) => row.record_id),
+      ).toEqual([sent[0]!]);
       const service = aPushService();
       const recording = aRecordingLogger();
       const metrics = serverMetrics(undefined, ['chat']);
-      const { say, settled } = await sending(db, service.post, recording, attention, metrics, {
-        queueMax: LINE,
+      const sender = await createPushSender({
+        database: db,
+        clock: time,
+        log: recording.log,
+        keys: KEYS,
+        attention,
+        notices: chatPushNotices,
+        noticeWords: noNoticeWords,
+        ...TEST_PUSH_POLICY,
+        post: service.post,
+        failures: metrics.pushFailures,
       });
-      await say(room, 'alice', `${mention(room, 'bob')} look`);
-      await settled();
-      expect(service.sent).toHaveLength(LINE);
-      // The oldest in line is the one let go; the newest is told.
-      const told = new Set(service.sent.map((push) => push.url));
-      expect(told.has('https://push.example.com/many/0')).toBe(false);
-      expect(told.has(`https://push.example.com/many/${String(LINE)}`)).toBe(true);
+      await sender.flush(10_000);
+      expect(service.sent).toHaveLength(3);
       expect(failuresOf(metrics)).toMatchObject({ dropped: 1 });
       expect(
-        recording.lines.find((line) => line['msg'] === 'push dropped: too many waiting'),
-      ).toMatchObject({ dropped: 1 });
+        recording.lines.find((line) => line['msg'] === 'pending pushes retired'),
+      ).toMatchObject({ reason: 'overflow', dropped: 1 });
     });
   });
 
@@ -866,7 +928,7 @@ describe('integration: what the push service answers', () => {
         attention,
         notices: chatPushNotices,
         noticeWords: noNoticeWords,
-        noticeThrottle: aNoticeThrottle(clock),
+        ...TEST_PUSH_POLICY,
         post: () => new Promise(() => undefined),
       });
       const context = room.members['alice']?.context;
@@ -1131,12 +1193,36 @@ describe('integration: push destinations agree with the message location', () =>
     await withRollback(async (db) => {
       const room = await aRoom(db, ['alice', 'bob']);
       const recipient = room.members['bob']?.userId ?? '';
-      const { say, settled } = await sending(db, aPushService().post);
+      const browser = await aBrowser();
+      await subscribeDevice(db, room, 'bob', browser);
+      let offset = 0;
+      const say = async (
+        _room: Room,
+        _actor: string,
+        content: string,
+        _id?: string,
+        parentId?: string,
+      ): Promise<string> => {
+        const result = await send(
+          { atomically: atomicallyOn(db), clock, bus: quietBus },
+          room.members['alice']!.context,
+          {
+            id: messageId(new Date(NOW.getTime() + ++offset)),
+            content,
+            ...(parentId === undefined ? {} : { parentId }),
+          },
+        );
+        return result.id;
+      };
       const root = await say(room, 'alice', `${mention(room, 'bob')} a question`);
       const id = kind.startsWith('reply')
         ? await say(room, 'alice', `${mention(room, 'bob')} an answer`, undefined, root)
         : root;
-      await settled();
+      await db
+        .updateTable('notifications')
+        .set({ read_at: NOW })
+        .where('message_id', '<>', id)
+        .execute();
       if (kind.includes('reminder') || kind === 'root thread reply') {
         await db
           .updateTable('notifications')
@@ -1145,8 +1231,6 @@ describe('integration: push destinations agree with the message location', () =>
           .where('user_id', '=', recipient)
           .execute();
       }
-      const browser = await aBrowser();
-      await subscribeDevice(db, room, 'bob', browser);
       const service = aPushService();
       const sender = await createPushSender({
         database: db,
@@ -1156,7 +1240,7 @@ describe('integration: push destinations agree with the message location', () =>
         attention,
         notices: chatPushNotices,
         noticeWords: noNoticeWords,
-        noticeThrottle: aNoticeThrottle(clock),
+        ...TEST_PUSH_POLICY,
         post: service.post,
       });
       sender.told(id, [recipient]);
@@ -1183,13 +1267,17 @@ describe('integration: live push settings', () => {
         const service = aPushService(201);
         const recording = aRecordingLogger();
         let enabled = stage !== 'lookup';
+        let recipientChecks = 0;
         const sender = await sending(db, service.post, recording, attention, undefined, {
           keys: () => Promise.resolve(enabled ? KEYS : undefined),
           notices: {
             ...chatPushNotices,
             canDeliver: async (...args) => {
               const allowed = await chatPushNotices.canDeliver(...args);
-              enabled = false;
+              // The first checks precede key lookup/encryption. Disable at the final source check
+              // to exercise the last dynamic-key guard rather than an earlier redundant check.
+              recipientChecks += 1;
+              if (recipientChecks === 3) enabled = false;
               return allowed;
             },
           },

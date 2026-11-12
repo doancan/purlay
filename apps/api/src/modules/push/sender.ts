@@ -1,80 +1,36 @@
-/**
- * Telling a person's devices what needs them, after the write that decided it has committed
- * (#78, D-126).
- *
- * - **Who:** only the people a write told for the first time (`notify` returns them), and of those
- *   only a notification still unread, not held back by Deep Work, of a reason that needs them, on a
- *   message not deleted — on a device whose session is live and whose subscription was made with the
- *   server's current key. Looked up once per write, then current source access, unread state,
- *   preferences, attention and session are checked per device immediately before posting. Pushed
- *   by the node that committed, never through the bus: a second node does not push it twice (§8).
- * - **What:** who and why, in the person's language (`words.ts`) and where, never what was written.
- * - **Where it goes:** the push service the browser named, through the checked address and lookup an
- *   external image uses (§6).
- * - **What the answer does:** 2xx keeps the device; 404 or 410 forgets it (the browser dropped it);
- *   400, 401, 403 or 413 is this server's request refused — said loudly, and no device's fault; any
- *   other answer, a timeout or a network failure records a streak bounded by `PUSH_FAILURES_MAX`;
- *   the subscription stays available for later messages and a successful delivery resets the streak.
- * - **A module's notice** (`toldInbox`, D-286 §9) is the same path with its own rows: only an entry still unread, of a person
- *   not erased, in a workspace not deleted, worded by the module that declares its kind. A person in Deep Work or in their
- *   quiet hours is not told now: the push waits **in memory, on the node that committed it**, and is asked again every
- *   `HELD_CHECK_MS`; it goes once they are out of it, unless they read it meanwhile, and is dropped and counted after
- *   `HELD_PUSH_MAX_MS`, which is how long the device would keep it anyway. A restart forgets what waits; the notice is in the
- *   inbox. A person in front of the page is not told, now or later, as for a message.
- * - **A loop cannot spam a device:** the pushes of one person for one kind of one module are held to `NOTICE_PUSH_BUDGET`; the
- *   rest are dropped and counted (`throttled`), and the notice is in the inbox.
- * - **Detached, bounded and fair:** the write's caller does not wait. At most `POSTS_AT_ONCE` are in
- *   flight on the node and `POSTS_PER_PERSON` for any one person, so one person's slow or hostile
- *   push services cannot hold everybody else's; past `QUEUE_MAX` waiting, the oldest push is dropped and
- *   said. `flush` waits for them at shutdown, within its bound.
- */
+/** Durable Web Push (#1405). After-commit calls only wake the worker; PostgreSQL owns accepted work. */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
 import type { Counter } from '../../platform/metrics';
 import type { WrittenNotice } from '../../platform/ports/notification-sink';
-import { createDelivery, PUSH_TTL_SECONDS, type PushPost } from './delivery';
+import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
+import { PUSH_POSTS_AT_ONCE, PUSH_TTL_SECONDS } from '../../platform/push-policy';
+import { createDelivery, type PushPost } from './delivery';
+import { currentPushDevice, currentPushSource } from './authority';
 import { devicesFor, routeInbox, type PushKeys } from './devices';
 import { createFailureCount } from './failures';
-import { createHeldNotices } from './held';
-import { createDeviceLine } from './line';
+import { maintainPushes } from './maintenance';
+import { claimPush, type PushClaim } from './queue';
+import { settlePush, type PushOutcome } from './queue-result';
 import type { NoticeWords, PushNotices } from './notices';
 
 export { PUSH_FAILURES_MAX, type PushPost } from './delivery';
-
-/** Pushes waiting their turn; past it one is dropped, and said. */
-const QUEUE_MAX = 1_000;
-/** How long a push service has to answer. */
+export { NOTICE_PUSH_BUDGET } from '../../platform/push-policy';
 export const PUSH_TIMEOUT_MS = 5_000;
-/** How long a shutdown waits for pushes on their way. */
-const FLUSH_BOUND_MS = 3_000;
-/** How long a push held by Deep Work or quiet hours waits: as long as a push service keeps it for a device that is off. */
 export const HELD_PUSH_MAX_MS = PUSH_TTL_SECONDS * 1_000;
-/**
- * Pushes of a module's notices one person is told of one kind: three at once, then one a minute (red-team F8). A person
- * assigned a handful of things in a minute is told of each; a loop that assigns a thousand is told of three, and the rest
- * are in the inbox, where they are bounded as well (`UNREAD_PER_MODULE_MAX`). Kept in this process, as what is held is, so
- * each node of a cluster counts its own. Provisional (O-4).
- */
-export const NOTICE_PUSH_BUDGET = { perSecond: 1 / 60, burst: 3 } as const;
-/** How often what is held is asked again whether the person is still in Deep Work or their quiet hours. */
-const HELD_CHECK_MS = 60_000;
+const POLL_MS = 1_000;
+const FLUSH_BOUND_MS = 3_000;
+const MAX_MAINTENANCE_PASSES = 4;
 
 export interface PushSender {
-  /** The people `messageId` told for the first time; returns at once. */
   readonly told: (messageId: string, userIds: readonly string[]) => void;
-  /** The notices a module wrote to the inbox, once their transaction has committed; returns at once. */
   readonly toldInbox: (notices: readonly WrittenNotice[]) => void;
-  /** Asks again, now, whether what waits for Deep Work or quiet hours may go: the timer's work, so a test need not wait for it. */
+  /** Drain due durable work now, including eligible quiet work; tests need no real-time sleep. */
   readonly releaseHeld: () => Promise<void>;
-  /** Waits for every push on its way, `boundMs` at most, and says what it left. */
+  /** Drain currently due work within the shutdown bound, leaving delayed and unfinished work durable. */
   readonly flush: (boundMs?: number) => Promise<void>;
-}
-
-/** Whether one more push of a kind may go to a person: a token bucket of `NOTICE_PUSH_BUDGET`, made where the server is composed. */
-export interface NoticeThrottle {
-  readonly consume: (key: string) => Promise<boolean>;
 }
 
 export interface PushSenderDependencies {
@@ -82,132 +38,191 @@ export interface PushSenderDependencies {
   readonly clock: Clock;
   readonly log: Logger;
   readonly keys: PushKeys;
-  /** How a push reaches its service: `postExternal` on the checked lookup, where the server is composed. */
   readonly post: PushPost;
-  /**
-   * Who is in front of a workspace's page now (D-143): their pushes for it are held, not sent later —
-   * what they are looking at already says it.
-   */
   readonly attention: Attention;
-  /** What the write told, from whoever owns the writes: chat's notifications, where the server is composed (D-250). */
   readonly notices: PushNotices;
-  /** Held to `NOTICE_PUSH_BUDGET` for each person, module and kind of notice (red-team F8). */
-  readonly noticeThrottle: NoticeThrottle;
-  /** What a module's notice in the inbox is said as, from the modules that declare the kinds (D-286 §9). */
   readonly noticeWords: NoticeWords;
-  /** Where a push that did not reach its service is counted, by why (D-221); absent, it is not. */
+  readonly inboxKinds: ReadonlyMap<string, string>;
+  readonly effectiveModules: EntitlementPolicy['effective'];
+  readonly owner: string;
+  /** The composition root opens this only after migrations and persisted settings are ready. */
+  readonly available?: () => boolean;
   readonly failures?: Counter<'reason' | 'module'>;
-  /** The module whose notices this sender delivers, for the failure counter's label; absent, the core's. */
-  readonly owner?: string;
-  /**
-   * Pushes that may wait, in line and held, before the oldest are let go: `QUEUE_MAX` where absent. A test of the
-   * bound gives a small one, as a thousand real encryptions is seconds of work to prove what three prove.
-   */
-  readonly queueMax?: number;
 }
+
 export const createPushSender = async (
   dependencies: PushSenderDependencies,
 ): Promise<PushSender> => {
-  const { clock, log } = dependencies;
-  const queueMax = dependencies.queueMax ?? QUEUE_MAX;
+  const { database, clock, log } = dependencies;
   const failed = createFailureCount(dependencies);
-  const held = createHeldNotices({ queueMax, maxMs: HELD_PUSH_MAX_MS, log, failed });
-  const deliver = await createDelivery(dependencies, { failed, hold: held.hold });
-  const line = createDeviceLine({ queueMax, deliver, log, failed });
-  const fetching = new Set<Promise<void>>();
+  const deliver = await createDelivery(dependencies, { failed });
+  const running = new Set<Promise<void>>();
+  let pumping: Promise<void> | undefined;
+  let wakeAgain = false;
+  let paused = false;
+  let lastMaintenance = -Infinity;
+  let maintenanceBacklog = false;
+  let continuing: ReturnType<typeof setTimeout> | undefined;
 
-  /** Follows a lookup until it ends, so `flush` waits for it; its failure is counted and said, never thrown at the caller. */
-  const follow = (lookup: Promise<void>, stage: string, about: Record<string, unknown>): void => {
-    const found = lookup
+  // Accessors preserve the fact that asynchronous callbacks may change these flags across awaits.
+  const isPaused = (): boolean => paused;
+  const hasWorkHint = (): boolean => wakeAgain || maintenanceBacklog;
+  const available = (): boolean => dependencies.available?.() !== false;
+
+  const deliverClaim = async (claim: PushClaim): Promise<PushOutcome> => {
+    if (
+      (await currentPushDevice(dependencies, claim)) === undefined ||
+      !(await currentPushSource(dependencies, claim))
+    )
+      return { kind: 'canceled' };
+    if (claim.source === 'message') {
+      const devices = await devicesFor(
+        dependencies,
+        claim.recordId,
+        [claim.userId],
+        claim.sourceId,
+      );
+      const device = devices.find(
+        (row) =>
+          row.id === claim.subscriptionId &&
+          row.generation === claim.generation &&
+          row.sessionId === claim.sessionId &&
+          row.userId === claim.userId &&
+          row.workspaceId === claim.workspaceId,
+      );
+      return device === undefined ? { kind: 'canceled' } : await deliver(device, claim);
+    }
+    const routed = await routeInbox(dependencies, [claim.recordId]);
+    if (routed.waiting.has(claim.recordId)) return { kind: 'held' };
+    const device = routed.devices.find(
+      (row) =>
+        row.id === claim.subscriptionId &&
+        row.generation === claim.generation &&
+        row.sessionId === claim.sessionId &&
+        row.userId === claim.userId &&
+        row.workspaceId === claim.workspaceId,
+    );
+    return device === undefined ? { kind: 'canceled' } : await deliver(device, claim);
+  };
+
+  const run = async (claim: PushClaim): Promise<void> => {
+    let outcome: PushOutcome;
+    try {
+      outcome = await deliverClaim(claim);
+    } catch (error) {
+      failed('error', 1, claim.module);
+      log.error('push delivery failed', { stage: 'delivering durable push', err: error });
+      outcome = { kind: 'retry' };
+    }
+    await settlePush(database, claim, outcome, clock);
+  };
+
+  const wake = (): Promise<void> => {
+    if (!available()) return Promise.resolve();
+    wakeAgain = true;
+    if (pumping !== undefined) return pumping;
+    clearTimeout(starting);
+    clearTimeout(continuing);
+    pumping = (async (): Promise<void> => {
+      let passes = 0;
+      do {
+        wakeAgain = false;
+        if (maintenanceBacklog || clock.now().getTime() - lastMaintenance >= 60_000) {
+          maintenanceBacklog = await maintainPushes(database, clock.now(), log, failed);
+          lastMaintenance = clock.now().getTime();
+        }
+        while (!isPaused() && running.size < PUSH_POSTS_AT_ONCE) {
+          const claim = await claimPush(dependencies);
+          if (claim === undefined) break;
+          const task = run(claim)
+            .catch((error: unknown) => {
+              // Lost acknowledgement remains leased and recoverable. Never turn a source write into an error.
+              failed('error', 1, claim.module);
+              log.error('push delivery failed', { stage: 'settling durable push', err: error });
+            })
+            .finally(() => {
+              running.delete(task);
+              if (!isPaused()) void wake();
+            });
+          running.add(task);
+        }
+        maintenanceBacklog =
+          (await maintainPushes(database, clock.now(), log, failed, false)) || maintenanceBacklog;
+        passes++;
+      } while (
+        hasWorkHint() &&
+        !isPaused() &&
+        running.size < PUSH_POSTS_AT_ONCE &&
+        passes < MAX_MAINTENANCE_PASSES
+      );
+    })()
       .catch((error: unknown) => {
+        wakeAgain = false;
+        maintenanceBacklog = false;
+        lastMaintenance = -Infinity;
         failed('error');
-        log.error('push delivery failed', { ...about, stage, err: error });
+        log.error('push delivery failed', { stage: 'claiming durable pushes', err: error });
       })
       .finally(() => {
-        fetching.delete(found);
+        pumping = undefined;
+        if (hasWorkHint() && !isPaused()) {
+          continuing = setTimeout(() => {
+            void wake();
+          }, 0);
+          continuing.unref();
+        }
       });
-    fetching.add(found);
+    return pumping;
   };
 
-  const route = async (entryIds: readonly string[]): Promise<void> => {
-    const { devices, waiting: stillWaiting } = await routeInbox(dependencies, entryIds);
-    const now = clock.now().getTime();
-    const eligible = devices.filter(
-      (device) => !('entryId' in device.source) || held.mayTell(device.source.entryId, device.id),
-    );
-    for (const id of entryIds) {
-      if (!stillWaiting.has(id)) held.release(id);
-      else held.hold(id, now);
+  const drain = async (): Promise<void> => {
+    if (!available()) return;
+    paused = false;
+    while (!isPaused()) {
+      await wake();
+      if (running.size === 0 && pumping === undefined && !maintenanceBacklog) return;
+      if (running.size === 0) continue;
+      await Promise.race(running);
     }
-    line.enqueue(eligible, { entries: entryIds.length });
   };
-
-  const releaseHeld = async (): Promise<void> => {
-    const due = held.takeDue(clock.now().getTime());
-    if (due.length === 0) return;
-    const asked = route(due);
-    follow(asked, 'releasing held pushes', { entries: due.length });
-    await asked.catch(() => undefined);
-  };
-  // Once a minute, the notices waiting for the end of Deep Work are asked again. Unreferenced: it never keeps a process alive.
-  let releasingNow: Promise<void> | undefined;
-  const releasing = setInterval(() => {
-    // One at a time: a slow database must not let the next tick ask for what this one is still sending.
-    if (releasingNow !== undefined) return;
-    releasingNow = releaseHeld().finally(() => {
-      releasingNow = undefined;
-    });
-  }, HELD_CHECK_MS);
-  releasing.unref();
+  // A restart recovers committed work without any after-commit callback or another incoming message.
+  const starting = setTimeout(() => {
+    void wake();
+  }, 0);
+  starting.unref();
+  const polling = setInterval(() => {
+    if (!isPaused()) void wake();
+  }, POLL_MS);
+  polling.unref();
 
   return {
-    told: (messageId, userIds): void => {
-      if (userIds.length === 0) return;
-      follow(
-        devicesFor(dependencies, messageId, userIds).then((devices) => {
-          line.enqueue(devices, { messageId });
-        }),
-        'finding devices',
-        { messageId },
-      );
+    told: (_messageId, userIds): void => {
+      if (userIds.length > 0) {
+        paused = false;
+        void wake();
+      }
     },
     toldInbox: (notices): void => {
-      if (notices.length === 0) return;
-      follow(
-        (async (): Promise<void> => {
-          const toTell: string[] = [];
-          for (const notice of notices) {
-            const key = `${notice.recipientId}:${notice.module}:${notice.kind}`;
-            if (await dependencies.noticeThrottle.consume(key)) toTell.push(notice.entryId);
-            else failed('throttled', 1, notice.module);
-          }
-          if (toTell.length > 0) await route(toTell);
-        })(),
-        'finding devices for inbox notices',
-        { entries: notices.length },
-      );
+      if (notices.length > 0) {
+        paused = false;
+        void wake();
+      }
     },
-    releaseHeld,
+    releaseHeld: drain,
     flush: async (boundMs = FLUSH_BOUND_MS): Promise<void> => {
-      clearInterval(releasing);
+      clearTimeout(starting);
+      clearInterval(polling);
+      clearTimeout(continuing);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const bound = new Promise<'bound'>((resolve) => {
         timer = setTimeout(() => {
           resolve('bound');
         }, boundMs);
       });
-      const drained = (async (): Promise<'drained'> => {
-        while (fetching.size > 0 || line.counts().running > 0 || line.counts().waiting > 0) {
-          await Promise.all([...fetching, ...line.inFlight()]);
-          line.restart();
-        }
-        return 'drained';
-      })();
-      const outcome = await Promise.race([drained, bound]);
+      const result = await Promise.race([drain().then(() => 'drained' as const), bound]);
       clearTimeout(timer);
-      if (outcome === 'bound') {
-        log.warn('pushes left at shutdown', line.counts());
-      }
+      paused = true;
+      if (result === 'bound') log.warn('pushes left at shutdown', { running: running.size });
     },
   };
 };

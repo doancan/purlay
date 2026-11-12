@@ -277,6 +277,15 @@ describe('integration: posting to an external server', () => {
       { lookup: checkingLookup(resolve, allowed), transport: http, port, timeoutMs: 1_000 },
     );
 
+  test('retains Retry-After without reading a provider response body', async () => {
+    respond = (_path, res): void => {
+      res.statusCode = 503;
+      res.setHeader('Retry-After', '120');
+      res.end('a body that is not read');
+    };
+    expect(await post()).toEqual({ kind: 'answered', status: 503, retryAfter: '120' });
+  });
+
   test('sends the body and the headers given, and answers the status alone', async () => {
     respond = (_path, res): void => {
       res.statusCode = 201;

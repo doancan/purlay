@@ -37,6 +37,7 @@ import { recordAudit } from './modules/audit/audit';
 import { addressCounterKey } from './modules/auth/magic-link';
 import { sweepEmailSignIns } from './modules/jobs/jobs';
 import { sweepInbox } from './modules/inbox/sweep';
+import { maintainPushes } from './modules/push/maintenance';
 import { OUTBOX_DEAD_KEPT_DAYS, sweepOutbox } from './platform/outbox-sweep';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
@@ -228,6 +229,33 @@ const inWorkspace = (world: World): { workspace_id: string; channel_id: string }
   channel_id: world.channelId,
 });
 
+const aPushIntent = async (
+  db: Transaction,
+  world: World,
+  id: string = crypto.randomUUID(),
+  created: Date = NOW,
+  expires: Date = new Date(NOW.getTime() + HOUR_MS),
+): Promise<string> => {
+  await db
+    .insertInto('push_intents')
+    .values({
+      id,
+      source_kind: 'message',
+      source_id: crypto.randomUUID(),
+      record_id: world.bobsMessage,
+      workspace_id: world.workspaceId,
+      user_id: world.adaId,
+      module: 'chat',
+      kind: 'mention',
+      created_at: created,
+      expires_at: expires,
+      next_check_at: created,
+      state: 'admitted',
+    })
+    .execute();
+  return id;
+};
+
 /** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   workspace_invitation_mail_attempts: {
@@ -310,6 +338,51 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
         challenge: 'c'.repeat(43),
         created_at: NOW,
         expires_at: new Date(NOW.getTime() + 120_000),
+      })
+      .execute();
+  }),
+  push_intents: ofAda('push_intents', async (db, world) => {
+    await aPushIntent(db, world);
+  }),
+  push_deliveries: by(
+    'push_deliveries',
+    'session_id',
+    (world) => world.sessionId,
+    async (db, world) => {
+      const intent = await aPushIntent(db, world);
+      const subscription = await db
+        .insertInto('push_subscriptions')
+        .values({
+          user_id: world.adaId,
+          session_id: world.sessionId,
+          endpoint: `https://push.example.test/${crypto.randomUUID()}`,
+          p256dh: 'p',
+          auth: 'a',
+          server_key: 'k',
+        })
+        .returning(['id', 'generation'])
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('push_deliveries')
+        .values({
+          intent_id: intent,
+          subscription_id: subscription.id,
+          generation: subscription.generation,
+          session_id: world.sessionId,
+          next_attempt_at: NOW,
+        })
+        .execute();
+    },
+  ),
+  push_notice_budgets: ofAda('push_notice_budgets', async (db, world) => {
+    await db
+      .insertInto('push_notice_budgets')
+      .values({
+        user_id: world.adaId,
+        module: 'chat',
+        kind: 'mention',
+        next_at: NOW,
+        updated_at: NOW,
       })
       .execute();
   }),
@@ -932,8 +1005,12 @@ const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
 const UNSEEDED_KEPT: Readonly<Record<Table, string>> = {};
 const MAX_UNSEEDED_KEPT = 0;
 
-/** The jobs that delete by time, as `bun run job <name>` calls them, over the test's transaction and the clock. */
+/** Time-based jobs and background maintenance, over the test's real transaction and clock. */
 const SWEEPS = {
+  // This is an API worker, not a scheduler CLI job; use the exact cleanup the sender invokes.
+  'worker:push': async (db: Transaction) => {
+    await maintainPushes(db, NOW, NO_LOG, () => undefined);
+  },
   'purge:retention': async (db: Transaction) => {
     await purgeRetention({ database: db, clock, log: NO_LOG, storage: aMemoryStore() });
   },
@@ -1032,6 +1109,29 @@ const marked = (
 
 /** Tables decided `window` or `swept`: a row seeded as `EXPIRED` and one as `KEPT`, by the same code. */
 const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
+  push_intents: {
+    job: 'worker:push',
+    seed: async (db, world, row) => {
+      await aPushIntent(db, world, row.id, new Date(row.at.getTime() - 1), row.until);
+    },
+    rows: async (db, row) => await countWhere(db, 'push_intents', 'id', row.id),
+  },
+  push_notice_budgets: {
+    job: 'worker:push',
+    seed: async (db, world, row) => {
+      await db
+        .insertInto('push_notice_budgets')
+        .values({
+          user_id: world.adaId,
+          module: 'chat',
+          kind: row.mark,
+          next_at: row.at,
+          updated_at: row.at,
+        })
+        .execute();
+    },
+    rows: async (db, row) => await countWhere(db, 'push_notice_budgets', 'kind', row.mark),
+  },
   messages: marked('purge:retention', 'messages', 'content', async (db, world, row) => {
     await db
       .updateTable('workspaces')

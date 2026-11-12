@@ -102,7 +102,7 @@ export const API_MODULES_ENTITLEMENTS: readonly Mutation[] = [
     id: 'entitlement-queued-push-ignores-message-refusal',
     why: 'a granted module sends a queued push even though its own message reader refused current access',
     file: 'apps/api/src/modules/entitlements/hooks.ts',
-    find: '    if (!(await notices.canDeliver(executor, messageId, userId))) return false;\n',
+    find: '    if (!(await notices.canDeliver(executor, messageId, userId, notificationId))) return false;\n',
     replace: '',
     tests: ['apps/api/src/ingress/http/entitlement-hooks.integration.test.ts'],
   },

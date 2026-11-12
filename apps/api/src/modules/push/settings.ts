@@ -131,6 +131,14 @@ export const pushConfiguration = (
             })
             .where('id', '=', true)
             .execute();
+          // Retire authority without cascading into subscription-owned rows. A 410/logout may
+          // already own another delivery of that device; expiry reclaims these receipts safely.
+          if (!enabled)
+            await tx
+              .updateTable('push_intents')
+              .set({ state: 'canceled' })
+              .where('state', 'in', ['pending', 'admitted'])
+              .execute();
           await recordServerAudit(tx, clock, {
             actorUserId: admin.userId,
             action: enabled ? 'server.push_enabled' : 'server.push_disabled',

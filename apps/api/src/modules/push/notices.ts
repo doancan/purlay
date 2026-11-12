@@ -7,6 +7,9 @@
 import type { Executor } from '@purlay/db';
 import type { PushLocale } from '@purlay/types';
 
+/** Core admission port: the source owner captures its recipients in the same transaction as its notice. */
+export { enqueuePush } from '../../platform/push-work';
+
 /** One notification still to be pushed: the person told, why, and the channel it happened in. */
 interface PushNotice {
   readonly userId: string;
@@ -30,9 +33,19 @@ export interface PushNotices {
    * The notifications of `messageId` that are still unread, not held back by Deep Work, of a reason that needs the
    * person, on a message not deleted, for these people.
    */
-  of(executor: Executor, messageId: string, userIds: readonly string[]): Promise<PushNotice[]>;
+  of(
+    executor: Executor,
+    messageId: string,
+    userIds: readonly string[],
+    notificationId?: string,
+  ): Promise<PushNotice[]>;
   /** Current source visibility and unread state, asked again when a queued device may be sent to. */
-  canDeliver(executor: Executor, messageId: string, userId: string): Promise<boolean>;
+  canDeliver(
+    executor: Executor,
+    messageId: string,
+    userId: string,
+    notificationId?: string,
+  ): Promise<boolean>;
 }
 
 /** The notifications of a process that runs no chat: none. */

@@ -28,7 +28,7 @@ import { aRoom, notificationsOf, type Room } from '../../../testing/rooms';
 import { markRead } from '../channels/read-state';
 import { leaveChannel } from '../channels/settings';
 import { REACTION_KINDS_MAX, setReaction } from '../reactions/reactions';
-import { sendMessage } from './messages';
+import { sendMessage as writeMessage } from './messages';
 import { countArrival } from './delivery';
 import { setResolved } from './threads';
 import { reviseMessage } from './edit';
@@ -36,6 +36,12 @@ import { removeMessage } from './delete';
 
 const NOW = new Date('2026-09-09T12:00:00.000Z');
 const clock = fixedClock(NOW);
+// Seed a committed source through a real transaction, as the ingress does. Notification capture
+// deliberately refuses a pooled executor; the later operations still use independent transactions.
+const sendMessage = async (
+  ...[database, ...args]: Parameters<typeof writeMessage>
+): ReturnType<typeof writeMessage> =>
+  await atomicallyOn(database)(async (tx) => await writeMessage(tx, ...args));
 let tick = 0;
 const nextId = (): string => messageId(new Date(NOW.getTime() + (tick += 1) * 10));
 
