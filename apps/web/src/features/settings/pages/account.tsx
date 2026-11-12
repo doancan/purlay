@@ -42,6 +42,9 @@ import { DevicesCard } from './devices-card';
 import { MyDataCard } from './export';
 import { GitHubWriteCard } from './github-issues';
 import { TwoFactorCard } from './two-factor-card';
+import { useSession } from '../../session/session';
+import { CompanyIdentitiesCard } from './company-identities';
+import { CompanySessionNotice } from './company-parts';
 
 const SignInCard = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -149,6 +152,40 @@ const PasswordSection = (): React.JSX.Element | null => {
 };
 
 export const AccountPage = (): React.JSX.Element => {
+  const { companyWorkspaceId } = useSession();
+  return companyWorkspaceId === undefined ? <IndependentAccountPage /> : <CompanyAccountPage />;
+};
+
+const CompanyAccountPage = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const signOut = useSignOut();
+  return (
+    <SettingsPage
+      title={t('settings.account.title')}
+      description={t('settings.account.description')}
+    >
+      <CompanySessionNotice />
+      <CompanyIdentitiesCard />
+      <SettingsCard title={t('settings.account.sessions')}>
+        <SettingsRow
+          label={t('settings.account.here')}
+          description={t('settings.account.hereHint')}
+        >
+          <Button
+            glyph="sign-out"
+            onClick={() => {
+              signOut('here');
+            }}
+          >
+            {t('user.signOut')}
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
+    </SettingsPage>
+  );
+};
+
+const IndependentAccountPage = (): React.JSX.Element => {
   const { t } = useI18n();
   const leave = useSignOut();
   const [confirming, setConfirming] = useState(false);
@@ -187,6 +224,7 @@ export const AccountPage = (): React.JSX.Element => {
       description={t('settings.account.description')}
     >
       <SignInCard />
+      <CompanyIdentitiesCard />
       <PasswordSection />
       <DevicesCard />
       <SettingsCard title={t('settings.account.sessions')}>

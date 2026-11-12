@@ -27,6 +27,9 @@
  */
 export const SESSION_COOKIE = '__Host-purlay_session';
 
+/** Company-only sessions also use a domain-separated MAC; old readers cannot accept them after renaming (D-309). */
+export const COMPANY_SESSION_COOKIE = '__Host-purlay_company_session';
+
 /**
  * The OAuth `state` cookie. `Path=/` because the prefix requires it, a ten-minute
  * `Max-Age` so an abandoned sign-in does not leave one behind, and consumed by
@@ -91,6 +94,9 @@ export const clearedSetupCookie = (): string => `${SETUP_COOKIE}=; ${SETUP_ATTRI
  */
 export const clearedSessionCookie = (): string =>
   `${SESSION_COOKIE}=; ${ATTRIBUTES}; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+
+export const clearedCompanySessionCookie = (): string =>
+  `${COMPANY_SESSION_COOKIE}=; ${ATTRIBUTES}; Max-Age=0`;
 
 /**
  * The session cookie as it is set on a client that is not a browser's own sign-in — the native

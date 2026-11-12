@@ -25,6 +25,7 @@ import { sessionCookie } from '../../platform/cookies';
 import { AppError } from '../../platform/errors';
 import { parseClientHeader } from './client-policy';
 import { requireSession } from './session';
+import { companySessionCookies } from '../../modules/auth/company-sessions';
 import { validated } from './validate';
 import type { AuthResponse } from './auth';
 
@@ -45,11 +46,12 @@ export const authorizeNativeClient = async (
   request: Request,
   body: unknown,
 ): Promise<NativeAuthorizeResponse> => {
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId, sessionId } = await requireSession(dependencies.auth, request);
   const { challenge, state } = validated(NativeAuthorizeRequest, body);
   const { code } = await authorizeNative(dependencies.database, dependencies.clock, {
     userId,
     challenge,
+    sourceSessionId: sessionId,
   });
   // Every character of `code` is hex and of `state` base64url (the contract's patterns), so nothing here
   // can end a parameter or begin another.
@@ -115,5 +117,12 @@ export const exchangeNativeToken = async (
   }
   // The session's expiry is made from the wall clock, so the cookie's lifetime is read against it.
   const seconds = Math.floor((minted.expiresAt.getTime() - SESSION_CLOCK.now().getTime()) / 1000);
-  return { setCookie: [sessionCookie(minted.token, Math.max(0, seconds))] };
+  const token =
+    minted.companyWorkspaceId === undefined
+      ? minted.token
+      : await companySessionCookies(
+          dependencies.database,
+          deriveAuthSecret(dependencies.config.ENCRYPTION_KEY),
+        ).nativeCookieValue(minted.token);
+  return { setCookie: [sessionCookie(token, Math.max(0, seconds))] };
 };

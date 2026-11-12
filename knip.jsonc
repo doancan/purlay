@@ -46,6 +46,7 @@
       // `testing/fresh-server.ts` is run by the setup wizard's browser spec (`apps/web/e2e/setup.e2e.ts`) as a
       // subprocess: a server with nobody on it, GitHub's stand-in and a relay beside it — the state `scripts/demo.ts`,
       // which seeds people, cannot give.
+      // `testing/company-browser-server.ts` similarly serves the company browser journey, with only external DNS/IdP replaced.
       // `testing/node-with-wiki-preload.ts`, `testing/node-without-grants-preload.ts` and `testing/node-without-suspension-preload.ts` are `bun --preload` files of the API
       // processes the two-process cluster tests start (`testing/cluster-node.ts`, #1197): they run before the entry point in the
       // process and are named by a path that is built, which knip does not follow.
@@ -59,6 +60,7 @@
         "src/cli/throwaway-database.ts",
         "src/features/*/schema.ts",
         "src/testing/fresh-server.ts",
+        "src/testing/company-browser-server.ts",
         "src/testing/node-with-wiki-preload.ts",
         "src/testing/node-without-grants-preload.ts",
         "src/testing/node-without-suspension-preload.ts",

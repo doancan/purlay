@@ -43,7 +43,7 @@ export const isUnsentUploadOf = (
         .select('workspace_members.user_id')
         .whereRef('workspace_members.workspace_id', '=', 'attachments.workspace_id')
         .where('workspace_members.user_id', '=', userId)
-        .where(activeWorkspaceMembership)
+        .where(activeWorkspaceMembership())
         .where('workspaces.deleted_at', 'is', null),
     ),
   ]);

@@ -5,6 +5,7 @@ import { readGrants } from '../../platform/grants';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import type { PushNotices } from './notices';
 import type { PushClaim } from './queue';
+import { companySessionAllowsWorkspace } from '../../platform/company-session';
 
 interface PushAuthority {
   readonly database: Executor;
@@ -28,6 +29,7 @@ export const currentPushDevice = async (
     .where('s.generation', '=', claim.generation)
     .whereRef('live.user_id', '=', 's.user_id')
     .where('live.expires_at', '>', clock.now())
+    .where(companySessionAllowsWorkspace('live', claim.workspaceId))
     .where('person.deleted_at', 'is', null)
     .where('person.suspended_at', 'is', null)
     .executeTakeFirst();

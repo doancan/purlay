@@ -11,6 +11,21 @@ const unexpected = (name: string) => (): never => {
 };
 
 export const anApi = (overrides: Partial<Api> = {}): Api => ({
+  companyDomains: unexpected('companyDomains'),
+  createCompanyDomain: unexpected('createCompanyDomain'),
+  renewCompanyDomain: unexpected('renewCompanyDomain'),
+  verifyCompanyDomain: unexpected('verifyCompanyDomain'),
+  revokeCompanyDomain: unexpected('revokeCompanyDomain'),
+  companyConnections: unexpected('companyConnections'),
+  createCompanyConnection: unexpected('createCompanyConnection'),
+  updateCompanyConnection: unexpected('updateCompanyConnection'),
+  setCompanyConnectionEnabled: unexpected('setCompanyConnectionEnabled'),
+  deleteCompanyConnection: unexpected('deleteCompanyConnection'),
+  myCompanyIdentities: unexpected('myCompanyIdentities'),
+  unlinkCompanyIdentity: unexpected('unlinkCompanyIdentity'),
+  startCompanyIdentity: unexpected('startCompanyIdentity'),
+  companySignInOptions: unexpected('companySignInOptions'),
+  signInWithCompany: unexpected('signInWithCompany'),
   shared: unexpected('shared'),
   me: unexpected('me'),
   channelGroups: unexpected('channelGroups'),

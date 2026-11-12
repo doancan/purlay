@@ -14,6 +14,14 @@ export const API_INGRESS_WS: readonly Mutation[] = [
     tests: SOCKET_TESTS,
   },
   {
+    id: 'company-frame-origin-not-carried',
+    why: 'A real company subscription or send must not be authorized as an independent account frame.',
+    file: 'apps/api/src/ingress/ws/socket.ts',
+    find: 'identity.companyWorkspaceId === undefined',
+    replace: 'true',
+    tests: ['apps/api/src/ingress/ws/company-session.integration.test.ts'],
+  },
+  {
     id: 'hub-not-told-a-socket-closed',
     why: 'the hub keeps the closed connection and writes to it',
     file: SOCKET,

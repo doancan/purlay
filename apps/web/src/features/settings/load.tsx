@@ -47,11 +47,13 @@ export const LazySettingsNav = (): React.JSX.Element => (
 /** The screen a person the server holds back until their second step is on sees instead (D-239). */
 export const LazyTwoFactorEnrolment = ({
   email,
+  companyOnly = false,
 }: {
   readonly email: string;
+  readonly companyOnly?: boolean;
 }): React.JSX.Element => (
   <Suspense fallback={<Waiting className="flex w-full flex-col gap-3 p-10" />}>
-    <Enrolment email={email} />
+    <Enrolment email={email} companyOnly={companyOnly} />
   </Suspense>
 );
 

@@ -26,6 +26,7 @@ import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
 import { startLivenessSweep } from '../../realtime/liveness';
 import { offlinePresence, onlinePresence, type OnlinePresence } from '../../realtime/online';
 import { announcePresence } from '../../features/chat/presence/presence';
+import { companyFrameProjector } from '../../features/chat/channels/company-delivery';
 import {
   inProcessRateLimiter,
   SOCKET_CONNECTION_LIMITS,
@@ -190,6 +191,7 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
             : { directory: dependencies.shared.directory }),
         });
   const hub = createSocketHub(dependencies.auth, clock, {
+    companyFrame: companyFrameProjector(database),
     log,
     presence: online,
     ...(dependencies.closedEvent === undefined ? {} : { closedEvent: dependencies.closedEvent }),
@@ -331,6 +333,14 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
             requestId: crypto.randomUUID(),
             startedAt: performance.now(),
             sessionId: identity.sessionId,
+            ...(identity.companyWorkspaceId === undefined
+              ? {}
+              : {
+                  companySession: {
+                    userId: identity.userId,
+                    workspaceId: identity.companyWorkspaceId,
+                  },
+                }),
           },
           async () => {
             let replies: readonly ServerFrame[] = [];

@@ -121,6 +121,8 @@ const crossings = (
 ): readonly { key: string; method: string; path: string; body?: unknown }[] => {
   const fresh = (): string => crypto.randomUUID();
   const ids: Ids = {
+    companyDomainId: fresh(),
+    companyConnectionId: fresh(),
     workspaceId,
     channelId: fresh(),
     messageId: fresh(),

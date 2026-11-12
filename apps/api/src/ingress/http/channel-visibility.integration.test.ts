@@ -487,6 +487,8 @@ describe('integration: channel visibility', () => {
           const body = crossing.body?.(NOW, world.ids);
           const at = (channelId: string): string =>
             pathFor(path, {
+              companyDomainId: NEVER_EXISTED,
+              companyConnectionId: NEVER_EXISTED,
               workspaceId: world.workspaceId,
               channelId,
               messageId: NEVER_EXISTED,
@@ -535,6 +537,8 @@ describe('integration: channel visibility', () => {
           const body = crossing.body?.(NOW, world.ids);
           const at = (messageId: string): string =>
             pathFor(path, {
+              companyDomainId: NEVER_EXISTED,
+              companyConnectionId: NEVER_EXISTED,
               workspaceId: world.workspaceId,
               channelId: NEVER_EXISTED,
               messageId,
@@ -603,6 +607,8 @@ describe('integration: channel visibility', () => {
               db,
               method,
               pathFor(`${path}${query}`, {
+                companyDomainId: NEVER_EXISTED,
+                companyConnectionId: NEVER_EXISTED,
                 workspaceId: world.workspaceId,
                 channelId: NEVER_EXISTED,
                 messageId: NEVER_EXISTED,

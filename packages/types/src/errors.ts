@@ -68,6 +68,10 @@ export const ErrorCode = Type.Union([
   /** No such route. Distinct from a resource that does not exist, or is not yours. */
   Type.Literal('ROUTE_NOT_FOUND'),
   Type.Literal('WORKSPACE_NOT_FOUND'),
+  Type.Literal('COMPANY_IDENTITY_NOT_FOUND'),
+  Type.Literal('COMPANY_IDENTITY_CHANGED'),
+  Type.Literal('COMPANY_IDENTITY_NOT_READY'),
+  Type.Literal('COMPANY_IDENTITY_LIMIT'),
   Type.Literal('CHANNEL_NOT_FOUND'),
   /**
    * A message that does not exist, or is in a channel the caller cannot see. One
@@ -304,6 +308,10 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
 
   ROUTE_NOT_FOUND: 404,
   WORKSPACE_NOT_FOUND: 404,
+  COMPANY_IDENTITY_NOT_FOUND: 404,
+  COMPANY_IDENTITY_CHANGED: 409,
+  COMPANY_IDENTITY_NOT_READY: 409,
+  COMPANY_IDENTITY_LIMIT: 409,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
   SCHEDULED_MESSAGE_NOT_FOUND: 404,

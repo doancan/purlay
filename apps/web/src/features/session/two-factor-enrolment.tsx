@@ -16,12 +16,15 @@ import { Main } from '../../ui/main';
 import { TwoFactorCard } from '../settings/pages/two-factor-card';
 import { LogoMark } from '../shell/notice';
 import { useSignOut } from '../shell/sign-out';
+import { IndependentSignInNotice } from '../settings/pages/company-parts';
 
 export const TwoFactorEnrolment = ({
   email,
+  companyOnly = false,
 }: {
   /** The account's address, for a password manager to file the password under. */
   readonly email: string;
+  readonly companyOnly?: boolean;
 }): React.JSX.Element => {
   const { t } = useI18n();
   const client = useQueryClient();
@@ -39,15 +42,19 @@ export const TwoFactorEnrolment = ({
           </h1>
           <p className="text-balance text-body text-ink-muted">{t('enrolTwoFactor.lede')}</p>
         </div>
-        <TwoFactorCard
-          email={email}
-          enabled={false}
-          required
-          onTurnedOn={() => {
-            void client.invalidateQueries({ queryKey: keys.me });
-            void client.invalidateQueries({ queryKey: keys.mySignIn });
-          }}
-        />
+        {companyOnly ? (
+          <IndependentSignInNotice />
+        ) : (
+          <TwoFactorCard
+            email={email}
+            enabled={false}
+            required
+            onTurnedOn={() => {
+              void client.invalidateQueries({ queryKey: keys.me });
+              void client.invalidateQueries({ queryKey: keys.mySignIn });
+            }}
+          />
+        )}
         <div className="flex justify-center">
           <Button
             variant="ghost"

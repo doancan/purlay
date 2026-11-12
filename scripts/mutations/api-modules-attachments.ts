@@ -18,9 +18,9 @@ export const API_MODULES_ATTACHMENTS: readonly Mutation[] = [
     id: 'attachment-unsent-readable-after-leaving',
     why: 'somebody removed from a workspace still reads what they uploaded into it',
     file: 'apps/api/src/modules/attachments/readable.ts',
-    find: "        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership)\n        .where('workspaces.deleted_at', 'is', null),\n",
+    find: "        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership())\n        .where('workspaces.deleted_at', 'is', null),\n",
     replace:
-      "        .where(activeWorkspaceMembership)\n        .where('workspaces.deleted_at', 'is', null),\n",
+      "        .where(activeWorkspaceMembership())\n        .where('workspaces.deleted_at', 'is', null),\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
   },
   {
@@ -35,10 +35,18 @@ export const API_MODULES_ATTACHMENTS: readonly Mutation[] = [
     id: 'attachment-unsent-readable-in-a-deleted-workspace',
     why: 'an upload in a workspace that was deleted is still read by its id',
     file: 'apps/api/src/modules/attachments/readable.ts',
-    find: "        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership)\n        .where('workspaces.deleted_at', 'is', null),\n",
+    find: "        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership())\n        .where('workspaces.deleted_at', 'is', null),\n",
     replace:
-      "        .where(activeWorkspaceMembership)\n        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership),\n",
+      "        .where(activeWorkspaceMembership())\n        .where('workspace_members.user_id', '=', userId)\n        .where(activeWorkspaceMembership()),\n",
     tests: ['apps/api/src/ingress/http/attachments.integration.test.ts'],
+  },
+  {
+    id: 'company-unsent-delete-ignores-source',
+    why: 'A company session must not delete its canonical person’s unsent upload in a different workspace.',
+    file: 'apps/api/src/modules/attachments/uploads.ts',
+    find: ': isUnsentUploadOf(eb, userId),',
+    replace: ': eb.val(true),',
+    tests: ['apps/api/src/ingress/http/company-handoff.integration.test.ts'],
   },
   {
     id: 'deletions-not-queued-with-the-rows',

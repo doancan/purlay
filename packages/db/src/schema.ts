@@ -474,6 +474,8 @@ export interface MissedMailLetters {
 export interface NativeAuthorizations {
   challenge: string;
   code_digest: string;
+  company_source_session_id: string | null;
+  company_workspace_id: string | null;
   created_at: Timestamp;
   expires_at: Timestamp;
   id: string;
@@ -720,6 +722,7 @@ export interface ServerSettings {
 }
 
 export interface Sessions {
+  company_workspace_id: string | null;
   created_at: Generated<Timestamp>;
   device_name: string | null;
   expires_at: Timestamp;
@@ -842,6 +845,60 @@ export interface WorkspaceExports {
   size_bytes: Int8 | null;
   status: string;
   storage_key: string | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceIdentityBindings {
+  connection_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  issuer: string;
+  last_authenticated_at: Timestamp | null;
+  subject: string;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceIdentityConnections {
+  authentication_revision: Generated<string>;
+  client_id: string;
+  client_secret_encrypted: Buffer | null;
+  created_at: Generated<Timestamp>;
+  deleted_at: Timestamp | null;
+  domain_id: string;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  issuer: string;
+  name: string;
+  revision: Generated<string>;
+  tested_at: Timestamp | null;
+  tested_authentication_revision: string | null;
+  updated_at: Generated<Timestamp>;
+  workspace_id: string;
+}
+
+export interface WorkspaceIdentityDomains {
+  challenge_digest: string | null;
+  challenge_encrypted: Buffer | null;
+  challenge_expires_at: Timestamp;
+  challenge_issued_at: Timestamp;
+  created_at: Generated<Timestamp>;
+  domain: string;
+  id: Generated<string>;
+  revision: Generated<string>;
+  revoked_at: Timestamp | null;
+  updated_at: Generated<Timestamp>;
+  verified_at: Timestamp | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceIdentitySessions {
+  authenticated_at: Timestamp;
+  authentication_revision: string;
+  binding_reference: string;
+  connection_id: string;
+  revoked_at: Timestamp | null;
+  session_id: string;
   workspace_id: string;
 }
 
@@ -992,6 +1049,10 @@ export interface DB {
   users: Users;
   verifications: Verifications;
   workspace_exports: WorkspaceExports;
+  workspace_identity_bindings: WorkspaceIdentityBindings;
+  workspace_identity_connections: WorkspaceIdentityConnections;
+  workspace_identity_domains: WorkspaceIdentityDomains;
+  workspace_identity_sessions: WorkspaceIdentitySessions;
   workspace_invitation_mail_attempts: WorkspaceInvitationMailAttempts;
   workspace_invitation_recipients: WorkspaceInvitationRecipients;
   workspace_invitations: WorkspaceInvitations;

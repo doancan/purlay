@@ -61,8 +61,13 @@ export const unsubscribeDevice = async (
   request: Request,
   body: unknown,
 ): Promise<void> => {
-  const { userId } = await requireSession(auth, request);
-  await unsubscribe(database, userId, validated(PushUnsubscribeRequest, body).endpoint);
+  const { userId, companyWorkspaceId } = await requireSession(auth, request);
+  await unsubscribe(
+    database,
+    userId,
+    validated(PushUnsubscribeRequest, body).endpoint,
+    companyWorkspaceId,
+  );
 };
 
 /** `PUT /api/me/locale` — the language the server writes this person's notifications in (D-41). */

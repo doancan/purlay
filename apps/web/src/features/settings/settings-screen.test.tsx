@@ -37,7 +37,14 @@ const ACCOUNT = [
   'Sessions & account',
   'About',
 ];
-const WORKSPACE = ['General', 'Members', 'Invitations', 'Integrations', 'Audit log'];
+const WORKSPACE = [
+  'General',
+  'Company sign-in',
+  'Members',
+  'Invitations',
+  'Integrations',
+  'Audit log',
+];
 
 const open = async (path: string, role: UserRole = 'owner'): Promise<View> => {
   const session = aSession();

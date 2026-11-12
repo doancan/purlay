@@ -45,6 +45,10 @@ export type CollatedColumn = readonly [table: string, column: string];
 export const CORE_COLLATED_COLUMNS: readonly CollatedColumn[] = [
   ['users', 'email'],
   ['users', 'username'],
+  ['workspace_identity_bindings', 'issuer'],
+  ['workspace_identity_bindings', 'subject'],
+  ['workspace_identity_connections', 'issuer'],
+  ['workspace_identity_domains', 'domain'],
   ['workspaces', 'slug'],
 ];
 

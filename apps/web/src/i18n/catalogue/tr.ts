@@ -14,6 +14,101 @@
 import type { Catalogue } from '../types';
 
 export const tr = {
+  'company.links.title': 'Şirket kimlikleriniz',
+  'company.links.description':
+    'Şirket kimliğini bu hesaba açıkça bağlayın. Aynı e-posta adresi hesapları otomatik eşleştirmez.',
+  'company.links.empty':
+    'Bu çalışma alanında kullanıma açık şirket sağlayıcısı yok. Bir yöneticiden yapılandırmasını isteyin.',
+  'company.links.link': 'Kimliği bağla',
+  'company.links.unlink': 'Kimlik bağlantısını kaldır',
+  'company.links.linked': '{when} tarihinde bağlandı',
+  'company.links.unavailable': 'Sağlayıcı kullanılamıyor',
+  'company.links.unlinked': 'Bağlanmadı',
+  'company.links.more': 'Diğer kimlikleri yükle',
+  'company.links.removeTitle': '{name} bağlantısı kaldırılsın mı?',
+  'company.links.removeDescription':
+    'Bu şirket kimliğiyle açılmış oturumlar kapanır. Bağımsız hesap oturumları açık kalır.',
+  'company.signIn.title': 'Şirketinizle giriş yapın',
+  'company.signIn.description':
+    'Zaten üyesi olduğunuz çalışma alanının kısa adresini girin. Bu işlem hesap oluşturmaz.',
+  'company.signIn.workspace': 'Çalışma alanı adresi',
+  'company.signIn.find': 'Şirket girişini bul',
+  'company.signIn.invalid':
+    'Küçük harf, rakam ve tire kullanarak çalışma alanının kısa adresini girin.',
+  'company.signIn.empty':
+    'Bu çalışma alanı için etkin şirket sağlayıcısı bulunamadı. Adresi kontrol edin veya yöneticinize başvurun.',
+  'company.signIn.with': '{name} ile devam et',
+
+  'settings.company.nav': 'Şirket girişi',
+  'company.title': 'Şirket hesabıyla giriş',
+  'company.description':
+    'Kimlik sağlayıcınızı bu çalışma alanına bağlayın. Üyeler, kabul edilmiş kendi hesaplarını eşleştirir.',
+  'company.unavailable': 'Bu sunucuda şirket hesabıyla giriş kullanılamıyor.',
+  'company.domains.title': 'Doğrulanmış alan adları',
+  'company.domains.description':
+    'DNS TXT kaydıyla alan adının kontrolünü doğrulayın. Alan adı, üyelik vermez veya kişileri e-postayla otomatik eşleştirmez.',
+  'company.domains.empty': 'Girişi yapılandırmak için şirketinizin alan adını ekleyin.',
+  'company.domain': 'Alan adı',
+  'company.domain.add': 'Alan adı ekle',
+  'company.domain.pending': 'DNS doğrulaması bekleniyor',
+  'company.domain.verified': 'Doğrulandı',
+  'company.domain.expired': 'Doğrulama süresi doldu',
+  'company.domain.recordName': 'TXT kaydı adı',
+  'company.domain.recordValue': 'TXT kaydı değeri',
+  'company.domain.expires':
+    'Doğrulama {when} tarihine kadar geçerli. DNS değişikliklerinin görünmesi zaman alabilir.',
+  'company.domain.verify': 'DNS kaydını kontrol et',
+  'company.domain.renew': 'Doğrulamayı yenile',
+  'company.domain.remove': 'Alan adı doğrulamasını kaldır',
+  'company.connections.title': 'Kimlik sağlayıcıları',
+  'company.connections.description':
+    'Bağlantıyı kaydedin, gerçek bir giriş testi yapın ve ardından etkinleştirin.',
+  'company.connections.empty':
+    'Bağlı sağlayıcı yok. Önce alan adını doğrulayın, ardından sağlayıcınızı ekleyin.',
+  'company.connection.add': 'Sağlayıcı ekle',
+  'company.connection.edit': 'Sağlayıcıyı düzenle',
+  'company.connection.name': 'Sağlayıcı adı',
+  'company.connection.issuer': 'Issuer adresi',
+  'company.connection.issuerHint':
+    'Sağlayıcınızın OpenID Connect yapılandırmasındaki HTTPS issuer adresi.',
+  'company.connection.clientId': 'İstemci kimliği',
+  'company.connection.secret': 'İstemci sırrı',
+  'company.connection.secretHint':
+    'Güvenli saklanır ve tekrar gösterilmez. Düzenlerken kayıtlı sırrı korumak için boş bırakın.',
+  'company.connection.callback': 'Yetkili yönlendirme adresi',
+  'company.connection.callbackHint': 'Sağlayıcınıza bu yönlendirme adresini aynen kaydedin.',
+  'company.connection.needsTest': 'Giriş testi gerekli',
+  'company.connection.ready': 'Test başarılı; giriş kapalı',
+  'company.connection.enabled': 'Giriş açık',
+  'company.connection.test': 'Girişi test et',
+  'company.connection.enable': 'Girişi etkinleştir',
+  'company.connection.disable': 'Girişi kapat',
+  'company.connection.remove': 'Sağlayıcıyı kaldır',
+  'company.connection.verifiedDomain': 'Doğrulanmış alan adı',
+  'company.connection.chooseDomain': 'Doğrulanmış alan adı seçin',
+  'company.connection.changed':
+    'Düzenleme sırasında bağlantı değişti. Kaydetmeden önce güncel halini yükleyin.',
+  'company.connection.reload': 'Bağlantıyı yeniden yükle',
+  'company.connection.secretChange':
+    'Sağlayıcı bilgilerini değiştirmek, yeni bir test başarılı olana kadar girişi kapatır.',
+  'company.save': 'Bağlantıyı kaydet',
+  'company.refresh': 'Yenile',
+  'company.loadFailed':
+    'Şirket girişi ayarları yüklenemedi. Güncel durumu okumak için tekrar deneyin.',
+  'company.saved': 'Şirket girişi ayarları güncellendi.',
+  'company.remove.title': '{name} kaldırılsın mı?',
+  'company.remove.description':
+    'Bu bağlantı üzerinden giriş durur. Mevcut şirket oturumları erişimini kaybeder. Bağımsız hesap oturumları korunur.',
+  'company.remove.confirm': 'Kaldır',
+  'company.copyNamed': '{label} kopyala',
+  'company.entry.title': 'Giriş adresi',
+  'company.entry.description':
+    'Test edilmiş sağlayıcıyı açtıktan sonra bu adresi paylaşın. Bu adres üyelik vermez.',
+  'company.session.title': 'Şirket kimliğiyle giriş yapıldı',
+  'company.session.description':
+    'Bu oturum kendi çalışma alanıyla sınırlıdır. Hesap giriş bilgilerinizi ve diğer çalışma alanlarını yönetmek için bağımsız giriş yapın.',
+  'company.session.signIn': 'Hesabınıza giriş yapın',
+
   'shared.title': 'Paylaşılanlar',
   'shared.files': 'Dosyalar',
   'shared.links': 'Bağlantılar',
@@ -643,6 +738,30 @@ export const tr = {
   'audit.kind.invitation.created': 'Davet bağlantısı oluşturuldu',
   'audit.kind.invitation.revoked': 'Davet bağlantısı iptal edildi',
   'audit.kind.message.removed_by_moderator': 'Mesaj bir yönetici tarafından silindi',
+  'audit.kind.identity.domain_created': 'Şirket alan adı eklendi',
+  'audit.action.identity.domain_created': '{actor} bir şirket alan adı ekledi',
+  'audit.kind.identity.domain_renewed': 'Alan adı doğrulama kaydı yenilendi',
+  'audit.action.identity.domain_renewed': '{actor} şirket alan adı doğrulama kaydını yeniledi',
+  'audit.kind.identity.domain_verified': 'Şirket alan adı doğrulandı',
+  'audit.action.identity.domain_verified': '{actor} bir şirket alan adını doğruladı',
+  'audit.kind.identity.domain_revoked': 'Şirket alan adı kaldırıldı',
+  'audit.action.identity.domain_revoked': '{actor} bir şirket alan adını kaldırdı',
+  'audit.kind.identity.connection_created': 'Şirket girişi yapılandırıldı',
+  'audit.action.identity.connection_created': '{actor} bir şirket giriş bağlantısı yapılandırdı',
+  'audit.kind.identity.connection_updated': 'Şirket girişi değiştirildi',
+  'audit.action.identity.connection_updated': '{actor} bir şirket giriş bağlantısını değiştirdi',
+  'audit.kind.identity.connection_enabled': 'Şirket girişi açıldı',
+  'audit.action.identity.connection_enabled': '{actor} bir şirket giriş bağlantısını açtı',
+  'audit.kind.identity.connection_disabled': 'Şirket girişi kapatıldı',
+  'audit.action.identity.connection_disabled': '{actor} bir şirket giriş bağlantısını kapattı',
+  'audit.kind.identity.connection_deleted': 'Şirket girişi kaldırıldı',
+  'audit.action.identity.connection_deleted': '{actor} bir şirket giriş bağlantısını kaldırdı',
+  'audit.kind.identity.connection_tested': 'Şirket girişi test edildi',
+  'audit.action.identity.connection_tested': '{actor} bir şirket girişi testini tamamladı',
+  'audit.kind.identity.linked': 'Şirket hesabı bağlandı',
+  'audit.action.identity.linked': '{actor} şirket hesabını bağladı',
+  'audit.kind.identity.unlinked': 'Şirket hesabının bağlantısı kaldırıldı',
+  'audit.action.identity.unlinked': '{actor} şirket hesabının bağlantısını kaldırdı',
   'audit.kind.workspace.renamed': 'Çalışma alanının adı değişti',
   'audit.kind.retention.changed': 'Saklama süresi değişti',
   'audit.kind.account.erased': 'Hesap silindi',

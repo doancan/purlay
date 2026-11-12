@@ -11,7 +11,7 @@ import {
 import type { Logger } from '../../platform/logging';
 import type { Auth } from '../../modules/auth/better-auth';
 import { deviceSessions, endDeviceSession } from '../../modules/auth/devices';
-import { requireSession } from './session';
+import { requireIndependentSession } from './session';
 import { validated } from './validate';
 
 export interface DeviceDependencies {
@@ -27,7 +27,7 @@ export const readMySessions = async (
   dependencies: DeviceDependencies,
   request: Request,
 ): Promise<DeviceSessionList> => {
-  const { userId, sessionId } = await requireSession(dependencies.auth, request);
+  const { userId, sessionId } = await requireIndependentSession(dependencies.auth, request);
   return {
     data: [
       ...(await deviceSessions(
@@ -49,7 +49,7 @@ export const endMySession = async (
   request: Request,
   sessionId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireIndependentSession(dependencies.auth, request);
   const id = validated(Uuid, sessionId);
   const ended = await endDeviceSession(dependencies.database, userId, id);
   await publishAfterCommit(dependencies.log, [

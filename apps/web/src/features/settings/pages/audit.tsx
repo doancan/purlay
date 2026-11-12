@@ -263,6 +263,30 @@ export const AuditPage = (): React.JSX.Element => {
           actor,
           author: person(entry.metadata['authorId']),
         });
+      case 'identity.domain_created':
+        return t('audit.action.identity.domain_created', { actor });
+      case 'identity.domain_renewed':
+        return t('audit.action.identity.domain_renewed', { actor });
+      case 'identity.domain_verified':
+        return t('audit.action.identity.domain_verified', { actor });
+      case 'identity.domain_revoked':
+        return t('audit.action.identity.domain_revoked', { actor });
+      case 'identity.connection_created':
+        return t('audit.action.identity.connection_created', { actor });
+      case 'identity.connection_updated':
+        return t('audit.action.identity.connection_updated', { actor });
+      case 'identity.connection_enabled':
+        return t('audit.action.identity.connection_enabled', { actor });
+      case 'identity.connection_disabled':
+        return t('audit.action.identity.connection_disabled', { actor });
+      case 'identity.connection_deleted':
+        return t('audit.action.identity.connection_deleted', { actor });
+      case 'identity.connection_tested':
+        return t('audit.action.identity.connection_tested', { actor });
+      case 'identity.linked':
+        return t('audit.action.identity.linked', { actor });
+      case 'identity.unlinked':
+        return t('audit.action.identity.unlinked', { actor });
       case 'workspace.renamed':
         return t('audit.action.workspace.renamed', {
           actor,

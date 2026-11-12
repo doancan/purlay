@@ -6,6 +6,7 @@
  */
 import type { Executor, LeaseConnection } from '@purlay/db';
 import type { Auth } from '../../modules/auth/better-auth';
+import type { CompanyTxtLookup } from '../../modules/workspaces/identity/domains';
 import type { ServicesPin, SettingsChange } from '../../modules/setup/runtime';
 import type { WorkspaceCreators } from '../../modules/workspaces/creators';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
@@ -32,6 +33,8 @@ import type { HttpBudgets } from './rate-limit';
 import type { Client } from './client';
 
 export interface HandlerDependencies {
+  /** External DNS seam; production uses the bounded system TXT resolver. */
+  readonly companyTxtLookup?: CompanyTxtLookup;
   readonly config: Config;
   /**
    * Better Auth (D-179): every session either door sees is resolved through it, over the same

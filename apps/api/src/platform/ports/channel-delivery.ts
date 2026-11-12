@@ -26,3 +26,16 @@ export interface ChannelDeliveryGate {
   ) => void;
   readonly releaseChannels?: (socketId: string, channelIds: readonly string[]) => void;
 }
+
+/** Origin captured from native session resolution, never from a client frame. */
+export interface CompanyDeliveryIdentity {
+  readonly sessionId: string;
+  readonly userId: string;
+  readonly workspaceId: string;
+}
+
+export type CompanyFrameProjector = (
+  identity: CompanyDeliveryIdentity,
+  frame: ServerFrame,
+  signal: AbortSignal,
+) => Promise<ServerFrame | undefined>;

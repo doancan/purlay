@@ -104,6 +104,16 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   workspace_exports: decided('anonymised', {
     kept: 'the row is the record that an export was made; its archive is swept',
   }),
+  workspace_identity_domains: decided(
+    { nobody: 'workspace-owned domain proof, with no person or creator reference' },
+    'until-removed',
+  ),
+  workspace_identity_connections: decided(
+    { nobody: 'workspace-owned provider configuration, with no person or creator reference' },
+    'until-removed',
+  ),
+  workspace_identity_bindings: decided('deleted', 'with-parent'),
+  workspace_identity_sessions: decided('deleted', 'with-parent'),
   // Received evidence is deleted on erasure; creator references name the anonymised account.
   workspace_invitation_recipients: decided('anonymised', {
     kept: 'for the life of the workspace, unless the recipient erases their account',

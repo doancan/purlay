@@ -134,6 +134,8 @@ export interface RequestScope {
    * the upgrade for a socket. What the audit trail names as who acted (D-116); never logged.
    */
   sessionId?: string;
+  /** Immutable session origin read by native authentication; company authority itself is rechecked by SQL. */
+  companySession?: { readonly userId: string; readonly workspaceId: string };
   /** The module whose route this is, once the router knows it (`noteModule`): the share of the database that holds it. */
   module?: string;
   /**
@@ -154,6 +156,9 @@ const scope = new AsyncLocalStorage<RequestScope>();
 export const withinRequest = <T>(request: RequestScope, body: () => T): T =>
   scope.run(request, body);
 
+/** A background worker authorizes its own work and must not inherit the request that woke it. */
+export const withoutRequest = <T>(body: () => T): T => scope.exit(body);
+
 /**
  * Makes the rest of this asynchronous flow one request. The framework offers no
  * hook *around* a request, only a first one; entering from it is what carries the
@@ -167,9 +172,16 @@ export const enterRequest = (request: RequestScope): void => {
 export const currentRequest = (): RequestScope | undefined => scope.getStore();
 
 /** Notes the session this request was proved to be made with; outside a request there is none to note. */
-export const noteSession = (sessionId: string): void => {
+export const noteSession = (
+  sessionId: string,
+  companySession?: RequestScope['companySession'],
+): void => {
   const request = scope.getStore();
-  if (request !== undefined) request.sessionId = sessionId;
+  if (request !== undefined) {
+    request.sessionId = sessionId;
+    if (companySession === undefined) delete request.companySession;
+    else request.companySession = companySession;
+  }
 };
 
 /** Notes the module a request or frame belongs to; outside a request there is none to note. */

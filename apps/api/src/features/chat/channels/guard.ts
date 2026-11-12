@@ -102,7 +102,7 @@ export const visibleChannels = (
     )
     .where('channels.deleted_at', 'is', null)
     .where('workspaces.deleted_at', 'is', null)
-    .where(activeWorkspaceMembership)
+    .where(activeWorkspaceMembership())
     .where(
       sql<boolean>`(workspace_members.access_kind = 'member'
       or workspace_members.guest_modules @> ARRAY['chat']::text[])`,

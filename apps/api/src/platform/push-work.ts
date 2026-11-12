@@ -1,6 +1,7 @@
 /** Capture a notification's devices inside its producer's transaction; no payload or credentials. */
 import { isTransaction, sql, type Executor } from '@purlay/db';
 import { PUSH_PENDING_PER_PERSON, PUSH_PERSON_LOCK, PUSH_TTL_SECONDS } from './push-policy';
+import { companySessionAllowsWorkspace } from './company-session';
 
 /** The producer owns the source row and has already checked its recipients. */
 export interface PushWork {
@@ -40,9 +41,10 @@ export const enqueuePush = async (
     );
   const sessions = await transaction
     .selectFrom('sessions')
-    .select(['id', 'user_id'])
+    .select(['id', 'user_id', 'company_workspace_id'])
     .where('user_id', 'in', people)
     .where('expires_at', '>', now)
+    .where(companySessionAllowsWorkspace('sessions', sql<string>`sessions.company_workspace_id`))
     .orderBy('id')
     .execute();
   if (sessions.length === 0) return;
@@ -61,12 +63,21 @@ export const enqueuePush = async (
     .orderBy('id')
     .forKeyShare()
     .execute();
-  const sessionOwners = new Map(sessions.map((row) => [row.id, row.user_id]));
-  const devices = candidates.filter((row) => sessionOwners.get(row.session_id) === row.user_id);
+  const sessionOwners = new Map(sessions.map((row) => [row.id, row]));
+  const devices = candidates.flatMap((row) => {
+    const session = sessionOwners.get(row.session_id);
+    return session?.user_id === row.user_id
+      ? [{ ...row, companyWorkspaceId: session.company_workspace_id }]
+      : [];
+  });
   const rows = work.filter(
     (item) =>
       item.createdAt.getTime() + PUSH_TTL_SECONDS * 1_000 > now.getTime() &&
-      devices.some((device) => device.user_id === item.userId),
+      devices.some(
+        (device) =>
+          device.user_id === item.userId &&
+          (device.companyWorkspaceId === null || device.companyWorkspaceId === item.workspaceId),
+      ),
   );
   if (rows.length === 0) return;
   const budgets = new Map(
@@ -110,11 +121,15 @@ export const enqueuePush = async (
       })),
     )
     .onConflict((conflict) => conflict.columns(['source_kind', 'source_id']).doNothing())
-    .returning(['id', 'user_id'])
+    .returning(['id', 'user_id', 'workspace_id'])
     .execute();
   const targets = inserted.flatMap((intent) =>
     devices
-      .filter((device) => device.user_id === intent.user_id)
+      .filter(
+        (device) =>
+          device.user_id === intent.user_id &&
+          (device.companyWorkspaceId === null || device.companyWorkspaceId === intent.workspace_id),
+      )
       .map((device) => ({
         intent_id: intent.id,
         subscription_id: device.id,

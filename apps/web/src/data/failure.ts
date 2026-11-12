@@ -161,6 +161,10 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'INVALID_MESSAGE_ID':
     case 'UNSUPPORTED_MEDIA_TYPE':
     case 'THREAD_NOT_RESOLVABLE':
+    case 'COMPANY_IDENTITY_NOT_FOUND':
+    case 'COMPANY_IDENTITY_CHANGED':
+    case 'COMPANY_IDENTITY_NOT_READY':
+    case 'COMPANY_IDENTITY_LIMIT':
     case 'WORKSPACE_SLUG_TAKEN':
     // A server administrator's grant (D-289): said by the console in words of its own, refused anywhere else.
     case 'MODULE_REQUIRES':

@@ -17,6 +17,11 @@ import { PERMISSIONS } from '../../testing/permissions';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import { aMemoryStore } from '../../testing/storage';
+import {
+  aCompanyCatalogue,
+  companyCatalogueDns,
+  type CompanyCatalogueIds,
+} from '../../testing/company-catalogue';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -45,6 +50,7 @@ const call = async (
     testDependencies({
       database: world.db,
       clock,
+      companyTxtLookup: companyCatalogueDns(world.db),
       mail: aRecordingOutbox(),
       githubApp: () => GITHUB_APP_STUB,
     }),
@@ -134,7 +140,64 @@ const guestTarget = async (world: World): Promise<void> => {
 };
 
 /** Each case's request, made as one role. */
+/** Real pre-existing identity configuration; only the DNS transport is external. */
+const companyCall = async (
+  world: World,
+  as: SignedInUser,
+  method: string,
+  suffix: string,
+  body?: (ids: CompanyCatalogueIds) => unknown,
+): Promise<Response> => {
+  const ids = await aCompanyCatalogue(
+    world.db,
+    clock,
+    world.workspaceId,
+    world.people.owner.userId,
+  );
+  const path = `/api/workspaces/${world.workspaceId}/identity/${suffix.replace(':domainId', ids.companyDomainId).replace(':connectionId', ids.companyConnectionId)}`;
+  return await call(world, method, path, as, body?.(ids));
+};
+
 const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promise<Response>>> = {
+  'list company domains': async (world, as) => await companyCall(world, as, 'GET', 'domains'),
+  'create a company domain': async (world, as) =>
+    await companyCall(world, as, 'POST', 'domains', () => ({ domain: 'new-company.example' })),
+  'renew a company domain proof': async (world, as) =>
+    await companyCall(world, as, 'POST', 'domains/:domainId/renew', (ids) => ({
+      revision: ids.companyDomainRevision,
+    })),
+  'verify a company domain': async (world, as) =>
+    await companyCall(world, as, 'POST', 'domains/:domainId/verify', (ids) => ({
+      revision: ids.companyDomainRevision,
+    })),
+  'revoke a company domain': async (world, as) =>
+    await companyCall(world, as, 'DELETE', 'domains/:domainId', (ids) => ({
+      revision: ids.companyDomainRevision,
+    })),
+  'list company identity connections': async (world, as) =>
+    await companyCall(world, as, 'GET', 'connections'),
+  'create a company identity connection': async (world, as) =>
+    await companyCall(world, as, 'POST', 'connections', (ids) => ({
+      domainId: ids.companyVerifiedDomainId,
+      name: 'New office',
+      issuer: 'https://new-identity.example',
+      clientId: 'new-client',
+      clientSecret: 'matrix-new-secret',
+    })),
+  'update a company identity connection': async (world, as) =>
+    await companyCall(world, as, 'PATCH', 'connections/:connectionId', (ids) => ({
+      revision: ids.companyConnectionRevision,
+      name: 'Updated office',
+    })),
+  'disable a company identity connection': async (world, as) =>
+    await companyCall(world, as, 'PUT', 'connections/:connectionId/enabled', (ids) => ({
+      revision: ids.companyConnectionRevision,
+      enabled: false,
+    })),
+  'delete a company identity connection': async (world, as) =>
+    await companyCall(world, as, 'DELETE', 'connections/:connectionId', (ids) => ({
+      revision: ids.companyConnectionRevision,
+    })),
   'convert guest access': async (world, as) => {
     await guestTarget(world);
     return await call(

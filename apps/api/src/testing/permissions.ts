@@ -21,6 +21,46 @@ export interface PermissionCase {
 }
 
 export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
+  'list company domains': {
+    endpoint: 'GET /api/workspaces/:workspaceId/identity/domains',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'create a company domain': {
+    endpoint: 'POST /api/workspaces/:workspaceId/identity/domains',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'renew a company domain proof': {
+    endpoint: 'POST /api/workspaces/:workspaceId/identity/domains/:domainId/renew',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'verify a company domain': {
+    endpoint: 'POST /api/workspaces/:workspaceId/identity/domains/:domainId/verify',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'revoke a company domain': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/identity/domains/:domainId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'list company identity connections': {
+    endpoint: 'GET /api/workspaces/:workspaceId/identity/connections',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'create a company identity connection': {
+    endpoint: 'POST /api/workspaces/:workspaceId/identity/connections',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'update a company identity connection': {
+    endpoint: 'PATCH /api/workspaces/:workspaceId/identity/connections/:connectionId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'disable a company identity connection': {
+    endpoint: 'PUT /api/workspaces/:workspaceId/identity/connections/:connectionId/enabled',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'delete a company identity connection': {
+    endpoint: 'DELETE /api/workspaces/:workspaceId/identity/connections/:connectionId',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'read guest invitation availability': {
     endpoint: 'GET /api/workspaces/:workspaceId/guest-invitations',
     allowed: { owner: true, admin: true, member: false },

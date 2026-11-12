@@ -18,6 +18,7 @@ const CORE_SECTIONS = [
   { id: 'account', group: 'account', glyph: 'lock', for: 'everyone' },
   { id: 'about', group: 'account', glyph: 'info', for: 'everyone' },
   { id: 'general', group: 'workspace', glyph: 'settings', for: 'admins' },
+  { id: 'company', group: 'workspace', glyph: 'lock', for: 'admins' },
   { id: 'members', group: 'workspace', glyph: 'people', for: 'admins' },
   { id: 'invitations', group: 'workspace', glyph: 'invite', for: 'admins' },
   { id: 'audit', group: 'workspace', glyph: 'audit', for: 'admins' },

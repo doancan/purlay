@@ -294,6 +294,11 @@ export const eraseAccount = async (
   });
   // A copy of their own data they asked for (D-241): no longer downloadable, its archive swept.
   await endPersonalExports(executor, clock, person.id);
+  // Native membership remains anonymised; its external identity must not remain recoverable.
+  await executor
+    .deleteFrom('workspace_identity_bindings')
+    .where('user_id', '=', person.id)
+    .execute();
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
   // left behind, the pair would also hand a returning GitHub sign-in the erased account (D-38, D-179).
   await executor.deleteFrom('accounts').where('user_id', '=', person.id).execute();

@@ -316,6 +316,10 @@ const uploadRefusal = (
     case 'USER_NOT_FOUND':
     case 'VALIDATION_FAILED':
     case 'WEBHOOK_SIGNATURE_INVALID':
+    case 'COMPANY_IDENTITY_NOT_FOUND':
+    case 'COMPANY_IDENTITY_CHANGED':
+    case 'COMPANY_IDENTITY_NOT_READY':
+    case 'COMPANY_IDENTITY_LIMIT':
     case 'WORKSPACE_SLUG_TAKEN':
       return { text: t('upload.failed'), retry: true };
   }

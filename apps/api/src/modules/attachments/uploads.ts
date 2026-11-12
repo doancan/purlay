@@ -39,6 +39,8 @@ import type { WorkspaceContext } from '../../platform/tenancy';
 import type { Atomically } from '../../platform/transactions';
 import { readImage } from './images';
 import { storageOf } from './quota';
+import { currentRequest } from '../../platform/logging';
+import { isUnsentUploadOf } from './readable';
 
 export interface UploadDependencies {
   readonly atomically: Atomically;
@@ -252,6 +254,11 @@ export const discardUpload = async (
       .where('id', '=', attachmentId)
       .where('uploader_id', '=', userId)
       .where('claimed_at', 'is', null)
+      .where((eb) =>
+        currentRequest()?.companySession === undefined
+          ? eb.val(true)
+          : isUnsentUploadOf(eb, userId),
+      )
       .returning(['storage_key', 'thumbnail_key'])
       .executeTakeFirst();
     if (gone === undefined) throw attachmentNotFound();

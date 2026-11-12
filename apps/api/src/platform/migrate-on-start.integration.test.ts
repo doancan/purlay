@@ -680,6 +680,7 @@ describe('integration: migrate on start', () => {
           oidc: null,
           signUp: 'invite-only',
           password: true,
+          company: { callbackUrl: `http://localhost:${String(port)}/auth/company/callback` },
         },
       ]);
       // The button's address is a defined answer, never the library's thrown error.
@@ -1062,6 +1063,9 @@ describe('integration: migrate on start', () => {
             oidc: null,
             signUp: 'invite-only',
             password: true,
+            company: {
+              callbackUrl: `http://localhost:${String(restartedPort)}/auth/company/callback`,
+            },
           },
         ]);
         expect((await bodyOf(restartedPort, '/auth/github'))[0]).toBe(404);

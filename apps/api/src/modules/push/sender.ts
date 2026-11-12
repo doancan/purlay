@@ -3,6 +3,7 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import type { Attention } from '../../platform/attention';
 import type { Logger } from '../../platform/logging';
+import { withoutRequest } from '../../platform/logging';
 import type { Counter } from '../../platform/metrics';
 import type { WrittenNotice } from '../../platform/ports/notification-sink';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
@@ -123,7 +124,7 @@ export const createPushSender = async (
     if (pumping !== undefined) return pumping;
     clearTimeout(starting);
     clearTimeout(continuing);
-    pumping = (async (): Promise<void> => {
+    pumping = withoutRequest(async (): Promise<void> => {
       let passes = 0;
       do {
         wakeAgain = false;
@@ -155,7 +156,7 @@ export const createPushSender = async (
         running.size < PUSH_POSTS_AT_ONCE &&
         passes < MAX_MAINTENANCE_PASSES
       );
-    })()
+    })
       .catch((error: unknown) => {
         wakeAgain = false;
         maintenanceBacklog = false;

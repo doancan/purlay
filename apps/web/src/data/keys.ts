@@ -15,6 +15,13 @@ import type {
  * frame names a channel and not the workspace it is in.
  */
 export const keys = {
+  companyDomains: (workspaceId: string, userId: string) =>
+    ['company-domains', workspaceId, userId] as const,
+  companyConnections: (workspaceId: string, userId: string) =>
+    ['company-connections', workspaceId, userId] as const,
+  myCompanyIdentities: (workspaceId: string, userId: string) =>
+    ['my-company-identities', workspaceId, userId] as const,
+  companySignInOptions: (workspace: string) => ['company-sign-in-options', workspace] as const,
   shared: (workspaceId: string, filters?: SharedFilters) =>
     filters === undefined
       ? (['shared', workspaceId] as const)

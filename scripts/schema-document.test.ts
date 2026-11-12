@@ -59,17 +59,34 @@ type ConstraintChange =
   | { readonly table: string; readonly rename: string; readonly to: string };
 
 const constraintChanges = (sql: string): ConstraintChange[] => {
-  const statement =
-    /ALTER TABLE (\w+)\s+(?:ADD CONSTRAINT (\w+)|DROP CONSTRAINT (?:IF EXISTS )?(\w+)|RENAME CONSTRAINT (\w+) TO (\w+))/g;
-  return [...withoutComments(sql).matchAll(statement)].flatMap((match): ConstraintChange[] => {
-    const [, table = '', added, dropped, renamed, renamedTo] = match;
-    if (added !== undefined) return [{ table, add: added }];
-    if (dropped !== undefined) return [{ table, drop: dropped }];
-    if (renamed !== undefined && renamedTo !== undefined)
-      return [{ table, rename: renamed, to: renamedTo }];
-    return [];
-  });
+  return [...withoutComments(sql).matchAll(/ALTER TABLE (\w+)\s+([^;]*);/g)].flatMap(
+    ([, table = '', actions = '']): ConstraintChange[] =>
+      [
+        ...actions.matchAll(
+          /\b(?:ADD CONSTRAINT (\w+)|DROP CONSTRAINT (?:IF EXISTS )?(\w+)|RENAME CONSTRAINT (\w+) TO (\w+))/g,
+        ),
+      ].flatMap(([, added, dropped, renamed, renamedTo]): ConstraintChange[] => {
+        if (added !== undefined) return [{ table, add: added }];
+        if (dropped !== undefined) return [{ table, drop: dropped }];
+        if (renamed !== undefined && renamedTo !== undefined)
+          return [{ table, rename: renamed, to: renamedTo }];
+        return [];
+      }),
+  );
 };
+
+test('constraint tracking reads every ALTER action, including a constraint after added columns', () => {
+  expect(
+    constraintChanges(`ALTER TABLE sample ADD COLUMN source UUID,
+    ADD CONSTRAINT source_present CHECK (source IS NOT NULL),
+    DROP CONSTRAINT IF EXISTS old_source;
+    ALTER TABLE sample RENAME CONSTRAINT source_present TO current_source;`),
+  ).toEqual([
+    { table: 'sample', add: 'source_present' },
+    { table: 'sample', drop: 'old_source' },
+    { table: 'sample', rename: 'source_present', to: 'current_source' },
+  ]);
+});
 
 /**
  * The indexes that exist after the SQL has run, by table.

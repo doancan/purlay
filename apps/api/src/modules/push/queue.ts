@@ -11,6 +11,7 @@ import {
   PUSH_POSTS_PER_PERSON,
 } from '../../platform/push-policy';
 import type { PushWork } from '../../platform/push-work';
+import { companySessionAllowsWorkspace } from '../../platform/company-session';
 
 export interface PushClaim extends PushWork {
   readonly intentId: string;
@@ -265,6 +266,9 @@ export const ownsPushClaim = async (
   (await database
     .selectFrom('push_deliveries as d')
     .innerJoin('push_intents as p', 'p.id', 'd.intent_id')
+    .innerJoin('sessions as live', (join) =>
+      join.onRef('live.id', '=', 'd.session_id').onRef('live.user_id', '=', 'p.user_id'),
+    )
     .innerJoin('server_settings as settings', (join) =>
       join
         .on('settings.id', '=', true)
@@ -279,5 +283,7 @@ export const ownsPushClaim = async (
     .where('d.state', '=', 'pending')
     .where('p.state', '=', 'admitted')
     .where('p.expires_at', '>', now)
+    .where('live.expires_at', '>', now)
+    .where(companySessionAllowsWorkspace('live', sql<string>`p.workspace_id`))
     .where('d.next_attempt_at', '>', now)
     .executeTakeFirst()) !== undefined;
