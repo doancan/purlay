@@ -27,12 +27,6 @@ have it.
 
 ## Unreleased
 
-### Fixed
-
-- **Notifications** — Pending browser pushes survive server restarts and retry temporary provider failures within their original expiry (D-307).
-
-### Security
-
-- **Notifications** — Delayed pushes recheck current access, module grants and device/session ownership; disabling push retires pending work (D-307).
+_Nothing yet._
 
 ---
