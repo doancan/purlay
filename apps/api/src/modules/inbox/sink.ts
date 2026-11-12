@@ -36,6 +36,7 @@ import type {
 import { assertMinted } from '../../platform/tenancy';
 import { assertTurn } from '../../platform/workspace-turn';
 import type { PushSender } from '../push/sender';
+import { enqueuePush } from '../../platform/push-work';
 
 /** What the table's CHECK holds as well, so a mistake is named here and not as a database error. */
 const PARAMS_MAX_BYTES = 1024;
@@ -207,6 +208,19 @@ export const notificationSink = (dependencies: {
       module,
       now,
     });
+    if (dependencies.pushedKinds.has(notice.kind))
+      await enqueuePush(transaction, now, [
+        {
+          source: 'inbox',
+          sourceId: written.id,
+          recordId: written.id,
+          workspaceId: who.workspaceId,
+          userId: notice.recipientId,
+          module,
+          kind: notice.kind,
+          createdAt: now,
+        },
+      ]);
     return {
       entryId: written.id,
       workspaceId: who.workspaceId,

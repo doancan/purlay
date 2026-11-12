@@ -10,7 +10,7 @@ import { requireMessageById } from '../channels/guard';
 import { notHiddenBy } from '../messages/hidden';
 
 export const chatPushNotices: PushNotices = {
-  canDeliver: async (executor, messageId, userId) => {
+  canDeliver: async (executor, messageId, userId, notificationId) => {
     try {
       const { context } = await requireMessageById(executor, userId, messageId);
       return (
@@ -26,6 +26,9 @@ export const chatPushNotices: PushNotices = {
           .where('n.message_id', '=', messageId)
           .where('n.channel_id', '=', context.channelId)
           .where('n.user_id', '=', userId)
+          .where((eb) =>
+            notificationId === undefined ? eb.val(true) : eb('n.id', '=', notificationId),
+          )
           .where('n.type', 'in', [...NEEDS_YOU, 'reminder'])
           .where('n.read_at', 'is', null)
           .where('n.suppressed_by_deep_work', '=', false)
@@ -51,7 +54,7 @@ export const chatPushNotices: PushNotices = {
       throw error;
     }
   },
-  of: async (executor, messageId, userIds) => {
+  of: async (executor, messageId, userIds, notificationId) => {
     const rows = await executor
       .selectFrom('notifications as n')
       .innerJoin('messages as m', 'm.id', 'n.message_id')
@@ -80,6 +83,9 @@ export const chatPushNotices: PushNotices = {
       ])
       .where('n.message_id', '=', messageId)
       .where('n.user_id', 'in', userIds)
+      .where((eb) =>
+        notificationId === undefined ? eb.val(true) : eb('n.id', '=', notificationId),
+      )
       .where('n.type', 'in', [...NEEDS_YOU, 'reminder'])
       .where('n.read_at', 'is', null)
       .where('n.suppressed_by_deep_work', '=', false)

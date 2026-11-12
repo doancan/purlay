@@ -154,7 +154,7 @@ export const fetchExternal = async (url: URL, options: FetchOptions): Promise<Fe
   });
 
 export type Posted =
-  | { readonly kind: 'answered'; readonly status: number }
+  | { readonly kind: 'answered'; readonly status: number; readonly retryAfter?: string }
   | { readonly kind: 'failed'; readonly reason: string };
 
 /**
@@ -189,7 +189,12 @@ export const postExternal = async (
         headers: { ...headers, 'content-length': String(body.byteLength) },
       },
       (response) => {
-        finish({ kind: 'answered', status: response.statusCode ?? 0 });
+        const retryAfter = response.headers['retry-after'];
+        finish({
+          kind: 'answered',
+          status: response.statusCode ?? 0,
+          ...(typeof retryAfter === 'string' ? { retryAfter } : {}),
+        });
       },
     );
     const timer = setTimeout(() => {

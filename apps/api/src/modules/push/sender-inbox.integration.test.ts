@@ -6,15 +6,12 @@
 import { afterAll, describe, expect, jest, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { MINUTES_PER_DAY } from '@purlay/types';
+import { enqueuePush } from '../../platform/push-work';
 import { inMemoryAttention, nobodyActive, type Attention } from '../../platform/attention';
 import { serverMetrics, type ServerMetrics } from '../../platform/metrics';
-import {
-  aDatabaseThatMustNotBeTouched,
-  aNoticeThrottle,
-  aRecordingLogger,
-  NOW,
-} from '../../testing/doubles';
+import { aDatabaseThatMustNotBeTouched, aRecordingLogger, NOW } from '../../testing/doubles';
 import { aBrowser, aPushService, KEYS } from '../../testing/push-service';
+import { TEST_PUSH_POLICY } from '../../testing/push-config';
 import { aUserRow } from '../../testing/users';
 import { aWorld, KIND, movable, subscribe, words, type World } from '../../testing/push-world';
 import {
@@ -36,9 +33,9 @@ const senderOn = async (
   post: Parameters<typeof createPushSender>[0]['post'],
   over: {
     attention?: Attention;
+    noticeWords?: Parameters<typeof createPushSender>[0]['noticeWords'];
     metrics?: ServerMetrics;
     log?: ReturnType<typeof aRecordingLogger>;
-    queueMax?: number;
   } = {},
 ): Promise<Awaited<ReturnType<typeof createPushSender>>> =>
   await createPushSender({
@@ -48,11 +45,10 @@ const senderOn = async (
     keys: KEYS,
     attention: over.attention ?? nobodyActive,
     notices: { of: () => Promise.resolve([]), canDeliver: () => Promise.resolve(false) },
-    noticeWords: words,
-    noticeThrottle: aNoticeThrottle(world.clock),
+    noticeWords: over.noticeWords ?? words,
+    ...TEST_PUSH_POLICY,
     post,
     ...(over.metrics === undefined ? {} : { failures: over.metrics.pushFailures, owner: 'chat' }),
-    ...(over.queueMax === undefined ? {} : { queueMax: over.queueMax }),
   });
 
 /** The failures counted under a module, by reason: the notices of `things` under `things`, the sender's own under `chat`. */
@@ -192,13 +188,11 @@ describe('integration: a device is told of a module’s notice', () => {
       await subscribe(db, world.clock, world.ada, await aBrowser());
       const service = aPushService();
       const recording = aRecordingLogger();
-      const sender = await senderOn(db, world, service.post, { log: recording });
+      const sender = await senderOn(db, world, service.post, {
+        log: recording,
+        noticeWords: () => undefined,
+      });
       const written = await world.write(world.ada);
-      await db
-        .updateTable('inbox_entries')
-        .set({ kind: 'unheard_of' })
-        .where('id', '=', written.entryId)
-        .execute();
       sender.toldInbox([written]);
       await sender.flush(10_000);
       expect(service.sent).toEqual([]);
@@ -286,34 +280,26 @@ describe('integration: what Deep Work and quiet hours hold back', () => {
     });
   });
 
-  test('is asked again by the sender’s own timer every minute, one asking at a time', async () => {
+  test('recovers committed work on its own one-second poll without an after-commit hint', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
-      let asked = 0;
-      const counted: World = {
-        ...world,
-        clock: {
-          ...world.clock,
-          now: (): Date => {
-            asked += 1;
-            return world.clock.now();
-          },
-        },
-      };
+      await subscribe(db, world.clock, world.ada, await aBrowser());
+      const service = aPushService();
+      const arrived = Promise.withResolvers<undefined>();
       jest.useFakeTimers();
+      const sender = await senderOn(db, world, async (...args) => {
+        const answer = await service.post(...args);
+        arrived.resolve(undefined);
+        return answer;
+      });
       try {
-        const sender = await senderOn(db, counted, aPushService().post);
-        const before = asked;
-        jest.advanceTimersByTime(HELD_CHECK_MS - 1);
-        expect(asked).toBe(before);
-        jest.advanceTimersByTime(1);
-        expect(asked).toBe(before + 1);
-        // The next minute's tick finds the last asking not yet over and leaves it be; once over, the one after asks.
-        jest.advanceTimersByTime(HELD_CHECK_MS);
-        expect(asked).toBe(before + 1);
         await sender.releaseHeld();
-        jest.advanceTimersByTime(HELD_CHECK_MS);
-        expect(asked).toBe(before + 3);
+        await world.write(world.ada);
+        jest.advanceTimersByTime(999);
+        expect(service.sent).toEqual([]);
+        jest.advanceTimersByTime(1);
+        await arrived.promise;
+        expect(service.sent).toHaveLength(1);
         await sender.flush(10_000);
       } finally {
         jest.useRealTimers();
@@ -401,7 +387,7 @@ describe('integration: what Deep Work and quiet hours hold back', () => {
       await sender.releaseHeld();
       await sender.flush(10_000);
       expect(service.sent).toEqual([]);
-      expect(failuresOf(metrics, 'chat')).toEqual({ dropped: 1 });
+      expect(failuresOf(metrics)).toEqual({ dropped: 1 });
     });
   });
 
@@ -420,22 +406,42 @@ describe('integration: what Deep Work and quiet hours hold back', () => {
       const metrics = serverMetrics(undefined, ['things'], [], []);
       const recording = aRecordingLogger();
       const service = aPushService();
-      const sender = await senderOn(db, world, service.post, {
-        metrics,
-        log: recording,
-        queueMax: 2,
-      });
-      sender.toldInbox([
+      const written = [
         await world.write(world.ada, 'one'),
         await world.write(world.ada, 'two'),
         await world.write(world.ada, 'three'),
-      ]);
+      ];
+      const last = written[2]!;
+      const row = await db
+        .selectFrom('inbox_entries')
+        .select('created_at')
+        .where('id', '=', last.entryId)
+        .executeTakeFirstOrThrow();
+      await enqueuePush(
+        db,
+        world.clock.now(),
+        [
+          {
+            source: 'inbox',
+            sourceId: last.entryId,
+            recordId: last.entryId,
+            workspaceId: last.workspaceId,
+            userId: last.recipientId,
+            module: last.module,
+            kind: last.kind,
+            createdAt: row.created_at,
+          },
+        ],
+        2,
+      );
+      const sender = await senderOn(db, world, service.post, { metrics, log: recording });
+      sender.toldInbox(written);
       await sender.flush(10_000);
       expect(service.sent).toEqual([]);
-      expect(failuresOf(metrics, 'chat')).toEqual({ dropped: 1 });
+      expect(failuresOf(metrics)).toEqual({ dropped: 1 });
       expect(
-        recording.lines.find((line) => line['msg'] === 'push dropped: too many held'),
-      ).toMatchObject({ dropped: 1 });
+        recording.lines.find((line) => line['msg'] === 'pending pushes retired'),
+      ).toMatchObject({ reason: 'overflow', dropped: 1 });
 
       world.clock.to(new Date(world.clock.now().getTime() + 2 * HOUR_MS));
       await sender.releaseHeld();
@@ -625,6 +631,7 @@ describe('integration: queued module notification authority', () => {
             .where('workspace_id', '=', world.workspaceId)
             .where('user_id', '=', world.ada)
             .execute();
+          world.clock.to(new Date(world.clock.now().getTime() + HELD_CHECK_MS));
         }
         await sender.releaseHeld();
         await sender.flush(10_000);

@@ -309,8 +309,18 @@ workspace membership is actually checked (`ARCHITECTURE.md` §9).
 creates its P-256 pair automatically, seals the private key in `server_settings` with `ENCRYPTION_KEY`,
 and uses the deployment's HTTPS address as its subject. No restart is needed. Disabling stops new
 provider requests while off, including requests whose device was already queued; it keeps keys and
-device registrations. Re-enabling uses the same pair. Existing quiet-hour holds retain their normal
-expiry and unread checks; the server's inbox remains the record.
+device registrations. It retires pending delivery work in the same transaction; re-enabling uses the
+same pair and only new source occurrences are captured. The server's inbox remains the record.
+
+**Recovery (D-307).** No new service or environment setting is required. The existing PostgreSQL stores
+an occurrence and its current devices with the source write; API workers recover it at startup and poll
+each second. Temporary failures retry up to eight eligible attempts, with bounded backoff and provider
+`Retry-After`, within the original one-day expiry. Quiet work waits within that same expiry. Retries
+recheck current access, unread/mute/hidden state, module grants, session/device lifetime and foreground
+attention. Later device registrations never receive historical work. A provider acceptance followed by
+a lost acknowledgement can repeat; this is not proof of native OS presentation or exactly-once delivery.
+Shutdown drains currently due work for three seconds and leaves unfinished work recoverable. Full
+expiry batches continue cooperatively, rather than imposing a 500-record-per-minute cleanup ceiling.
 
 On the first start after migration 0097, an existing complete `VAPID_*` environment triple is imported
 once and keeps push enabled, preserving devices. With none, it starts disabled. Afterwards the row is
@@ -405,7 +415,7 @@ asks its API about github.com links, which it does not have; run Enterprise Serv
 > numbers live in `apps/api/src/ingress/http/rate-limit.ts`. Two reads that fan out have buckets of their own, per signed-in
 > user and before the workspace is looked at: the workspace find (`FIND_BUDGET`, 20 at once then 5 a second) and the inbox
 > list (`INBOX_LIST_BUDGET`, 60 at once then 10 a second); marking the inbox read is a write. A person's pushes of one kind of
-> notice from one module are 3 at once then one a minute (`NOTICE_PUSH_BUDGET` in `modules/push/sender.ts`), and the unread
+> notice from one module are 3 at once then one a minute (`NOTICE_PUSH_BUDGET` in `platform/push-policy.ts`, persisted across nodes/restarts), and the unread
 > notices of a module in a person's inbox are at most 200 (`UNREAD_PER_MODULE_MAX` in `modules/inbox/sink.ts`). With
 > `REDIS_URL` the HTTP buckets are shared by the nodes; the push budget is each node's own. The largest JSON body is 64 KiB, the
 > socket's frame (D-80).

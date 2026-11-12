@@ -36,6 +36,7 @@ import { passportAddressDigest } from '../workspaces/invitation-passport';
 import { addressAttemptsPrefix } from '../auth/password-attempts';
 import { revokeAllSessions } from '../auth/sessions';
 import type { Hooks } from '../../platform/hooks';
+import { PUSH_PERSON_LOCK } from '../../platform/push-policy';
 
 /** What the ingress tells after the commit: whose sockets end, and which workspaces read again. */
 export interface Erased {
@@ -192,6 +193,12 @@ export const eraseAccount = async (
     .forUpdate()
     .executeTakeFirst();
   if (locked === undefined) return { userId: person.id, workspaces: [], afterCommit: [] };
+  // Capture owns the workspace before this lock; claims try it and provider answers wait before
+  // locking a subscription. No provider I/O holds this lock.
+  // Take it before any queue/subscription erasure so their cascades share one recipient order.
+  await sql`select pg_advisory_xact_lock(hashtextextended(${person.id}, ${PUSH_PERSON_LOCK}))`.execute(
+    executor,
+  );
 
   const blocking: string[] = [];
   const unowned: string[] = [];
@@ -274,6 +281,8 @@ export const eraseAccount = async (
     .where('id', '=', person.id)
     .execute();
 
+  await executor.deleteFrom('push_intents').where('user_id', '=', person.id).execute();
+  await executor.deleteFrom('push_notice_budgets').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
   // What modules told them, in the core's inbox: theirs alone (D-286).
   await executor.deleteFrom('inbox_entries').where('user_id', '=', person.id).execute();

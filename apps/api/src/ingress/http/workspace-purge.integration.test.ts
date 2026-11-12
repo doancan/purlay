@@ -20,6 +20,8 @@ import { aRecordingLogger, testDependencies } from '../../testing/doubles';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aMemoryStore, type MemoryStore } from '../../testing/storage';
 import { aUniqueSlug } from '../../testing/users';
+import { enableTestPush } from '../../testing/push-config';
+import { aBrowser } from '../../testing/push-service';
 import { sweepObjectDeletions } from '../../modules/attachments/deletions';
 import { atomicallyOn } from '../../platform/transactions';
 import {
@@ -88,6 +90,26 @@ const aLivedInWorkspace = async (
   const app = createApp(testDependencies({ database: db, clock, storage: store }));
   const owner = await aSignedInUser(db, clock, `${label}-owner`);
   const member = await aSignedInUser(db, clock, `${label}-member`);
+  await enableTestPush(db, clock);
+  const browser = await aBrowser();
+  await db
+    .insertInto('push_subscriptions')
+    .values({
+      user_id: member.userId,
+      session_id: member.sessionId,
+      endpoint: `https://push.example.test/purge/${member.userId}`,
+      p256dh: browser.p256dh,
+      auth: browser.auth,
+      server_key:
+        (
+          await db
+            .selectFrom('server_settings')
+            .select('push_public_key')
+            .where('id', '=', true)
+            .executeTakeFirstOrThrow()
+        ).push_public_key ?? '',
+    })
+    .execute();
   const call = async (
     method: string,
     path: string,
@@ -275,6 +297,7 @@ const nonZero = (counts: Record<string, number>): string[] =>
 
 /** What the core's own steps empty: the tables that are not a module's to list. */
 const EMPTIED_BY_THE_CORE_STEPS = [
+  'push_intents',
   'messages',
   'attachments',
   'workspace_exports',
@@ -367,6 +390,7 @@ describe('integration: the workspace purge', () => {
           'messages',
           'notifications',
           'outbox',
+          'push_intents',
           'pinned_messages',
           'saved_messages',
           'saved_searches',

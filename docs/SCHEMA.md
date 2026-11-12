@@ -368,6 +368,7 @@ CREATE TABLE push_subscriptions (
     server_key  TEXT NOT NULL,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     sound       BOOLEAN NOT NULL DEFAULT true, -- this device’s preference, including a closed tab (D-148)
+    generation  UUID NOT NULL DEFAULT gen_random_uuid(), -- captured delivery lifetime (D-307)
     failures    INTEGER NOT NULL DEFAULT 0,   -- bounded streak of deliveries the push service did not take (D-299)
 
     CONSTRAINT push_subscriptions_endpoint_is_https CHECK (endpoint LIKE 'https://%'),
@@ -387,7 +388,89 @@ The endpoint and both keys are a person's: never logged (`ARCHITECTURE.md` §10)
 Temporary provider and network failures retain the subscription. Its recorded streak is saturated before
 incrementing, including for a large restored value, and success clears it only for the same person and
 session. Definitive expiry (404/410), an invalid endpoint, sign-out and the existing device bound still
-remove the row (D-299). Retaining a subscription is not a retry of the failed notification.
+remove the row (D-299). D-307 separately persists delivery attempts: retaining a device alone is not a retry.
+
+#### 3.3.1. `push_intents`, `push_deliveries`, `push_notice_budgets`
+
+Core operational state added by 0102/0103, with state-led indexing in 0104 (D-307), captured inside the source owner's transaction:
+
+| Table | Identity and contents | Bound and lifecycle |
+| --- | --- | --- |
+| `push_intents` | UUID; unique `(source_kind, source_id)` exact occurrence, record/workspace/recipient/module/kind, original creation/expiry, next check, admission/result and diagnostic receipt | 1,000 active occurrences per recipient; expires within one day of source creation. Older overflow and other terminal receipts remain only until that expiry; indexed batches remove them. Workspace/user deletion cascades; account erasure explicitly deletes them |
+| `push_deliveries` | `(intent_id, subscription_id, generation)`; captured session UUID, state, attempts, next attempt, current lease UUID and bounded status/category | At most the registered devices captured at commit, never later devices. Eight eligible attempts; 60-second claim, original expiry. Intent/subscription deletion cascades. Session is a snapshot, not a second FK: session → subscription → delivery already cascades, and a late session FK reverses account erasure's lock order |
+| `push_notice_budgets` | `(user_id, module, kind)`; persistent GCRA next-admission/updated times | Three occurrences at once, then one a minute; retries/devices share admission. Stale rows with no live work are swept after one day; account erasure deletes them |
+
+```sql
+CREATE TABLE push_intents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('message', 'inbox')),
+    source_id UUID NOT NULL,
+    record_id UUID NOT NULL,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    module TEXT NOT NULL CHECK (length(module) BETWEEN 1 AND 64),
+    kind TEXT NOT NULL CHECK (length(kind) BETWEEN 1 AND 64),
+    created_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    next_check_at TIMESTAMPTZ NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending'
+        CHECK (state IN ('pending', 'admitted', 'completed', 'throttled', 'canceled', 'overflow')),
+    reported_at TIMESTAMPTZ,
+    UNIQUE (source_kind, source_id),
+    CONSTRAINT push_intents_lifetime CHECK (
+        isfinite(created_at) AND isfinite(expires_at)
+        AND expires_at > created_at AND expires_at <= created_at + interval '1 day'
+    )
+);
+
+CREATE INDEX idx_push_intents_due ON push_intents (next_check_at, id)
+    WHERE state IN ('pending', 'admitted');
+CREATE INDEX idx_push_intents_person ON push_intents (user_id, created_at DESC, id DESC);
+CREATE INDEX idx_push_intents_workspace ON push_intents (workspace_id);
+CREATE INDEX idx_push_intents_expiry ON push_intents (expires_at);
+CREATE INDEX idx_push_intents_state ON push_intents (state, id);
+
+CREATE TABLE push_deliveries (
+    intent_id UUID NOT NULL REFERENCES push_intents(id) ON DELETE CASCADE,
+    subscription_id UUID NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+    generation UUID NOT NULL,
+    session_id UUID NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending'
+        CHECK (state IN ('pending', 'delivered', 'canceled', 'exhausted', 'refused')),
+    attempts SMALLINT NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 8),
+    next_attempt_at TIMESTAMPTZ NOT NULL,
+    lease_id UUID,
+    last_status INTEGER CHECK (last_status BETWEEN 100 AND 599),
+    last_failure TEXT CHECK (length(last_failure) <= 64),
+    PRIMARY KEY (intent_id, subscription_id, generation)
+);
+
+CREATE INDEX idx_push_deliveries_due ON push_deliveries (next_attempt_at, intent_id)
+    WHERE state = 'pending';
+CREATE INDEX idx_push_deliveries_subscription ON push_deliveries (subscription_id);
+CREATE INDEX idx_push_deliveries_session ON push_deliveries (session_id);
+
+-- Admission is once per occurrence, not once per device or retry. One token a minute, burst three.
+CREATE TABLE push_notice_budgets (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    module TEXT NOT NULL CHECK (length(module) BETWEEN 1 AND 64),
+    kind TEXT NOT NULL CHECK (length(kind) BETWEEN 1 AND 64),
+    next_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (user_id, module, kind),
+    CONSTRAINT push_notice_budgets_window CHECK (
+        isfinite(next_at) AND isfinite(updated_at)
+        AND next_at <= updated_at + interval '3 minutes'
+    )
+);
+CREATE INDEX idx_push_notice_budgets_retention ON push_notice_budgets (updated_at);
+```
+
+No message body, inbox params, endpoint or browser/server key is copied into these tables. A trigger
+rotates subscription `generation` when owner/session/endpoint/crypto material changes, including a
+change later undone; normal renewal and sound updates preserve it. Every attempt rebuilds metadata
+and rechecks current source, permissions, module grant, session, generation and sound. Provider answers
+may mutate the captured device only while still owning the live lease under the recipient lock.
 
 ---
 
@@ -3252,6 +3335,9 @@ file that leaves its transaction runs statement by statement and must be safe to
 0099_workspace_guest_access.sql   workspace membership and invitation access descriptors, guest history/expiry/module scope  (D-300)
 0100_guest_invitation_token_encoding.sql  guest digests tagged and bound to invitation access kind  (D-300)
 0101_workspace_guest_directory.sql  partial workspace guest directory pagination index  (D-300)
+0102_push_delivery.sql  subscription generations, push_intents, push_deliveries and shared notice admission  (D-307)
+0103_push_capture_order.sql  remove redundant delivery-session FK; cover both unreported terminal states  (D-307)
+0104_push_state_index.sql  concurrent state-led access for cancellation/reporting; remove redundant partial ID index  (D-307)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

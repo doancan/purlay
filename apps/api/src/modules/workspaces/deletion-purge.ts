@@ -16,8 +16,8 @@
  *   drains them after the commit; a key the store refuses waits for `sweep:deletions` (D-141), and fails
  *   this run so it is said.
  * - **Nothing is taken back or told**: nobody can reach the workspace (the tenancy guard refuses it since the
- *   deletion was asked for, and its sockets were told then), so no counter needs keeping and no lock order
- *   needs sharing with a writer — there is none.
+ *   deletion was asked for, and its sockets were told then), so no content counter needs keeping. Global
+ *   device lifetimes may still change: push retirement yields to their child locks before erasing content.
  */
 import { absentTables, type Database, type Executor, type Transaction } from '@purlay/db';
 import { WORKSPACE_DELETION_GRACE_DAYS } from '@purlay/types';
@@ -28,6 +28,7 @@ import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
 import { recordServerAudit } from '../audit/server-audit';
 import type { JobDependencies } from '../jobs/jobs';
+import { retirePushIntents } from '../push/retire';
 
 /** Messages or uploads one transaction takes. Chat's steps are batched by it too. */
 export const WORKSPACE_PURGE_BATCH = 500;
@@ -126,6 +127,37 @@ const factBatch = async (transaction: Transaction, workspaceId: string): Promise
   keys: [],
 });
 
+/** A late logout can still hold a device's children in this long-closed workspace. Do not mark
+ * erasure complete until its operational journal is empty, or wait in an inverted cascade order. */
+const pushBatch = async (transaction: Transaction, workspaceId: string): Promise<Batch> => {
+  const parents = await transaction
+    .selectFrom('push_intents')
+    .select('id')
+    .where('workspace_id', '=', workspaceId)
+    .orderBy('id')
+    .limit(WORKSPACE_PURGE_BATCH)
+    .forUpdate()
+    .skipLocked()
+    .execute();
+  const retired = await retirePushIntents(
+    transaction,
+    parents.map((row) => row.id),
+  );
+  if (retired.length < WORKSPACE_PURGE_BATCH) {
+    const remaining = await transaction
+      .selectFrom('push_intents')
+      .select('id')
+      .where('workspace_id', '=', workspaceId)
+      .limit(1)
+      .executeTakeFirst();
+    if (remaining !== undefined)
+      throw new Error(
+        'Workspace push records are busy; retry erasure after the current transaction finishes.',
+      );
+  }
+  return { rows: retired.length, files: 0, keys: [] };
+};
+
 /** What the erasure of one workspace did. */
 export interface PurgedWorkspace {
   readonly messages: number;
@@ -145,6 +177,7 @@ export const purgeWorkspaceContent = async (
   const { database, clock, storage, log } = dependencies;
   const done = { messages: 0, files: 0, leftBehind: 0 };
   const steps: readonly PurgeStep[] = [
+    { batch: pushBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
     ...purge.before,
     { batch: uploadBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
     { batch: exportBatch, size: Number.POSITIVE_INFINITY, messages: false },

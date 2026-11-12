@@ -158,6 +158,9 @@ export type CoreExcluded =
   | 'rate_limits'
   | 'sessions'
   | 'push_subscriptions'
+  | 'push_intents'
+  | 'push_deliveries'
+  | 'push_notice_budgets'
   | 'inbox_entries'
   | 'workspace_modules'
   | 'suspended_modules'
@@ -186,6 +189,9 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
     'sign-in and invitation-mail counters by client address, address digest or id, nobody’s record (D-179)',
   sessions: 'a credential, the person’s own',
   push_subscriptions: 'a device’s keys, the person’s own',
+  push_intents: 'transient delivery state; the source notification is exported by its owner',
+  push_deliveries: 'transient device/session delivery state, not conversation content',
+  push_notice_budgets: 'transient interruption admission, not conversation content',
   inbox_entries:
     'what modules told one person: theirs alone and short-lived (read rows go after 30 days, all after 180), so it is in their own export and in no workspace’s (D-286)',
   workspace_modules:

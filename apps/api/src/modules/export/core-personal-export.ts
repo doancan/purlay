@@ -160,6 +160,9 @@ export type CorePersonalExcluded =
   | 'two_factors'
   | 'sessions'
   | 'push_subscriptions'
+  | 'push_intents'
+  | 'push_deliveries'
+  | 'push_notice_budgets'
   | 'native_authorizations'
   | 'invitation_passports'
   | 'admin_email_verification'
@@ -184,6 +187,9 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   two_factors: 'an authenticator’s sealed key and the backup codes: a credential (D-236)',
   sessions: 'a credential; where they are signed in is listed in Sessions & account (D-193)',
   push_subscriptions: 'a device’s keys: a credential of the browser’s',
+  push_intents: 'transient delivery state; the source notification is exported by its owner',
+  push_deliveries: 'transient device/session delivery state, not conversation content',
+  push_notice_budgets: 'transient interruption admission, not conversation content',
   native_authorizations: 'digests of one-time codes: credentials (D-191)',
   invitation_passports: 'digests of a cookie or an address: credentials (D-179 §5)',
   admin_email_verification: 'the digest of a link that verifies an address: a credential',

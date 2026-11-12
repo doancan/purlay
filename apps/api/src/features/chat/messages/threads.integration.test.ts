@@ -42,11 +42,14 @@ const post = async (
 ): Promise<Sent> => {
   const member = room.members[as];
   if (member === undefined) throw new Error(`no member ${as}`);
-  return await sendMessage(db, fixedClock(when), member.context, {
-    id: messageId(when),
-    content,
-    ...extra,
-  });
+  return await atomicallyOn(db)(
+    async (tx) =>
+      await sendMessage(tx, fixedClock(when), member.context, {
+        id: messageId(when),
+        content,
+        ...extra,
+      }),
+  );
 };
 
 const recordingBus = (): { bus: EventBus; frames: ServerFrame[] } => {
