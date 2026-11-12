@@ -19,6 +19,7 @@ import { createNotificationsApi, type NotificationsApi } from './endpoints/notif
 import { createGitHubApi, type GitHubApi } from './endpoints/github';
 import { createAccountApi, type AccountApi } from './endpoints/account';
 import { createRetentionApi, type RetentionApi } from './endpoints/retention';
+import { createCompanyIdentityApi, type CompanyIdentityApi } from './endpoints/company-identity';
 
 export type { SetupStatusAnswer } from './endpoints/server';
 
@@ -35,6 +36,7 @@ export interface Api
     NotificationsApi,
     GitHubApi,
     AccountApi,
+    CompanyIdentityApi,
     RetentionApi {}
 
 export const createApi = (http: Http): Api => ({
@@ -50,4 +52,5 @@ export const createApi = (http: Http): Api => ({
   ...createGitHubApi(http),
   ...createAccountApi(http),
   ...createRetentionApi(http),
+  ...createCompanyIdentityApi(http),
 });

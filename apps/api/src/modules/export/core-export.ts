@@ -150,6 +150,10 @@ export const coreExport: CoreExportContribution = {
 
 /** The tables of the core that are not in an export, and why. Every other table says it in its own module's. */
 export type CoreExcluded =
+  | 'workspace_identity_domains'
+  | 'workspace_identity_connections'
+  | 'workspace_identity_bindings'
+  | 'workspace_identity_sessions'
   | 'workspace_invitation_recipients'
   | 'workspace_invitation_mail_attempts'
   | 'accounts'
@@ -178,6 +182,12 @@ export type CoreExcluded =
   | 'setup_state';
 
 export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
+  workspace_identity_domains:
+    'administrator-only domain proof and pending verification capabilities',
+  workspace_identity_connections:
+    'administrator-only provider configuration and sealed credentials',
+  workspace_identity_bindings: 'private external identity; native membership is exported instead',
+  workspace_identity_sessions: 'session authentication provenance, not workspace content',
   workspace_invitation_recipients:
     'private recipient addresses, available only to workspace managers',
   workspace_invitation_mail_attempts: 'private invitation delivery history',

@@ -56,6 +56,7 @@ import { setupRoutes } from './routes/setup-routes';
 import { serverRoutes } from './routes/server-routes';
 import { meRoutes } from './routes/me-routes';
 import { workspaceRoutes } from './routes/workspace-routes';
+import { companyIdentityRoutes } from './routes/company-identity-routes';
 import { attachmentRoutes } from './routes/attachment-routes';
 import { clientRoutes } from './routes/client-routes';
 import { errorHook } from './error-hook';
@@ -307,6 +308,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
       }),
     }),
     workspaceRoutes(context, afterInvitationAnswers.run),
+    companyIdentityRoutes(context, cipher),
     ...moduleRoutes,
     attachmentRoutes(context),
     clientRoutes(context),

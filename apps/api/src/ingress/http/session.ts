@@ -14,8 +14,12 @@ import {
   requireSessionFromHeaders,
   type SessionAuth,
   type SessionReach,
+  type SessionOwner,
 } from '../../modules/auth/sessions';
 import { noteSession } from '../../platform/logging';
+import { AppError } from '../../platform/errors';
+
+type RequestSession = Pick<SessionOwner, 'userId' | 'sessionId' | 'companyWorkspaceId'>;
 
 /**
  * A live session, refused `403 TWO_FACTOR_REQUIRED` while its person owes the server two-step verification
@@ -27,9 +31,31 @@ export const requireSession = async (
   auth: Auth | SessionAuth,
   request: Request,
   reach: SessionReach = 'everything',
-): Promise<{ readonly userId: string; readonly sessionId: string }> => {
-  const { userId, sessionId } = await requireSessionFromHeaders(auth, request.headers, reach);
+): Promise<RequestSession> => {
+  const { userId, sessionId, companyWorkspaceId } = await requireSessionFromHeaders(
+    auth,
+    request.headers,
+    reach,
+  );
   // What the trail names as who acted, for whatever this request goes on to do (D-116).
-  noteSession(sessionId);
-  return { userId, sessionId };
+  noteSession(
+    sessionId,
+    companyWorkspaceId === undefined ? undefined : { userId, workspaceId: companyWorkspaceId },
+  );
+  return { userId, sessionId, ...(companyWorkspaceId === undefined ? {} : { companyWorkspaceId }) };
+};
+
+/** Global account authority requires a sign-in independent of a workspace's identity provider. */
+export const requireIndependentSession = async (
+  auth: Auth | SessionAuth,
+  request: Request,
+  reach: SessionReach = 'everything',
+): Promise<RequestSession> => {
+  const owner = await requireSession(auth, request, reach);
+  if (owner.companyWorkspaceId !== undefined)
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Sign in independently to manage this account.',
+    });
+  return owner;
 };

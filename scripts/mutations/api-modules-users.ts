@@ -4,6 +4,14 @@ import { PERSONAL_HTTP_TESTS } from './shared';
 
 export const API_MODULES_USERS: readonly Mutation[] = [
   {
+    id: 'company-erasure-keeps-external-binding',
+    why: 'An anonymised native membership must not retain the erased person’s provider subject.',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: "  await executor\n    .deleteFrom('workspace_identity_bindings')\n    .where('user_id', '=', person.id)\n    .execute();\n",
+    replace: '',
+    tests: ['apps/api/src/modules/workspaces/identity/connections.integration.test.ts'],
+  },
+  {
     id: 'erasure-from-any-old-session',
     why: 'a forgotten session from last month erases the account (D-139 §5)',
     file: 'apps/api/src/modules/users/erasure.ts',

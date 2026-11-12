@@ -97,6 +97,10 @@ export type WorkspaceDeletion = Static<typeof WorkspaceDeletion>;
 /** `GET /api/me` — the caller, and the workspaces they belong to. */
 export const MeResponse = Type.Object({
   user: CurrentUser,
+  /** A company-only session can act inside this workspace; omitted for independent and older sessions. */
+  companyWorkspaceId: Type.Optional(Uuid),
+  /** This server supports explicit company account linking in the current workspace. */
+  companySignInAvailable: Type.Optional(Type.Boolean()),
   /** The caller's own profile, for the dialog that changes it (D-131). */
   profile: Profile,
   memberships: Type.Array(Membership),
@@ -846,6 +850,18 @@ export type OlderPageQuery = Static<typeof OlderPageQuery>;
  * failing the whole trail.
  */
 export const AUDIT_ACTIONS = [
+  'identity.domain_created',
+  'identity.domain_renewed',
+  'identity.domain_verified',
+  'identity.domain_revoked',
+  'identity.connection_created',
+  'identity.connection_updated',
+  'identity.connection_enabled',
+  'identity.connection_disabled',
+  'identity.connection_deleted',
+  'identity.connection_tested',
+  'identity.linked',
+  'identity.unlinked',
   'member.role_changed',
   'member.guest_access_changed',
   'member.guest_converted',
@@ -902,6 +918,18 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number];
  * only what it runs.
  */
 export const CORE_AUDIT_ACTIONS = [
+  'identity.domain_created',
+  'identity.domain_renewed',
+  'identity.domain_verified',
+  'identity.domain_revoked',
+  'identity.connection_created',
+  'identity.connection_updated',
+  'identity.connection_enabled',
+  'identity.connection_disabled',
+  'identity.connection_deleted',
+  'identity.connection_tested',
+  'identity.linked',
+  'identity.unlinked',
   'member.role_changed',
   'member.guest_access_changed',
   'member.guest_converted',
@@ -991,7 +1019,11 @@ export const AuditQuery = FromClient({
   ...AuditFilterProperties,
   before: Type.Optional(Uuid),
   limit: Type.Optional(
-    Type.Integer({ minimum: 1, maximum: PAGE_LIMIT.max, default: PAGE_LIMIT.default }),
+    Type.Integer({
+      minimum: 1,
+      maximum: PAGE_LIMIT.max,
+      default: PAGE_LIMIT.default,
+    }),
   ),
 });
 export type AuditQuery = Static<typeof AuditQuery>;
@@ -1848,6 +1880,10 @@ export type IncidentUpdatePage = Static<typeof IncidentUpdatePage>;
  */
 export const AuthMethods = Type.Object({
   github: Type.Boolean(),
+  /** Native company sign-in is available; absent on older servers. Workspace options are discovered separately. */
+  company: Type.Optional(
+    Type.Object({ callbackUrl: Type.String({ format: 'uri', maxLength: 2048 }) }),
+  ),
   email: Type.Boolean(),
   /**
    * Single sign-on by the organisation's OpenID Connect provider (D-200): `null` where none is connected,

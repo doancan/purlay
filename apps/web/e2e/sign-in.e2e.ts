@@ -25,6 +25,10 @@ test.describe('the sign-in screen', () => {
   test('looks the same as it did', async ({ page }) => {
     await page.goto('/sign-in');
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Sign in with your company', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel('Workspace address', { exact: true })).toBeVisible();
     await expect(page).toHaveScreenshot('sign-in.png');
   });
 
@@ -40,6 +44,7 @@ test.describe('the sign-in screen', () => {
       google: false,
       signUp: 'invite-only',
       password: true,
+      company: { callbackUrl: new URL('/auth/company/callback', page.url()).toString() },
     });
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
     // The password is always offered; the link by email is not, with no mail.

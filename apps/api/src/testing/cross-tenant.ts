@@ -25,6 +25,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { messageId, type ErrorCode } from '@purlay/types';
+import type { CompanyCatalogueIds } from './company-catalogue';
 
 export interface DocumentedEndpoint {
   readonly method: string;
@@ -57,7 +58,9 @@ export const documentedEndpoints = (): readonly DocumentedEndpoint[] =>
     });
 
 /** The ids a crossing is made with: the owner's real ones, or ones that never existed. */
-export interface Ids {
+export interface Ids extends Partial<CompanyCatalogueIds> {
+  readonly companyDomainId: string;
+  readonly companyConnectionId: string;
   readonly workspaceId: string;
   readonly channelId: string;
   readonly messageId: string;
@@ -98,6 +101,8 @@ const CROSSING_EMOJI = encodeURIComponent('👍');
  */
 export const pathFor = (path: string, ids: Ids): string =>
   path.replace(/:(\w+)/g, (_whole, name: string) => {
+    if (name === 'domainId') return ids.companyDomainId;
+    if (name === 'connectionId') return ids.companyConnectionId;
     if (name === 'workspaceId') return ids.workspaceId;
     if (name === 'channelId') return ids.channelId;
     // A saved search's and a scheduled message's ids are the client's to choose: any fresh one will do.
@@ -154,7 +159,7 @@ type Visibility =
  * stranger's request carries the same body, which is how a refusal that came before
  * the body was read is told from one that came after.
  */
-export interface OwnerIds {
+export interface OwnerIds extends Partial<CompanyCatalogueIds> {
   readonly channelId: string;
   readonly replyId: string;
   readonly userId: string;
@@ -163,6 +168,8 @@ export interface OwnerIds {
 }
 
 export interface CrossTenantCase {
+  /** Seed real company domain/provider/link state for the positive control. */
+  readonly companyIdentity?: true;
   /** What a stranger is told — and, identically, somebody naming an id that never existed. */
   readonly refusal: Extract<
     ErrorCode,
@@ -227,7 +234,90 @@ export const queriesFor = (crossing: CrossTenantCase): readonly (readonly [strin
   ];
 };
 
+const COMPANY_CATALOGUE: Visibility = {
+  kind: 'none',
+  reason: 'Workspace company configuration and own account links, without conversation content.',
+};
+
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
+  'GET /api/workspaces/:workspaceId/identity/domains': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+  },
+  'POST /api/workspaces/:workspaceId/identity/domains': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: () => ({ domain: 'new-company.example' }),
+  },
+  'POST /api/workspaces/:workspaceId/identity/domains/:domainId/renew': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({ revision: owner.companyDomainRevision ?? '' }),
+  },
+  'POST /api/workspaces/:workspaceId/identity/domains/:domainId/verify': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({ revision: owner.companyDomainRevision ?? '' }),
+  },
+  'DELETE /api/workspaces/:workspaceId/identity/domains/:domainId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({ revision: owner.companyDomainRevision ?? '' }),
+  },
+  'GET /api/workspaces/:workspaceId/identity/connections': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+  },
+  'POST /api/workspaces/:workspaceId/identity/connections': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({
+      domainId: owner.companyVerifiedDomainId ?? '',
+      name: 'New office',
+      issuer: 'https://new-identity.example',
+      clientId: 'new-client',
+      clientSecret: 'matrix-new-secret',
+    }),
+  },
+  'PATCH /api/workspaces/:workspaceId/identity/connections/:connectionId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({
+      revision: owner.companyConnectionRevision ?? '',
+      name: 'Updated office',
+    }),
+  },
+  'PUT /api/workspaces/:workspaceId/identity/connections/:connectionId/enabled': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({ revision: owner.companyConnectionRevision ?? '', enabled: false }),
+  },
+  'DELETE /api/workspaces/:workspaceId/identity/connections/:connectionId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({ revision: owner.companyConnectionRevision ?? '' }),
+  },
+  'GET /api/workspaces/:workspaceId/company-identities': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+  },
+  'DELETE /api/workspaces/:workspaceId/company-identities/:connectionId': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    companyIdentity: true,
+    visibility: COMPANY_CATALOGUE,
+    body: (_now, owner) => ({ bindingId: owner.companyBindingId ?? '' }),
+  },
   'GET /api/workspaces/:workspaceId': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: { kind: 'none', reason: 'the workspace itself; no channel is named or listed' },

@@ -256,6 +256,56 @@ const aPushIntent = async (
   return id;
 };
 
+/** A real private company binding; its workspace-owned configuration survives personal erasure. */
+const aCompanyBinding = async (
+  db: Transaction,
+  world: World,
+): Promise<{
+  readonly connectionId: string;
+  readonly bindingId: string;
+  readonly revision: string;
+}> => {
+  const domain = await db
+    .insertInto('workspace_identity_domains')
+    .values({
+      workspace_id: world.workspaceId,
+      domain: `${crypto.randomUUID()}.example.test`,
+      challenge_issued_at: NOW,
+      challenge_expires_at: new Date(NOW.getTime() + DAY_MS),
+      verified_at: NOW,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const connection = await db
+    .insertInto('workspace_identity_connections')
+    .values({
+      workspace_id: world.workspaceId,
+      domain_id: domain.id,
+      name: crypto.randomUUID(),
+      issuer: 'https://identity.example.test',
+      client_id: 'erasure-probe',
+      client_secret_encrypted: Buffer.from('opaque-erasure-probe'),
+    })
+    .returning(['id', 'authentication_revision'])
+    .executeTakeFirstOrThrow();
+  const binding = await db
+    .insertInto('workspace_identity_bindings')
+    .values({
+      workspace_id: world.workspaceId,
+      connection_id: connection.id,
+      user_id: world.adaId,
+      issuer: 'https://identity.example.test',
+      subject: 'erased-person',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return {
+    connectionId: connection.id,
+    bindingId: binding.id,
+    revision: connection.authentication_revision,
+  };
+};
+
 /** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   workspace_invitation_mail_attempts: {
@@ -411,6 +461,28 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   sessions: ofAda('sessions', async () => {
     // The world's own session is the row: the erasure ends it with the rest.
   }),
+  workspace_identity_bindings: ofAda('workspace_identity_bindings', async (db, world) => {
+    await aCompanyBinding(db, world);
+  }),
+  workspace_identity_sessions: by(
+    'workspace_identity_sessions',
+    'session_id',
+    (world) => world.sessionId,
+    async (db, world) => {
+      const binding = await aCompanyBinding(db, world);
+      await db
+        .insertInto('workspace_identity_sessions')
+        .values({
+          session_id: world.sessionId,
+          workspace_id: world.workspaceId,
+          connection_id: binding.connectionId,
+          binding_reference: binding.bindingId,
+          authentication_revision: binding.revision,
+          authenticated_at: NOW,
+        })
+        .execute();
+    },
+  ),
   two_factors: ofAda('two_factors', async (db, world) => {
     await db
       .insertInto('two_factors')

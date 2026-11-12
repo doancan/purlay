@@ -9,6 +9,14 @@ const SETUP_TESTS = 'apps/api/src/modules/setup/setup.integration.test.ts';
 export const API_MODULES_SETUP_SETUP: readonly Mutation[] = [
   // ── Administration → Server and the recovery command (D-179 §4.8) ──
   {
+    id: 'company-origin-inherits-server-admin',
+    why: 'A tenant identity provider cannot inherit the canonical user’s server administration authority.',
+    file: 'apps/api/src/modules/setup/setup.ts',
+    find: 'owner === undefined || owner.companyWorkspaceId !== undefined || admin === undefined',
+    replace: 'owner === undefined || admin === undefined',
+    tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
+  },
+  {
     id: 'server-guard-ignores-the-admin-flag',
     why: 'any signed-in person — a member, a workspace owner — is the server administrator',
     file: 'apps/api/src/modules/setup/setup.ts',

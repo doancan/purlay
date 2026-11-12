@@ -146,7 +146,7 @@ const workspaceMembership = async (
     .where('workspace_members.workspace_id', '=', workspaceId)
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
-    .where(activeWorkspaceMembership)
+    .where(activeWorkspaceMembership())
     .executeTakeFirst();
 
   if (row === undefined) throw workspaceNotFound();

@@ -50,7 +50,7 @@ import { inviteCookie } from '../../platform/cookies';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import type { Outbox } from '../../platform/mail';
 import { atomicallyOn } from '../../platform/transactions';
-import { requireSession } from './session';
+import { requireSession, requireIndependentSession } from './session';
 import { queryOf, validated } from './validate';
 import type { WorkspaceDependencies, MemberWriteDependencies } from './workspaces';
 import { guestInvitationAvailability } from '../../modules/workspaces/guest-readiness';
@@ -216,7 +216,7 @@ export const joinByInvitation = async (
   request: Request,
   body: unknown,
 ): Promise<Membership> => {
-  const { userId } = await requireSession(auth, request);
+  const { userId } = await requireIndependentSession(auth, request);
   const { token } = validated(InvitationTokenRequest, body);
   const { membership, memberIds } = await atomicallyOn(database)(
     async (transaction) =>

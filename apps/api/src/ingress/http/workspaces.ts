@@ -68,7 +68,7 @@ import {
   type EventBus,
 } from '../../platform/events';
 import type { Logger } from '../../platform/logging';
-import { requireSession } from './session';
+import { requireSession, requireIndependentSession } from './session';
 import { queryOf, validated } from './validate';
 
 export interface WorkspaceDependencies {
@@ -111,7 +111,11 @@ export const readMe = async (
   request: Request,
 ): Promise<MeResponse> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  const { userId, companyWorkspaceId } = await requireSession(
+    dependencies.auth,
+    request,
+    'enrolment',
+  );
   const me = await meOf(
     database,
     clock,
@@ -121,6 +125,15 @@ export const readMe = async (
   );
   return {
     ...me,
+    ...(dependencies.auth.company === undefined ? {} : { companySignInAvailable: true }),
+    ...(companyWorkspaceId === undefined
+      ? {}
+      : {
+          companyWorkspaceId,
+          isServerAdmin: false,
+          mayCreateWorkspace: false,
+          scheduledDeletions: [],
+        }),
     mustEnrolTwoFactor: await dependencies.auth.owesTwoFactor(userId),
     modules: dependencies.modules.filter((id) => dependencies.suspended?.().has(id) !== true),
   };
@@ -141,7 +154,7 @@ export const createMyWorkspace = async (
   body: unknown,
 ): Promise<Workspace> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireIndependentSession(dependencies.auth, request);
   const input = validated(CreateWorkspaceRequest, body);
   return await atomicallyOn(database)(async (transaction) => {
     await requireMayCreateWorkspace(

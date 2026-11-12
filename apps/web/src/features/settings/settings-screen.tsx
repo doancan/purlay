@@ -16,6 +16,7 @@ import { AccountPage } from './pages/account';
 import { AuditPage } from './pages/audit';
 import { DataPage } from './pages/data';
 import { GeneralPage } from './pages/general';
+import { CompanyPage } from './pages/company';
 import { InvitationsPage } from './pages/invitations';
 import { MembersPage } from './pages/members';
 import { PreferencesPage } from './pages/preferences';
@@ -33,6 +34,7 @@ const PAGES: Record<CoreSettingsSectionId, () => React.JSX.Element> = {
   account: AccountPage,
   about: AboutPage,
   general: GeneralPage,
+  company: CompanyPage,
   members: MembersPage,
   invitations: InvitationsPage,
   audit: AuditPage,

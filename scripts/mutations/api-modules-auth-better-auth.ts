@@ -453,6 +453,14 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     tests: ['apps/api/src/modules/auth/better-auth.integration.test.ts'],
   },
   {
+    id: 'company-native-credentials-open',
+    why: 'A company provider cannot change global credentials through a native library endpoint.',
+    file: 'apps/api/src/modules/auth/better-auth.ts',
+    find: '            if (!allowed)',
+    replace: '            if (false)',
+    tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
+  },
+  {
     id: 'github-addresses-follow-redirects',
     why: 'an address-list request that answers 308 is followed with the person’s token to another origin',
     file: BETTER_AUTH,
@@ -905,9 +913,9 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'sign-in-link-spend-outside-one-transaction',
     why: 'a link’s spend is several transactions, so a refusal at its end undoes none of what came first',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: '                const { headers: answered } = await runWithTransaction(\n                  adapter,\n                  async () =>\n                    await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true }),\n                );\n',
+    find: '                const { headers: answered } = await runWithTransaction(\n                  adapter,\n                  async () =>\n                    await api.magicLinkVerify({\n                      query: { token },\n                      headers: companyCookies.independentHeaders(headers),\n                      returnHeaders: true,\n                    }),\n                );\n',
     replace:
-      '                void adapter;\n                const { headers: answered } = await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true });\n',
+      '                void adapter;\n                const { headers: answered } = await api.magicLinkVerify({ query: { token }, headers: companyCookies.independentHeaders(headers), returnHeaders: true });\n',
     tests: ['apps/api/src/ingress/http/magic-link-guard.integration.test.ts'],
   },
   {
@@ -941,8 +949,9 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'sign-in-link-strips-an-unproven-account',
     why: 'a link spent where no transaction can undo it removes the setup administrator’s password (D-179 §4)',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: '        delete: {\n          before: (_account, context) => {\n            refusedWhileSpendingALink(context);\n',
-    replace: '        delete: {\n          before: (_account, context) => {\n',
+    find: "        delete: {\n          before: (account, context) => {\n            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))\n              throw new APIError('FORBIDDEN', {\n                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',\n                message: 'Unlink company identities from their workspace settings.',\n              });\n            refusedWhileSpendingALink(context);\n",
+    replace:
+      "        delete: {\n          before: (account, context) => {\n            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))\n              throw new APIError('FORBIDDEN', {\n                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',\n                message: 'Unlink company identities from their workspace settings.',\n              });\n",
     tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
   },
   {

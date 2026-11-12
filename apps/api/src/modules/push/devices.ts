@@ -4,7 +4,8 @@
  * workspace's page (D-143), and — for a module's notice — minus those in Deep Work or their quiet hours,
  * whose notices wait instead. What each device is told is worded here, in the person's language.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
+import { companySessionAllowsWorkspace } from '../../platform/company-session';
 import { NEEDS_YOU, type PushLocale, type PushPayload } from '@purlay/types';
 import type { Attention } from '../../platform/attention';
 import type { Clock } from '../../platform/clock';
@@ -18,6 +19,7 @@ import { pushBody, saidOf } from './words';
 export type PushKeys = VapidKeys | (() => Promise<VapidKeys | undefined>);
 
 interface Subscription {
+  readonly companyWorkspaceId: string | null;
   readonly id: string;
   readonly userId: string;
   readonly sessionId: string;
@@ -29,7 +31,7 @@ interface Subscription {
   readonly generation: string;
 }
 
-export interface Device extends Omit<Subscription, 'locale'> {
+export interface Device extends Omit<Subscription, 'locale' | 'companyWorkspaceId'> {
   readonly workspaceId: string;
   readonly source:
     { readonly messageId: string; readonly notificationId?: string } | { readonly entryId: string };
@@ -74,6 +76,7 @@ const subscriptionsOf = async (
       's.server_key as serverKey',
       's.user_id as userId',
       's.session_id as sessionId',
+      'live.company_workspace_id as companyWorkspaceId',
       's.endpoint',
       's.p256dh',
       's.auth',
@@ -84,6 +87,7 @@ const subscriptionsOf = async (
     .where('person.deleted_at', 'is', null)
     .where('person.suspended_at', 'is', null)
     .where('live.expires_at', '>', clock.now())
+    .where(companySessionAllowsWorkspace('live', sql<string>`live.company_workspace_id`))
     .where('s.server_key', '=', current.publicKey)
     // A person's devices in the order they were subscribed: the same order every time.
     .orderBy('s.created_at')
@@ -114,7 +118,12 @@ export const devicesFor = async (
   const slugs = new Map(workspaces.map((workspace) => [workspace.id, workspace.slug]));
   const rows = subscriptions.flatMap((subscription) =>
     told
-      .filter((notice) => notice.userId === subscription.userId)
+      .filter(
+        (notice) =>
+          notice.userId === subscription.userId &&
+          (subscription.companyWorkspaceId === null ||
+            subscription.companyWorkspaceId === notice.workspaceId),
+      )
       .flatMap((notice) => {
         const slug = slugs.get(notice.workspaceId);
         return slug === undefined ? [] : [{ ...subscription, ...notice, slug }];
@@ -208,7 +217,12 @@ export const routeInbox = async (
   ]);
   const devices = subscriptions.flatMap((subscription) =>
     ready
-      .filter((entry) => entry.userId === subscription.userId)
+      .filter(
+        (entry) =>
+          entry.userId === subscription.userId &&
+          (subscription.companyWorkspaceId === null ||
+            subscription.companyWorkspaceId === entry.workspaceId),
+      )
       .flatMap((entry) => {
         const saying = noticeWords(
           entry.kind,

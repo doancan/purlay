@@ -239,6 +239,7 @@ const moduleSet = {
 // derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
 // takes that is not a setting is the process's own, from the environment.
 const runtimeBase: RuntimeBase = {
+  companyIdentity: { cipher: credentialCipher(config.ENCRYPTION_KEY) },
   database,
   baseUrl: config.APP_URL,
   secret: deriveAuthSecret(config.ENCRYPTION_KEY),

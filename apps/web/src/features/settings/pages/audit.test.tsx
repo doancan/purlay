@@ -74,6 +74,35 @@ const lines = (view: View): string[] =>
     .map((item) => item.querySelector('[data-audit-line]')?.textContent ?? '');
 
 describe('the audit log', () => {
+  test('company identity changes are readable administrative events without exposing identity claims or credentials', async () => {
+    const events = [
+      ['identity.domain_created', 'added a company domain'],
+      ['identity.domain_renewed', 'renewed a company domain verification challenge'],
+      ['identity.domain_verified', 'verified a company domain'],
+      ['identity.domain_revoked', 'removed a company domain'],
+      ['identity.connection_created', 'configured a company sign-in connection'],
+      ['identity.connection_updated', 'changed a company sign-in connection'],
+      ['identity.connection_enabled', 'enabled a company sign-in connection'],
+      ['identity.connection_disabled', 'disabled a company sign-in connection'],
+      ['identity.connection_deleted', 'removed a company sign-in connection'],
+      ['identity.connection_tested', 'completed a company sign-in test'],
+      ['identity.linked', 'linked their company identity'],
+      ['identity.unlinked', 'unlinked their company identity'],
+    ] as const;
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page(
+            events.map(([action], n) =>
+              anEntry(n, { action, targetType: 'workspace', metadata: {} }),
+            ),
+          ),
+        ),
+    });
+    expect(lines(view)).toEqual(events.map(([, sentence]) => `${ME.displayName} ${sentence}`));
+    view.unmount();
+  });
+
   test('is an owner’s and an admin’s; a member is not offered it, and its address is not found', async () => {
     const member = await render('/w/acme/settings/audit', {}, 'member');
     expect(await member.findByText('Nothing here')).toBeDefined();

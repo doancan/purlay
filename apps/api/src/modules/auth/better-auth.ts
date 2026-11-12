@@ -56,6 +56,7 @@ import { readCapped } from '../../platform/http-body';
 import type { Clock } from '../../platform/clock';
 import {
   INVITE_COOKIE,
+  COMPANY_SESSION_COOKIE,
   readCookie,
   SESSION_COOKIE,
   STATE_COOKIE,
@@ -91,7 +92,15 @@ import {
   NO_SESSION_LIFETIME,
   type SessionLifetime,
 } from './session-lifetime';
-import { SESSION_CLOCK } from './sessions';
+import { SESSION_CLOCK, requireSessionFromHeaders } from './sessions';
+import {
+  companySessionCookies,
+  readSessionAuthority,
+  type SessionAuthority,
+} from './company-sessions';
+import type { CredentialCipher } from '../../platform/crypto';
+import { companyIdentityPlugin } from '../workspaces/identity/native-auth';
+import { COMPANY_PROVIDER_PREFIX } from '../workspaces/identity/catalogue';
 import { linkLetter, type SignInLocale } from './sign-in-letters';
 import { heldTransaction, rememberingTransactions } from './sign-up-transaction';
 import { consumePassport, passportAllows } from '../workspaces/invitation-passport';
@@ -134,6 +143,8 @@ export interface SignInPolicy {
 const NO_SIGN_IN_POLICY: SignInPolicy = { requireTwoFactor: false, passwordSignIn: true };
 
 export interface AuthDependencies {
+  /** Native workspace identity uses the installation's credential cipher; only tests replace its external provider. */
+  readonly companyIdentity?: { readonly cipher: CredentialCipher; readonly fetch?: GithubFetch };
   readonly database: Executor;
   readonly baseUrl: string;
   /** Already derived: see `deriveAuthSecret`. Never the root key, never an editable setting. */
@@ -1174,6 +1185,13 @@ export interface AuthAnswer {
  * this literal — and `schemaProblem`, the one question of ours asked of it.
  */
 export type Auth = ReturnType<typeof betterAuth> & {
+  readonly company: { readonly callbackUrl: string } | undefined;
+  /** Verifies the company cookie before adapting it privately for the native library. */
+  readonly sessionHeaders: (headers: Headers) => Promise<Headers | undefined>;
+  readonly sessionAuthority: (
+    sessionId: string,
+    userId: string,
+  ) => Promise<SessionAuthority | undefined>;
   /**
    * A request through the library, with what Purlay needs to know of a GitHub sign-up it lost: two
    * tabs of the same person made the account at once, the other's committed, and this one's insert
@@ -1243,6 +1261,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     throw new Error(`the auth secret must be at least ${String(SECRET_BYTES)} bytes`);
   }
   const { settings, log, mailer } = deps;
+  const companyCookies = companySessionCookies(deps.database, deps.secret);
   const policy = deps.signInPolicy ?? NO_SIGN_IN_POLICY;
   const lifetime = deps.sessionLifetime ?? NO_SESSION_LIFETIME;
   /** The requirement in force: on, and a password a way in for it to protect. */
@@ -1653,6 +1672,40 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       // between a person and signing out: a read of ours that fails is written down and the request
       // goes on, told by the library's own hooks alone.
       before: createAuthMiddleware(async (ctx) => {
+        // Only the verified company-cookie bridge supplies both names. Independent requests and
+        // sign-out keep the existing fail-open announcement watch; an observer failure cannot trap a session.
+        const source =
+          ctx.path === '/sign-out' ||
+          readCookie(ctx.headers?.get('cookie') ?? null, COMPANY_SESSION_COOKIE) === undefined
+            ? undefined
+            : await callerSession(deps.database, ctx.headers);
+        if (source !== undefined) {
+          const row = await deps.database
+            .selectFrom('sessions')
+            .select('company_workspace_id')
+            .where('id', '=', source.id)
+            .executeTakeFirst();
+          if (row?.company_workspace_id != null) {
+            const independentSignIn =
+              ctx.path.startsWith('/sign-in/') || ctx.path.startsWith('/callback/');
+            const allowed =
+              independentSignIn ||
+              ctx.path === '/get-session' ||
+              ctx.path === '/sign-out' ||
+              ctx.path === '/company/sign-in' ||
+              ctx.path === '/company/callback';
+            if (!allowed)
+              throw new APIError('FORBIDDEN', {
+                message: 'Sign in independently to manage account credentials.',
+              });
+            if (
+              !independentSignIn &&
+              ctx.path !== '/sign-out' &&
+              (await readSessionAuthority(deps.database, source.id, source.userId)) === undefined
+            )
+              throw new APIError('UNAUTHORIZED', { message: 'Sign in again to continue.' });
+          }
+        }
         policyRefusal(ctx.path);
         await lapsedCallerEnded(ctx.headers);
         const round = signInRounds.getStore();
@@ -1722,6 +1775,22 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       }),
     },
     plugins: [
+      ...(deps.companyIdentity === undefined
+        ? []
+        : [
+            companyIdentityPlugin({
+              database: deps.database,
+              clock: deps.clock,
+              cipher: deps.companyIdentity.cipher,
+              lifetime: () => lifetime,
+              baseUrl: deps.baseUrl,
+              log,
+              ...(deps.companyIdentity.fetch === undefined
+                ? {}
+                : { providerFetch: deps.companyIdentity.fetch }),
+              requireActor: async (headers) => await requireSessionFromHeaders(auth, headers),
+            }),
+          ]),
       revokeOtherSessionsById(sessionsEnded),
       // Two-step verification for an account with a password (D-236): a code from an authenticator app after
       // the password, or a backup code. What a client may not choose is set by `twoFactorBody`; the routes
@@ -1807,7 +1876,12 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         },
         update: { before: (account) => Promise.resolve({ data: withoutTokens(account) }) },
         delete: {
-          before: (_account, context) => {
+          before: (account, context) => {
+            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))
+              throw new APIError('FORBIDDEN', {
+                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',
+                message: 'Unlink company identities from their workspace settings.',
+              });
             refusedWhileSpendingALink(context);
             return Promise.resolve();
           },
@@ -2065,7 +2139,31 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   const answer = async (request: Request): Promise<AuthAnswer> => {
     const round: SignInRound = { profile: undefined, made: false };
     return await signInRounds.run(round, async () => {
-      let response = await instance.handler(request);
+      const companyPresented =
+        readCookie(request.headers.get('cookie'), COMPANY_SESSION_COOKIE) !== undefined;
+      const path = new URL(request.url).pathname.slice(AUTH_BASE_PATH.length);
+      const independent =
+        path.startsWith('/sign-in/') ||
+        path.startsWith('/callback/') ||
+        path === VERIFY_CODE ||
+        path === VERIFY_BACKUP_CODE ||
+        path === '/magic-link/verify';
+      const verified = independent
+        ? companyCookies.independentHeaders(request.headers)
+        : await companyCookies.nativeHeaders(request.headers);
+      const nativeHeaders = verified ?? new Headers(request.headers);
+      if (verified === undefined) {
+        const remaining = (nativeHeaders.get('cookie') ?? '')
+          .split(';')
+          .map((part) => part.trim())
+          .filter(
+            (part) =>
+              !part.startsWith(`${SESSION_COOKIE}=`) &&
+              !part.startsWith(`${COMPANY_SESSION_COOKIE}=`),
+          );
+        nativeHeaders.set('cookie', remaining.join('; '));
+      }
+      let response = await instance.handler(new Request(request, { headers: nativeHeaders }));
       const redirect = response.headers.get('location');
       if (round.admissionRefused === true && redirect !== null) {
         const url = new URL(redirect, deps.baseUrl);
@@ -2074,6 +2172,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         headers.set('location', url.toString());
         response = new Response(response.body, { status: response.status, headers });
       }
+      response = await companyCookies.publicResponse(response, companyPresented, independent);
       return { response, lostSignUpRace: await lostSignUpRace(round, response) };
     });
   };
@@ -2110,9 +2209,19 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 const { headers: answered } = await runWithTransaction(
                   adapter,
                   async () =>
-                    await api.magicLinkVerify({ query: { token }, headers, returnHeaders: true }),
+                    await api.magicLinkVerify({
+                      query: { token },
+                      headers: companyCookies.independentHeaders(headers),
+                      returnHeaders: true,
+                    }),
                 );
-                return answered.getSetCookie();
+                return (
+                  await companyCookies.publicResponse(
+                    new Response(null, { headers: answered }),
+                    readCookie(headers.get('cookie'), COMPANY_SESSION_COOKIE) !== undefined,
+                    true,
+                  )
+                ).headers.getSetCookie();
               } catch (error) {
                 if (tried === 0 && uniqueViolation(error)) continue;
                 // The guard above: something past every check of Purlay's reached it, and is said.
@@ -2131,8 +2240,15 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     };
   })();
 
-  return {
+  const auth: Auth = {
     ...instance,
+    company:
+      deps.companyIdentity === undefined
+        ? undefined
+        : { callbackUrl: `${deps.baseUrl}${AUTH_BASE_PATH}/company/callback` },
+    sessionHeaders: companyCookies.nativeHeaders,
+    sessionAuthority: async (sessionId, userId): Promise<SessionAuthority | undefined> =>
+      await readSessionAuthority(deps.database, sessionId, userId),
     handler: async (request: Request): Promise<Response> => (await answer(request)).response,
     answer,
     schemaProblem,
@@ -2163,8 +2279,17 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       return await signInRounds.run(
         round,
         async () =>
-          await instance.api.signInEmail({ body: { email, password }, headers, asResponse: true }),
+          await companyCookies.publicResponse(
+            await instance.api.signInEmail({
+              body: { email, password },
+              headers: companyCookies.independentHeaders(headers),
+              asResponse: true,
+            }),
+            readCookie(headers.get('cookie'), COMPANY_SESSION_COOKIE) !== undefined,
+            true,
+          ),
       );
     },
   };
+  return auth;
 };

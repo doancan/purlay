@@ -33,12 +33,20 @@
  * - **Two minutes**, on the server's clock. The application's clock decides nothing.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 import { atomicallyOn } from '../../platform/transactions';
-import { issueSession, type IssuedSession, type IssueOptions } from './sessions';
+import {
+  issueSession,
+  requireLiveSession,
+  type IssuedSession,
+  type IssueOptions,
+} from './sessions';
+import { lockCompanyIdentityMember } from '../workspaces/identity/authority';
+import { liveCompanySessionProof } from '../../platform/company-session';
+import { AppError } from '../../platform/errors';
 
 /** How long a code lasts: long enough to go from the browser to the application, and no longer. */
 export const NATIVE_CODE_TTL_MS = 2 * 60 * 1000;
@@ -59,6 +67,10 @@ const sameChallenge = (stored: string, supplied: string): boolean => {
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
+/** Older readers cannot exchange a company grant as an independent native session. */
+const companyCodeDigest = async (code: string): Promise<string> =>
+  await tokenDigest(`company-native-code@purlay/v1:${code}`);
+
 /**
  * A code for this person, bound to the application's `challenge` (the caller has checked its shape).
  * The code is returned this once and never stored.
@@ -66,12 +78,28 @@ const sameChallenge = (stored: string, supplied: string): boolean => {
 export const authorizeNative = async (
   database: Executor,
   clock: Clock,
-  { userId, challenge }: { readonly userId: string; readonly challenge: string },
+  {
+    userId,
+    challenge,
+    sourceSessionId,
+  }: { readonly userId: string; readonly challenge: string; readonly sourceSessionId?: string },
 ): Promise<{ readonly code: string }> => {
   const code = randomToken();
   const digest = await tokenDigest(code);
+  const companyDigest = await companyCodeDigest(code);
   const now = clock.now();
   await atomicallyOn(database)(async (transaction) => {
+    let companyWorkspaceId: string | undefined;
+    if (sourceSessionId !== undefined) {
+      const source = await requireLiveSession(transaction, clock, sourceSessionId);
+      if (source.userId !== userId)
+        throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+      companyWorkspaceId = source.companyWorkspaceId;
+      if (companyWorkspaceId !== undefined) {
+        await lockCompanyIdentityMember(transaction, companyWorkspaceId, userId, false);
+        await requireLiveSession(transaction, clock, sourceSessionId);
+      }
+    }
     // The one lock every authorisation of this person is made under. `FOR NO KEY UPDATE` is compatible
     // with the key share the insert below takes on the same row, so it never waits on itself.
     await transaction
@@ -82,7 +110,7 @@ export const authorizeNative = async (
       .executeTakeFirstOrThrow();
     const live = await transaction
       .selectFrom('native_authorizations')
-      .select('id')
+      .select(['id', 'company_workspace_id'])
       .where('user_id', '=', userId)
       .where('spent_at', 'is', null)
       .where('expires_at', '>', now)
@@ -90,7 +118,17 @@ export const authorizeNative = async (
       .orderBy('id', 'desc')
       .execute();
     // The newest four stay, and the one made now is the fifth.
-    const makingRoom = live.slice(NATIVE_LIVE_CODES_PER_USER - 1).map((row) => row.id);
+    const excess = Math.max(0, live.length - NATIVE_LIVE_CODES_PER_USER + 1);
+    const eligible =
+      companyWorkspaceId === undefined
+        ? live
+        : live.filter((row) => row.company_workspace_id === companyWorkspaceId);
+    if (eligible.length < excess)
+      throw new AppError({
+        code: 'FORBIDDEN',
+        message: 'Sign in independently to make room for this native sign-in.',
+      });
+    const makingRoom = eligible.slice(eligible.length - excess).map((row) => row.id);
     if (makingRoom.length > 0) {
       await transaction.deleteFrom('native_authorizations').where('id', 'in', makingRoom).execute();
     }
@@ -99,7 +137,13 @@ export const authorizeNative = async (
       .values({
         id: messageId(now),
         user_id: userId,
-        code_digest: digest,
+        code_digest: companyWorkspaceId === undefined ? digest : companyDigest,
+        ...(companyWorkspaceId === undefined
+          ? {}
+          : {
+              company_workspace_id: companyWorkspaceId,
+              company_source_session_id: sourceSessionId,
+            }),
         challenge,
         created_at: now,
         expires_at: new Date(now.getTime() + NATIVE_CODE_TTL_MS),
@@ -120,7 +164,18 @@ export interface NativeSessionTerms {
  * and a client that guesses learns nothing from the difference.
  */
 export type NativeRefusal =
-  'unknown' | 'spent' | 'expired' | 'burnt' | 'erased' | 'suspended' | 'wrong-verifier';
+  | 'unknown'
+  | 'spent'
+  | 'expired'
+  | 'burnt'
+  | 'erased'
+  | 'suspended'
+  | 'wrong-verifier'
+  | 'company-source-ended';
+
+export interface NativeIssuedSession extends IssuedSession {
+  readonly companyWorkspaceId?: string;
+}
 
 /**
  * Spends a code for a session, or says nothing: `undefined` is every way it can fail, and is the same
@@ -143,15 +198,16 @@ export const exchangeNativeCode = async (
     /** Told why when the code does not open; never given the code, its digest or the person. */
     readonly refused?: (reason: NativeRefusal) => void;
   } & IssueOptions,
-): Promise<IssuedSession | undefined> => {
+): Promise<NativeIssuedSession | undefined> => {
   // Before anything is looked up, so a code that does not exist costs the same hash as one that does.
   const supplied = nativeChallengeOf(verifier);
   const digest = await tokenDigest(code);
-  const now = clock.now();
+  const companyDigest = await companyCodeDigest(code);
 
   return await atomicallyOn(database)(async (transaction) => {
-    // Held to the end: of two spends of one code the second waits here, finds it spent and is refused.
-    const found = await transaction
+    // Classify immutable provenance before locking the grant. Company operations lock source,
+    // workspace and person before a grant row, matching enrollment and cap pruning.
+    const grant = transaction
       .selectFrom('native_authorizations')
       .innerJoin('users', 'users.id', 'native_authorizations.user_id')
       .select([
@@ -161,16 +217,104 @@ export const exchangeNativeCode = async (
         'native_authorizations.wrong_verifiers',
         'native_authorizations.expires_at',
         'native_authorizations.spent_at',
+        'native_authorizations.company_workspace_id',
+        'native_authorizations.company_source_session_id',
         'users.deleted_at',
         'users.suspended_at',
       ])
-      .where('native_authorizations.code_digest', '=', digest)
-      .forUpdate(['native_authorizations'])
-      .executeTakeFirst();
-    if (found === undefined) {
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb('native_authorizations.code_digest', '=', digest),
+            eb('native_authorizations.company_workspace_id', 'is', null),
+          ]),
+          eb.and([
+            eb('native_authorizations.code_digest', '=', companyDigest),
+            eb('native_authorizations.company_workspace_id', 'is not', null),
+          ]),
+        ]),
+      );
+    const origin = await grant.executeTakeFirst();
+    if (origin === undefined) {
       refused?.('unknown');
       return undefined;
     }
+
+    let proof:
+      | {
+          connection_id: string;
+          binding_reference: string;
+          authentication_revision: string;
+          authenticated_at: Date;
+        }
+      | undefined;
+    if (origin.company_workspace_id !== null) {
+      const sourceId = origin.company_source_session_id;
+      if (sourceId === null) {
+        refused?.('company-source-ended');
+        return undefined;
+      }
+      try {
+        const source = await requireLiveSession(transaction, clock, sourceId);
+        if (
+          source.userId !== origin.user_id ||
+          source.companyWorkspaceId !== origin.company_workspace_id
+        ) {
+          refused?.('company-source-ended');
+          return undefined;
+        }
+        await lockCompanyIdentityMember(
+          transaction,
+          origin.company_workspace_id,
+          origin.user_id,
+          false,
+        );
+        await requireLiveSession(transaction, clock, sourceId);
+      } catch (error) {
+        if (!(error instanceof AppError)) throw error;
+        refused?.('company-source-ended');
+        return undefined;
+      }
+      proof = await transaction
+        .selectFrom('workspace_identity_sessions')
+        .select([
+          'connection_id',
+          'binding_reference',
+          'authentication_revision',
+          'authenticated_at',
+        ])
+        .where('session_id', '=', sourceId)
+        .where('workspace_id', '=', origin.company_workspace_id)
+        .where(
+          liveCompanySessionProof(
+            sourceId,
+            origin.company_workspace_id,
+            origin.user_id,
+            sql<string>`workspace_identity_sessions.connection_id`,
+          ),
+        )
+        .executeTakeFirst();
+      if (proof === undefined) {
+        refused?.('company-source-ended');
+        return undefined;
+      }
+    }
+
+    // Reread and hold the same grant after source authority is locked. A concurrent spend or
+    // prune cannot be mistaken for the earlier snapshot, and old readers cannot change its kind.
+    const found = await grant
+      .where('native_authorizations.id', '=', origin.id)
+      .forUpdate(['native_authorizations'])
+      .executeTakeFirst();
+    if (
+      found?.user_id !== origin.user_id ||
+      found.company_workspace_id !== origin.company_workspace_id ||
+      found.company_source_session_id !== origin.company_source_session_id
+    ) {
+      refused?.('unknown');
+      return undefined;
+    }
+    const now = clock.now();
 
     // Spent, expired, burnt, or its person erased or suspended (D-233): nothing is counted and nothing is made.
     const live =
@@ -213,13 +357,30 @@ export const exchangeNativeCode = async (
       .set({ spent_at: now })
       .where('id', '=', found.id)
       .execute();
-    return await issueSession(
+    const issued = await issueSession(
       transaction,
       clock,
       terms.secret,
       found.user_id,
       terms.sessionTtlDays,
-      { userAgent, ipAddress, deviceName },
+      {
+        userAgent,
+        ipAddress,
+        deviceName,
+        companyWorkspaceId: found.company_workspace_id ?? undefined,
+      },
     );
+    if (proof !== undefined && found.company_workspace_id !== null) {
+      await transaction
+        .insertInto('workspace_identity_sessions')
+        .values({
+          ...proof,
+          session_id: issued.sessionId,
+          workspace_id: found.company_workspace_id,
+        })
+        .execute();
+      return { ...issued, companyWorkspaceId: found.company_workspace_id };
+    }
+    return issued;
   });
 };

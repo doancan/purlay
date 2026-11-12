@@ -12,7 +12,7 @@ import {
 } from '../../platform/events';
 import { atomicallyOn } from '../../platform/transactions';
 import { updateProfile } from '../../modules/users/profile';
-import { requireSession } from './session';
+import { requireIndependentSession } from './session';
 import { validated } from './validate';
 import type { MemberWriteDependencies } from './workspaces';
 
@@ -22,7 +22,7 @@ export const updateMyProfile = async (
   body: unknown,
 ): Promise<Profile> => {
   const { database, clock, bus, log = NO_LOG } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireIndependentSession(dependencies.auth, request);
   const input = validated(UpdateProfileRequest, body);
   const change = await atomicallyOn(database)(
     async (transaction) => await updateProfile(transaction, userId, input),

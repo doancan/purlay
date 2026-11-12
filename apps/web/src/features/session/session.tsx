@@ -150,7 +150,13 @@ export const SessionGate = ({
       />
     );
   }
-  if (me.data.mustEnrolTwoFactor) return <LazyTwoFactorEnrolment email={me.data.user.email} />;
+  if (me.data.mustEnrolTwoFactor)
+    return (
+      <LazyTwoFactorEnrolment
+        email={me.data.user.email}
+        companyOnly={me.data.companyWorkspaceId !== undefined}
+      />
+    );
   // Push is a person's, on every signed-in page: a device they turned it on in is tied again on load.
   return (
     <SessionContext.Provider value={me.data}>

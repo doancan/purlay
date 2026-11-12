@@ -12,9 +12,11 @@ import type { Auth } from '../../modules/auth/better-auth';
 
 /** `GET /api/auth/methods` — nothing of anybody in it: the same for every caller. */
 export const authMethods = (
-  auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'google' | 'signUp' | 'signInPolicy'>,
+  auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'google' | 'signUp' | 'signInPolicy'> &
+    Partial<Pick<Auth, 'company'>>,
 ): AuthMethods => ({
   github: auth.github,
+  ...(auth.company === undefined ? {} : { company: auth.company }),
   email: auth.signInLinks !== undefined,
   oidc: auth.oidc === undefined ? null : { name: auth.oidc.name ?? null },
   google: auth.google,

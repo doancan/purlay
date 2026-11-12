@@ -25,7 +25,8 @@ import { isAPIError } from 'better-auth/api';
 import { sessionTokenDigest, type Executor } from '@purlay/db';
 import { systemClock, type Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
-import { readCookie, SESSION_COOKIE } from '../../platform/cookies';
+import { readCookie, SESSION_COOKIE, COMPANY_SESSION_COOKIE } from '../../platform/cookies';
+import { liveCompanySessionProof } from '../../platform/company-session';
 import { randomToken } from '../../platform/tokens';
 import type { Auth } from './better-auth';
 import { ACTIVITY_STALE_AFTER_MS, fixedEnd } from './session-lifetime';
@@ -80,6 +81,7 @@ export interface IssuedSession {
 }
 
 export interface SessionOwner {
+  readonly companyWorkspaceId?: string;
   readonly sessionId: string;
   readonly userId: string;
   /**
@@ -90,6 +92,8 @@ export interface SessionOwner {
 }
 
 export interface IssueOptions {
+  /** Immutable issuing company, provided only by a server-verified native handoff. */
+  readonly companyWorkspaceId?: string | undefined;
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
   /** What a device list calls this session: set for the native application's, never for a browser's (D-193). */
@@ -125,6 +129,9 @@ export const issueSession = async (
       created_at: now,
       last_used_at: now,
       expires_at: expiresAt,
+      ...(options.companyWorkspaceId === undefined
+        ? {}
+        : { company_workspace_id: options.companyWorkspaceId }),
       ...(options.userAgent === undefined ? {} : { user_agent: options.userAgent }),
       ...(options.ipAddress === undefined ? {} : { ip_address: options.ipAddress }),
       ...(options.deviceName === undefined ? {} : { device_name: options.deviceName }),
@@ -188,12 +195,23 @@ export const sessionFromHeaders = async (
   options: { readonly allowPending?: boolean; readonly recordActivity?: boolean } = {},
 ): Promise<SessionOwner | undefined> => {
   // Nothing to look up: an anonymous request costs the database nothing.
-  if (readCookie(headers.get('cookie'), SESSION_COOKIE) === undefined) return undefined;
+  if (
+    readCookie(headers.get('cookie'), SESSION_COOKIE) === undefined &&
+    readCookie(headers.get('cookie'), COMPANY_SESSION_COOKIE) === undefined
+  )
+    return undefined;
   try {
+    const nativeHeaders = await auth.sessionHeaders(headers);
+    if (nativeHeaders === undefined) return undefined;
     // Read, never written: a refresh here would extend the row while the browser's cookie kept its
     // old lifetime, and put a write on every request. The library's own `/get-session` refreshes.
-    const found = await auth.api.getSession({ headers, query: { disableRefresh: true } });
+    const found = await auth.api.getSession({
+      headers: nativeHeaders,
+      query: { disableRefresh: true },
+    });
     if (found === null) return undefined;
+    const authority = await auth.sessionAuthority(found.session.id, found.user.id);
+    if (authority === undefined) return undefined;
     // A soft-deleted account keeps no live session, whatever row is left (ARCHITECTURE.md, D-139 §5).
     if (markOf(found.user, 'deletedAt') !== null) return undefined;
     // Nor a suspended one (D-233): its sessions were deleted when it was suspended, and this refuses one
@@ -205,6 +223,7 @@ export const sessionFromHeaders = async (
     if (options.recordActivity !== false)
       await touch(auth, found.session.id, new Date(found.session.updatedAt));
     return {
+      ...authority,
       sessionId: found.session.id,
       userId: found.user.id,
       expiresAt: fixedEnd(auth.sessionLifetime, {
@@ -272,11 +291,11 @@ export const requireLiveSession = async (
   transaction: Executor,
   clock: Clock,
   sessionId: string,
-): Promise<void> => {
+): Promise<Pick<SessionOwner, 'userId' | 'sessionId' | 'companyWorkspaceId'>> => {
   const live = await transaction
     .selectFrom('sessions')
     .innerJoin('users', 'users.id', 'sessions.user_id')
-    .select('sessions.id')
+    .select(['sessions.id', 'sessions.user_id', 'sessions.company_workspace_id'])
     .where('sessions.id', '=', sessionId)
     .where('sessions.expires_at', '>', clock.now())
     .where('users.admission_state', '=', 'approved')
@@ -291,6 +310,23 @@ export const requireLiveSession = async (
   if (live === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
   }
+  if (live.company_workspace_id !== null) {
+    const proof = await transaction
+      .selectFrom('sessions')
+      .select('id')
+      .where('id', '=', sessionId)
+      .where(liveCompanySessionProof(sessionId, live.company_workspace_id, live.user_id))
+      .executeTakeFirst();
+    if (proof === undefined)
+      throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  }
+  return {
+    userId: live.user_id,
+    sessionId: live.id,
+    ...(live.company_workspace_id === null
+      ? {}
+      : { companyWorkspaceId: live.company_workspace_id }),
+  };
 };
 
 /**

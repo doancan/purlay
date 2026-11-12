@@ -24,14 +24,16 @@
 import { ACCESS_REVOKED_MAX_CHANNELS, CLOSE_CODES, type ServerFrame } from '@purlay/types';
 import type { Clock } from '../platform/clock';
 import type { Auth } from '../modules/auth/better-auth';
-import { readCookie, SESSION_COOKIE } from '../platform/cookies';
-import type { Logger } from '../platform/logging';
+import { readCookie, SESSION_COOKIE, COMPANY_SESSION_COOKIE } from '../platform/cookies';
+import { withinRequest, type Logger } from '../platform/logging';
 import { SESSION_CLOCK, sessionFromHeaders } from '../modules/auth/sessions';
 import type { SocketIdentity } from './router';
 import type {
   ChannelDeliveryGate,
   ChannelDeliveryScope,
   ChannelDeliveryVerdict,
+  CompanyDeliveryIdentity,
+  CompanyFrameProjector,
 } from '../platform/ports/channel-delivery';
 import { DEFAULT_DEADLINE_MS, timedOut, withDeadline } from '../platform/request-deadline';
 
@@ -207,6 +209,8 @@ interface Held {
   /** Allocated for module subscriptions that require current delivery authority. */
   channels?: Map<string, RestrictedChannel>;
   projected?: { tail: Promise<void>; bytes: number };
+  company?: CompanyDeliveryIdentity;
+  companyProjected?: { tail: Promise<void>; bytes: number };
 }
 
 interface RestrictedChannel {
@@ -216,6 +220,7 @@ interface RestrictedChannel {
 }
 
 export interface HubOptions {
+  readonly companyFrame?: CompanyFrameProjector;
   readonly log: Logger;
   /**
    * Stops a connection listening to a channel. The hub calls it when it delivers an
@@ -290,7 +295,7 @@ const channelOf = (frame: ServerFrame): string | null => {
 export const createSocketHub = (
   auth: Auth,
   clock: Clock,
-  { log, leave, listen, timers = systemTimers, presence, closedEvent }: HubOptions,
+  { log, leave, listen, timers = systemTimers, presence, closedEvent, companyFrame }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
@@ -399,7 +404,7 @@ export const createSocketHub = (
     });
   };
 
-  const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
+  const writeAuthorized = (socketId: string, socket: Held, frame: ServerFrame): void => {
     const channelId = channelOf(frame);
     const restricted = channelId === null ? undefined : socket.channels?.get(channelId);
     // Session loss is immediate; all ordinary writes retain their order behind pending authority reads.
@@ -504,7 +509,7 @@ export const createSocketHub = (
     });
   };
 
-  const deliver = (socketId: string, frame: ServerFrame): void => {
+  const deliverAuthorized = (socketId: string, frame: ServerFrame): void => {
     const socket = held.get(socketId);
     // A frame for a connection that has gone is dropped, not queued. Delivery is
     // best-effort by design: what a client missed it asks for on reconnect, by
@@ -542,7 +547,121 @@ export const createSocketHub = (
       socket.holding.push(frame);
       return;
     }
-    write(socketId, socket, frame);
+    writeAuthorized(socketId, socket, frame);
+  };
+
+  /** All company output shares one bounded queue; a session end bypasses pending authority reads. */
+  const projectCompany = (
+    socketId: string,
+    socket: Held,
+    frame: ServerFrame,
+    accept: (projected: ServerFrame) => void,
+  ): void => {
+    if (closedEvent?.(frame.event) === true) return;
+    const identity = socket.company;
+    if (identity === undefined || frame.event === 'SESSION_ENDED') {
+      accept(frame);
+      return;
+    }
+    if (socket.ending || socket.ended === true) return;
+    const queue = socket.companyProjected ?? { tail: Promise.resolve(), bytes: 0 };
+    socket.companyProjected = queue;
+    const bytes = Buffer.byteLength(JSON.stringify(frame), 'utf8');
+    if (queue.bytes + bytes + (socket.projected?.bytes ?? 0) > OUTBOUND_HIGH_WATER_MARK) {
+      socket.ending = true;
+      socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+      return;
+    }
+    queue.bytes += bytes;
+    let charged = true;
+    const release = (): void => {
+      if (charged) {
+        queue.bytes -= bytes;
+        charged = false;
+      }
+    };
+    const current = (): boolean =>
+      held.get(socketId) === socket && !socket.ending && socket.ended !== true;
+    const run = queue.tail
+      .then(async () => {
+        if (!current()) return;
+        if (companyFrame === undefined)
+          throw new Error('Company delivery projection is unavailable');
+        const projected = await withDeadline<ServerFrame | 'ended' | 'timeout' | undefined>(
+          DEFAULT_DEADLINE_MS,
+          async (signal) =>
+            await withinRequest(
+              {
+                requestId: `live:company:${socketId}`,
+                startedAt: performance.now(),
+                sessionId: identity.sessionId,
+                signal,
+              },
+              async () => {
+                const authority = await auth.sessionAuthority(identity.sessionId, identity.userId);
+                if (authority?.companyWorkspaceId !== identity.workspaceId) return 'ended';
+                return await companyFrame(identity, frame, signal);
+              },
+            ),
+          () => 'timeout',
+        );
+        if (!current()) return;
+        if (projected === 'timeout') throw timedOut();
+        if (projected === 'ended') {
+          deliverAuthorized(socketId, {
+            event: 'SESSION_ENDED',
+            data: { reason: 'signed-out' },
+            ts: clock.now().getTime(),
+          });
+          return;
+        }
+        release();
+        if (projected !== undefined) {
+          accept(projected);
+          await socket.projected?.tail;
+        }
+      })
+      .catch((error: unknown) => {
+        if (!current()) return;
+        log.error('company session delivery failed; closing to resync', { socketId, err: error });
+        socket.ending = true;
+        socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+      })
+      .finally(() => {
+        release();
+        running.delete(run);
+      });
+    queue.tail = run;
+    running.add(run);
+  };
+  const write = (socketId: string, socket: Held, frame: ServerFrame): void => {
+    projectCompany(socketId, socket, frame, (projected) => {
+      writeAuthorized(socketId, socket, projected);
+    });
+  };
+  const deliver = (socketId: string, frame: ServerFrame): void => {
+    const socket = held.get(socketId);
+    if (closedEvent?.(frame.event) === true) return;
+    // Preserve subscribe-before-replay order while company authority is asynchronous. Replayed
+    // payloads are still checked against current channel authority before any bytes leave.
+    if (
+      socket?.company !== undefined &&
+      socket.holding !== undefined &&
+      frame.event !== 'SESSION_ENDED'
+    ) {
+      if (socket.holding.length >= HELD_FRAMES_MAX) {
+        socket.holding = undefined;
+        socket.ending = true;
+        socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+        return;
+      }
+      socket.holding.push(frame);
+      return;
+    }
+    if (socket !== undefined)
+      projectCompany(socketId, socket, frame, (projected) => {
+        deliverAuthorized(socketId, projected);
+      });
   };
 
   const resolve = async (
@@ -550,9 +669,24 @@ export const createSocketHub = (
     request: Request,
   ): Promise<SocketIdentity | undefined> => {
     const owner = await sessionFromHeaders(auth, request.headers);
+    const socket = held.get(socketId);
+    if (socket !== undefined && owner?.companyWorkspaceId !== undefined)
+      socket.company = {
+        userId: owner.userId,
+        sessionId: owner.sessionId,
+        workspaceId: owner.companyWorkspaceId,
+      };
     return owner === undefined
       ? undefined
-      : { socketId, userId: owner.userId, sessionId: owner.sessionId, expiresAt: owner.expiresAt };
+      : {
+          socketId,
+          userId: owner.userId,
+          sessionId: owner.sessionId,
+          expiresAt: owner.expiresAt,
+          ...(owner.companyWorkspaceId === undefined
+            ? {}
+            : { companyWorkspaceId: owner.companyWorkspaceId }),
+        };
   };
 
   return {
@@ -573,7 +707,9 @@ export const createSocketHub = (
       // (`upgrade.ts`), so a cookie that no longer resolves — even at the first read below, when a
       // sign-out landed between admission and it — is a session that ended, and is told so (#632).
       const opening = {
-        hadSession: readCookie(request.headers.get('cookie'), SESSION_COOKIE) !== undefined,
+        hadSession:
+          readCookie(request.headers.get('cookie'), SESSION_COOKIE) !== undefined ||
+          readCookie(request.headers.get('cookie'), COMPANY_SESSION_COOKIE) !== undefined,
       };
       entry.identity = (async (): Promise<SocketIdentity | undefined> => {
         const first = await resolve(socketId, request);
@@ -636,8 +772,23 @@ export const createSocketHub = (
       return identity;
     },
 
-    identity: async (socketId: string): Promise<SocketIdentity | undefined> =>
-      await (held.get(socketId)?.identity ?? Promise.resolve(undefined)),
+    identity: async (socketId: string): Promise<SocketIdentity | undefined> => {
+      const socket = held.get(socketId);
+      const identity = await (socket?.identity ?? Promise.resolve(undefined));
+      if (
+        socket?.company !== undefined &&
+        (await auth.sessionAuthority(socket.company.sessionId, socket.company.userId))
+          ?.companyWorkspaceId !== socket.company.workspaceId
+      ) {
+        deliver(socketId, {
+          event: 'SESSION_ENDED',
+          data: { reason: 'signed-out' },
+          ts: clock.now().getTime(),
+        });
+        return undefined;
+      }
+      return identity;
+    },
 
     closed: (socketId: string): void => {
       const socket = held.get(socketId);
@@ -723,7 +874,8 @@ export const createSocketHub = (
         if (live.event === 'MESSAGE_CREATED' && replayed.has(live.data.id)) continue;
         // A write above may have closed the connection; stop writing to it.
         if (!held.has(socketId)) return;
-        write(socketId, socket, live);
+        if (socket.company === undefined) write(socketId, socket, live);
+        else deliver(socketId, live);
       }
     },
 

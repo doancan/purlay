@@ -83,9 +83,13 @@ export const subscribe = async (
       details: { fields: { endpoint: 'not an address a push may be sent to' } },
     });
   }
-  await requireLiveSession(transaction, clock, subscriber.sessionId);
+  const authority = await requireLiveSession(transaction, clock, subscriber.sessionId);
+  if (authority.userId !== subscriber.userId)
+    throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+  // Serialize this person's cap before an upsert or pruning can choose another browser.
+  await setLocale(transaction, subscriber.userId, input.locale);
   const now = clock.now();
-  await transaction
+  const changed = await transaction
     .insertInto('push_subscriptions')
     .values({
       user_id: subscriber.userId,
@@ -119,7 +123,12 @@ export const subscribe = async (
         }))
         .where((row) =>
           row.or([
-            row('push_subscriptions.user_id', '=', subscriber.userId),
+            row.and([
+              row('push_subscriptions.user_id', '=', subscriber.userId),
+              ...(authority.companyWorkspaceId === undefined
+                ? []
+                : [row('push_subscriptions.session_id', '=', subscriber.sessionId)]),
+            ]),
             row.and([
               row('push_subscriptions.p256dh', '=', input.keys.p256dh),
               row('push_subscriptions.auth', '=', input.keys.auth),
@@ -127,7 +136,45 @@ export const subscribe = async (
           ]),
         ),
     )
-    .execute();
+    .returning('id')
+    .executeTakeFirst();
+  if (changed === undefined) return;
+  if (authority.companyWorkspaceId !== undefined) {
+    const count = await transaction
+      .selectFrom('push_subscriptions')
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .where('user_id', '=', subscriber.userId)
+      .executeTakeFirstOrThrow();
+    const excess = Number(count.n) - PUSH_SUBSCRIPTIONS_MAX;
+    if (excess > 0) {
+      const owned = await transaction
+        .selectFrom('push_subscriptions as s')
+        .innerJoin('sessions as origin', 'origin.id', 's.session_id')
+        .select('s.id')
+        .where('s.user_id', '=', subscriber.userId)
+        .where('origin.company_workspace_id', '=', authority.companyWorkspaceId)
+        .where('s.id', '<>', changed.id)
+        .orderBy('s.created_at')
+        .orderBy('s.id')
+        .limit(excess)
+        .execute();
+      if (owned.length < excess)
+        throw new AppError({
+          code: 'FORBIDDEN',
+          message: 'Sign in independently to make room for this device.',
+        });
+      await transaction
+        .deleteFrom('push_subscriptions')
+        .where('user_id', '=', subscriber.userId)
+        .where(
+          'id',
+          'in',
+          owned.map((row) => row.id),
+        )
+        .execute();
+    }
+    return;
+  }
   const kept = await transaction
     .selectFrom('push_subscriptions')
     .select('id')
@@ -149,7 +196,6 @@ export const subscribe = async (
       )
       .execute();
   }
-  await setLocale(transaction, subscriber.userId, input.locale);
 };
 
 /**
@@ -160,11 +206,23 @@ export const unsubscribe = async (
   executor: Executor,
   userId: string,
   endpoint: string,
+  companyWorkspaceId?: string,
 ): Promise<void> => {
   await executor
     .deleteFrom('push_subscriptions')
     .where('user_id', '=', userId)
     .where('endpoint', '=', endpoint)
+    .where((eb) =>
+      companyWorkspaceId === undefined
+        ? eb.val(true)
+        : eb.exists(
+            eb
+              .selectFrom('sessions')
+              .select('id')
+              .whereRef('sessions.id', '=', 'push_subscriptions.session_id')
+              .where('sessions.company_workspace_id', '=', companyWorkspaceId),
+          ),
+    )
     .execute();
 };
 

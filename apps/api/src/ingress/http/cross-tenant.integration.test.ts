@@ -46,6 +46,7 @@ import { aSignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import { twoColourPng } from '../../testing/png';
 import { aMemoryStore } from '../../testing/storage';
+import { aCompanyCatalogue, companyCatalogueDns } from '../../testing/company-catalogue';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -94,6 +95,7 @@ const call = async (
     testDependencies({
       database: db,
       clock,
+      companyTxtLookup: companyCatalogueDns(db),
       mail: aRecordingOutbox(),
       storage: STORE,
       githubApp: () => GITHUB_APP_STUB,
@@ -115,6 +117,7 @@ const aTenant = async (
   cookie: string,
   slug: string,
   guestMember = false,
+  companyIdentity = false,
 ): Promise<Ids & { readonly replyId: string }> => {
   const workspaceId = await created(
     await call(db, 'POST', '/api/workspaces', cookie, { name: slug, slug: aUniqueSlug(slug) }),
@@ -354,6 +357,9 @@ const aTenant = async (
     })
     .execute();
   return {
+    ...(companyIdentity
+      ? await aCompanyCatalogue(db, clock, workspaceId, ownerId)
+      : { companyDomainId: crypto.randomUUID(), companyConnectionId: crypto.randomUUID() }),
     workspaceId,
     channelId,
     messageId: root,
@@ -374,6 +380,8 @@ const aTenant = async (
 };
 
 const NEVER_EXISTED: Ids = {
+  companyDomainId: '00000000-0000-4000-8000-000000000000',
+  companyConnectionId: '00000000-0000-4000-8000-000000000000',
   workspaceId: '00000000-0000-4000-8000-000000000000',
   channelId: '00000000-0000-4000-8000-000000000000',
   messageId: '00000000-0000-4000-8000-000000000000',
@@ -392,6 +400,8 @@ const NEVER_EXISTED: Ids = {
 };
 
 const NOT_A_UUID: Ids = {
+  companyDomainId: 'not-a-uuid',
+  companyConnectionId: 'not-a-uuid',
   workspaceId: 'not-a-uuid',
   channelId: 'not-a-uuid',
   messageId: 'not-a-uuid',
@@ -423,19 +433,19 @@ describe('integration: cross-tenant isolation', () => {
           const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
           const owner = ownerUser.cookie;
           const stranger = await signedIn(db, 'xt-stranger');
-          const theirs = await aTenant(db, owner, 'xt-theirs', crossing.guestMember);
+          const theirs = await aTenant(
+            db,
+            owner,
+            'xt-theirs',
+            crossing.guestMember,
+            crossing.companyIdentity,
+          );
           await aTenant(db, stranger, 'xt-own');
           if (crossing.archived === true) {
             const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
             expect(archived.status).toBe(204);
           }
-          const body = crossing.body?.(NOW, {
-            channelId: theirs.channelId,
-            userId: ownerUser.userId,
-            workspaceId: theirs.workspaceId,
-            messageId: theirs.messageId,
-            replyId: theirs.replyId,
-          });
+          const body = crossing.body?.(NOW, { ...theirs, userId: ownerUser.userId });
 
           const across = await call(
             db,
@@ -498,8 +508,20 @@ describe('integration: one member, two workspaces', () => {
     test(`${key} lists nothing of the member's other workspace`, async () => {
       await withRollback(async (db) => {
         const member = await signedIn(db, 'xt-both');
-        const first = await aTenant(db, member, 'xt-first', crossing.guestMember);
-        const second = await aTenant(db, member, 'xt-second', crossing.guestMember);
+        const first = await aTenant(
+          db,
+          member,
+          'xt-first',
+          crossing.guestMember,
+          crossing.companyIdentity,
+        );
+        const second = await aTenant(
+          db,
+          member,
+          'xt-second',
+          crossing.guestMember,
+          crossing.companyIdentity,
+        );
 
         const directions: readonly (readonly [Ids, Ids])[] = [
           [first, second],

@@ -15,7 +15,8 @@
  * socket opens and again only while any is open. The timer does not keep the process alive and is
  * cleared by `stop`, which shutdown calls.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
+import { companySessionAllowsWorkspace } from '../platform/company-session';
 import type { ServerFrame } from '@purlay/types';
 import type { Clock } from '../platform/clock';
 import type { Logger } from '../platform/logging';
@@ -89,6 +90,9 @@ export const startLivenessSweep = ({
           'users.deleted_at',
         ])
         .where('sessions.id', 'in', [...new Set(batch.map((one) => one.sessionId))])
+        .where(
+          companySessionAllowsWorkspace('sessions', sql<string>`sessions.company_workspace_id`),
+        )
         .execute();
       const known = new Map(rows.map((row) => [row.id, row]));
       const now = clock.now().getTime();

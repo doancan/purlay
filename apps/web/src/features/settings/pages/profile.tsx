@@ -28,6 +28,7 @@ import { Button } from '../../../ui/button';
 import { useSession } from '../../session/session';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 import { NameRow } from './name-row';
+import { CompanySessionNotice } from './company-parts';
 
 /** The zones this browser can format in, for the field's suggestions; none where it cannot say. */
 const zonesHere = (): readonly string[] =>
@@ -40,6 +41,29 @@ type Field = 'title' | 'timeZone' | 'status';
 const FIELDS: readonly Field[] = ['title', 'timeZone', 'status'];
 
 export const ProfilePage = (): React.JSX.Element => {
+  const { companyWorkspaceId } = useSession();
+  return companyWorkspaceId === undefined ? <IndependentProfilePage /> : <CompanyProfilePage />;
+};
+
+const CompanyProfilePage = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const { user } = useSession();
+  return (
+    <SettingsPage
+      title={t('settings.profile.title')}
+      description={t('settings.profile.description')}
+    >
+      <CompanySessionNotice />
+      <SettingsCard>
+        <SettingsRow label={t('profile.nameLabel')}>
+          <span className="text-body text-ink">{user.displayName}</span>
+        </SettingsRow>
+      </SettingsCard>
+    </SettingsPage>
+  );
+};
+
+const IndependentProfilePage = (): React.JSX.Element => {
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();

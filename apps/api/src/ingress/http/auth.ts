@@ -49,11 +49,13 @@ import {
   signOut as signOutOf,
   signOutEverywhere as signOutEverywhereOf,
 } from '../../modules/auth/sign-in';
-import { requireSession } from './session';
+import { requireIndependentSession } from './session';
 import { sessionFromHeaders } from '../../modules/auth/sessions';
 import {
   clearedRetryCookie,
   clearedSessionCookie,
+  clearedCompanySessionCookie,
+  COMPANY_SESSION_COOKIE,
   clearedStateCookie,
   RETRY_COOKIE,
   retryCookie,
@@ -519,7 +521,7 @@ export const readMySignIn = async (
   dependencies: Pick<AuthDependencies, 'auth' | 'database'>,
   request: Request,
 ): Promise<MySignIn> => {
-  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  const { userId } = await requireIndependentSession(dependencies.auth, request, 'enrolment');
   return await mySignIn(
     dependencies.database,
     userId,
@@ -536,7 +538,14 @@ export const signOut = async (
     allowPending: true,
   });
   await signOutOf(dependencies, session?.sessionId);
-  return { setCookie: [clearedSessionCookie()] };
+  return {
+    setCookie: [
+      clearedSessionCookie(),
+      ...(readCookie(request.headers.get('cookie'), COMPANY_SESSION_COOKIE) === undefined
+        ? []
+        : [clearedCompanySessionCookie()]),
+    ],
+  };
 };
 
 /** Signing out *everywhere* needs to know who you are, so it needs a live session. */
@@ -544,7 +553,7 @@ export const signOutEverywhere = async (
   dependencies: SignOutDependencies,
   request: Request,
 ): Promise<AuthResponse> => {
-  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');
+  const { userId } = await requireIndependentSession(dependencies.auth, request, 'enrolment');
   await signOutEverywhereOf(dependencies, userId);
   return { setCookie: [clearedSessionCookie()] };
 };
@@ -559,7 +568,7 @@ export const eraseMyAccount = async (
   body: unknown,
 ): Promise<AuthResponse> => {
   const { database, clock, bus } = dependencies;
-  const caller = await requireSession(dependencies.auth, request);
+  const caller = await requireIndependentSession(dependencies.auth, request);
   const { confirm } = validated(EraseAccountRequest, body);
   const erased = await atomicallyOn(database)(
     async (transaction) =>

@@ -187,7 +187,7 @@ export const requireServerAdmin = async (
           .where('suspended_at', 'is', null)
           .where('deleted_at', 'is', null)
           .executeTakeFirst();
-  if (owner === undefined || admin === undefined) {
+  if (owner === undefined || owner.companyWorkspaceId !== undefined || admin === undefined) {
     throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
   }
   // The administrator too is held back until their second step is on, where the server requires it (D-239):

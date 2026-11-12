@@ -27,6 +27,12 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **Company sign-in** — Workspace administrators can verify domains, test and enable an OpenID Connect provider, and let existing members explicitly link their company identity (D-308).
+
+### Security
+
+- **Company sign-in** — Company sessions retain their issuing workspace across browser, desktop, live events and queued notifications; account-wide changes require an independent sign-in (D-309).
 
 ---

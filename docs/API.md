@@ -501,6 +501,43 @@ an instance-administrator role this product does not have.
 
 Demoting or removing the last `owner` returns `409` (invariant I-2).
 
+### Workspace company sign-in (D-308, D-309)
+
+Company sign-in uses the existing native account and workspace membership; neither a matching email
+nor a verified company domain grants membership. Wire contracts are in `@purlay/types/workspace-identity`.
+Administrators prove DNS control, save a provider, complete a real provider test and explicitly enable
+the tested revision. Configuration inventories are bounded to 32 domains and 16 providers. OAuth
+credentials are write-only and provider tokens are never retained or returned.
+
+| | Method | Path | Role |
+|:-:|---|---|---|
+| ○ | `GET` | `/api/workspaces/:workspaceId/identity/domains` | owner/admin; domain metadata and pending public TXT challenges |
+| ○ | `POST` | `/api/workspaces/:workspaceId/identity/domains` | owner/admin; `CreateCompanyDomainRequest`, returns a new challenge |
+| ○ | `POST` | `/api/workspaces/:workspaceId/identity/domains/:domainId/renew` | owner/admin; observed `revision`, replaces the challenge |
+| ○ | `POST` | `/api/workspaces/:workspaceId/identity/domains/:domainId/verify` | owner/admin; observed `revision`, verifies bounded DNS TXT evidence |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/identity/domains/:domainId` | owner/admin; observed `revision`, revokes dependent company authority |
+| ○ | `GET` | `/api/workspaces/:workspaceId/identity/connections` | owner/admin; metadata without client secrets |
+| ○ | `POST` | `/api/workspaces/:workspaceId/identity/connections` | owner/admin; `CreateCompanyConnectionRequest`, initially disabled |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/identity/connections/:connectionId` | owner/admin; `UpdateCompanyConnectionRequest`, omitted secret is preserved |
+| ○ | `PUT` | `/api/workspaces/:workspaceId/identity/connections/:connectionId/enabled` | owner/admin; observed `revision` and `enabled`; enabling requires a current successful native test |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/identity/connections/:connectionId` | owner/admin; observed `revision`, disables and clears the saved secret |
+| ○ | `GET` | `/api/workspaces/:workspaceId/company-identities` | full member; own links only, keyset `before`/`limit` pagination |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/company-identities/:connectionId` | full member; exact observed `bindingId`, unlinks and retires dependent company sessions |
+| ○ | `GET` | `/auth/company-options` | public; exact `workspace` slug, enabled tested provider names/IDs only; unknown/unavailable workspaces return an empty list |
+
+The native Better Auth handler under `/auth/*` accepts `POST /auth/company/start` with
+`CompanyIdentityStartRequest` for an independent member's explicit link, or an independent administrator's
+test. Public `POST /auth/company/sign-in` accepts `CompanySignInRequest`; both return an HTTPS provider
+URL, with authenticated server state and PKCE. The provider returns to `/auth/company/callback`.
+`AuthMethods.company.callbackUrl` supplies the exact callback to register, and is omitted on older servers.
+
+`GET /api/me` includes `companyWorkspaceId` for a source-limited company session and
+`companySignInAvailable` when explicit company account linking is supported. Company sessions can act
+only in their issuing workspace and require independent proof for global account/profile/credential
+management. Native authorization/exchange preserves the company source and proof. Revoked, removed or
+purged provider authority cannot become independent authority through cookie names, code exchange or
+delayed delivery. These endpoints do not implement SCIM or workspace sign-in policy enforcement.
+
 **An invitation's token is never in a path or a query** (D-115): the request log writes every path,
 so the token travels in the body, and in the client's address only after `#`, which no request
 carries.

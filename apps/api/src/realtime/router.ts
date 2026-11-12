@@ -135,7 +135,7 @@ interface SocketGate extends ChannelDeliveryGate {
 }
 
 /** Who is speaking; the session is the one the connection was opened with, and its end ends the connection. */
-export type SocketIdentity = FrameIdentity;
+export type SocketIdentity = FrameIdentity & { readonly companyWorkspaceId?: string };
 
 /**
  * Stamps a frame with the server clock and the id it answers. The body is one

@@ -24,7 +24,7 @@ import {
   listPersonalExports,
   requestPersonalExport,
 } from '../../modules/export/personal-requests';
-import { requireSession } from './session';
+import { requireSession, requireIndependentSession } from './session';
 
 export interface ExportDependencies {
   /** Who is calling: every session is resolved through it (`sessions.ts`, D-179). */
@@ -105,7 +105,7 @@ export const askForMyExport = async (
   request: Request,
 ): Promise<WorkspaceExport> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireIndependentSession(dependencies.auth, request);
   const asked = await atomicallyOn(database)(
     async (transaction) => await requestPersonalExport(transaction, clock, userId),
   );
@@ -118,7 +118,7 @@ export const readMyExports = async (
   dependencies: ExportDependencies,
   request: Request,
 ): Promise<WorkspaceExport[]> => {
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireIndependentSession(dependencies.auth, request);
   return await listPersonalExports(dependencies.database, userId);
 };
 
@@ -132,7 +132,7 @@ export const downloadMyExport = async (
   readonly headers: Record<string, string>;
 }> => {
   const { database, clock } = dependencies;
-  const { userId } = await requireSession(dependencies.auth, request);
+  const { userId } = await requireIndependentSession(dependencies.auth, request);
   const claimed = await atomicallyOn(database)(
     async (transaction) => await claimPersonalDownload(transaction, clock, userId, exportId),
   );

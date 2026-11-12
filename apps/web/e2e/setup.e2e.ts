@@ -127,6 +127,7 @@ test('walks a fresh server from the code to its first workspace', async ({ brows
     google: false,
     signUp: 'invite-only',
     password: true,
+    company: { callbackUrl: `${origin}/auth/company/callback` },
   });
   await expect(again.getByText('Accounts are created by invitation.')).toBeVisible();
   await again.getByLabel('Email address').fill('ayse@example.test');

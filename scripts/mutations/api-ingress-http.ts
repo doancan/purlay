@@ -277,6 +277,22 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/modules-off.integration.test.ts'],
   },
   {
+    id: 'company-profile-writes-global-account',
+    why: 'A workspace-issued company credential must not change the global native profile.',
+    file: 'apps/api/src/ingress/http/profile.ts',
+    find: "import { requireIndependentSession } from './session';",
+    replace: "import { requireSession as requireIndependentSession } from './session';",
+    tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
+  },
+  {
+    id: 'company-unsubscribe-http-source-forgotten',
+    why: 'The actual HTTP boundary must pass the native company source to device removal.',
+    file: 'apps/api/src/ingress/http/push.ts',
+    find: '    validated(PushUnsubscribeRequest, body).endpoint,\n    companyWorkspaceId,',
+    replace: '    validated(PushUnsubscribeRequest, body).endpoint,',
+    tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
+  },
+  {
     id: 'creators-not-read-from-the-setting',
     why: 'who may make a workspace is not the server’s setting, and a server set to its first person lets anybody in',
     file: 'apps/api/src/ingress/http/route-context.ts',
@@ -884,8 +900,9 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'two-factor-hold-on-the-way-out',
     why: 'a held-back person cannot read who they are, so the client cannot show them how to turn it on (D-239)',
     file: 'apps/api/src/ingress/http/workspaces.ts',
-    find: "  const { userId } = await requireSession(dependencies.auth, request, 'enrolment');",
-    replace: '  const { userId } = await requireSession(dependencies.auth, request);',
+    find: "  const { userId, companyWorkspaceId } = await requireSession(\n    dependencies.auth,\n    request,\n    'enrolment',\n  );\n",
+    replace:
+      "  const { userId, companyWorkspaceId } = await requireSession(\n    dependencies.auth,\n    request,\n    'everything',\n  );\n",
     tests: ['apps/api/src/ingress/http/sign-in-policy.integration.test.ts'],
   },
   {

@@ -155,6 +155,10 @@ export const corePersonalExport: CorePersonalContribution = {
 
 /** The tables of the core that are not in a person's export, and why. Every other table says it in its own module's. */
 export type CorePersonalExcluded =
+  | 'workspace_identity_domains'
+  | 'workspace_identity_connections'
+  | 'workspace_identity_bindings'
+  | 'workspace_identity_sessions'
   | 'accounts'
   | 'verifications'
   | 'two_factors'
@@ -182,6 +186,11 @@ export type CorePersonalExcluded =
   | 'setup_state';
 
 export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, string>> = {
+  workspace_identity_domains: 'workspace-owned domain proof and verification capabilities',
+  workspace_identity_connections: 'workspace-owned provider configuration and sealed credentials',
+  workspace_identity_bindings:
+    'private sign-in identity, listed through own company identity settings',
+  workspace_identity_sessions: 'session authentication provenance, listed through session settings',
   accounts: 'a provider’s account and a password’s hash: a credential (GitHub’s id is on `users`)',
   verifications: 'short-lived sign-in tokens: credentials',
   two_factors: 'an authenticator’s sealed key and the backup codes: a credential (D-236)',

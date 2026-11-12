@@ -170,6 +170,7 @@ describe('what is on offer before anything is typed', () => {
       'Sessions & account',
       'About',
       'General',
+      'Company sign-in',
       'Members',
       'Invitations',
       'Integrations',

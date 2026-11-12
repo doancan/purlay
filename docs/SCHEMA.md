@@ -230,6 +230,9 @@ CREATE TABLE sessions (
     expires_at   TIMESTAMPTZ NOT NULL,
     revoked_at   TIMESTAMPTZ,
 
+    -- Retained company origin; intentionally no FK, so purging its provider cannot promote it to global authority (D-309).
+    company_workspace_id UUID,
+
     -- Bounded as the request is (`NATIVE_DEVICE_NAME_PATTERN`). Added by 0057. (D-193)
     CONSTRAINT sessions_device_name_bounded
         CHECK (device_name IS NULL OR char_length(device_name) BETWEEN 1 AND 64)
@@ -346,6 +349,128 @@ CREATE TABLE two_factors (
     CONSTRAINT two_factors_user_key UNIQUE (user_id),
     CONSTRAINT two_factors_failures_counted CHECK (failed_verification_count >= 0)
 );
+```
+
+### 3.2.3. Workspace company identity
+
+Company identity retains native users, sessions and workspace memberships (D-308). A verified
+DNS domain is a configuration prerequisite, never permission to create an account or link by email.
+Pending TXT challenges are sealed with row-bound associated data and compared by their digest;
+provider secrets are sealed separately and never leave the administrative write endpoint.
+Configuration and authentication revisions fence stale edits and callbacks. Only a successful actual
+provider round trip can certify the current authentication revision before enabling sign-in.
+
+Bindings name an exact connection, issuer and subject; the native membership's composite foreign key
+removes them when membership ends. Account erasure explicitly removes them because native membership
+is anonymised rather than deleted. Session provenance remains after unlinking, so an existing company
+session is not mistaken for an independent sign-in; ending its native session removes that provenance.
+All four tables are emptied by workspace purge. Credentials and private external identities are
+excluded from content exports; configuration has no personal creator reference.
+
+```sql
+-- Workspace-owned company identity, without another user or membership authority (D-308).
+CREATE TABLE workspace_identity_domains (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    domain TEXT COLLATE "C" NOT NULL CHECK (
+        length(domain) BETWEEN 1 AND 253 AND domain = lower(domain) AND domain = btrim(domain)
+    ),
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    challenge_digest TEXT CHECK (challenge_digest ~ '^[0-9a-f]{64}$'),
+    challenge_encrypted BYTEA,
+    challenge_issued_at TIMESTAMPTZ NOT NULL,
+    challenge_expires_at TIMESTAMPTZ NOT NULL,
+    verified_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, id),
+    CHECK ((challenge_digest IS NULL) = (challenge_encrypted IS NULL)),
+    CHECK (verified_at IS NOT NULL OR revoked_at IS NOT NULL OR challenge_digest IS NOT NULL),
+    CHECK (
+        isfinite(challenge_issued_at) AND isfinite(challenge_expires_at)
+        AND challenge_expires_at > challenge_issued_at
+        AND challenge_expires_at <= challenge_issued_at + interval '1 day'
+    )
+);
+CREATE UNIQUE INDEX idx_workspace_identity_domain_name
+    ON workspace_identity_domains (workspace_id, domain) WHERE revoked_at IS NULL;
+CREATE INDEX idx_workspace_identity_domains_live
+    ON workspace_identity_domains (workspace_id, revoked_at, id);
+
+CREATE TABLE workspace_identity_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    domain_id UUID NOT NULL,
+    name VARCHAR(40) NOT NULL CHECK (name = btrim(name) AND length(name) > 0),
+    issuer TEXT COLLATE "C" NOT NULL CHECK (length(issuer) BETWEEN 1 AND 512),
+    client_id TEXT NOT NULL CHECK (length(client_id) BETWEEN 1 AND 256),
+    client_secret_encrypted BYTEA,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    authentication_revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    tested_authentication_revision UUID,
+    tested_at TIMESTAMPTZ,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, id),
+    FOREIGN KEY (workspace_id, domain_id)
+        REFERENCES workspace_identity_domains(workspace_id, id) ON DELETE CASCADE,
+    CHECK (client_secret_encrypted IS NOT NULL OR deleted_at IS NOT NULL),
+    CHECK ((tested_authentication_revision IS NULL) = (tested_at IS NULL)),
+    CHECK (NOT enabled OR (
+        deleted_at IS NULL AND client_secret_encrypted IS NOT NULL
+        AND tested_authentication_revision IS NOT NULL
+        AND tested_authentication_revision = authentication_revision
+    ))
+);
+CREATE UNIQUE INDEX idx_workspace_identity_connection_name
+    ON workspace_identity_connections (workspace_id, name) WHERE deleted_at IS NULL;
+CREATE INDEX idx_workspace_identity_connections_live
+    ON workspace_identity_connections (workspace_id, deleted_at, id);
+CREATE INDEX idx_workspace_identity_connections_domain
+    ON workspace_identity_connections (workspace_id, domain_id);
+
+CREATE TABLE workspace_identity_bindings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    connection_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    issuer TEXT COLLATE "C" NOT NULL CHECK (length(issuer) BETWEEN 1 AND 512),
+    subject TEXT COLLATE "C" NOT NULL CHECK (length(subject) BETWEEN 1 AND 255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_authenticated_at TIMESTAMPTZ,
+    FOREIGN KEY (workspace_id, connection_id)
+        REFERENCES workspace_identity_connections(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, user_id)
+        REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE,
+    UNIQUE (connection_id, issuer, subject),
+    UNIQUE (connection_id, user_id)
+);
+CREATE INDEX idx_workspace_identity_bindings_member
+    ON workspace_identity_bindings (workspace_id, user_id, id);
+CREATE INDEX idx_workspace_identity_bindings_user
+    ON workspace_identity_bindings (user_id);
+
+-- A session may prove more than one company's identity. Unlinking a binding must not erase the
+-- fact that a still-existing global session was authenticated through that connection.
+CREATE TABLE workspace_identity_sessions (
+    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id UUID NOT NULL,
+    connection_id UUID NOT NULL,
+    binding_reference UUID NOT NULL,
+    authentication_revision UUID NOT NULL,
+    authenticated_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    PRIMARY KEY (session_id, connection_id),
+    FOREIGN KEY (workspace_id, connection_id)
+        REFERENCES workspace_identity_connections(workspace_id, id) ON DELETE CASCADE
+);
+CREATE INDEX idx_workspace_identity_sessions_connection
+    ON workspace_identity_sessions (workspace_id, connection_id, session_id);
+CREATE INDEX idx_workspace_identity_sessions_binding
+    ON workspace_identity_sessions (binding_reference, revoked_at, session_id);
 ```
 
 ### 3.3. `push_subscriptions` and `users.locale`
@@ -2954,7 +3079,8 @@ a person is signed in in a browser and spent by the application that started the
 `modules/auth/native-handoff.ts`.
 
 - **The code is never stored**: `code_digest` is the SHA-256 of its 64 hex digits (`platform/tokens.ts`), unique.
-  A copy of the table spends nothing.
+  Company grants use a separate digest domain, so an older reader cannot exchange them as independent
+  grants. A copy of the table spends nothing.
 - **Bound to a secret the application keeps**: `challenge` is the base64url SHA-256 of a verifier the
   application made and never sent (43 characters). Spending a code needs the verifier.
 - **Two minutes, once**: `expires_at` is two minutes after `created_at` on the server's clock; `spent_at` is set
@@ -2962,7 +3088,11 @@ a person is signed in in a browser and spent by the application that started the
 - **Wrong guesses are counted and committed with their refusal**: `wrong_verifiers`, 0 to 5; at five the code is
   burnt (`expires_at` brought to that moment). A wrong guess never burns it earlier.
 - **A person's own**: `user_id`, `ON DELETE CASCADE`; at most five live per person, the oldest making room, counted
-  under a lock on the person's row.
+  under a lock on the person's row. A company grant makes room only among that company's existing grants.
+- **Company origin survives removal**: `company_workspace_id` and `company_source_session_id` are both
+  null for independent grants and both present for company grants, without foreign keys. Exchange requires
+  the original source and its current proof, then copies the proof into the new source-bearing session
+  in the same transaction as spending the code. A purge cannot turn a company grant into a global one.
 - A day past its expiry the daily sweep deletes the row; an erasure deletes the person's rows.
 
 Instance-wide; never exported.
@@ -2977,7 +3107,10 @@ CREATE TABLE native_authorizations (
     created_at       TIMESTAMPTZ NOT NULL,
     expires_at       TIMESTAMPTZ NOT NULL,
     spent_at         TIMESTAMPTZ,
+    company_workspace_id UUID,
+    company_source_session_id UUID,
 
+    CONSTRAINT native_authorizations_company_origin_pair CHECK ((company_workspace_id IS NULL) = (company_source_session_id IS NULL)),
     CONSTRAINT native_authorizations_code_is_a_digest CHECK (code_digest ~ '^[0-9a-f]{64}$'),
     CONSTRAINT native_authorizations_challenge_is_a_digest CHECK (challenge ~ '^[A-Za-z0-9_-]{43}$'),
     CONSTRAINT native_authorizations_wrong_verifiers_bounded CHECK (wrong_verifiers BETWEEN 0 AND 5),
@@ -3338,6 +3471,9 @@ file that leaves its transaction runs statement by statement and must be safe to
 0102_push_delivery.sql  subscription generations, push_intents, push_deliveries and shared notice admission  (D-307)
 0103_push_capture_order.sql  remove redundant delivery-session FK; cover both unreported terminal states  (D-307)
 0104_push_state_index.sql  concurrent state-led access for cancellation/reporting; remove redundant partial ID index  (D-307)
+0105_workspace_identity.sql      workspace-owned domain proof, provider configuration, exact native-member bindings and session provenance (D-308)
+0106_company_session_origin.sql  retain a company session’s workspace origin independently of provider/proof purge (D-309)
+0107_company_native_origin.sql   retain company provenance through native authorization and exchange, without a cascade restoring independent authority (D-309)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
