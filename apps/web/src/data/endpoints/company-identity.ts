@@ -85,29 +85,29 @@ export interface CompanyIdentityApi {
 }
 
 export const createCompanyIdentityApi = (http: Http): CompanyIdentityApi => {
-  const invoke = async <A extends unknown[], T>(
-    select: (api: CompanyIdentityApi) => (...input: A) => Promise<T>,
-    args: A,
-  ): Promise<T> =>
-    await select((await import('./company-identity-requests')).createCompanyIdentityRequests(http))(
-      ...args,
-    );
+  const lazy =
+    <A extends unknown[], T>(
+      select: (api: CompanyIdentityApi) => (...input: A) => Promise<T>,
+    ): ((...args: A) => Promise<T>) =>
+    async (...args) =>
+      await select(
+        (await import('./company-identity-requests')).createCompanyIdentityRequests(http),
+      )(...args);
   return {
-    companyDomains: (...args) => invoke((api) => api.companyDomains, args),
-    createCompanyDomain: (...args) => invoke((api) => api.createCompanyDomain, args),
-    renewCompanyDomain: (...args) => invoke((api) => api.renewCompanyDomain, args),
-    verifyCompanyDomain: (...args) => invoke((api) => api.verifyCompanyDomain, args),
-    revokeCompanyDomain: (...args) => invoke((api) => api.revokeCompanyDomain, args),
-    companyConnections: (...args) => invoke((api) => api.companyConnections, args),
-    createCompanyConnection: (...args) => invoke((api) => api.createCompanyConnection, args),
-    updateCompanyConnection: (...args) => invoke((api) => api.updateCompanyConnection, args),
-    setCompanyConnectionEnabled: (...args) =>
-      invoke((api) => api.setCompanyConnectionEnabled, args),
-    deleteCompanyConnection: (...args) => invoke((api) => api.deleteCompanyConnection, args),
-    myCompanyIdentities: (...args) => invoke((api) => api.myCompanyIdentities, args),
-    unlinkCompanyIdentity: (...args) => invoke((api) => api.unlinkCompanyIdentity, args),
-    startCompanyIdentity: (...args) => invoke((api) => api.startCompanyIdentity, args),
-    companySignInOptions: (...args) => invoke((api) => api.companySignInOptions, args),
-    signInWithCompany: (...args) => invoke((api) => api.signInWithCompany, args),
+    companyDomains: lazy((api) => api.companyDomains),
+    createCompanyDomain: lazy((api) => api.createCompanyDomain),
+    renewCompanyDomain: lazy((api) => api.renewCompanyDomain),
+    verifyCompanyDomain: lazy((api) => api.verifyCompanyDomain),
+    revokeCompanyDomain: lazy((api) => api.revokeCompanyDomain),
+    companyConnections: lazy((api) => api.companyConnections),
+    createCompanyConnection: lazy((api) => api.createCompanyConnection),
+    updateCompanyConnection: lazy((api) => api.updateCompanyConnection),
+    setCompanyConnectionEnabled: lazy((api) => api.setCompanyConnectionEnabled),
+    deleteCompanyConnection: lazy((api) => api.deleteCompanyConnection),
+    myCompanyIdentities: lazy((api) => api.myCompanyIdentities),
+    unlinkCompanyIdentity: lazy((api) => api.unlinkCompanyIdentity),
+    startCompanyIdentity: lazy((api) => api.startCompanyIdentity),
+    companySignInOptions: lazy((api) => api.companySignInOptions),
+    signInWithCompany: lazy((api) => api.signInWithCompany),
   };
 };
