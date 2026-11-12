@@ -17,6 +17,7 @@ const PAGES = [
   ['account', 'Sessions & account'],
   ['about', 'About'],
   ['general', 'General'],
+  ['company', 'Company sign-in'],
   ['members', 'Members'],
   ['invitations', 'Invitations'],
   ['integrations', 'Integrations'],
@@ -53,6 +54,8 @@ test.describe('every page of Settings', () => {
     test(`${title} passes the audit`, async ({ page, signIn, tenant, expectNoAxe }) => {
       await signIn();
       await openSettings(page, tenant.slug, section, title);
+      if (section === 'company')
+        await expect(page.getByLabel('Domain', { exact: true })).toBeVisible();
       await expectNoAxe();
     });
   }

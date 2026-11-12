@@ -162,6 +162,7 @@ test('the administrator replaces GitHub, changes the sign-up policy, and is aske
     google: false,
     signUp: 'open',
     password: true,
+    company: { callbackUrl: `${origin}/auth/company/callback` },
   });
 
   // Only GitHub is connected: disconnecting it is the last way in, and says so before it asks.

@@ -128,16 +128,22 @@ describe('integration: company identity volume', () => {
       for (const [index, company] of companies.entries())
         await growCompany(company, `198.51.100.${String(index + 1)}`);
     });
+    const workspaceIds = companies.map((company) => company.fixture.actor.context.workspaceId);
     expect(
       await clone.db
         .selectFrom('workspace_identity_connections')
         .select('id')
+        .where('workspace_id', 'in', workspaceIds)
         .where('enabled', '=', true)
         .execute(),
     ).toHaveLength(100);
-    expect(await clone.db.selectFrom('workspace_members').select('user_id').execute()).toHaveLength(
-      200,
-    );
+    expect(
+      await clone.db
+        .selectFrom('workspace_members')
+        .select('user_id')
+        .where('workspace_id', 'in', workspaceIds)
+        .execute(),
+    ).toHaveLength(200);
     // A positive native membership in another tenant makes every exclusion below an authority check.
     await clone.db
       .insertInto('workspace_members')
