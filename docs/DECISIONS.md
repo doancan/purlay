@@ -1799,8 +1799,10 @@ gate loses credibility.
 *Amended 2026-11-13 (the API runtime):* every API launcher, including the production image,
 development, demo, restore rehearsal and budget processes, uses Bun's default heap policy.
 The real memory and latency measurements run independently of the coverage suite, and remain
-required by CI. The 120 MiB RSS limit and latency regression bounds are unchanged; no forced
-collection or measurement-only runtime flag is added.
+required by CI. Pull requests measure their actual main base and proposed code sequentially on
+the same runner, using separate checkouts and pinned dependencies; both raw measurements are kept.
+Pushes on main retain the cached previous passing baseline. The 120 MiB RSS limit and latency
+regression bounds are unchanged; no forced collection or measurement-only runtime flag is added.
 
 **Blocking on regression, not on an absolute threshold:** ACK round-trip p95, fan-out p95, cold
 load, channel switch, keystroke→paint. Each is recorded per commit and compared with the previous

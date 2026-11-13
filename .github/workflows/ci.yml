@@ -528,12 +528,31 @@ jobs:
       - name: the API's idle memory is inside its budget
         run: bun run budget:api
 
+      # A PR compares with its actual main base on this runner, so host speed is not a code regression.
+      # Separate checkouts install their own pinned dependencies and run sequential fresh API processes.
+      - name: check out main's comparison source
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .budget/main-source
+          persist-credentials: false
+      - name: install main's pinned dependencies
+        if: github.event_name == 'pull_request'
+        working-directory: .budget/main-source
+        run: bun install --frozen-lockfile
+      - name: measure main on the same runner
+        if: github.event_name == 'pull_request'
+        working-directory: .budget/main-source
+        run: bun run budget:latency -- --record "$GITHUB_WORKSPACE/.budget/main-latency.json"
+
       # The ACK round-trip and fan-out p95 (D-49): measured on two real sockets, and blocking on a
       # regression against the last measurement on main — never on the line itself, which a shared
       # runner moves by tens of percent. A pull request reads main's baseline (the cache is shared
       # downward); only main writes one, and only after its own run passed, so a regression that
       # reached main fails there and does not become the new normal (#73).
       - name: the last latency measured on main
+        if: github.event_name != 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .budget/latency.json
@@ -541,7 +560,12 @@ jobs:
           restore-keys: budget-latency-
       - name: the latency budgets hold against main's last measurement
         id: latency
-        run: bun run budget:latency -- --keep .budget/latency.json --record .budget/latency-current.json
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            bun run budget:latency -- --baseline .budget/main-latency.json --record .budget/latency-current.json
+          else
+            bun run budget:latency -- --keep .budget/latency.json --record .budget/latency-current.json
+          fi
       # The baseline is never replaced by a regression. Keep its raw trials separately,
       # including on a failed comparison, so the next investigation has more than one p95.
       - name: keep the current latency trials
@@ -549,7 +573,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-latency-${{ github.sha }}
-          path: .budget/latency-current.json
+          path: |
+            .budget/latency-current.json
+            .budget/main-latency.json
           include-hidden-files: true
           retention-days: 7
       - name: keep this measurement as main's baseline
