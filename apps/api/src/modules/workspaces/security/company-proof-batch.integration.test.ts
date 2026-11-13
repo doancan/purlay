@@ -244,7 +244,12 @@ describe('integration: company proof final batches', () => {
           () => batch.source,
         )
         .selectFrom(initial.as('joined_sources'))
-        .selectAll('joined_sources');
+        .selectAll('joined_sources')
+        .where(
+          'joined_sources.key',
+          'in',
+          cases.map((row) => row.key),
+        );
       for (const next of batch.queries.slice(1)) query = query.unionAll(next);
       expect(
         Object.fromEntries((await query.execute()).map((row) => [row.key, row.allowed])),

@@ -786,13 +786,17 @@ describe('integration: a session that ends on another node', () => {
     const bystander = await aSignedInUser(cloned.db, clock, 'bystander');
     const socket = await connect(alice.cookie);
     const other = await connect(bystander.cookie);
+    // WebSocket.open precedes server-side authentication and user-topic registration.
+    await settle(socket);
+    await settle(other);
+    const beforeDeletion = socket.frames.length;
 
     await publishUserDeleted(publisher, clock, alice.userId);
 
     expect(await socket.ended).toBe(CLOSE_CODES.SESSION_ENDED);
-    expect(socket.frames.filter((f) => f.event !== 'PRESENCE')).toMatchObject([
-      { event: 'SESSION_ENDED', data: { reason: 'account-deleted' } },
-    ]);
+    expect(socket.frames.slice(beforeDeletion).filter((f) => f.event !== 'PRESENCE')).toMatchObject(
+      [{ event: 'SESSION_ENDED', data: { reason: 'account-deleted' } }],
+    );
     // The control: the same publish left someone else's socket open and usable.
     await settle(other);
     expect(other.frames.some((f) => f.event === 'SESSION_ENDED')).toBe(false);
