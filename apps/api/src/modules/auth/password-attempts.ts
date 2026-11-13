@@ -30,6 +30,7 @@ import type { Clock } from '../../platform/clock';
 import { limitKeyFor } from '../../platform/client-key';
 import { tokenDigest } from '../../platform/tokens';
 import { counted, uncounted } from './counters';
+import { atomicallyOn } from '../../platform/transactions';
 
 /** Wrong passwords for one address from one client in a window. */
 export const PASSWORD_FAILURES_PER_ADDRESS_AND_CLIENT = 10;
@@ -68,18 +69,23 @@ export const countAttempt = async (
   const from = await tokenDigest(limitKeyFor(client));
   const pairKey = `${await addressAttemptsPrefix(address)}client:${from}`;
   const clientKey = `purlay:password:client:${from}`;
-  const pair = await counted(database, pairKey, now, PASSWORD_FAILURE_WINDOW_MS);
-  const fromClient = await counted(database, clientKey, now, PASSWORD_FAILURE_WINDOW_MS);
-  const over = [
-    ...(pair.count > PASSWORD_FAILURES_PER_ADDRESS_AND_CLIENT ? [pair.closes] : []),
-    ...(fromClient.count > PASSWORD_FAILURES_PER_CLIENT ? [fromClient.closes] : []),
-  ];
-  const attempt: Attempt = { keys: [pairKey, clientKey] };
-  if (over.length === 0) return attempt;
-  // Refused, not weighed: no guess was made, so nothing stays counted for it.
-  await giveBack(database, clock, attempt);
-  const waitMs = Math.max(...over) - now.getTime();
-  return { retryAfterSeconds: Math.max(1, Math.ceil(waitMs / 1000)) };
+  // Both budgets and a refusal's refund commit together, before native authentication starts.
+  // Otherwise a pair-rejected burst can temporarily spend the shared client allowance and refuse
+  // an admissible attempt whose pair count was already accepted on another connection.
+  return await atomicallyOn(database)(async (transaction) => {
+    const pair = await counted(transaction, pairKey, now, PASSWORD_FAILURE_WINDOW_MS);
+    const fromClient = await counted(transaction, clientKey, now, PASSWORD_FAILURE_WINDOW_MS);
+    const over = [
+      ...(pair.count > PASSWORD_FAILURES_PER_ADDRESS_AND_CLIENT ? [pair.closes] : []),
+      ...(fromClient.count > PASSWORD_FAILURES_PER_CLIENT ? [fromClient.closes] : []),
+    ];
+    const attempt: Attempt = { keys: [pairKey, clientKey] };
+    if (over.length === 0) return attempt;
+    // Refused, not weighed: no guess was made, so nothing stays counted for it.
+    await giveBack(transaction, clock, attempt);
+    const waitMs = Math.max(...over) - now.getTime();
+    return { retryAfterSeconds: Math.max(1, Math.ceil(waitMs / 1000)) };
+  });
 };
 
 /** The attempt was not a wrong guess: what it counted is given back. */

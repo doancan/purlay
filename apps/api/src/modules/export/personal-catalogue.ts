@@ -46,7 +46,19 @@ export const personalTableExport = <T extends keyof Database>(
   name: T,
   columns: PersonalColumnsOf<T>,
   bounds: PersonalTableExport['bounds'],
-): PersonalTableExport & { readonly name: T } => ({ name, columns, bounds });
+): PersonalTableExport & { readonly name: T } => ({
+  name,
+  columns,
+  bounds: async (userId, workspaces, executor): Promise<Bounds> => {
+    const own = await bounds(userId, workspaces, executor);
+    return 'workspace_id' in columns
+      ? {
+          ...own,
+          where: sql`(${own.where}) and (workspace_id is null or workspace_id in (${workspaces}))`,
+        }
+      : own;
+  },
+});
 
 /** The rows of a table whose `column` names the person, in the order of their `id`: what a person made or owns. */
 export const ownedBy =

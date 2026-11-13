@@ -26,7 +26,7 @@ import { TooltipProvider } from '../ui/tooltip';
 import { ToastProvider } from '../ui/toast';
 import { ActionsProvider } from '../data/actions-provider';
 import type { Api } from '../data/api';
-import { ApiProvider } from '../data/api-provider';
+import { BrowserApiProvider } from '../data/api-provider';
 import type { ClientStorage } from '../data/browser-storage';
 import { StorageProvider } from '../data/storage-provider';
 import { LocksContext } from '../data/locks';
@@ -84,7 +84,7 @@ export const AppProviders = ({
         <AppBoundary>
           <RouterProvider {...(ports.history === undefined ? {} : { history: ports.history })}>
             <QueryClientProvider client={client}>
-              <ApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
+              <BrowserApiProvider {...(ports.api === undefined ? {} : { api: ports.api })}>
                 <StorageProvider
                   {...(ports.storage === undefined ? {} : { storage: ports.storage })}
                 >
@@ -108,7 +108,7 @@ export const AppProviders = ({
                     </RealtimePortsContext.Provider>
                   </ActionsProvider>
                 </StorageProvider>
-              </ApiProvider>
+              </BrowserApiProvider>
             </QueryClientProvider>
           </RouterProvider>
         </AppBoundary>

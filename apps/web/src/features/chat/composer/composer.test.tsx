@@ -2262,6 +2262,16 @@ describe('attaching files (D-109, #370)', () => {
     { readonly en: string; readonly tr: string; readonly retry: boolean },
   ][] = [
     [
+      'workspace verification required',
+      new ApiError(403, 'WORKSPACE_ACCESS_REQUIRED', 'verify'),
+      {
+        en: 'Verify your workspace access before continuing.',
+        tr: 'Devam etmeden önce çalışma alanı erişiminizi doğrulayın.',
+        retry: false,
+      },
+    ],
+
+    [
       'too large at the edge',
       new ApiError(413, 'PAYLOAD_TOO_LARGE', 'big'),
       { en: 'Larger than 25 MB', tr: '25 MB sınırından büyük', retry: false },

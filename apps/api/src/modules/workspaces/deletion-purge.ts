@@ -40,6 +40,12 @@ export const WORKSPACE_PURGE_BATCH = 500;
  * the trail kept, to every table the catalogue says refers to a workspace.
  */
 export const CORE_REMAINING_TABLES = [
+  'workspace_mfa_challenges',
+  'workspace_session_assurances',
+  'workspace_mfa_recovery_codes',
+  'workspace_mfa_factors',
+  'workspace_access_policy_tests',
+  'workspace_access_policies',
   'workspace_identity_sessions',
   'workspace_identity_bindings',
   'workspace_identity_connections',

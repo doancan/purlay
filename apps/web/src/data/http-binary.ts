@@ -19,6 +19,7 @@ export const readBinary = async (
   maxBytes: number,
   signal: AbortSignal | undefined,
   refusal: (status: number, text: string) => ApiError,
+  headers: Readonly<Record<string, string>> = {},
 ): Promise<Uint8Array<ArrayBuffer>> => {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1)
     throw new RangeError('Invalid binary byte limit');
@@ -47,7 +48,7 @@ export const readBinary = async (
         method: 'GET',
         credentials: 'same-origin',
         cache: 'no-cache',
-        headers: { accept: 'application/octet-stream' },
+        headers: { accept: 'application/octet-stream', ...headers },
         ...(signal === undefined ? {} : { signal }),
       }).then((answer) => {
         // A transport may finish after its caller gave up. Discard that late body as well.

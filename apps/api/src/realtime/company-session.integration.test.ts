@@ -7,7 +7,7 @@ import {
   closeIntegrationDatabase,
   type ClonedDatabase,
 } from '@purlay/db';
-import { CLOSE_CODES, parseServerMessage, type ServerFrame } from '@purlay/types';
+import { CLOSE_CODES, messageId, parseServerMessage, type ServerFrame } from '@purlay/types';
 import { systemClock } from '../platform/clock';
 import { NO_LOG, userTopic } from '../platform/events';
 import { signInCompanyNative } from '../testing/company-native-auth';
@@ -18,6 +18,10 @@ import { companyFrameProjector } from '../features/chat/channels/company-deliver
 import { startLivenessSweep } from './liveness';
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 import { channelFor } from '../features/chat/channels/channels';
+import { requireChannelById } from '../features/chat/channels/guard';
+import { sendMessage } from '../features/chat/messages/messages';
+import { workspaceAccessStatus } from '../modules/workspaces/security/access';
+import { requireWorkspaceSecurityMembership } from '../platform/tenancy';
 
 let clone: ClonedDatabase;
 beforeAll(async () => {
@@ -41,7 +45,10 @@ const recordedSocket = async (): Promise<{
     log: NO_LOG,
     leave: () => undefined,
     listen: () => undefined,
-    companyFrame: companyFrameProjector(clone.db),
+    companyFrame: companyFrameProjector(clone.db, {
+      clock: systemClock,
+      lifetime: () => NO_SESSION_LIFETIME,
+    }),
   });
   expect(
     await hub.opened(
@@ -65,6 +72,65 @@ const recordedSocket = async (): Promise<{
 };
 
 describe('integration: company socket authority', () => {
+  test('a legacy company projection reports scoped policy remediation while retaining the live native session', async () => {
+    const { world, hub, sent, closed } = await recordedSocket();
+    const workspaceId = world.fixture.member.context.workspaceId;
+    const userId = world.companySession.userId;
+    try {
+      await clone.db
+        .updateTable('workspaces')
+        .set({ access_policy_epoch: '1' })
+        .where('id', '=', workspaceId)
+        .execute();
+      await clone.db
+        .insertInto('workspace_access_policies')
+        .values({
+          workspace_id: workspaceId,
+          epoch: '1',
+          mode: 'enforced',
+          sign_in: 'any',
+          require_mfa: false,
+          idle_minutes: 15,
+          max_age_hours: 1,
+          mfa_max_age_minutes: 5,
+        })
+        .execute();
+      const actor = {
+        context: await requireWorkspaceSecurityMembership(clone.db, userId, workspaceId),
+        sessionId: world.companySession.sessionId,
+      };
+      expect(
+        (
+          await workspaceAccessStatus(
+            {
+              ...world.fixture.dependencies,
+              database: clone.db,
+              clock: systemClock,
+              lifetime: () => NO_SESSION_LIFETIME,
+            },
+            actor,
+          )
+        ).state,
+      ).toBe('allowed');
+      await clone.db
+        .updateTable('workspace_session_assurances')
+        .set({ ended_at: systemClock.now(), end_reason: 'source_revoked' })
+        .where('workspace_id', '=', workspaceId)
+        .where('session_id', '=', actor.sessionId)
+        .execute();
+      hub.deliver('company', { event: 'INBOX_UPDATED', data: { workspaceId }, ts: 1 });
+      await hub.settled();
+      expect(sent).toMatchObject([
+        { event: 'ERROR', workspaceId, data: { code: 'WORKSPACE_ACCESS_REQUIRED' } },
+      ]);
+      expect(closed).toEqual([]);
+      expect((await hub.identity('company'))?.sessionId).toBe(actor.sessionId);
+    } finally {
+      hub.closed('company');
+      await hub.settled();
+    }
+  });
+
   test('the projection port preserves control replies and accepts only channel additions from its current company', async () => {
     const world = await signInCompanyNative(clone.db);
     const identity = {
@@ -72,7 +138,10 @@ describe('integration: company socket authority', () => {
       sessionId: world.companySession.sessionId,
       workspaceId: world.fixture.member.context.workspaceId,
     };
-    const project = companyFrameProjector(clone.db);
+    const project = companyFrameProjector(clone.db, {
+      clock: systemClock,
+      lifetime: () => NO_SESSION_LIFETIME,
+    });
     const signal = AbortSignal.timeout(3_000);
     const pong: ServerFrame = { event: 'PONG', data: {}, ts: 1 };
     expect(await project(identity, pong, signal)).toEqual(pong);
@@ -86,6 +155,82 @@ describe('integration: company socket authority', () => {
     const own = await channelFor(clone.db, identity.userId, ownRow.id);
     const added: ServerFrame = { event: 'CHANNEL_ADDED', data: own, ts: 2 };
     expect(await project(identity, added, signal)).toEqual(added);
+    const context = await requireChannelById(clone.db, identity.userId, ownRow.id);
+    const message = (
+      await sendMessage(clone.db, systemClock, context, {
+        id: messageId(systemClock.now()),
+        content: 'company channel event',
+      })
+    ).message;
+    const reply = await sendMessage(clone.db, systemClock, context, {
+      id: messageId(systemClock.now()),
+      content: 'actual reply',
+      parentId: message.id,
+    });
+    if (reply.thread === null) throw new Error('Missing actual thread summary');
+    for (const frame of [
+      { event: 'MESSAGE_CREATED', data: message, ts: 2 },
+      {
+        event: 'MESSAGE_REVISED',
+        data: {
+          channelId: own.id,
+          messageId: message.id,
+          parentId: null,
+          content: message.content,
+          editedAt: null,
+          deletedAt: null,
+          mentions: [],
+        },
+        version: 1,
+        ts: 2,
+      },
+      {
+        event: 'MESSAGE_HIDDEN',
+        data: {
+          workspaceId: identity.workspaceId,
+          channelId: own.id,
+          messageId: message.id,
+          hiddenAt: systemClock.now().toISOString(),
+        },
+        ts: 2,
+      },
+      {
+        event: 'THREAD_UPDATED',
+        data: { channelId: own.id, messageId: message.id, thread: reply.thread.summary },
+        version: 1,
+        ts: 2,
+      },
+      {
+        event: 'REACTIONS_UPDATED',
+        data: { channelId: own.id, messageId: message.id, reactions: message.reactions },
+        version: 1,
+        ts: 2,
+      },
+    ] satisfies ServerFrame[])
+      expect(await project(identity, frame, signal)).toEqual(frame);
+    const fault = new Error('actual channel projection SQL failed after execution');
+    const selected = new Set<unknown>();
+    const failing = clone.db.withPlugin({
+      transformQuery: (args) => {
+        if (JSON.stringify(args.node).includes('"name":"channels"')) selected.add(args.queryId);
+        return args.node;
+      },
+      transformResult: (args) => {
+        if (selected.delete(args.queryId)) throw fault;
+        return Promise.resolve(args.result);
+      },
+    });
+    expect(
+      await companyFrameProjector(failing)(
+        identity,
+        {
+          event: 'TYPING',
+          data: { channelId: own.id, userId: identity.userId, ttlMs: 3_000 },
+          ts: 3,
+        },
+        signal,
+      ).catch((error: unknown) => error),
+    ).toBe(fault);
     const other = await aRoom(clone.db, ['projection-outsider']);
     const foreign = await channelFor(
       clone.db,

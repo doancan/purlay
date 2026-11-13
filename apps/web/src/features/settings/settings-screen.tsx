@@ -27,6 +27,22 @@ import { useModules } from '../session/session';
 import { useIsServerAdmin, useWorkspaceRole } from './role';
 import { sectionFor, type CoreSettingsSectionId } from './sections';
 
+const Security = lazy(async () => ({
+  default: (await import('./security/policy')).WorkspaceSecurityPage,
+}));
+const WorkspaceMfa = lazy(async () => ({
+  default: (await import('./security/mfa')).WorkspaceMfaPage,
+}));
+const SecurityLoading = (): React.JSX.Element => {
+  const { t } = useI18n();
+  return (
+    <LoadingStatus label={t('common.loading')} className="p-6">
+      <Skeleton />
+      <Skeleton />
+    </LoadingStatus>
+  );
+};
+
 const PAGES: Record<CoreSettingsSectionId, () => React.JSX.Element> = {
   profile: ProfilePage,
   preferences: PreferencesPage,
@@ -35,6 +51,16 @@ const PAGES: Record<CoreSettingsSectionId, () => React.JSX.Element> = {
   about: AboutPage,
   general: GeneralPage,
   company: CompanyPage,
+  security: () => (
+    <Suspense fallback={<SecurityLoading />}>
+      <Security />
+    </Suspense>
+  ),
+  'workspace-mfa': () => (
+    <Suspense fallback={<SecurityLoading />}>
+      <WorkspaceMfa />
+    </Suspense>
+  ),
   members: MembersPage,
   invitations: InvitationsPage,
   audit: AuditPage,

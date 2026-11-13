@@ -10,6 +10,8 @@ import type { WorkspaceExport } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
 import type { Logger } from '../../platform/logging';
+import type { PersonalCatalogue } from '../../modules/export/personal-catalogue';
+import type { ArchiveDownloadHandoff } from '../../modules/export/download-handoff';
 import type { ObjectStore } from '../../platform/storage';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { atomicallyOn } from '../../platform/transactions';
@@ -37,6 +39,7 @@ export interface ExportDependencies {
   readonly exportRunner: (exportId: string) => void;
   /** And a person's export of their own data, in the same queue (D-241). */
   readonly personalExportRunner: (exportId: string) => void;
+  readonly personalCatalogue?: PersonalCatalogue;
 }
 
 /** `POST /api/workspaces/:workspaceId/exports` — asked for; its making starts once this commits. */
@@ -86,7 +89,10 @@ export const downloadExport = async (
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const claimed = await atomicallyOn(database)(
-    async (transaction) => await claimDownload(transaction, clock, context, exportId),
+    async (transaction) =>
+      await claimDownload(transaction, clock, context, exportId, {
+        sessionLifetime: () => dependencies.auth.sessionLifetime,
+      }),
   );
   const workspace = await database
     .selectFrom('workspaces')
@@ -134,7 +140,13 @@ export const downloadMyExport = async (
   const { database, clock } = dependencies;
   const { userId } = await requireIndependentSession(dependencies.auth, request);
   const claimed = await atomicallyOn(database)(
-    async (transaction) => await claimPersonalDownload(transaction, clock, userId, exportId),
+    async (transaction) =>
+      await claimPersonalDownload(transaction, clock, userId, exportId, {
+        sessionLifetime: () => dependencies.auth.sessionLifetime,
+        ...(dependencies.personalCatalogue === undefined
+          ? {}
+          : { personalCatalogue: dependencies.personalCatalogue }),
+      }),
   );
   return await serveOnce(dependencies, exportId, claimed, 'purlay-data');
 };
@@ -146,7 +158,11 @@ export const downloadMyExport = async (
 const serveOnce = async (
   dependencies: ExportDependencies,
   exportId: string,
-  { key, size }: { readonly key: string; readonly size: number },
+  {
+    key,
+    size,
+    handoff,
+  }: { readonly key: string; readonly size: number; readonly handoff: ArchiveDownloadHandoff },
   stem: string,
 ): Promise<{
   readonly body: ReadableStream<Uint8Array>;
@@ -175,22 +191,34 @@ const serveOnce = async (
     // Claimed while its archive is gone: our failure, loud, never "not found" (as an attachment's).
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
+  const authorize = async (): Promise<void> => {
+    await handoff({ database, clock, sessionLifetime: () => dependencies.auth.sessionLifetime });
+  };
+  try {
+    await authorize();
+  } catch (error) {
+    await stored.body.cancel().catch(() => undefined);
+    await done();
+    throw error;
+  }
   const name = `${stem}-${clock.now().toISOString().slice(0, 10)}.tar`;
   const reader = stored.body.getReader();
   const served = new ReadableStream<Uint8Array>({
     pull: async (controller): Promise<void> => {
       try {
         const { value, done: ended } = await reader.read();
+        await authorize();
         if (ended) {
-          controller.close();
           await done();
+          controller.close();
         } else {
           controller.enqueue(value);
         }
       } catch (error) {
         log.warn('an export’s download was cut off by the store', { exportId, err: error });
-        controller.error(error);
+        await reader.cancel().catch(() => undefined);
         await done();
+        controller.error(error);
       }
     },
     cancel: async (reason): Promise<void> => {

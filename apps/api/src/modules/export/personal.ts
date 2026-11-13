@@ -20,6 +20,9 @@ import { snapshotOn } from '../../platform/transactions';
 import { copyObjects, filesOf, readTable, schemaOf } from './export';
 import type { PersonalCatalogue, PersonalTableExport } from './personal-catalogue';
 import { exportDirectory } from './write';
+import { currentRequest } from '../../platform/logging';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
+import { readWorkspaceAccessDecisions } from '../../platform/workspace-access';
 
 /** The columns the catalogue lets go, and no other. */
 const projection = (table: PersonalTableExport): RawBuilder<unknown> =>
@@ -41,39 +44,79 @@ export const exportPerson = async (
     readonly storage: ObjectStore;
     /** What the export holds, assembled from the core's contribution and the modules' (D-250). */
     readonly personalCatalogue: PersonalCatalogue;
+    readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   },
   person: { readonly id: string; readonly username: string },
   target: string,
-): Promise<{ readonly path: string; readonly manifest: PersonalExportManifest }> => {
+): Promise<{
+  readonly path: string;
+  readonly manifest: PersonalExportManifest;
+  readonly workspaceIds: readonly string[];
+}> => {
   const { database, clock, log, storage, personalCatalogue } = dependencies;
   const directory = await exportDirectory(target);
   try {
-    const { tables, schema, objects } = await snapshotOn(database)(async (transaction) => {
-      const counted: Record<string, number> = {};
-      const absent = await personalCatalogue.absent(transaction);
-      const workspaces = personalCatalogue.workspaces(person.id, absent);
-      for (const name of personalCatalogue.order) {
-        const table = personalCatalogue.table(name);
-        if (absent.includes(name)) {
-          counted[name] = 0;
-          continue;
+    const { tables, schema, objects, workspaceIds } = await snapshotOn(database)(
+      async (transaction) => {
+        const counted: Record<string, number> = {};
+        const absent = await personalCatalogue.absent(transaction);
+        const potential = personalCatalogue.workspaces(person.id, absent);
+        const candidates = await transaction
+          .selectFrom('workspaces')
+          .select(['id', 'access_policy_epoch'])
+          .where(sql<boolean>`id in (${potential})`)
+          .execute();
+        const source = currentRequest();
+        const governed = candidates.filter((row) => row.access_policy_epoch !== '0');
+        const decisions =
+          source?.sessionId === undefined || dependencies.sessionLifetime === undefined
+            ? undefined
+            : await readWorkspaceAccessDecisions(transaction, {
+                sessionId: source.sessionId,
+                userId: person.id,
+                workspaceIds: governed.map((row) => row.id),
+                now: clock.now(),
+                lifetime: dependencies.sessionLifetime(),
+              });
+        const allowed = candidates
+          .filter(
+            (row) =>
+              (source?.companySession === undefined ||
+                source.companySession.workspaceId === row.id) &&
+              (row.access_policy_epoch === '0' || decisions?.get(row.id)?.allowed === true),
+          )
+          .map((row) => row.id);
+        const workspaces =
+          allowed.length === 0
+            ? sql`select id from workspaces where false`
+            : sql`select id from workspaces where id in (${sql.join(allowed)})`;
+        for (const name of personalCatalogue.order) {
+          const table = personalCatalogue.table(name);
+          if (absent.includes(name)) {
+            counted[name] = 0;
+            continue;
+          }
+          counted[name] = await readTable(
+            transaction,
+            name,
+            {
+              columns: projection(table),
+              ...(await table.bounds(person.id, workspaces, transaction)),
+            },
+            directory.write,
+          );
         }
-        counted[name] = await readTable(
-          transaction,
-          name,
-          {
-            columns: projection(table),
-            ...(await table.bounds(person.id, workspaces, transaction)),
-          },
-          directory.write,
-        );
-      }
-      return {
-        schema: await schemaOf(transaction),
-        tables: counted,
-        objects: await filesOf(transaction, await personalCatalogue.files(person.id, transaction)),
-      };
-    });
+        return {
+          schema: await schemaOf(transaction),
+          tables: counted,
+          objects: await filesOf(
+            transaction,
+            sql`(${(await personalCatalogue.files(person.id, transaction)) ?? sql`false`}) and workspace_id in (${workspaces})`,
+          ),
+          workspaceIds: allowed,
+        };
+      },
+    );
     // The snapshot has committed: the files are copied outside it, however slow the store.
     const blobs = await copyObjects(database, storage, objects, directory);
     const manifest: PersonalExportManifest = {
@@ -88,7 +131,7 @@ export const exportPerson = async (
     await directory.seal(manifest, personalCatalogue.order);
     const path = await directory.publish();
     log.info('a person’s data exported', { userId: person.id, rows: tables, files: blobs.count });
-    return { path, manifest };
+    return { path, manifest, workspaceIds };
   } catch (error) {
     await directory.abandon();
     throw error;

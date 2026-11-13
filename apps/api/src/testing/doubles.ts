@@ -120,6 +120,7 @@ export const testConfig = (overrides: Partial<Config> = {}): Config => ({
   TRUST_PROXY: false,
   // This fixture runs the current capable readers; production loadConfig defaults admission closed.
   GUEST_ACCESS_READY: true,
+  WORKSPACE_ACCESS_READY: false,
   DATABASE_SSL: false,
   DATABASE_ALLOW_PLAINTEXT: false,
   WORKSPACE_MODULES: 'open',

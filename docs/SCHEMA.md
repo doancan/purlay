@@ -238,6 +238,7 @@ CREATE TABLE sessions (
         CHECK (device_name IS NULL OR char_length(device_name) BETWEEN 1 AND 64)
 );
 
+CREATE UNIQUE INDEX idx_sessions_native_owner ON sessions (id, user_id);
 CREATE INDEX idx_sessions_user    ON sessions (user_id);
 CREATE INDEX idx_sessions_expiry  ON sessions (expires_at) WHERE revoked_at IS NULL;
 CREATE INDEX idx_sessions_revoked ON sessions (revoked_at) WHERE revoked_at IS NOT NULL;
@@ -345,8 +346,11 @@ CREATE TABLE two_factors (
     verified                   BOOLEAN NOT NULL DEFAULT FALSE,
     failed_verification_count  INTEGER NOT NULL DEFAULT 0,
     locked_until               TIMESTAMPTZ,
+    assurance_revision         UUID NOT NULL DEFAULT '00000000-0000-4000-8000-000000000000',
+    last_assurance_counter     BIGINT,
 
     CONSTRAINT two_factors_user_key UNIQUE (user_id),
+    CONSTRAINT two_factors_last_assurance_counter_check CHECK (last_assurance_counter >= 0),
     CONSTRAINT two_factors_failures_counted CHECK (failed_verification_count >= 0)
 );
 ```
@@ -471,6 +475,244 @@ CREATE INDEX idx_workspace_identity_sessions_connection
     ON workspace_identity_sessions (workspace_id, connection_id, session_id);
 CREATE INDEX idx_workspace_identity_sessions_binding
     ON workspace_identity_sessions (binding_reference, revoked_at, session_id);
+```
+
+### 3.2.4. Workspace access policy and authentication evidence
+
+Native `sessions` and `workspace_members` remain the authorities (D-310). Evidence is bound to
+its exact session owner and authentication revision by composite foreign keys. Unknown legacy
+primary authentication stays null; a real independently verified global MFA tuple may coexist
+with that unknown primary and does not make primary authentication fresh. Company/provider and
+factor references deliberately do not cascade into a different classification.
+
+The native factor trigger changes its assurance revision on secret, backup-code or verification
+changes. It resets the accepted TOTP counter only when the secret changes. Primary session
+evidence is immutable; native authorization source IDs remain after their source is deleted.
+Policy epochs never decrease. Workspace factor identity, owner and sealed secret are immutable;
+rotation creates a new row. Pending factors may become verified or revoked, verified factors
+may become revoked, and revoked factors cannot reactivate. State changes return a new revision;
+accepted counters never decrease. Stable workspace/user/factor-ID associated data seals the secret.
+
+A policy applies company sign-in to full members; restricted guests keep independent sign-in.
+MFA, idle and primary-age limits apply to both, preserving guest channel/history restrictions.
+Preview/test artifacts include guest impact. An assurance stores its base deadline separately
+from `mfa_expires_at`, along with workspace activity and terminal state. Only an actual accepted
+MFA event may refresh the MFA deadline, while the base lifetime is still live. Relaxing a policy
+does not revive expired/ended evidence; only still-live proof may extend its idle deadline.
+Native handoff copies both deadlines and the original evidence and assurance
+state, including ended/expired state, rather than manufacturing fresh authentication.
+
+Policy tests and MFA challenges are short-lived, purpose-bound, hashed bearer receipts. Their
+workspace/session/user/authentication tuple must agree; test challenges additionally reference
+the exact matching policy test. Completed challenges can authorize only their bound operation.
+Single-use factor and policy recovery codes are hashes. Policy recovery also needs a fresh
+independent current owner and changes configuration only; it grants no membership or content.
+Neither secrets nor evidence rows are exported. Account erasure explicitly removes workspace
+factors/recovery codes because native memberships are retained; native session removal cascades
+its evidence, challenges, tests and assurances.
+
+```sql
+CREATE TABLE session_authentication_evidence (
+    session_id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    method TEXT CHECK (method IN ('password', 'email_link', 'github', 'server_oidc', 'google', 'company_oidc')),
+    authenticated_at TIMESTAMPTZ,
+    company_workspace_id UUID,
+    company_connection_id UUID,
+    company_authentication_revision UUID,
+    global_mfa_factor_id UUID,
+    global_mfa_factor_revision UUID,
+    global_mfa_method TEXT CHECK (global_mfa_method IN ('totp', 'recovery')),
+    global_mfa_counter BIGINT CHECK (global_mfa_counter >= 0),
+    global_mfa_verified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (session_id, user_id, revision),
+    FOREIGN KEY (session_id, user_id) REFERENCES sessions(id, user_id) ON DELETE CASCADE,
+    CHECK ((method IS NULL) = (authenticated_at IS NULL)),
+    CHECK ((method = 'company_oidc' AND company_workspace_id IS NOT NULL AND company_connection_id IS NOT NULL AND company_authentication_revision IS NOT NULL)
+        OR (method IS DISTINCT FROM 'company_oidc' AND company_workspace_id IS NULL AND company_connection_id IS NULL AND company_authentication_revision IS NULL)),
+    CONSTRAINT session_authentication_company_tuple
+    CHECK ((method IS NOT NULL AND method = 'company_oidc'
+            AND company_workspace_id IS NOT NULL AND company_connection_id IS NOT NULL AND company_authentication_revision IS NOT NULL)
+        OR (method IS DISTINCT FROM 'company_oidc'
+            AND company_workspace_id IS NULL AND company_connection_id IS NULL AND company_authentication_revision IS NULL)),
+    CHECK ((global_mfa_factor_id IS NULL AND global_mfa_factor_revision IS NULL AND global_mfa_method IS NULL AND global_mfa_counter IS NULL AND global_mfa_verified_at IS NULL)
+        OR (global_mfa_factor_id IS NOT NULL AND global_mfa_factor_revision IS NOT NULL AND global_mfa_method IS NOT NULL AND global_mfa_verified_at IS NOT NULL
+            AND ((global_mfa_method = 'totp' AND global_mfa_counter IS NOT NULL) OR (global_mfa_method = 'recovery' AND global_mfa_counter IS NULL))))
+);
+CREATE INDEX idx_authentication_evidence_user ON session_authentication_evidence (user_id, session_id);
+CREATE INDEX idx_authentication_evidence_company ON session_authentication_evidence (company_workspace_id, session_id) WHERE company_workspace_id IS NOT NULL;
+CREATE INDEX idx_authentication_evidence_factor ON session_authentication_evidence (global_mfa_factor_id, session_id) WHERE global_mfa_factor_id IS NOT NULL;
+
+CREATE TABLE workspace_access_policies (
+    workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+    epoch BIGINT NOT NULL CHECK (epoch > 0),
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    mode TEXT NOT NULL CHECK (mode IN ('off', 'enforced')),
+    sign_in TEXT NOT NULL CHECK (sign_in IN ('any', 'company')),
+    allowed_connection_ids UUID[] NOT NULL DEFAULT '{}'
+        CHECK (CASE WHEN array_ndims(allowed_connection_ids) > 1 THEN false
+            ELSE cardinality(allowed_connection_ids) <= 16 AND array_position(allowed_connection_ids, NULL) IS NULL
+                AND coalesce(array_lower(allowed_connection_ids, 1), 1) = 1 END),
+    require_mfa BOOLEAN NOT NULL DEFAULT false,
+    idle_minutes INTEGER CHECK (idle_minutes BETWEEN 5 AND 1440),
+    max_age_hours INTEGER CHECK (max_age_hours BETWEEN 1 AND 720),
+    mfa_max_age_minutes INTEGER CHECK (mfa_max_age_minutes BETWEEN 5 AND 1440),
+    tested_at TIMESTAMPTZ,
+    updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_workspace_access_policy_actor ON workspace_access_policies (updated_by) WHERE updated_by IS NOT NULL;
+
+CREATE TABLE workspace_access_policy_tests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    session_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    token_hash BYTEA NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
+    policy_revision UUID,
+    policy_epoch BIGINT NOT NULL CHECK (policy_epoch >= 0),
+    authentication_revision UUID NOT NULL,
+    proposed_policy JSONB NOT NULL CHECK (jsonb_typeof(proposed_policy) = 'object' AND octet_length(proposed_policy::text) <= 4096),
+    proposed_digest BYTEA NOT NULL CHECK (octet_length(proposed_digest) = 32),
+    provider_revisions JSONB NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(provider_revisions) = 'object' AND octet_length(provider_revisions::text) <= 8192),
+    recovery_revision UUID NOT NULL,
+    factor_scope TEXT CHECK (factor_scope IN ('global', 'workspace')),
+    factor_id UUID,
+    factor_revision UUID,
+    mfa_verified_at TIMESTAMPTZ,
+    tested_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, session_id, user_id, id),
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id, user_id, authentication_revision) REFERENCES session_authentication_evidence(session_id, user_id, revision) ON DELETE CASCADE,
+    CHECK ((policy_revision IS NULL) = (policy_epoch = 0)),
+    CHECK ((factor_scope IS NULL AND factor_id IS NULL AND factor_revision IS NULL AND mfa_verified_at IS NULL)
+        OR (factor_scope IS NOT NULL AND factor_id IS NOT NULL AND factor_revision IS NOT NULL AND mfa_verified_at IS NOT NULL)),
+    CHECK (expires_at > created_at)
+);
+CREATE INDEX idx_workspace_policy_tests_member ON workspace_access_policy_tests (workspace_id, user_id, id);
+CREATE INDEX idx_workspace_policy_tests_authentication ON workspace_access_policy_tests (session_id, user_id, authentication_revision);
+CREATE INDEX idx_workspace_policy_tests_expiry ON workspace_access_policy_tests (expires_at, id);
+
+CREATE TABLE workspace_session_assurances (
+    workspace_id UUID NOT NULL,
+    session_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    authentication_revision UUID NOT NULL,
+    policy_revision UUID,
+    policy_epoch BIGINT NOT NULL CHECK (policy_epoch >= 0),
+    factor_scope TEXT CHECK (factor_scope IN ('global', 'workspace')),
+    factor_id UUID,
+    factor_revision UUID,
+    mfa_verified_at TIMESTAMPTZ,
+    mfa_expires_at TIMESTAMPTZ,
+    last_used_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    ended_at TIMESTAMPTZ,
+    end_reason TEXT CHECK (end_reason IN ('expired', 'policy_changed', 'factor_revoked', 'source_revoked', 'member_removed')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, session_id),
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id, user_id, authentication_revision) REFERENCES session_authentication_evidence(session_id, user_id, revision) ON DELETE CASCADE,
+    CHECK ((policy_revision IS NULL) = (policy_epoch = 0)),
+    CHECK ((factor_scope IS NULL AND factor_id IS NULL AND factor_revision IS NULL AND mfa_verified_at IS NULL)
+        OR (factor_scope IS NOT NULL AND factor_id IS NOT NULL AND factor_revision IS NOT NULL AND mfa_verified_at IS NOT NULL)),
+    CHECK ((ended_at IS NULL) = (end_reason IS NULL)),
+    CONSTRAINT workspace_assurance_mfa_deadline CHECK ((factor_scope IS NULL) = (mfa_expires_at IS NULL)),
+    CHECK (expires_at > last_used_at)
+);
+CREATE INDEX idx_workspace_assurance_member ON workspace_session_assurances (workspace_id, user_id, session_id);
+CREATE INDEX idx_workspace_assurance_authentication ON workspace_session_assurances (session_id, user_id, authentication_revision);
+CREATE INDEX idx_workspace_assurance_expiry ON workspace_session_assurances (expires_at, workspace_id, session_id) WHERE ended_at IS NULL;
+
+CREATE TABLE workspace_mfa_factors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    secret_encrypted BYTEA NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('pending', 'verified', 'revoked')),
+    pending_expires_at TIMESTAMPTZ,
+    verified_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    last_accepted_counter BIGINT CHECK (last_accepted_counter >= 0),
+    failed_verification_count INTEGER NOT NULL DEFAULT 0 CHECK (failed_verification_count >= 0),
+    locked_until TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, user_id, id),
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE,
+    CHECK ((state = 'pending' AND pending_expires_at IS NOT NULL AND verified_at IS NULL AND revoked_at IS NULL)
+        OR (state = 'verified' AND verified_at IS NOT NULL AND revoked_at IS NULL)
+        OR (state = 'revoked' AND revoked_at IS NOT NULL))
+);
+CREATE UNIQUE INDEX idx_workspace_mfa_pending ON workspace_mfa_factors (workspace_id, user_id) WHERE state = 'pending';
+CREATE UNIQUE INDEX idx_workspace_mfa_verified ON workspace_mfa_factors (workspace_id, user_id) WHERE state = 'verified';
+CREATE INDEX idx_workspace_mfa_pending_expiry ON workspace_mfa_factors (pending_expires_at, id) WHERE state = 'pending';
+CREATE INDEX idx_workspace_mfa_user ON workspace_mfa_factors (user_id, id);
+
+CREATE TABLE workspace_mfa_challenges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    token_hash BYTEA NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
+    workspace_id UUID NOT NULL,
+    session_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    authentication_revision UUID NOT NULL,
+    policy_revision UUID,
+    policy_epoch BIGINT NOT NULL CHECK (policy_epoch >= 0),
+    factor_scope TEXT NOT NULL CHECK (factor_scope IN ('global', 'workspace')),
+    factor_id UUID NOT NULL,
+    factor_revision UUID NOT NULL,
+    purpose TEXT NOT NULL CHECK (purpose IN ('enroll', 'step_up', 'policy_test', 'rotate', 'disable', 'recovery_codes')),
+    test_id UUID,
+    failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK (failed_attempts BETWEEN 0 AND 5),
+    expires_at TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id, user_id, authentication_revision) REFERENCES session_authentication_evidence(session_id, user_id, revision) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, session_id, user_id, test_id) REFERENCES workspace_access_policy_tests(workspace_id, session_id, user_id, id) ON DELETE CASCADE,
+    CHECK ((policy_revision IS NULL) = (policy_epoch = 0)),
+    CHECK ((purpose = 'policy_test') = (test_id IS NOT NULL)),
+    CHECK (completed_at IS NULL OR consumed_at IS NOT NULL),
+    CHECK (expires_at > created_at)
+);
+CREATE UNIQUE INDEX idx_workspace_mfa_challenge_pending ON workspace_mfa_challenges (workspace_id, session_id, purpose) WHERE consumed_at IS NULL;
+CREATE INDEX idx_workspace_mfa_challenge_member ON workspace_mfa_challenges (workspace_id, user_id, id);
+CREATE INDEX idx_workspace_mfa_challenge_authentication ON workspace_mfa_challenges (session_id, user_id, authentication_revision);
+CREATE INDEX idx_workspace_mfa_challenge_test ON workspace_mfa_challenges (workspace_id, session_id, user_id, test_id) WHERE test_id IS NOT NULL;
+CREATE INDEX idx_workspace_mfa_challenge_expiry ON workspace_mfa_challenges (expires_at, id);
+
+CREATE TABLE workspace_mfa_recovery_codes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    purpose TEXT NOT NULL CHECK (purpose IN ('factor', 'policy')),
+    revision UUID NOT NULL,
+    factor_id UUID,
+    factor_revision UUID,
+    code_hash BYTEA NOT NULL UNIQUE CHECK (octet_length(code_hash) = 32),
+    spent_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, user_id, factor_id) REFERENCES workspace_mfa_factors(workspace_id, user_id, id) ON DELETE CASCADE,
+    CHECK ((purpose = 'factor' AND factor_id IS NOT NULL AND factor_revision IS NOT NULL)
+        OR (purpose = 'policy' AND factor_id IS NULL AND factor_revision IS NULL))
+);
+CREATE INDEX idx_workspace_mfa_recovery_member ON workspace_mfa_recovery_codes (workspace_id, user_id, purpose, revision);
+CREATE INDEX idx_workspace_mfa_recovery_factor ON workspace_mfa_recovery_codes (workspace_id, user_id, factor_id);
+CREATE INDEX idx_workspace_mfa_recovery_user ON workspace_mfa_recovery_codes (user_id, id);
+
+
 ```
 
 ### 3.3. `push_subscriptions` and `users.locale`
@@ -629,6 +871,8 @@ CREATE TABLE workspaces (
     -- NULL means infinite, which is the default and the product's tenet: nothing is
     -- thrown away. An operator opts in; the purge job (D-30) enforces it. (D-27)
     retention_days      INTEGER,
+    -- Monotonic retained marker: deleting a policy row cannot make a previously governed workspace implicit off (D-310).
+    access_policy_epoch BIGINT NOT NULL DEFAULT 0,
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -642,6 +886,7 @@ CREATE TABLE workspaces (
     purged_at   TIMESTAMPTZ,
 
     CONSTRAINT storage_used_non_negative CHECK (storage_used_bytes >= 0),
+    CONSTRAINT workspaces_access_policy_epoch_check CHECK (access_policy_epoch >= 0),
 
     -- Claimed only once asked for, purged only once claimed. (0071)
     CONSTRAINT workspaces_deletion_order CHECK (
@@ -660,6 +905,7 @@ CREATE TABLE workspaces (
 
 -- The foreign key's index (see §6.2).
 CREATE INDEX idx_workspaces_created_by ON workspaces (created_by) WHERE created_by IS NOT NULL;
+CREATE INDEX idx_workspaces_access_policy_epoch ON workspaces (access_policy_epoch);
 ```
 
 ### 4.2. `workspace_members`
@@ -1942,6 +2188,7 @@ CREATE TYPE scheduled_message_state AS ENUM ('pending', 'sent', 'failed');
 CREATE TABLE scheduled_messages (
     id              UUID PRIMARY KEY,
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_session_id UUID, -- retained source; no FK or background backfill (D-310)
     workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     channel_id      UUID NOT NULL,
     parent_id       UUID,
@@ -1994,6 +2241,7 @@ their inbox as a `reminder` notification when due and deleted then. `notificatio
 CREATE TABLE message_reminders (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_session_id UUID, -- exact source required for governed deferred delivery (D-310)
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     channel_id   UUID NOT NULL,
     message_id   UUID NOT NULL,
@@ -2571,6 +2819,7 @@ CREATE TABLE workspace_exports (
     id             UUID PRIMARY KEY,
     workspace_id   UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     requested_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    source_session_id UUID, -- retained request provenance; losing the session never grants authority
     -- 'pending' while it is made, 'ready' with its archive, 'failed' with a code,
     -- 'downloaded' once it has been, 'expired' when nobody did in time.
     status         TEXT NOT NULL,
@@ -2622,6 +2871,8 @@ sweep then takes their archives. Never exported itself.
 CREATE TABLE personal_exports (
     id             UUID PRIMARY KEY,
     user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_session_id UUID, -- each governed workspace is checked against this exact request source
+    source_workspace_ids UUID[], -- exact server-computed prepared archive set; NULL is legacy unknown
     -- As workspace_exports: 'pending', 'ready', 'failed', 'downloaded', 'expired'.
     status         TEXT NOT NULL,
     storage_key    TEXT,
@@ -2633,6 +2884,13 @@ CREATE TABLE personal_exports (
     expires_at     TIMESTAMPTZ,
     downloaded_at  TIMESTAMPTZ,
 
+    CONSTRAINT personal_export_workspace_sources CHECK (
+        CASE
+            WHEN source_workspace_ids IS NULL OR cardinality(source_workspace_ids) = 0 THEN true
+            WHEN array_ndims(source_workspace_ids) <> 1 OR array_lower(source_workspace_ids, 1) <> 1 THEN false
+            ELSE array_position(source_workspace_ids, NULL) IS NULL
+        END
+    ),
     CONSTRAINT personal_exports_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
     CONSTRAINT personal_exports_status
@@ -3109,7 +3367,9 @@ CREATE TABLE native_authorizations (
     spent_at         TIMESTAMPTZ,
     company_workspace_id UUID,
     company_source_session_id UUID,
+    authentication_source_session_id UUID,
 
+    CONSTRAINT native_authorizations_authentication_source CHECK (authentication_source_session_id IS NULL OR company_workspace_id IS NULL OR authentication_source_session_id = company_source_session_id),
     CONSTRAINT native_authorizations_company_origin_pair CHECK ((company_workspace_id IS NULL) = (company_source_session_id IS NULL)),
     CONSTRAINT native_authorizations_code_is_a_digest CHECK (code_digest ~ '^[0-9a-f]{64}$'),
     CONSTRAINT native_authorizations_challenge_is_a_digest CHECK (challenge ~ '^[A-Za-z0-9_-]{43}$'),
@@ -3474,6 +3734,14 @@ file that leaves its transaction runs statement by statement and must be safe to
 0105_workspace_identity.sql      workspace-owned domain proof, provider configuration, exact native-member bindings and session provenance (D-308)
 0106_company_session_origin.sql  retain a company session’s workspace origin independently of provider/proof purge (D-309)
 0107_company_native_origin.sql   retain company provenance through native authorization and exchange, without a cascade restoring independent authority (D-309)
+0108_session_authentication_evidence.sql  immutable native primary/source evidence and monotonic global-factor revision/counter metadata (D-310)
+0109_workspace_access_policy.sql  retained policy epoch, owner test receipts and durable workspace session assurances (D-310)
+0110_workspace_mfa.sql  workspace-owned factors, purpose-bound challenges and hashed recovery codes (D-310)
+0111_authentication_company_tuple.sql  reject nonempty company provenance when primary authentication is unknown (D-310)
+0112_workspace_mfa_deadline.sql  separate refreshable MFA expiry from the terminal base lifetime, preserving old deadlines (D-310)
+0113_deferred_author_session.sql  retain the actual native author source for workspace and personal exports (D-310)
+0114_personal_archive_workspaces.sql  bind prepared personal archive bytes to their exact workspace set, with legacy unknown retained (D-310)
+0115_workspace_policy_lookup.sql  index retained workspace policy history for legacy archive admission (D-310)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
@@ -3490,6 +3758,7 @@ chat/0013_missed_mail_claims.sql durable missed-mail leases and released attempt
 chat/0014_shared_catalogue.sql    rendered link projection, durable source jobs and historical cursor (D-306)
 chat/0015_shared_source_changes.sql capture source writes for rolling-upgrade/restart recovery (D-306)
 chat/0016_shared_source_indexes.sql restartable concurrent workspace-file keyset index (D-306)
+chat/0017_deferred_author_session.sql retain the actual author source for scheduled sends and message reminders (D-310)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```

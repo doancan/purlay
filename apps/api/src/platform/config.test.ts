@@ -60,6 +60,19 @@ test('guest admission requires an explicit rollout attestation and never infers 
   );
 });
 
+test('workspace enforcement requires its own explicit operator rollout attestation', () => {
+  for (const base of [valid, production, { ...valid, REDIS_URL: 'redis://localhost:6379' }]) {
+    expect(loadConfig(base).WORKSPACE_ACCESS_READY).toBe(false);
+    expect(loadConfig({ ...base, WORKSPACE_ACCESS_READY: '' }).WORKSPACE_ACCESS_READY).toBe(false);
+    expect(loadConfig({ ...base, WORKSPACE_ACCESS_READY: 'false' }).WORKSPACE_ACCESS_READY).toBe(
+      false,
+    );
+    expect(loadConfig({ ...base, WORKSPACE_ACCESS_READY: 'true' }).WORKSPACE_ACCESS_READY).toBe(
+      true,
+    );
+  }
+});
+
 /** The same 32 bytes spelled differently: the last character's two unused low bits flipped. */
 const aliasOf = (key: string): string => {
   const last = ALPHABET.indexOf(key.charAt(42));

@@ -333,6 +333,14 @@ describe('integration: upgrading from the previous release', () => {
         '0105_workspace_identity',
         '0106_company_session_origin',
         '0107_company_native_origin',
+        '0108_session_authentication_evidence',
+        '0109_workspace_access_policy',
+        '0110_workspace_mfa',
+        '0111_authentication_company_tuple',
+        '0112_workspace_mfa_deadline',
+        '0113_deferred_author_session',
+        '0114_personal_archive_workspaces',
+        '0115_workspace_policy_lookup',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -349,6 +357,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0014_shared_catalogue',
         'chat/0015_shared_source_changes',
         'chat/0016_shared_source_indexes',
+        'chat/0017_deferred_author_session',
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
@@ -470,6 +479,7 @@ describe('integration: the contract release on a database that has run the expan
         'chat/0014_shared_catalogue',
         'chat/0015_shared_source_changes',
         'chat/0016_shared_source_indexes',
+        'chat/0017_deferred_author_session',
       ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
@@ -691,6 +701,7 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0014_shared_catalogue',
         'chat/0015_shared_source_changes',
         'chat/0016_shared_source_indexes',
+        'chat/0017_deferred_author_session',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -766,6 +777,7 @@ describe('integration: moving development read scopes into chat’s own table', 
           'chat/0014_shared_catalogue',
           'chat/0015_shared_source_changes',
           'chat/0016_shared_source_indexes',
+          'chat/0017_deferred_author_session',
         ]);
         expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([
           {

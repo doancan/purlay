@@ -12,9 +12,17 @@
  * (D-46).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { closeIntegrationDatabase, withRollback, sql, type Executor } from '@purlay/db';
 import { AppError } from './errors';
-import { assertMinted, requireWorkspaceMembership, type WorkspaceContext } from './tenancy';
+import { withinRequest } from './logging';
+import {
+  assertMinted,
+  assertSecurityMinted,
+  requireWorkspaceMembership,
+  requireWorkspaceSecurityMembership,
+  type WorkspaceContext,
+  type WorkspaceSecurityContext,
+} from './tenancy';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -56,6 +64,126 @@ const refusalFrom = async (body: () => Promise<unknown>): Promise<AppError> => {
 };
 
 describe('integration: the workspace membership guard', () => {
+  test('governed membership needs explicit content proof while remediation stays reachable', async () => {
+    await withRollback(async (db) => {
+      const userId = await addUser(db, 'governed-owner');
+      const outsider = await addUser(db, 'governed-outsider');
+      const workspaceId = await addWorkspace(db, 'governed-workspace');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: userId, role: 'owner' })
+        .execute();
+      await db
+        .updateTable('workspaces')
+        .set({ access_policy_epoch: '1' })
+        .where('id', '=', workspaceId)
+        .execute();
+      expect(
+        (await refusalFrom(() => requireWorkspaceMembership(db, userId, workspaceId))).body,
+      ).toMatchObject({ code: 'WORKSPACE_ACCESS_REQUIRED', details: { workspaceId } });
+      expect(
+        (await refusalFrom(() => requireWorkspaceMembership(db, outsider, workspaceId))).body.code,
+      ).toBe('WORKSPACE_NOT_FOUND');
+      expect((await requireWorkspaceSecurityMembership(db, userId, workspaceId)).workspaceId).toBe(
+        workspaceId,
+      );
+      let checks = 0;
+      await withinRequest(
+        {
+          requestId: 'tenancy-policy',
+          startedAt: 0,
+          workspaceAccess: (_executor, nativeUser, nativeWorkspace): Promise<void> => {
+            expect(nativeUser).toBe(userId);
+            expect(nativeWorkspace).toBe(workspaceId);
+            checks += 1;
+            return Promise.resolve();
+          },
+        },
+        async () => {
+          expect((await requireWorkspaceMembership(db, userId, workspaceId)).workspaceId).toBe(
+            workspaceId,
+          );
+        },
+      );
+      expect(checks).toBe(1);
+    });
+  });
+
+  test('self remediation receives a distinct immutable capability and rejects copies', async () => {
+    await withRollback(async (db) => {
+      const userId = await addUser(db, 'security-owner');
+      const workspaceId = await addWorkspace(db, 'security-home');
+      await db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspaceId, user_id: userId, role: 'owner' })
+        .execute();
+      const context = await requireWorkspaceSecurityMembership(db, userId, workspaceId);
+      expect(context.workspaceId).toBe(workspaceId);
+      expect(context.userId).toBe(userId);
+      expect(context.role).toBe('owner');
+      expect(Object.isFrozen(context)).toBe(true);
+      expect(() => {
+        assertSecurityMinted(context);
+      }).not.toThrow();
+      const copy: WorkspaceSecurityContext = { ...context };
+      const foreign: WorkspaceSecurityContext = { ...context, workspaceId: crypto.randomUUID() };
+      expect(() => {
+        assertSecurityMinted(copy);
+      }).toThrow('did not mint');
+      expect(() => {
+        assertSecurityMinted(foreign);
+      }).toThrow('did not mint');
+      const ordinary = await requireWorkspaceMembership(db, userId, workspaceId);
+      expect(() => {
+        assertMinted(ordinary);
+      }).not.toThrow();
+      expect(() => {
+        Reflect.apply(assertMinted, undefined, [context]);
+      }).toThrow('did not mint');
+      expect(() => {
+        Reflect.apply(assertSecurityMinted, undefined, [ordinary]);
+      }).toThrow('did not mint');
+    });
+  });
+
+  test('a guest can remediate only their own live membership without gaining full-member authority', async () => {
+    await withRollback(async (db) => {
+      const userId = await addUser(db, 'security-guest');
+      const outsider = await addUser(db, 'security-outsider');
+      const workspaceId = await addWorkspace(db, 'security-guest-home');
+      await db
+        .insertInto('workspace_members')
+        .values({
+          workspace_id: workspaceId,
+          user_id: userId,
+          access_kind: 'guest',
+          guest_since: sql<Date>`statement_timestamp()`,
+          guest_modules: ['chat'],
+        })
+        .execute();
+      const context = await requireWorkspaceSecurityMembership(db, userId, workspaceId);
+      expect(context.guest?.kind).toBe('guest');
+      expect(context.role).toBe('member');
+      expect(
+        (await refusalFrom(() => requireWorkspaceSecurityMembership(db, outsider, workspaceId)))
+          .status,
+      ).toBe(404);
+      expect(
+        (await refusalFrom(() => requireWorkspaceSecurityMembership(db, userId, 'malformed')))
+          .status,
+      ).toBe(404);
+      await db
+        .updateTable('workspaces')
+        .set({ deleted_at: new Date() })
+        .where('id', '=', workspaceId)
+        .execute();
+      expect(
+        (await refusalFrom(() => requireWorkspaceSecurityMembership(db, userId, workspaceId)))
+          .status,
+      ).toBe(404);
+    });
+  });
+
   test('a member receives a context, and it is accepted where one is required', async () => {
     await withRollback(async (db) => {
       const userId = await addUser(db, 'guard-member');

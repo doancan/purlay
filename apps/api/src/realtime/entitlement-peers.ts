@@ -132,3 +132,14 @@ export const advertiseSuspension = (advertising: Advertising): EntitlementPeers 
 /** How many live nodes do not read the stopped modules, which a stop waits to be none. */
 export const suspensionPeersBehind = async (link: RedisLink): Promise<number> =>
   await behindIn(link, link.names.suspensionNodes);
+
+/** API capability only: the operator must separately attest scheduler and job/outbox readiness (D-310). */
+export const advertiseWorkspaceAccess = (advertising: Advertising): EntitlementPeers =>
+  advertiseIn(
+    advertising.link.names.workspaceAccessNodes,
+    'workspace access policies',
+    advertising,
+  );
+
+export const workspaceAccessPeersBehind = async (link: RedisLink): Promise<number> =>
+  await behindIn(link, link.names.workspaceAccessNodes);

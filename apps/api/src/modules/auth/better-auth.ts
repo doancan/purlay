@@ -101,6 +101,10 @@ import {
 import type { CredentialCipher } from '../../platform/crypto';
 import { companyIdentityPlugin } from '../workspaces/identity/native-auth';
 import { COMPANY_PROVIDER_PREFIX } from '../workspaces/identity/catalogue';
+import {
+  nativeAuthenticationEvidence,
+  type NativeAuthenticationRound,
+} from './authentication-evidence-native';
 import { linkLetter, type SignInLocale } from './sign-in-letters';
 import { heldTransaction, rememberingTransactions } from './sign-up-transaction';
 import { consumePassport, passportAllows } from '../workspaces/invitation-passport';
@@ -268,7 +272,7 @@ export const deriveAuthSecret = (encryptionKey: string): string =>
  * One request through the library, as far as Purlay's own columns care: the GitHub account the
  * provider's call vouched for, and whether the library made an account for it.
  */
-interface SignInRound {
+interface SignInRound extends NativeAuthenticationRound {
   admissionRefused?: boolean;
   browserInvitationId?: string | undefined;
   emailInvitation?: string | undefined;
@@ -1288,9 +1292,14 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   };
 
   /** A session the lifetime let lapse, deleted while its row still says so, and told once (D-244). */
-  const endLapsed = async (sessionId: string): Promise<void> => {
-    if (await endLapsedSession(deps.database, lifetime, SESSION_CLOCK.now(), sessionId)) {
-      await sessionsEnded([sessionId], 'expired');
+  const endLapsed = async (
+    sessionId: string,
+    executor: Executor = deps.database,
+  ): Promise<void> => {
+    if (await endLapsedSession(executor, lifetime, SESSION_CLOCK.now(), sessionId)) {
+      await authenticationEvidence.afterTransaction(async () => {
+        await sessionsEnded([sessionId], 'expired');
+      });
     }
   };
 
@@ -1299,11 +1308,14 @@ export const createAuth = (deps: AuthDependencies): Auth => {
    * let lapse is ended here first, so the library finds none — a route that needs one answers its `401`, and a
    * sign-in goes on as from a browser that holds nothing (D-244). One read, and only while a rule is on.
    */
-  const lapsedCallerEnded = async (headers: Headers | undefined): Promise<void> => {
+  const lapsedCallerEnded = async (
+    headers: Headers | undefined,
+    executor: Executor = deps.database,
+  ): Promise<void> => {
     if (!lifetimeLimited(lifetime)) return;
-    const caller = await callerSession(deps.database, headers);
+    const caller = await callerSession(executor, headers);
     if (caller !== undefined && lapsed(lifetime, caller, SESSION_CLOCK.now())) {
-      await endLapsed(caller.id);
+      await endLapsed(caller.id, executor);
     }
   };
 
@@ -1352,7 +1364,10 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     answer: Headers | undefined,
   ): Promise<void> => {
     if (made === null || made.session.id === kept) return;
-    await deps.database.deleteFrom('sessions').where('id', '=', made.session.id).execute();
+    await (authenticationEvidence.executor() ?? heldTransaction() ?? deps.database)
+      .deleteFrom('sessions')
+      .where('id', '=', made.session.id)
+      .execute();
     const cookies = answer?.getSetCookie() ?? [];
     answer?.delete('set-cookie');
     for (const line of cookies) {
@@ -1672,15 +1687,16 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       // between a person and signing out: a read of ours that fails is written down and the request
       // goes on, told by the library's own hooks alone.
       before: createAuthMiddleware(async (ctx) => {
+        const database = authenticationEvidence.executor() ?? deps.database;
         // Only the verified company-cookie bridge supplies both names. Independent requests and
         // sign-out keep the existing fail-open announcement watch; an observer failure cannot trap a session.
         const source =
           ctx.path === '/sign-out' ||
           readCookie(ctx.headers?.get('cookie') ?? null, COMPANY_SESSION_COOKIE) === undefined
             ? undefined
-            : await callerSession(deps.database, ctx.headers);
+            : await callerSession(database, ctx.headers);
         if (source !== undefined) {
-          const row = await deps.database
+          const row = await database
             .selectFrom('sessions')
             .select('company_workspace_id')
             .where('id', '=', source.id)
@@ -1701,33 +1717,43 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             if (
               !independentSignIn &&
               ctx.path !== '/sign-out' &&
-              (await readSessionAuthority(deps.database, source.id, source.userId)) === undefined
+              (await readSessionAuthority(database, source.id, source.userId)) === undefined
             )
               throw new APIError('UNAUTHORIZED', { message: 'Sign in again to continue.' });
           }
         }
         policyRefusal(ctx.path);
-        await lapsedCallerEnded(ctx.headers);
+        await lapsedCallerEnded(ctx.headers, database);
         const round = signInRounds.getStore();
         const changed = await passwordWeighed(ctx.path, ctx.headers, ctx.body, round);
         if (round !== undefined && ctx.path === CHANGE_PASSWORD) {
-          const caller = await callerSession(deps.database, ctx.headers);
+          const caller = await callerSession(database, ctx.headers);
           if (caller !== undefined) round.keeping = { userId: caller.userId, sessionId: caller.id };
         }
-        if (round !== undefined && ROTATING_PATHS.has(ctx.path)) {
-          const caller = await callerSession(deps.database, ctx.headers);
-          if (caller !== undefined) round.unrotated = caller.id;
-        }
+        const unrotated =
+          round !== undefined && ROTATING_PATHS.has(ctx.path)
+            ? await callerSession(database, ctx.headers)
+            : undefined;
         if (round !== undefined && ENDING_PATHS.has(ctx.path)) {
           try {
-            const userId = await personEnding(deps.database, ctx.path, ctx.headers, ctx.body);
+            const userId = await personEnding(database, ctx.path, ctx.headers, ctx.body);
             if (userId !== undefined) {
-              round.ending = { userId, sessionIds: await sessionIdsOf(deps.database, userId) };
+              round.ending = { userId, sessionIds: await sessionIdsOf(database, userId) };
             }
           } catch (error) {
             log.warn('the sessions a sign-out ends could not be read first', { err: error });
           }
         }
+        // Admission/counters finish before a native transaction occupies a pool connection.
+        await authenticationEvidence.prepareMfa(
+          ctx.path,
+          ctx.headers,
+          ctx.body,
+          async () => await ctx.getSignedCookie(TWO_FACTOR_COOKIE, deps.secret),
+        );
+        // prepareMfa's nested get-session runs the native after-hook too. Publish the outer
+        // retention marker only after that lookup, so the inner request cannot consume it.
+        if (round !== undefined && unrotated !== undefined) round.unrotated = unrotated.id;
         return changed ?? twoFactorBody(ctx.path, ctx.body, issuer);
       }),
       // … and every one of them gone after it, told — once its transaction has committed, as the
@@ -1744,13 +1770,15 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           const returned: unknown = ctx.context.returned;
           const code = isAPIError(returned) ? fieldOf(returned.body, 'code') : undefined;
           if (typeof code !== 'string' || !WRONG_GUESSES.has(code)) {
-            try {
-              await giveBack(deps.database, deps.clock, attempt);
-            } catch (error) {
-              log.error('a password attempt that was no wrong guess could not be given back', {
-                err: error,
-              });
-            }
+            await authenticationEvidence.afterTransaction(async () => {
+              try {
+                await giveBack(deps.database, deps.clock, attempt);
+              } catch (error) {
+                log.error('a password attempt that was no wrong guess could not be given back', {
+                  err: error,
+                });
+              }
+            });
           }
         }
         const keeping = round?.keeping;
@@ -1763,6 +1791,11 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           round.unrotated = undefined;
           await sessionUnrotated(unrotated, ctx.context.newSession, ctx.context.responseHeaders);
         }
+        await authenticationEvidence.after(
+          ctx.path,
+          isAPIError(ctx.context.returned),
+          ctx.context.newSession?.session.id,
+        );
         const ending = round?.ending;
         if (ending === undefined) return;
         try {
@@ -1864,6 +1897,14 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             github: githubOptions(settings.github, endpoints, deps.database, log, get),
           },
     databaseHooks: {
+      verification: {
+        create: {
+          before: async (verification, context) => {
+            await authenticationEvidence.challenge(context?.path, verification);
+            return { data: verification };
+          },
+        },
+      },
       // The library has no option to keep a provider's tokens out of `accounts` (`encryptOAuthTokens` only
       // encrypts them), and Purlay never calls GitHub on a person's behalf, so a token kept would be a
       // credential held for nothing. The columns exist because the schema check demands them.
@@ -1980,7 +2021,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
             }
             // Receipt evidence is observed only on the explicit invitation sign-in paths. Existing
             // accounts still need no passport to sign in; observing it never grants a membership.
-            const executor = heldTransaction() ?? deps.database;
+            const executor =
+              authenticationEvidence.executor() ?? heldTransaction() ?? deps.database;
             const round = signInRounds.getStore();
             let invitationId = round?.browserInvitationId;
             if (context?.path === LINK_SPEND_PATH && round?.emailInvitation !== undefined) {
@@ -2070,6 +2112,21 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     },
   };
   const instance = betterAuth(options);
+  const authenticationEvidence = nativeAuthenticationEvidence({
+    database: deps.database,
+    clock: deps.clock,
+    instance,
+    round: () => signInRounds.getStore(),
+    verifiedMethod: (path) => {
+      const round = signInRounds.getStore();
+      if (path === LINK_SPEND_PATH && round !== undefined) return 'email_link';
+      if (!path.startsWith('/callback/')) return undefined;
+      if (round?.profile !== undefined) return 'github';
+      if (round?.oidcAccountId !== undefined) return 'server_oidc';
+      if (round?.googleAccountId !== undefined) return 'google';
+      return undefined;
+    },
+  });
 
   /** Once the schema has passed, it is not asked again: nothing in this process changes it. */
   let passed = false;
@@ -2163,7 +2220,10 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           );
         nativeHeaders.set('cookie', remaining.join('; '));
       }
-      let response = await instance.handler(new Request(request, { headers: nativeHeaders }));
+      let response = await authenticationEvidence.around(
+        path,
+        async () => await instance.handler(new Request(request, { headers: nativeHeaders })),
+      );
       const redirect = response.headers.get('location');
       if (round.admissionRefused === true && redirect !== null) {
         const url = new URL(redirect, deps.baseUrl);
@@ -2279,14 +2339,18 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       return await signInRounds.run(
         round,
         async () =>
-          await companyCookies.publicResponse(
-            await instance.api.signInEmail({
-              body: { email, password },
-              headers: companyCookies.independentHeaders(headers),
-              asResponse: true,
-            }),
-            readCookie(headers.get('cookie'), COMPANY_SESSION_COOKIE) !== undefined,
-            true,
+          await authenticationEvidence.around(
+            SIGN_IN_WITH_PASSWORD,
+            async () =>
+              await companyCookies.publicResponse(
+                await instance.api.signInEmail({
+                  body: { email, password },
+                  headers: companyCookies.independentHeaders(headers),
+                  asResponse: true,
+                }),
+                readCookie(headers.get('cookie'), COMPANY_SESSION_COOKIE) !== undefined,
+                true,
+              ),
           ),
       );
     },

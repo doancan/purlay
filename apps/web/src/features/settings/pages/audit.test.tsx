@@ -74,6 +74,70 @@ const lines = (view: View): string[] =>
     .map((item) => item.querySelector('[data-audit-line]')?.textContent ?? '');
 
 describe('the audit log', () => {
+  test('a failed background refresh preserves the visible audit trail and Retry reads it again', async () => {
+    let reads = 0;
+    const rows = page([
+      anEntry(1, {
+        action: 'workspace.security.policy_updated',
+        targetType: 'workspace',
+        targetId: IDS.workspace,
+      }),
+    ]);
+    const view = await openPage({
+      audit: () => {
+        reads++;
+        return reads === 2
+          ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
+          : Promise.resolve(rows);
+      },
+    });
+    expect(lines(view)).toEqual([ME.displayName + ' changed workspace sign-in requirements']);
+    await act(async () => {
+      await view.world.client.invalidateQueries({ queryKey: ['audit', IDS.workspace] });
+    });
+    await view.findByText('The audit log could not be refreshed.');
+    expect(lines(view)).toEqual([ME.displayName + ' changed workspace sign-in requirements']);
+    await person().click(view.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(view.queryByText('The audit log could not be refreshed.')).toBeNull();
+    });
+    expect(reads).toBe(3);
+    expect(lines(view)).toHaveLength(1);
+    view.unmount();
+  });
+
+  test('workspace authentication changes name the actor and action without reading verification secrets', async () => {
+    const events = [
+      ['workspace.mfa.enrolled', 'connected a workspace authenticator'],
+      ['workspace.mfa.rotated', 'replaced a workspace authenticator'],
+      ['workspace.mfa.revoked', 'disconnected a workspace authenticator'],
+      ['workspace.mfa.recovery_codes_rotated', 'replaced workspace authenticator recovery codes'],
+      ['workspace.mfa.recovery_used', 'used a workspace authenticator recovery code'],
+      ['workspace.security.policy_tested', 'tested workspace sign-in requirements'],
+      ['workspace.security.policy_updated', 'changed workspace sign-in requirements'],
+      ['workspace.security.recovery_created', 'created owner recovery for this workspace'],
+      ['workspace.security.policy_recovered', 'recovered workspace sign-in requirements'],
+    ] as const;
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page(
+            events.map(([action], n) =>
+              anEntry(n, {
+                action,
+                targetType: 'workspace',
+                targetId: IDS.workspace,
+                metadata: {},
+              }),
+            ),
+          ),
+        ),
+    });
+    expect(lines(view)).toEqual(events.map(([, text]) => ME.displayName + ' ' + text));
+    expect(view.queryByRole('textbox', { name: 'Authenticator code' })).toBeNull();
+    view.unmount();
+  });
+
   test('company identity changes are readable administrative events without exposing identity claims or credentials', async () => {
     const events = [
       ['identity.domain_created', 'added a company domain'],

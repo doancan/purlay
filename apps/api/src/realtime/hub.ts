@@ -34,8 +34,10 @@ import type {
   ChannelDeliveryVerdict,
   CompanyDeliveryIdentity,
   CompanyFrameProjector,
+  WorkspaceFrameProjector,
 } from '../platform/ports/channel-delivery';
 import { DEFAULT_DEADLINE_MS, timedOut, withDeadline } from '../platform/request-deadline';
+import { AppError } from '../platform/errors';
 
 /** How a connection is reached and ended. The transport supplies both. */
 export interface Connection {
@@ -211,6 +213,7 @@ interface Held {
   projected?: { tail: Promise<void>; bytes: number };
   company?: CompanyDeliveryIdentity;
   companyProjected?: { tail: Promise<void>; bytes: number };
+  deniedWorkspaces?: Set<string>;
 }
 
 interface RestrictedChannel {
@@ -221,6 +224,7 @@ interface RestrictedChannel {
 
 export interface HubOptions {
   readonly companyFrame?: CompanyFrameProjector;
+  readonly workspaceFrame?: WorkspaceFrameProjector;
   readonly log: Logger;
   /**
    * Stops a connection listening to a channel. The hub calls it when it delivers an
@@ -295,7 +299,16 @@ const channelOf = (frame: ServerFrame): string | null => {
 export const createSocketHub = (
   auth: Auth,
   clock: Clock,
-  { log, leave, listen, timers = systemTimers, presence, closedEvent, companyFrame }: HubOptions,
+  {
+    log,
+    leave,
+    listen,
+    timers = systemTimers,
+    presence,
+    closedEvent,
+    companyFrame,
+    workspaceFrame,
+  }: HubOptions,
 ): SocketHub => {
   const held = new Map<string, Held>();
   const running = new Set<Promise<void>>();
@@ -390,6 +403,15 @@ export const createSocketHub = (
         }
       } catch (error) {
         if (!current()) return;
+        if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED') {
+          denyWorkspace(
+            socketId,
+            socket,
+            expiry.workspaceId,
+            expiring.map(([id]) => id),
+          );
+          return;
+        }
         log.error('guest expiry could not be rechecked; closing to resync', {
           socketId,
           err: error,
@@ -413,7 +435,12 @@ export const createSocketHub = (
       return;
     }
     if (socket.ending || socket.ended === true) return;
-    if ((restricted === undefined || channelId === null) && (socket.projected?.bytes ?? 0) === 0) {
+    const content = !['SESSION_ENDED', 'ACK', 'ERROR', 'PONG'].includes(frame.event);
+    if (
+      (restricted === undefined || channelId === null) &&
+      (socket.projected?.bytes ?? 0) === 0 &&
+      (workspaceFrame === undefined || !content)
+    ) {
       writeNow(socketId, socket, frame);
       return;
     }
@@ -446,32 +473,33 @@ export const createSocketHub = (
     const run = queue.tail
       .then(async () => {
         if (!current()) return;
-        if (restricted === undefined || channelId === null) {
-          writeNow(socketId, socket, frame);
-          return;
-        }
-        const accepted = await withDeadline<ChannelDeliveryVerdict | undefined>(
-          DEFAULT_DEADLINE_MS,
-          async (signal) => await restricted.scope.accepts(frame, signal),
-          () => undefined,
-        );
+        const accepted =
+          restricted === undefined || channelId === null
+            ? true
+            : await withDeadline<ChannelDeliveryVerdict | undefined>(
+                DEFAULT_DEADLINE_MS,
+                async (signal) => await restricted.scope.accepts(frame, signal),
+                () => undefined,
+              );
         if (accepted === undefined) throw timedOut();
         if (!current()) return;
         if (
+          restricted !== undefined &&
+          channelId !== null &&
           restricted.scope.expiresAt !== null &&
           restricted.scope.expiresAt <= clock.now().getTime()
         ) {
           expireChannel(socketId, channelId);
           return;
         }
-        if (accepted === 'revoked') {
+        if (accepted === 'revoked' && channelId !== null) {
           deliver(socketId, {
             event: 'ACCESS_REVOKED',
             data: { channelIds: [channelId] },
             ts: clock.now().getTime(),
           });
         } else if (accepted === 'resync') {
-          const workspaceId = restricted.scope.expiry?.workspaceId;
+          const workspaceId = restricted?.scope.expiry?.workspaceId;
           if (workspaceId === undefined) {
             socket.ending = true;
             socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
@@ -482,7 +510,51 @@ export const createSocketHub = (
               ts: clock.now().getTime(),
             });
           }
-        } else if (accepted) writeNow(socketId, socket, frame);
+        } else if (accepted) {
+          let projected: ServerFrame = frame;
+          if (workspaceFrame !== undefined && content) {
+            if (socket.sessionId === undefined || socket.userId === undefined) return;
+            const result = await withDeadline(
+              DEFAULT_DEADLINE_MS,
+              async (signal) =>
+                await workspaceFrame(
+                  {
+                    sessionId: socket.sessionId ?? '',
+                    userId: socket.userId ?? '',
+                    ...(socket.company === undefined
+                      ? {}
+                      : { companyWorkspaceId: socket.company.workspaceId }),
+                  },
+                  [...(socket.channels?.keys() ?? [])],
+                  frame,
+                  signal,
+                  restricted?.scope,
+                ),
+              () => undefined,
+            );
+            if (result === undefined) throw timedOut();
+            if (!current()) return;
+            if ('restart' in result) {
+              writeNow(socketId, socket, result.restart);
+              socket.ending = true;
+              socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
+              return;
+            }
+            if ('workspaceId' in result) {
+              denyWorkspace(
+                socketId,
+                socket,
+                result.workspaceId,
+                result.channelIds,
+                result.changed,
+              );
+              return;
+            }
+            if (result.frame === undefined) return;
+            projected = result.frame;
+          }
+          writeNow(socketId, socket, projected);
+        }
       })
       .catch((error: unknown) => {
         if (!current()) return;
@@ -509,6 +581,51 @@ export const createSocketHub = (
     });
   };
 
+  const denyWorkspace = (
+    socketId: string,
+    socket: Held,
+    workspaceId: string,
+    channelIds: readonly string[],
+    changed?: true,
+  ): void => {
+    const retired = [
+      ...new Set([
+        ...channelIds,
+        ...[...(socket.channels ?? [])]
+          .filter(([, channel]) => channel.scope.expiry?.workspaceId === workspaceId)
+          .map(([id]) => id),
+      ]),
+    ];
+    releaseChannels(socketId, retired);
+    for (const id of retired) {
+      leave(id, socketId);
+      socket.revokedWhileHolding?.add(id);
+    }
+    purge(socket, new Set(retired));
+    if (changed === true) {
+      writeNow(socketId, socket, {
+        event: 'WORKSPACE_UPDATED',
+        ts: clock.now().getTime(),
+        data: { workspaceId, accessChanged: true },
+      });
+      return;
+    }
+    const denied = socket.deniedWorkspaces ?? new Set<string>();
+    socket.deniedWorkspaces = denied;
+    if (denied.has(workspaceId)) return;
+    denied.add(workspaceId);
+    writeNow(socketId, socket, {
+      event: 'ERROR',
+      workspaceId,
+      ts: clock.now().getTime(),
+      data: {
+        code: 'WORKSPACE_ACCESS_REQUIRED',
+        message: 'Complete this workspace’s sign-in requirements.',
+        details: { workspaceId },
+      },
+    });
+  };
+
   const deliverAuthorized = (socketId: string, frame: ServerFrame): void => {
     const socket = held.get(socketId);
     // A frame for a connection that has gone is dropped, not queued. Delivery is
@@ -530,6 +647,19 @@ export const createSocketHub = (
     // Widening access must replace the former guest projection and absolute expiry on a fresh subscription.
     // A delayed hint grants nothing: the new socket authenticates the current membership again.
     if (frame.event === 'WORKSPACE_UPDATED' && frame.data.accessChanged === true) {
+      if (workspaceFrame !== undefined) {
+        const channels = [...(socket.channels ?? [])]
+          .filter(([, channel]) => channel.scope.expiry?.workspaceId === frame.data.workspaceId)
+          .map(([id]) => id);
+        releaseChannels(socketId, channels);
+        for (const id of channels) {
+          leave(id, socketId);
+          socket.revokedWhileHolding?.add(id);
+        }
+        purge(socket, new Set(channels));
+        writeAuthorized(socketId, socket, frame);
+        return;
+      }
       if (socket.channels !== undefined) releaseChannels(socketId, [...socket.channels.keys()]);
       writeNow(socketId, socket, frame);
       socket.ending = true;
@@ -559,6 +689,11 @@ export const createSocketHub = (
   ): void => {
     if (closedEvent?.(frame.event) === true) return;
     const identity = socket.company;
+    // The current projector batches the same native company proof at its final SQL gate.
+    if (workspaceFrame !== undefined) {
+      accept(frame);
+      return;
+    }
     if (identity === undefined || frame.event === 'SESSION_ENDED') {
       accept(frame);
       return;
@@ -623,6 +758,12 @@ export const createSocketHub = (
       })
       .catch((error: unknown) => {
         if (!current()) return;
+        if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED') {
+          denyWorkspace(socketId, socket, identity.workspaceId, [
+            ...(socket.channels?.keys() ?? []),
+          ]);
+          return;
+        }
         log.error('company session delivery failed; closing to resync', { socketId, err: error });
         socket.ending = true;
         socket.connection.close(CLOSE_CODES.RESYNC, 'resync');
@@ -821,6 +962,7 @@ export const createSocketHub = (
     restrictChannel: (socketId, channelId, scope): void => {
       const socket = held.get(socketId);
       if (socket === undefined) return;
+      if (scope.expiry !== undefined) socket.deniedWorkspaces?.delete(scope.expiry.workspaceId);
       if (socket.channels?.get(channelId)?.scope.key === scope.key) return;
       releaseChannels(socketId, [channelId]);
       const channels = socket.channels ?? new Map<string, RestrictedChannel>();

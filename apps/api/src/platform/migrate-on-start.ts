@@ -61,6 +61,17 @@ export const migrateOnStart = async (
 /** How often a node that does not migrate looks again for the migrations it waits on. */
 const MIGRATED_POLL_MS = 2_000;
 
+/** Deferred readers do no work against missing or unrecognized schema, including a downgraded worker. */
+export const requireCurrentSchema = async (
+  database: Executor,
+  sets: readonly MigrationSet[] = PRODUCT_MIGRATION_SETS,
+): Promise<void> => {
+  const history = await migrationHistoryProblem(database, undefined, undefined, sets);
+  if (history !== undefined) throw new Error(`worker migration history mismatch: ${history}`);
+  const pending = await pendingMigrations(database, undefined, sets);
+  if (pending.length > 0) throw new Error(`worker migrations not applied: ${pending.join(', ')}`);
+};
+
 /**
  * For a node that does not migrate on start: resolves once the database answers and every migration
  * this code ships is applied — by an operator's `bun run db:migrate`, or by another node — so what the

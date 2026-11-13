@@ -16,6 +16,7 @@ import { maintainPushes } from './maintenance';
 import { claimPush, type PushClaim } from './queue';
 import { settlePush, type PushOutcome } from './queue-result';
 import type { NoticeWords, PushNotices } from './notices';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
 
 export { PUSH_FAILURES_MAX, type PushPost } from './delivery';
 export { NOTICE_PUSH_BUDGET } from '../../platform/push-policy';
@@ -37,6 +38,7 @@ export interface PushSender {
 export interface PushSenderDependencies {
   readonly database: Executor;
   readonly clock: Clock;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   readonly log: Logger;
   readonly keys: PushKeys;
   readonly post: PushPost;

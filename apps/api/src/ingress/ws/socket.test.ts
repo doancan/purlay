@@ -66,6 +66,40 @@ const opening = async (
 };
 
 describe('a socket whose identity cannot be read when it opens', () => {
+  test('refuses a transport that cannot report its actual buffered bytes', async () => {
+    const { log } = aRecordingLogger();
+    const lifecycle = createSocketLifecycle({
+      config: testConfig(),
+      auth: anAuthThatMustNotBeTouched(),
+      database: aDatabaseThatMustNotBeTouched(),
+      clock,
+      log,
+      userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
+      attention: nobodyActive,
+    });
+    const closed: number[] = [];
+    const sent: unknown[] = [];
+    try {
+      await lifecycle.open({
+        id: 'unbounded-transport',
+        raw: {
+          send: (text: string): number => {
+            sent.push(JSON.parse(text));
+            return text.length;
+          },
+        },
+        data: { request: new Request('https://purlay.test/ws') },
+        close: (code): void => {
+          closed.push(code);
+        },
+      });
+      expect(sent).toMatchObject([{ event: 'ERROR', data: { code: 'INTERNAL' } }]);
+      expect(closed).toEqual([CLOSE_CODES.INTERNAL]);
+    } finally {
+      lifecycle.closeAll();
+    }
+  });
+
   test('is told in a frame from the contract and closed with the code that says why', async () => {
     const { sent, closed, logged } = await opening(new Error('the connection reset'));
 

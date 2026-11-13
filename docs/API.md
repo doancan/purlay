@@ -538,6 +538,40 @@ management. Native authorization/exchange preserves the company source and proof
 purged provider authority cannot become independent authority through cookie names, code exchange or
 delayed delivery. These endpoints do not implement SCIM or workspace sign-in policy enforcement.
 
+### Workspace access policy and own authenticator (D-310)
+
+Contracts live in `@purlay/types/workspace-security`. Every route requires a live native session
+and current membership; narrow remediation grants no content access. A foreign workspace or
+hidden resource remains `404`. A visible workspace whose policy blocks this session returns
+`403 WORKSPACE_ACCESS_REQUIRED`, optionally with its `workspaceId` for scoped remediation.
+
+| | Method | Path | Contract |
+|---|---|---|---|
+| ○ | `GET` | `/api/workspace-security` | `?workspace=<slug>`; own safe workspace metadata and access status, usable before content admission |
+| ○ | `GET` | `/api/workspaces/:workspaceId/security/access` | Own current access status and next verification step |
+| ○ | `GET` | `/api/workspaces/:workspaceId/security/policy` | Owner/admin; current policy and recovery readiness |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/policy/preview` | Owner/admin; proposed-policy impact, bounded keyset examples |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/policy/test` | Owner; actual revision-bound admission test, short-lived one-time proof |
+| ○ | `PUT` | `/api/workspaces/:workspaceId/security/policy` | Owner; observed revision and exact successful test proof before enforcement |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/recovery` | Owner; prepare or replace a policy-only offline recovery code |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/recover` | Fresh independent owner plus single-use policy recovery code; changes policy only |
+| ○ | `GET` | `/api/workspaces/:workspaceId/security/mfa` | Own factor metadata, never its secret or recovery codes |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/mfa/enrollment` | Own workspace factor setup; pending URI returned once |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/mfa/challenges` | Own purpose-bound verification challenge |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/mfa/verify` | Consume the exact challenge and authenticator timestep atomically |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/mfa/recovery` | Consume own workspace recovery code for the requested challenge |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/security/mfa` | Own factor, with current factor or recovery proof |
+| ○ | `POST` | `/api/workspaces/:workspaceId/security/mfa/recovery-codes` | Replace own recovery codes with current proof; show the new batch once |
+
+Security responses are `no-store`. Company sessions manage workspace-owned factors; native global
+credential endpoints retain their independent-session requirement. Company sign-in requirements
+apply to full members; guests retain independent sign-in and existing channel/history bounds,
+with workspace MFA and time limits still enforced. Successful foreground content activity can
+refresh only that workspace's live idle deadline. Replay, push, background reads and another
+workspace do not refresh it. Deferred jobs retain their exact native source; file and archive
+streams recheck authority after asynchronous storage reads. Deployment readiness and compatible
+rollback requirements are defined in D-310 and `CONFIG.md`.
+
 **An invitation's token is never in a path or a query** (D-115): the request log writes every path,
 so the token travels in the body, and in the client's address only after `#`, which no request
 carries.

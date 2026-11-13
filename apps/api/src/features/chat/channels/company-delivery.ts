@@ -1,20 +1,37 @@
 /** Project account-wide publications onto the native company session's single workspace. */
 import type { ServerFrame } from '@purlay/types';
 import { withinRequest } from '../../../platform/logging';
-import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { readonlyWorkspaceAccess, requireWorkspaceMembership } from '../../../platform/tenancy';
+import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { CompanyFrameProjector } from '../../../platform/ports/channel-delivery';
 import type { ChatDb } from '../schema';
 import { requireChannelById } from './guard';
 
 export const companyFrameProjector =
-  (database: ChatDb): CompanyFrameProjector =>
-  async (identity, frame, signal): Promise<ServerFrame | undefined> =>
-    await withinRequest(
+  (
+    database: ChatDb,
+    source?: {
+      readonly clock: Clock;
+      readonly lifetime: Parameters<typeof readonlyWorkspaceAccess>[2];
+    },
+  ): CompanyFrameProjector =>
+  async (identity, frame, signal): Promise<ServerFrame | undefined> => {
+    if (
+      frame.event === 'SESSION_ENDED' ||
+      frame.event === 'ACK' ||
+      frame.event === 'ERROR' ||
+      frame.event === 'PONG'
+    )
+      return frame;
+    return await withinRequest(
       {
         requestId: `live:company:${identity.sessionId}`,
         startedAt: performance.now(),
         sessionId: identity.sessionId,
+        ...(source === undefined
+          ? {}
+          : { workspaceAccess: readonlyWorkspaceAccess(identity, source.clock, source.lifetime) }),
         companySession: { userId: identity.userId, workspaceId: identity.workspaceId },
         module: 'chat',
         signal,
@@ -26,11 +43,6 @@ export const companyFrameProjector =
           identity.workspaceId,
         );
         switch (frame.event) {
-          case 'SESSION_ENDED':
-          case 'ACK':
-          case 'ERROR':
-          case 'PONG':
-            return frame;
           case 'WORKSPACE_UPDATED':
           case 'DEEP_WORK_UPDATED':
           case 'INBOX_UPDATED':
@@ -100,3 +112,4 @@ export const companyFrameProjector =
         }
       },
     );
+  };

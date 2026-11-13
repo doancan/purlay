@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
-import { SLUG, slugOf } from '../../shell/home';
+import { SLUG, slugOf } from '../../shell/workspace-slug';
 import { isSetupFailure } from '../client';
 import { useSetup } from '../context';
 import { Actions, FailureNote, Note, StepHeader } from '../parts';

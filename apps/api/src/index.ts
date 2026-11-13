@@ -38,8 +38,10 @@ import { bunRedisClient, connectRedis } from './platform/redis';
 import {
   advertiseEntitlements,
   advertiseSuspension,
+  advertiseWorkspaceAccess,
   peersBehind,
   suspensionPeersBehind,
+  workspaceAccessPeersBehind,
 } from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { sharedRealtime } from './realtime/shared';
@@ -158,6 +160,7 @@ const push = await createPushSender({
   available: () => pushAvailable,
   database,
   clock: systemClock,
+  sessionLifetime: () => services.auth.sessionLifetime,
   log,
   attention,
   notices: modules.pushNotices,
@@ -181,6 +184,7 @@ const storage = storeFor(config);
 const exports = exportQueue({
   database,
   clock: systemClock,
+  sessionLifetime: () => services.auth.sessionLifetime,
   log,
   storage,
   catalogue: modules.exportCatalogue,
@@ -227,8 +231,11 @@ const grantsAdvertised =
 // And of which of them read the modules the administrator has stopped, so that a stop is not written beside one that does not (D-296).
 const suspensionAdvertised =
   redis === undefined ? undefined : advertiseSuspension({ link: redis, nodeId, log });
+const workspaceAccessAdvertised =
+  redis === undefined ? undefined : advertiseWorkspaceAccess({ link: redis, nodeId, log });
 const moduleSet = {
   stop: async (): Promise<void> => {
+    await workspaceAccessAdvertised?.stop();
     await suspensionAdvertised?.stop();
     await grantsAdvertised?.stop();
     await moduleSetWatch?.stop();
@@ -280,6 +287,8 @@ const app = createApp({
     : {
         peersBehind: async (): Promise<number> => await peersBehind(redis),
         suspensionPeersBehind: async (): Promise<number> => await suspensionPeersBehind(redis),
+        workspaceAccessPeersBehind: async (): Promise<number> =>
+          await workspaceAccessPeersBehind(redis),
       }),
   auth: services.auth,
   services,
@@ -428,6 +437,7 @@ if (!workerLifecycle.stopped) {
   activeWorkers = startWorkers(modules.workers, {
     database: leasingExecutor(database, moduleShares),
     clock: systemClock,
+    sessionLifetime: () => services.auth.sessionLifetime,
     log,
     bus: runtimeBase.bus,
     failures: metrics.workerFailures,

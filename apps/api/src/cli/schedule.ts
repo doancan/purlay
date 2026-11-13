@@ -6,18 +6,30 @@
  * SIGTERM ends the wait at once; a job already running is let finish, within the stop grace.
  */
 import { join } from 'node:path';
-import { composition } from '../composition';
+import { createDatabase } from '@purlay/db';
+import { compositionFor } from '../composition';
 import { PLAN, runSchedule } from '../modules/jobs/schedule';
 import { systemClock } from '../platform/clock';
 import { loadConfig } from '../platform/config';
 import { createLogger } from '../platform/logging';
 import { installCrashHandlers } from '../lifecycle';
 import { errorTrackingFor, reportUrgently } from '../platform/error-tracking';
+import { databaseConnection } from '../platform/database';
+import { requireCurrentSchema } from '../platform/migrate-on-start';
+import { sendAuditLinesTo } from '../modules/audit/lines';
 
 const config = loadConfig(process.env);
 const plainLog = createLogger({ level: config.LOG_LEVEL });
 // What the scheduler logs at `error` is reported as the API's errors are (#635).
 const { tracker, log } = errorTrackingFor(config, plainLog, systemClock);
+sendAuditLinesTo(log);
+const composition = compositionFor(config.MODULES, config.WORKSPACE_MODULES);
+const schema = createDatabase({ ...databaseConnection(config, log), poolSize: 1 });
+try {
+  await requireCurrentSchema(schema, composition.migrationSets);
+} finally {
+  await schema.destroy();
+}
 // An error nothing handled ends the scheduler, reported, for its container to restart (#634).
 installCrashHandlers({
   log: plainLog,

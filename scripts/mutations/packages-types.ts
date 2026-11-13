@@ -479,4 +479,28 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     replace: 'WEB_LINK_TITLE_MAX = 201',
     tests: ['packages/types/src/web-link-previews.test.ts'],
   },
+  {
+    id: 'workspace-mfa-contract-digits-drift',
+    why: 'Client and server can disagree about the authenticator code width.',
+    file: 'packages/types/src/workspace-security.ts',
+    find: 'WORKSPACE_MFA_CODE_DIGITS = 6',
+    replace: 'WORKSPACE_MFA_CODE_DIGITS = 7',
+    tests: ['packages/types/src/workspace-security.test.ts'],
+  },
+  {
+    id: 'workspace-mfa-contract-nonascii-code',
+    why: 'A six-character non-ASCII code is accepted before TOTP verification.',
+    file: 'packages/types/src/workspace-security.ts',
+    find: 'pattern: `^[0-9]{${String(WORKSPACE_MFA_CODE_DIGITS)}}$`',
+    replace: 'pattern: `^[0-9１２３４５６]{${String(WORKSPACE_MFA_CODE_DIGITS)}}$`',
+    tests: ['packages/types/src/workspace-security.test.ts'],
+  },
+  {
+    id: 'workspace-policy-contract-duplicate-providers',
+    why: 'The proposed policy can contain repeated provider IDs instead of a bounded unique provider set.',
+    file: 'packages/types/src/workspace-security.ts',
+    find: 'maxItems: WORKSPACE_POLICY_CONNECTIONS_MAX,\n    uniqueItems: true,',
+    replace: 'maxItems: WORKSPACE_POLICY_CONNECTIONS_MAX,\n    uniqueItems: false,',
+    tests: ['packages/types/src/workspace-security.test.ts'],
+  },
 ];

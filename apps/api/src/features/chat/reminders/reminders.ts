@@ -17,6 +17,7 @@ import { DAY_MS, type Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { buildMessages, MESSAGE_COLUMNS, readBuilt } from '../messages/reader';
+import { currentRequest } from '../../../platform/logging';
 
 export const setReminder = async (
   tx: ChatTx,
@@ -62,6 +63,7 @@ export const setReminder = async (
         details: { fields: { reminders: 'at most 100 pending reminders' } },
       });
   }
+  const sourceSessionId = currentRequest()?.sessionId;
   const row = await tx
     .insertInto('message_reminders')
     .values({
@@ -71,9 +73,13 @@ export const setReminder = async (
       message_id: messageId,
       remind_at: date,
       created_at: clock.now(),
+      source_session_id: sourceSessionId ?? null,
     })
     .onConflict((conflict) =>
-      conflict.columns(['user_id', 'message_id']).doUpdateSet({ remind_at: date }),
+      conflict.columns(['user_id', 'message_id']).doUpdateSet({
+        remind_at: date,
+        ...(sourceSessionId === undefined ? {} : { source_session_id: sourceSessionId }),
+      }),
     )
     .returningAll()
     .executeTakeFirstOrThrow();

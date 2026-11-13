@@ -54,6 +54,8 @@ import { noteSessionActivity, type SessionLifetime } from '../modules/auth/sessi
 import { SESSION_CLOCK } from '../modules/auth/sessions';
 import type { RateLimiter } from './rate-limiter';
 import type { ChannelDeliveryGate } from '../platform/ports/channel-delivery';
+import { recordWorkspaceActivity } from '../modules/workspaces/security/activity';
+import { requireWorkspaceSecurityMembership } from '../platform/tenancy';
 
 const unlimited: ReplayGate = async (work) => await work();
 
@@ -183,7 +185,14 @@ const errorFrame = (error: unknown, clock: Clock, refId?: string): ServerFrame =
               message: 'The service is busy. Try again shortly.',
             }
           : { code: 'INTERNAL' as const, message: 'Something went wrong.' };
-  return frame({ event: 'ERROR', data: body }, clock, refId);
+  const workspaceId =
+    error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED'
+      ? error.body.details?.workspaceId
+      : undefined;
+  return {
+    ...frame({ event: 'ERROR', data: body }, clock, refId),
+    ...(typeof workspaceId === 'string' ? { workspaceId } : {}),
+  };
 };
 
 /**
@@ -366,6 +375,23 @@ const serveFrame = async (
         // A workspace the sender is not in neither holds anything nor takes a place in memory: the
         // same 404 a stranger gets.
         await requireWorkspaceMembership(database, identity.userId, parsed.payload.workspaceId);
+        const policy = await database
+          .selectFrom('workspaces')
+          .select('access_policy_epoch')
+          .where('id', '=', parsed.payload.workspaceId)
+          .executeTakeFirst();
+        if (policy?.access_policy_epoch !== undefined && policy.access_policy_epoch !== '0')
+          await recordWorkspaceActivity(
+            { database, clock, lifetime: dependencies.sessionLifetime },
+            {
+              context: await requireWorkspaceSecurityMembership(
+                database,
+                identity.userId,
+                parsed.payload.workspaceId,
+              ),
+              sessionId: identity.sessionId,
+            },
+          );
         dependencies.attention.heard(identity.userId, parsed.payload.workspaceId);
         // And the person's page spoke: their five quiet minutes start again (D-257).
         dependencies.online.active(identity.userId);

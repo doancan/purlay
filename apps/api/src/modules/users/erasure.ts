@@ -143,7 +143,9 @@ export const eraseAccount = async (
   await sql`delete from verifications
     where value = ${person.id}
        or case when pg_input_is_valid(value, 'jsonb')
-               then lower((value::jsonb) ->> 'email') end = ${person.email}`.execute(executor);
+               then lower((value::jsonb) ->> 'email') end = ${person.email}
+       or case when identifier like 'native-primary-2fa:%' and pg_input_is_valid(value, 'jsonb')
+               then (value::jsonb) ->> 'userId' end = ${person.id}`.execute(executor);
   // And how many links the address was sent this hour, from whichever clients: kept under its digest.
   await executor
     .deleteFrom('rate_limits')
@@ -299,6 +301,12 @@ export const eraseAccount = async (
     .deleteFrom('workspace_identity_bindings')
     .where('user_id', '=', person.id)
     .execute();
+  // Membership survives anonymisation; its scoped authenticator and offline recovery credentials do not.
+  await executor
+    .deleteFrom('workspace_mfa_recovery_codes')
+    .where('user_id', '=', person.id)
+    .execute();
+  await executor.deleteFrom('workspace_mfa_factors').where('user_id', '=', person.id).execute();
   // A provider's account id is who they are on GitHub, and a credential account holds a password's hash;
   // left behind, the pair would also hand a returning GitHub sign-in the erased account (D-38, D-179).
   await executor.deleteFrom('accounts').where('user_id', '=', person.id).execute();

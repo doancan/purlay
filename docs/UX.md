@@ -1359,6 +1359,21 @@ minutes old — says *This sign-in has expired* and offers *Go to Purlay*. The e
 browser, in which case the pair rides in the link's fragment after the token (`#<token>[.<invitation>]~<challenge>~<state>`)
 and the sign-in keeps it for that tab.
 
+**Workspace security** (D-310) uses the existing settings cards, controls and keyboard behavior.
+Owners can preview a proposed sign-in, authenticator and session policy, prepare offline recovery,
+complete a real test and explicitly apply that tested policy. Administrators can read and preview;
+enforcement and policy recovery remain owner actions. Show stale revisions, unavailable rollout
+readiness and the next required step without losing the form. Secrets and newly generated recovery
+codes are shown once, with explicit acknowledgment before leaving.
+
+A person blocked by policy lands at `/workspace-access?workspace=<slug>`, outside content loaders.
+Explain whether sign-in, authenticator enrollment, a fresh code or a new session is needed. Company
+employees enroll a workspace authenticator without creating a password. Offer the scoped recovery
+alternative, retry for expired or lost challenges, and a safe way to another eligible workspace.
+Failing access to one workspace leaves the independent account and other workspaces usable. A guest
+keeps the existing channel and post-join history limits through remediation; company-only sign-in
+does not apply to guests, while the workspace's MFA and session limits do.
+
 ---
 
 ## 12. The native client

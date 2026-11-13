@@ -1064,4 +1064,28 @@ export const API_CHAT: readonly Mutation[] = [
     replace: '    filesLinked: true,',
     tests: ['apps/api/src/module-lifecycle.integration.test.ts'],
   },
+  {
+    id: 'workspace-personal-linked-rows-cross-denied-workspaces',
+    why: 'Rows carrying only channel/message links must obey the same eligible workspace set as messages.',
+    file: 'apps/api/src/features/chat/personal-export.ts',
+    find: '    return scope === undefined ? own : { ...own, where: sql`(${own.where}) and (${scope})` };',
+    replace: '    return own;',
+    tests: ['apps/api/src/realtime/workspace-access.integration.test.ts'],
+  },
+  {
+    id: 'workspace-reminder-producer-forgets-native-source',
+    why: 'A reminder worker cannot recover source authority from unrelated current sessions.',
+    file: 'apps/api/src/features/chat/reminders/reminders.ts',
+    find: '      source_session_id: sourceSessionId ?? null,',
+    replace: '      source_session_id: null,',
+    tests: ['apps/api/src/realtime/workspace-access.integration.test.ts'],
+  },
+  {
+    id: 'workspace-scheduled-producer-forgets-native-source',
+    why: 'A governed scheduled message must retain its actual requesting native SID.',
+    file: 'apps/api/src/features/chat/scheduled/scheduled.ts',
+    find: '        source_session_id: currentRequest()?.sessionId ?? null,',
+    replace: '        source_session_id: null,',
+    tests: ['apps/api/src/realtime/workspace-access.integration.test.ts'],
+  },
 ];

@@ -22,7 +22,11 @@ import { sql, type RawBuilder, type SelectQueryBuilder } from '@purlay/db';
 import type { ChatDb, ChatSchema, ChatTx } from '../schema';
 import { isUnsentUploadOf, type ReadableAttachment } from '../../../modules/attachments/readable';
 import { AppError, attachmentNotFound } from '../../../platform/errors';
-import { activeWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
+import {
+  activeWorkspaceMembership,
+  requireWorkspaceContentAccess,
+  type WorkspaceContext,
+} from '../../../platform/tenancy';
 import {
   guestContentHistory,
   guestMessageHistory,
@@ -54,6 +58,7 @@ interface VisibleChannel {
   readonly id: string;
   readonly workspaceId: string;
   readonly type: ChannelType;
+  readonly policyEpoch: string;
   readonly guestSince: Date | string | null;
   readonly guestExpiresAt: Date | string | null;
   readonly channelJoinedAt: Date | string | null;
@@ -86,6 +91,7 @@ type VisibilityQuery = SelectQueryBuilder<
 export const visibleChannels = (
   executor: ChatDb,
   userId: string | RawBuilder<string>,
+  options: { readonly visibilityOnly?: boolean } = {},
 ): VisibilityQuery =>
   executor
     .selectFrom('channels')
@@ -102,7 +108,7 @@ export const visibleChannels = (
     )
     .where('channels.deleted_at', 'is', null)
     .where('workspaces.deleted_at', 'is', null)
-    .where(activeWorkspaceMembership())
+    .where(activeWorkspaceMembership(options))
     .where(
       sql<boolean>`(workspace_members.access_kind = 'member'
       or workspace_members.guest_modules @> ARRAY['chat']::text[])`,
@@ -138,7 +144,7 @@ export const channelAudienceQuery = (
   channelId: string | RawBuilder<string>,
   messageId?: string | RawBuilder<string>,
 ): SelectQueryBuilder<ChatSchema, 'users', { id: string }> => {
-  const visible = visibleChannels(executor, sql.ref<string>('users.id'))
+  const visible = visibleChannels(executor, sql.ref<string>('users.id'), { visibilityOnly: true })
     .select('channels.id')
     .where('channels.id', '=', channelId)
     .$if(messageId !== undefined, (query) =>
@@ -188,7 +194,7 @@ export const readLiveChannelAudience = async (
   if (userIds.length === 0) return [];
   if (userIds.length > LIVE_AUDIENCE_BATCH_MAX)
     throw new RangeError('Live audience batch is too large.');
-  const access = visibleChannels(executor, sql.ref<string>('users.id'))
+  const access = visibleChannels(executor, sql.ref<string>('users.id'), { visibilityOnly: true })
     .select([
       'workspace_members.access_kind as accessKind',
       'workspace_members.guest_expires_at as expiresAt',
@@ -228,10 +234,11 @@ const visible = async (
   userId: string,
   scope: Scope,
 ): Promise<readonly VisibleChannel[]> => {
-  let query = visibleChannels(executor, userId).select([
+  let query = visibleChannels(executor, userId, { visibilityOnly: true }).select([
     'channels.id as id',
     'channels.workspace_id as workspaceId',
     'channels.type as type',
+    'workspaces.access_policy_epoch as policyEpoch',
     'workspace_members.guest_since as guestSince',
     'workspace_members.guest_expires_at as guestExpiresAt',
     'channel_members.joined_at as channelJoinedAt',
@@ -287,6 +294,13 @@ const allOrNothing = async (
     ...(workspaceId === undefined ? {} : { workspaceId }),
   });
   const byId = new Map(found.map((channel) => [channel.id, channel]));
+  // Refuse every invisible resource before a policy hint can reveal anything about the visible ones.
+  if (channelIds.some((id) => !byId.has(id))) throw channelNotFound();
+  for (const [workspace, epoch] of new Map(
+    found.map((row) => [row.workspaceId, row.policyEpoch]),
+  )) {
+    await requireWorkspaceContentAccess(executor, userId, workspace, epoch);
+  }
   return channelIds.map((id) => {
     const channel = byId.get(id);
     if (channel === undefined) throw channelNotFound();
@@ -372,10 +386,18 @@ export const requireChannelsById = async (
 export const visibleChannelsIn = async (
   executor: ChatDb,
   context: WorkspaceContext,
-): Promise<readonly ChannelContext[]> =>
-  (await visible(executor, context.userId, { workspaceId: context.workspaceId })).map((channel) =>
-    mint(context.userId, channel),
-  );
+): Promise<readonly ChannelContext[]> => {
+  const channels = await visible(executor, context.userId, { workspaceId: context.workspaceId });
+  const first = channels[0];
+  if (first !== undefined)
+    await requireWorkspaceContentAccess(
+      executor,
+      context.userId,
+      context.workspaceId,
+      first.policyEpoch,
+    );
+  return channels.map((channel) => mint(context.userId, channel));
+};
 
 /**
  * The channels this user can see, for a workspace-wide read.
@@ -489,12 +511,13 @@ export const requireMessageById = async (
   } = {},
 ): Promise<VisibleMessage> => {
   if (!Value.Check(Uuid, messageId)) throw messageNotFound();
-  let statement = visibleChannels(executor, userId)
+  let statement = visibleChannels(executor, userId, { visibilityOnly: true })
     .innerJoin('messages', 'messages.channel_id', 'channels.id')
     .select([
       'channels.id as id',
       'channels.workspace_id as workspaceId',
       'channels.type as type',
+      'workspaces.access_policy_epoch as policyEpoch',
       'workspace_members.guest_since as guestSince',
       'workspace_members.guest_expires_at as guestExpiresAt',
       'channel_members.joined_at as channelJoinedAt',
@@ -505,6 +528,7 @@ export const requireMessageById = async (
   if (options.deleted !== 'include') statement = statement.where('messages.deleted_at', 'is', null);
   const row = await statement.executeTakeFirst();
   if (row === undefined) throw messageNotFound();
+  await requireWorkspaceContentAccess(executor, userId, row.workspaceId, row.policyEpoch);
   return {
     context: mint(userId, row),
     messageId,
@@ -520,12 +544,13 @@ export const requireThreadContextById = async (
   options: { readonly deleted?: 'include' } = {},
 ): Promise<VisibleMessage> => {
   if (!Value.Check(Uuid, messageId)) throw messageNotFound();
-  let statement = visibleChannels(executor, userId)
+  let statement = visibleChannels(executor, userId, { visibilityOnly: true })
     .innerJoin('messages', 'messages.channel_id', 'channels.id')
     .select([
       'channels.id as id',
       'channels.workspace_id as workspaceId',
       'channels.type as type',
+      'workspaces.access_policy_epoch as policyEpoch',
       'workspace_members.guest_since as guestSince',
       'workspace_members.guest_expires_at as guestExpiresAt',
       'channel_members.joined_at as channelJoinedAt',
@@ -537,6 +562,7 @@ export const requireThreadContextById = async (
   if (options.deleted !== 'include') statement = statement.where('messages.deleted_at', 'is', null);
   const row = await statement.executeTakeFirst();
   if (row === undefined) throw messageNotFound();
+  await requireWorkspaceContentAccess(executor, userId, row.workspaceId, row.policyEpoch);
   return {
     context: mint(userId, row),
     messageId,
@@ -569,14 +595,18 @@ export const requireAttachmentById = async (
       'attachments.thumbnail_key as thumbnailKey',
       'attachments.file_name as fileName',
       'attachments.kind as kind',
+      'attachments.workspace_id as workspaceId',
+      sql<string>`(select access_policy_epoch from workspaces where id = attachments.workspace_id)`.as(
+        'policyEpoch',
+      ),
     ])
     .where('attachments.id', '=', attachmentId)
     .where((eb) =>
       eb.or([
-        isUnsentUploadOf(eb, userId),
+        isUnsentUploadOf(eb, userId, { visibilityOnly: true }),
         // Correlated, so it looks at this attachment's one message, not every visible one.
         eb.exists(
-          visibleChannels(executor, userId)
+          visibleChannels(executor, userId, { visibilityOnly: true })
             .innerJoin('messages', 'messages.channel_id', 'channels.id')
             .select('messages.id')
             .innerJoin('message_attachments', 'message_attachments.message_id', 'messages.id')
@@ -588,5 +618,12 @@ export const requireAttachmentById = async (
     )
     .executeTakeFirst();
   if (row === undefined) throw attachmentNotFound();
-  return row;
+  await requireWorkspaceContentAccess(executor, userId, row.workspaceId, row.policyEpoch);
+  return {
+    id: row.id,
+    storageKey: row.storageKey,
+    thumbnailKey: row.thumbnailKey,
+    fileName: row.fileName,
+    kind: row.kind,
+  };
 };

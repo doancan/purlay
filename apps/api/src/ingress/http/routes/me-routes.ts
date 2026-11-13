@@ -53,7 +53,11 @@ export const meRoutes = (
       })
       .get('/api/me/exports', async ({ request }) => await readMyExports(dependencies, request))
       .get('/api/me/exports/:exportId/download', async ({ request, params }) => {
-        const { body, headers } = await downloadMyExport(dependencies, request, params.exportId);
+        const { body, headers } = await downloadMyExport(
+          { ...dependencies, personalCatalogue: context.modules.personalExportCatalogue },
+          request,
+          params.exportId,
+        );
         // Our own Response, as an owner's export's download is: a cancel must reach the archive's.
         return new Response(body, { headers });
       })

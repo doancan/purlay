@@ -27,6 +27,7 @@ const head = [
       storage_quota_bytes: 'export',
       storage_used_bytes: 'export',
       // The deletion's job (D-242): null in every workspace that can still be exported.
+      access_policy_epoch: 'omit',
       purge_started_at: 'omit',
       purged_at: 'omit',
     },
@@ -150,6 +151,13 @@ export const coreExport: CoreExportContribution = {
 
 /** The tables of the core that are not in an export, and why. Every other table says it in its own module's. */
 export type CoreExcluded =
+  | 'session_authentication_evidence'
+  | 'workspace_access_policies'
+  | 'workspace_access_policy_tests'
+  | 'workspace_session_assurances'
+  | 'workspace_mfa_factors'
+  | 'workspace_mfa_challenges'
+  | 'workspace_mfa_recovery_codes'
   | 'workspace_identity_domains'
   | 'workspace_identity_connections'
   | 'workspace_identity_bindings'
@@ -182,6 +190,16 @@ export type CoreExcluded =
   | 'setup_state';
 
 export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
+  session_authentication_evidence:
+    'private native authentication and MFA provenance, not exported credentials or workspace content',
+  workspace_access_policies:
+    'workspace access control configuration, managed through security settings',
+  workspace_access_policy_tests:
+    'short-lived policy activation capabilities and verification state',
+  workspace_session_assurances: 'private session authority, activity and verification evidence',
+  workspace_mfa_factors: 'sealed workspace authenticator credentials',
+  workspace_mfa_challenges: 'one-time workspace authenticator verification capabilities',
+  workspace_mfa_recovery_codes: 'hashed one-time factor and policy recovery credentials',
   workspace_identity_domains:
     'administrator-only domain proof and pending verification capabilities',
   workspace_identity_connections:

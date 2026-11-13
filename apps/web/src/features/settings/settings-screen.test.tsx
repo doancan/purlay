@@ -40,6 +40,8 @@ const ACCOUNT = [
 const WORKSPACE = [
   'General',
   'Company sign-in',
+  'Workspace security',
+  'Your workspace authenticator',
   'Members',
   'Invitations',
   'Integrations',
@@ -97,10 +99,13 @@ describe('the settings’ navigation', () => {
     view.unmount();
   });
 
-  test('a member, their own pages and no workspace group at all', async () => {
+  test('a member, their own pages and only their workspace authenticator', async () => {
     const view = await open('/w/acme/settings/profile', 'member');
-    expect(groups(view)).toEqual([['Account', ACCOUNT]]);
-    expect(nav(view).queryByText('acme-eng')).toBeNull();
+    expect(groups(view)).toEqual([
+      ['Account', ACCOUNT],
+      ['acme-eng', ['Your workspace authenticator']],
+    ]);
+    expect(nav(view).queryByRole('link', { name: 'Workspace security' })).toBeNull();
     view.unmount();
   });
 

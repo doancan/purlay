@@ -15,10 +15,27 @@
  */
 import { sql, tableExists, type RawBuilder } from '@purlay/db';
 import {
-  personalTableExport,
+  personalTableExport as nativePersonalTableExport,
   type PersonalContribution,
 } from '../../modules/export/personal-catalogue';
 import type { ChatDb } from './schema';
+
+/** Tables with only a channel/message link carry the same allowed-workspace bound as direct rows. */
+const personalTableExport: typeof nativePersonalTableExport = (name, columns, bounds) =>
+  nativePersonalTableExport(name, columns, async (userId, workspaces, executor) => {
+    const own = await bounds(userId, workspaces, executor);
+    const scope =
+      'workspace_id' in columns
+        ? undefined
+        : 'channel_id' in columns
+          ? sql`channel_id is null or channel_id in (select id from channels where workspace_id in (${workspaces}))`
+          : 'message_id' in columns
+            ? sql`message_id is null or message_id in (select id from messages where workspace_id in (${workspaces}))`
+            : 'root_id' in columns
+              ? sql`root_id in (select id from messages where workspace_id in (${workspaces}))`
+              : undefined;
+    return scope === undefined ? own : { ...own, where: sql`(${own.where}) and (${scope})` };
+  });
 
 /** The messages the person wrote that stand: every bound of their words goes through this. */
 const theirMessages = (userId: string): RawBuilder<unknown> =>

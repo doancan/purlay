@@ -22,7 +22,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Executor, Transaction } from '@purlay/db';
+import { sql, type Executor, type RawBuilder, type Transaction } from '@purlay/db';
 import {
   EXPORT_KEPT_HOURS,
   ExportFailure,
@@ -44,6 +44,11 @@ import { atomicallyOn } from '../../platform/transactions';
 import { recordAudit } from '../audit/audit';
 import { exportWorkspace } from './export';
 import { writeTar } from './tar';
+import { currentRequest } from '../../platform/logging';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
+import { withinDeferredSource } from '../../platform/deferred-source';
+import { requirePreparedWorkspaceSet, type ExportSourceOptions } from './source';
+import { archiveDownloadHandoff, type ArchiveDownloadHandoff } from './download-handoff';
 
 /** How often a run says it is alive, and how long silent before the sweep takes it for cut off. */
 const HEARTBEAT_MS = 60_000;
@@ -127,7 +132,7 @@ export const shown = (row: Row): WorkspaceExport => ({
 
 /** Where an export's archive is kept: under its workspace, as every key of the store is. */
 const keyOf = (workspaceId: string, exportId: string): string =>
-  `${workspacePrefix(workspaceId)}exports/${exportId}.tar`;
+  `${workspacePrefix(workspaceId)}exports/${exportId}/${crypto.randomUUID()}.tar`;
 
 /** Asks for an export; the caller starts it once this has committed (`exportQueue`). */
 export const requestExport = async (
@@ -167,6 +172,7 @@ export const requestExport = async (
       status: 'pending',
       created_at: at,
       heartbeat_at: at,
+      source_session_id: currentRequest()?.sessionId ?? null,
     })
     .returning(COLUMNS)
     .executeTakeFirstOrThrow();
@@ -201,6 +207,7 @@ export const listExports = async (
 export interface RunDependencies {
   readonly database: Executor;
   readonly clock: Clock;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   readonly log: Logger;
   readonly storage: ObjectStore;
   /** What a workspace's export holds, assembled from the core's contribution and the modules' (D-250). */
@@ -304,6 +311,7 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
     .select([
       'workspace_exports.workspace_id',
       'workspace_exports.requested_by',
+      'workspace_exports.source_session_id',
       'workspaces.slug',
       'workspaces.name',
     ])
@@ -316,99 +324,130 @@ const makeExport = async (dependencies: RunDependencies, exportId: string): Prom
     await fail(dependencies, 'workspace_exports', exportId, 'EXPORT_FAILED');
     return;
   }
-  // The owner as they are now: one demoted, gone, or erased since asking is not exported for.
-  const context =
-    row.requested_by === null
-      ? null
-      : await membershipOf(database, row.requested_by, row.workspace_id);
-  const live =
-    row.requested_by === null
-      ? undefined
-      : await database
-          .selectFrom('users')
-          .select('id')
-          .where('id', '=', row.requested_by)
-          .where('deleted_at', 'is', null)
-          .executeTakeFirst();
-  if (context?.role !== 'owner' || live === undefined) {
-    log.warn('an export’s owner is no longer one', { exportId, workspaceId: row.workspace_id });
+  if (row.requested_by === null) {
     await fail(dependencies, 'workspace_exports', exportId, 'EXPORT_REQUESTER_GONE');
     return;
   }
-  const owner = context.userId;
-
-  const stopBeating = beatWhileMade(dependencies, 'workspace_exports', exportId);
-  const scratch = await mkdtemp(join(tmpdir(), 'purlay-export-'));
-  const key = keyOf(row.workspace_id, exportId);
-  let stored = false;
   try {
-    const folder = join(scratch, 'export');
-    const { manifest } = await exportWorkspace(
+    await withinDeferredSource(
       dependencies,
-      { id: row.workspace_id, slug: row.slug, name: row.name },
-      await dependencies.catalogue.scopeOf(database, {
-        kind: 'visible-to-owner',
-        workspaceId: row.workspace_id,
-        viewer: context,
-      }),
-      folder,
-      'caller',
+      { userId: row.requested_by, sessionId: row.source_session_id },
+      async () => {
+        // The owner as they are now: one demoted, gone, or erased since asking is not exported for.
+        const context =
+          row.requested_by === null
+            ? null
+            : await membershipOf(database, row.requested_by, row.workspace_id);
+        const live =
+          row.requested_by === null
+            ? undefined
+            : await database
+                .selectFrom('users')
+                .select('id')
+                .where('id', '=', row.requested_by)
+                .where('deleted_at', 'is', null)
+                .executeTakeFirst();
+        if (context?.role !== 'owner' || live === undefined) {
+          log.warn('an export’s owner is no longer one', {
+            exportId,
+            workspaceId: row.workspace_id,
+          });
+          await fail(dependencies, 'workspace_exports', exportId, 'EXPORT_REQUESTER_GONE');
+          return;
+        }
+        const owner = context.userId;
+
+        const stopBeating = beatWhileMade(dependencies, 'workspace_exports', exportId);
+        const scratch = await mkdtemp(join(tmpdir(), 'purlay-export-'));
+        const key = keyOf(row.workspace_id, exportId);
+        let stored = false;
+        try {
+          const folder = join(scratch, 'export');
+          const { manifest } = await exportWorkspace(
+            dependencies,
+            { id: row.workspace_id, slug: row.slug, name: row.name },
+            await dependencies.catalogue.scopeOf(database, {
+              kind: 'visible-to-owner',
+              workspaceId: row.workspace_id,
+              viewer: context,
+            }),
+            folder,
+            'caller',
+          );
+          // A short, fixed root inside the archive: the slug is in the download's name, not each entry's.
+          const archive = join(scratch, 'export.tar');
+          const size = await writeTar(
+            folder,
+            'export',
+            archive,
+            Math.floor(clock.now().getTime() / 1000),
+          );
+          await rm(folder, { recursive: true, force: true });
+          await storage.putFile(key, archive, 'application/x-tar');
+          stored = true;
+          // Ready and on the trail together: a trail that refuses leaves it pending, to fail below.
+          const ready = await atomicallyOn(database)(
+            async (transaction) =>
+              await withinDeferredSource(
+                { ...dependencies, database: transaction },
+                { userId: owner, sessionId: row.source_session_id },
+                async () => {
+                  const current = await membershipOf(transaction, owner, row.workspace_id);
+                  if (current?.role !== 'owner') throw ownersOnly();
+                  const fence = await requirePreparedWorkspaceSet(transaction, owner, [
+                    row.workspace_id,
+                  ]);
+                  const done = clock.now();
+                  const marked = await transaction
+                    .updateTable('workspace_exports')
+                    .set({
+                      status: 'ready',
+                      storage_key: key,
+                      size_bytes: String(size),
+                      finished_at: done,
+                      expires_at: new Date(done.getTime() + EXPORT_KEPT_HOURS * HOUR_MS),
+                    })
+                    .where('id', '=', exportId)
+                    .where('status', '=', 'pending')
+                    .where(fence)
+                    .returning('id')
+                    .executeTakeFirst();
+                  if (marked === undefined) return false;
+                  await recordAudit(transaction, clock, {
+                    workspaceId: row.workspace_id,
+                    actorUserId: owner,
+                    action: 'workspace.exported',
+                    targetType: 'workspace',
+                    targetId: row.workspace_id,
+                    metadata: {
+                      scope: 'visible-to-owner',
+                      ...dependencies.catalogue.audit(manifest.tables),
+                    },
+                  });
+                  return true;
+                },
+              ),
+          );
+          if (!ready) {
+            // Marked cut off meanwhile: the archive is nobody's, and goes.
+            await storage.delete(key);
+            log.warn('an export finished after it was given up on', { exportId });
+            return;
+          }
+          log.info('export ready', { exportId, workspaceId: row.workspace_id, bytes: size });
+        } catch (error) {
+          log.error('export failed', { exportId, workspaceId: row.workspace_id, err: error });
+          if (stored) await removeArchive(dependencies, exportId, key);
+          await fail(dependencies, 'workspace_exports', exportId, failureOf(error));
+        } finally {
+          stopBeating();
+          await rm(scratch, { recursive: true, force: true });
+        }
+      },
     );
-    // A short, fixed root inside the archive: the slug is in the download's name, not each entry's.
-    const archive = join(scratch, 'export.tar');
-    const size = await writeTar(
-      folder,
-      'export',
-      archive,
-      Math.floor(clock.now().getTime() / 1000),
-    );
-    await rm(folder, { recursive: true, force: true });
-    await storage.putFile(key, archive, 'application/x-tar');
-    stored = true;
-    // Ready and on the trail together: a trail that refuses leaves it pending, to fail below.
-    const ready = await atomicallyOn(database)(async (transaction) => {
-      const done = clock.now();
-      const marked = await transaction
-        .updateTable('workspace_exports')
-        .set({
-          status: 'ready',
-          storage_key: key,
-          size_bytes: String(size),
-          finished_at: done,
-          expires_at: new Date(done.getTime() + EXPORT_KEPT_HOURS * HOUR_MS),
-        })
-        .where('id', '=', exportId)
-        .where('status', '=', 'pending')
-        .returning('id')
-        .executeTakeFirst();
-      if (marked === undefined) return false;
-      await recordAudit(transaction, clock, {
-        workspaceId: row.workspace_id,
-        actorUserId: owner,
-        action: 'workspace.exported',
-        targetType: 'workspace',
-        targetId: row.workspace_id,
-        metadata: {
-          scope: 'visible-to-owner',
-          ...dependencies.catalogue.audit(manifest.tables),
-        },
-      });
-      return true;
-    });
-    if (!ready) {
-      // Marked cut off meanwhile: the archive is nobody's, and goes.
-      await storage.delete(key);
-      log.warn('an export finished after it was given up on', { exportId });
-      return;
-    }
-    log.info('export ready', { exportId, workspaceId: row.workspace_id, bytes: size });
   } catch (error) {
-    log.error('export failed', { exportId, workspaceId: row.workspace_id, err: error });
-    if (stored) await removeArchive(dependencies, exportId, key);
+    log.error('export original authority ended', { exportId, err: error });
     await fail(dependencies, 'workspace_exports', exportId, failureOf(error));
-  } finally {
-    stopBeating();
-    await rm(scratch, { recursive: true, force: true });
   }
 };
 
@@ -429,28 +468,68 @@ export const runExport = async (dependencies: RunDependencies, exportId: string)
  * this workspace's and the caller's own; answers where its archive is. Anything else — an id that is no
  * UUID among it — is the one `EXPORT_NOT_FOUND`.
  */
+const downloadableExport = (context: WorkspaceContext, exportId: string): RawBuilder<boolean> =>
+  sql<boolean>`id=${exportId} and workspace_id=${context.workspaceId} and requested_by=${context.userId} and status='ready'`;
+
 export const claimDownload = async (
   transaction: Transaction,
   clock: Clock,
   context: WorkspaceContext,
   exportId: string,
-): Promise<{ readonly key: string; readonly size: number }> => {
+  options: ExportSourceOptions = {},
+): Promise<{
+  readonly key: string;
+  readonly size: number;
+  readonly handoff: ArchiveDownloadHandoff;
+}> => {
+  const callerSessionId = currentRequest()?.sessionId ?? null;
   if (context.role !== 'owner') throw ownersOnly();
   // An id that is no UUID names no export; asked of a uuid column it would be the database's error.
   if (!Value.Check(Uuid, exportId)) throw notFound();
-  const now = clock.now();
-  const claimed = await transaction
-    .updateTable('workspace_exports')
-    .set({ status: 'downloaded', downloaded_at: now })
-    .where('id', '=', exportId)
-    .where('workspace_id', '=', context.workspaceId)
-    .where('requested_by', '=', context.userId)
-    .where('status', '=', 'ready')
-    .where('expires_at', '>', now)
-    .returning(['storage_key', 'size_bytes'])
+  const staged = await transaction
+    .selectFrom('workspace_exports')
+    .select(['source_session_id'])
+    .where(downloadableExport(context, exportId))
     .executeTakeFirst();
-  if (claimed?.storage_key == null) throw notFound();
-  return { key: claimed.storage_key, size: Number(claimed.size_bytes) };
+  if (staged === undefined) throw notFound();
+  return await withinDeferredSource(
+    { database: transaction, clock, ...options },
+    { userId: context.userId, sessionId: staged.source_session_id },
+    async () => {
+      const fence = await requirePreparedWorkspaceSet(transaction, context.userId, [
+        context.workspaceId,
+      ]);
+      const now = clock.now();
+      const claimed = await transaction
+        .updateTable('workspace_exports')
+        .set({ status: 'downloaded', downloaded_at: now })
+        .where(downloadableExport(context, exportId))
+        .where('id', '=', exportId)
+        .where('expires_at', '>', now)
+        .where(
+          'source_session_id',
+          staged.source_session_id === null ? 'is' : '=',
+          staged.source_session_id,
+        )
+        .where(fence)
+        .returning(['storage_key', 'size_bytes'])
+        .executeTakeFirst();
+      if (claimed?.storage_key == null) throw notFound();
+      return {
+        key: claimed.storage_key,
+        size: Number(claimed.size_bytes),
+        handoff: archiveDownloadHandoff({
+          kind: 'workspace',
+          exportId,
+          key: claimed.storage_key,
+          userId: context.userId,
+          callerSessionId,
+          sourceSessionId: staged.source_session_id,
+          workspaceIds: [context.workspaceId],
+        }),
+      };
+    },
+  );
 };
 
 /**

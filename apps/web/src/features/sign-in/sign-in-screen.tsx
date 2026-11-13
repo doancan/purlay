@@ -25,7 +25,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { signInFailureIn, type SignInFailure } from '@purlay/types';
 import { useAuthMethods, useMe } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
-import { href } from '../../router/routes';
+import { href, workspaceAccessHref } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button, buttonStyle } from '../../ui/button';
 import { cn } from '../../ui/cn';
@@ -121,9 +121,14 @@ export const SignInScreen = (): React.JSX.Element => {
           : null;
 
   useEffect(() => {
-    if (me.isSuccess && me.data.companyWorkspaceId === undefined && !independent)
+    if (
+      me.isSuccess &&
+      me.data.companyWorkspaceId === undefined &&
+      !independent &&
+      workspace === ''
+    )
       navigate(href('home'), { replace: true });
-  }, [me.isSuccess, me.data?.companyWorkspaceId, independent, navigate]);
+  }, [me.isSuccess, me.data?.companyWorkspaceId, independent, workspace, navigate]);
 
   return (
     <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
@@ -182,6 +187,13 @@ export const SignInScreen = (): React.JSX.Element => {
               alone={!github && !google && oidc === null && !methods.isError && mail}
               withPassword={methods.data?.password !== false}
               mail={mail}
+              {...(workspace === ''
+                ? {}
+                : {
+                    onSignedIn: (): void => {
+                      navigate(workspaceAccessHref(workspace), { replace: true });
+                    },
+                  })}
             />
             {methods.data?.company !== undefined && !independent && (
               <Suspense

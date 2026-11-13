@@ -180,7 +180,10 @@ describe('integration: a person’s export of their own data', () => {
     const ready = await made(ask, world);
     expect(ready).toMatchObject({ status: 'ready', failure: null });
     expect(ready.expiresAt).toBe(new Date(NOW.getTime() + 24 * HOUR_MS).toISOString());
-    expect(world.store.keys()).toEqual([`${personPrefix(ada.userId)}exports/${ready.id}.tar`]);
+    expect(world.store.keys()).toHaveLength(1);
+    expect(world.store.keys()[0]).toMatch(
+      new RegExp(`^${personPrefix(ada.userId)}exports/${ready.id}/[0-9a-f-]+\\.tar$`),
+    );
 
     // Somebody else: not listed, not downloadable — the same answer as one that is not there.
     const other = await world.as('bob');

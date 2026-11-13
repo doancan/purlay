@@ -1,18 +1,52 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { cloneIntegrationDatabase, closeIntegrationDatabase, sql } from '@purlay/db';
+import {
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  createMigrationDatabase,
+  migrateToLatest,
+  PRODUCT_MIGRATION_SETS,
+  sql,
+  type ClonedDatabase,
+} from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { aRoom } from '../testing/rooms';
 import { DAY_MS } from '../platform/clock';
 import { anOutboxRow, aWorkspaceRow } from '../testing/facts';
 
+/** These subprocess tests deliberately select different module sets, including all of them. */
+const aJobDatabase = async (): Promise<ClonedDatabase> => {
+  const cloned = await cloneIntegrationDatabase();
+  const migration = createMigrationDatabase({ connectionString: cloned.connectionString });
+  try {
+    const { error } = await migrateToLatest(migration, undefined, {
+      modules: PRODUCT_MIGRATION_SETS,
+    }).finally(async () => {
+      await migration.destroy();
+    });
+    if (error !== undefined) throw new Error('Migrating the jobs fixture failed', { cause: error });
+    return cloned;
+  } catch (error) {
+    await cloned.drop();
+    throw error;
+  }
+};
+
+let database: ClonedDatabase | undefined;
+beforeAll(async () => {
+  database = await aJobDatabase();
+}, CLONE_HOOK_MS);
+
 /** Runs `bun run job <name>` as a scheduler does, with the test database and this `MODULES`. */
 const job = async (
   name: string,
   modules: string | undefined,
-  databaseUrl = process.env['DATABASE_URL'] ?? '',
+  databaseUrl = database?.connectionString,
   extraEnvironment: Readonly<Record<string, string>> = {},
 ): Promise<{ code: number; said: string }> => {
+  if (databaseUrl === undefined) throw new Error('The jobs fixture database is not ready');
   const process_ = Bun.spawn(['bun', '--no-env-file', join(import.meta.dir, 'jobs.ts'), name], {
     stdout: 'pipe',
     stderr: 'pipe',
@@ -32,12 +66,13 @@ const job = async (
 };
 
 afterAll(async () => {
+  await database?.drop();
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 describe('integration: the scheduled jobs of a module the administrator has stopped (D-296)', () => {
   test('are not run, say why, and are not overdue; its retention goes on, and a resume brings the job back', async () => {
-    const cloned = await cloneIntegrationDatabase();
+    const cloned = await aJobDatabase();
     try {
       await cloned.db
         .insertInto('suspended_modules')
@@ -136,7 +171,7 @@ describe('integration: the scheduled jobs of the modules a process runs', () => 
 
 describe('integration: sweep:outbox as the scheduler runs it (D-288 §12)', () => {
   test('keeps a dead fact for OUTBOX_DEAD_KEPT_DAYS, 180 unless set, and says what it took', async () => {
-    const cloned = await cloneIntegrationDatabase();
+    const cloned = await aJobDatabase();
     try {
       const workspaceId = await aWorkspaceRow(cloned.db);
       const ago = (days: number): Date => new Date(Date.now() - days * DAY_MS);
@@ -172,7 +207,7 @@ describe('integration: expired guest cleanup as the scheduler actually runs it',
   test.each(['omitted', 'stopped'] as const)(
     'cleans durable pending rows with chat %s and another process safely repeats it',
     async (mode) => {
-      const cloned = await cloneIntegrationDatabase();
+      const cloned = await aJobDatabase();
       try {
         const room = await aRoom(cloned.db, ['owner', 'guest']);
         const owner = room.members['owner'];

@@ -474,6 +474,23 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     tests: ['apps/api/src/modules/push/authority-recovery.integration.test.ts'],
   },
   {
+    id: 'push-source-policy-remediation-rethrown',
+    why: 'A genuine workspace remediation denial from the chat visibility guard cancels only that push source instead of retrying a content delivery the native session cannot receive.',
+    file: 'apps/api/src/modules/push/authority.ts',
+    find: "          if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')\n            return false;",
+    replace: '          if (false) return false;',
+    tests: ['apps/api/src/modules/push/authority-recovery.integration.test.ts'],
+  },
+  {
+    id: 'push-source-unexpected-error-hidden',
+    why: 'A database or programming failure while checking a genuine chat source must propagate instead of silently discarding its durable notification as unauthorized.',
+    file: 'apps/api/src/modules/push/authority.ts',
+    find: '          throw error;',
+    replace: '          return false;',
+    tests: ['apps/api/src/modules/push/authority-recovery.integration.test.ts'],
+  },
+
+  {
     id: 'push-starts-before-migrated-settings',
     why: 'A worker must wait until migrations and persisted settings are ready before recovering work.',
     file: 'apps/api/src/modules/push/sender.ts',
@@ -529,5 +546,21 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     find: "    .where('user_id', '=', userId)\n    .where('endpoint', '=', endpoint)\n",
     replace: "    .where('endpoint', '=', endpoint)\n",
     tests: ['apps/api/src/ingress/http/push.integration.test.ts'],
+  },
+  {
+    id: 'workspace-push-cohort-accepts-unknown-source',
+    why: 'A registered device does not prove current-session workspace authentication.',
+    file: 'apps/api/src/modules/push/workspace-access.ts',
+    find: 'if (decision.allowed) allowed.add(`${workspaceId}:${id}`);',
+    replace: 'if (true) allowed.add(`${workspaceId}:${id}`);',
+    tests: ['apps/api/src/realtime/workspace-access.integration.test.ts'],
+  },
+  {
+    id: 'workspace-push-final-leased-policy-check-ignored',
+    why: 'A prepared encrypted body cannot be posted after source authority ends at its final key/lease handoff.',
+    file: 'apps/api/src/modules/push/delivery.ts',
+    find: "    if (\n      (await currentPushDevice(dependencies, claim)) === undefined ||\n      !(await currentPushSource(dependencies, claim))\n    )\n      return { kind: 'canceled' };",
+    replace: '',
+    tests: ['apps/api/src/realtime/workspace-access.integration.test.ts'],
   },
 ];

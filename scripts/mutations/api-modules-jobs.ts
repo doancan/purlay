@@ -192,4 +192,20 @@ export const API_MODULES_JOBS: readonly Mutation[] = [
     replace: '  const before = new Date(dependencies.clock.now().getTime() + DAY_MS);\n',
     tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
   },
+  {
+    id: 'workspace-security-sweep-keeps-proofs',
+    why: 'Expired challenges and policy receipts must leave.',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: '  const workspaceProofs = await sweepWorkspaceSecurityProofs(dependencies.database, before);',
+    replace: '  const workspaceProofs = 0;',
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
+  {
+    id: 'workspace-security-sweep-removes-live-proofs',
+    why: 'Sweeps retain live capabilities.',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: "            .selectFrom(table)\n            .select('id')\n            .where('expires_at', '<', before)\n",
+    replace: "            .selectFrom(table)\n            .select('id')\n",
+    tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
+  },
 ];

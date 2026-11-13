@@ -31,6 +31,7 @@ import { inviterMailKey } from '../workspaces/invitation-mail';
 import { aUserRow } from '../../testing/users';
 import { chatUserErased } from '../../features/chat/channels/user-hooks';
 import { channelPins, pinMessage } from '../../features/chat/pins/pins';
+import { rememberSecondFactorPrimary } from '../auth/authentication-evidence';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -110,6 +111,100 @@ const erase = async (
   await eraseAccount(db, clock, caller, confirm, chatUserErased());
 
 describe('integration: erasing an account', () => {
+  test('retained memberships keep no scoped factors, recovery codes or pending primary proof after erasure', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['bob', 'ada']);
+      const ada = member(room, 'ada');
+      const bob = member(room, 'bob');
+      for (const person of [ada, bob]) {
+        const factor = await db
+          .insertInto('workspace_mfa_factors')
+          .values({
+            workspace_id: room.workspaceId,
+            user_id: person.userId,
+            secret_encrypted: Buffer.from('opaque-sealed-test-factor'),
+            state: 'verified',
+            verified_at: NOW,
+          })
+          .returning(['id', 'revision'])
+          .executeTakeFirstOrThrow();
+        await db
+          .insertInto('workspace_mfa_recovery_codes')
+          .values([
+            {
+              workspace_id: room.workspaceId,
+              user_id: person.userId,
+              purpose: 'factor',
+              factor_id: factor.id,
+              factor_revision: factor.revision,
+              revision: crypto.randomUUID(),
+              code_hash: Buffer.from(await tokenDigest(`${person.userId}:factor-recovery`), 'hex'),
+            },
+            {
+              workspace_id: room.workspaceId,
+              user_id: person.userId,
+              purpose: 'policy',
+              revision: crypto.randomUUID(),
+              code_hash: Buffer.from(await tokenDigest(`${person.userId}:policy-recovery`), 'hex'),
+            },
+          ])
+          .execute();
+        await rememberSecondFactorPrimary(
+          db,
+          `${person.userId}:pending-second-factor`,
+          person.userId,
+          NOW,
+          new Date(NOW.getTime() + 300_000),
+        );
+      }
+      expect(
+        await db
+          .selectFrom('workspace_mfa_factors')
+          .select('id')
+          .where('workspace_id', '=', room.workspaceId)
+          .execute(),
+      ).toHaveLength(2);
+      expect(
+        await db
+          .selectFrom('workspace_mfa_recovery_codes')
+          .select('id')
+          .where('workspace_id', '=', room.workspaceId)
+          .execute(),
+      ).toHaveLength(4);
+      await erase(db, await signedIn(db, room, 'ada'), ada.username);
+      expect(
+        await db
+          .selectFrom('workspace_members')
+          .select('user_id')
+          .where('workspace_id', '=', room.workspaceId)
+          .where('user_id', '=', ada.userId)
+          .execute(),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .selectFrom('workspace_mfa_factors')
+          .select('user_id')
+          .where('workspace_id', '=', room.workspaceId)
+          .execute(),
+      ).toEqual([{ user_id: bob.userId }]);
+      expect(
+        await db
+          .selectFrom('workspace_mfa_recovery_codes')
+          .select('user_id')
+          .where('workspace_id', '=', room.workspaceId)
+          .execute(),
+      ).toEqual([{ user_id: bob.userId }, { user_id: bob.userId }]);
+      const pending = await db
+        .selectFrom('verifications')
+        .select('value')
+        .where('identifier', 'like', 'native-primary-2fa:%')
+        .execute();
+      expect(pending).toHaveLength(1);
+      expect(pending[0]?.value).toContain(bob.userId);
+      expect(JSON.stringify(pending)).not.toContain(ada.userId);
+    });
+  });
+
   test.each([
     [false, false, 1],
     [true, false, 0],

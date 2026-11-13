@@ -214,6 +214,8 @@ export const UnsubscribedFrame = Type.Object({
 export const ErrorFrame = Type.Object({
   event: Type.Literal('ERROR'),
   data: AppErrorBody,
+  /** Only after canonical membership/resource visibility is established; never echoed input. */
+  workspaceId: Type.Optional(Uuid),
   ...envelope,
 });
 

@@ -42,6 +42,7 @@ import { isTransient } from './errors';
 import { claimFor } from './browser-storage';
 import { useClientStorage } from './storage-provider';
 import { keys } from './keys';
+import { isNewPageRequest } from './activity';
 import { reconcileAccountOnCommit } from './access-change';
 import { profileTimeZoneChanged } from './cache';
 
@@ -246,9 +247,16 @@ export const useMessages = (
   around: string | null = null,
 ): UseInfiniteQueryResult<FeedPages> => {
   const api = useApi();
+  const client = useQueryClient();
   const present = useInfiniteQuery({
     queryKey: keys.messages(channelId),
-    queryFn: ({ pageParam, signal }) => api.messages(channelId, { before: pageParam }, signal),
+    queryFn: ({ pageParam, signal }) =>
+      api.messages(
+        channelId,
+        { before: pageParam },
+        signal,
+        isNewPageRequest(client, keys.messages(channelId), pageParam),
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: around === null,
@@ -258,7 +266,11 @@ export const useMessages = (
     queryKey: keys.messagesAround(channelId, around),
     queryFn: async ({ pageParam, signal }): Promise<FeedPage> => {
       if ('around' in pageParam) {
-        const found = await api.messageWindow(pageParam.around, signal);
+        const found = await api.messageWindow(
+          pageParam.around,
+          signal,
+          isNewPageRequest(client, keys.messagesAround(channelId, around), pageParam),
+        );
         return {
           data: found.data,
           nextCursor: found.olderCursor,
@@ -267,7 +279,12 @@ export const useMessages = (
         };
       }
       if ('after' in pageParam) {
-        const newer = await api.messages(channelId, { after: pageParam.after }, signal);
+        const newer = await api.messages(
+          channelId,
+          { after: pageParam.after },
+          signal,
+          isNewPageRequest(client, keys.messagesAround(channelId, around), pageParam),
+        );
         const data = [...newer.data].reverse();
         // A list read again is read forwards from its first page, which may be this one: older
         // than it goes on from its oldest message.
@@ -277,7 +294,12 @@ export const useMessages = (
           newerCursor: newer.nextCursor,
         };
       }
-      return await api.messages(channelId, { before: pageParam.before }, signal);
+      return await api.messages(
+        channelId,
+        { before: pageParam.before },
+        signal,
+        isNewPageRequest(client, keys.messagesAround(channelId, around), pageParam),
+      );
     },
     initialPageParam: { around: around ?? '' },
     getNextPageParam: (last: FeedPage): WindowParam | undefined =>
@@ -295,9 +317,16 @@ export const useMessages = (
 /** One thread's replies, oldest first, a page at a time. */
 export const useThread = (messageId: string, enabled = true): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
+  const client = useQueryClient();
   return useInfiniteQuery({
     queryKey: keys.thread(messageId),
-    queryFn: ({ pageParam, signal }) => api.thread(messageId, { after: pageParam }, signal),
+    queryFn: ({ pageParam, signal }) =>
+      api.thread(
+        messageId,
+        { after: pageParam },
+        signal,
+        isNewPageRequest(client, keys.thread(messageId), pageParam),
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
@@ -476,6 +505,7 @@ export const useSearch = (
   filters: SearchFilters = {},
 ): UseInfiniteQueryResult<Pages> => {
   const api = useApi();
+  const client = useQueryClient();
   return useInfiniteQuery({
     queryKey: keys.search(workspaceId, words, channelId, authorId, filters),
     queryFn: ({ pageParam, signal }) =>
@@ -489,6 +519,11 @@ export const useSearch = (
           ...(authorId === null ? {} : { senderId: authorId }),
         },
         signal,
+        isNewPageRequest(
+          client,
+          keys.search(workspaceId, words, channelId, authorId, filters),
+          pageParam,
+        ),
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,

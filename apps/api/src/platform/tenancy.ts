@@ -32,8 +32,17 @@ import { currentRequest } from './logging';
 import { asGrants, grantColumns } from './grants';
 import { inTheCore } from './module-budget';
 import { activeWorkspaceMembership } from './membership-access';
+import { requireWorkspaceContentAccess } from './workspace-content-access';
 
 export { activeWorkspaceMembership } from './membership-access';
+export { requireWorkspaceContentAccess } from './workspace-content-access';
+export { withinDeferredSource } from './deferred-source';
+export type { WorkspaceAccessLifetime } from './workspace-access-facts';
+export {
+  readWorkspaceContentPermits,
+  type WorkspaceContentPermit,
+} from './workspace-content-fence';
+export { readonlyWorkspaceAccess } from './workspace-delivery-access';
 
 /** Not exported. Naming this key is the capability, and it stays in this file. */
 const tenancy: unique symbol = Symbol('WorkspaceContext');
@@ -76,6 +85,24 @@ export interface WorkspaceContext {
   readonly modules: ReadonlySet<string> | null;
   readonly [tenancy]: true;
 }
+
+/** Membership for self remediation only; it carries no workspace content capability. */
+const security: unique symbol = Symbol('WorkspaceSecurityContext');
+const securityMinted = new WeakSet<object>();
+
+export interface WorkspaceSecurityContext {
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly role: UserRole;
+  readonly guest?: GuestMembershipAccess;
+  readonly [security]: true;
+}
+
+export const assertSecurityMinted: (context: WorkspaceSecurityContext) => void = (context) => {
+  if (!securityMinted.has(context)) {
+    throw new Error('a WorkspaceSecurityContext the membership guard did not mint was refused');
+  }
+};
 
 /**
  * Whether the workspace of a context may use a module (D-289): what a service asks when the module it serves is not the
@@ -125,11 +152,11 @@ export const workspaceNotFound = (): AppError =>
  * not a member learns nothing of a workspace, its grants included. The guard is the one place that mints a context, so a module
  * cannot forget to ask.
  */
-const workspaceMembership = async (
+const readWorkspaceMembership = async (
   executor: Executor,
   userId: string,
   workspaceId: string,
-): Promise<WorkspaceContext> => {
+): Promise<Omit<WorkspaceContext, typeof tenancy> & { readonly policyEpoch: string }> => {
   if (!Value.Check(Uuid, workspaceId)) throw workspaceNotFound();
 
   const row = await executor
@@ -141,12 +168,13 @@ const workspaceMembership = async (
       'workspace_members.guest_since',
       'workspace_members.guest_expires_at',
       'workspace_members.guest_modules',
+      'workspaces.access_policy_epoch',
       ...grantColumns,
     ])
     .where('workspace_members.workspace_id', '=', workspaceId)
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
-    .where(activeWorkspaceMembership())
+    .where(activeWorkspaceMembership({ visibilityOnly: true }))
     .executeTakeFirst();
 
   if (row === undefined) throw workspaceNotFound();
@@ -172,17 +200,48 @@ const workspaceMembership = async (
     policy?.refused(request.module);
     throw routeNotFound();
   }
-  return mint({
+  return {
     workspaceId,
     userId,
     role: row.role,
+    policyEpoch: row.access_policy_epoch,
     modules,
     ...(guest === undefined ? {} : { guest }),
-  });
+  };
+};
+
+const workspaceMembership = async (
+  executor: Executor,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceContext> => {
+  const { policyEpoch, ...member } = await readWorkspaceMembership(executor, userId, workspaceId);
+  await requireWorkspaceContentAccess(executor, userId, workspaceId, policyEpoch);
+  return mint(member);
 };
 
 /** The guard above as the core's own work, whichever module's request asks it (`inTheCore`, D-266). */
 export const requireWorkspaceMembership = inTheCore(workspaceMembership);
+
+/** A separate brand keeps policy enrollment/recovery from granting chat or file access. */
+const workspaceSecurityMembership = async (
+  executor: Executor,
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceSecurityContext> => {
+  const member = await readWorkspaceMembership(executor, userId, workspaceId);
+  const context: WorkspaceSecurityContext = Object.freeze({
+    workspaceId: member.workspaceId,
+    userId: member.userId,
+    role: member.role,
+    ...(member.guest === undefined ? {} : { guest: member.guest }),
+    [security]: true as const,
+  });
+  securityMinted.add(context);
+  return context;
+};
+
+export const requireWorkspaceSecurityMembership = inTheCore(workspaceSecurityMembership);
 
 /** Not exported either: the deletion's own capability, apart from the workspace's. */
 const deletion: unique symbol = Symbol('DeletionContext');

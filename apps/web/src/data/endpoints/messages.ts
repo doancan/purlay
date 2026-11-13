@@ -29,6 +29,7 @@ export interface MessagesApi {
     channelId: string,
     page?: PageQuery,
     signal?: AbortSignal,
+    foreground?: boolean,
   ) => Promise<MessagePage>;
   readonly unreads: (
     channelId: string,
@@ -38,8 +39,16 @@ export interface MessagesApi {
   /** One message, for the card a link to it is drawn as (D-217); 404 when it is not the caller's to see. */
   readonly message: (messageId: string, signal?: AbortSignal) => Promise<Message>;
   /** The feed around one message, for a link to it (D-149). */
-  readonly messageWindow: (messageId: string, signal?: AbortSignal) => Promise<MessageWindow>;
-  readonly send: (channelId: string, input: SendMessageRequest) => Promise<Message>;
+  readonly messageWindow: (
+    messageId: string,
+    signal?: AbortSignal,
+    foreground?: boolean,
+  ) => Promise<MessageWindow>;
+  readonly send: (
+    channelId: string,
+    input: SendMessageRequest,
+    foreground?: boolean,
+  ) => Promise<Message>;
   /** A file's bytes under the attachment id the client chose (D-109 §3). */
   readonly upload: (
     workspaceId: string,
@@ -51,6 +60,7 @@ export interface MessagesApi {
     messageId: string,
     page?: PageQuery,
     signal?: AbortSignal,
+    foreground?: boolean,
   ) => Promise<ThreadPage>;
   readonly setKnowledge: (messageId: string, input: SetKnowledgeRequest) => Promise<Message>;
   readonly resolve: (messageId: string) => Promise<Message>;
@@ -104,12 +114,12 @@ export interface MessagesApi {
 }
 
 export const createMessagesApi = (http: Http): MessagesApi => ({
-  messages: (channelId, page = {}, signal) =>
+  messages: (channelId, page = {}, signal, foreground = false) =>
     http.request(
       'GET',
       `/api/channels/${at(channelId)}/messages`,
       MessagePage,
-      options({ query: { ...page } }, signal),
+      options({ activity: foreground, query: { ...page } }, signal),
     ),
   unreads: (channelId, query = {}, signal) =>
     http.request(
@@ -120,23 +130,24 @@ export const createMessagesApi = (http: Http): MessagesApi => ({
     ),
   message: (messageId, signal) =>
     http.request('GET', `/api/messages/${at(messageId)}`, Message, options({}, signal)),
-  messageWindow: (messageId, signal) =>
+  messageWindow: (messageId, signal, foreground = false) =>
     http.request(
       'GET',
       `/api/messages/${at(messageId)}/around`,
       MessageWindow,
-      options({}, signal),
+      options({ activity: foreground }, signal),
     ),
-  send: (channelId, input) =>
+  send: (channelId, input, foreground = false) =>
     http.request(
       'POST',
       `/api/channels/${at(channelId)}/messages`,
       Message,
-      options({ body: input }),
+      options({ body: input, activity: foreground }),
     ),
   upload: (workspaceId, { id, name, file }, onProgress) =>
     http.upload(`/api/workspaces/${at(workspaceId)}/uploads`, Attachment, file, {
       query: { id, name },
+      activity: true,
       ...(onProgress === undefined
         ? {}
         : {
@@ -145,19 +156,34 @@ export const createMessagesApi = (http: Http): MessagesApi => ({
             },
           }),
     }),
-  thread: (messageId, page = {}, signal) =>
+  thread: (messageId, page = {}, signal, foreground = false) =>
     http.request(
       'GET',
       `/api/messages/${at(messageId)}/thread`,
       ThreadPage,
-      options({ query: { ...page } }, signal),
+      options({ activity: foreground, query: { ...page } }, signal),
     ),
   setKnowledge: (id, input) =>
-    http.request('PUT', `/api/messages/${at(id)}/knowledge`, Message, options({ body: input })),
+    http.request(
+      'PUT',
+      `/api/messages/${at(id)}/knowledge`,
+      Message,
+      options({ activity: true, body: input }),
+    ),
   resolve: (messageId) =>
-    http.request('POST', `/api/messages/${at(messageId)}/resolve`, Message, options()),
+    http.request(
+      'POST',
+      `/api/messages/${at(messageId)}/resolve`,
+      Message,
+      options({ activity: true }),
+    ),
   reopen: (messageId) =>
-    http.request('DELETE', `/api/messages/${at(messageId)}/resolve`, Message, options()),
+    http.request(
+      'DELETE',
+      `/api/messages/${at(messageId)}/resolve`,
+      Message,
+      options({ activity: true }),
+    ),
   unresolved: (workspaceId, page = {}, signal) =>
     http.request(
       'GET',
@@ -170,23 +196,24 @@ export const createMessagesApi = (http: Http): MessagesApi => ({
       'PUT',
       `/api/messages/${at(messageId)}/reactions/${at(emoji)}`,
       ReactionsResponse,
-      options(),
+      options({ activity: true }),
     ),
   unreact: (messageId, emoji) =>
     http.request(
       'DELETE',
       `/api/messages/${at(messageId)}/reactions/${at(emoji)}`,
       ReactionsResponse,
-      options(),
+      options({ activity: true }),
     ),
   editMessage: (messageId, content) =>
     http.request(
       'PATCH',
       `/api/messages/${at(messageId)}`,
       Message,
-      options({ body: { content } }),
+      options({ activity: true, body: { content } }),
     ),
-  deleteMessage: (messageId) => http.send('DELETE', `/api/messages/${at(messageId)}`, options()),
+  deleteMessage: (messageId) =>
+    http.send('DELETE', `/api/messages/${at(messageId)}`, options({ activity: true })),
   discardAttachment: (attachmentId) =>
     http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
   attachmentText: (attachmentId, signal) =>
@@ -214,14 +241,14 @@ export const createMessagesApi = (http: Http): MessagesApi => ({
       'PUT',
       `/api/channels/${at(channelId)}/unread`,
       ReadChannelResponse,
-      options({ body: { fromMessageId } }),
+      options({ activity: true, body: { fromMessageId } }),
     ),
   markAllRead: (workspaceId) =>
     http.request(
       'PUT',
       `/api/workspaces/${at(workspaceId)}/read`,
       ReadAllChannelsResponse,
-      options(),
+      options({ activity: true }),
     ),
   readThread: (rootId, lastReadMessageId) =>
     http.send(
@@ -236,7 +263,7 @@ export const createMessagesApi = (http: Http): MessagesApi => ({
       'PUT',
       `/api/messages/${at(rootId)}/follow`,
       ThreadFollow,
-      options({ body: { following } satisfies SetThreadFollowRequest }),
+      options({ activity: true, body: { following } satisfies SetThreadFollowRequest }),
     ),
   followedThreads: (workspaceId, query = {}, signal) =>
     http.request(

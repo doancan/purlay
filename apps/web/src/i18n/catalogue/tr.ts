@@ -14,6 +14,175 @@
 import type { Catalogue } from '../types';
 
 export const tr = {
+  'security.code.restart': 'Yeni doğrulama başlat',
+  'audit.kind.workspace.mfa.enrolled': 'Çalışma alanı doğrulayıcısı bağlandı',
+  'audit.action.workspace.mfa.enrolled': '{actor} çalışma alanı doğrulayıcısı bağladı',
+  'audit.kind.workspace.mfa.rotated': 'Çalışma alanı doğrulayıcısı değiştirildi',
+  'audit.action.workspace.mfa.rotated': '{actor} çalışma alanı doğrulayıcısını değiştirdi',
+  'audit.kind.workspace.mfa.revoked': 'Çalışma alanı doğrulayıcısı ayrıldı',
+  'audit.action.workspace.mfa.revoked': '{actor} çalışma alanı doğrulayıcısını ayırdı',
+  'audit.kind.workspace.mfa.recovery_codes_rotated': 'Çalışma alanı kurtarma kodları yenilendi',
+  'audit.action.workspace.mfa.recovery_codes_rotated':
+    '{actor} çalışma alanı doğrulayıcısının kurtarma kodlarını yeniledi',
+  'audit.kind.workspace.mfa.recovery_used': 'Çalışma alanı kurtarma kodu kullanıldı',
+  'audit.action.workspace.mfa.recovery_used':
+    '{actor} çalışma alanı doğrulayıcısının kurtarma kodunu kullandı',
+  'audit.kind.workspace.security.policy_tested': 'Çalışma alanı gereksinimleri test edildi',
+  'audit.action.workspace.security.policy_tested':
+    '{actor} çalışma alanı giriş gereksinimlerini test etti',
+  'audit.kind.workspace.security.policy_updated': 'Çalışma alanı gereksinimleri değiştirildi',
+  'audit.action.workspace.security.policy_updated':
+    '{actor} çalışma alanı giriş gereksinimlerini değiştirdi',
+  'audit.kind.workspace.security.recovery_created': 'Alan sahibi kurtarması oluşturuldu',
+  'audit.action.workspace.security.recovery_created':
+    '{actor} bu çalışma alanı için alan sahibi kurtarması oluşturdu',
+  'audit.kind.workspace.security.policy_recovered': 'Çalışma alanı gereksinimleri kurtarıldı',
+  'audit.action.workspace.security.policy_recovered':
+    '{actor} çalışma alanı giriş gereksinimlerini kurtardı',
+  'security.recovery.prepare': 'Yeni kurtarma kodu hazırla',
+  'security.recovery.keepOpen':
+    'Bu sekmeyi açık tutun. Yeni sekmede kendi hesabınızla giriş yapın, ardından kurtarma kodunu oluşturmak için buraya dönün. Gereksinimler bu sırada uygulanmaya devam eder.',
+  'security.recovery.signInTab': 'Yeni sekmede giriş yap',
+  'security.recovery.continue': 'Giriş yaptım — kurtarma kodu oluştur',
+  'settings.security.nav': 'Çalışma alanı güvenliği',
+  'settings.workspace-mfa.nav': 'Çalışma alanı doğrulayıcınız',
+  'security.title': 'Çalışma alanı güvenliği',
+  'security.description': 'Bu çalışma alanını açmadan önce kimliğin nasıl doğrulanacağını seçin.',
+  'security.self.title': 'Çalışma alanı doğrulayıcınız',
+  'security.self.description':
+    'Bu çalışma alanına erişiminizi bir doğrulayıcı uygulamasıyla koruyun. Diğer çalışma alanları ve hesap kimlik bilgileri ayrı kalır.',
+  'security.loadFailed':
+    'Çalışma alanı güvenliği okunamadı. Bağlantınızı kontrol edip yeniden deneyin.',
+  'security.refresh': 'Güvenlik durumunu yenile',
+  'security.saved': 'Çalışma alanı güvenliği güncellendi.',
+  'security.status.allowed': 'Erişim doğrulandı',
+  'security.status.sign_in_required': 'Şirket hesabıyla giriş gerekli',
+  'security.status.mfa_enrollment_required': 'Bir doğrulayıcı kurun',
+  'security.status.mfa_required': 'Doğrulayıcınızla doğrulayın',
+  'security.status.expired': 'Yeniden giriş yapın',
+  'security.access.title': 'Çalışma alanı erişimini doğrulayın',
+  'security.access.description': 'Konuşmalarınıza dönmek için gerekli doğrulamayı tamamlayın.',
+  'security.access.workspace': 'Çalışma alanı adresi',
+  'security.access.find': 'Çalışma alanına devam et',
+  'security.access.invalid': 'Çalışma alanının acme gibi kısa adresini yazın.',
+  'security.access.company':
+    'Bu çalışma alanının izin verdiği bir şirket sağlayıcısıyla giriş yapın. Misafirler kendi giriş yöntemini kullanabilir.',
+  'security.access.expired':
+    'Giriş veya boşta kalma süreniz doldu. Doğrulayıcı kodu bu süreyi uzatmaz; önce yeniden giriş yapın.',
+  'security.access.allowed': 'Erişiminiz doğrulandı. Çalışma alanına dönebilirsiniz.',
+  'security.access.return': 'Çalışma alanına dön',
+  'security.access.other': 'Başka bir çalışma alanı seç',
+  'security.signIn': 'Yeniden giriş yap',
+  'security.independent': 'Kendi hesabınızla giriş yapın',
+  'security.independentHint':
+    'Çalışma alanı kurtarması oluşturmak veya kullanmak için alan sahibinin yakın zamanda bağımsız giriş yapması gerekir. Şirket girişi hesap kimlik bilgilerini değiştiremez.',
+  'security.factor.title': 'Bu çalışma alanı için doğrulayıcı',
+  'security.factor.scope': 'Bu doğrulayıcı yalnızca bu çalışma alanına aittir.',
+  'security.factor.on': 'Bağlı',
+  'security.factor.off': 'Bağlı değil',
+  'security.factor.pending': 'Kurulum onay bekliyor. QR kodu elinizde değilse yeniden başlayın.',
+  'security.factor.start': 'Doğrulayıcı kur',
+  'security.factor.restart': 'Kuruluma yeniden başla',
+  'security.factor.verify': 'Erişimi doğrula',
+  'security.factor.rotate': 'Doğrulayıcıyı değiştir',
+  'security.factor.rotateHint':
+    'Yeni doğrulayıcıyı onaylayana kadar mevcut doğrulayıcınız çalışır.',
+  'security.factor.stop': 'Doğrulayıcıyı ayır',
+  'security.factor.stopHint':
+    'Mevcut uygulama veya kurtarma koduyla onaylayın. Ayırmak, yeni doğrulayıcı kurana kadar bu çalışma alanına erişimi engelleyebilir.',
+  'security.factor.codes': 'Kurtarma kodlarını yenile',
+  'security.factor.remaining': 'Kullanılmamış kurtarma kodu: {count}',
+  'security.factor.scan':
+    'Bu QR kodu doğrulayıcı uygulamanızla tarayın, ardından altı haneli kodunu yazın.',
+  'security.factor.qr': 'Çalışma alanı doğrulayıcısı QR kodu',
+  'security.factor.key': 'Kurulum anahtarı',
+  'security.factor.once':
+    'Bu kurulum anahtarı yalnızca şimdi gösterilir. Ayrılırsanız kuruluma yeniden başlayın.',
+  'security.factor.confirm': 'Doğrulayıcıyı onayla',
+  'security.factor.confirmed': 'Doğrulama tamamlandı.',
+  'security.code': 'Doğrulayıcı kodu',
+  'security.code.invalid': 'Doğrulayıcı uygulamanızdaki altı haneyi yazın.',
+  'security.code.recovery': 'Kurtarma kodu',
+  'security.code.recoveryInvalid':
+    '22 karakterli çalışma alanı kurtarma kodlarınızdan birini yazın.',
+  'security.code.useRecovery': 'Kurtarma kodu kullan',
+  'security.code.useApp': 'Doğrulayıcı uygulamasını kullan',
+  'security.code.submit': 'Kodu doğrula',
+  'security.code.expired':
+    'Bu doğrulamanın süresi doldu. Yeniden denemek için yeni doğrulama başlatın.',
+  'security.code.fresh':
+    'Uygulamanızdaki yeni kodu kullanın. Kabul edilen bir kod yeniden kullanılamaz.',
+  'security.codes.title': 'Kurtarma kodlarınızı saklayın',
+  'security.codes.hint':
+    'Bu kodlar bir kez gösterilir. Gizli bir yerde saklayın; her biri bir kez çalışır ve bu doğrulayıcının önceki kodlarının yerini alır.',
+  'security.codes.copy': 'Kurtarma kodlarını kopyala',
+  'security.codes.done': 'Kodları sakladım',
+  'security.global.title': 'Hesap doğrulayıcınızı kullanın',
+  'security.global.hint':
+    'Mevcut hesap doğrulayıcınız bu bağımsız oturumu doğrulayabilir. Çalışma alanı yöneticileri onu yönetemez.',
+  'security.global.action': 'Hesap doğrulayıcısıyla doğrula',
+  'security.policy.title': 'Giriş gereksinimleri',
+  'security.policy.mode': 'Gereksinimleri uygula',
+  'security.policy.off': 'Kapalı',
+  'security.policy.enforced': 'Zorunlu',
+  'security.policy.signIn': 'Üyelerin giriş yöntemi',
+  'security.policy.any': 'Desteklenen herhangi bir yöntem',
+  'security.policy.company': 'İzin verilen şirket sağlayıcıları',
+  'security.policy.guests':
+    'Yalnızca şirket girişi tam üyeler için geçerlidir. Misafirler bağımsız giriş yapar; doğrulayıcı ve süre sınırları herkese uygulanır.',
+  'security.policy.providers': 'İzin verilen şirket sağlayıcıları',
+  'security.policy.providersHint': 'Girişi test edilmiş en fazla 16 etkin sağlayıcı seçin.',
+  'security.policy.unavailable': 'Kullanılamıyor — başka sağlayıcı seçin',
+  'security.policy.noProviders':
+    'Test edilmiş sağlayıcı yok. Önce şirket girişini yapılandırıp test edin.',
+  'security.policy.configure': 'Şirket girişini yapılandır',
+  'security.policy.requireMfa': 'Doğrulayıcı zorunlu olsun',
+  'security.policy.idle': 'Hareketsizlikten sonra erişimi bitir (dakika)',
+  'security.policy.maxAge': 'Şu kadar sonra yeniden giriş iste (saat)',
+  'security.policy.mfaAge': 'Şu kadar sonra yeni doğrulayıcı kodu iste (dakika)',
+  'security.policy.noLimit': 'Mevcut oturum süresini kullanmak için boş bırakın.',
+  'security.policy.invalid':
+    'Devam etmeden önce seçilen sağlayıcıları ve süre sınırlarını kontrol edin.',
+  'security.policy.preview': 'Etkisini önizle',
+  'security.policy.impact': 'Kimlerin yeniden doğrulaması gerekiyor',
+  'security.policy.counts': 'Etkilenen üye: {members}; misafir: {guests}; oturum: {sessions}.',
+  'security.policy.more': 'Etkilenen diğer kişileri göster',
+  'security.policy.test': 'Bu gereksinimleri test et',
+  'security.policy.ownerOnly':
+    'Gereksinimleri çalışma alanı sahipleri test edip uygular. Etkilerini burada önizleyebilirsiniz.',
+  'security.policy.testHint':
+    'Kaydetmeden önce aynı gereksinimlerle kendi erişiminizi doğrulayın. Değişiklikler yeni önizleme ve test gerektirir.',
+  'security.policy.testPassed': 'Erişiminiz bu testi geçti. Gereksinimler kaydedilmeye hazır.',
+  'security.policy.resume': 'Bu testi yeniden kontrol et',
+  'security.policy.save': 'Test edilen gereksinimleri kaydet',
+  'security.policy.confirm':
+    'Etkilenen kişilerin çalışma alanına dönmeden önce doğrulama yapması gerektiğini anlıyorum.',
+  'security.policy.recoveryNeeded':
+    'Zorunlu uygulama için erişimi kurtarabilecek bir alan sahibi gerekir. Bağımsız girişle kurtarma kodu oluşturun veya önce kurtarabilecek bir alan sahibi ekleyin.',
+  'security.policy.owners': 'Çalışma alanı sahiplerini yönet',
+  'security.recovery.title': 'Alan sahibi kurtarması',
+  'security.recovery.hint':
+    'Yakın zamanda yapılan bağımsız giriş ve saklanan kurtarma kodu çalışma alanı gereksinimlerini kapatabilir. Bu işlem üyelik veya konuşmalara erişim sağlamaz.',
+  'security.recovery.create': 'Alan sahibi kurtarma kodu oluştur',
+  'security.recovery.value': 'Alan sahibi kurtarma kodu',
+  'security.recovery.once':
+    'Bu kodu gizli bir yerde saklayın. Bir kez gösterilir; yenisi eskisinin yerini alır.',
+  'security.recovery.done': 'Kurtarma kodunu sakladım',
+  'security.recovery.open': 'Alan sahibi kurtarma kodu kullan',
+  'security.recovery.submit': 'Çalışma alanı erişim ayarlarını kurtar',
+  'security.recovery.invalid': 'Sakladığınız alan sahibi kurtarma kodunun tamamını yapıştırın.',
+  'security.recovery.saved':
+    'Çalışma alanı gereksinimleri kapalı. Dönmeden önce mevcut erişiminizi doğrulayın.',
+  'failure.workspaceAccess': 'Devam etmeden önce çalışma alanı erişiminizi doğrulayın.',
+  'failure.workspaceSecurityChanged':
+    'Güvenlik ayarları değişti. Yenileyip doğrulamaya yeniden başlayın.',
+  'failure.workspaceSecurityNotReady':
+    'Bu güvenlik değişikliği hazır değil. Alan sahibi kurtarmasını kontrol edip yeni bir politika testi yapın.',
+  'failure.workspaceMfaMissing': 'Bu doğrulama artık kullanılamıyor. Yeniden başlayın.',
+  'failure.workspaceMfaInvalid':
+    'Kod kabul edilmedi. Uygulamadaki yeni kodu veya kullanılmamış kurtarma kodunu kullanın.',
+  'failure.workspaceMfaLocked':
+    'Çok fazla deneme yapıldı. Yeni doğrulama başlatmadan önce bekleyin.',
   'company.links.title': 'Şirket kimlikleriniz',
   'company.links.description':
     'Şirket kimliğini bu hesaba açıkça bağlayın. Aynı e-posta adresi hesapları otomatik eşleştirmez.',

@@ -7,8 +7,10 @@ import {
   assertMinted,
   requireFullMembership,
   requireWorkspaceMembership,
+  requireWorkspaceSecurityMembership,
   workspaceNotFound,
   type WorkspaceContext,
+  type WorkspaceSecurityContext,
 } from '../../../platform/tenancy';
 import { lapsed, type SessionLifetime } from '../../auth/session-lifetime';
 
@@ -78,13 +80,12 @@ export const lockCompanyIdentityActor = async (
   );
 };
 
-/** The canonical person resolved from an exact verified external binding, never an address or client-selected id. */
-export const lockCompanyIdentityMember = async (
+/** Shared native row locks; callers still have to obtain their purpose-specific capability. */
+const lockIdentityMemberRows = async (
   transaction: Transaction,
   workspaceId: string,
   userId: string,
-  administrator: boolean,
-): Promise<WorkspaceContext> => {
+): Promise<void> => {
   const workspace = await transaction
     .selectFrom('workspaces')
     .select('id')
@@ -110,6 +111,16 @@ export const lockCompanyIdentityMember = async (
     .executeTakeFirst();
   if (person === undefined)
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'This account cannot continue.' });
+};
+
+/** The canonical person resolved from an exact verified external binding, never an address or client-selected id. */
+const lockCompanyIdentityMember = async (
+  transaction: Transaction,
+  workspaceId: string,
+  userId: string,
+  administrator: boolean,
+): Promise<WorkspaceContext> => {
+  await lockIdentityMemberRows(transaction, workspaceId, userId);
   const current = await requireWorkspaceMembership(transaction, userId, workspaceId);
   requireFullMembership(current, 'Company identity requires full workspace membership.');
   if (administrator && current.role === 'member')
@@ -117,5 +128,17 @@ export const lockCompanyIdentityMember = async (
       code: 'FORBIDDEN',
       message: 'Only an owner or admin manages company identity.',
     });
+  return current;
+};
+
+/** Sign-in can create a scoped session for MFA remediation without granting workspace content. */
+export const lockCompanySignInMember = async (
+  transaction: Transaction,
+  workspaceId: string,
+  userId: string,
+): Promise<WorkspaceSecurityContext> => {
+  await lockIdentityMemberRows(transaction, workspaceId, userId);
+  const current = await requireWorkspaceSecurityMembership(transaction, userId, workspaceId);
+  requireFullMembership(current, 'Company sign-in requires full workspace membership.');
   return current;
 };

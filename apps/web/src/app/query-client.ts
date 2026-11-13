@@ -18,6 +18,7 @@
  * `retries: 0`.
  */
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
+import { workspaceAccessRequired } from '../data/access-change';
 import { isApiError, isTransient } from '../data/errors';
 import { keys } from '../data/keys';
 
@@ -33,6 +34,8 @@ export const STALE_AFTER_MS = 30_000;
  * it cannot loop, and a read already under way is the answer a burst of 404s waits for.
  */
 const rereadSessionOnClosedRoute = (client: QueryClient, error: unknown): void => {
+  if (isApiError(error) && error.code === 'WORKSPACE_ACCESS_REQUIRED' && error.workspaceId !== null)
+    workspaceAccessRequired(client, error.workspaceId);
   if (!isApiError(error) || error.code !== 'ROUTE_NOT_FOUND') return;
   if (client.isFetching({ queryKey: keys.me, exact: true }) > 0) return;
   void client.invalidateQueries({ queryKey: keys.me, exact: true });

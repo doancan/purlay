@@ -1,9 +1,27 @@
 import { describe, expect, test } from 'bun:test';
-import { messageId, parseServerMessage } from './index';
+import { messageId, parseServerMessage, type ServerFrame } from './index';
 
 const id = messageId(new Date('2026-10-09T12:00:00.000Z'));
 
 describe('parseServerMessage', () => {
+  test('ERROR keeps an optional validated workspace hint without requiring one from older readers', () => {
+    const frame = {
+      event: 'ERROR',
+      data: { code: 'WORKSPACE_ACCESS_REQUIRED', message: 'Verify first.' },
+      ts: 1,
+    } satisfies ServerFrame;
+    const workspaceId = '00000000-0000-4000-8000-0000000000a1';
+    expect(parseServerMessage(JSON.stringify(frame)).kind).toBe('frame');
+    expect(parseServerMessage(JSON.stringify({ ...frame, workspaceId }))).toEqual({
+      kind: 'frame',
+      frame: { ...frame, workspaceId },
+    });
+    for (const hint of ['another/slug', null, 42]) {
+      expect(parseServerMessage(JSON.stringify({ ...frame, workspaceId: hint })).kind).toBe(
+        'malformed',
+      );
+    }
+  });
   test('a frame the contract defines is a frame', () => {
     const message = parseServerMessage(JSON.stringify({ event: 'PONG', data: {}, ts: 1 }));
     expect(message.kind === 'frame' && message.frame.event).toBe('PONG');

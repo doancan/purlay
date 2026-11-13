@@ -19,6 +19,7 @@ import { useCallback } from 'react';
 import { useI18n } from '../i18n/i18n-provider';
 import { isApiError, type ApiErrorCode } from './errors';
 import { keys } from './keys';
+import { workspaceAccessRequired } from './access-change';
 
 export type FailureCode = ApiErrorCode | 'TIMEOUT' | 'UNKNOWN';
 
@@ -51,6 +52,12 @@ export type FailureKey =
   | 'failure.onlyAdminsPost'
   | 'failure.channelGroupName'
   | 'failure.channelGroupLimit'
+  | 'failure.workspaceAccess'
+  | 'failure.workspaceSecurityChanged'
+  | 'failure.workspaceSecurityNotReady'
+  | 'failure.workspaceMfaMissing'
+  | 'failure.workspaceMfaInvalid'
+  | 'failure.workspaceMfaLocked'
   | 'failure.generic';
 // A personal heading's name and cap can be corrected in its form.
 
@@ -69,6 +76,19 @@ export const codeOf = (error: unknown): FailureCode => (isApiError(error) ? erro
 /** Which sentence says it. Exhaustive: a new server code is a compile error until it is placed. */
 export const failureKey = (code: FailureCode): FailureKey => {
   switch (code) {
+    case 'WORKSPACE_ACCESS_REQUIRED':
+      return 'failure.workspaceAccess';
+    case 'WORKSPACE_SECURITY_CHANGED':
+      return 'failure.workspaceSecurityChanged';
+    case 'WORKSPACE_SECURITY_NOT_READY':
+      return 'failure.workspaceSecurityNotReady';
+    case 'WORKSPACE_MFA_NOT_FOUND':
+      return 'failure.workspaceMfaMissing';
+    case 'WORKSPACE_MFA_INVALID':
+      return 'failure.workspaceMfaInvalid';
+    case 'WORKSPACE_MFA_LOCKED':
+      return 'failure.workspaceMfaLocked';
+
     case 'NETWORK':
     case 'TIMEOUT':
       return 'failure.network';
@@ -229,6 +249,8 @@ export const useDescribeFailure = (): ((error: unknown) => string) => {
   return useCallback(
     (error: unknown): string => {
       const code = codeOf(error);
+      if (isApiError(error) && code === 'WORKSPACE_ACCESS_REQUIRED' && error.workspaceId !== null)
+        workspaceAccessRequired(client, error.workspaceId);
       if (code === 'UNAUTHENTICATED' || code === 'TWO_FACTOR_REQUIRED') refreshSession(client);
       return t(failureKey(code));
     },

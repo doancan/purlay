@@ -20,7 +20,7 @@ import { Dialog } from '../../../ui/dialog';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
 import { useModules, useSession } from '../../session/session';
-import { CreateWorkspace } from '../../shell/home';
+import { CreateWorkspace } from '../../shell/create-workspace';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 import { ArchivedChannelsCard } from './archived-channels';

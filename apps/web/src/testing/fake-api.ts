@@ -11,6 +11,22 @@ const unexpected = (name: string) => (): never => {
 };
 
 export const anApi = (overrides: Partial<Api> = {}): Api => ({
+  workspaceSecurityEntry: unexpected('workspaceSecurityEntry'),
+  workspaceAccess: unexpected('workspaceAccess'),
+  workspacePolicy: unexpected('workspacePolicy'),
+  previewWorkspacePolicy: unexpected('previewWorkspacePolicy'),
+  testWorkspacePolicy: unexpected('testWorkspacePolicy'),
+  updateWorkspacePolicy: unexpected('updateWorkspacePolicy'),
+  createWorkspacePolicyRecovery: unexpected('createWorkspacePolicyRecovery'),
+  recoverWorkspacePolicy: unexpected('recoverWorkspacePolicy'),
+  myWorkspaceMfa: unexpected('myWorkspaceMfa'),
+  startWorkspaceMfaEnrollment: unexpected('startWorkspaceMfaEnrollment'),
+  startWorkspaceMfaChallenge: unexpected('startWorkspaceMfaChallenge'),
+  verifyWorkspaceMfa: unexpected('verifyWorkspaceMfa'),
+  recoverWorkspaceMfa: unexpected('recoverWorkspaceMfa'),
+  disableWorkspaceMfa: unexpected('disableWorkspaceMfa'),
+  newWorkspaceMfaRecoveryCodes: unexpected('newWorkspaceMfaRecoveryCodes'),
+
   companyDomains: unexpected('companyDomains'),
   createCompanyDomain: unexpected('createCompanyDomain'),
   renewCompanyDomain: unexpected('renewCompanyDomain'),

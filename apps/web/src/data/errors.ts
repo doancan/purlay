@@ -23,6 +23,8 @@ export class ApiError extends Error {
   readonly workspaceIds: readonly string[];
   /** The room a workspace still has when a file did not fit (`STORAGE_QUOTA_EXCEEDED`, D-159); else null. */
   readonly remainingBytes: number | null;
+  /** Canonical member workspace named by a policy refusal; absent for unscoped errors. */
+  readonly workspaceId: string | null;
 
   constructor(
     status: number,
@@ -32,6 +34,7 @@ export class ApiError extends Error {
     cause?: unknown,
     workspaceIds: readonly string[] = [],
     remainingBytes: number | null = null,
+    workspaceId: string | null = null,
   ) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'ApiError';
@@ -40,6 +43,7 @@ export class ApiError extends Error {
     this.fields = fields;
     this.workspaceIds = workspaceIds;
     this.remainingBytes = remainingBytes;
+    this.workspaceId = workspaceId;
   }
 }
 

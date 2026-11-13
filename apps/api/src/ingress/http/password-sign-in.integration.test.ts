@@ -69,12 +69,12 @@ interface Server {
   readonly clock: ReturnType<typeof movable>;
 }
 
-const aServer = (): Server => {
+const aServer = (database: Executor = db): Server => {
   const clock = movable();
-  const auth = aTestAuth(db, { baseUrl: ORIGIN, clock });
+  const auth = aTestAuth(database, { baseUrl: ORIGIN, clock });
   // Behind a proxy, so each test names the client a request comes from (`X-Forwarded-For`).
   const config = testConfig({ APP_URL: ORIGIN, TRUST_PROXY: true });
-  return { app: createApp(testDependencies({ database: db, config, auth })), auth, clock };
+  return { app: createApp(testDependencies({ database, config, auth })), auth, clock };
 };
 
 /** An account with a password — the setup's administrator's kind: made by setup, its address unverified. */
@@ -557,6 +557,111 @@ describe('integration: the throttle counts a network, not a host (D-179 §4)', (
       await signIn(server, admin.email, `guess number ${String(n)}`, client);
     }
     expect((await signIn(server, admin.email.toUpperCase(), PASSWORD, client)).status).toBe(429);
+  });
+
+  test('concurrent successful sign-ins release native transactions before refunding their committed attempts', async () => {
+    const server = aServer();
+    const admin = await aPasswordAccount();
+    const client = aClient();
+    // Eight requests exceed the actual four-connection clone pool. Keeping a connection for the
+    // refund would strand every native transaction, while the independent counters must commit.
+    const answers = await Promise.all(
+      Array.from({ length: 8 }, async () => await signIn(server, admin.email, PASSWORD, client)),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual(Array<number>(8).fill(200));
+    expect(
+      await db
+        .selectFrom('session_authentication_evidence')
+        .select('method')
+        .where('user_id', '=', admin.userId)
+        .execute(),
+    ).toEqual(Array.from({ length: 8 }, () => ({ method: 'password' })));
+    const counters = await db
+      .selectFrom('rate_limits')
+      .select('count')
+      .where('key', 'like', 'purlay:password:%')
+      .execute();
+    expect(counters).toHaveLength(2);
+    expect(counters.every((counter) => counter.count === 0)).toBe(true);
+    // A following genuine wrong guess still spends exactly one committed allowance.
+    expect(
+      (await signIn(server, admin.email, 'wrong after successful sign-ins', client)).status,
+    ).toBe(401);
+    expect(
+      await db
+        .selectFrom('rate_limits')
+        .select('count')
+        .where('key', 'like', 'purlay:password:%')
+        .execute(),
+    ).toEqual([{ count: 1 }, { count: 1 }]);
+  });
+
+  test('a rejected burst cannot spend the client allowance while an admitted password attempt has only counted its address', async () => {
+    const server = aServer();
+    const admin = await aPasswordAccount();
+    const client = aClient();
+    for (let attempt = 0; attempt < 9; attempt++)
+      expect((await signIn(server, admin.email, 'a wrong password', client)).status).toBe(401);
+    const countedAddress = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const selected = new Set<unknown>();
+    const observed = db.withPlugin({
+      transformQuery: (args) => {
+        const node = JSON.stringify(args.node);
+        if (node.includes('insert into rate_limits') && node.includes('purlay:password:address:'))
+          selected.add(args.queryId);
+        return args.node;
+      },
+      transformResult: async (args) => {
+        if (selected.delete(args.queryId)) {
+          const row = args.result.rows[0] as { readonly count?: number } | undefined;
+          if (row?.count === 10) {
+            countedAddress.resolve(undefined);
+            await release.promise;
+          }
+        }
+        return args.result;
+      },
+    });
+    const tenth = signIn(aServer(observed), admin.email, 'the tenth wrong password', client);
+    let burst: Promise<Response>[] = [];
+    let committedCounts: readonly number[] = [];
+    let answers: Response[] = [];
+    try {
+      await countedAddress.promise;
+      burst = Array.from({ length: 40 }, () =>
+        signIn(server, admin.email, 'already over address limit', client),
+      );
+      // A distinct real connection observes committed state while the admitted attempt is held
+      // between its two buckets. Neither half may leak into a competing admission's allowance.
+      committedCounts = await cloned.withFreshPool(async (fresh) =>
+        (
+          await fresh
+            .selectFrom('rate_limits')
+            .select('count')
+            .where('key', 'like', 'purlay:password:%')
+            .orderBy('count')
+            .execute()
+        ).map((row) => row.count),
+      );
+    } finally {
+      release.resolve(undefined);
+      answers = await Promise.all([tenth, ...burst]);
+    }
+    expect(committedCounts).toEqual([9, 9]);
+    expect(answers.filter((answer) => answer.status === 401)).toHaveLength(1);
+    expect(answers.filter((answer) => answer.status === 429)).toHaveLength(40);
+    const tenthAnswer = answers[0];
+    if (tenthAnswer === undefined) throw new Error('Missing actual tenth password response');
+    expect(await codeOf(tenthAnswer)).toBe('INVALID_EMAIL_OR_PASSWORD');
+    expect(
+      await db
+        .selectFrom('rate_limits')
+        .select('count')
+        .where('key', 'like', 'purlay:password:%')
+        .orderBy('count')
+        .execute(),
+    ).toEqual([{ count: 10 }, { count: 10 }]);
   });
 
   test('fifty wrong passwords at once from one client weigh exactly ten', async () => {
