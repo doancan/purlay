@@ -1,8 +1,11 @@
 /** Actual source reads stay bounded by cohort size, while every final statement retains its exact native fence. @needs-modules chat */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+  cloneIntegrationDatabase,
   closeIntegrationDatabase,
-  withRollback,
+  type ClonedDatabase,
   type Executor,
   type Selectable,
   type Database,
@@ -32,87 +35,30 @@ import { companyWorkspaceMfaActor } from '../modules/workspaces/security/mfa.tes
 import { companySessionCookies } from '../modules/auth/company-sessions';
 import { companyFrameProjector } from '../features/chat/channels/company-delivery';
 
-afterAll(closeIntegrationDatabase);
-
-describe('integration: workspace delivery cohort bounds', () => {
-  test.each([false, true])(
-    '12 and 120 exact native sources use bounded factual reads and final fanout, company=%s',
-    async (company) => {
-      await withRollback(async (db) => {
-        const room = await aRoom(db, ['cohort']);
-        const person = room.members['cohort'];
-        if (person === undefined) throw new Error('Missing cohort owner');
-        const clock = aMovableClock(new Date());
-        let first = await aSession(db, clock, person.userId);
-        await recordPrimaryAuthentication(db, first.sessionId, person.userId, {
-          method: 'password',
-          authenticatedAt: clock.now(),
-        });
-        let companyProof: Selectable<Database['workspace_identity_sessions']> | undefined;
-        if (company) {
-          const configured = await companyWorkspaceMfaActor(
-            {
-              database: db,
-              clock,
-              lifetime: () => NO_SESSION_LIFETIME,
-              cipher: credentialCipher(Buffer.alloc(32, 7).toString('base64')),
-            },
-            {
-              context: await requireWorkspaceSecurityMembership(
-                db,
-                person.userId,
-                room.workspaceId,
-              ),
-              sessionId: first.sessionId,
-            },
-          );
-          companyProof = await db
-            .selectFrom('workspace_identity_sessions')
-            .selectAll()
-            .where('session_id', '=', configured.actor.sessionId)
-            .executeTakeFirstOrThrow();
-          first = await aSession(db, clock, person.userId, 30, {
-            companyWorkspaceId: room.workspaceId,
-          });
-          await db
-            .insertInto('workspace_identity_sessions')
-            .values({ ...companyProof, session_id: first.sessionId })
-            .execute();
-          await recordPrimaryAuthentication(db, first.sessionId, person.userId, {
-            method: 'company_oidc',
-            authenticatedAt: clock.now(),
-            companyWorkspaceId: room.workspaceId,
-            companyConnectionId: companyProof.connection_id,
-            companyAuthenticationRevision: companyProof.authentication_revision,
-          });
-        }
-        await db
-          .updateTable('workspaces')
-          .set({ access_policy_epoch: '1' })
-          .where('id', '=', room.workspaceId)
-          .execute();
-        await db
-          .insertInto('workspace_access_policies')
-          .values({
-            workspace_id: room.workspaceId,
-            epoch: '1',
-            mode: 'enforced',
-            sign_in: 'any',
-            require_mfa: false,
-            idle_minutes: 15,
-            max_age_hours: 1,
-            mfa_max_age_minutes: 5,
-          })
-          .execute();
-        const dependencies = {
-          database: db,
-          clock,
-          sessionLifetime: (): typeof NO_SESSION_LIFETIME => NO_SESSION_LIFETIME,
-        };
-        await workspaceAccessStatus(
+describe.each([false, true])(
+  'integration: workspace delivery cohort bounds, company=%s',
+  (company) => {
+    let clone: ClonedDatabase;
+    let runCohort: () => Promise<void>;
+    beforeAll(async () => {
+      clone = await cloneIntegrationDatabase();
+      const db = clone.db;
+      const room = await aRoom(db, ['cohort']);
+      const person = room.members['cohort'];
+      if (person === undefined) throw new Error('Missing cohort owner');
+      const clock = aMovableClock(new Date());
+      let first = await aSession(db, clock, person.userId);
+      await recordPrimaryAuthentication(db, first.sessionId, person.userId, {
+        method: 'password',
+        authenticatedAt: clock.now(),
+      });
+      let companyProof: Selectable<Database['workspace_identity_sessions']> | undefined;
+      if (company) {
+        const configured = await companyWorkspaceMfaActor(
           {
-            ...dependencies,
-            lifetime: dependencies.sessionLifetime,
+            database: db,
+            clock,
+            lifetime: () => NO_SESSION_LIFETIME,
             cipher: credentialCipher(Buffer.alloc(32, 7).toString('base64')),
           },
           {
@@ -120,48 +66,101 @@ describe('integration: workspace delivery cohort bounds', () => {
             sessionId: first.sessionId,
           },
         );
-        const evidence = await db
-          .selectFrom('session_authentication_evidence')
+        companyProof = await db
+          .selectFrom('workspace_identity_sessions')
           .selectAll()
-          .where('session_id', '=', first.sessionId)
+          .where('session_id', '=', configured.actor.sessionId)
           .executeTakeFirstOrThrow();
-        const assurance = await db
-          .selectFrom('workspace_session_assurances')
-          .selectAll()
-          .where('session_id', '=', first.sessionId)
-          .executeTakeFirstOrThrow();
-        const sessions = [first];
-        for (let index = 1; index < 120; index++)
-          sessions.push(
-            await aSession(
-              db,
-              clock,
-              person.userId,
-              30,
-              company ? { companyWorkspaceId: room.workspaceId } : {},
-            ),
-          );
-        if (companyProof !== undefined) {
-          const proof = companyProof;
-          await db
-            .insertInto('workspace_identity_sessions')
-            .values(
-              sessions.slice(1).map((session) => ({ ...proof, session_id: session.sessionId })),
-            )
-            .execute();
-        }
+        first = await aSession(db, clock, person.userId, 30, {
+          companyWorkspaceId: room.workspaceId,
+        });
         await db
-          .insertInto('session_authentication_evidence')
-          .values(
-            sessions.slice(1).map((session) => ({ ...evidence, session_id: session.sessionId })),
-          )
+          .insertInto('workspace_identity_sessions')
+          .values({ ...companyProof, session_id: first.sessionId })
           .execute();
+        await recordPrimaryAuthentication(db, first.sessionId, person.userId, {
+          method: 'company_oidc',
+          authenticatedAt: clock.now(),
+          companyWorkspaceId: room.workspaceId,
+          companyConnectionId: companyProof.connection_id,
+          companyAuthenticationRevision: companyProof.authentication_revision,
+        });
+      }
+      await db
+        .updateTable('workspaces')
+        .set({ access_policy_epoch: '1' })
+        .where('id', '=', room.workspaceId)
+        .execute();
+      await db
+        .insertInto('workspace_access_policies')
+        .values({
+          workspace_id: room.workspaceId,
+          epoch: '1',
+          mode: 'enforced',
+          sign_in: 'any',
+          require_mfa: false,
+          idle_minutes: 15,
+          max_age_hours: 1,
+          mfa_max_age_minutes: 5,
+        })
+        .execute();
+      const dependencies = {
+        database: db,
+        clock,
+        sessionLifetime: (): typeof NO_SESSION_LIFETIME => NO_SESSION_LIFETIME,
+      };
+      await workspaceAccessStatus(
+        {
+          ...dependencies,
+          lifetime: dependencies.sessionLifetime,
+          cipher: credentialCipher(Buffer.alloc(32, 7).toString('base64')),
+        },
+        {
+          context: await requireWorkspaceSecurityMembership(db, person.userId, room.workspaceId),
+          sessionId: first.sessionId,
+        },
+      );
+      const evidence = await db
+        .selectFrom('session_authentication_evidence')
+        .selectAll()
+        .where('session_id', '=', first.sessionId)
+        .executeTakeFirstOrThrow();
+      const assurance = await db
+        .selectFrom('workspace_session_assurances')
+        .selectAll()
+        .where('session_id', '=', first.sessionId)
+        .executeTakeFirstOrThrow();
+      const sessions = [first];
+      for (let index = 1; index < 120; index++)
+        sessions.push(
+          await aSession(
+            db,
+            clock,
+            person.userId,
+            30,
+            company ? { companyWorkspaceId: room.workspaceId } : {},
+          ),
+        );
+      if (companyProof !== undefined) {
+        const proof = companyProof;
         await db
-          .insertInto('workspace_session_assurances')
-          .values(
-            sessions.slice(1).map((session) => ({ ...assurance, session_id: session.sessionId })),
-          )
+          .insertInto('workspace_identity_sessions')
+          .values(sessions.slice(1).map((session) => ({ ...proof, session_id: session.sessionId })))
           .execute();
+      }
+      await db
+        .insertInto('session_authentication_evidence')
+        .values(
+          sessions.slice(1).map((session) => ({ ...evidence, session_id: session.sessionId })),
+        )
+        .execute();
+      await db
+        .insertInto('workspace_session_assurances')
+        .values(
+          sessions.slice(1).map((session) => ({ ...assurance, session_id: session.sessionId })),
+        )
+        .execute();
+      runCohort = async (): Promise<void> => {
         let reads = 0;
         const roots = new Map<string, number>();
         const starts = new Map<unknown, { at: number; kind: string }>();
@@ -317,31 +316,32 @@ describe('integration: workspace delivery cohort bounds', () => {
           expect(sent.every((value) => value.event === 'MESSAGE_REVISED')).toBe(true);
           expect(closed).toEqual([]);
           expect(elapsedMs).toBeLessThan(DEFAULT_DEADLINE_MS);
+          const receipt = {
+            nativeSources: [12, 120],
+            factualSelects: counts,
+            fanout: {
+              sources: 120,
+              sent: sent.length,
+              totalSelects: reads,
+              elapsedMs,
+              receiptP95Ms: p95,
+            },
+            productFanoutBudgetMs: BUDGETS.fanOutMs,
+            selectRootKinds: Object.fromEntries(roots),
+            actualSelects: completedSelects,
+            queryTimes,
+            existingDeadlineMs: DEFAULT_DEADLINE_MS,
+          };
           await mkdir('/tmp/purlay-workspace-ws-batch', { recursive: true, mode: 0o700 });
           await writeFile(
             `/tmp/purlay-workspace-ws-batch/performance-${company ? 'company' : 'independent'}.json`,
-            JSON.stringify(
-              {
-                nativeSources: [12, 120],
-                factualSelects: counts,
-                fanout: {
-                  sources: 120,
-                  sent: sent.length,
-                  totalSelects: reads,
-                  elapsedMs,
-                  receiptP95Ms: p95,
-                },
-                productFanoutBudgetMs: BUDGETS.fanOutMs,
-                selectRootKinds: Object.fromEntries(roots),
-                actualSelects: completedSelects,
-                queryTimes,
-                existingDeadlineMs: DEFAULT_DEADLINE_MS,
-              },
-              null,
-              2,
-            ),
+            JSON.stringify(receipt, null, 2),
             { mode: 0o600 },
           );
+          if (!(p95 < BUDGETS.fanOutMs))
+            console.error(
+              JSON.stringify({ workspaceDeliveryCohortFailure: { company, ...receipt } }),
+            );
           expect(p95).toBeLessThan(BUDGETS.fanOutMs);
         } finally {
           for (const [index] of sessions.entries()) hub.closed(String(index));
@@ -416,7 +416,14 @@ describe('integration: workspace delivery cohort bounds', () => {
           }).toThrow('Verify workspace access');
           return Promise.resolve();
         });
-      });
-    },
-  );
-});
+      };
+    }, CLONE_HOOK_MS);
+    afterAll(async () => {
+      await clone.drop();
+      await closeIntegrationDatabase();
+    }, DROP_HOOK_MS);
+    test('12 and 120 exact native sources use bounded factual reads and final fanout', async () => {
+      await runCohort();
+    });
+  },
+);

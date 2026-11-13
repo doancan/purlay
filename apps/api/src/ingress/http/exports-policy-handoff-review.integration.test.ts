@@ -26,7 +26,7 @@ import { createApp } from './app';
 describe('integration: archive policy handoff', () => {
   afterAll(closeIntegrationDatabase);
 
-  test('archive handoffs recheck caller, original source, owner and exact prepared set before releasing bytes', async () => {
+  test('archive handoff refuses a missing caller before touching the database', async () => {
     const missingCaller = archiveDownloadHandoff({
       kind: 'personal',
       exportId: crypto.randomUUID(),
@@ -42,42 +42,45 @@ describe('integration: archive policy handoff', () => {
         clock: aMovableClock(),
       }).catch((error: unknown) => error),
     ).toMatchObject({ body: { code: 'UNAUTHENTICATED' } });
-    const observed: {
-      kind: string;
-      stage: string;
-      change: string;
-      status: number;
-      bodyFailed: boolean;
-      contentReleased: boolean;
-      cleaned: boolean;
-    }[] = [];
-    for (const kind of ['workspace', 'personal'] as const) {
-      for (const stage of ['store', 'stream'] as const) {
-        for (const change of [
-          'none',
-          'policy',
-          'caller',
-          'original',
-          'scope',
-          'owner',
-          'deleted_original',
-          'company_original',
-          'caller_proof',
-          'original_proof',
-        ] as const) {
-          if (
-            stage === 'stream' &&
-            (change === 'none' ||
-              change === 'scope' ||
-              change === 'deleted_original' ||
-              change === 'company_original')
-          )
-            continue;
-          if (
-            (kind === 'personal' && change === 'owner') ||
-            (kind === 'workspace' && change === 'company_original')
-          )
-            continue;
+  });
+
+  const observed: {
+    kind: string;
+    stage: string;
+    change: string;
+    status: number;
+    bodyFailed: boolean;
+    contentReleased: boolean;
+    cleaned: boolean;
+  }[] = [];
+  for (const kind of ['workspace', 'personal'] as const) {
+    for (const stage of ['store', 'stream'] as const) {
+      for (const change of [
+        'none',
+        'policy',
+        'caller',
+        'original',
+        'scope',
+        'owner',
+        'deleted_original',
+        'company_original',
+        'caller_proof',
+        'original_proof',
+      ] as const) {
+        if (
+          stage === 'stream' &&
+          (change === 'none' ||
+            change === 'scope' ||
+            change === 'deleted_original' ||
+            change === 'company_original')
+        )
+          continue;
+        if (
+          (kind === 'personal' && change === 'owner') ||
+          (kind === 'workspace' && change === 'company_original')
+        )
+          continue;
+        test(`archive handoff ${kind}/${stage}/${change} rechecks authority before releasing bytes`, async () => {
           await withoutRequest(async () => {
             await withRollback(async (db) => {
               const clock = aMovableClock(new Date());
@@ -300,9 +303,11 @@ describe('integration: archive policy handoff', () => {
               });
             });
           });
-        }
+        });
       }
     }
+  }
+  afterAll(() => {
     console.log(JSON.stringify({ exportHandoffReview: observed }));
   });
 
