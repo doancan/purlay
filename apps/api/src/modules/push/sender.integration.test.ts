@@ -688,7 +688,7 @@ describe('integration: what the push service answers', () => {
       const post: PushPost = (url) => {
         posted.push(url.href);
         if (
-          posted.includes('https://push.example.com/send/carol') &&
+          posted.some((endpoint) => endpoint === 'https://push.example.com/send/carol') &&
           posted.filter((endpoint) => endpoint.startsWith('https://slow.example.com/')).length >= 2
         )
           concurrentPosts.resolve(undefined);
