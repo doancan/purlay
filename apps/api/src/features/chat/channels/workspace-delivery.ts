@@ -193,7 +193,7 @@ export const workspaceFrameProjector = (
   ): AliasableExpression<ReadyRow> =>
     withinRequest(sourceScope(entry.identity, entry.signal, permit !== 'off'), () => {
       if (permit !== 'off') permit.capture(clock.now());
-      const { identity, workspaceId, channelId, key } = entry;
+      const { identity, workspaceId, key } = entry;
       if (channelBatch)
         return database
           .selectFrom(sql<VisibilityRow>`ready_channel_visibility`.as('workspaces'))
@@ -210,67 +210,34 @@ export const workspaceFrameProjector = (
           ])
           .where('workspaces.sourceKey', '=', key)
           .where(activeWorkspaceMembership());
-      if (channelId === undefined)
-        return database
-          .selectFrom('workspaces')
-          .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
-          .select((eb) => [
-            eb.val(key).as('sourceKey'),
-            'workspace_members.access_kind as accessKind',
-            'workspace_members.guest_since as guestSince',
-            'workspace_members.guest_expires_at as guestExpiresAt',
-            eb.val<Date | null>(null).as('channelJoinedAt'),
-            eb.val(true).as('historyAllowed'),
-          ])
-          .where('workspaces.id', '=', workspaceId)
-          .where('workspaces.deleted_at', 'is', null)
-          .where('workspace_members.user_id', '=', identity.userId)
-          .where(activeWorkspaceMembership())
-          .where((eb) =>
-            eb.or([
-              eb('workspace_members.access_kind', '=', 'member'),
-              eb(
-                eb.fn<number | null>('array_position', [
-                  eb.ref('workspace_members.guest_modules'),
-                  eb.val('chat'),
-                ]),
-                'is not',
-                null,
-              ),
-            ]),
-          )
-          .$castTo<ReadyRow>();
-      const message =
-        entry.frame.event === 'MESSAGE_CREATED'
-          ? entry.frame.data.id
-          : 'messageId' in entry.frame.data
-            ? entry.frame.data.messageId
-            : undefined;
-      return visibleChannels(database, identity.userId)
+      return database
+        .selectFrom('workspaces')
+        .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
         .select((eb) => [
           eb.val(key).as('sourceKey'),
           'workspace_members.access_kind as accessKind',
           'workspace_members.guest_since as guestSince',
           'workspace_members.guest_expires_at as guestExpiresAt',
-          'channel_members.joined_at as channelJoinedAt',
-          (message === undefined
-            ? eb.val(true)
-            : eb.or([
-                eb('workspace_members.access_kind', '=', 'member'),
-                eb.exists(
-                  eb
-                    .selectFrom('messages as ready_message')
-                    .select('ready_message.id')
-                    .where('ready_message.id', '=', message)
-                    .where('ready_message.channel_id', '=', channelId)
-                    .where('ready_message.workspace_id', '=', workspaceId)
-                    .where(guestMessageHistoryFor('ready_message')),
-                ),
-              ])
-          ).as('historyAllowed'),
+          eb.val<Date | null>(null).as('channelJoinedAt'),
+          eb.val(true).as('historyAllowed'),
         ])
-        .where('channels.id', '=', channelId)
-        .where('channels.workspace_id', '=', workspaceId)
+        .where('workspaces.id', '=', workspaceId)
+        .where('workspaces.deleted_at', 'is', null)
+        .where('workspace_members.user_id', '=', identity.userId)
+        .where(activeWorkspaceMembership())
+        .where((eb) =>
+          eb.or([
+            eb('workspace_members.access_kind', '=', 'member'),
+            eb(
+              eb.fn<number | null>('array_position', [
+                eb.ref('workspace_members.guest_modules'),
+                eb.val('chat'),
+              ]),
+              'is not',
+              null,
+            ),
+          ]),
+        )
         .$castTo<ReadyRow>();
     });
   /** Shared visibility facts stay in the final statement's snapshot; exact native fences are applied below. */
