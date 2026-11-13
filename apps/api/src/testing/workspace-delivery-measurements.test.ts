@@ -7,6 +7,7 @@ import { bundledModules } from '../composition';
 import { moduleCells } from './module-cells';
 import { needsReader } from './module-needs';
 import {
+  CohortBudgetExceeded,
   cohortMode,
   cohortReceiptPath,
   main,
@@ -40,6 +41,49 @@ const receipt = (given = identity): Receipt => ({
   fanout: { sources: 120, sent: 120, receipts: 120, receiptP95Ms: 199.99 },
   productFanoutBudgetMs: 200,
 });
+
+type Failure =
+  | 'missing'
+  | 'stale'
+  | 'failed'
+  | 'incomplete'
+  | 'counts'
+  | 'malformed'
+  | 'nan'
+  | 'zero'
+  | 'negative'
+  | 'fake-budget-error'
+  | 'budget';
+const unconfirmable: readonly Failure[] = [
+  'missing',
+  'stale',
+  'failed',
+  'incomplete',
+  'counts',
+  'malformed',
+  'nan',
+  'zero',
+  'negative',
+  'fake-budget-error',
+];
+const failCase = async (kind: Failure, given: typeof identity, path: string): Promise<number> => {
+  if (kind === 'missing') return 0;
+  if (kind === 'fake-budget-error') throw new CohortBudgetExceeded(212);
+  if (kind === 'malformed') {
+    await writeFile(path, '{broken');
+    return 0;
+  }
+  const value = receipt(given);
+  value.fanout.receiptP95Ms = 212;
+  if (kind === 'stale') value.measurement.runId = 'earlier-run';
+  if (kind === 'incomplete') value.complete = false;
+  if (kind === 'counts') value.factualSelects = [7, 13];
+  if (kind === 'nan') value.fanout.receiptP95Ms = NaN;
+  if (kind === 'zero') value.fanout.receiptP95Ms = 0;
+  if (kind === 'negative') value.fanout.receiptP95Ms = -1;
+  await writeFile(path, JSON.stringify(value));
+  return kind === 'failed' ? 1 : 0;
+};
 
 describe('the native cohort measurement', () => {
   test('direct runs are strict; only explicit functional and measurement modes are accepted', () => {
@@ -95,6 +139,26 @@ describe('the native cohort measurement', () => {
       expect(() =>
         receiptP95({ ...receipt(), fanout: { ...receipt().fanout, receiptP95Ms: p95 } }, identity),
       ).toThrow();
+  });
+
+  test('only a complete valid finite over-budget receipt produces the typed confirmation failure', async () => {
+    const slow = receipt();
+    slow.fanout.receiptP95Ms = 200;
+    expect(() => receiptP95(slow, identity)).toThrow(CohortBudgetExceeded);
+    for (const p95 of [NaN, Infinity, 0, -1]) {
+      const error = await rejected(
+        Promise.resolve().then(() =>
+          receiptP95({ ...slow, fanout: { ...slow.fanout, receiptP95Ms: p95 } }, identity),
+        ),
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(CohortBudgetExceeded);
+    }
+    const incomplete = await rejected(
+      Promise.resolve().then(() => receiptP95({ ...slow, complete: false }, identity)),
+    );
+    expect(incomplete).toBeInstanceOf(Error);
+    expect(incomplete).not.toBeInstanceOf(CohortBudgetExceeded);
   });
 
   test('refuses stale identity, partial fixtures, missing deliveries and unbounded factual reads', () => {
@@ -160,17 +224,12 @@ describe('the native cohort measurement', () => {
   test('zero tests, stale receipts and failed processes refuse the run without retrying a case', async () => {
     const owned = await mkdtemp(join(tmpdir(), 'workspace-cohort-refusal-'));
     try {
-      for (const kind of ['missing', 'stale', 'failed', 'incomplete', 'slow']) {
+      for (const kind of unconfirmable) {
         let cases = 0;
         expect(
           await measure({}, join(owned, kind), async (_cell, given, path) => {
             cases++;
-            const value = receipt(given);
-            if (kind === 'stale') value.measurement.runId = 'earlier-run';
-            if (kind === 'incomplete') value.complete = false;
-            if (kind === 'slow') value.fanout.receiptP95Ms = 212;
-            if (kind !== 'missing') await writeFile(path, JSON.stringify(value));
-            return kind === 'failed' ? 1 : 0;
+            return await failCase(kind, given, path);
           }),
         ).toBe(1);
         expect(cases).toBe(measurementCells().length * 2);
@@ -179,6 +238,82 @@ describe('the native cohort measurement', () => {
       await writeFile(borrowed, 'keep');
       expect(await rejected(measure({}, owned, () => Promise.resolve(0)))).toBeInstanceOf(Error);
       expect(await readFile(borrowed, 'utf8')).toBe('keep');
+    } finally {
+      await rm(owned, { recursive: true });
+    }
+  });
+
+  test('D-227 confirms an initial budget failure once with a fresh identity and file, preserving both judgments', async () => {
+    const owned = await mkdtemp(join(tmpdir(), 'workspace-cohort-confirmation-'));
+    const calls = new Map<string, number>();
+    try {
+      expect(
+        await measure({}, join(owned, 'run'), async (_cell, given, path) => {
+          const key = `${given.modules}/${String(given.company)}`;
+          const count = (calls.get(key) ?? 0) + 1;
+          calls.set(key, count);
+          const value = receipt(given);
+          value.fanout.receiptP95Ms = count === 1 ? 212 : 199.99;
+          await writeFile(path, JSON.stringify(value));
+          return 0;
+        }),
+      ).toBe(0);
+      expect([...calls.values()]).toEqual(measurementCells().flatMap(() => [2, 2]));
+      const summary = JSON.parse(await readFile(join(owned, 'run/summary.json'), 'utf8')) as {
+        attempts: { kind: string; runId: string; receipt: string; p95: number; error?: string }[];
+        p95: number;
+        error?: string;
+      }[];
+      expect(summary).toHaveLength(measurementCells().length * 2);
+      for (const result of summary) {
+        expect(result.error).toBeUndefined();
+        expect(result.p95).toBe(199.99);
+        expect(result.attempts).toHaveLength(2);
+        const first = result.attempts[0];
+        const second = result.attempts[1];
+        if (first === undefined || second === undefined) throw new Error('Missing trial');
+        expect(first.kind).toBe('initial');
+        expect(first.p95).toBe(212);
+        expect(first.error).toContain('received 212');
+        expect(second.kind).toBe('confirmation');
+        expect(second.error).toBeUndefined();
+        expect(second.runId).not.toBe(first.runId);
+        expect(second.receipt).not.toBe(first.receipt);
+        for (const attempt of [first, second]) {
+          const kept = JSON.parse(await readFile(attempt.receipt, 'utf8')) as Receipt;
+          expect(kept.measurement.runId).toBe(attempt.runId);
+          expect(kept.fanout.receiptP95Ms).toBe(attempt.p95);
+          expect(kept.complete).toBe(true);
+        }
+      }
+    } finally {
+      await rm(owned, { recursive: true });
+    }
+  });
+
+  test('any failed confirmation refuses with no third attempt, including stale, partial, nonzero and repeated budget failures', async () => {
+    const owned = await mkdtemp(join(tmpdir(), 'workspace-cohort-confirmation-refusal-'));
+    try {
+      for (const kind of [...unconfirmable, 'budget'] as const) {
+        const calls = new Map<string, number>();
+        expect(
+          await measure({}, join(owned, kind), async (_cell, given, path) => {
+            const key = `${given.modules}/${String(given.company)}`;
+            const count = (calls.get(key) ?? 0) + 1;
+            calls.set(key, count);
+            return await failCase(count === 1 ? 'budget' : kind, given, path);
+          }),
+        ).toBe(1);
+        expect([...calls.values()]).toEqual(measurementCells().flatMap(() => [2, 2]));
+        const summary = JSON.parse(await readFile(join(owned, kind, 'summary.json'), 'utf8')) as {
+          attempts: unknown[];
+          error?: string;
+        }[];
+        for (const result of summary) {
+          expect(result.attempts).toHaveLength(2);
+          expect(result.error).toBeDefined();
+        }
+      }
     } finally {
       await rm(owned, { recursive: true });
     }

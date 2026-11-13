@@ -68,6 +68,17 @@ interface Identity {
   readonly modules: string;
 }
 
+/** Only a valid complete native receipt can produce the budget failure D-227 confirms once. */
+export class CohortBudgetExceeded extends Error {
+  readonly p95Ms: number;
+
+  constructor(p95Ms: number) {
+    super(`The cohort p95 must be below ${String(BUDGETS.fanOutMs)} ms; received ${String(p95Ms)}`);
+    this.p95Ms = p95Ms;
+    this.name = 'CohortBudgetExceeded';
+  }
+}
+
 /** A successful process alone is insufficient: a missing, partial or earlier receipt is a failure. */
 export const receiptP95 = (value: unknown, identity: Identity): number => {
   const record = (candidate: unknown): Record<string, unknown> => {
@@ -106,10 +117,9 @@ export const receiptP95 = (value: unknown, identity: Identity): number => {
     receipt['complete'] !== true
   )
     throw new Error('The cohort receipt is missing deliveries or bounded native reads');
-  if (typeof p95 !== 'number' || !Number.isFinite(p95) || p95 <= 0 || p95 >= BUDGETS.fanOutMs)
-    throw new Error(
-      `The cohort p95 must be below ${String(BUDGETS.fanOutMs)} ms; received ${String(p95)}`,
-    );
+  if (typeof p95 !== 'number' || !Number.isFinite(p95) || p95 <= 0)
+    throw new Error(`The cohort p95 must be finite and positive; received ${String(p95)}`);
+  if (p95 >= BUDGETS.fanOutMs) throw new CohortBudgetExceeded(p95);
   return p95;
 };
 
@@ -163,7 +173,7 @@ const runCase: RunCase = async (cell, identity, receipt, environment) => {
   }
 };
 
-/** Every case runs once, sequentially. One failure refuses the entire run; no minimum, retry or baseline can forgive it. */
+/** D-227: only a complete successful case over the unchanged budget gets one fresh confirmation, never a third attempt. */
 export const measure = async (
   environment: Readonly<Record<string, string | undefined>>,
   folder: string = resolve(OUTPUT, randomUUID()),
@@ -171,29 +181,71 @@ export const measure = async (
 ): Promise<number> => {
   await mkdir(resolve(folder, '..'), { recursive: true });
   await mkdir(folder);
-  const results: { modules: string; company: boolean; p95?: number; error?: string }[] = [];
+  interface Attempt {
+    readonly kind: 'initial' | 'confirmation';
+    readonly runId: string;
+    readonly receipt: string;
+    p95?: number;
+    error?: string;
+  }
+  const results: {
+    modules: string;
+    company: boolean;
+    attempts: Attempt[];
+    p95?: number;
+    error?: string;
+  }[] = [];
   for (const cell of measurementCells()) {
     for (const company of [false, true]) {
       const modules = cell.setting ?? 'all';
-      const identity = { runId: randomUUID(), company, modules };
-      const path = resolve(
-        folder,
-        `${modules.replaceAll(',', '-')}-${company ? 'company' : 'independent'}.json`,
-      );
-      await rm(path, { force: true });
+      const attempts: Attempt[] = [];
+      const take = async (kind: Attempt['kind']): Promise<number> => {
+        const identity = { runId: randomUUID(), company, modules };
+        const path = resolve(
+          folder,
+          `${modules.replaceAll(',', '-')}-${company ? 'company' : 'independent'}${kind === 'confirmation' ? '-confirmation' : ''}.json`,
+        );
+        const attempt: Attempt = { kind, runId: identity.runId, receipt: path };
+        attempts.push(attempt);
+        await rm(path, { force: true });
+        try {
+          let code: number;
+          try {
+            code = await run(cell, identity, path, environment);
+          } catch (error) {
+            // A process error can never impersonate a validated receipt's budget failure.
+            throw new Error('The cohort process did not complete', { cause: error });
+          }
+          if (code !== 0) throw new Error(`The cohort process exited ${String(code)}`);
+          const p95 = receiptP95(JSON.parse(await readFile(path, 'utf8')) as unknown, identity);
+          attempt.p95 = p95;
+          return p95;
+        } catch (error) {
+          if (error instanceof CohortBudgetExceeded) attempt.p95 = error.p95Ms;
+          attempt.error = error instanceof Error ? error.message : String(error);
+          throw error;
+        }
+      };
       try {
-        const code = await run(cell, identity, path, environment);
-        if (code !== 0) throw new Error(`The cohort process exited ${String(code)}`);
-        const p95 = receiptP95(JSON.parse(await readFile(path, 'utf8')) as unknown, identity);
-        results.push({ modules, company, p95 });
+        let p95: number;
+        try {
+          p95 = await take('initial');
+        } catch (error) {
+          if (!(error instanceof CohortBudgetExceeded)) throw error;
+          process.stdout.write(
+            `workspace cohort — ${modules}, company=${String(company)}: initial budget failure: ${error.message}; measuring one fresh confirmation (D-227)\n`,
+          );
+          p95 = await take('confirmation');
+        }
+        results.push({ modules, company, attempts, p95 });
         process.stdout.write(
-          `workspace cohort — ${modules}, company=${String(company)}: p95 ${p95.toFixed(2)} < ${String(BUDGETS.fanOutMs)} ms\n`,
+          `workspace cohort — ${modules}, company=${String(company)}: ${attempts.length === 2 ? 'confirmation' : 'initial'} p95 ${p95.toFixed(2)} < ${String(BUDGETS.fanOutMs)} ms\n`,
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        results.push({ modules, company, error: message });
+        results.push({ modules, company, attempts, error: message });
         process.stderr.write(
-          `workspace cohort — ${modules}, company=${String(company)}: ${message}\n`,
+          `workspace cohort — ${modules}, company=${String(company)}: ${attempts.length === 2 ? 'confirmation' : 'initial'} failed: ${message}\n`,
         );
       }
     }

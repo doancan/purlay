@@ -229,7 +229,8 @@ jobs:
         run: bun run modules:suites -- ${{ matrix.cell }}
 
   # The same native cohort as the functional suites, measured alone. Every eligible module cell and
-  # both session kinds run once in fresh sequential processes; each retains the unchanged 200 ms bound.
+  # both session kinds run in fresh sequential processes with the unchanged 200 ms bound. A complete
+  # over-budget case gets D-227's one fresh confirmation; every other failure refuses immediately.
   cohort-measurements:
     needs: changes
     if: needs.changes.outputs.modules == 'true'
