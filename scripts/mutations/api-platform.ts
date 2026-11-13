@@ -146,6 +146,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
   },
   {
+    id: 'company-proof-batch-source-id-ignored',
+    why: 'A revoked or unknown native source must not borrow another live proof in the same final statement.',
+    file: 'apps/api/src/platform/company-session.ts',
+    find: '    where ready_company_proof.session_id = ${sessionId}\n',
+    replace: '    where true\n',
+    tests: ['apps/api/src/modules/workspaces/security/company-proof-batch.integration.test.ts'],
+  },
+  {
     id: 'company-push-worker-inherits-request',
     why: 'A request that wakes the global worker must not limit the authority of unrelated queued independent deliveries.',
     file: 'apps/api/src/platform/logging.ts',
@@ -199,7 +207,10 @@ export const API_PLATFORM: readonly Mutation[] = [
     file: 'apps/api/src/platform/company-session.ts',
     find: '    and company_connection.enabled\n',
     replace: '',
-    tests: ['apps/api/src/realtime/company-session.integration.test.ts'],
+    tests: [
+      'apps/api/src/realtime/company-session.integration.test.ts',
+      'apps/api/src/modules/workspaces/security/company-proof-batch.integration.test.ts',
+    ],
   },
   {
     id: 'company-source-revision-retirement-ignored',

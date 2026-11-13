@@ -35,6 +35,7 @@ import { activeWorkspaceMembership } from './membership-access';
 import { requireWorkspaceContentAccess } from './workspace-content-access';
 
 export { activeWorkspaceMembership } from './membership-access';
+export { buildCompanyProofBatch } from './company-session';
 export { requireWorkspaceContentAccess } from './workspace-content-access';
 export { withinDeferredSource } from './deferred-source';
 export type { WorkspaceAccessLifetime } from './workspace-access-facts';

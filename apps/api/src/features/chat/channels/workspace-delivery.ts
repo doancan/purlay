@@ -12,6 +12,7 @@ import type {
 } from '../../../platform/ports/channel-delivery';
 import {
   activeWorkspaceMembership,
+  buildCompanyProofBatch,
   type readonlyWorkspaceAccess,
   readWorkspaceContentPermits,
   type WorkspaceContentPermit,
@@ -254,25 +255,40 @@ export const workspaceFrameProjector = (
         if (counterReady === batch) counterReady = undefined;
         void (async (): Promise<void> => {
           const active: Ready[] = [];
-          const queries: AliasableExpression<ReadyRow>[] = [];
-          for (const entry of selected) {
-            if (entry.signal.aborted) {
-              entry.reject(entry.signal.reason);
-              continue;
-            }
-            try {
-              queries.push(entry.query());
-              active.push(entry);
-            } catch (error) {
-              if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')
-                entry.resolve({ workspaceId: entry.workspaceId, channelIds: [] });
-              else entry.reject(error);
-            }
-          }
+          const proofBatch = buildCompanyProofBatch<ReadyRow>(
+            selected
+              .filter((entry) => !entry.signal.aborted)
+              .map((entry) => entry.identity.sessionId),
+            () => {
+              const queries: AliasableExpression<ReadyRow>[] = [];
+              for (const entry of selected) {
+                if (entry.signal.aborted) {
+                  entry.reject(entry.signal.reason);
+                  continue;
+                }
+                try {
+                  queries.push(entry.query());
+                  active.push(entry);
+                } catch (error) {
+                  if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')
+                    entry.resolve({ workspaceId: entry.workspaceId, channelIds: [] });
+                  else entry.reject(error);
+                }
+              }
+              return queries;
+            },
+          );
+          const { queries } = proofBatch;
           const first = queries[0];
           if (first === undefined) return;
           try {
-            let query = database.selectFrom(first.as('ready_sources')).selectAll('ready_sources');
+            let query = database
+              .with(
+                (cte) => cte(proofBatch.name).materialized(),
+                () => proofBatch.source,
+              )
+              .selectFrom(first.as('ready_sources'))
+              .selectAll('ready_sources');
             for (const next of queries.slice(1)) query = query.unionAll(next);
             const rows = await query.execute();
             const known = new Map(rows.map((row) => [row.sourceKey, row]));

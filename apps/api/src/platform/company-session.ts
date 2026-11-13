@@ -1,5 +1,5 @@
 /** Current company authority, shared by session resolution and canonical resource guards (D-309). */
-import { sql, type RawBuilder } from '@purlay/db';
+import { sql, type AliasableExpression, type RawBuilder } from '@purlay/db';
 
 interface CompanyProofCompanions {
   readonly member: string;
@@ -20,7 +20,7 @@ export const companySessionAllowsWorkspace = (
 )`;
 
 /** A retained origin is authority only while its exact provider, binding and native membership remain live. */
-export const liveCompanySessionProof = (
+const canonicalLiveCompanySessionProof = (
   sessionId: string | RawBuilder<string>,
   workspaceId: string | RawBuilder<string>,
   userId: string | RawBuilder<string>,
@@ -76,4 +76,94 @@ export const liveCompanySessionProof = (
     and (not ${sql.ref(`${person}.admission_requires_verified_email`)} or ${sql.ref(`${person}.email_verified`)})
     and ${sql.ref(`${workspace}.deleted_at`)} is null
 )`;
+};
+
+const COMPANY_PROOF_BATCH_NAME = 'ready_company_proofs';
+interface CompanyProofBatchRow {
+  readonly session_id: string;
+  readonly workspace_id: string;
+  readonly connection_id: string;
+  readonly user_id: string;
+}
+let companyProofBatch = false;
+
+/** Outside synchronous final-batch construction, every caller retains the full canonical SQL proof. */
+export const liveCompanySessionProof = (
+  sessionId: string | RawBuilder<string>,
+  workspaceId: string | RawBuilder<string>,
+  userId: string | RawBuilder<string>,
+  connectionId?: string | RawBuilder<string>,
+  companions?: CompanyProofCompanions,
+): RawBuilder<boolean> => {
+  if (!companyProofBatch)
+    return canonicalLiveCompanySessionProof(
+      sessionId,
+      workspaceId,
+      userId,
+      connectionId,
+      companions,
+    );
+  return sql<boolean>`exists (
+    select 1 from ${sql.table(COMPANY_PROOF_BATCH_NAME)} as ready_company_proof
+    where ready_company_proof.session_id = ${sessionId}
+      and ready_company_proof.workspace_id = ${workspaceId}
+      and ready_company_proof.user_id = ${userId}
+      and ${connectionId === undefined ? sql<boolean>`true` : sql<boolean>`ready_company_proof.connection_id = ${connectionId}`}
+      and ${
+        companions === undefined
+          ? sql<boolean>`true`
+          : sql<boolean>`(
+        ${sql.ref(`${companions.member}.workspace_id`)} = ready_company_proof.workspace_id
+        and ${sql.ref(`${companions.member}.user_id`)} = ready_company_proof.user_id
+        and ${sql.ref(`${companions.person}.id`)} = ready_company_proof.user_id
+        and ${sql.ref(`${companions.workspace}.id`)} = ready_company_proof.workspace_id
+      )`
+      }
+  )`;
+};
+
+/** Only synchronous query construction can refer to this statement's canonical proof relation. */
+export const buildCompanyProofBatch = <Row>(
+  sessionIds: readonly string[],
+  build: () => readonly AliasableExpression<Row>[],
+): {
+  readonly name: typeof COMPANY_PROOF_BATCH_NAME;
+  readonly source: RawBuilder<CompanyProofBatchRow>;
+  readonly queries: readonly AliasableExpression<Row>[];
+} => {
+  if (companyProofBatch) throw new Error('Company proof batches cannot be nested');
+  companyProofBatch = true;
+  let queries: readonly AliasableExpression<Row>[];
+  try {
+    queries = build();
+    if (!Array.isArray(queries))
+      throw new Error('Company proof batches require synchronous queries');
+  } finally {
+    companyProofBatch = false;
+  }
+  const ids = [...new Set(sessionIds)];
+  // Pulling the canonical proof into the origin joins multiplied measured PostgreSQL planning work.
+  const source = sql<CompanyProofBatchRow>`(select
+    batch_company_origin.session_id, batch_company_origin.workspace_id,
+    batch_company_origin.connection_id, batch_company_session.user_id
+    from workspace_identity_sessions as batch_company_origin
+    join sessions as batch_company_session on batch_company_session.id = batch_company_origin.session_id
+    join workspace_members as batch_company_member
+      on batch_company_member.workspace_id = batch_company_origin.workspace_id
+      and batch_company_member.user_id = batch_company_session.user_id
+    join users as batch_company_person on batch_company_person.id = batch_company_session.user_id
+    join workspaces as batch_company_workspace on batch_company_workspace.id = batch_company_origin.workspace_id
+    where batch_company_session.id in (${ids.length === 0 ? sql`null` : sql.join(ids)})
+    and (${canonicalLiveCompanySessionProof(
+      sql.ref<string>('batch_company_session.id'),
+      sql.ref<string>('batch_company_origin.workspace_id'),
+      sql.ref<string>('batch_company_session.user_id'),
+      sql.ref<string>('batch_company_origin.connection_id'),
+      {
+        member: 'batch_company_member',
+        person: 'batch_company_person',
+        workspace: 'batch_company_workspace',
+      },
+    )}) is true)`;
+  return { name: COMPANY_PROOF_BATCH_NAME, source, queries };
 };
