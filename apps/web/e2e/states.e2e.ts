@@ -226,11 +226,13 @@ test.describe('the connection', () => {
       (window as unknown as { __refuse: boolean }).__refuse = false;
       window.WebSocket = class extends Native {
         constructor(url: string | URL, protocols?: string | string[]) {
-          // While the test says the network is gone, every new socket goes nowhere: whether the
-          // browser's offline mode stops a socket to localhost is not this test's question, and under
-          // load a reconnect that slipped through hid the bar before it was looked for (#347).
+          // While the network is gone, use a same-origin path with no WebSocket endpoint. A refused
+          // connection must still obey the document's connect-src policy. Offline mode alone let a
+          // reconnect slip through and hide the bar before it was looked for under load (#347).
+          const unavailable = new URL('/__e2e__/unavailable-socket', window.location.href);
+          unavailable.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           super(
-            (window as unknown as { __refuse: boolean }).__refuse ? 'ws://127.0.0.1:9/' : url,
+            (window as unknown as { __refuse: boolean }).__refuse ? unavailable : url,
             protocols,
           );
           sockets.push(this);

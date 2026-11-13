@@ -1,5 +1,5 @@
 /** Exact non-DM visibility stays independent from a management role grant. */
-import { sql, type SelectQueryBuilder, type RawBuilder } from '@purlay/db';
+import { sql, tableExists, type SelectQueryBuilder, type RawBuilder } from '@purlay/db';
 import type { ChatTx, ChatSchema } from '../schema';
 import type { Channel } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
@@ -51,7 +51,11 @@ const descriptor = async (
   channelId: string,
 ): Promise<WorkspaceGrantChannel> => {
   await requireScope(transaction, context, scope);
-  if (!Value.Check(Uuid, channelId)) throw channelNotFound();
+  if (
+    !Value.Check(Uuid, channelId) ||
+    !(await tableExists(transaction, 'channel_access_role_grants'))
+  )
+    throw channelNotFound();
   const channel = await transaction
     .selectFrom('channels')
     .select(['id', 'name', 'type'])
@@ -163,6 +167,7 @@ const list = async (
   await requireScope(transaction, context, scope);
   if (!Number.isSafeInteger(take) || take < 1 || take > 101)
     throw new Error('Channel grant listing requires a bounded page.');
+  if (!(await tableExists(transaction, 'channel_access_role_grants'))) return [];
   let statement = grantsQuery(transaction, context, scope)
     .orderBy('role_grant.id', 'desc')
     .limit(take);
@@ -184,7 +189,8 @@ const find = async (
   id: string,
 ): Promise<WorkspaceChannelGrantDescriptor | undefined> => {
   await requireScope(transaction, context, scope);
-  if (!Value.Check(Uuid, id)) return undefined;
+  if (!Value.Check(Uuid, id) || !(await tableExists(transaction, 'channel_access_role_grants')))
+    return undefined;
   const row = await grantsQuery(transaction, context, scope)
     .where('role_grant.id', '=', id)
     .executeTakeFirst();

@@ -1,5 +1,5 @@
 /** Native channel provenance and finite delegation share the workspace source transaction. */
-import { sql } from '@purlay/db';
+import { sql, tableExists } from '@purlay/db';
 import type { Clock } from '../../../platform/clock';
 import type { ChatDb, ChatTx } from '../schema';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
@@ -27,6 +27,7 @@ export const projectChannelAccess = async (
   requireWorkspaceProjectionScope(db, scope);
   if (userIds.length === 0) return [];
   const workspaceId = scope.workspaceId;
+  const hasSourceTables = await tableExists(db, 'channel_access_controls');
   const now = clock.now();
   const expected = await db
     .selectFrom('channel_members')
@@ -51,7 +52,7 @@ export const projectChannelAccess = async (
     select channel.id from channels channel
     where channel.workspace_id = ${workspaceId} and (
       exists (select 1 from channel_members member where member.channel_id = channel.id and member.user_id = any(${userIds}::uuid[]))
-      or exists (select 1 from channel_access_controls control where control.channel_id = channel.id and control.user_id = any(${userIds}::uuid[]))
+      ${hasSourceTables ? sql`or exists (select 1 from channel_access_controls control where control.channel_id = channel.id and control.user_id = any(${userIds}::uuid[]))` : sql``}
     )
   `.execute(db);
   const parents = parentRows.rows.map((row) => row.id);
@@ -65,6 +66,32 @@ export const projectChannelAccess = async (
       .skipLocked()
       .execute();
     if (heldParents.length !== parents.length) throw provisioningChanged();
+  }
+  // A database without chat's0018 still carries legacy native channel rows in core.
+  // There is no scoped ledger to project, but a retained local offboarding must still remove its audience.
+  if (!hasSourceTables) {
+    const removed = await sql<{ channel_id: string; user_id: string }>`
+      delete from channel_members member using channels channel
+      where channel.id = member.channel_id and channel.workspace_id = ${workspaceId}
+        and member.user_id = any(${userIds}::uuid[])
+        and exists (
+          select 1 from workspace_admission_controls admission
+          where admission.workspace_id = ${workspaceId} and admission.user_id = member.user_id
+            and (admission.blocked_at is not null or not exists (
+              select 1 from workspace_access_sources source
+              where source.workspace_id = admission.workspace_id and source.user_id = admission.user_id
+                and source.state = 'active'
+            ))
+        )
+      returning member.channel_id, member.user_id
+    `.execute(db);
+    for (const userId of userIds) {
+      const channelIds = removed.rows
+        .filter((row) => row.user_id === userId)
+        .map((row) => row.channel_id);
+      if (channelIds.length !== 0) noteWorkspaceChannelRevocation(db, scope, userId, channelIds);
+    }
+    return [...new Set(removed.rows.map((row) => row.channel_id))];
   }
   // Only genuinely pre-existing native rows with no retained control are adopted once.
   await sql`
@@ -179,6 +206,7 @@ export const channelRoleUsers = async (
   workspaceId: string,
   roleId: string,
 ): Promise<readonly string[]> => {
+  if (!(await tableExists(db, 'channel_access_role_grants'))) return [];
   const result = await sql<{ user_id: string }>`
     select source.user_id from channel_access_role_grants role_grant
     join workspace_access_sources source on source.workspace_id = role_grant.workspace_id and source.id = role_grant.source_id
@@ -198,6 +226,8 @@ export const prepareManualChannelAdmission = async (
   context: Pick<WorkspaceContext, 'workspaceId' | 'userId'>,
   userIds: readonly string[],
 ): Promise<(channelId: string) => Promise<void>> => {
+  if (!(await tableExists(db, 'channel_access_controls')))
+    return (): Promise<void> => Promise.resolve();
   const controlled = await db
     .selectFrom('workspace_admission_controls')
     .select('user_id')

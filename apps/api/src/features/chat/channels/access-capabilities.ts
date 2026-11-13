@@ -1,5 +1,5 @@
 /** Exact channel delegation is a current projection over native membership, never a visibility grant. */
-import { sql, type RawBuilder, type SelectQueryBuilder } from '@purlay/db';
+import { sql, tableExists, type RawBuilder, type SelectQueryBuilder } from '@purlay/db';
 import { ChannelAccessAction } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import type { ChatDb, ChatSchema } from '../schema';
@@ -93,6 +93,7 @@ export const hasChannelCapability = async (
   capability: ChannelAccessAction,
   includeArchived = false,
 ): Promise<boolean> => {
+  if (!(await tableExists(executor, 'channel_member_capabilities'))) return false;
   const row = await capabilityQuery(executor, context.userId, {
     includeArchived,
     visibilityOnly: false,
@@ -110,7 +111,8 @@ export const channelCapabilitiesFor = async (
   channelIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly ChannelAccessAction[]>> => {
   const result = new Map<string, ChannelAccessAction[]>();
-  if (channelIds.length === 0) return result;
+  if (channelIds.length === 0 || !(await tableExists(executor, 'channel_member_capabilities')))
+    return result;
   const rows = await capabilityQuery(executor, userId, { includeArchived: false, ordered: true })
     .select(['channels.id', 'channel_member_capabilities.capability'])
     .where('channels.id', 'in', [...new Set(channelIds)])
@@ -132,7 +134,8 @@ export const aggregateChannelCapabilities = async (
   workspaceIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly ChannelAccessAction[]>> => {
   const result = new Map<string, ChannelAccessAction[]>();
-  if (workspaceIds.length === 0) return result;
+  if (workspaceIds.length === 0 || !(await tableExists(executor, 'channel_member_capabilities')))
+    return result;
   const rows = await capabilityQuery(executor, userId, { includeArchived: true, ordered: true })
     .select(['channels.workspace_id', 'channel_member_capabilities.capability'])
     .where('channels.workspace_id', 'in', [...new Set(workspaceIds)])
