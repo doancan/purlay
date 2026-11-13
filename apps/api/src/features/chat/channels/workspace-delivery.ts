@@ -48,6 +48,18 @@ export const workspaceFrameProjector = (
       | undefined
     >
   >();
+  interface Route {
+    readonly workspace_id: string;
+    readonly access_policy_epoch: string;
+  }
+  const counterRoutes = new Map<string, Promise<Route | undefined>>();
+  const readRoute = async (channelId: string): Promise<Route | undefined> =>
+    await database
+      .selectFrom('channels')
+      .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
+      .select(['channels.workspace_id', 'workspaces.access_policy_epoch'])
+      .where('channels.id', '=', channelId)
+      .executeTakeFirst();
   const sourceFor = (
     frame: ServerFrame,
     workspaceId: string,
@@ -495,16 +507,22 @@ export const workspaceFrameProjector = (
       case 'MESSAGE_VERSIONS_UPDATED':
       case 'TYPING': {
         channelId = frame.data.channelId;
-        let found = channelRoutes.get(frame);
+        let found =
+          frame.event === 'CHANNEL_STATE' ? counterRoutes.get(channelId) : channelRoutes.get(frame);
         if (found === undefined) {
-          found = database
-            .selectFrom('channels')
-            .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
-            .select(['channels.workspace_id', 'workspaces.access_policy_epoch'])
-            .where('channels.id', '=', channelId)
-            .executeTakeFirst();
-          channelRoutes.set(frame, found);
+          if (frame.event === 'CHANNEL_STATE') {
+            const id = channelId;
+            found = new Promise<Route | undefined>((resolve, reject) => {
+              queueMicrotask(() => {
+                // Detach before dispatch so later recipients cannot reuse a started or completed routing read.
+                counterRoutes.delete(id);
+                void readRoute(id).then(resolve, reject);
+              });
+            });
+            counterRoutes.set(id, found);
+          } else found = readRoute(channelId);
         }
+        channelRoutes.set(frame, found);
         workspaceId = (await found)?.workspace_id;
         break;
       }
