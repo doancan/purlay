@@ -8,6 +8,7 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   type ClonedDatabase,
+  type Executor,
 } from '@purlay/db';
 import { AUTH_BASE_PATH } from '@purlay/types';
 import { systemClock } from '../../../platform/clock';
@@ -36,6 +37,7 @@ import {
   type WorkspaceContentPermit,
 } from '../../../platform/workspace-content-fence';
 import { workspaceAccessStatus } from '../security/access';
+import { companyWorkspaceMfaActor } from '../security/mfa.testing';
 import { NO_SESSION_LIFETIME } from '../../auth/session-lifetime';
 import { unlinkCompanyIdentity } from '../identity/bindings';
 import { listCompanyConnections, createCompanyConnection } from '../identity/connections';
@@ -139,6 +141,138 @@ const resourceId = async (response: Response): Promise<string> => {
 };
 
 describe('integration: native directory provisioning', () => {
+  test('preview keeps actual manual, directory and mixed sources live', async () => {
+    const f = await setup();
+    const external = crypto.randomUUID();
+    const email = `preview-${external}@company.example`;
+    const created = await call(f, 'POST', 'Users', user(external, email));
+    expect(created.status).toBe(201);
+    const resource = await resourceId(created);
+    const person = await clone.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', email)
+      .executeTakeFirstOrThrow();
+    const workspaceId = f.configured.fixture.actor.context.workspaceId;
+    const workspace = await clone.db
+      .selectFrom('workspaces')
+      .select('slug')
+      .where('id', '=', workspaceId)
+      .executeTakeFirstOrThrow();
+    f.configured.idp.person = { sub: external, email };
+    const login = await roundtripCompanyNative(
+      f.configured,
+      { workspace: workspace.slug, connectionId: f.configured.connection.id },
+      '',
+      true,
+    );
+    expect(login.status).toBe(302);
+    const cookie = login.headers
+      .getSetCookie()
+      .find((value) => value.startsWith(`${COMPANY_SESSION_COOKIE}=`))
+      ?.split(';')[0];
+    const directory = await sessionFromHeaders(
+      f.configured.auth,
+      new Headers({ cookie: cookie ?? '' }),
+      { recordActivity: false },
+    );
+    if (directory === undefined) throw new Error('Missing actual directory session');
+    const manual = await companyWorkspaceMfaActor(
+      { ...f.configured.fixture.dependencies, clock: systemClock },
+      {
+        sessionId: f.configured.fixture.actor.sessionId,
+        context: await requireWorkspaceSecurityMembership(
+          clone.db,
+          f.configured.fixture.actor.context.userId,
+          workspaceId,
+        ),
+      },
+    );
+    const decisions = async (sessionIds: readonly string[]): Promise<readonly boolean[]> => {
+      let selects = 0;
+      const counted = clone.db.withPlugin({
+        transformQuery: (
+          args,
+        ): ReturnType<Parameters<Executor['withPlugin']>[0]['transformQuery']> => {
+          if (args.node.kind === 'SelectQueryNode') selects++;
+          return args.node;
+        },
+        transformResult: (
+          args,
+        ): ReturnType<Parameters<Executor['withPlugin']>[0]['transformResult']> =>
+          Promise.resolve(args.result),
+      });
+      const permits = await readWorkspaceContentPermits(counted, {
+        workspaceId,
+        sessionIds,
+        now: systemClock.now(),
+        lifetime: NO_SESSION_LIFETIME,
+      });
+      expect(selects).toBe(7);
+      return sessionIds.map((id): boolean => {
+        const permit = permits.get(id);
+        if (permit === undefined) throw new Error('Missing actual source decision');
+        return permit.decision.allowed;
+      });
+    };
+    expect(await decisions([manual.actor.sessionId])).toEqual([true]);
+    expect(await decisions([directory.sessionId])).toEqual([true]);
+    expect(await decisions([manual.actor.sessionId, directory.sessionId])).toEqual([true, true]);
+
+    // Retaining a directory proof on a native NULL origin cannot turn it into a manual proof.
+    const copied = await aSession(clone.db, systemClock, person.id, 30, {
+      companyWorkspaceId: workspaceId,
+    });
+    const directoryProof = await clone.db
+      .selectFrom('workspace_identity_sessions')
+      .selectAll()
+      .where('session_id', '=', directory.sessionId)
+      .executeTakeFirstOrThrow();
+    await clone.db
+      .insertInto('workspace_identity_sessions')
+      .values({ ...directoryProof, session_id: copied.sessionId })
+      .execute();
+    expect(await decisions([copied.sessionId])).toEqual([false]);
+
+    // A separate real manual admission preserves membership while only the directory source ends.
+    await clone.db.transaction().execute(async (transaction) => {
+      const scope = await lockWorkspaceProjectionScope(transaction, workspaceId);
+      await transaction
+        .insertInto('workspace_access_sources')
+        .values({
+          workspace_id: workspaceId,
+          user_id: person.id,
+          kind: 'manual',
+          state: 'active',
+          builtin_role: 'member',
+          access_kind: 'member',
+          admitted_at: systemClock.now(),
+          created_at: systemClock.now(),
+          updated_at: systemClock.now(),
+        })
+        .execute();
+      await projectWorkspaceAccess(
+        transaction,
+        systemClock,
+        scope,
+        [person.id],
+        noWorkspaceChannels,
+      );
+    });
+    const inactive = await call(f, 'PATCH', `Users/${resource}`, {
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+      Operations: [{ op: 'replace', path: 'active', value: false }],
+    });
+    expect(inactive.status).toBe(200);
+    expect(await decisions([manual.actor.sessionId, directory.sessionId])).toEqual([true, false]);
+    await clone.db
+      .updateTable('workspace_identity_connections')
+      .set({ enabled: false })
+      .where('id', '=', manual.connectionId)
+      .execute();
+    expect(await decisions([manual.actor.sessionId])).toEqual([false]);
+  });
+
   test('creates a new employee through native admission then signs in by an exact active SCIM claim without a password or global email grant', async () => {
     const f = await setup();
     const external = crypto.randomUUID();

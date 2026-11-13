@@ -147,9 +147,11 @@ export const readWorkspacePolicyPreviewPage = async (
         sessions.filter((row) => row.company_workspace_id === null).map((row) => row.user_id),
       ),
     ];
-    const companyIds = sessions
-      .filter((row) => row.company_workspace_id === input.workspaceId)
-      .map((row) => row.id);
+    const companySessions = sessions.filter(
+      (row) => row.company_workspace_id === input.workspaceId,
+    );
+    const companyIds = companySessions.map((row) => row.id);
+    const onlyManualCompany = companySessions.every((row) => row.directory_id === null);
     const [global, company] = await Promise.all([
       independentUsers.length === 0
         ? Promise.resolve([])
@@ -177,6 +179,10 @@ export const readWorkspacePolicyPreviewPage = async (
                 sql.ref<string>('workspace_identity_sessions.session_id'),
                 input.workspaceId,
                 sql.ref<string>('preview_source.user_id'),
+                undefined,
+                undefined,
+                sql.ref<string | null>('preview_source.directory_id'),
+                onlyManualCompany ? null : undefined,
               ).as('live'),
             ])
             .where('workspace_identity_sessions.workspace_id', '=', input.workspaceId)

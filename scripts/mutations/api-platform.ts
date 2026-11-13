@@ -178,6 +178,22 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
   },
   {
+    id: 'company-preview-directory-source-treated-as-manual',
+    why: 'An actual directory source must retain its current directory proof rather than take the manual-only branch.',
+    file: 'apps/api/src/platform/workspace-policy-preview.ts',
+    find: 'const onlyManualCompany = companySessions.every((row) => row.directory_id === null);',
+    replace: 'const onlyManualCompany = true;',
+    tests: ['apps/api/src/modules/workspaces/directory/native-auth.integration.test.ts'],
+  },
+  {
+    id: 'company-preview-native-directory-origin-ignored',
+    why: 'Preview must compare the proof with the exact native directory origin, including a non-null directory source.',
+    file: 'apps/api/src/platform/workspace-policy-preview.ts',
+    find: "sql.ref<string | null>('preview_source.directory_id')",
+    replace: 'sql<string | null>`null`',
+    tests: ['apps/api/src/modules/workspaces/directory/native-auth.integration.test.ts'],
+  },
+  {
     id: 'company-proof-batch-empties-requested-proofs',
     why: 'A personal-only batch may omit unused proof construction, but a mixed company batch must retain its current native source proof.',
     file: 'apps/api/src/platform/company-session.ts',

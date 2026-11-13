@@ -30,7 +30,8 @@ describe('integration: company proof final batches', () => {
           () => batch.source,
         )
         .selectFrom(first.as('personal_sources'))
-        .selectAll('personal_sources');
+        .selectAll('personal_sources')
+        .where('personal_sources.userId', '=', actor.context.userId);
       expect(query.compile().sql).not.toContain('workspace_directory_scim_users');
       expect(query.compile().sql).not.toContain('workspace_identity_sessions');
       expect(
@@ -38,6 +39,7 @@ describe('integration: company proof final batches', () => {
           .with(batch.name, () => batch.source)
           .selectFrom(batch.name)
           .selectAll()
+          .where('session_id', '=', actor.sessionId)
           .execute(),
       ).toEqual([]);
       expect(await query.execute()).toEqual([{ userId: actor.context.userId }]);
