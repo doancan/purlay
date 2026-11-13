@@ -29,6 +29,7 @@ const CHALLENGE_OVER: ReadonlySet<string> = new Set([
 ]);
 
 interface SecondStepFormProps {
+  readonly onSignedIn?: () => void;
   /** Back to the password: with a sentence when the challenge ended by itself, without one when asked. */
   readonly onRestart: (said: string | null) => void;
   readonly className?: string;
@@ -36,6 +37,7 @@ interface SecondStepFormProps {
 
 export const SecondStepForm = ({
   onRestart,
+  onSignedIn,
   className,
 }: SecondStepFormProps): React.JSX.Element => {
   const { t } = useI18n();
@@ -75,6 +77,7 @@ export const SecondStepForm = ({
       await api.verifySignInCode({ code: code.replace(/\s+/g, ''), kind });
       // The session is there now: the screen asks who it is, and a person who has one is sent on.
       await client.invalidateQueries({ queryKey: keys.me });
+      onSignedIn?.();
     } catch (caught) {
       setBusy(false);
       if (isLibraryFailure(caught) && CHALLENGE_OVER.has(caught.code)) {

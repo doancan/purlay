@@ -85,6 +85,9 @@ export const Environment = Type.Object({
   /** Operator attestation after every API, scheduler and job/outbox reader runs a guest-capable release. */
   GUEST_ACCESS_READY: Type.Boolean({ default: false }),
 
+  /** Operator attestation that every API, scheduler and job/outbox reader enforces workspace access policies. */
+  WORKSPACE_ACCESS_READY: Type.Boolean({ default: false }),
+
   DATABASE_URL: Type.String({ minLength: 1 }),
   DATABASE_POOL_MAX: Type.Integer({ minimum: 1, maximum: 100, default: 10 }),
   /** The facts one workspace may have waiting for one module's outbox worker; a publish past it is refused with

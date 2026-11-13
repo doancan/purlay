@@ -23,6 +23,7 @@ import { beginPushAttempt, ownsPushClaim, type PushClaim } from './queue';
 import { currentPushDevice, currentPushSource } from './authority';
 import { applyPushResponse } from './response';
 import type { PushOutcome } from './queue-result';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
 
 /** The largest recorded failure streak; temporary failures never expire a subscription. */
 export const PUSH_FAILURES_MAX = 5;
@@ -38,6 +39,7 @@ export type PushPost = (
 interface DeliveryDependencies {
   readonly database: Executor;
   readonly clock: Clock;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   readonly log: Logger;
   readonly keys: PushKeys;
   readonly post: PushPost;
@@ -157,6 +159,11 @@ export const createDelivery = async (
       .toString('base64url')
       .slice(0, 32);
     if (!(await ownsPushClaim(database, claim, clock.now(), device.serverKey)))
+      return { kind: 'canceled' };
+    if (
+      (await currentPushDevice(dependencies, claim)) === undefined ||
+      !(await currentPushSource(dependencies, claim))
+    )
       return { kind: 'canceled' };
     const ttl = Math.floor((claim.expiresAt.getTime() - clock.now().getTime()) / 1_000);
     if (ttl <= 0) return { kind: 'canceled' };

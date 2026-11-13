@@ -20,6 +20,7 @@ import {
 import type { WorkspaceContext } from '../../../platform/tenancy';
 import { asAttachment } from '../../../modules/attachments/uploads';
 import { readBody } from '../messages/body';
+import { currentRequest } from '../../../platform/logging';
 
 const missing = (): AppError =>
   new AppError({ code: 'SCHEDULED_MESSAGE_NOT_FOUND', message: 'Scheduled message not found.' });
@@ -164,6 +165,7 @@ export const scheduleMessage = async (
         send_at: sendAt,
         created_at: now,
         updated_at: now,
+        source_session_id: currentRequest()?.sessionId ?? null,
       })
       .onConflict((conflict) => conflict.column('id').doNothing())
       .returning('id')
@@ -180,6 +182,7 @@ export const scheduleMessage = async (
         failure_code: null,
         updated_at: now,
         revision: sql<number>`revision + 1`,
+        source_session_id: currentRequest()?.sessionId ?? existing.source_session_id,
       })
       .where('id', '=', scheduledId)
       .execute();

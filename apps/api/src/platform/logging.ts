@@ -22,6 +22,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pino from 'pino';
 import type { EntitlementPolicy } from './module-kit/entitlement';
+import type { Executor } from '@purlay/db';
+import type { WorkspaceContentFence } from './workspace-content-fence';
 
 /** Never written to a log, at any depth (`ARCHITECTURE.md` §10). */
 export const NEVER_LOGGED: ReadonlySet<string> = new Set([
@@ -68,6 +70,11 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'totpURI',
   'backupCodes',
   'backup_codes',
+  // Workspace policy activation and offline recovery carry one-time bearer proofs.
+  'testToken',
+  'recoveryCode',
+  'challengeId',
+  'authorizationChallengeId',
 ]);
 
 const REDACTED = '[redacted]';
@@ -136,6 +143,11 @@ export interface RequestScope {
   sessionId?: string;
   /** Immutable session origin read by native authentication; company authority itself is rechecked by SQL. */
   companySession?: { readonly userId: string; readonly workspaceId: string };
+  /** Explicit native-session authority for governed content. Missing authority never admits an epoch above zero. */
+  workspaceAccess?: (executor: Executor, userId: string, workspaceId: string) => Promise<void>;
+  /** Collected only for an explicit foreground hint; HTTP runs these after a successful response. */
+  workspaceActivity?: Map<string, () => Promise<void>>;
+  workspaceFences?: Map<string, WorkspaceContentFence>;
   /** The module whose route this is, once the router knows it (`noteModule`): the share of the database that holds it. */
   module?: string;
   /**

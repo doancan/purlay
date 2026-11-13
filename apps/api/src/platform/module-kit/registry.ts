@@ -53,6 +53,7 @@ const CORE_ROUTE_SEGMENTS: readonly string[] = [
   'server',
   'setup',
   'webhooks',
+  'workspace-security',
   'workspaces',
   'ws',
 ];

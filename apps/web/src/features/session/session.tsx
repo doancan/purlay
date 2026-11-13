@@ -61,7 +61,7 @@ export const SessionGate = ({
   readonly children: React.ReactNode;
 }): React.JSX.Element | null => {
   const me = useMe();
-  const { navigate, match } = useRoute();
+  const { navigate, match, search } = useRoute();
   const { t } = useI18n();
   const signedOut = me.isError && isApiError(me.error) && me.error.status === 401;
   // Nobody signed in at `/` on a server nobody has set up: the wizard, not a sign-in card with
@@ -88,9 +88,17 @@ export const SessionGate = ({
     )
       return;
     if (front && open) navigate(href('setup'), { replace: true });
-    else navigate(ended ? `${href('signIn')}?reason=ended` : href('signIn'), { replace: true });
+    else if (match.name === 'workspaceAccess') {
+      const workspace = new URLSearchParams(search).get('workspace') ?? '';
+      navigate(
+        `${href('signIn')}?${new URLSearchParams({ independent: '1', workspace }).toString()}`,
+        { replace: true },
+      );
+    } else navigate(ended ? `${href('signIn')}?reason=ended` : href('signIn'), { replace: true });
   }, [
     signedOut,
+    match.name,
+    search,
     ended,
     navigate,
     deciding,

@@ -25,12 +25,13 @@ import { AppError } from '../../../platform/errors';
 import { createOidcProvider, type OidcFetch, type OidcProvider } from '../../auth/oidc';
 import { heldTransaction } from '../../auth/sign-up-transaction';
 import type { SessionOwner } from '../../auth/sessions';
+import { recordPrimaryAuthentication } from '../../auth/authentication-evidence';
 import { recordAudit } from '../../audit/audit';
 import {
   identityChanged,
   identityNotReady,
   lockCompanyIdentityActor,
-  lockCompanyIdentityMember,
+  lockCompanySignInMember,
   type CompanyIdentityDependencies,
 } from './authority';
 import {
@@ -271,6 +272,7 @@ export const companyIdentityPlugin = (
             if (typeof email !== 'string')
               throw identityNotReady('The provider did not verify an address.');
             const profile = verified.data;
+            const authenticatedAt = dependencies.clock.now();
             const result = await runWithTransaction(ctx.context.adapter, async () => {
               const transaction = heldTransaction();
               if (transaction === undefined)
@@ -293,11 +295,10 @@ export const companyIdentityPlugin = (
                   throw identityNotReady(
                     'Link this company identity from your signed-in account first.',
                   );
-                context = await lockCompanyIdentityMember(
+                context = await lockCompanySignInMember(
                   transaction,
                   flow.workspaceId,
                   binding.user_id,
-                  false,
                 );
               } else {
                 if (actor === undefined) throw identityChanged();
@@ -446,9 +447,21 @@ export const companyIdentityPlugin = (
                   connection_id: current.id,
                   binding_reference: binding.id,
                   authentication_revision: current.authenticationRevision,
-                  authenticated_at: dependencies.clock.now(),
+                  authenticated_at: authenticatedAt,
                 })
                 .execute();
+              await recordPrimaryAuthentication(
+                transaction,
+                finalized.data.session.id,
+                context.userId,
+                {
+                  method: 'company_oidc',
+                  authenticatedAt,
+                  companyWorkspaceId: context.workspaceId,
+                  companyConnectionId: current.id,
+                  companyAuthenticationRevision: current.authenticationRevision,
+                },
+              );
               await transaction
                 .updateTable('workspace_identity_bindings')
                 .set({ last_authenticated_at: dependencies.clock.now() })

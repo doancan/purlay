@@ -1,8 +1,28 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { ERROR_STATUS, statusFor, type ErrorCode } from './errors';
+import { Value } from '@sinclair/typebox/value';
+import { AppErrorBody, ERROR_STATUS, statusFor, type ErrorCode } from './errors';
 
 const codes = Object.keys(ERROR_STATUS) as ErrorCode[];
+
+test('workspace access refusal optionally names one validated canonical workspace', () => {
+  const refusal = { code: 'WORKSPACE_ACCESS_REQUIRED', message: 'Verify first.' };
+  expect(Value.Check(AppErrorBody, refusal)).toBe(true);
+  expect(
+    Value.Check(AppErrorBody, {
+      ...refusal,
+      details: { workspaceId: '00000000-0000-4000-8000-0000000000a1' },
+    }),
+  ).toBe(true);
+  for (const details of [
+    {},
+    { workspaceId: null },
+    { workspaceId: 'foreign/slug' },
+    { workspaceId: 1 },
+  ]) {
+    expect(Value.Check(AppErrorBody, { ...refusal, details })).toBe(false);
+  }
+});
 /**
  * The statuses `API.md` §1 tabulates, read from its table rather than copied —
  * the copy that was here listed one the table did not (#201). Every status a
@@ -13,6 +33,15 @@ const allowed: readonly number[] = [
 ].map((match) => Number(match[1]));
 
 describe('the error contract', () => {
+  test('workspace remediation distinguishes stale state, invalid proof, absence and lockout', () => {
+    expect(statusFor('WORKSPACE_ACCESS_REQUIRED')).toBe(403);
+    expect(statusFor('WORKSPACE_SECURITY_CHANGED')).toBe(409);
+    expect(statusFor('WORKSPACE_SECURITY_NOT_READY')).toBe(409);
+    expect(statusFor('WORKSPACE_MFA_NOT_FOUND')).toBe(404);
+    expect(statusFor('WORKSPACE_MFA_INVALID')).toBe(400);
+    expect(statusFor('WORKSPACE_MFA_LOCKED')).toBe(429);
+  });
+
   test('every code has a status, and it is one API.md allows', () => {
     expect(codes.length).toBeGreaterThan(0);
     // The table was read: a pattern that matched nothing would allow nothing and

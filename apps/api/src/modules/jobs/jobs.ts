@@ -19,6 +19,7 @@ import type { WorkspaceScope } from '../../platform/ports/record-ref';
 import type { Logger } from '../../platform/logging';
 import type { SendMail } from '../../platform/mail';
 import type { ObjectStore } from '../../platform/storage';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
 import { atomicallyOn } from '../../platform/transactions';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
 import { sweepAdminVerification } from '../setup/verification';
@@ -29,6 +30,8 @@ export const ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
 const ORPHAN_BATCH = 500;
 /** What a failure's message may take of the row: the rest is the log's (§9.2). */
 const ERROR_MAX = 500;
+/** Expired authentication capabilities leave in bounded batches, yielding rows held by live writers. */
+const SIGN_IN_SWEEP_BATCH = 500;
 
 export interface JobDependencies {
   readonly database: Executor;
@@ -44,6 +47,7 @@ export type Outcome = Readonly<Record<string, number>>;
  * them from here and opens nothing of its own (`composition.ts`, `MODULES.md` §2).
  */
 export interface JobContext extends JobDependencies {
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   readonly storage: ObjectStore;
   readonly appUrl: string;
   /** The workspaces the job's module may act for now (D-289): for a job that acts for workspaces, `perWorkspaceJob` walks them. */
@@ -229,6 +233,34 @@ export const reconcileStorage = async (dependencies: {
  * setup administrator's address link once its day is over (`sweepAdminVerification`), and the invitation
  * passports a day past their hour or their use (D-179 §5).
  */
+const sweepWorkspaceSecurityProofs = async (database: Executor, before: Date): Promise<number> => {
+  let removed = 0;
+  // Children first: policy-test deletion may also cascade to its own MFA challenges.
+  for (const table of ['workspace_mfa_challenges', 'workspace_access_policy_tests'] as const) {
+    for (;;) {
+      const gone = await database
+        .deleteFrom(table)
+        .where(
+          'id',
+          'in',
+          database
+            .selectFrom(table)
+            .select('id')
+            .where('expires_at', '<', before)
+            .orderBy('id')
+            .limit(SIGN_IN_SWEEP_BATCH)
+            .forUpdate()
+            .skipLocked(),
+        )
+        .executeTakeFirst();
+      const count = Number(gone.numDeletedRows);
+      removed += count;
+      if (count < SIGN_IN_SWEEP_BATCH) break;
+    }
+  }
+  return removed;
+};
+
 export const sweepEmailSignIns = async (dependencies: {
   readonly database: Executor;
   readonly clock: Clock;
@@ -256,12 +288,14 @@ export const sweepEmailSignIns = async (dependencies: {
     .deleteFrom('native_authorizations')
     .where('expires_at', '<', before)
     .executeTakeFirst();
+  const workspaceProofs = await sweepWorkspaceSecurityProofs(dependencies.database, before);
   return {
     removed:
       Number(links.numDeletedRows) +
       Number(counters.numDeletedRows) +
       adminLink +
       Number(passports.numDeletedRows) +
-      Number(nativeCodes.numDeletedRows),
+      Number(nativeCodes.numDeletedRows) +
+      workspaceProofs,
   };
 };

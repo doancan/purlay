@@ -66,7 +66,7 @@ import { isClaimedBy, type ClientStorage } from '../data/browser-storage';
 import { codeOf, UNREACHED, type FailureCode } from '../data/failure';
 import { accountChanged, isApiError } from '../data/errors';
 import { families, keys } from '../data/keys';
-import { workspaceAccessChanged } from '../data/access-change';
+import { workspaceAccessChanged, workspaceAccessRequired } from '../data/access-change';
 import { captureAccess, watchAccessChanges } from '../data/access-revision';
 import type { Clock } from './clock';
 import {
@@ -154,6 +154,8 @@ interface RealtimeState {
 }
 
 interface Outgoing {
+  /** Delayed producers opt out; direct sends and deliberate Retry are foreground. */
+  readonly foreground?: boolean;
   readonly channelId: string;
   readonly content: string;
   readonly parentId?: string | undefined;
@@ -452,18 +454,22 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
 
   /** HTTP is the door when the socket is not: the same service, the same id. */
-  const overHttp = async (pending: PendingMessage): Promise<void> => {
+  const overHttp = async (pending: PendingMessage, foreground: boolean): Promise<void> => {
     if (!ownsAccount()) return;
     const mine = epoch;
     const current = (): boolean => mine === epoch && ownsAccount();
     const currentAccess = channelAccess(pending.channelId);
     try {
-      const message = await api.send(pending.channelId, {
-        id: pending.id,
-        content: pending.content,
-        ...(pending.parentId === null ? {} : { parentId: pending.parentId }),
-        ...carried(pending),
-      });
+      const message = await api.send(
+        pending.channelId,
+        {
+          id: pending.id,
+          content: pending.content,
+          ...(pending.parentId === null ? {} : { parentId: pending.parentId }),
+          ...carried(pending),
+        },
+        foreground,
+      );
       if (!current()) return;
       if (currentAccess()) messageCreated(client, message);
       forget(pending.id);
@@ -492,7 +498,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     }
   };
 
-  const transmit = (pending: PendingMessage): void => {
+  const transmit = (pending: PendingMessage, foreground = false): void => {
     const frame: ClientFrame = {
       id: pending.id,
       op: 'MESSAGE_SEND',
@@ -504,7 +510,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       },
     };
     if (connection?.send(frame) !== true) {
-      void overHttp(pending);
+      void overHttp(pending, foreground);
       return;
     }
     timers.get(pending.id)?.();
@@ -713,6 +719,17 @@ export const createEngine = (options: EngineOptions): Engine => {
         return;
       }
       case 'ERROR': {
+        if (frame.data.code === 'WORKSPACE_ACCESS_REQUIRED') {
+          const detail = frame.data.details?.workspaceId;
+          const hint = frame.workspaceId ?? detail;
+          if (
+            hint !== undefined &&
+            (detail === undefined ||
+              frame.workspaceId === undefined ||
+              detail === frame.workspaceId)
+          )
+            workspaceAccessRequired(client, hint);
+        }
         const { refId } = frame;
         if (refId !== undefined && isAnnouncement(refId)) {
           // An announcement the server would not take — the channel went, or the budget is spent —
@@ -1010,7 +1027,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         }
       }
     },
-    send: ({ channelId, content, parentId, attachments }): string => {
+    send: ({ channelId, content, parentId, attachments, foreground = true }): string => {
       // What they were typing is on its way; the next keystroke is news again, as on the server.
       announced.delete(channelId);
       const id = messageId(serverClock.now());
@@ -1026,7 +1043,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       };
       // Painted before anything leaves: the store is what the screen reads.
       if (!change((all) => [...all, pending])) throw accountChanged();
-      transmit(pending);
+      transmit(pending, foreground);
       return id;
     },
     retry: (id): void => {
@@ -1034,7 +1051,7 @@ export const createEngine = (options: EngineOptions): Engine => {
       if (pending?.delivery !== 'failed') return;
       const next: PendingMessage = { ...pending, delivery: 'sending', reason: null };
       update(id, { delivery: 'sending', reason: null });
-      transmit(next);
+      transmit(next, true);
     },
     discard: (id): void => {
       if (find(id)?.delivery === 'failed') forget(id);

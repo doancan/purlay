@@ -7,6 +7,10 @@
  * `ApiError` — it never returns half of a response. This file is the one door the rest of the client uses.
  */
 import type { Http } from './http';
+import {
+  createWorkspaceSecurityApi,
+  type WorkspaceSecurityApi,
+} from './endpoints/workspace-security';
 import { createServerApi, type ServerApi } from './endpoints/server';
 import { createWorkspacesApi, type WorkspacesApi } from './endpoints/workspaces';
 import { createInvitationsApi, type InvitationsApi } from './endpoints/invitations';
@@ -37,7 +41,8 @@ export interface Api
     GitHubApi,
     AccountApi,
     CompanyIdentityApi,
-    RetentionApi {}
+    RetentionApi,
+    WorkspaceSecurityApi {}
 
 export const createApi = (http: Http): Api => ({
   ...createServerApi(http),
@@ -53,4 +58,5 @@ export const createApi = (http: Http): Api => ({
   ...createAccountApi(http),
   ...createRetentionApi(http),
   ...createCompanyIdentityApi(http),
+  ...createWorkspaceSecurityApi(http),
 });

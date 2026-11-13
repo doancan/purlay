@@ -14,6 +14,8 @@ import { inDeepWork } from '../workspaces/deep-work';
 import type { NoticeWords, PushNotices } from './notices';
 import type { VapidKeys } from './vapid';
 import { pushBody, saidOf } from './words';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
+import { eligiblePushSources } from './workspace-access';
 
 /** The server's push keys, or where to ask for them when an administrator can change them while the server runs. */
 export type PushKeys = VapidKeys | (() => Promise<VapidKeys | undefined>);
@@ -44,6 +46,7 @@ interface SubscriptionLookup {
   readonly database: Executor;
   readonly clock: Clock;
   readonly keys: PushKeys;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
 }
 
 export interface DeviceFinder extends SubscriptionLookup {
@@ -112,7 +115,7 @@ export const devicesFor = async (
   ]);
   const workspaces = await database
     .selectFrom('workspaces')
-    .select(['id', 'slug'])
+    .select(['id', 'slug', 'access_policy_epoch'])
     .where('id', 'in', [...new Set(told.map((notice) => notice.workspaceId))])
     .execute();
   const slugs = new Map(workspaces.map((workspace) => [workspace.id, workspace.slug]));
@@ -129,35 +132,42 @@ export const devicesFor = async (
         return slug === undefined ? [] : [{ ...subscription, ...notice, slug }];
       }),
   );
+  const eligible = await eligiblePushSources(
+    dependencies,
+    new Map(workspaces.map((row) => [row.id, row.access_policy_epoch])),
+    rows,
+  );
   const held = new Set<string>();
-  const devices = rows.flatMap((row) => {
-    const reason =
-      row.type === 'reminder' ? 'reminder' : NEEDS_YOU.find((known) => known === row.type);
-    if (reason === undefined) return [];
-    // In front of this workspace's page: held, never sent later (D-143, D-12).
-    if (attention.active(row.userId, row.workspaceId)) {
-      held.add(row.userId);
-      return [];
-    }
-    return [
-      {
-        ...row,
-        source: { messageId, ...(notificationId === undefined ? {} : { notificationId }) },
-        payload: {
-          // A channel by its name; a group by its people; a direct message by who wrote it.
-          title:
-            row.channelName !== null ? `#${row.channelName}` : (row.groupNames ?? row.authorName),
-          body: pushBody(
-            localeOf(row.locale),
-            saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
-            row.authorName,
-          ),
-          url: `/w/${row.slug}/c/${row.channelId}${row.threadId === null ? '' : `?thread=${encodeURIComponent(row.threadId)}`}`,
-          tag: `channel:${row.channelId}`,
+  const devices = rows
+    .filter((row) => eligible.has(`${row.workspaceId}:${row.sessionId}`))
+    .flatMap((row) => {
+      const reason =
+        row.type === 'reminder' ? 'reminder' : NEEDS_YOU.find((known) => known === row.type);
+      if (reason === undefined) return [];
+      // In front of this workspace's page: held, never sent later (D-143, D-12).
+      if (attention.active(row.userId, row.workspaceId)) {
+        held.add(row.userId);
+        return [];
+      }
+      return [
+        {
+          ...row,
+          source: { messageId, ...(notificationId === undefined ? {} : { notificationId }) },
+          payload: {
+            // A channel by its name; a group by its people; a direct message by who wrote it.
+            title:
+              row.channelName !== null ? `#${row.channelName}` : (row.groupNames ?? row.authorName),
+            body: pushBody(
+              localeOf(row.locale),
+              saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
+              row.authorName,
+            ),
+            url: `/w/${row.slug}/c/${row.channelId}${row.threadId === null ? '' : `?thread=${encodeURIComponent(row.threadId)}`}`,
+            tag: `channel:${row.channelId}`,
+          },
         },
-      },
-    ];
-  });
+      ];
+    });
   if (held.size > 0) log.debug('push held: the person is active', { messageId, people: held.size });
   return devices;
 };
@@ -181,6 +191,7 @@ export const routeInbox = async (
       'e.subject_id as subjectId',
       'w.slug',
       'w.name as workspaceName',
+      'w.access_policy_epoch as epoch',
       'actor.display_name as actorName',
       'e.module',
     ])
@@ -215,13 +226,27 @@ export const routeInbox = async (
   const subscriptions = await subscriptionsOf(dependencies, [
     ...new Set(ready.map((entry) => entry.userId)),
   ]);
-  const devices = subscriptions.flatMap((subscription) =>
+  const candidates = subscriptions.flatMap((subscription) =>
     ready
       .filter(
         (entry) =>
           entry.userId === subscription.userId &&
           (subscription.companyWorkspaceId === null ||
             subscription.companyWorkspaceId === entry.workspaceId),
+      )
+      .map((entry) => ({ workspaceId: entry.workspaceId, sessionId: subscription.sessionId })),
+  );
+  const eligible = await eligiblePushSources(
+    dependencies,
+    new Map(entries.map((row) => [row.workspaceId, row.epoch])),
+    candidates,
+  );
+  const devices = subscriptions.flatMap((subscription) =>
+    ready
+      .filter(
+        (entry) =>
+          entry.userId === subscription.userId &&
+          eligible.has(`${entry.workspaceId}:${subscription.sessionId}`),
       )
       .flatMap((entry) => {
         const saying = noticeWords(

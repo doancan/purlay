@@ -61,6 +61,7 @@ const head = [
       retention_days: 'omit',
       storage_quota_bytes: 'omit',
       storage_used_bytes: 'omit',
+      access_policy_epoch: 'omit',
       purge_started_at: 'omit',
       purged_at: 'omit',
     },
@@ -155,6 +156,13 @@ export const corePersonalExport: CorePersonalContribution = {
 
 /** The tables of the core that are not in a person's export, and why. Every other table says it in its own module's. */
 export type CorePersonalExcluded =
+  | 'session_authentication_evidence'
+  | 'workspace_access_policies'
+  | 'workspace_access_policy_tests'
+  | 'workspace_session_assurances'
+  | 'workspace_mfa_factors'
+  | 'workspace_mfa_challenges'
+  | 'workspace_mfa_recovery_codes'
   | 'workspace_identity_domains'
   | 'workspace_identity_connections'
   | 'workspace_identity_bindings'
@@ -186,6 +194,16 @@ export type CorePersonalExcluded =
   | 'setup_state';
 
 export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, string>> = {
+  session_authentication_evidence:
+    'private native authentication and MFA provenance, not exported credentials or workspace content',
+  workspace_access_policies:
+    'workspace access control configuration, managed through security settings',
+  workspace_access_policy_tests:
+    'short-lived policy activation capabilities and verification state',
+  workspace_session_assurances: 'private session authority, activity and verification evidence',
+  workspace_mfa_factors: 'sealed workspace authenticator credentials',
+  workspace_mfa_challenges: 'one-time workspace authenticator verification capabilities',
+  workspace_mfa_recovery_codes: 'hashed one-time factor and policy recovery credentials',
   workspace_identity_domains: 'workspace-owned domain proof and verification capabilities',
   workspace_identity_connections: 'workspace-owned provider configuration and sealed credentials',
   workspace_identity_bindings:

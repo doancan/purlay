@@ -401,6 +401,7 @@ export interface MessageReminders {
   id: Generated<string>;
   message_id: string;
   remind_at: Timestamp;
+  source_session_id: string | null;
   user_id: string;
   workspace_id: string;
 }
@@ -472,6 +473,7 @@ export interface MissedMailLetters {
 }
 
 export interface NativeAuthorizations {
+  authentication_source_session_id: string | null;
   challenge: string;
   code_digest: string;
   company_source_session_id: string | null;
@@ -534,6 +536,8 @@ export interface PersonalExports {
   heartbeat_at: Timestamp | null;
   id: string;
   size_bytes: Int8 | null;
+  source_session_id: string | null;
+  source_workspace_ids: string[] | null;
   status: string;
   storage_key: string | null;
   user_id: string;
@@ -649,6 +653,7 @@ export interface ScheduledMessages {
   revision: Generated<number>;
   send_at: Timestamp;
   sent_message_id: string | null;
+  source_session_id: string | null;
   state: Generated<ScheduledMessageState>;
   updated_at: Generated<Timestamp>;
   user_id: string;
@@ -721,6 +726,24 @@ export interface ServerSettings {
   workspace_creators: Generated<string>;
 }
 
+export interface SessionAuthenticationEvidence {
+  authenticated_at: Timestamp | null;
+  company_authentication_revision: string | null;
+  company_connection_id: string | null;
+  company_workspace_id: string | null;
+  created_at: Generated<Timestamp>;
+  global_mfa_counter: Int8 | null;
+  global_mfa_factor_id: string | null;
+  global_mfa_factor_revision: string | null;
+  global_mfa_method: string | null;
+  global_mfa_verified_at: Timestamp | null;
+  method: string | null;
+  revision: Generated<string>;
+  session_id: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
 export interface Sessions {
   company_workspace_id: string | null;
   created_at: Generated<Timestamp>;
@@ -784,9 +807,11 @@ export interface ThreadReads {
 }
 
 export interface TwoFactors {
+  assurance_revision: Generated<string>;
   backup_codes: string;
   failed_verification_count: Generated<number>;
   id: Generated<string>;
+  last_assurance_counter: Int8 | null;
   locked_until: Timestamp | null;
   secret: string;
   user_id: string;
@@ -833,6 +858,46 @@ export interface Verifications {
   value: string;
 }
 
+export interface WorkspaceAccessPolicies {
+  allowed_connection_ids: Generated<string[]>;
+  created_at: Generated<Timestamp>;
+  epoch: Int8;
+  idle_minutes: number | null;
+  max_age_hours: number | null;
+  mfa_max_age_minutes: number | null;
+  mode: string;
+  require_mfa: Generated<boolean>;
+  revision: Generated<string>;
+  sign_in: string;
+  tested_at: Timestamp | null;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceAccessPolicyTests {
+  authentication_revision: string;
+  consumed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  factor_id: string | null;
+  factor_revision: string | null;
+  factor_scope: string | null;
+  id: Generated<string>;
+  mfa_verified_at: Timestamp | null;
+  policy_epoch: Int8;
+  policy_revision: string | null;
+  proposed_digest: Buffer;
+  proposed_policy: Json;
+  provider_revisions: Generated<Json>;
+  recovery_revision: string;
+  session_id: string;
+  tested_at: Timestamp | null;
+  token_hash: Buffer;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface WorkspaceExports {
   created_at: Timestamp;
   downloaded_at: Timestamp | null;
@@ -843,6 +908,7 @@ export interface WorkspaceExports {
   id: string;
   requested_by: string | null;
   size_bytes: Int8 | null;
+  source_session_id: string | null;
   status: string;
   storage_key: string | null;
   workspace_id: string;
@@ -954,6 +1020,58 @@ export interface WorkspaceMembers {
   workspace_id: string;
 }
 
+export interface WorkspaceMfaChallenges {
+  authentication_revision: string;
+  completed_at: Timestamp | null;
+  consumed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  factor_id: string;
+  factor_revision: string;
+  factor_scope: string;
+  failed_attempts: Generated<number>;
+  id: Generated<string>;
+  policy_epoch: Int8;
+  policy_revision: string | null;
+  purpose: string;
+  session_id: string;
+  test_id: string | null;
+  token_hash: Buffer;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceMfaFactors {
+  created_at: Generated<Timestamp>;
+  failed_verification_count: Generated<number>;
+  id: Generated<string>;
+  last_accepted_counter: Int8 | null;
+  locked_until: Timestamp | null;
+  pending_expires_at: Timestamp | null;
+  revision: Generated<string>;
+  revoked_at: Timestamp | null;
+  secret_encrypted: Buffer;
+  state: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  verified_at: Timestamp | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceMfaRecoveryCodes {
+  code_hash: Buffer;
+  created_at: Generated<Timestamp>;
+  factor_id: string | null;
+  factor_revision: string | null;
+  id: Generated<string>;
+  purpose: string;
+  revision: string;
+  revoked_at: Timestamp | null;
+  spent_at: Timestamp | null;
+  user_id: string;
+  workspace_id: string;
+}
+
 export interface WorkspaceModules {
   changed_at: Timestamp;
   changed_by: string | null;
@@ -965,6 +1083,7 @@ export interface WorkspaceModules {
 }
 
 export interface Workspaces {
+  access_policy_epoch: Generated<Int8>;
   avatar_url: string | null;
   created_at: Generated<Timestamp>;
   created_by: string | null;
@@ -978,6 +1097,26 @@ export interface Workspaces {
   storage_quota_bytes: Generated<Int8>;
   storage_used_bytes: Generated<Int8>;
   updated_at: Generated<Timestamp>;
+}
+
+export interface WorkspaceSessionAssurances {
+  authentication_revision: string;
+  created_at: Generated<Timestamp>;
+  end_reason: string | null;
+  ended_at: Timestamp | null;
+  expires_at: Timestamp;
+  factor_id: string | null;
+  factor_revision: string | null;
+  factor_scope: string | null;
+  last_used_at: Timestamp;
+  mfa_expires_at: Timestamp | null;
+  mfa_verified_at: Timestamp | null;
+  policy_epoch: Int8;
+  policy_revision: string | null;
+  session_id: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  workspace_id: string;
 }
 
 export interface DB {
@@ -1039,6 +1178,7 @@ export interface DB {
   server_audit_log: ServerAuditLog;
   server_operational_status: ServerOperationalStatus;
   server_settings: ServerSettings;
+  session_authentication_evidence: SessionAuthenticationEvidence;
   sessions: Sessions;
   setup_state: SetupState;
   shared_link_backfill: SharedLinkBackfill;
@@ -1048,6 +1188,8 @@ export interface DB {
   two_factors: TwoFactors;
   users: Users;
   verifications: Verifications;
+  workspace_access_policies: WorkspaceAccessPolicies;
+  workspace_access_policy_tests: WorkspaceAccessPolicyTests;
   workspace_exports: WorkspaceExports;
   workspace_identity_bindings: WorkspaceIdentityBindings;
   workspace_identity_connections: WorkspaceIdentityConnections;
@@ -1057,6 +1199,10 @@ export interface DB {
   workspace_invitation_recipients: WorkspaceInvitationRecipients;
   workspace_invitations: WorkspaceInvitations;
   workspace_members: WorkspaceMembers;
+  workspace_mfa_challenges: WorkspaceMfaChallenges;
+  workspace_mfa_factors: WorkspaceMfaFactors;
+  workspace_mfa_recovery_codes: WorkspaceMfaRecoveryCodes;
   workspace_modules: WorkspaceModules;
+  workspace_session_assurances: WorkspaceSessionAssurances;
   workspaces: Workspaces;
 }

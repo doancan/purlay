@@ -161,7 +161,7 @@ export const membershipsOf = async (
     ])
     .where('workspace_members.user_id', '=', userId)
     .where('workspaces.deleted_at', 'is', null)
-    .where(activeWorkspaceMembership())
+    .where(activeWorkspaceMembership({ visibilityOnly: true }))
     .orderBy('workspace_members.joined_at', 'asc');
   if (workspaceId !== undefined) statement = statement.where('workspaces.id', '=', workspaceId);
   const rows = await statement.execute();

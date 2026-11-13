@@ -2,6 +2,7 @@
 import { isTransaction, sql, type Executor } from '@purlay/db';
 import { PUSH_PENDING_PER_PERSON, PUSH_PERSON_LOCK, PUSH_TTL_SECONDS } from './push-policy';
 import { companySessionAllowsWorkspace } from './company-session';
+import { readWorkspaceSessionAccessDecisions } from './workspace-delivery-access';
 
 /** The producer owns the source row and has already checked its recipients. */
 export interface PushWork {
@@ -28,7 +29,12 @@ export const enqueuePush = async (
   // Disable serializes with this read and cancels all prior work in the same settings transaction.
   const setting = await transaction
     .selectFrom('server_settings')
-    .select(['push_enabled', 'push_public_key'])
+    .select([
+      'push_enabled',
+      'push_public_key',
+      'session_idle_timeout_hours',
+      'session_max_age_days',
+    ])
     .where('id', '=', true)
     .forShare()
     .executeTakeFirst();
@@ -70,12 +76,44 @@ export const enqueuePush = async (
       ? [{ ...row, companyWorkspaceId: session.company_workspace_id }]
       : [];
   });
+  const workspaces = await transaction
+    .selectFrom('workspaces')
+    .select(['id', 'access_policy_epoch'])
+    .where('id', 'in', [...new Set(work.map((item) => item.workspaceId))])
+    .where('deleted_at', 'is', null)
+    .execute();
+  const epochs = new Map(workspaces.map((row) => [row.id, row.access_policy_epoch]));
+  const eligible = new Map<string, ReadonlySet<string>>();
+  for (const workspace of workspaces)
+    if (workspace.access_policy_epoch !== '0') {
+      const recipients = new Set(
+        work.filter((item) => item.workspaceId === workspace.id).map((item) => item.userId),
+      );
+      const decisions = await readWorkspaceSessionAccessDecisions(transaction, {
+        workspaceId: workspace.id,
+        sessionIds: devices
+          .filter((device) => recipients.has(device.user_id))
+          .map((device) => device.session_id),
+        now,
+        lifetime: {
+          sessionIdleTimeoutHours: setting.session_idle_timeout_hours,
+          sessionMaxAgeDays: setting.session_max_age_days,
+        },
+      });
+      eligible.set(
+        workspace.id,
+        new Set([...decisions].filter(([, decision]) => decision.allowed).map(([id]) => id)),
+      );
+    }
+  const allowed = (workspaceId: string, sessionId: string): boolean =>
+    epochs.get(workspaceId) === '0' || eligible.get(workspaceId)?.has(sessionId) === true;
   const rows = work.filter(
     (item) =>
       item.createdAt.getTime() + PUSH_TTL_SECONDS * 1_000 > now.getTime() &&
       devices.some(
         (device) =>
           device.user_id === item.userId &&
+          allowed(item.workspaceId, device.session_id) &&
           (device.companyWorkspaceId === null || device.companyWorkspaceId === item.workspaceId),
       ),
   );
@@ -128,6 +166,7 @@ export const enqueuePush = async (
       .filter(
         (device) =>
           device.user_id === intent.user_id &&
+          allowed(intent.workspace_id, device.session_id) &&
           (device.companyWorkspaceId === null || device.companyWorkspaceId === intent.workspace_id),
       )
       .map((device) => ({

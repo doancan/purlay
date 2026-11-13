@@ -825,7 +825,7 @@ describe('the workspace menu', () => {
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'Create workspace…' }));
     const dialog = await view.findByRole('dialog');
-    await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await person().click(await within(dialog).findByRole('button', { name: 'Cancel' }));
     expect(view.queryByRole('dialog')).toBeNull();
   });
 

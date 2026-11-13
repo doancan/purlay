@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./workspace-identity": "./src/workspace-identity.ts"
+    "./workspace-identity": "./src/workspace-identity.ts",
+    "./workspace-security": "./src/workspace-security.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "0.34.52"

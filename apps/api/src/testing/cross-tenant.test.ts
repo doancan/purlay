@@ -6,10 +6,13 @@
  * `cross-tenant.integration.test.ts`. (D-21, D-63)
  */
 import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'bun:test';
 import { createApp } from '../ingress/http/app';
 import {
   CROSS_TENANT,
+  WORKFLOW_CROSS_TENANT,
   EMPTY_FOR_THE_SEED,
   UNSCOPED,
   WORKSPACE_WIDE_READS,
@@ -85,19 +88,30 @@ describe('every served endpoint has a cross-tenant case', () => {
     for (const endpoint of documented) {
       const key = endpointKey(endpoint);
       const inCases = key in CROSS_TENANT;
+      const inWorkflow = key in WORKFLOW_CROSS_TENANT;
       const inUnscoped = key in UNSCOPED;
-      expect({ key, both: inCases && inUnscoped }).toEqual({ key, both: false });
-      if (!inCases && !inUnscoped && (await isServed(endpoint))) unclassified.push(key);
+      expect({
+        key,
+        classifications: Number(inCases) + Number(inWorkflow) + Number(inUnscoped),
+      }).toEqual({ key, classifications: inCases || inWorkflow || inUnscoped ? 1 : 0 });
+      if (!inCases && !inWorkflow && !inUnscoped && (await isServed(endpoint)))
+        unclassified.push(key);
     }
-    // Add a case to `CROSS_TENANT`, or say in `UNSCOPED` why there is no tenant to cross.
+    // Add a real case to `CROSS_TENANT` or its bounded workflow suite, or say in `UNSCOPED` why there is no tenant to cross.
     expect(unclassified).toEqual([]);
   });
 
   test('no case outlives its endpoint, and none arrives before it', async () => {
-    for (const key of [...Object.keys(CROSS_TENANT), ...Object.keys(UNSCOPED)]) {
+    for (const key of [
+      ...Object.keys(CROSS_TENANT),
+      ...Object.keys(WORKFLOW_CROSS_TENANT),
+      ...Object.keys(UNSCOPED),
+    ]) {
       expect({ key, documented: keys.has(key) }).toEqual({ key, documented: true });
     }
-    for (const endpoint of documented.filter((each) => endpointKey(each) in CROSS_TENANT)) {
+    for (const endpoint of documented.filter(
+      (each) => endpointKey(each) in CROSS_TENANT || endpointKey(each) in WORKFLOW_CROSS_TENANT,
+    )) {
       expect({ key: endpointKey(endpoint), served: await isServed(endpoint) }).toEqual({
         key: endpointKey(endpoint),
         served: true,
@@ -105,8 +119,33 @@ describe('every served endpoint has a cross-tenant case', () => {
     }
   });
 
+  test('stateful crossings stay bounded to the explicit native workspace-security suite', () => {
+    const workflows = Object.entries(WORKFLOW_CROSS_TENANT);
+    expect(workflows.length).toBe(15);
+    for (const [key, crossing] of workflows) {
+      expect(
+        key === 'GET /api/workspace-security' ||
+          /^(GET|POST|PUT|DELETE) \/api\/workspaces\/:workspaceId\/security(?:\/|$)/.test(key),
+      ).toBe(true);
+      expect(crossing.suite).toBe('workspace-security');
+      expect(crossing.testFile).toBe(
+        'apps/api/src/ingress/http/workspace-security-cross-tenant.integration.test.ts',
+      );
+      expect(
+        existsSync(fileURLToPath(new URL(`../../../../${crossing.testFile}`, import.meta.url))),
+      ).toBe(true);
+      expect(crossing.visibility.kind).toBe('none');
+      expect(crossing.visibility.reason.length).toBeGreaterThan(0);
+      expect(key in UNSCOPED).toBe(false);
+      expect(key in CROSS_TENANT).toBe(false);
+    }
+  });
+
   test('nothing that names a channel opts out of the visibility axis', () => {
-    for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
+    for (const [key, crossing] of [
+      ...Object.entries(CROSS_TENANT),
+      ...Object.entries(WORKFLOW_CROSS_TENANT),
+    ]) {
       if (key.includes(':channelId')) {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'channel' });
       }
@@ -114,7 +153,10 @@ describe('every served endpoint has a cross-tenant case', () => {
   });
 
   test('nothing that names a message opts out of the visibility axis', () => {
-    for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
+    for (const [key, crossing] of [
+      ...Object.entries(CROSS_TENANT),
+      ...Object.entries(WORKFLOW_CROSS_TENANT),
+    ]) {
       if (key.includes(':messageId')) {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'message' });
       }

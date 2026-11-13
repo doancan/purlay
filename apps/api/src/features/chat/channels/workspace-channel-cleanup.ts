@@ -1,8 +1,7 @@
 /** Conversation and departure cleanup stays authoritative for expired guests and fresh admissions. */
 import { tableExists } from '@purlay/db';
 import type { ChatDb } from '../schema';
-import { visibleChannelIds } from './guard';
-import { requireWorkspaceMembership } from '../../../platform/tenancy';
+import { visibleChannels } from './guard';
 
 export const forgetWorkspaceChannels = async (
   executor: ChatDb,
@@ -28,10 +27,14 @@ export const forgetWorkspaceChannels = async (
             .orderBy('channel_members.channel_id')
             .execute()
         ).map((row) => row.channel_id)
-      : await visibleChannelIds(
-          executor,
-          await requireWorkspaceMembership(executor, userId, workspaceId),
-        );
+      : // Revocation lists the departing person's topics; it cannot borrow their native session
+        // or require them to satisfy a policy before their access can be removed.
+        (
+          await visibleChannels(executor, userId, { visibilityOnly: true })
+            .select('channels.id')
+            .where('channels.workspace_id', '=', workspaceId)
+            .execute()
+        ).map((row) => row.id);
   await executor
     .deleteFrom('channel_members')
     .where('user_id', '=', userId)

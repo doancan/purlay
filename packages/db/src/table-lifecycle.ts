@@ -91,6 +91,8 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
     { kept: 'one row for the life of the instance' },
   ),
   sessions: decided('deleted', 'swept'),
+  // Native-session cascade removes evidence; retained company/provider IDs deliberately have no FK (D-310).
+  session_authentication_evidence: decided('deleted', 'with-parent'),
   setup_state: decided(
     {
       nobody:
@@ -104,6 +106,13 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   workspace_exports: decided('anonymised', {
     kept: 'the row is the record that an export was made; its archive is swept',
   }),
+  workspace_access_policies: decided('anonymised', 'until-removed'),
+  workspace_access_policy_tests: decided('deleted', 'swept'),
+  workspace_session_assurances: decided('deleted', 'with-parent'),
+  // Erasure explicitly removes factors/recovery rows: native memberships themselves are retained (D-256).
+  workspace_mfa_factors: decided('deleted', 'until-removed'),
+  workspace_mfa_challenges: decided('deleted', 'swept'),
+  workspace_mfa_recovery_codes: decided('deleted', 'with-parent'),
   workspace_identity_domains: decided(
     { nobody: 'workspace-owned domain proof, with no person or creator reference' },
     'until-removed',

@@ -19,12 +19,14 @@ export interface SearchApi {
     workspaceId: string,
     query: SharedFilters & { readonly before?: string | undefined },
     signal?: AbortSignal,
+    foreground?: boolean,
   ) => Promise<SharedPage>;
   /** The words, in the channels the caller can see, newest first (D-105). */
   readonly search: (
     workspaceId: string,
     query: Omit<SearchQuery, 'before'> & { readonly before?: string | undefined },
     signal?: AbortSignal,
+    foreground?: boolean,
   ) => Promise<SearchPage>;
   readonly savedSearches: (
     workspaceId: string,
@@ -50,19 +52,19 @@ export interface SearchApi {
 }
 
 export const createSearchApi = (http: Http): SearchApi => ({
-  shared: (workspaceId, query, signal) =>
+  shared: (workspaceId, query, signal, foreground = false) =>
     http.request(
       'GET',
       `/api/workspaces/${at(workspaceId)}/shared`,
       SharedPage,
-      options({ query: { ...query } }, signal),
+      options({ activity: foreground, query: { ...query } }, signal),
     ),
-  search: (workspaceId, query, signal) =>
+  search: (workspaceId, query, signal, foreground = false) =>
     http.request(
       'GET',
       `/api/workspaces/${at(workspaceId)}/search`,
       SearchPage,
-      options({ query: { ...query } }, signal),
+      options({ activity: foreground, query: { ...query } }, signal),
     ),
   savedSearches: (workspaceId, before, signal) =>
     http.request(

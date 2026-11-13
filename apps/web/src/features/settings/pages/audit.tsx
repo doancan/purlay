@@ -115,6 +115,17 @@ export const AuditPage = (): React.JSX.Element => {
     const actor = entry.actor?.displayName ?? t('audit.someone');
     const action = known(entry.action);
     switch (action) {
+      case 'workspace.mfa.enrolled':
+      case 'workspace.mfa.rotated':
+      case 'workspace.mfa.revoked':
+      case 'workspace.mfa.recovery_codes_rotated':
+      case 'workspace.mfa.recovery_used':
+      case 'workspace.security.policy_tested':
+      case 'workspace.security.policy_updated':
+      case 'workspace.security.recovery_created':
+      case 'workspace.security.policy_recovered':
+        return t(`audit.action.${action}`, { actor });
+
       case 'member.role_changed':
         return t('audit.action.member.role_changed', {
           actor,

@@ -15,6 +15,7 @@ const WORKSPACE_CONTENT = new Set<string>([
   families.shared[0],
   families.channels[0],
   families.members[0],
+  keys.issues('')[0],
   keys.sent('', '')[0],
   keys.unfurl('', '')[0],
 ]);
@@ -208,4 +209,17 @@ export const reconcileAccountOnCommit = (
     accountAccessChanged(client, before, after);
   });
   signal.addEventListener('abort', stop, { once: true });
+};
+
+/** Account-scoped signal: late refusals for another workspace never replace the current page. */
+export const workspaceAccessRequiredKey = (workspaceId: string, userId: string) =>
+  ['workspace-access-required', userId, workspaceId] as const;
+
+export const workspaceAccessRequired = (client: QueryClient, workspaceId: string): void => {
+  const me = client.getQueryData<MeResponse>(keys.me);
+  if (!me?.memberships.some((member) => member.workspace.id === workspaceId)) return;
+  const key = workspaceAccessRequiredKey(workspaceId, me.user.id);
+  if (client.getQueryData<boolean>(key) === true) return;
+  resetContent(client, { workspaceId }, false);
+  client.setQueryData(key, true);
 };

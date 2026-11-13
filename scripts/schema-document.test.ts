@@ -30,7 +30,9 @@ const withoutComments = (sql: string): string => sql.replace(/--[^\n]*/g, '');
 /** Every `CREATE TABLE name ( … );` in some SQL, by table. */
 const tablesIn = (sql: string): Map<string, TableShape> => {
   const tables = new Map<string, TableShape>();
-  for (const match of withoutComments(sql).matchAll(/CREATE TABLE (\w+) \(([\s\S]*?)\n\);/g)) {
+  for (const match of withoutComments(sql).matchAll(
+    /CREATE TABLE (?:IF NOT EXISTS )?(\w+) \(([\s\S]*?)\n\);/g,
+  )) {
     const [, name = '', body = ''] = match;
     const columns = new Set<string>();
     const constraints = new Set<string>();
@@ -45,6 +47,16 @@ const tablesIn = (sql: string): Map<string, TableShape> => {
   }
   return tables;
 };
+
+test('table tracking includes restartable CREATE TABLE IF NOT EXISTS statements', () => {
+  const tables = tablesIn(`CREATE TABLE IF NOT EXISTS proof (
+    session_id UUID PRIMARY KEY,
+    CONSTRAINT proof_owner UNIQUE (session_id)
+);`);
+  expect([...tables.keys()]).toEqual(['proof']);
+  expect([...tables.get('proof')!.columns]).toEqual(['session_id']);
+  expect([...tables.get('proof')!.constraints]).toEqual(['proof_owner']);
+});
 
 /**
  * What later migrations do to constraints, in order: `ADD CONSTRAINT`, `DROP

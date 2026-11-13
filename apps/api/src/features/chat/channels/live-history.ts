@@ -3,7 +3,7 @@ import type {
   ChannelDeliveryScope,
   ChannelDeliveryVerdict,
 } from '../../../platform/ports/channel-delivery';
-import { withinRequest } from '../../../platform/logging';
+import { currentRequest, withinRequest } from '../../../platform/logging';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
 import { AppError } from '../../../platform/errors';
 import type { ChatDb } from '../schema';
@@ -18,6 +18,7 @@ export const liveChannelScope = (): ((
   const expiryReads = new WeakMap<ChatDb, Map<string, Promise<boolean>>>();
   return (database, context) => {
     const guest = context.guest;
+    const source = currentRequest();
 
     return {
       key: JSON.stringify([context.workspaceId, context.channelId, context.userId, guest ?? null]),
@@ -29,6 +30,7 @@ export const liveChannelScope = (): ((
             context.workspaceId,
             context.userId,
             guest?.expiresAt ?? null,
+            source?.sessionId ?? null,
           ]);
           const reads = expiryReads.get(database) ?? new Map<string, Promise<boolean>>();
           expiryReads.set(database, reads);
@@ -40,6 +42,13 @@ export const liveChannelScope = (): ((
                 startedAt: performance.now(),
                 module: 'chat',
                 signal,
+                ...(source?.sessionId === undefined ? {} : { sessionId: source.sessionId }),
+                ...(source?.companySession === undefined
+                  ? {}
+                  : { companySession: source.companySession }),
+                ...(source?.workspaceAccess === undefined
+                  ? {}
+                  : { workspaceAccess: source.workspaceAccess }),
               },
               async () => {
                 try {

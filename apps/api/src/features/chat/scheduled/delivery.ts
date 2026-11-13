@@ -9,6 +9,7 @@ import { atomicallyOn } from '../../../platform/transactions';
 import { publishArrival, sendMessage } from '../messages/messages';
 import { releaseReservations } from './scheduled';
 import type { PushSender } from '../../../modules/push/sender';
+import { withinDeferredSource, type WorkspaceAccessLifetime } from '../../../platform/tenancy';
 
 interface Dependencies {
   readonly database: ChatDb;
@@ -16,6 +17,7 @@ interface Dependencies {
   readonly bus: EventBus;
   readonly log: Logger;
   readonly push?: PushSender;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
 }
 
 /** Rolls the send back before recording a domain refusal in a new transaction. */
@@ -35,48 +37,73 @@ class RefusedDelivery extends Error {
 export const deliverScheduled = async (dependencies: Dependencies): Promise<number> => {
   const { database, clock, bus, log, push } = dependencies;
   let delivered = 0;
+  const skipped = new Set<string>();
   for (let count = 0; count < 100; count += 1) {
     try {
       const result = await atomicallyOn(database)(async (transaction) => {
-        const row = await transaction
+        let candidates = transaction
           .selectFrom('scheduled_messages')
           .selectAll()
           .where('state', '=', 'pending')
           .where('send_at', '<=', clock.now())
           .orderBy('send_at')
           .orderBy('id')
-          .forUpdate()
-          .skipLocked()
-          .limit(1)
-          .executeTakeFirst();
-        if (row === undefined) return undefined;
+          .limit(1);
+        if (skipped.size > 0) candidates = candidates.where('id', 'not in', [...skipped]);
+        const candidate = await candidates.executeTakeFirst();
+        if (candidate === undefined) return undefined;
         try {
-          const context = await requireChannelById(transaction, row.user_id, row.channel_id);
-          // Let go and sent in one transaction: the send claims each file again as it links it.
-          const files = await releaseReservations(transaction, row.id);
-          const sent = await sendMessage(transaction, clock, context, {
-            id: messageId(clock.now()),
-            content: row.content,
-            ...(row.parent_id === null ? {} : { parentId: row.parent_id }),
-            ...(files.length === 0 ? {} : { attachmentIds: [...files] }),
-          });
-          await transaction
-            .updateTable('scheduled_messages')
-            .set({
-              state: 'sent',
-              sent_message_id: sent.message.id,
-              updated_at: clock.now(),
-            })
-            .where('id', '=', row.id)
-            .execute();
-          return { context, sent };
+          return await withinDeferredSource(
+            { ...dependencies, database: transaction },
+            { userId: candidate.user_id, sessionId: candidate.source_session_id },
+            async () => {
+              const row = await transaction
+                .selectFrom('scheduled_messages')
+                .selectAll()
+                .where('id', '=', candidate.id)
+                .where('revision', '=', candidate.revision)
+                .where('state', '=', 'pending')
+                .where(
+                  'source_session_id',
+                  candidate.source_session_id === null ? 'is' : '=',
+                  candidate.source_session_id,
+                )
+                .forUpdate()
+                .skipLocked()
+                .executeTakeFirst();
+              if (row === undefined) return { skipped: candidate.id };
+              const context = await requireChannelById(transaction, row.user_id, row.channel_id);
+              // Let go and sent in one transaction: the send claims each file again as it links it.
+              const files = await releaseReservations(transaction, row.id);
+              const sent = await sendMessage(transaction, clock, context, {
+                id: messageId(clock.now()),
+                content: row.content,
+                ...(row.parent_id === null ? {} : { parentId: row.parent_id }),
+                ...(files.length === 0 ? {} : { attachmentIds: [...files] }),
+              });
+              await transaction
+                .updateTable('scheduled_messages')
+                .set({
+                  state: 'sent',
+                  sent_message_id: sent.message.id,
+                  updated_at: clock.now(),
+                })
+                .where('id', '=', row.id)
+                .execute();
+              return { context, sent };
+            },
+          );
         } catch (error) {
           if (error instanceof AppError)
-            throw new RefusedDelivery(row.id, row.revision, error.body.code);
+            throw new RefusedDelivery(candidate.id, candidate.revision, error.body.code);
           throw error;
         }
       });
       if (result === undefined) break;
+      if ('skipped' in result) {
+        skipped.add(result.skipped);
+        continue;
+      }
       const { context, sent } = result;
       delivered += 1;
       await publishArrival(

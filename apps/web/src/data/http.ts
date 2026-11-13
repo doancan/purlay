@@ -21,6 +21,8 @@ import { ApiError, LibraryFailure } from './errors';
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface RequestOptions {
+  /** Deliberate foreground read/action; background polling and replay leave it absent. */
+  readonly activity?: boolean;
   /** Appended as a query string; `undefined` values are left out. */
   readonly query?: Readonly<Record<string, string | number | undefined>>;
   readonly body?: unknown;
@@ -57,7 +59,7 @@ export interface Http {
   readonly bytes: (
     path: string,
     maxBytes: number,
-    options?: Pick<RequestOptions, 'signal'>,
+    options?: Pick<RequestOptions, 'signal' | 'activity'>,
   ) => Promise<Uint8Array<ArrayBuffer>>;
   /**
    * A file's bytes, posted, with its progress told as it goes (#388) — `fetch` reports nothing of a
@@ -73,6 +75,7 @@ export interface Http {
 }
 
 interface UploadOptions {
+  readonly activity?: boolean;
   readonly query?: RequestOptions['query'];
   /** Bytes sent of the total, whenever the browser can measure them. */
   readonly onProgress?: (sent: number, total: number) => void;
@@ -155,6 +158,7 @@ const failureOf = (status: number, text: string): ApiError => {
     undefined,
     body.code === 'LAST_OWNER' ? (body.details?.workspaceIds ?? []) : [],
     body.code === 'STORAGE_QUOTA_EXCEEDED' ? (body.details?.remainingBytes ?? null) : null,
+    body.code === 'WORKSPACE_ACCESS_REQUIRED' ? (body.details?.workspaceId ?? null) : null,
   );
 };
 
@@ -189,7 +193,20 @@ export const createHttp = (
   newUpload: () => UploadRequest = () => new XMLHttpRequest(),
   // The timers a write's deadline runs on: the browser's, or a test's that moves when told.
   schedule: Schedule = browserSchedule,
+  onFailure?: (error: ApiError) => void,
+  activeWorkspace?: () => string | null,
 ): Http => {
+  const activityHeaders = (foreground: boolean | undefined): Readonly<Record<string, string>> => {
+    const workspace = foreground === true ? activeWorkspace?.() : null;
+    return workspace === null || workspace === undefined
+      ? {}
+      : { 'x-purlay-active-workspace': workspace };
+  };
+  const failure = (status: number, text: string): ApiError => {
+    const error = failureOf(status, text);
+    onFailure?.(error);
+    return error;
+  };
   /** The answer, read whole: a deadline holds until the last byte, not only the headers. */
   const call = async (
     method: Method,
@@ -217,7 +234,7 @@ export const createHttp = (
     options: RequestOptions,
     signal: AbortSignal | undefined,
     refusal: (status: number, text: string, response: Response) => Error = (status, text) =>
-      failureOf(status, text),
+      failure(status, text),
   ): Promise<{ readonly status: number; readonly text: string }> => {
     const hasBody = options.body !== undefined;
     const sent: { type: string; body: BodyInit } | null =
@@ -233,6 +250,7 @@ export const createHttp = (
         credentials: 'same-origin',
         headers: {
           accept: 'application/json',
+          ...activityHeaders(options.activity),
           ...(sent === null ? {} : { 'content-type': sent.type }),
         },
         ...(sent === null ? {} : { body: sent.body }),
@@ -301,26 +319,35 @@ export const createHttp = (
       (await call('GET', path, options)).text,
     bytes: async (path, maxBytes, options = {}): Promise<Uint8Array<ArrayBuffer>> => {
       const { readBinary } = await import('./http-binary');
-      return await readBinary(fetchFn, path, maxBytes, options.signal, failureOf);
+      return await readBinary(
+        fetchFn,
+        path,
+        maxBytes,
+        options.signal,
+        failure,
+        activityHeaders(options.activity),
+      );
     },
     upload: async <S extends TSchema>(
       path: string,
       schema: S,
       bytes: Blob,
-      { query, onProgress }: UploadOptions,
+      { query, onProgress, activity }: UploadOptions,
     ): Promise<Static<S>> =>
       await new Promise<Static<S>>((resolve, reject) => {
         const request = newUpload();
         request.open('POST', withQuery(path, query));
         request.setRequestHeader('accept', 'application/json');
         request.setRequestHeader('content-type', 'application/octet-stream');
+        for (const [name, value] of Object.entries(activityHeaders(activity)))
+          request.setRequestHeader(name, value);
         request.upload.onprogress = (event): void => {
           if (event.lengthComputable) onProgress?.(event.loaded, event.total);
         };
         request.onload = (): void => {
           try {
             if (request.status < 200 || request.status > 299) {
-              throw failureOf(request.status, request.responseText);
+              throw failure(request.status, request.responseText);
             }
             resolve(answerOf(request.status, request.responseText, schema));
           } catch (error) {

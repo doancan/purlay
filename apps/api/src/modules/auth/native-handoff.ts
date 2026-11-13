@@ -44,9 +44,13 @@ import {
   type IssuedSession,
   type IssueOptions,
 } from './sessions';
-import { lockCompanyIdentityMember } from '../workspaces/identity/authority';
+import { lockCompanySignInMember } from '../workspaces/identity/authority';
 import { liveCompanySessionProof } from '../../platform/company-session';
 import { AppError } from '../../platform/errors';
+import {
+  copyAuthenticationEvidence,
+  copyWorkspaceAuthenticationAssurances,
+} from './authentication-evidence';
 
 /** How long a code lasts: long enough to go from the browser to the application, and no longer. */
 export const NATIVE_CODE_TTL_MS = 2 * 60 * 1000;
@@ -96,7 +100,7 @@ export const authorizeNative = async (
         throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
       companyWorkspaceId = source.companyWorkspaceId;
       if (companyWorkspaceId !== undefined) {
-        await lockCompanyIdentityMember(transaction, companyWorkspaceId, userId, false);
+        await lockCompanySignInMember(transaction, companyWorkspaceId, userId);
         await requireLiveSession(transaction, clock, sourceSessionId);
       }
     }
@@ -138,6 +142,7 @@ export const authorizeNative = async (
         id: messageId(now),
         user_id: userId,
         code_digest: companyWorkspaceId === undefined ? digest : companyDigest,
+        authentication_source_session_id: sourceSessionId ?? null,
         ...(companyWorkspaceId === undefined
           ? {}
           : {
@@ -171,6 +176,7 @@ export type NativeRefusal =
   | 'erased'
   | 'suspended'
   | 'wrong-verifier'
+  | 'source-ended'
   | 'company-source-ended';
 
 export interface NativeIssuedSession extends IssuedSession {
@@ -219,6 +225,7 @@ export const exchangeNativeCode = async (
         'native_authorizations.spent_at',
         'native_authorizations.company_workspace_id',
         'native_authorizations.company_source_session_id',
+        'native_authorizations.authentication_source_session_id',
         'users.deleted_at',
         'users.suspended_at',
       ])
@@ -238,6 +245,29 @@ export const exchangeNativeCode = async (
     if (origin === undefined) {
       refused?.('unknown');
       return undefined;
+    }
+
+    if (origin.authentication_source_session_id !== null) {
+      try {
+        const source = await requireLiveSession(
+          transaction,
+          clock,
+          origin.authentication_source_session_id,
+        );
+        if (
+          source.userId !== origin.user_id ||
+          source.companyWorkspaceId !== (origin.company_workspace_id ?? undefined) ||
+          (origin.company_workspace_id !== null &&
+            origin.authentication_source_session_id !== origin.company_source_session_id)
+        ) {
+          refused?.('source-ended');
+          return undefined;
+        }
+      } catch (error) {
+        if (!(error instanceof AppError)) throw error;
+        refused?.('source-ended');
+        return undefined;
+      }
     }
 
     let proof:
@@ -263,12 +293,7 @@ export const exchangeNativeCode = async (
           refused?.('company-source-ended');
           return undefined;
         }
-        await lockCompanyIdentityMember(
-          transaction,
-          origin.company_workspace_id,
-          origin.user_id,
-          false,
-        );
+        await lockCompanySignInMember(transaction, origin.company_workspace_id, origin.user_id);
         await requireLiveSession(transaction, clock, sourceId);
       } catch (error) {
         if (!(error instanceof AppError)) throw error;
@@ -309,7 +334,8 @@ export const exchangeNativeCode = async (
     if (
       found?.user_id !== origin.user_id ||
       found.company_workspace_id !== origin.company_workspace_id ||
-      found.company_source_session_id !== origin.company_source_session_id
+      found.company_source_session_id !== origin.company_source_session_id ||
+      found.authentication_source_session_id !== origin.authentication_source_session_id
     ) {
       refused?.('unknown');
       return undefined;
@@ -379,8 +405,24 @@ export const exchangeNativeCode = async (
           workspace_id: found.company_workspace_id,
         })
         .execute();
-      return { ...issued, companyWorkspaceId: found.company_workspace_id };
     }
-    return issued;
+    if (found.authentication_source_session_id !== null) {
+      await copyAuthenticationEvidence(
+        transaction,
+        found.authentication_source_session_id,
+        issued.sessionId,
+        found.user_id,
+      );
+      await copyWorkspaceAuthenticationAssurances(
+        transaction,
+        found.authentication_source_session_id,
+        issued.sessionId,
+        found.user_id,
+        found.company_workspace_id,
+      );
+    }
+    return found.company_workspace_id === null
+      ? issued
+      : { ...issued, companyWorkspaceId: found.company_workspace_id };
   });
 };

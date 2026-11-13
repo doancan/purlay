@@ -683,9 +683,15 @@ describe('integration: what the push service answers', () => {
       await subscribeDevice(db, room, 'carol', await aBrowser());
       const posted: string[] = [];
       const held: (() => void)[] = [];
+      const concurrentPosts = Promise.withResolvers<undefined>();
       let released = false;
       const post: PushPost = (url) => {
         posted.push(url.href);
+        if (
+          posted.some((endpoint) => endpoint === 'https://push.example.com/send/carol') &&
+          posted.filter((endpoint) => endpoint.startsWith('https://slow.example.com/')).length >= 2
+        )
+          concurrentPosts.resolve(undefined);
         if (url.hostname !== 'slow.example.com' || released) {
           return Promise.resolve({ kind: 'answered', status: 201 });
         }
@@ -699,15 +705,7 @@ describe('integration: what the push service answers', () => {
       await say(room, 'alice', `${mention(room, 'bob')} ${mention(room, 'carol')} look`);
       try {
         // Carol's push goes while two of Bob's hang, and Bob's third waits for one of his own.
-        for (
-          let turn = 0;
-          turn < 50 &&
-          (!posted.some((url) => url === 'https://push.example.com/send/carol') ||
-            posted.filter((url) => url.startsWith('https://slow.example.com/')).length < 2);
-          turn++
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
+        await concurrentPosts.promise;
         expect(posted.filter((url) => url.startsWith('https://slow.example.com/'))).toHaveLength(2);
         expect(posted).toContain('https://push.example.com/send/carol');
       } finally {

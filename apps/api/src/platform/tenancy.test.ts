@@ -16,7 +16,7 @@ import { describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { ErrorResponse } from '@purlay/types';
 import { AppError } from './errors';
-import type { WorkspaceContext } from './tenancy';
+import type { WorkspaceContext, WorkspaceSecurityContext } from './tenancy';
 
 /**
  * Stands in for the workspace-scoped repositories that arrive with the workspace,
@@ -33,6 +33,18 @@ export const compileTimeAssertions = (): void => {
   scopedRead({ workspaceId: 'w', userId: 'u', role: 'member' });
   // @ts-expect-error a workspace-scoped read with no context at all does not compile (D-21)
   scopedRead();
+};
+
+/** A remediation capability cannot be exchanged for content authority, in either direction. */
+export const securityTypeAssertions = (
+  security: WorkspaceSecurityContext,
+  workspace: WorkspaceContext,
+): void => {
+  const securityRead = (context: WorkspaceSecurityContext): string => context.workspaceId;
+  // @ts-expect-error proving membership for remediation grants no workspace content capability
+  scopedRead(security);
+  // @ts-expect-error ordinary content authority is not the separately minted remediation capability
+  securityRead(workspace);
 };
 
 describe('AppError', () => {

@@ -39,3 +39,24 @@ export type CompanyFrameProjector = (
   frame: ServerFrame,
   signal: AbortSignal,
 ) => Promise<ServerFrame | undefined>;
+
+/** The final native source check never changes a workspace's proof or activity. */
+export type WorkspaceFrameProjector = (
+  identity: {
+    readonly sessionId: string;
+    readonly userId: string;
+    readonly companyWorkspaceId?: string;
+  },
+  subscribedChannelIds: readonly string[],
+  frame: ServerFrame,
+  signal: AbortSignal,
+  channelScope?: ChannelDeliveryScope,
+) => Promise<
+  | { readonly frame: ServerFrame | undefined }
+  | { readonly restart: ServerFrame }
+  | {
+      readonly workspaceId: string;
+      readonly channelIds: readonly string[];
+      readonly changed?: true;
+    }
+>;

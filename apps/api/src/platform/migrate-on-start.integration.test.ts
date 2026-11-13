@@ -18,7 +18,7 @@ import {
 } from '@purlay/db';
 import type { DatabasePool, Executor, MigrationSet } from '@purlay/db';
 import { bundledModules, type BundledModule } from '../composition';
-import { migrateOnStart, untilMigrated } from './migrate-on-start';
+import { migrateOnStart, requireCurrentSchema, untilMigrated } from './migrate-on-start';
 import { credentialCipher } from './crypto';
 import { aRecordingLogger } from '../testing/doubles';
 import { aGitHubPerson } from '../testing/github-sign-in';
@@ -238,6 +238,26 @@ afterAll(async () => {
 }, 120_000);
 
 describe('integration: migrate on start', () => {
+  test('a deferred reader refuses pending or unrecognized history before any work', async () => {
+    const { name, db } = await freshDatabase('worker-fence');
+    try {
+      expect((await failure(requireCurrentSchema(db, []))).message).toContain(
+        'migrations not applied',
+      );
+      await migrateWith(name, []);
+      await requireCurrentSchema(db, []);
+      await sql`insert into kysely_migration (name, timestamp, checksum)
+        values ('9999_unrecognized_worker_schema', '2099-01-01T00:00:00.000Z', ${'0'.repeat(64)})`.execute(
+        db,
+      );
+      expect((await failure(requireCurrentSchema(db, []))).message).toContain(
+        'migration history mismatch',
+      );
+    } finally {
+      await db.destroy();
+    }
+  }, 60_000);
+
   test('an empty database is migrated to the latest, and starting again changes nothing', async () => {
     const { name, db } = await freshDatabase('one');
     try {

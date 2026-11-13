@@ -6,8 +6,8 @@
  * must hold on every endpoint forever (D-21). Remembering to write the test is
  * the discipline model D-21 rejects, so the list of endpoints is not kept here:
  * it is read from `API.md`, and every documented `/api/` endpoint the
- * application serves must appear below — in `CROSS_TENANT` with a case, or in
- * `UNSCOPED` with the reason it has no tenant to cross. Neither is a failing
+ * application serves must appear below — in `CROSS_TENANT` with a case, in
+ * `WORKFLOW_CROSS_TENANT` with its real stateful suite, or in `UNSCOPED` with the reason it has no tenant to cross. Neither is a failing
  * build (`cross-tenant.test.ts`). (D-63)
  *
  * A case names only what cannot be derived. The path is the documented one with
@@ -238,6 +238,40 @@ const COMPANY_CATALOGUE: Visibility = {
   kind: 'none',
   reason: 'Workspace company configuration and own account links, without conversation content.',
 };
+
+/** Native proof and one-time receipts must be prepared by the real workflow, never replaced by permissive positive controls. */
+interface WorkflowCrossTenantCase {
+  readonly suite: 'workspace-security';
+  readonly testFile: 'apps/api/src/ingress/http/workspace-security-cross-tenant.integration.test.ts';
+  readonly visibility: Extract<Visibility, { readonly kind: 'none' }>;
+}
+const SECURITY_WORKFLOW = {
+  suite: 'workspace-security',
+  testFile: 'apps/api/src/ingress/http/workspace-security-cross-tenant.integration.test.ts',
+  visibility: {
+    kind: 'none',
+    reason: 'Workspace policy and own factors, without channel or conversation inventory.',
+  },
+} as const satisfies WorkflowCrossTenantCase;
+
+/** Every row is executed by the named HTTP/SQL suite with foreign/missing/malformed IDs and a strict successful owner/self control. */
+export const WORKFLOW_CROSS_TENANT = {
+  'GET /api/workspace-security': SECURITY_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/security/access': SECURITY_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/security/policy': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/policy/preview': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/policy/test': SECURITY_WORKFLOW,
+  'PUT /api/workspaces/:workspaceId/security/policy': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/recovery': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/recover': SECURITY_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/security/mfa': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/mfa/enrollment': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/mfa/challenges': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/mfa/verify': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/mfa/recovery': SECURITY_WORKFLOW,
+  'DELETE /api/workspaces/:workspaceId/security/mfa': SECURITY_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/security/mfa/recovery-codes': SECURITY_WORKFLOW,
+} as const satisfies Readonly<Record<string, WorkflowCrossTenantCase>>;
 
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId/identity/domains': {

@@ -38,6 +38,7 @@ interface Failure {
 type BeforeLink = (email: string) => Promise<boolean>;
 
 interface EmailSignInFormProps {
+  readonly onSignedIn?: () => void;
   /** No GitHub button above it: the form is the card's only way in, so it has no rule to hang from. */
   readonly alone?: boolean;
   /** The password field and Sign in; without it the form is the link's alone (the sign-up screen). */
@@ -55,6 +56,7 @@ const looksLikeAddress = (value: string): boolean => /^[^\s@]+@[^\s@]+$/.test(va
 
 export const EmailSignInForm = ({
   alone = false,
+  onSignedIn,
   withPassword = false,
   beforeLink,
   mail,
@@ -108,6 +110,7 @@ export const EmailSignInForm = ({
     return (
       <SecondStepForm
         className={cn('flex w-full flex-col gap-3 text-left', ruled)}
+        {...(onSignedIn === undefined ? {} : { onSignedIn })}
         onRestart={(words) => {
           setSecondStep(false);
           setFailure(words === null ? null : { field: 'form', message: words });
@@ -150,6 +153,7 @@ export const EmailSignInForm = ({
       }
       // The session is there now: the screen asks who it is, and a person who has one is sent on.
       await client.invalidateQueries({ queryKey: keys.me });
+      onSignedIn?.();
     } catch (caught) {
       setFailure({ field: 'form', message: passwordFailure(caught) });
       setBusy(null);

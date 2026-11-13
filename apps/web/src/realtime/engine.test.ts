@@ -4415,3 +4415,50 @@ test('session-ended frame and physical close notify once, and a fresh authentica
   expect(w.ended.count).toBe(2);
   w.engine.stop();
 });
+
+test('foreground HTTP intent distinguishes a new send and deliberate Retry from a delayed background producer', async () => {
+  const intent: (boolean | undefined)[] = [];
+  const w = world({
+    send: (_channel, _input, foreground) => {
+      intent.push(foreground);
+      return Promise.reject(new ApiError(400, 'VALIDATION_FAILED', 'refused'));
+    },
+  });
+  const id = w.engine.send({ channelId: CH, content: 'A deliberate send' });
+  await Promise.resolve();
+  await Promise.resolve();
+  w.engine.retry(id);
+  await Promise.resolve();
+  await Promise.resolve();
+  w.engine.send({ channelId: CH, content: 'A delayed upload completion', foreground: false });
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(intent).toEqual([true, true, false]);
+  w.engine.stop();
+  w.client.clear();
+});
+
+test('policy ERROR hints clear only the known named workspace and preserve the canonical account', () => {
+  const w = world();
+  w.client.setQueryData(keys.channels(WS), [channel(CH)]);
+  w.engine.start();
+  w.open();
+  w.deliver({
+    event: 'ERROR',
+    workspaceId: IDS.browse,
+    data: { code: 'WORKSPACE_ACCESS_REQUIRED', message: 'not current' },
+    ts: T0,
+  });
+  expect(w.client.getQueryData(keys.channels(WS))).toBeDefined();
+  w.deliver({
+    event: 'ERROR',
+    workspaceId: WS,
+    data: { code: 'WORKSPACE_ACCESS_REQUIRED', message: 'verify' },
+    ts: T0,
+  });
+  expect(w.client.getQueryData(keys.channels(WS))).toBeUndefined();
+  expect(w.client.getQueryData(keys.me)).toBeDefined();
+  expect(w.ended.count).toBe(0);
+  w.engine.stop();
+  w.client.clear();
+});

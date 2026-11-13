@@ -10,6 +10,7 @@
  */
 
 import { Type, type Static } from '@sinclair/typebox';
+import { Uuid } from './models';
 
 /** Statuses this API is allowed to return. (`API.md` §1) */
 export type HttpStatus =
@@ -54,6 +55,12 @@ export const ErrorCode = Type.Union([
    * the session stands, and the same session goes on once it is on.
    */
   Type.Literal('TWO_FACTOR_REQUIRED'),
+  Type.Literal('WORKSPACE_ACCESS_REQUIRED'),
+  Type.Literal('WORKSPACE_SECURITY_CHANGED'),
+  Type.Literal('WORKSPACE_SECURITY_NOT_READY'),
+  Type.Literal('WORKSPACE_MFA_NOT_FOUND'),
+  Type.Literal('WORKSPACE_MFA_INVALID'),
+  Type.Literal('WORKSPACE_MFA_LOCKED'),
   /**
    * Writing in a channel the caller can see and is not in: a public channel they have not joined.
    * Joining it is the way on (D-156). Never for a channel they cannot see — that is its `404`.
@@ -312,6 +319,12 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   COMPANY_IDENTITY_CHANGED: 409,
   COMPANY_IDENTITY_NOT_READY: 409,
   COMPANY_IDENTITY_LIMIT: 409,
+  WORKSPACE_ACCESS_REQUIRED: 403,
+  WORKSPACE_SECURITY_CHANGED: 409,
+  WORKSPACE_SECURITY_NOT_READY: 409,
+  WORKSPACE_MFA_NOT_FOUND: 404,
+  WORKSPACE_MFA_INVALID: 400,
+  WORKSPACE_MFA_LOCKED: 429,
   CHANNEL_NOT_FOUND: 404,
   MESSAGE_NOT_FOUND: 404,
   SCHEDULED_MESSAGE_NOT_FOUND: 404,
@@ -487,6 +500,12 @@ export type ClientTooOldDetails = Static<typeof ClientTooOldDetails>;
 
 export const AppErrorBody = Type.Union([
   Type.Object({
+    code: Type.Literal('WORKSPACE_ACCESS_REQUIRED'),
+    message: Type.String(),
+    // An optional canonical-member hint; an absent hint never names an arbitrary workspace.
+    details: Type.Optional(Type.Object({ workspaceId: Uuid })),
+  }),
+  Type.Object({
     code: Type.Literal('VALIDATION_FAILED'),
     message: Type.String(),
     details: ValidationDetails,
@@ -528,6 +547,7 @@ export const AppErrorBody = Type.Union([
       ErrorCode,
       Type.Union([
         Type.Literal('VALIDATION_FAILED'),
+        Type.Literal('WORKSPACE_ACCESS_REQUIRED'),
         Type.Literal('LAST_OWNER'),
         Type.Literal('STORAGE_QUOTA_EXCEEDED'),
         Type.Literal('SETUP_STEP_REFUSED'),

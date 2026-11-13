@@ -9,13 +9,17 @@
  * dismissed for good is worse than one that is missed. A server that does not say its version, a build with no
  * notes for it and notes that fail to load show nothing either — the app is never held up for them.
  */
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useClientStorage } from '../../data/storage-provider';
 import { useLatestRelease } from '../../data/queries';
 import type { ClientStorage } from '../../data/browser-storage';
 import { noteStorageFailure } from '../../data/browser-storage';
-import { ReleaseNotesDialog } from './release-notes-dialog';
+import { RenderBoundary } from '../shell/failure-boundary';
 import { useReleaseNotes } from './release-notes-source';
+
+const ReleaseNotesDialog = lazy(async () => ({
+  default: (await import('./release-notes-dialog')).ReleaseNotesDialog,
+}));
 
 /** The version whose notes this browser has shown. */
 export const RELEASE_NOTES_SEEN_KEY = 'purlay.releaseNotesSeen';
@@ -53,14 +57,18 @@ export const ReleaseNotesOnce = (): React.JSX.Element | null => {
   const notes = useReleaseNotes(version, due).data;
   if (!due || notes === null || notes === undefined) return null;
   return (
-    <ReleaseNotesDialog
-      notes={notes}
-      open
-      onOpenChange={(open) => {
-        if (open) return;
-        remember(storage, version);
-        setClosed(true);
-      }}
-    />
+    <RenderBoundary fallback={null}>
+      <Suspense fallback={null}>
+        <ReleaseNotesDialog
+          notes={notes}
+          open
+          onOpenChange={(open) => {
+            if (open) return;
+            remember(storage, version);
+            setClosed(true);
+          }}
+        />
+      </Suspense>
+    </RenderBoundary>
   );
 };

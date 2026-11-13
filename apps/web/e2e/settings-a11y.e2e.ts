@@ -18,6 +18,8 @@ const PAGES = [
   ['about', 'About'],
   ['general', 'General'],
   ['company', 'Company sign-in'],
+  ['security', 'Workspace security'],
+  ['workspace-mfa', 'Your workspace authenticator'],
   ['members', 'Members'],
   ['invitations', 'Invitations'],
   ['integrations', 'Integrations'],
@@ -56,6 +58,10 @@ test.describe('every page of Settings', () => {
       await openSettings(page, tenant.slug, section, title);
       if (section === 'company')
         await expect(page.getByLabel('Domain', { exact: true })).toBeVisible();
+      if (section === 'security')
+        await expect(page.getByRole('combobox', { name: 'Apply requirements' })).toBeVisible();
+      if (section === 'workspace-mfa')
+        await expect(page.getByRole('button', { name: 'Set up authenticator' })).toBeVisible();
       await expectNoAxe();
     });
   }

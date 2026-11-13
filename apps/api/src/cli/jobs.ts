@@ -52,6 +52,8 @@ import { sendAuditLinesTo } from '../modules/audit/lines';
 import { errorTrackingFor } from '../platform/error-tracking';
 import { storeFor, type ObjectStore } from '../platform/storage';
 import { readSuspended, suspensionCache } from '../platform/suspended-modules';
+import { requireCurrentSchema } from '../platform/migrate-on-start';
+import type { WorkspaceAccessLifetime } from '../platform/workspace-access-facts';
 
 /** Sessions one statement of the sweep removes. */
 const SESSION_BATCH = 1_000;
@@ -70,6 +72,7 @@ const clock = systemClock;
 // A run is its own process and reads the stopped modules once (D-296): a module the administrator stopped has no job to do here.
 const suspension = suspensionCache({ read: async () => await readSuspended(database), log });
 const composition = compositionFor(config.MODULES, config.WORKSPACE_MODULES, suspension);
+let jobSessionLifetime: WorkspaceAccessLifetime | undefined;
 
 /**
  * The relay the server's settings name, as the API builds it (`runtimeServicesFrom`): read once a run, so a
@@ -100,6 +103,11 @@ const contextOn = (on: JobContext['database'], job: string): JobContext => ({
   database: on,
   entitled: composition.entitledFor(composition.owner.ofJob(job), on),
   clock,
+  sessionLifetime: (): WorkspaceAccessLifetime => {
+    if (jobSessionLifetime === undefined)
+      throw new Error('The job has no authoritative session lifetime settings');
+    return jobSessionLifetime;
+  },
   log,
   // Built when a job asks, as each job did: the store is not needed to sweep sessions.
   get storage(): ObjectStore {
@@ -175,10 +183,21 @@ const runOne = scheduledJobRunner({
 });
 
 const name = process.argv[2] ?? '';
-await suspension.fresh();
-// A job of a module this process does not run is not overdue and has nothing to do (`MODULES.md` §3).
-const running = Object.keys(jobs).filter((job) => !composition.closedJob(job));
 try {
+  await requireCurrentSchema(database, composition.migrationSets);
+  const lifetime = await database
+    .selectFrom('server_settings')
+    .select(['session_idle_timeout_hours', 'session_max_age_days'])
+    .where('id', '=', true)
+    .executeTakeFirst();
+  if (lifetime !== undefined)
+    jobSessionLifetime = {
+      sessionIdleTimeoutHours: lifetime.session_idle_timeout_hours,
+      sessionMaxAgeDays: lifetime.session_max_age_days,
+    };
+  await suspension.fresh();
+  // A stopped module's jobs are filtered only after this run has read the current stops.
+  const running = Object.keys(jobs).filter((job) => !composition.closedJob(job));
   if (name === 'jobs:status') {
     const report = jobReport(running, await records(), clock.now());
     process.stdout.write(`${report.lines.join('\n')}\n`);

@@ -32,7 +32,7 @@ import { useMembers } from '../../../data/queries';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
 import { useSession } from '../../session/session';
-import { CreateWorkspace } from '../../shell/home';
+import { LazyCreateWorkspace } from '../../shell/create-workspace-load';
 import { useMarkAllRead } from '../../shell/read-all';
 import { isMacPlatform, keyLabels } from '../../shortcuts/platform';
 import { useWorkspace } from '../../shell/workspace';
@@ -197,7 +197,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         description={t('workspace.create.body')}
         closeLabel={t('common.close')}
       >
-        <CreateWorkspace
+        <LazyCreateWorkspace
           framed={false}
           onCreated={() => {
             setCreating(false);

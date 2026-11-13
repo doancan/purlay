@@ -9,6 +9,8 @@
 import { useEffect } from 'react';
 import { useEngine } from '../../realtime/realtime-provider';
 import { useWorkspace } from './workspace';
+import { useRoute } from '../../router/router-provider';
+import { contentWorkspaceSlug } from '../../router/routes';
 
 /** What counts as the person being here: their own hand on it. */
 const INPUT = ['keydown', 'pointerdown', 'touchstart', 'pointermove', 'wheel'] as const;
@@ -16,9 +18,12 @@ const INPUT = ['keydown', 'pointerdown', 'touchstart', 'pointermove', 'wheel'] a
 export const AttentionReporter = (): null => {
   const engine = useEngine();
   const { workspace } = useWorkspace();
+  const { match } = useRoute();
+  const slug = contentWorkspaceSlug(match);
   useEffect(() => {
     const say = (): void => {
-      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      if (slug !== workspace.slug || document.visibilityState !== 'visible' || !document.hasFocus())
+        return;
       engine.announceActive(workspace.id);
     };
     for (const type of INPUT) window.addEventListener(type, say, { passive: true, capture: true });
@@ -31,6 +36,6 @@ export const AttentionReporter = (): null => {
       window.removeEventListener('focus', say);
       document.removeEventListener('visibilitychange', say);
     };
-  }, [engine, workspace.id]);
+  }, [engine, workspace.id, workspace.slug, slug]);
   return null;
 };

@@ -10,6 +10,7 @@ import { Uuid, type AttachmentKind } from '@purlay/types';
 import type { Database, Executor, Expression, ExpressionBuilder, SqlBool } from '@purlay/db';
 import { attachmentNotFound } from '../../platform/errors';
 import { activeWorkspaceMembership } from '../../platform/membership-access';
+import { requireWorkspaceContentAccess } from '../../platform/workspace-content-access';
 
 /** An attachment the caller may read, with where its bytes are. */
 export interface ReadableAttachment {
@@ -32,6 +33,7 @@ export type AttachmentReader = (
 export const isUnsentUploadOf = (
   eb: ExpressionBuilder<Database, 'attachments'>,
   userId: string,
+  options: { readonly visibilityOnly?: boolean } = {},
 ): Expression<SqlBool> =>
   eb.and([
     eb('attachments.claimed_at', 'is', null),
@@ -43,7 +45,7 @@ export const isUnsentUploadOf = (
         .select('workspace_members.user_id')
         .whereRef('workspace_members.workspace_id', '=', 'attachments.workspace_id')
         .where('workspace_members.user_id', '=', userId)
-        .where(activeWorkspaceMembership())
+        .where(activeWorkspaceMembership(options))
         .where('workspaces.deleted_at', 'is', null),
     ),
   ]);
@@ -53,16 +55,26 @@ export const requireOwnUpload: AttachmentReader = async (executor, userId, attac
   if (!Value.Check(Uuid, attachmentId)) throw attachmentNotFound();
   const row = await executor
     .selectFrom('attachments')
+    .innerJoin('workspaces', 'workspaces.id', 'attachments.workspace_id')
     .select([
       'attachments.id as id',
       'attachments.storage_key as storageKey',
       'attachments.thumbnail_key as thumbnailKey',
       'attachments.file_name as fileName',
       'attachments.kind as kind',
+      'attachments.workspace_id as workspaceId',
+      'workspaces.access_policy_epoch as policyEpoch',
     ])
     .where('attachments.id', '=', attachmentId)
-    .where((eb) => isUnsentUploadOf(eb, userId))
+    .where((eb) => isUnsentUploadOf(eb, userId, { visibilityOnly: true }))
     .executeTakeFirst();
   if (row === undefined) throw attachmentNotFound();
-  return row;
+  await requireWorkspaceContentAccess(executor, userId, row.workspaceId, row.policyEpoch);
+  return {
+    id: row.id,
+    storageKey: row.storageKey,
+    thumbnailKey: row.thumbnailKey,
+    fileName: row.fileName,
+    kind: row.kind,
+  };
 };

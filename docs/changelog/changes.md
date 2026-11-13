@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Security
+
+- **Workspace security** — Owners can require company sign-in, workspace authenticators and session limits, with enrollment, verification and recovery that preserve access to other workspaces (D-310).
 
 ---

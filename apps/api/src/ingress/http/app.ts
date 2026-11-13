@@ -57,6 +57,7 @@ import { serverRoutes } from './routes/server-routes';
 import { meRoutes } from './routes/me-routes';
 import { workspaceRoutes } from './routes/workspace-routes';
 import { companyIdentityRoutes } from './routes/company-identity-routes';
+import { workspaceSecurityRoutes } from './routes/workspace-security-routes';
 import { attachmentRoutes } from './routes/attachment-routes';
 import { clientRoutes } from './routes/client-routes';
 import { errorHook } from './error-hook';
@@ -182,6 +183,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const afterSignInAnswers = afterAnswer(log, 'sign-in');
   // Invitation letters are posted after the answer too, by the relay the sign-in library mails through.
   const afterInvitationAnswers = afterAnswer(log, 'invitation');
+  const afterWorkspaceActivity = afterAnswer(log, 'workspace activity');
   // The GitHub App (D-246): its settings as this request pinned them, and GitHub as the App speaks to it.
   const githubUrls = {
     web: dependencies.config.GITHUB_URL,
@@ -309,6 +311,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     }),
     workspaceRoutes(context, afterInvitationAnswers.run),
     companyIdentityRoutes(context, cipher),
+    workspaceSecurityRoutes(context, cipher),
     ...moduleRoutes,
     attachmentRoutes(context),
     clientRoutes(context),
@@ -322,6 +325,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     deadlineOf,
     admit,
     observation,
+    activityLater: afterWorkspaceActivity.run,
   });
   const onError = errorHook({ dependencies, modules, log, metrics, observation });
   const app = new Elysia({
@@ -335,6 +339,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     .onBeforeHandle(hooks.onBeforeHandle)
     .onError(onError)
     .onAfterResponse(hooks.onAfterResponse)
+    .mapResponse(hooks.onMapResponse)
     .use(routes)
 
     /**
@@ -391,6 +396,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
         sockets.settled(),
         afterSignInAnswers.settled(),
         afterInvitationAnswers.settled(),
+        afterWorkspaceActivity.settled(),
       ]);
     },
     drain: async (): Promise<void> => {

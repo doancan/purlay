@@ -18,6 +18,7 @@ describe('the names in a namespace', () => {
       moduleSet: 'purlay:modules',
       entitlementNodes: 'purlay:entitlement-nodes',
       suspensionNodes: 'purlay:suspension-nodes',
+      workspaceAccessNodes: 'purlay:workspace-access-nodes',
       typingPrefix: 'purlay:typing:',
       onlinePrefix: 'purlay:online:',
       lapseIndex: 'purlay:online-lapse',
@@ -128,6 +129,10 @@ describe('no other file writes a name into Redis', () => {
     'modules/auth/magic-link.ts',
     'modules/auth/password-attempts.ts',
     'modules/workspaces/invitation-mail.ts',
+    // Domain separators for SQL-held one-time proof hashes and sealed scoped factors, never Redis keys (D-310).
+    'modules/workspaces/security/mfa-state.ts',
+    'modules/workspaces/security/recovery-state.ts',
+    'modules/workspaces/security/policy-state.ts',
   ]);
 
   test('the sources were found', () => {

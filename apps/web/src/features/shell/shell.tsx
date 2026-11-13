@@ -32,6 +32,7 @@ import { AttentionReporter } from './attention';
 import { PresenceReader } from './presence-reader';
 import { TabTitle } from './tab-title';
 import { WorkspaceScopeProvider } from './workspace';
+import { WorkspaceAccessGuard } from './workspace-access-guard';
 import { SaveIntentsProvider } from '../chat/saved/save-toggle';
 import { OutboxProvider } from '../chat/composer/uploads';
 
@@ -44,39 +45,41 @@ export const Shell = ({
 }): React.JSX.Element => (
   <SessionGate>
     <WorkspaceScopeProvider slug={slug} notFound={<NotFound />}>
-      <RealtimeProvider>
-        <OutboxProvider>
-          <OverlayProvider>
-            <SaveIntentsProvider>
-              <DeepWorkProvider>
-                <GlobalKeys />
-                <TabTitle />
-                <WhenRun module="chat">
-                  <BackgroundAlerts />
-                  <PresenceReader />
-                  <AttentionReporter />
-                  <LostSends />
-                </WhenRun>
-                <ReleaseNotesOnce />
-                <NavProvider>
-                  <div className="flex h-screen bg-surface-100 text-ink">
-                    <SidebarSlot />
-                    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                      <ConnectionBar />
-                      <UpdateBar />
-                      <DeepWorkBar />
-                      <ScheduledDeletions />
-                      <Main className="flex min-h-0 flex-1 flex-col">
-                        <ScreenBoundary>{children}</ScreenBoundary>
-                      </Main>
+      <WorkspaceAccessGuard>
+        <RealtimeProvider>
+          <OutboxProvider>
+            <OverlayProvider>
+              <SaveIntentsProvider>
+                <DeepWorkProvider>
+                  <GlobalKeys />
+                  <TabTitle />
+                  <WhenRun module="chat">
+                    <BackgroundAlerts />
+                    <PresenceReader />
+                    <AttentionReporter />
+                    <LostSends />
+                  </WhenRun>
+                  <ReleaseNotesOnce />
+                  <NavProvider>
+                    <div className="flex h-screen bg-surface-100 text-ink">
+                      <SidebarSlot />
+                      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                        <ConnectionBar />
+                        <UpdateBar />
+                        <DeepWorkBar />
+                        <ScheduledDeletions />
+                        <Main className="flex min-h-0 flex-1 flex-col">
+                          <ScreenBoundary>{children}</ScreenBoundary>
+                        </Main>
+                      </div>
                     </div>
-                  </div>
-                </NavProvider>
-              </DeepWorkProvider>
-            </SaveIntentsProvider>
-          </OverlayProvider>
-        </OutboxProvider>
-      </RealtimeProvider>
+                  </NavProvider>
+                </DeepWorkProvider>
+              </SaveIntentsProvider>
+            </OverlayProvider>
+          </OutboxProvider>
+        </RealtimeProvider>
+      </WorkspaceAccessGuard>
     </WorkspaceScopeProvider>
   </SessionGate>
 );

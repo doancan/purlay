@@ -14,6 +14,171 @@
 import type { Message } from '../types';
 
 export const en = {
+  'security.code.restart': 'Start new verification',
+  'audit.kind.workspace.mfa.enrolled': 'Workspace authenticator connected',
+  'audit.action.workspace.mfa.enrolled': '{actor} connected a workspace authenticator',
+  'audit.kind.workspace.mfa.rotated': 'Workspace authenticator replaced',
+  'audit.action.workspace.mfa.rotated': '{actor} replaced a workspace authenticator',
+  'audit.kind.workspace.mfa.revoked': 'Workspace authenticator disconnected',
+  'audit.action.workspace.mfa.revoked': '{actor} disconnected a workspace authenticator',
+  'audit.kind.workspace.mfa.recovery_codes_rotated': 'Workspace recovery codes replaced',
+  'audit.action.workspace.mfa.recovery_codes_rotated':
+    '{actor} replaced workspace authenticator recovery codes',
+  'audit.kind.workspace.mfa.recovery_used': 'Workspace recovery code used',
+  'audit.action.workspace.mfa.recovery_used':
+    '{actor} used a workspace authenticator recovery code',
+  'audit.kind.workspace.security.policy_tested': 'Workspace requirements tested',
+  'audit.action.workspace.security.policy_tested': '{actor} tested workspace sign-in requirements',
+  'audit.kind.workspace.security.policy_updated': 'Workspace requirements changed',
+  'audit.action.workspace.security.policy_updated':
+    '{actor} changed workspace sign-in requirements',
+  'audit.kind.workspace.security.recovery_created': 'Owner recovery created',
+  'audit.action.workspace.security.recovery_created':
+    '{actor} created owner recovery for this workspace',
+  'audit.kind.workspace.security.policy_recovered': 'Workspace requirements recovered',
+  'audit.action.workspace.security.policy_recovered':
+    '{actor} recovered workspace sign-in requirements',
+  'security.recovery.prepare': 'Prepare a new recovery code',
+  'security.recovery.keepOpen':
+    'Keep this tab open. Sign in with your own account in the new tab, then return here to create the recovery code. Requirements stay enforced throughout.',
+  'security.recovery.signInTab': 'Sign in in a new tab',
+  'security.recovery.continue': 'I signed in — create recovery code',
+  'settings.security.nav': 'Workspace security',
+  'settings.workspace-mfa.nav': 'Your workspace authenticator',
+  'security.title': 'Workspace security',
+  'security.description': 'Choose how people verify their identity before opening this workspace.',
+  'security.self.title': 'Your workspace authenticator',
+  'security.self.description':
+    'Protect your access to this workspace with an authenticator app. Your other workspaces and account credentials stay separate.',
+  'security.loadFailed': 'Couldn’t read workspace security. Check your connection and try again.',
+  'security.refresh': 'Refresh security status',
+  'security.saved': 'Workspace security updated.',
+  'security.status.allowed': 'Access verified',
+  'security.status.sign_in_required': 'Company sign-in required',
+  'security.status.mfa_enrollment_required': 'Set up an authenticator',
+  'security.status.mfa_required': 'Verify with your authenticator',
+  'security.status.expired': 'Sign in again',
+  'security.access.title': 'Verify workspace access',
+  'security.access.description':
+    'Complete the required verification to return to your conversations.',
+  'security.access.workspace': 'Workspace address',
+  'security.access.find': 'Continue to workspace',
+  'security.access.invalid': 'Enter the workspace’s short address, such as acme.',
+  'security.access.company':
+    'Use a company provider allowed by this workspace. Guests can keep their own sign-in method.',
+  'security.access.expired':
+    'Your sign-in or idle time has ended. A new authenticator code cannot extend it; sign in again first.',
+  'security.access.allowed': 'Your access is verified. You can return to the workspace.',
+  'security.access.return': 'Return to workspace',
+  'security.access.other': 'Choose another workspace',
+  'security.signIn': 'Sign in again',
+  'security.independent': 'Sign in with your own account',
+  'security.independentHint':
+    'An owner needs a recent independent sign-in to create or use workspace recovery. Company sign-in cannot change account credentials.',
+  'security.factor.title': 'Authenticator for this workspace',
+  'security.factor.scope': 'This authenticator belongs only to this workspace.',
+  'security.factor.on': 'Connected',
+  'security.factor.off': 'Not connected',
+  'security.factor.pending':
+    'Setup is waiting for confirmation. Start again if you no longer have the QR code.',
+  'security.factor.start': 'Set up authenticator',
+  'security.factor.restart': 'Start setup again',
+  'security.factor.verify': 'Verify access',
+  'security.factor.rotate': 'Replace authenticator',
+  'security.factor.rotateHint':
+    'Your current authenticator keeps working until you confirm the replacement.',
+  'security.factor.stop': 'Disconnect authenticator',
+  'security.factor.stopHint':
+    'Confirm with your current app or a recovery code. Disconnecting may block this workspace until you set up another authenticator.',
+  'security.factor.codes': 'Replace recovery codes',
+  'security.factor.remaining': 'Unused recovery codes: {count}',
+  'security.factor.scan':
+    'Scan this QR code with your authenticator app, then enter its six-digit code.',
+  'security.factor.qr': 'Workspace authenticator QR code',
+  'security.factor.key': 'Setup key',
+  'security.factor.once': 'This setup key is shown only now. If you leave, start setup again.',
+  'security.factor.confirm': 'Confirm authenticator',
+  'security.factor.confirmed': 'Verification completed.',
+  'security.code': 'Authenticator code',
+  'security.code.invalid': 'Enter the six digits from your authenticator app.',
+  'security.code.recovery': 'Recovery code',
+  'security.code.recoveryInvalid': 'Enter one of your 22-character workspace recovery codes.',
+  'security.code.useRecovery': 'Use a recovery code instead',
+  'security.code.useApp': 'Use authenticator app instead',
+  'security.code.submit': 'Verify code',
+  'security.code.expired': 'This verification expired. Start a new verification to try again.',
+  'security.code.fresh':
+    'Use a new code from your app. A code that was already accepted cannot be used again.',
+  'security.codes.title': 'Keep your recovery codes',
+  'security.codes.hint':
+    'These codes are shown once. Store them privately; each works once and replaces all previous codes for this authenticator.',
+  'security.codes.copy': 'Copy recovery codes',
+  'security.codes.done': 'I saved these codes',
+  'security.global.title': 'Use your account authenticator',
+  'security.global.hint':
+    'Your existing account authenticator can verify this independent session. Workspace administrators cannot manage it.',
+  'security.global.action': 'Verify with account authenticator',
+  'security.policy.title': 'Sign-in requirements',
+  'security.policy.mode': 'Apply requirements',
+  'security.policy.off': 'Off',
+  'security.policy.enforced': 'Required',
+  'security.policy.signIn': 'Sign-in method for members',
+  'security.policy.any': 'Any supported method',
+  'security.policy.company': 'Allowed company providers',
+  'security.policy.guests':
+    'Company-only sign-in applies to full members. Guests keep independent sign-in; authenticator and time limits apply to everyone.',
+  'security.policy.providers': 'Allowed company providers',
+  'security.policy.providersHint': 'Select up to 16 enabled providers whose sign-in was tested.',
+  'security.policy.unavailable': 'Unavailable — choose another provider',
+  'security.policy.noProviders':
+    'No tested provider is available. Configure and test company sign-in first.',
+  'security.policy.configure': 'Configure company sign-in',
+  'security.policy.requireMfa': 'Require an authenticator',
+  'security.policy.idle': 'End workspace access after inactivity (minutes)',
+  'security.policy.maxAge': 'Ask for a new sign-in after (hours)',
+  'security.policy.mfaAge': 'Ask for a new authenticator code after (minutes)',
+  'security.policy.noLimit': 'Leave empty to use the existing session lifetime.',
+  'security.policy.invalid': 'Check the selected providers and time limits before continuing.',
+  'security.policy.preview': 'Preview impact',
+  'security.policy.impact': 'Who needs to verify again',
+  'security.policy.counts': 'Affected members: {members}; guests: {guests}; sessions: {sessions}.',
+  'security.policy.more': 'Show more affected people',
+  'security.policy.test': 'Test these requirements',
+  'security.policy.ownerOnly':
+    'Workspace owners test and apply requirements. You can preview their impact here.',
+  'security.policy.testHint':
+    'Verify your own access with the exact requirements before saving. Changes require a new preview and test.',
+  'security.policy.testPassed':
+    'Your access passed this test. These requirements are ready to save.',
+  'security.policy.resume': 'Check this test again',
+  'security.policy.save': 'Save tested requirements',
+  'security.policy.confirm':
+    'I understand that affected people must verify before returning to this workspace.',
+  'security.policy.recoveryNeeded':
+    'Enforcement needs an owner who can recover access. Create a recovery code with an independent sign-in, or add a recoverable owner first.',
+  'security.policy.owners': 'Manage workspace owners',
+  'security.recovery.title': 'Owner recovery',
+  'security.recovery.hint':
+    'A recent independent sign-in and your saved recovery code can turn off workspace requirements. This never grants membership or access to conversations.',
+  'security.recovery.create': 'Create owner recovery code',
+  'security.recovery.value': 'Owner recovery code',
+  'security.recovery.once':
+    'Save this code privately. It is shown once; creating another replaces it.',
+  'security.recovery.done': 'I saved the recovery code',
+  'security.recovery.open': 'Use an owner recovery code',
+  'security.recovery.submit': 'Recover workspace access settings',
+  'security.recovery.invalid': 'Paste the complete owner recovery code you saved.',
+  'security.recovery.saved':
+    'Workspace requirements are off. Verify your current access before returning.',
+  'failure.workspaceAccess': 'Verify your workspace access before continuing.',
+  'failure.workspaceSecurityChanged':
+    'Security settings changed. Refresh and start verification again.',
+  'failure.workspaceSecurityNotReady':
+    'This security change is not ready. Check owner recovery and complete a fresh policy test.',
+  'failure.workspaceMfaMissing': 'This verification is no longer available. Start again.',
+  'failure.workspaceMfaInvalid':
+    'The code was not accepted. Use a new code from the app or an unused recovery code.',
+  'failure.workspaceMfaLocked': 'Too many attempts. Wait before starting another verification.',
   'company.links.title': 'Your company identities',
   'company.links.description':
     'Link a company identity explicitly to this account. Matching email addresses never link accounts automatically.',

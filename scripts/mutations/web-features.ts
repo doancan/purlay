@@ -993,7 +993,7 @@ export const WEB_FEATURES: readonly Mutation[] = [
     id: 'release-notes-close-forgets',
     why: 'closing the window does not remember the version, so the next load opens it again (D-248)',
     file: 'apps/web/src/features/about/release-notes-once.tsx',
-    find: '        remember(storage, version);\n',
+    find: '            remember(storage, version);\n',
     replace: '',
     tests: ['apps/web/src/features/about/release-notes-once.test.tsx'],
   },
@@ -1378,7 +1378,7 @@ export const WEB_FEATURES: readonly Mutation[] = [
   {
     id: 'workspace-address-drops-turkish-letters',
     why: 'the address suggested for `Çağrı Merkezi` is `a-r-merkezi`: its Turkish letters are dropped, not folded',
-    file: 'apps/web/src/features/shell/home.tsx',
+    file: 'apps/web/src/features/shell/workspace-slug.ts',
     find: "    .normalize('NFD')\n    .replace(/\\p{M}/gu, '')\n    .toLowerCase()\n    .replace(/ı/gu, 'i')\n",
     replace: '    .toLowerCase()\n',
     tests: ['apps/web/src/features/shell/home.test.ts'],

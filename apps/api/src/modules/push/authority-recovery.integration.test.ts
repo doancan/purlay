@@ -23,10 +23,102 @@ import { claimPush } from './queue';
 import { createPushSender, type PushSenderDependencies } from './sender';
 import { noPushNotices } from './notices';
 import { pushConfiguration } from './settings';
+import { NO_SESSION_LIFETIME } from '../auth/session-lifetime';
+import { withinRequest } from '../../platform/logging';
+import { readonlyWorkspaceAccess } from '../../platform/tenancy';
 
 afterAll(closeIntegrationDatabase);
 
 describe('integration: recovered push authority', () => {
+  test('the actual chat source converts a newly enforced workspace requirement into canceled push authority', async () => {
+    await withRollback(async (db) => {
+      const world = await pendingPush(db);
+      const dependencies = {
+        ...world.dependencies(aPushService().post),
+        sessionLifetime: (): typeof NO_SESSION_LIFETIME => NO_SESSION_LIFETIME,
+      };
+      const claim = await claimPush(dependencies);
+      if (claim === undefined) throw new Error('Missing actual pending chat claim');
+      expect(await currentPushSource(dependencies, claim)).toBe(true);
+      await db
+        .updateTable('workspaces')
+        .set({ access_policy_epoch: '1' })
+        .where('id', '=', world.room.workspaceId)
+        .execute();
+      await db
+        .insertInto('workspace_access_policies')
+        .values({
+          workspace_id: world.room.workspaceId,
+          epoch: '1',
+          mode: 'enforced',
+          sign_in: 'any',
+          require_mfa: false,
+          idle_minutes: 15,
+          max_age_hours: 1,
+          mfa_max_age_minutes: 5,
+        })
+        .execute();
+      // The genuine chat guard throws the scoped remediation error for this retained unknown
+      // native authentication. The push boundary must cancel only this source instead of retrying.
+      const denied = await withinRequest(
+        {
+          requestId: 'actual-chat-push-policy',
+          startedAt: 0,
+          sessionId: claim.sessionId,
+          workspaceAccess: readonlyWorkspaceAccess(
+            { sessionId: claim.sessionId, userId: claim.userId },
+            world.clock,
+            dependencies.sessionLifetime,
+          ),
+        },
+        async () =>
+          await chatPushNotices.canDeliver(db, claim.recordId, claim.userId, claim.sourceId),
+      ).catch((error: unknown) => error);
+      expect(denied).toMatchObject({
+        body: {
+          code: 'WORKSPACE_ACCESS_REQUIRED',
+          details: { workspaceId: world.room.workspaceId },
+        },
+      });
+      expect(await currentPushSource(dependencies, claim)).toBe(false);
+    });
+  });
+
+  test('an unexpected failure after the actual chat source SQL remains a failure, not an authority cancellation', async () => {
+    await withRollback(async (db) => {
+      const world = await pendingPush(db);
+      const dependencies = world.dependencies(aPushService().post);
+      const claim = await claimPush(dependencies);
+      if (claim === undefined) throw new Error('Missing actual pending chat claim');
+      expect(await currentPushSource(dependencies, claim)).toBe(true);
+      const fault = new Error('injected failure after actual chat visibility SQL');
+      const selected = new Set<unknown>();
+      let completedVisibilityReads = 0;
+      const failing = db.withPlugin({
+        transformQuery: (args) => {
+          const node = JSON.stringify(args.node);
+          if (node.includes('"name":"messages"') && node.includes('"name":"channels"'))
+            selected.add(args.queryId);
+          return args.node;
+        },
+        transformResult: (args) => {
+          if (selected.delete(args.queryId)) {
+            expect(args.result.rows).toHaveLength(1);
+            completedVisibilityReads++;
+            throw fault;
+          }
+          return Promise.resolve(args.result);
+        },
+      });
+      expect(
+        await currentPushSource({ ...dependencies, database: failing }, claim).catch(
+          (error: unknown) => error,
+        ),
+      ).toBe(fault);
+      expect(completedVisibilityReads).toBe(1);
+    });
+  });
+
   test('an unread later occurrence cannot make a read occurrence eligible again', async () => {
     await withRollback(async (db) => {
       const world = await pendingPush(db);

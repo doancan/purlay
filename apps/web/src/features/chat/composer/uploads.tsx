@@ -72,7 +72,7 @@ export const OutboxProvider = ({
       }),
       send: (message) => {
         if (!isCurrent()) throw accountChanged();
-        latest.current.engine.send(message);
+        latest.current.engine.send({ ...message, foreground: false });
       },
       refused: (channelName, reason) => {
         if (!isCurrent()) return;
@@ -228,6 +228,8 @@ const uploadRefusal = (
       return { text: t('upload.why.session'), retry: true };
     // The workspace answers a person who is no longer in it as one that does not exist (404, never
     // 403): taken out of it, or it was deleted. The same bytes would be refused the same way.
+    case 'WORKSPACE_ACCESS_REQUIRED':
+      return { text: t('failure.workspaceAccess'), retry: false };
     case 'WORKSPACE_NOT_FOUND':
       return { text: t('upload.why.notInWorkspace'), retry: false };
     // Nothing more to say than that it did not: the server's fault, or a refusal no upload meets.
@@ -316,6 +318,11 @@ const uploadRefusal = (
     case 'USER_NOT_FOUND':
     case 'VALIDATION_FAILED':
     case 'WEBHOOK_SIGNATURE_INVALID':
+    case 'WORKSPACE_SECURITY_CHANGED':
+    case 'WORKSPACE_SECURITY_NOT_READY':
+    case 'WORKSPACE_MFA_NOT_FOUND':
+    case 'WORKSPACE_MFA_INVALID':
+    case 'WORKSPACE_MFA_LOCKED':
     case 'COMPANY_IDENTITY_NOT_FOUND':
     case 'COMPANY_IDENTITY_CHANGED':
     case 'COMPANY_IDENTITY_NOT_READY':

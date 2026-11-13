@@ -306,8 +306,204 @@ const aCompanyBinding = async (
   };
 };
 
+/** The same native proof is shared by the policy test, challenge and workspace assurance. */
+const anAuthenticationRevision = async (db: Transaction, world: World): Promise<string> => {
+  await db
+    .insertInto('session_authentication_evidence')
+    .values({
+      session_id: world.sessionId,
+      user_id: world.adaId,
+      method: 'password',
+      authenticated_at: NOW,
+    })
+    .onConflict((conflict) => conflict.column('session_id').doNothing())
+    .execute();
+  return (
+    await db
+      .selectFrom('session_authentication_evidence')
+      .select('revision')
+      .where('session_id', '=', world.sessionId)
+      .where('user_id', '=', world.adaId)
+      .executeTakeFirstOrThrow()
+  ).revision;
+};
+
+const aWorkspaceFactor = async (
+  db: Transaction,
+  world: World,
+): Promise<{ readonly id: string; readonly revision: string }> => {
+  const existing = await db
+    .selectFrom('workspace_mfa_factors')
+    .select(['id', 'revision'])
+    .where('workspace_id', '=', world.workspaceId)
+    .where('user_id', '=', world.adaId)
+    .where('state', '=', 'verified')
+    .executeTakeFirst();
+  return (
+    existing ??
+    (await db
+      .insertInto('workspace_mfa_factors')
+      .values({
+        workspace_id: world.workspaceId,
+        user_id: world.adaId,
+        secret_encrypted: Buffer.from('opaque-sealed-lifecycle-factor'),
+        state: 'verified',
+        verified_at: NOW,
+        last_accepted_counter: '42',
+      })
+      .returning(['id', 'revision'])
+      .executeTakeFirstOrThrow())
+  );
+};
+
+interface ProofLifetime {
+  readonly id?: string;
+  readonly created_at: Date;
+  readonly expires_at: Date;
+}
+
+const LIVE_PROOF: ProofLifetime = {
+  created_at: NOW,
+  expires_at: new Date(NOW.getTime() + HOUR_MS),
+};
+
+const aPolicyTest = async (
+  db: Transaction,
+  world: World,
+  lifetime: ProofLifetime = LIVE_PROOF,
+): Promise<void> => {
+  const proposal = JSON.stringify({
+    mode: 'enforced',
+    signIn: 'any',
+    allowedConnectionIds: [],
+    requireMfa: true,
+    idleMinutes: 30,
+    maxAgeHours: 24,
+    mfaMaxAgeMinutes: 60,
+  });
+  await db
+    .insertInto('workspace_access_policy_tests')
+    .values({
+      ...lifetime,
+      workspace_id: world.workspaceId,
+      session_id: world.sessionId,
+      user_id: world.adaId,
+      authentication_revision: await anAuthenticationRevision(db, world),
+      policy_epoch: '0',
+      token_hash: Buffer.from(await tokenDigest(crypto.randomUUID()), 'hex'),
+      proposed_policy: proposal,
+      proposed_digest: Buffer.from(await tokenDigest(proposal), 'hex'),
+      recovery_revision: crypto.randomUUID(),
+    })
+    .execute();
+};
+
+const aWorkspaceChallenge = async (
+  db: Transaction,
+  world: World,
+  lifetime: ProofLifetime = LIVE_PROOF,
+): Promise<void> => {
+  const factor = await aWorkspaceFactor(db, world);
+  await db
+    .insertInto('workspace_mfa_challenges')
+    .values({
+      ...lifetime,
+      workspace_id: world.workspaceId,
+      session_id: world.sessionId,
+      user_id: world.adaId,
+      authentication_revision: await anAuthenticationRevision(db, world),
+      policy_epoch: '0',
+      factor_scope: 'workspace',
+      factor_id: factor.id,
+      factor_revision: factor.revision,
+      purpose: 'step_up',
+      token_hash: Buffer.from(await tokenDigest(crypto.randomUUID()), 'hex'),
+    })
+    .execute();
+};
+
+/** Kept separate so another member's real security rows can guard against over-broad erasure. */
+const WORKSPACE_SECURITY_ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
+  session_authentication_evidence: ofAda('session_authentication_evidence', async (db, world) => {
+    await anAuthenticationRevision(db, world);
+  }),
+  workspace_access_policy_tests: ofAda('workspace_access_policy_tests', async (db, world) => {
+    await aPolicyTest(db, world);
+  }),
+  workspace_session_assurances: ofAda('workspace_session_assurances', async (db, world) => {
+    const factor = await aWorkspaceFactor(db, world);
+    await db
+      .insertInto('workspace_session_assurances')
+      .values({
+        workspace_id: world.workspaceId,
+        session_id: world.sessionId,
+        user_id: world.adaId,
+        authentication_revision: await anAuthenticationRevision(db, world),
+        policy_epoch: '0',
+        factor_scope: 'workspace',
+        factor_id: factor.id,
+        factor_revision: factor.revision,
+        mfa_verified_at: NOW,
+        mfa_expires_at: LIVE_PROOF.expires_at,
+        last_used_at: NOW,
+        expires_at: LIVE_PROOF.expires_at,
+      })
+      .execute();
+  }),
+  workspace_mfa_factors: ofAda('workspace_mfa_factors', async (db, world) => {
+    await aWorkspaceFactor(db, world);
+    await db
+      .insertInto('workspace_mfa_factors')
+      .values([
+        {
+          workspace_id: world.workspaceId,
+          user_id: world.adaId,
+          secret_encrypted: Buffer.from('opaque-pending-lifecycle-factor'),
+          state: 'pending',
+          pending_expires_at: LIVE_PROOF.expires_at,
+        },
+        {
+          workspace_id: world.workspaceId,
+          user_id: world.adaId,
+          secret_encrypted: Buffer.from('opaque-revoked-lifecycle-factor'),
+          state: 'revoked',
+          revoked_at: NOW,
+        },
+      ])
+      .execute();
+  }),
+  workspace_mfa_challenges: ofAda('workspace_mfa_challenges', async (db, world) => {
+    await aWorkspaceChallenge(db, world);
+  }),
+  workspace_mfa_recovery_codes: ofAda('workspace_mfa_recovery_codes', async (db, world) => {
+    const factor = await aWorkspaceFactor(db, world);
+    await db
+      .insertInto('workspace_mfa_recovery_codes')
+      .values([
+        {
+          workspace_id: world.workspaceId,
+          user_id: world.adaId,
+          purpose: 'factor',
+          revision: crypto.randomUUID(),
+          factor_id: factor.id,
+          factor_revision: factor.revision,
+          code_hash: Buffer.from(await tokenDigest(crypto.randomUUID()), 'hex'),
+        },
+        {
+          workspace_id: world.workspaceId,
+          user_id: world.adaId,
+          purpose: 'policy',
+          revision: crypto.randomUUID(),
+          code_hash: Buffer.from(await tokenDigest(crypto.randomUUID()), 'hex'),
+        },
+      ])
+      .execute();
+  }),
+};
+
 /** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
+  ...WORKSPACE_SECURITY_ERASURE_PROBES,
   workspace_invitation_mail_attempts: {
     seed: async (db, world) => {
       await db
@@ -715,6 +911,28 @@ const UNSEEDED_ERASURE: Readonly<Record<Table, string>> = {};
  * that names them, which the soft deletion keeps pointing at the same (anonymised) account.
  */
 const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
+  workspace_access_policies: by(
+    'workspace_access_policies',
+    'updated_by',
+    adas,
+    async (db, world) => {
+      await db
+        .updateTable('workspaces')
+        .set({ access_policy_epoch: '1' })
+        .where('id', '=', world.workspaceId)
+        .execute();
+      await db
+        .insertInto('workspace_access_policies')
+        .values({
+          workspace_id: world.workspaceId,
+          epoch: '1',
+          mode: 'off',
+          sign_in: 'any',
+          updated_by: world.adaId,
+        })
+        .execute();
+    },
+  ),
   message_shared_jobs: by(
     'message_shared_jobs',
     'workspace_id',
@@ -1181,6 +1399,33 @@ const marked = (
 
 /** Tables decided `window` or `swept`: a row seeded as `EXPIRED` and one as `KEPT`, by the same code. */
 const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
+  workspace_access_policy_tests: marked(
+    'sweep:email-sign-ins',
+    'workspace_access_policy_tests',
+    'id',
+    async (db, world, row) => {
+      await aPolicyTest(db, world, {
+        id: row.id,
+        created_at: new Date(row.at.getTime() - 1),
+        expires_at: row.until,
+      });
+    },
+    (row) => row.id,
+  ),
+  // A step-up challenge has no test FK: deleting an expired policy test cannot hide a missing sweep.
+  workspace_mfa_challenges: marked(
+    'sweep:email-sign-ins',
+    'workspace_mfa_challenges',
+    'id',
+    async (db, world, row) => {
+      await aWorkspaceChallenge(db, world, {
+        id: row.id,
+        created_at: new Date(row.at.getTime() - 1),
+        expires_at: row.until,
+      });
+    },
+    (row) => row.id,
+  ),
   push_intents: {
     job: 'worker:push',
     seed: async (db, world, row) => {
@@ -1523,7 +1768,33 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
     await withRollback(async (db) => {
       const world = await aWorld(db);
       const seeded: Record<Table, Probe> = { ...ERASURE_PROBES, ...KEPT_PROBES };
-      for (const probe of Object.values(seeded)) await probe.seed(db, world);
+      // Ordinary content is created before the fixture installs its retained governed policy epoch.
+      const seedOrder = Object.entries(seeded).sort(
+        ([left], [right]) =>
+          Number(left === 'workspace_access_policies') -
+          Number(right === 'workspace_access_policies'),
+      );
+      for (const [, probe] of seedOrder) await probe.seed(db, world);
+      // These probes read only workspaceId, adaId and sessionId. Bob shares the workspace,
+      // while the other world catches a deletion that forgets its person/workspace predicate.
+      const controls: readonly [World, World] = [
+        {
+          ...world,
+          adaId: world.bobId,
+          sessionId: (await aSession(db, clock, world.bobId)).sessionId,
+        },
+        await aWorld(db),
+      ];
+      const securityBefore: (readonly [Table, number, number])[] = [];
+      for (const [table, probe] of Object.entries(WORKSPACE_SECURITY_ERASURE_PROBES)) {
+        for (const control of controls) await probe.seed(db, control);
+        securityBefore.push([
+          table,
+          await probe.rows(db, controls[0]),
+          await probe.rows(db, controls[1]),
+        ]);
+      }
+      expect(securityBefore.filter(([, bob, other]) => bob === 0 || other === 0)).toEqual([]);
       // Seeded for real: a probe that found nothing before the erasure holds nothing after it.
       const before: Record<Table, number> = {};
       for (const [table, probe] of Object.entries(seeded)) {
@@ -1549,6 +1820,15 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
         (table) => (left[table] ?? 0) < (before[table] ?? 0),
       );
       expect(removed).toEqual([]);
+      const securityAfter: (readonly [Table, number, number])[] = [];
+      for (const [table, probe] of Object.entries(WORKSPACE_SECURITY_ERASURE_PROBES)) {
+        securityAfter.push([
+          table,
+          await probe.rows(db, controls[0]),
+          await probe.rows(db, controls[1]),
+        ]);
+      }
+      expect(securityAfter).toEqual(securityBefore);
     });
   });
 

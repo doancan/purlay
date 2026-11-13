@@ -285,8 +285,9 @@ export const WEB_REALTIME: readonly Mutation[] = [
     id: 'guest-egress-http-start-owner-omitted',
     why: 'A stale retry whose socket is denied cannot fall through to HTTP with the new cookie.',
     file: 'apps/web/src/realtime/engine.ts',
-    find: '  const overHttp = async (pending: PendingMessage): Promise<void> => {\n    if (!ownsAccount()) return;',
-    replace: '  const overHttp = async (pending: PendingMessage): Promise<void> => {',
+    find: '  const overHttp = async (pending: PendingMessage, foreground: boolean): Promise<void> => {\n    if (!ownsAccount()) return;',
+    replace:
+      '  const overHttp = async (pending: PendingMessage, foreground: boolean): Promise<void> => {',
     tests: ['apps/web/src/realtime/engine.test.ts'],
   },
   {

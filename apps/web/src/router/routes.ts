@@ -37,6 +37,7 @@ export const CORE_ROUTES = {
   home: '/',
   serverHome: '/server',
   serverSection: '/server/:section',
+  workspaceAccess: '/workspace-access',
   workspace: '/w/:slug',
   welcome: '/w/:slug/welcome',
   // Settings are a page with a navigation of its own (D-146); the bare address opens Profile.
@@ -254,3 +255,13 @@ export const searchFiltersIn = (search: string): SearchFilters => {
   }
   return Value.Check(SearchFilters, values) ? values : {};
 };
+
+/** Only a workspace name returns from remediation; no caller-selected redirect URL is trusted. */
+export const workspaceAccessHref = (workspace: string): string =>
+  `${href('workspaceAccess')}?${new URLSearchParams({ workspace }).toString()}`;
+
+/** Content only: settings, remediation, administration and inbox/status screens are not activity. */
+export const contentWorkspaceSlug = (match: Match): string | null =>
+  match.name === 'workspace' || (isModuleMatch(match) && match.name !== 'inbox')
+    ? match.params.slug
+    : null;

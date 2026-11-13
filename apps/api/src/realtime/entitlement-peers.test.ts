@@ -11,8 +11,10 @@ import { aFakeLink } from '../testing/redis';
 import {
   advertiseEntitlements,
   advertiseSuspension,
+  advertiseWorkspaceAccess,
   peersBehind,
   suspensionPeersBehind,
+  workspaceAccessPeersBehind,
 } from './entitlement-peers';
 import type { Timers } from './hub';
 import { ANNOUNCE_RETRY_MS, NODE_TTL_MS } from './module-set';
@@ -57,6 +59,26 @@ const manualTimers = (): {
 const settle = async (): Promise<void> => {
   await Bun.sleep(0);
 };
+
+test('workspace access readers advertise and check their own API capability namespace', async () => {
+  const link = aFakeLink();
+  link.behaviour.script = (): number => 0;
+  link.behaviour.send = (): number => 1;
+  const clock = manualTimers();
+  const node = advertiseWorkspaceAccess({
+    link,
+    nodeId: 'access-a',
+    log: aRecordingLogger().log,
+    timers: clock.timers,
+  });
+  await settle();
+  expect(link.scripts[0]?.keys).toEqual([names.workspaceAccessNodes]);
+  expect(await workspaceAccessPeersBehind(link)).toBe(0);
+  expect(link.scripts[1]?.keys).toEqual([names.moduleSet, names.workspaceAccessNodes]);
+  await node.stop();
+  expect(clock.pending()).toBe(0);
+  expect(link.sent).toEqual([{ command: 'HDEL', args: [names.workspaceAccessNodes, 'access-a'] }]);
+});
 
 describe('a node that reads workspace grants says so', () => {
   test('asks again soon when it could not say so, and settles to the renewal once it has', async () => {

@@ -4,12 +4,19 @@
  * handler, and its line in the log after its answer. `createApp` attaches them; a failure is `error-hook.ts`'s.
  */
 import { StatusMap, type Elysia, type HTTPHeaders } from 'elysia';
+import { mapResponse as mapFrameworkResponse } from 'elysia/adapter/bun/handler';
 import { ATTACHMENT_BYTES_MAX } from '@purlay/types';
 import type { Composition } from '../../composition';
 import { AppError } from '../../platform/errors';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
-import { currentRequest, enterRequest, noteModule, type Logger } from '../../platform/logging';
+import {
+  currentRequest,
+  enterRequest,
+  noteModule,
+  type Logger,
+  type RequestScope,
+} from '../../platform/logging';
 import { timedOut, withDeadline } from '../../platform/request-deadline';
 import { clientRefusal, isOutsideClientPolicy } from './client-policy';
 import { clientPolicyOf } from './client-info';
@@ -35,6 +42,7 @@ import { refusalFor } from './errors';
 import { EDGE_ROUTE } from './metrics';
 import type { httpLimits } from './rate-limit';
 import type { RequestObservation } from './request-observation';
+import { workspaceHttpAccess } from './workspace-access';
 
 /** Paths asked every few seconds by a machine: their request lines are written at debug. */
 const POLLED: ReadonlySet<string> = new Set(['/health', '/health/ready', '/metrics']);
@@ -53,6 +61,7 @@ export interface RequestHooksInput {
   readonly deadlineOf: (module: string) => number | undefined;
   readonly admit: ReturnType<typeof httpLimits>;
   readonly observation: RequestObservation;
+  readonly activityLater: (work: () => Promise<void>) => void;
 }
 
 interface RequestContext {
@@ -73,11 +82,16 @@ interface ResponseContext {
   readonly responseValue: unknown;
 }
 
+interface MappingContext extends ResponseContext {
+  readonly set: Parameters<typeof mapFrameworkResponse>[1];
+}
+
 export interface RequestHooks {
   readonly wrap: Wrap;
   readonly onRequest: (context: RequestContext) => Response | undefined;
   readonly onBeforeHandle: (context: HandlerContext) => Promise<void>;
   readonly onAfterResponse: (context: ResponseContext) => void;
+  readonly onMapResponse: (context: MappingContext) => Response;
 }
 
 export const requestHooks = (input: RequestHooksInput): RequestHooks => {
@@ -92,6 +106,7 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
   const closedRoute = (request: Request): boolean => modules.closed(new URL(request.url).pathname);
   /** What a request's own hooks know that the deadline, which wraps them all, needs to answer in their place. */
   const requestIds = new WeakMap<Request, string>();
+  const requestScopes = new WeakMap<Request, RequestScope>();
   const deadlineSignals = new WeakMap<Request, AbortSignal>();
   /** The answer to a module's request that ran past its deadline: the envelope, with the headers the others carry. */
   const answerOverrun = (request: Request, module: string): Response => {
@@ -141,7 +156,15 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
   const onRequest = ({ request, set }: RequestContext): Response | undefined => {
     // An id from the edge is kept when well-formed, as a label only (#234).
     const requestId = inboundRequestId(request.headers);
-    enterRequest({ requestId, startedAt: performance.now(), entitlements });
+    const scope: RequestScope = {
+      requestId,
+      startedAt: performance.now(),
+      entitlements,
+      workspaceAccess: workspaceHttpAccess(dependencies, request),
+      ...(request.headers.has('x-purlay-active-workspace') ? { workspaceActivity: new Map() } : {}),
+    };
+    requestScopes.set(request, scope);
+    enterRequest(scope);
     requestIds.set(request, requestId);
     // Before anything asks the library: every use of it in this request, and in what the request
     // leaves for after its answer, is of the instance current now (D-179 §4).
@@ -237,5 +260,27 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
     });
   };
 
-  return { wrap, onRequest, onBeforeHandle, onAfterResponse };
+  // Runs before the framework returns the response. Its delayed after-response hook is too late for
+  // drain/settled to account for newly queued work, even though the response has already succeeded.
+  const onMapResponse = ({ request, set, responseValue }: MappingContext): Response => {
+    const status =
+      responseValue instanceof Response
+        ? responseValue.status
+        : typeof set.status === 'string'
+          ? StatusMap[set.status]
+          : (set.status ?? 200);
+    const pending = requestScopes.get(request)?.workspaceActivity;
+    if (status < 400 && pending !== undefined) {
+      const activities = [...pending.values()];
+      input.activityLater(async (): Promise<void> => {
+        for (const activity of activities) await activity();
+      });
+    }
+    pending?.clear();
+    requestScopes.delete(request);
+    // The pinned framework replaces an error answer with this mapper's return value, including undefined.
+    return mapFrameworkResponse(responseValue, set, request);
+  };
+
+  return { wrap, onRequest, onBeforeHandle, onAfterResponse, onMapResponse };
 };

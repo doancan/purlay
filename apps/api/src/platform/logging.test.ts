@@ -104,6 +104,23 @@ describe('the never-logged list', () => {
     log.info('kept', { userId: 'u1', nested: { channelId: 'c1' } });
     expect(lines[0]).toMatchObject({ msg: 'kept', userId: 'u1', nested: { channelId: 'c1' } });
   });
+
+  test('workspace policy proof and recovery values are redacted in fields and bindings', () => {
+    const { log, lines } = recording();
+    const values = {
+      testToken: 'one-time-policy-proof',
+      recoveryCode: 'one-time-policy-recovery',
+      challengeId: 'one-time-factor-challenge',
+      authorizationChallengeId: 'one-time-factor-authorization',
+      totpURI: 'otpauth://totp/example?secret=setup-secret',
+      backupCodes: ['one-time-factor-recovery'],
+    };
+    log.info('security result', { result: values, revision: 'visible-revision' });
+    log.child({ nested: values }).info('security binding');
+    const written = JSON.stringify(lines);
+    for (const secret of Object.values(values).flat()) expect(written).not.toContain(secret);
+    expect(lines[0]).toMatchObject({ revision: 'visible-revision' });
+  });
 });
 
 describe('what a line carries', () => {

@@ -11,6 +11,7 @@
  */
 import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
+import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
 import type { EventBus } from '../../platform/events';
 import { withinRequest, type Logger } from '../../platform/logging';
 import type { ModuleManifest } from '../../platform/module-kit/manifest';
@@ -50,6 +51,7 @@ interface WorkerContext {
   /** The module's lease of the pool: the work opens no connection of its own. */
   readonly database: Executor;
   readonly clock: Clock;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   /** Names the module and the worker on every line. */
   readonly log: Logger;
   readonly bus: EventBus;
@@ -173,6 +175,7 @@ export interface WorkersDependencies {
   /** Already leased: every connection the work takes is asked of its module's share (`leasingExecutor`). */
   readonly database: Executor;
   readonly clock: Clock;
+  readonly sessionLifetime?: () => WorkspaceAccessLifetime;
   readonly log: Logger;
   readonly bus: EventBus;
   readonly push?: PushSender;
@@ -240,6 +243,9 @@ export const startWorkers = (
               clock,
               log,
               bus,
+              ...(dependencies.sessionLifetime === undefined
+                ? {}
+                : { sessionLifetime: dependencies.sessionLifetime }),
               ports,
               entitled,
               seams,

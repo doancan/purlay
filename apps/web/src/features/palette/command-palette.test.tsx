@@ -171,6 +171,8 @@ describe('what is on offer before anything is typed', () => {
       'About',
       'General',
       'Company sign-in',
+      'Workspace security',
+      'Your workspace authenticator',
       'Members',
       'Invitations',
       'Integrations',
@@ -638,7 +640,7 @@ describe('what each kind of item does', () => {
     expect(closed()).toEqual([false]);
   });
 
-  test('a member is offered their own settings pages and none of the workspace’s', async () => {
+  test('a member is offered their own settings and workspace authenticator, without administrative pages', async () => {
     const session = aSession();
     const { options } = await mount(
       apiWith({
@@ -652,7 +654,16 @@ describe('what each kind of item does', () => {
     const offered = options();
     expect(offered).toContain('Profile');
     expect(offered).toContain('Sessions & account');
-    for (const page of ['General', 'Members', 'Invitations', 'Audit log', 'Data & retention']) {
+    expect(offered).toContain('Your workspace authenticator');
+    for (const page of [
+      'General',
+      'Company sign-in',
+      'Workspace security',
+      'Members',
+      'Invitations',
+      'Audit log',
+      'Data & retention',
+    ]) {
       expect(offered).not.toContain(page);
     }
   });

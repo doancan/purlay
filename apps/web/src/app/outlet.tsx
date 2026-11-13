@@ -24,8 +24,6 @@ import { NotFound } from '../features/shell/not-found';
 import { Shell } from '../features/shell/shell';
 import { WorkspaceHome } from '../features/shell/workspace-home';
 import { SignInScreen } from '../features/sign-in/sign-in-screen';
-import { EmailSignInScreen } from '../features/sign-in/email-sign-in-screen';
-import { SignUpScreen } from '../features/sign-in/sign-up-screen';
 import { useI18n } from '../i18n/i18n-provider';
 import { useRoute } from '../router/router-provider';
 import { isModuleMatch, moduleOf, type Match } from '../router/routes';
@@ -60,6 +58,14 @@ export const loadGallery = (): Promise<{ default: ComponentType }> =>
 const defaultGallery: ComponentType | null =
   import.meta.env.DEV || import.meta.env.VITE_GALLERY === '1' ? lazy(loadGallery) : null;
 
+// Account creation and an opened email link are separate routes; ordinary sign-in stays eager.
+const EmailSignInScreen = lazy(async () => ({
+  default: (await import('../features/sign-in/email-sign-in-screen')).EmailSignInScreen,
+}));
+const SignUpScreen = lazy(async () => ({
+  default: (await import('../features/sign-in/sign-up-screen')).SignUpScreen,
+}));
+
 // Joining is a route of its own: a regular conversation need not download its screens.
 const InviteScreen = lazy(async () => ({
   default: (await import('../features/invitations/invite-screen')).InviteScreen,
@@ -69,6 +75,10 @@ const WelcomeScreen = lazy(async () => ({
 }));
 const MailStopScreen = lazy(async () => ({
   default: (await import('../features/missed-mail/stop-screen')).MailStopScreen,
+}));
+
+const WorkspaceAccessScreen = lazy(async () => ({
+  default: (await import('../features/settings/security/access-screen')).WorkspaceAccessScreen,
 }));
 
 const Loading = (): React.JSX.Element => {
@@ -106,7 +116,17 @@ const draw = (match: Match, gallery: ComponentType | null): Drawn => {
     case 'signIn':
       return bare(<SignInScreen />);
     case 'signInEmail':
-      return bare(<EmailSignInScreen />);
+      return bare(
+        <Suspense
+          fallback={
+            <Main>
+              <Loading />
+            </Main>
+          }
+        >
+          <EmailSignInScreen />
+        </Suspense>,
+      );
     case 'signInNative':
       return bare(
         <SessionGate>
@@ -114,7 +134,17 @@ const draw = (match: Match, gallery: ComponentType | null): Drawn => {
         </SessionGate>,
       );
     case 'signUp':
-      return bare(<SignUpScreen />);
+      return bare(
+        <Suspense
+          fallback={
+            <Main>
+              <Loading />
+            </Main>
+          }
+        >
+          <SignUpScreen />
+        </Suspense>,
+      );
     case 'setup':
       return bare(<LazySetupScreen />);
     case 'setupVerify':
@@ -160,6 +190,20 @@ const draw = (match: Match, gallery: ComponentType | null): Drawn => {
         >
           <MailStopScreen />
         </Suspense>,
+      );
+    case 'workspaceAccess':
+      return bare(
+        <SessionGate>
+          <Suspense
+            fallback={
+              <Main>
+                <Loading />
+              </Main>
+            }
+          >
+            <WorkspaceAccessScreen />
+          </Suspense>
+        </SessionGate>,
       );
     case 'workspace':
       return shelled(match.params.slug, <WorkspaceHome />);

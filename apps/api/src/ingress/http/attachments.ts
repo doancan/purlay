@@ -18,7 +18,8 @@ import type { Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import type { AttachmentReader, ReadableAttachment } from '../../modules/attachments/readable';
 import { AppError, attachmentNotFound } from '../../platform/errors';
-import type { Logger } from '../../platform/logging';
+import { currentRequest, withinRequest, type Logger } from '../../platform/logging';
+import { requireCapturedWorkspaceAccess } from '../../platform/membership-access';
 import type { ObjectStore } from '../../platform/storage';
 import type { Atomically } from '../../platform/transactions';
 import { discardUpload } from '../../modules/attachments/uploads';
@@ -101,9 +102,56 @@ export const downloadAttachment = async (
     // A row whose object is gone is our failure, not the reader's: loud, never "not found".
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
+  try {
+    // Storage is an asynchronous boundary: current authority is checked again before any bytes leave.
+    await dependencies.readAttachment(database, userId, attachmentId);
+  } catch (error) {
+    await stored.body.cancel().catch(() => undefined);
+    throw error;
+  }
+  const scope = currentRequest();
+  const captured =
+    scope === undefined
+      ? undefined
+      : {
+          ...scope,
+          workspaceFences: new Map(scope.workspaceFences),
+          workspaceAccess: requireCapturedWorkspaceAccess,
+        };
+  const lifetime = { ...dependencies.auth.sessionLifetime };
+  const reader = stored.body.getReader();
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull: async (controller): Promise<void> => {
+        try {
+          const { value, done } = await reader.read();
+          const currentLifetime = dependencies.auth.sessionLifetime;
+          if (
+            currentLifetime.sessionIdleTimeoutHours !== lifetime.sessionIdleTimeoutHours ||
+            currentLifetime.sessionMaxAgeDays !== lifetime.sessionMaxAgeDays
+          )
+            throw attachmentNotFound();
+          const authorize = async (): Promise<void> => {
+            await dependencies.readAttachment(database, userId, attachmentId);
+          };
+          if (captured === undefined) await authorize();
+          else await withinRequest(captured, authorize);
+          if (done) controller.close();
+          else controller.enqueue(value);
+        } catch (error) {
+          await reader.cancel().catch(() => undefined);
+          controller.error(error);
+        }
+      },
+      cancel: async (reason): Promise<void> => {
+        await reader.cancel(reason);
+      },
+    },
+    { highWaterMark: 0 },
+  );
   return {
     status: 200,
-    body: stored.body,
+    body,
     headers: {
       ...downloadHeaders(attachment),
       ...validator,

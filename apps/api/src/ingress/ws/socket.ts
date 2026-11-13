@@ -27,6 +27,8 @@ import { startLivenessSweep } from '../../realtime/liveness';
 import { offlinePresence, onlinePresence, type OnlinePresence } from '../../realtime/online';
 import { announcePresence } from '../../features/chat/presence/presence';
 import { companyFrameProjector } from '../../features/chat/channels/company-delivery';
+import { workspaceFrameProjector } from '../../features/chat/channels/workspace-delivery';
+import { readonlyWorkspaceAccess } from '../../platform/tenancy';
 import {
   inProcessRateLimiter,
   SOCKET_CONNECTION_LIMITS,
@@ -191,7 +193,15 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
             : { directory: dependencies.shared.directory }),
         });
   const hub = createSocketHub(dependencies.auth, clock, {
-    companyFrame: companyFrameProjector(database),
+    companyFrame: companyFrameProjector(database, {
+      clock,
+      lifetime: () => dependencies.auth.sessionLifetime,
+    }),
+    workspaceFrame: workspaceFrameProjector(
+      database,
+      clock,
+      () => dependencies.auth.sessionLifetime,
+    ),
     log,
     presence: online,
     ...(dependencies.closedEvent === undefined ? {} : { closedEvent: dependencies.closedEvent }),
@@ -333,6 +343,11 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
             requestId: crypto.randomUUID(),
             startedAt: performance.now(),
             sessionId: identity.sessionId,
+            workspaceAccess: readonlyWorkspaceAccess(
+              identity,
+              clock,
+              () => dependencies.auth.sessionLifetime,
+            ),
             ...(identity.companyWorkspaceId === undefined
               ? {}
               : {

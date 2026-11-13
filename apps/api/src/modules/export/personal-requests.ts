@@ -18,7 +18,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Executor, Transaction } from '@purlay/db';
+import { sql, type Executor, type RawBuilder, type Transaction } from '@purlay/db';
 import {
   EXPORT_KEPT_HOURS,
   PERSONAL_EXPORTS_PER_DAY,
@@ -44,13 +44,22 @@ import {
   type RunDependencies,
 } from './requests';
 import { writeTar } from './tar';
+import { currentRequest } from '../../platform/logging';
+import { withinDeferredSource } from '../../platform/deferred-source';
+import { atomicallyOn } from '../../platform/transactions';
+import { archiveDownloadHandoff, type ArchiveDownloadHandoff } from './download-handoff';
+import {
+  legacyPersonalWorkspaces,
+  requirePreparedWorkspaceSet,
+  type ExportSourceOptions,
+} from './source';
 
 /** The window `PERSONAL_EXPORTS_PER_DAY` counts in. */
 const DAY_MS = 24 * HOUR_MS;
 
 /** Where a person's archive is kept: under the person, never a workspace (`personPrefix`). */
 const keyOf = (userId: string, exportId: string): string =>
-  `${personPrefix(userId)}exports/${exportId}.tar`;
+  `${personPrefix(userId)}exports/${exportId}/${crypto.randomUUID()}.tar`;
 
 /** Asks for an export of the caller's own data; the caller starts it once this has committed. */
 export const requestPersonalExport = async (
@@ -110,6 +119,7 @@ export const requestPersonalExport = async (
       status: 'pending',
       created_at: at,
       heartbeat_at: at,
+      source_session_id: currentRequest()?.sessionId ?? null,
     })
     .returning(COLUMNS)
     .executeTakeFirstOrThrow();
@@ -147,6 +157,7 @@ const makePersonalExport = async (
     .innerJoin('users', 'users.id', 'personal_exports.user_id')
     .select([
       'personal_exports.user_id',
+      'personal_exports.source_session_id',
       'users.username',
       'users.deleted_at',
       'users.suspended_at',
@@ -166,52 +177,83 @@ const makePersonalExport = async (
   }
   const userId = row.user_id;
 
-  const stopBeating = beatWhileMade(dependencies, 'personal_exports', exportId);
-  const scratch = await mkdtemp(join(tmpdir(), 'purlay-export-'));
-  const key = keyOf(userId, exportId);
-  let stored = false;
   try {
-    const folder = join(scratch, 'export');
-    await exportPerson(dependencies, { id: userId, username: row.username }, folder);
-    const archive = join(scratch, 'export.tar');
-    const size = await writeTar(
-      folder,
-      'export',
-      archive,
-      Math.floor(clock.now().getTime() / 1000),
+    await withinDeferredSource(
+      dependencies,
+      { userId, sessionId: row.source_session_id },
+      async () => {
+        const stopBeating = beatWhileMade(dependencies, 'personal_exports', exportId);
+        const scratch = await mkdtemp(join(tmpdir(), 'purlay-export-'));
+        const key = keyOf(userId, exportId);
+        let stored = false;
+        try {
+          const folder = join(scratch, 'export');
+          const exported = await exportPerson(
+            dependencies,
+            { id: userId, username: row.username },
+            folder,
+          );
+          const archive = join(scratch, 'export.tar');
+          const size = await writeTar(
+            folder,
+            'export',
+            archive,
+            Math.floor(clock.now().getTime() / 1000),
+          );
+          await rm(folder, { recursive: true, force: true });
+          await storage.putFile(key, archive, 'application/x-tar');
+          stored = true;
+          const done = clock.now();
+          const marked = await atomicallyOn(database)(
+            async (transaction) =>
+              await withinDeferredSource(
+                { ...dependencies, database: transaction },
+                { userId, sessionId: row.source_session_id },
+                async () => {
+                  const fence = await requirePreparedWorkspaceSet(
+                    transaction,
+                    userId,
+                    exported.workspaceIds,
+                  );
+                  return await transaction
+                    .updateTable('personal_exports')
+                    .set({
+                      status: 'ready',
+                      storage_key: key,
+                      source_workspace_ids: [...exported.workspaceIds],
+                      size_bytes: String(size),
+                      finished_at: done,
+                      expires_at: new Date(done.getTime() + EXPORT_KEPT_HOURS * HOUR_MS),
+                    })
+                    .where('id', '=', exportId)
+                    .where('status', '=', 'pending')
+                    .where(fence)
+                    .returning('id')
+                    .executeTakeFirst();
+                },
+              ),
+          );
+          if (marked === undefined) {
+            // Marked cut off, or the account erased, meanwhile: the archive is nobody's, and goes — and one the
+            // store will not let go of is logged by its key, since no row names it for the sweep.
+            await removeArchive(dependencies, exportId, key);
+            log.warn('an export finished after it was given up on', { exportId });
+            return;
+          }
+          log.info('a person’s export ready', { exportId, bytes: size });
+        } catch (error) {
+          log.error('a person’s export failed', { exportId, err: error });
+          if (stored) await removeArchive(dependencies, exportId, key);
+          await fail(dependencies, 'personal_exports', exportId, failureOf(error));
+        } finally {
+          stopBeating();
+          await rm(scratch, { recursive: true, force: true });
+        }
+      },
     );
-    await rm(folder, { recursive: true, force: true });
-    await storage.putFile(key, archive, 'application/x-tar');
-    stored = true;
-    const done = clock.now();
-    const marked = await database
-      .updateTable('personal_exports')
-      .set({
-        status: 'ready',
-        storage_key: key,
-        size_bytes: String(size),
-        finished_at: done,
-        expires_at: new Date(done.getTime() + EXPORT_KEPT_HOURS * HOUR_MS),
-      })
-      .where('id', '=', exportId)
-      .where('status', '=', 'pending')
-      .returning('id')
-      .executeTakeFirst();
-    if (marked === undefined) {
-      // Marked cut off, or the account erased, meanwhile: the archive is nobody's, and goes — and one the
-      // store will not let go of is logged by its key, since no row names it for the sweep.
-      await removeArchive(dependencies, exportId, key);
-      log.warn('an export finished after it was given up on', { exportId });
-      return;
-    }
-    log.info('a person’s export ready', { exportId, bytes: size });
   } catch (error) {
-    log.error('a person’s export failed', { exportId, err: error });
-    if (stored) await removeArchive(dependencies, exportId, key);
+    log.error('personal export original authority ended', { exportId, err: error });
     await fail(dependencies, 'personal_exports', exportId, failureOf(error));
-  } finally {
-    stopBeating();
-    await rm(scratch, { recursive: true, force: true });
   }
 };
 
@@ -238,40 +280,84 @@ export const runPersonalExport = async (
  * expired and theirs, and puts it on the server's trail in the same transaction; answers where its
  * archive is. Anything else — an id that is no UUID among it — is the one `EXPORT_NOT_FOUND`.
  */
+const downloadablePersonalExport = (userId: string, exportId: string): RawBuilder<boolean> =>
+  sql<boolean>`id=${exportId} and user_id=${userId} and status='ready'`;
+
 export const claimPersonalDownload = async (
   transaction: Transaction,
   clock: Clock,
   userId: string,
   exportId: string,
-): Promise<{ readonly key: string; readonly size: number }> => {
+  options: ExportSourceOptions = {},
+): Promise<{
+  readonly key: string;
+  readonly size: number;
+  readonly handoff: ArchiveDownloadHandoff;
+}> => {
+  const callerSessionId = currentRequest()?.sessionId ?? null;
   if (!Value.Check(Uuid, exportId)) throw notFound();
-  // The person's row before their export's, as erasure takes them (`erasure.ts`): the trail's line below
-  // names the row, and taken in the other order a download and an erasure would each wait for the other.
-  const person = await transaction
-    .selectFrom('users')
-    .select('id')
-    .where('id', '=', userId)
-    .where('deleted_at', 'is', null)
-    .forKeyShare()
+  const staged = await transaction
+    .selectFrom('personal_exports')
+    .select(['source_session_id', 'source_workspace_ids'])
+    .where(downloadablePersonalExport(userId, exportId))
     .executeTakeFirst();
-  if (person === undefined) throw notFound();
-  const now = clock.now();
-  const claimed = await transaction
-    .updateTable('personal_exports')
-    .set({ status: 'downloaded', downloaded_at: now })
-    .where('id', '=', exportId)
-    .where('user_id', '=', userId)
-    .where('status', '=', 'ready')
-    .where('expires_at', '>', now)
-    .returning(['storage_key', 'size_bytes'])
-    .executeTakeFirst();
-  if (claimed?.storage_key == null) throw notFound();
-  await recordServerAudit(transaction, clock, {
-    actorUserId: userId,
-    action: 'account.export_downloaded',
-    targetUserId: userId,
-  });
-  return { key: claimed.storage_key, size: Number(claimed.size_bytes) };
+  if (staged === undefined) throw notFound();
+  return await withinDeferredSource(
+    { database: transaction, clock, ...options },
+    { userId, sessionId: staged.source_session_id },
+    async () => {
+      const included = staged.source_workspace_ids ?? (await legacyPersonalWorkspaces(transaction));
+      const fence = await requirePreparedWorkspaceSet(transaction, userId, included);
+      // The person's row before their export's, as erasure takes them (`erasure.ts`): the trail's line below
+      // names the row, and taken in the other order a download and an erasure would each wait for the other.
+      const person = await transaction
+        .selectFrom('users')
+        .select('id')
+        .where('id', '=', userId)
+        .where('deleted_at', 'is', null)
+        .forKeyShare()
+        .executeTakeFirst();
+      if (person === undefined) throw notFound();
+      const now = clock.now();
+      const claimed = await transaction
+        .updateTable('personal_exports')
+        .set({ status: 'downloaded', downloaded_at: now })
+        .where(downloadablePersonalExport(userId, exportId))
+        .where('id', '=', exportId)
+        .where('expires_at', '>', now)
+        .where(
+          'source_session_id',
+          staged.source_session_id === null ? 'is' : '=',
+          staged.source_session_id,
+        )
+        .where(
+          sql<boolean>`source_workspace_ids is not distinct from ${staged.source_workspace_ids}::uuid[]`,
+        )
+        .where(fence)
+        .returning(['storage_key', 'size_bytes'])
+        .executeTakeFirst();
+      if (claimed?.storage_key == null) throw notFound();
+      await recordServerAudit(transaction, clock, {
+        actorUserId: userId,
+        action: 'account.export_downloaded',
+        targetUserId: userId,
+      });
+      return {
+        key: claimed.storage_key,
+        size: Number(claimed.size_bytes),
+        handoff: archiveDownloadHandoff({
+          kind: 'personal',
+          exportId,
+          key: claimed.storage_key,
+          userId,
+          callerSessionId,
+          sourceSessionId: staged.source_session_id,
+          workspaceIds: included,
+          preparedWorkspaceIds: staged.source_workspace_ids,
+        }),
+      };
+    },
+  );
 };
 
 /**
