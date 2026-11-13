@@ -16,16 +16,16 @@ const compose = readFileSync('docker-compose.yml', 'utf8');
 const images = [...compose.matchAll(/^\s+image:\s*(\S+)$/gm)].map((m) => m[1] ?? '');
 
 describe('the API runtime matches the deployed memory policy', () => {
-  test('production, development and every direct API launcher use the same smaller heap', () => {
+  test('production, development and every direct API launcher use the default heap', () => {
     const command = JSON.parse(
       /^CMD (\[.*\])$/m.exec(readFileSync('Dockerfile', 'utf8'))?.[1] ?? 'null',
     ) as readonly string[];
-    expect(command).toContain('--smol');
+    expect(command).not.toContain('--smol');
     expect(command.at(-1)).toBe('apps/api/src/index.ts');
     const manifest = JSON.parse(readFileSync('apps/api/package.json', 'utf8')) as {
       scripts: { dev: string };
     };
-    expect(manifest.scripts.dev.split(/\s+/)).toContain('--smol');
+    expect(manifest.scripts.dev.split(/\s+/)).not.toContain('--smol');
     const launches: { file: string; args: string }[] = [];
     for (const pattern of ['apps/*/src/**/*.ts', 'scripts/**/*.ts'])
       for (const file of new Bun.Glob(pattern).scanSync({ cwd: '.', onlyFiles: true })) {
@@ -38,7 +38,7 @@ describe('the API runtime matches the deployed memory policy', () => {
         }
       }
     expect(launches.length).toBeGreaterThanOrEqual(6);
-    for (const { file, args } of launches) expect(args, file).toContain('--smol');
+    for (const { file, args } of launches) expect(args, file).not.toContain('--smol');
   });
 });
 

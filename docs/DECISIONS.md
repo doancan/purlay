@@ -1797,11 +1797,10 @@ gate loses credibility.
 | API idle RSS < 120 MB | Measured by starting the process and reading it. Stable enough to threshold. *Since 2026-10-12, `bun run budget:api` (#73): 80.6 MiB on its first run.* |
 
 *Amended 2026-11-13 (the API runtime):* every API launcher, including the production image,
-development, demo, restore rehearsal and budget processes, uses Bun's `--smol` mode. It grows
-the heap more conservatively by running automatic garbage collection more often
-([Bun runtime](https://bun.com/docs/runtime)); the existing latency gate still holds that CPU
-tradeoff to its bounds. This is the deployed runtime choice, not a measurement-only flag:
-the RSS limit, settling time and timeouts are unchanged, and no forced collection is added.
+development, demo, restore rehearsal and budget processes, uses Bun's default heap policy.
+The real memory and latency measurements run independently of the coverage suite, and remain
+required by CI. The 120 MiB RSS limit and latency regression bounds are unchanged; no forced
+collection or measurement-only runtime flag is added.
 
 **Blocking on regression, not on an absolute threshold:** ACK round-trip p95, fan-out p95, cold
 load, channel switch, keystroke→paint. Each is recorded per commit and compared with the previous

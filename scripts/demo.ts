@@ -161,7 +161,7 @@ const github = Bun.serve({
   },
 });
 say(`starting the API on :${String(apiPort)}…`);
-const api = Bun.spawn(['bun', '--no-env-file', '--smol', 'run', 'apps/api/src/index.ts'], {
+const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
   env: {
     ...process.env,

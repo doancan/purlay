@@ -87,7 +87,7 @@ export const measureIdleRss = async (url: string): Promise<number> => {
   const problem = throwawayDatabaseProblem(url);
   if (problem !== undefined) throw new Error(problem);
   const port = await freePort();
-  const api = Bun.spawn(['bun', '--no-env-file', '--smol', 'apps/api/src/index.ts'], {
+  const api = Bun.spawn(['bun', '--no-env-file', 'apps/api/src/index.ts'], {
     env: {
       ...process.env,
       NODE_ENV: 'development',

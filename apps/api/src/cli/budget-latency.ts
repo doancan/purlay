@@ -331,7 +331,7 @@ const inAScene = async <Result>(body: (scene: Scene) => Promise<Result>): Promis
   const origin = `http://localhost:${String(port)}`;
   // The server's key, so the sessions made below are signed as it signs them (D-179).
   const key = randomBytes(32).toString('base64');
-  const api = Bun.spawn(['bun', '--no-env-file', '--smol', 'apps/api/src/index.ts'], {
+  const api = Bun.spawn(['bun', '--no-env-file', 'apps/api/src/index.ts'], {
     env: {
       ...process.env,
       NODE_ENV: 'development',
