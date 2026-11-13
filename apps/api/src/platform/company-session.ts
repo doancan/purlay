@@ -139,6 +139,24 @@ const canonicalLiveCompanySessionProof = (
 )`;
 };
 
+/** The caller has already joined the exact native proof as company_proof; retain every live origin check. */
+export const liveJoinedCompanySessionProof = (
+  workspaceId: string,
+  userId: RawBuilder<string>,
+  directoryId: RawBuilder<string | null>,
+  capturedDirectoryId?: string | null,
+): RawBuilder<boolean> =>
+  canonicalLiveCompanySessionProof(
+    sql.ref<string>('company_proof.session_id'),
+    workspaceId,
+    userId,
+    undefined,
+    undefined,
+    directoryId,
+    capturedDirectoryId,
+    true,
+  );
+
 const COMPANY_PROOF_BATCH_NAME = 'ready_company_proofs';
 interface CompanyProofBatchRow {
   readonly session_id: string;

@@ -1,6 +1,6 @@
 /** Keyset pages of actual native proof candidates; proposals consume the shared access evaluator. */
 import { sql, type Executor } from '@purlay/db';
-import { liveCompanySessionProof } from './company-session';
+import { liveJoinedCompanySessionProof } from './company-session';
 import { snapshotOn } from './transactions';
 import type { WorkspaceAccessFacts, WorkspaceAccessLifetime } from './workspace-access-facts';
 
@@ -164,29 +164,26 @@ export const readWorkspacePolicyPreviewPage = async (
       companyIds.length === 0
         ? Promise.resolve([])
         : transaction
-            .selectFrom('workspace_identity_sessions')
+            .selectFrom('workspace_identity_sessions as company_proof')
             .innerJoin(
               'sessions as preview_source',
               'preview_source.id',
-              'workspace_identity_sessions.session_id',
+              'company_proof.session_id',
             )
             .select([
-              'workspace_identity_sessions.session_id',
+              'company_proof.session_id',
               'connection_id',
               'authentication_revision',
               'authenticated_at',
-              liveCompanySessionProof(
-                sql.ref<string>('workspace_identity_sessions.session_id'),
+              liveJoinedCompanySessionProof(
                 input.workspaceId,
                 sql.ref<string>('preview_source.user_id'),
-                undefined,
-                undefined,
                 sql.ref<string | null>('preview_source.directory_id'),
                 onlyManualCompany ? null : undefined,
               ).as('live'),
             ])
-            .where('workspace_identity_sessions.workspace_id', '=', input.workspaceId)
-            .where('workspace_identity_sessions.session_id', 'in', companyIds)
+            .where('company_proof.workspace_id', '=', input.workspaceId)
+            .where('company_proof.session_id', 'in', companyIds)
             .execute(),
     ]);
     const bySession = new Map(sessions.map((row) => [row.id, row]));
