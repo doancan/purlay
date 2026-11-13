@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
-import type { Message } from '@purlay/types';
+import type { Message, SetKnowledgeRequest } from '@purlay/types';
 
-test('a question is tracked before its first reply, keeps its decision, and is found through saved filters', async ({
+test('a question is tracked before its first reply, keeps its decision, and forgets a removed answer', async ({
   page,
   signIn,
   room,
@@ -45,6 +45,39 @@ test('a question is tracked before its first reply, keeps its decision, and is f
   await page.screenshot({ path: test.info().outputPath('question-decision.png'), fullPage: true });
   await api('carol').resolve(root.id);
 
+  await api('bob').remove(answer.id);
+  const current = await api('carol').get<{ data: Message[] }>(`/api/channels/${made.id}/messages`);
+  expect(
+    current.data.find((message) => message.id === root.id)?.thread?.knowledge?.acceptedAnswer,
+  ).toBeNull();
+});
+
+test('a resolved question with a decision is found through saved search filters', async ({
+  page,
+  signIn,
+  room,
+  api,
+  tenant,
+  expectNoAxe,
+}) => {
+  const made = await room({ members: ['dogancan', 'alice', 'bob'] });
+  const root = await api('carol').say(made.id, `Retry policy ${made.name}`);
+  const answer = await api('bob').say(
+    made.id,
+    `Wait four seconds for upstream capacity ${made.name}.`,
+    { parentId: root.id },
+  );
+  const knowledge: SetKnowledgeRequest = {
+    version: 0,
+    isQuestion: true,
+    assigneeId: tenant.userIds.dogancan,
+    acceptedAnswerId: answer.id,
+    decisionNote: `Avoid retry storms ${made.name}`,
+    decisionUrl: 'https://github.com/acme/api/pull/42',
+  };
+  await api('dogancan').put<Message>(`/api/messages/${root.id}/knowledge`, knowledge);
+  await api('carol').resolve(root.id);
+  await signIn();
   await page.goto(
     `/w/${tenant.slug}/search?q=${encodeURIComponent(made.name)}&status=resolved&question=yes&repository=acme%2Fapi`,
   );
@@ -63,12 +96,6 @@ test('a question is tracked before its first reply, keeps its decision, and is f
   await expect(page.getByLabel('Thread status')).toHaveValue('resolved');
   await expect(page.getByLabel('GitHub repository')).toHaveValue('acme/api');
   await expectNoAxe();
-
-  await api('bob').remove(answer.id);
-  const current = await api('carol').get<{ data: Message[] }>(`/api/channels/${made.id}/messages`);
-  expect(
-    current.data.find((message) => message.id === root.id)?.thread?.knowledge?.acceptedAnswer,
-  ).toBeNull();
 });
 
 test('advanced search stays usable at 320 pixels', async ({
