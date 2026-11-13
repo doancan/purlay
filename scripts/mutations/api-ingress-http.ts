@@ -1018,7 +1018,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'workspace-activity-mapper-drops-error-answer',
     why: 'Scheduling successful foreground activity must preserve the actual error response body and headers.',
     file: 'apps/api/src/ingress/http/request-hooks.ts',
-    find: '    return mapFrameworkResponse(responseValue, set, request);',
+    find: '    return error === undefined ? undefined : mapFrameworkResponse(responseValue, set, request);',
     replace: '    return undefined;',
     tests: [
       'apps/api/src/ingress/http/serving-the-client.test.ts',

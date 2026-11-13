@@ -1,5 +1,5 @@
 /** Native sessions with an independently retained company origin and a credential old readers cannot accept (D-309). */
-import { hkdfSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 import { makeSignature } from 'better-auth/crypto';
 import { sql, sessionTokenDigest, type Executor } from '@purlay/db';
 import { liveCompanySessionProof } from '../../platform/company-session';
@@ -97,8 +97,12 @@ export const companySessionCookies = (
     if (presented === undefined) return headers;
     const decoded = valueOf(presented);
     if (decoded === undefined) return explicit === undefined ? headers : undefined;
-    const expected = Buffer.from(await makeSignature(decoded.token, companySecret));
-    const directoryExpected = Buffer.from(await makeSignature(decoded.token, directorySecret));
+    const expected = Buffer.from(
+      createHmac('sha256', companySecret).update(decoded.token).digest('base64'),
+    );
+    const directoryExpected = Buffer.from(
+      createHmac('sha256', directorySecret).update(decoded.token).digest('base64'),
+    );
     const actual = Buffer.from(decoded.signature);
     const companyValid = expected.length === actual.length && timingSafeEqual(expected, actual);
     const directoryValid =
