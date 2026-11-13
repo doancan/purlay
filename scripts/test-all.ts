@@ -15,6 +15,12 @@
  */
 import { reachable } from './database-reachable';
 
+const cohortMode = process.env['PURLAY_WORKSPACE_COHORT'];
+if (cohortMode !== undefined && cohortMode !== 'functional' && cohortMode !== 'measure') {
+  console.error('PURLAY_WORKSPACE_COHORT must be functional or measure, or unset for strict');
+  process.exit(1);
+}
+
 const ROOTS = ['apps', 'packages', 'scripts'];
 
 /**
@@ -35,7 +41,11 @@ const run = (args: readonly string[]): number =>
       `--parallel=${String(WORKERS)}`,
       ...args,
     ],
-    { stdout: 'inherit', stderr: 'inherit' },
+    {
+      env: { ...process.env, PURLAY_WORKSPACE_COHORT: 'functional' },
+      stdout: 'inherit',
+      stderr: 'inherit',
+    },
   ).exitCode;
 
 const url = process.env['DATABASE_URL'] ?? '';

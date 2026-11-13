@@ -12,6 +12,8 @@ import {
 } from '@purlay/db';
 import { parseServerMessage, type ServerFrame } from '@purlay/types';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { cohortMode, cohortReceiptPath } from '../testing/workspace-delivery-measurements';
 import { aSession, aTestAuth, TEST_AUTH_SECRET } from '../testing/signed-in';
 import { aRoom } from '../testing/rooms';
 import { aMovableClock } from '../testing/doubles';
@@ -35,10 +37,16 @@ import { companyWorkspaceMfaActor } from '../modules/workspaces/security/mfa.tes
 import { companySessionCookies } from '../modules/auth/company-sessions';
 import { companyFrameProjector } from '../features/chat/channels/company-delivery';
 
+const measurementMode = cohortMode(process.env);
+
 describe('integration: workspace delivery cohort bounds', () => {
   describe.each([false, true])(
     'integration: workspace delivery cohort bounds, company=%s',
     (company) => {
+      const receiptPath = cohortReceiptPath(
+        process.env,
+        `/tmp/purlay-workspace-ws-batch/performance-${company ? 'company' : 'independent'}.json`,
+      );
       let clone: ClonedDatabase;
       let runCohort: () => Promise<void>;
       let closeCohort: (() => Promise<void>) | undefined;
@@ -185,7 +193,10 @@ describe('integration: workspace delivery cohort bounds', () => {
                 ':' +
                 String(args.node.setOperations?.length ?? 0);
               roots.set(root, (roots.get(root) ?? 0) + 1);
-              starts.set(args.queryId, { at: performance.now(), kind: root });
+              starts.set(args.queryId, {
+                at: measurementMode === 'measure' ? 0 : performance.now(),
+                kind: root,
+              });
             }
             return args.node;
           },
@@ -193,13 +204,15 @@ describe('integration: workspace delivery cohort bounds', () => {
             const start = starts.get(args.queryId);
             if (start !== undefined) {
               completedSelects++;
-              const end = performance.now();
-              queryTimes.push({
-                kind: start.kind,
-                ms: end - start.at,
-                startMs: start.at - fanoutStart,
-                endMs: end - fanoutStart,
-              });
+              if (measurementMode !== 'measure') {
+                const end = performance.now();
+                queryTimes.push({
+                  kind: start.kind,
+                  ms: end - start.at,
+                  startMs: start.at - fanoutStart,
+                  endMs: end - fanoutStart,
+                });
+              }
             }
             return Promise.resolve(args.result);
           },
@@ -286,6 +299,7 @@ describe('integration: workspace delivery cohort bounds', () => {
           },
         };
         runCohort = async (): Promise<void> => {
+          let cohortReceipt: Record<string, unknown>;
           const counts: number[] = [];
           for (const size of [12, 120]) {
             reads = 0;
@@ -350,11 +364,19 @@ describe('integration: workspace delivery cohort bounds', () => {
             expect(closed).toEqual([]);
             expect(elapsedMs).toBeLessThan(DEFAULT_DEADLINE_MS);
             const receipt = {
+              complete: false,
+              measurement: {
+                mode: measurementMode,
+                runId: process.env['PURLAY_WORKSPACE_COHORT_RUN'] ?? null,
+                modules: process.env['MODULES'] ?? 'all',
+                company,
+              },
               nativeSources: [12, 120],
               factualSelects: counts,
               fanout: {
                 sources: 120,
                 sent: sent.length,
+                receipts: receipts.length,
                 totalSelects: reads,
                 elapsedMs,
                 receiptP95Ms: p95,
@@ -367,17 +389,14 @@ describe('integration: workspace delivery cohort bounds', () => {
               queryTimes,
               existingDeadlineMs: DEFAULT_DEADLINE_MS,
             };
-            await mkdir('/tmp/purlay-workspace-ws-batch', { recursive: true, mode: 0o700 });
-            await writeFile(
-              `/tmp/purlay-workspace-ws-batch/performance-${company ? 'company' : 'independent'}.json`,
-              JSON.stringify(receipt, null, 2),
-              { mode: 0o600 },
-            );
-            if (!(p95 < BUDGETS.fanOutMs))
+            cohortReceipt = receipt;
+            await mkdir(dirname(receiptPath), { recursive: true, mode: 0o700 });
+            await writeFile(receiptPath, JSON.stringify(receipt, null, 2), { mode: 0o600 });
+            if (measurementMode !== 'functional' && !(p95 < BUDGETS.fanOutMs))
               console.error(
                 JSON.stringify({ workspaceDeliveryCohortFailure: { company, ...receipt } }),
               );
-            expect(p95).toBeLessThan(BUDGETS.fanOutMs);
+            if (measurementMode !== 'functional') expect(p95).toBeLessThan(BUDGETS.fanOutMs);
           } finally {
             await close();
           }
@@ -450,6 +469,11 @@ describe('integration: workspace delivery cohort bounds', () => {
             }).toThrow('Verify workspace access');
             return Promise.resolve();
           });
+          await writeFile(
+            receiptPath,
+            JSON.stringify({ ...cohortReceipt, complete: true }, null, 2),
+            { mode: 0o600 },
+          );
         };
       }, CLONE_HOOK_MS);
       afterAll(async () => {
@@ -457,7 +481,7 @@ describe('integration: workspace delivery cohort bounds', () => {
         await clone.drop();
         await closeIntegrationDatabase();
       }, DROP_HOOK_MS);
-      test('12 and 120 exact native sources use bounded factual reads and final fanout', async () => {
+      test(`12 and 120 exact native sources use bounded factual reads and final fanout, company=${String(company)}`, async () => {
         await runCohort();
       });
     },

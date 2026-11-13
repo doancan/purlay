@@ -87,8 +87,9 @@
     "tokens:generate": "bun run packages/tokens/src/cli.ts",
     "typecheck": "tsc --build --pretty",
     "typecheck:ts6": "tsc6 --build --force --pretty",
-    "verify": "bun run check:branch && bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run knip && bun run format:check && bun run test:all && bun run build:web:mapped && bun run budget:web && bun run budget:api && bun run budget:latency && bun run verify:enforcement && bun run check:docs && bun run config:example -- --check && bun run tokens:check",
-    "verify:enforcement": "bun run scripts/verify-enforcement.ts"
+    "verify": "bun run check:branch && bun run typecheck && bun run typecheck:ts6 && bun run lint && bun run knip && bun run format:check && bun run test:all && bun run build:web:mapped && bun run budget:web && bun run budget:api && bun run budget:latency && bun run budget:workspace-cohort && bun run verify:enforcement && bun run check:docs && bun run config:example -- --check && bun run tokens:check",
+    "verify:enforcement": "bun run scripts/verify-enforcement.ts",
+    "budget:workspace-cohort": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/workspace-delivery-measurements.ts"
   },
   "devDependencies": {
     "@eslint/compat": "2.1.1",
