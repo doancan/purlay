@@ -3,11 +3,11 @@ import type { Mutation } from '../mutate';
 
 export const REPO: readonly Mutation[] = [
   {
-    id: 'api-production-runtime-loses-smaller-heap',
+    id: 'api-production-runtime-loses-default-heap',
     why: 'Production grows a different heap from the measured API, so a passing memory budget no longer describes the deployed process (D-49).',
     file: 'Dockerfile',
     find: 'CMD ["apps/api/src/index.ts"]',
-    replace: 'CMD ["apps/api/src/index.ts"]',
+    replace: 'CMD ["--smol", "apps/api/src/index.ts"]',
     tests: ['scripts/environment.test.ts'],
   },
   {

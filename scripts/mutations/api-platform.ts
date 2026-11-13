@@ -141,7 +141,7 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'company-directory-captured-native-origin-ignored',
     why: 'A captured nondirectory proof must fail when its current native session acquires a different directory origin.',
     file: 'apps/api/src/platform/company-session.ts',
-    find: '    and ${capturedDirectoryId === null ? sql<boolean>`${sql.ref(`${alias}.directory_id`)} is null` : sql<boolean>`true`}\n',
+    find: '    and company_proof.directory_id is not distinct from ${directoryId ?? sql<string | null>`(select origin.directory_id from sessions as origin where origin.id = ${sessionId} and origin.user_id = ${userId})`}\n',
     replace: '',
     tests: ['apps/api/src/realtime/workspace-access.integration.test.ts'],
   },

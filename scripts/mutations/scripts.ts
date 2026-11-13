@@ -27,11 +27,11 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
-    id: 'budget-api-runtime-loses-smaller-heap',
+    id: 'budget-api-runtime-loses-default-heap',
     why: 'The RSS process runs a different heap policy from production, so the budget no longer measures the deployed runtime (D-49).',
     file: 'scripts/budget-api.ts',
     find: "['bun', '--no-env-file', 'apps/api/src/index.ts']",
-    replace: "['bun', '--no-env-file', 'apps/api/src/index.ts']",
+    replace: "['bun', '--no-env-file', '--smol', 'apps/api/src/index.ts']",
     tests: ['scripts/environment.test.ts'],
   },
   {
