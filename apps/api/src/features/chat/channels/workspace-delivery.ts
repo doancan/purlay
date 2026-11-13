@@ -3,7 +3,7 @@ import type { Clock } from '../../../platform/clock';
 import type { ServerFrame } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { withinRequest, type RequestScope } from '../../../platform/logging';
-import type { AliasableExpression } from '@purlay/db';
+import { sql, type AliasableExpression } from '@purlay/db';
 import { visibleChannels } from './guard';
 import { guestMessageHistoryFor } from './history-access';
 import type {
@@ -124,11 +124,13 @@ export const workspaceFrameProjector = (
     readonly signal: AbortSignal;
     readonly scope: ChannelDeliveryScope | undefined;
     readonly query: () => AliasableExpression<ReadyRow>;
+    readonly permit: WorkspaceContentPermit | 'off';
     readonly resolve: (result: Result) => void;
     readonly reject: (error: unknown) => void;
   }
-  const readyGroups = new WeakMap<ServerFrame, Ready[]>();
-  let counterReady: Ready[] | undefined;
+  const readyGroups = new WeakMap<object, Ready[]>();
+  const personalReadyGroups = new WeakMap<object, Ready[]>();
+  const counterKey = {};
   const scopeKey = (row: ReadyRow, entry: Ready): string =>
     JSON.stringify([
       entry.workspaceId,
@@ -163,7 +165,7 @@ export const workspaceFrameProjector = (
       : { companySession: { userId: identity.userId, workspaceId: identity.companyWorkspaceId } }),
   });
   const finalQuery = (
-    entry: Omit<Ready, 'query' | 'resolve' | 'reject'>,
+    entry: Omit<Ready, 'query' | 'resolve' | 'reject' | 'permit'>,
     permit: WorkspaceContentPermit | 'off',
   ): AliasableExpression<ReadyRow> =>
     withinRequest(sourceScope(entry.identity, entry.signal, permit !== 'off'), () => {
@@ -232,6 +234,62 @@ export const workspaceFrameProjector = (
         .where('channels.workspace_id', '=', workspaceId)
         .$castTo<ReadyRow>();
     });
+  /** Epoch-zero personal recipients share visibility SQL, while every row retains its own user and channel. */
+  const personalChannelQuery = (entries: readonly Ready[]): AliasableExpression<ReadyRow> => {
+    const first = entries[0];
+    if (first === undefined) throw new Error('Missing personal channel recipients');
+    const recipients = sql<{
+      source_key: string;
+      user_id: string;
+      workspace_id: string;
+      channel_id: string;
+    }>`(values ${sql.join(
+      entries.map(
+        (entry) => sql`(${entry.key}::text, ${entry.identity.userId}::uuid,
+        ${entry.workspaceId}::uuid, ${entry.channelId}::uuid)`,
+      ),
+    )})`.as<'ready_recipients'>(
+      sql`ready_recipients(source_key, user_id, workspace_id, channel_id)`,
+    );
+    return withinRequest(sourceScope(first.identity, first.signal), () => {
+      const message =
+        first.frame.event === 'MESSAGE_CREATED'
+          ? first.frame.data.id
+          : 'messageId' in first.frame.data
+            ? first.frame.data.messageId
+            : undefined;
+      const access = visibleChannels(database, sql.ref<string>('ready_recipients.user_id'))
+        .where('channels.id', '=', sql.ref<string>('ready_recipients.channel_id'))
+        .where('channels.workspace_id', '=', sql.ref<string>('ready_recipients.workspace_id'))
+        .select((eb) => [
+          sql.ref<string>('ready_recipients.source_key').as('sourceKey'),
+          'workspace_members.access_kind as accessKind',
+          'workspace_members.guest_since as guestSince',
+          'workspace_members.guest_expires_at as guestExpiresAt',
+          'channel_members.joined_at as channelJoinedAt',
+          (message === undefined
+            ? eb.val(true)
+            : eb.or([
+                eb('workspace_members.access_kind', '=', 'member'),
+                eb.exists(
+                  eb
+                    .selectFrom('messages as ready_message')
+                    .select('ready_message.id')
+                    .where('ready_message.id', '=', message)
+                    .whereRef('ready_message.channel_id', '=', 'channels.id')
+                    .whereRef('ready_message.workspace_id', '=', 'channels.workspace_id')
+                    .where(guestMessageHistoryFor('ready_message')),
+                ),
+              ])
+          ).as('historyAllowed'),
+        ])
+        .$castTo<ReadyRow>();
+      return database
+        .selectFrom(recipients)
+        .innerJoinLateral(access.as('personal_access'), (join) => join.onTrue())
+        .selectAll('personal_access');
+    });
+  };
   const ready = (
     identity: Identity,
     workspaceId: string,
@@ -241,18 +299,21 @@ export const workspaceFrameProjector = (
     scope: ChannelDeliveryScope | undefined,
     permit: WorkspaceContentPermit | 'off',
   ): Promise<Result> => {
-    let group = frame.event === 'CHANNEL_STATE' ? counterReady : readyGroups.get(frame);
+    const personal =
+      permit === 'off' && identity.companyWorkspaceId === undefined && channelId !== undefined;
+    const groups = personal ? personalReadyGroups : readyGroups;
+    const batchKey = frame.event === 'CHANNEL_STATE' ? counterKey : frame;
+    const limit = personal ? 100 : FINAL_BATCH_MAX;
+    let group = groups.get(batchKey);
     if (group === undefined) {
       group = [];
-      if (frame.event === 'CHANNEL_STATE') counterReady = group;
-      else readyGroups.set(frame, group);
+      groups.set(batchKey, group);
     }
     const batch = group;
     if (batch.length === 0)
       queueMicrotask(() => {
-        const selected = batch.splice(0, FINAL_BATCH_MAX);
-        if (readyGroups.get(frame) === batch) readyGroups.delete(frame);
-        if (counterReady === batch) counterReady = undefined;
+        const selected = batch.splice(0, limit);
+        if (groups.get(batchKey) === batch) groups.delete(batchKey);
         void (async (): Promise<void> => {
           const active: Ready[] = [];
           const proofBatch = buildCompanyProofBatch<ReadyRow>(
@@ -261,13 +322,20 @@ export const workspaceFrameProjector = (
               .map((entry) => entry.identity.sessionId),
             () => {
               const queries: AliasableExpression<ReadyRow>[] = [];
+              const personal: Ready[] = [];
               for (const entry of selected) {
                 if (entry.signal.aborted) {
                   entry.reject(entry.signal.reason);
                   continue;
                 }
                 try {
-                  queries.push(entry.query());
+                  if (
+                    entry.permit === 'off' &&
+                    entry.identity.companyWorkspaceId === undefined &&
+                    entry.channelId !== undefined
+                  )
+                    personal.push(entry);
+                  else queries.push(entry.query());
                   active.push(entry);
                 } catch (error) {
                   if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')
@@ -275,6 +343,7 @@ export const workspaceFrameProjector = (
                   else entry.reject(error);
                 }
               }
+              if (personal.length > 0) queries.push(personalChannelQuery(personal));
               return queries;
             },
           );
@@ -324,10 +393,8 @@ export const workspaceFrameProjector = (
         signal,
         scope,
       };
-      batch.push({ ...entry, query: () => finalQuery(entry, permit), resolve, reject });
-      if (batch.length === FINAL_BATCH_MAX && readyGroups.get(frame) === batch)
-        readyGroups.delete(frame);
-      if (batch.length === FINAL_BATCH_MAX && counterReady === batch) counterReady = undefined;
+      batch.push({ ...entry, permit, query: () => finalQuery(entry, permit), resolve, reject });
+      if (batch.length === limit && groups.get(batchKey) === batch) groups.delete(batchKey);
     });
   };
   return async (identity, _channelIds, frame, signal, channelScope): Promise<Result> => {

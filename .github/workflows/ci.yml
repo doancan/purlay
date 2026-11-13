@@ -505,6 +505,25 @@ jobs:
       - name: every test, with coverage
         run: bun run test:all
 
+  # Measure on a fresh runner and database, independently of the complete coverage suite.
+  # These remain required by verify; a latency regression is visible without waiting for every test.
+  api-measurements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: start the database and redis
+        run: bun run db:up:tests
+
       # PRD.md §5's other blocking budget (D-49): a real API, started and settled, under 120 MiB.
       - name: the API's idle memory is inside its budget
         run: bun run budget:api
@@ -548,6 +567,7 @@ jobs:
       [
         static,
         schema,
+        api-measurements,
         changes,
         browser,
         modules,

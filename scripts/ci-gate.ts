@@ -19,6 +19,7 @@
 export const GATED = [
   'static',
   'schema',
+  'api-measurements',
   'changes',
   'browser',
   'modules',

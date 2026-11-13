@@ -18,6 +18,7 @@ const results = (
   JSON.stringify({
     static: { result: over.static ?? 'success', outputs: {} },
     schema: { result: over.schema ?? 'success', outputs: {} },
+    'api-measurements': { result: over['api-measurements'] ?? 'success', outputs: {} },
     changes: {
       result: over.changes ?? 'success',
       outputs: { browser: touched, modules: touchedModules, mutations: touchedMutations },
