@@ -91,7 +91,11 @@ interface CompanyProofBatchRow {
   readonly connection_id: string;
   readonly user_id: string;
 }
-let companyProofBatch = false;
+interface CompanyProofBatchContext {
+  readonly workspaceIds: Set<string>;
+  unknownWorkspace: boolean;
+}
+let companyProofBatch: CompanyProofBatchContext | undefined;
 
 /** Outside synchronous final-batch construction, every caller retains the full canonical SQL proof. */
 export const liveCompanySessionProof = (
@@ -101,7 +105,8 @@ export const liveCompanySessionProof = (
   connectionId?: string | RawBuilder<string>,
   companions?: CompanyProofCompanions,
 ): RawBuilder<boolean> => {
-  if (!companyProofBatch)
+  const batch = companyProofBatch;
+  if (batch === undefined)
     return canonicalLiveCompanySessionProof(
       sessionId,
       workspaceId,
@@ -109,6 +114,8 @@ export const liveCompanySessionProof = (
       connectionId,
       companions,
     );
+  if (typeof workspaceId === 'string') batch.workspaceIds.add(workspaceId);
+  else batch.unknownWorkspace = true;
   return sql<boolean>`exists (
     select 1 from ${sql.table(COMPANY_PROOF_BATCH_NAME)} as ready_company_proof
     where ready_company_proof.session_id = ${sessionId}
@@ -137,17 +144,26 @@ export const buildCompanyProofBatch = <Row>(
   readonly source: RawBuilder<CompanyProofBatchRow>;
   readonly queries: readonly AliasableExpression<Row>[];
 } => {
-  if (companyProofBatch) throw new Error('Company proof batches cannot be nested');
-  companyProofBatch = true;
+  if (companyProofBatch !== undefined) throw new Error('Company proof batches cannot be nested');
+  const context: CompanyProofBatchContext = { workspaceIds: new Set(), unknownWorkspace: false };
+  companyProofBatch = context;
   let queries: readonly AliasableExpression<Row>[];
   try {
     queries = build();
     if (!Array.isArray(queries))
       throw new Error('Company proof batches require synchronous queries');
   } finally {
-    companyProofBatch = false;
+    companyProofBatch = undefined;
   }
   const ids = [...new Set(sessionIds)];
+  const workspaceIds = [...context.workspaceIds];
+  const firstWorkspaceId = workspaceIds[0];
+  const workspaceScope =
+    context.unknownWorkspace || firstWorkspaceId === undefined
+      ? sql<boolean>`true`
+      : workspaceIds.length === 1
+        ? sql<boolean>`company_proof.workspace_id = ${firstWorkspaceId}`
+        : sql<boolean>`company_proof.workspace_id in (${sql.join(workspaceIds)})`;
   // Pulling the canonical proof into the origin joins multiplied measured PostgreSQL planning work.
   const source = sql<CompanyProofBatchRow>`(select
     company_proof.session_id, company_proof.workspace_id,
@@ -160,6 +176,7 @@ export const buildCompanyProofBatch = <Row>(
     join users as batch_company_person on batch_company_person.id = batch_company_session.user_id
     join workspaces as batch_company_workspace on batch_company_workspace.id = company_proof.workspace_id
     where batch_company_session.id in (${ids.length === 0 ? sql`null` : sql.join(ids)})
+    and ${workspaceScope}
     and (${canonicalLiveCompanySessionProof(
       sql.ref<string>('batch_company_session.id'),
       sql.ref<string>('company_proof.workspace_id'),

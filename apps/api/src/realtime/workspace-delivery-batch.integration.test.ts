@@ -172,7 +172,8 @@ describe('integration: workspace delivery cohort bounds', () => {
           const roots = new Map<string, number>();
           const starts = new Map<unknown, { at: number; kind: string }>();
           let completedSelects = 0;
-          const queryTimes: { kind: string; ms: number }[] = [];
+          const queryTimes: { kind: string; ms: number; startMs: number; endMs: number }[] = [];
+          let fanoutStart = 0;
           const counted = db.withPlugin({
             transformQuery: (
               args,
@@ -192,7 +193,13 @@ describe('integration: workspace delivery cohort bounds', () => {
               const start = starts.get(args.queryId);
               if (start !== undefined) {
                 completedSelects++;
-                queryTimes.push({ kind: start.kind, ms: performance.now() - start.at });
+                const end = performance.now();
+                queryTimes.push({
+                  kind: start.kind,
+                  ms: end - start.at,
+                  startMs: start.at - fanoutStart,
+                  endMs: end - fanoutStart,
+                });
               }
               return Promise.resolve(args.result);
             },
@@ -234,9 +241,8 @@ describe('integration: workspace delivery cohort bounds', () => {
             return Promise.resolve();
           });
 
-          const sent: ServerFrame[] = [];
+          const rawFrames: string[] = [];
           const receipts: number[] = [];
-          let fanoutStart = 0;
           const closed: number[] = [];
           const hub = createSocketHub(aTestAuth(counted, { clock }), clock, {
             log: NO_LOG,
@@ -278,9 +284,7 @@ describe('integration: workspace delivery cohort bounds', () => {
                       closed.push(code);
                     },
                     send: (text) => {
-                      const parsed = parseServerMessage(text);
-                      if (parsed.kind !== 'frame') throw new Error('Invalid fanout frame');
-                      sent.push(parsed.frame);
+                      rawFrames.push(text);
                       if (fanoutStart > 0) receipts.push(performance.now() - fanoutStart);
                       return text.length;
                     },
@@ -316,6 +320,14 @@ describe('integration: workspace delivery cohort bounds', () => {
             for (const [index] of sessions.entries()) hub.deliver(String(index), frame);
             await hub.settled();
             const elapsedMs = performance.now() - start;
+            // Browser trust-boundary validation follows the measured server byte handoff.
+            const validationStart = performance.now();
+            const sent = rawFrames.map((text) => {
+              const parsed = parseServerMessage(text);
+              if (parsed.kind !== 'frame') throw new Error('Invalid fanout frame');
+              return parsed.frame;
+            });
+            const clientValidationMs = performance.now() - validationStart;
             const p95 =
               receipts.sort((left, right) => left - right)[Math.ceil(receipts.length * 0.95) - 1] ??
               Infinity;
@@ -333,6 +345,7 @@ describe('integration: workspace delivery cohort bounds', () => {
                 elapsedMs,
                 receiptP95Ms: p95,
               },
+              clientValidationMs,
               productFanoutBudgetMs: BUDGETS.fanOutMs,
               selectRootKinds: Object.fromEntries(roots),
               actualSelects: completedSelects,

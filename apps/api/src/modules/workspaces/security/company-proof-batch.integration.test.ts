@@ -19,7 +19,12 @@ describe('integration: company proof final batches', () => {
       const workspaceId = fixture.actor.context.workspaceId;
       const batch = buildCompanyProofBatch([a.actor.sessionId, b.actor.sessionId], () =>
         [
-          { key: 'a', sessionId: a.actor.sessionId, workspaceId, userId },
+          {
+            key: 'a',
+            sessionId: a.actor.sessionId,
+            workspaceId: sql<string>`${workspaceId}`,
+            userId,
+          },
           { key: 'b', sessionId: b.actor.sessionId, workspaceId, userId },
           {
             key: 'foreign-workspace',

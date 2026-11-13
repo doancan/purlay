@@ -304,6 +304,7 @@ describe('integration: away by choice (D-257)', () => {
       const second = await connect(room.alice.cookie, listening);
       await second.handled();
       await node.settled();
+      await bob.until((f) => heardOf(f, room.alice.id).length === 4, 'alice activity delivered');
       const heard = heardOf(bob.frames, room.alice.id);
       // Online, chosen, idle, and the word that ended the idle: the control that her word was heard, and told.
       expect(heard).toHaveLength(4);
