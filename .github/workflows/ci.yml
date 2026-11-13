@@ -541,9 +541,14 @@ jobs:
         if: github.event_name == 'pull_request'
         working-directory: .budget/main-source
         run: bun install --frozen-lockfile
+      - name: create main's isolated measurement database
+        if: github.event_name == 'pull_request'
+        run: docker compose exec -T postgres createdb --username=purlay --owner=purlay purlay_main_control
       - name: measure main on the same runner
         if: github.event_name == 'pull_request'
         working-directory: .budget/main-source
+        env:
+          DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay_main_control
         run: bun run budget:latency -- --record "$GITHUB_WORKSPACE/.budget/main-latency.json"
 
       # The ACK round-trip and fan-out p95 (D-49): measured on two real sockets, and blocking on a
