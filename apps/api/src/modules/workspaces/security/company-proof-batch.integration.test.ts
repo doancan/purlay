@@ -148,4 +148,127 @@ describe('integration: company proof final batches', () => {
       ).toBe(true);
     });
   });
+
+  test('joined aliases cannot borrow another member, person or workspace across a multi-workspace batch', async () => {
+    await withRollback(async (db) => {
+      const first = await workspaceMfaFixture(db);
+      const second = await workspaceMfaFixture(db);
+      const a = await companyWorkspaceMfaActor(
+        { ...first.dependencies, clock: systemClock },
+        first.actor,
+      );
+      const b = await companyWorkspaceMfaActor(
+        { ...second.dependencies, clock: systemClock },
+        second.actor,
+      );
+      const userA = first.actor.context.userId;
+      const userB = second.actor.context.userId;
+      const workspaceA = first.actor.context.workspaceId;
+      const workspaceB = second.actor.context.workspaceId;
+      const cases = [
+        {
+          key: 'a',
+          session: a.actor.sessionId,
+          user: userA,
+          workspace: workspaceA,
+          member: userA,
+          memberWorkspace: workspaceA,
+          person: userA,
+          joinedWorkspace: workspaceA,
+        },
+        {
+          key: 'b',
+          session: b.actor.sessionId,
+          user: userB,
+          workspace: workspaceB,
+          member: userB,
+          memberWorkspace: workspaceB,
+          person: userB,
+          joinedWorkspace: workspaceB,
+        },
+        {
+          key: 'wrong-member',
+          session: a.actor.sessionId,
+          user: userA,
+          workspace: workspaceA,
+          member: userB,
+          memberWorkspace: workspaceB,
+          person: userA,
+          joinedWorkspace: workspaceA,
+        },
+        {
+          key: 'wrong-person',
+          session: a.actor.sessionId,
+          user: userA,
+          workspace: workspaceA,
+          member: userA,
+          memberWorkspace: workspaceA,
+          person: userB,
+          joinedWorkspace: workspaceA,
+        },
+        {
+          key: 'wrong-workspace',
+          session: a.actor.sessionId,
+          user: userA,
+          workspace: workspaceA,
+          member: userA,
+          memberWorkspace: workspaceA,
+          person: userA,
+          joinedWorkspace: workspaceB,
+        },
+      ];
+      const batch = buildCompanyProofBatch<{ key: string; allowed: boolean }>(
+        [a.actor.sessionId, b.actor.sessionId],
+        () =>
+          cases.map(
+            (row) => sql<{ key: string; allowed: boolean }>`(select ${row.key}::text as key,
+          ${liveCompanySessionProof(row.session, row.workspace, row.user, undefined, {
+            member: 'asked_member',
+            person: 'asked_person',
+            workspace: 'asked_workspace',
+          })} as allowed
+          from workspace_members as asked_member
+          cross join users as asked_person
+          cross join workspaces as asked_workspace
+          where asked_member.workspace_id = ${row.memberWorkspace}::uuid
+            and asked_member.user_id = ${row.member}::uuid
+            and asked_person.id = ${row.person}::uuid
+            and asked_workspace.id = ${row.joinedWorkspace}::uuid)`,
+          ),
+      );
+      const initial = batch.queries[0];
+      if (initial === undefined) throw new Error('Missing joined source query');
+      let query = db
+        .with(
+          (cte) => cte(batch.name).materialized(),
+          () => batch.source,
+        )
+        .selectFrom(initial.as('joined_sources'))
+        .selectAll('joined_sources');
+      for (const next of batch.queries.slice(1)) query = query.unionAll(next);
+      expect(
+        Object.fromEntries((await query.execute()).map((row) => [row.key, row.allowed])),
+      ).toEqual({
+        a: true,
+        b: true,
+        'wrong-member': false,
+        'wrong-person': false,
+        'wrong-workspace': false,
+      });
+      await db
+        .updateTable('workspace_identity_connections')
+        .set({ enabled: false })
+        .where('id', '=', b.connectionId)
+        .execute();
+      expect(
+        Object.fromEntries((await query.execute()).map((row) => [row.key, row.allowed])),
+      ).toEqual({
+        a: true,
+        b: false,
+        'wrong-member': false,
+        'wrong-person': false,
+        'wrong-workspace': false,
+      });
+    });
+  });
 });
