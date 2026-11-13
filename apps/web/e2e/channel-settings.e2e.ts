@@ -6,6 +6,7 @@
 import { expect, test } from './fixtures';
 import { navLink, openNav, wallClock } from './support';
 import type { ChannelList } from '@purlay/types';
+import type { Request } from '@playwright/test';
 
 test('a rename shows in another person’s sidebar and header; leaving takes it off both of the leaver’s tabs', async ({
   page,
@@ -98,16 +99,25 @@ test('a channel archived while this page had no connection says so when the conn
   // The page's connection is cut by the test and refused while it is "down"; what the server sent in
   // the meantime went to nobody, and the archive is among it.
   let down = false;
-  let cut = (): void => undefined;
+  let cut = (): Promise<void> => Promise.resolve();
+  const channelListPath = `/api/workspaces/${tenant.workspaceId}/channels`;
+  const pendingLists = new Set<Request>();
+  let listReads = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname === channelListPath) {
+      pendingLists.add(request);
+      listReads += 1;
+    }
+  });
+  page.on('requestfinished', (request) => pendingLists.delete(request));
+  page.on('requestfailed', (request) => pendingLists.delete(request));
   await page.routeWebSocket(/\/ws$/, (ws) => {
     if (down) {
       void ws.close();
       return;
     }
     const server = ws.connectToServer();
-    cut = (): void => {
-      void ws.close();
-    };
+    cut = (): Promise<void> => ws.close();
     ws.onMessage((frame) => {
       server.send(frame);
     });
@@ -125,10 +135,27 @@ test('a channel archived while this page had no connection says so when the conn
   ).toBeVisible();
 
   down = true;
-  cut();
+  await cut();
   await page.evaluate(() => {
     window.dispatchEvent(new Event('offline'));
   });
+  // Initial subscriptions can still be refreshing the list after the live message paints. Drain
+  // those reads and their render before ageing the cache: an old answer arriving after the clock
+  // jump would become fresh again, and the online refresh would join it instead of asking anew.
+  await expect
+    .poll(async () => {
+      const before = listReads;
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => {
+              resolve();
+            }),
+          ),
+      );
+      return pendingLists.size === 0 && listReads === before;
+    })
+    .toBe(true);
   await api('dogancan').del(`/api/channels/${made.id}`);
   // Age only wall time, then let the normal online cache refresh win while sockets stay down.
   // The generic missing state proves the HTTP answer committed before the next socket opens.
@@ -136,7 +163,7 @@ test('a channel archived while this page had no connection says so when the conn
   const refreshed = page.waitForResponse(
     async (answer) =>
       answer.request().method() === 'GET' &&
-      new URL(answer.url()).pathname === `/api/workspaces/${tenant.workspaceId}/channels` &&
+      new URL(answer.url()).pathname === channelListPath &&
       answer.status() === 200 &&
       !((await answer.json()) as ChannelList).some((channel) => channel.id === made.id),
   );

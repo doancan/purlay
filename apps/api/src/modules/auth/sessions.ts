@@ -92,6 +92,8 @@ export interface SessionOwner {
 }
 
 export interface IssueOptions {
+  /** Retained directory origin uses a MAC older company-aware readers cannot accept. */
+  readonly directoryId?: string | undefined;
   /** Immutable issuing company, provided only by a server-verified native handoff. */
   readonly companyWorkspaceId?: string | undefined;
   readonly userAgent?: string | undefined;
@@ -132,6 +134,7 @@ export const issueSession = async (
       ...(options.companyWorkspaceId === undefined
         ? {}
         : { company_workspace_id: options.companyWorkspaceId }),
+      ...(options.directoryId === undefined ? {} : { directory_id: options.directoryId }),
       ...(options.userAgent === undefined ? {} : { user_agent: options.userAgent }),
       ...(options.ipAddress === undefined ? {} : { ip_address: options.ipAddress }),
       ...(options.deviceName === undefined ? {} : { device_name: options.deviceName }),

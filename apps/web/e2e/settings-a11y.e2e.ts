@@ -20,6 +20,10 @@ const PAGES = [
   ['company', 'Company sign-in'],
   ['security', 'Workspace security'],
   ['workspace-mfa', 'Your workspace authenticator'],
+  ['directory', 'Company directory'],
+  ['access-people', 'People access'],
+  ['access-roles', 'Roles'],
+  ['access-groups', 'Access groups'],
   ['members', 'Members'],
   ['invitations', 'Invitations'],
   ['integrations', 'Integrations'],
@@ -55,13 +59,39 @@ test.describe('every page of Settings', () => {
   for (const [section, title] of PAGES) {
     test(`${title} passes the audit`, async ({ page, signIn, tenant, expectNoAxe }) => {
       await signIn();
+      // This harness leaves source creation off until every reader is attested. People reads
+      // initialize native admissions, so its default page is the explicit readiness refusal.
+      const peopleRead =
+        section === 'access-people'
+          ? page.waitForResponse(
+              (response) =>
+                response.request().method() === 'GET' &&
+                new URL(response.url()).pathname ===
+                  `/api/workspaces/${tenant.workspaceId}/access/people`,
+            )
+          : null;
       await openSettings(page, tenant.slug, section, title);
+      if (peopleRead !== null) {
+        const refused = await peopleRead;
+        expect(refused.status()).toBe(409);
+        expect(await refused.json()).toMatchObject({
+          error: { code: 'WORKSPACE_PROVISIONING_NOT_READY' },
+        });
+        await expect(page.getByRole('alert')).toContainText('Couldn’t refresh access.');
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+      }
       if (section === 'company')
         await expect(page.getByLabel('Domain', { exact: true })).toBeVisible();
       if (section === 'security')
         await expect(page.getByRole('combobox', { name: 'Apply requirements' })).toBeVisible();
       if (section === 'workspace-mfa')
         await expect(page.getByRole('button', { name: 'Set up authenticator' })).toBeVisible();
+      if (section === 'directory' || section === 'access-roles' || section === 'access-groups')
+        await expect(
+          page.getByText('No results. Try a different search or create the first item.', {
+            exact: true,
+          }),
+        ).toBeVisible();
       await expectNoAxe();
     });
   }

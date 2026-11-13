@@ -249,7 +249,7 @@ export const workspaceRoutes = (
     .patch(
       '/api/workspaces/:workspaceId/members/:userId',
       async ({ request, params, body }) =>
-        await updateMemberRole(dependencies, request, params.workspaceId, params.userId, body),
+        await updateMemberRole(sending, request, params.workspaceId, params.userId, body),
     )
     .delete('/api/workspaces/:workspaceId/members/:userId', async ({ request, params, set }) => {
       await removeWorkspaceMember(sending, request, params.workspaceId, params.userId);

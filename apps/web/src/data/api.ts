@@ -8,6 +8,14 @@
  */
 import type { Http } from './http';
 import {
+  createWorkspaceDirectoryApi,
+  type WorkspaceDirectoryApi,
+} from './endpoints/workspace-directory';
+import {
+  createWorkspaceProvisioningApi,
+  type WorkspaceProvisioningApi,
+} from './endpoints/workspace-provisioning';
+import {
   createWorkspaceSecurityApi,
   type WorkspaceSecurityApi,
 } from './endpoints/workspace-security';
@@ -42,7 +50,9 @@ export interface Api
     AccountApi,
     CompanyIdentityApi,
     RetentionApi,
-    WorkspaceSecurityApi {}
+    WorkspaceSecurityApi,
+    WorkspaceProvisioningApi,
+    WorkspaceDirectoryApi {}
 
 export const createApi = (http: Http): Api => ({
   ...createServerApi(http),
@@ -59,4 +69,6 @@ export const createApi = (http: Http): Api => ({
   ...createRetentionApi(http),
   ...createCompanyIdentityApi(http),
   ...createWorkspaceSecurityApi(http),
+  ...createWorkspaceProvisioningApi(http),
+  ...createWorkspaceDirectoryApi(http),
 });

@@ -1,4 +1,6 @@
 import { beginReadScopes } from './read-scope';
+import { prepareManualChannelAdmission } from './access-projection';
+import { channelCapabilitiesFor } from './access-capabilities';
 /**
  * Channels: create a public one, join it, list what you can see.
  *
@@ -256,7 +258,8 @@ export const channelFor = async (
   const [row] = await readChannels(executor, userId, { id: channelId });
   if (row === undefined)
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
-  return asChannel(row, userId);
+  const capabilities = await channelCapabilitiesFor(executor, userId, [row.id]);
+  return { ...asChannel(row, userId), channelCapabilities: [...(capabilities.get(row.id) ?? [])] };
 };
 
 export interface NewChannel {
@@ -296,6 +299,9 @@ export const createChannel = async (
     });
   }
 
+  const recordAdmission = await prepareManualChannelAdmission(executor, clock, context, [
+    context.userId,
+  ]);
   const row = await executor
     .insertInto('channels')
     .values({
@@ -317,6 +323,7 @@ export const createChannel = async (
       joined_at: joinedAt,
     })
     .execute();
+  await recordAdmission(row.id);
   await beginReadScopes(executor, row.id, [context.userId], joinedAt);
 
   await recordAudit(executor, clock, {
@@ -344,9 +351,16 @@ export const channelsVisibleIn = async (
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return [];
 
-  return (await readChannels(executor, context.userId, { ids: visible })).map((row) =>
-    asChannel(row, context.userId),
+  const rows = await readChannels(executor, context.userId, { ids: visible });
+  const capabilities = await channelCapabilitiesFor(
+    executor,
+    context.userId,
+    rows.map((row) => row.id),
   );
+  return rows.map((row) => ({
+    ...asChannel(row, context.userId),
+    channelCapabilities: [...(capabilities.get(row.id) ?? [])],
+  }));
 };
 
 /** The channel the context was minted for. There is no other one it could return. */
@@ -372,6 +386,9 @@ export const joinChannel = async (
     // the answer a stranger gets (`channel-visibility.integration.test.ts`).
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   }
+  const recordAdmission = await prepareManualChannelAdmission(executor, clock, context, [
+    context.userId,
+  ]);
   const joinedAt = clock.now();
   const joined = await executor
     .insertInto('channel_members')
@@ -383,7 +400,9 @@ export const joinChannel = async (
     .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
     .returning('channel_id')
     .executeTakeFirst();
-  if (joined !== undefined)
+  if (joined !== undefined) {
+    await recordAdmission(context.channelId);
     await beginReadScopes(executor, context.channelId, [context.userId], joinedAt);
+  }
   return joined !== undefined;
 };

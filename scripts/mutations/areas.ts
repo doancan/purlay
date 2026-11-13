@@ -100,6 +100,7 @@ export const AREAS = [
   { name: 'api-modules-workspaces', prefixes: ['apps/api/src/modules/workspaces/'] },
   { name: 'api-platform', prefixes: ['apps/api/src/platform/'] },
   { name: 'api-realtime', prefixes: ['apps/api/src/realtime/'] },
+  { name: 'api-testing', prefixes: ['apps/api/src/testing/workspace-delivery-measurements.ts'] },
   {
     name: 'web-core',
     prefixes: [

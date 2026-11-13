@@ -31,6 +31,7 @@ import {
 import { bundledModules } from '../composition';
 import { moduleCells, type ModuleCell } from './module-cells';
 import { needsReader, type NeedsOf } from './module-needs';
+import { cohortMode } from './workspace-delivery-measurements';
 
 /** Whether something accepts connections at the address of a URL: Redis's, to say plainly that its suites were left out. */
 const reachable = async (url: string): Promise<boolean> => {
@@ -165,6 +166,7 @@ const runCell = async (
         env: {
           ...inherited,
           DATABASE_URL: onDatabase(base, database),
+          PURLAY_WORKSPACE_COHORT: 'functional',
           ...(cell.setting === undefined ? {} : { MODULES: cell.setting }),
         },
         stdout: 'inherit',
@@ -182,6 +184,7 @@ export const main = async (
   run: typeof runCell = runCell,
   only: readonly string[] = [],
 ): Promise<number> => {
+  cohortMode(environment);
   const base = environment['DATABASE_URL'] ?? '';
   if (base === '') {
     say.err('modules:suites — DATABASE_URL is not set, so no cell was run.');

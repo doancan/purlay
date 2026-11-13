@@ -42,6 +42,8 @@ describe('the modules job', () => {
   test.each([
     'apps/api/src/composition.ts',
     'apps/api/src/testing/module-smoke.ts',
+    'apps/api/src/testing/workspace-delivery-measurements.ts',
+    'apps/api/src/realtime/workspace-delivery-batch.integration.test.ts',
     'packages/db/src/cli/migrate.ts',
     'package.json',
     'bun.lock',

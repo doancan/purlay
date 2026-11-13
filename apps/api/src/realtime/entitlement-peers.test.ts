@@ -12,9 +12,11 @@ import {
   advertiseEntitlements,
   advertiseSuspension,
   advertiseWorkspaceAccess,
+  advertiseWorkspaceProvisioning,
   peersBehind,
   suspensionPeersBehind,
   workspaceAccessPeersBehind,
+  workspaceProvisioningPeersBehind,
 } from './entitlement-peers';
 import type { Timers } from './hub';
 import { ANNOUNCE_RETRY_MS, NODE_TTL_MS } from './module-set';
@@ -78,6 +80,29 @@ test('workspace access readers advertise and check their own API capability name
   await node.stop();
   expect(clock.pending()).toBe(0);
   expect(link.sent).toEqual([{ command: 'HDEL', args: [names.workspaceAccessNodes, 'access-a'] }]);
+});
+
+test('source-aware readers advertise separately from policy-only readers and withdraw on shutdown', async () => {
+  const link = aFakeLink();
+  link.behaviour.script = (): number => 0;
+  link.behaviour.send = (): number => 1;
+  const clock = manualTimers();
+  const node = advertiseWorkspaceProvisioning({
+    link,
+    nodeId: 'directory-a',
+    log: aRecordingLogger().log,
+    timers: clock.timers,
+  });
+  await settle();
+  expect(link.scripts[0]?.keys).toEqual([names.workspaceProvisioningNodes]);
+  expect(link.scripts[0]?.keys).not.toContain(names.workspaceAccessNodes);
+  expect(await workspaceProvisioningPeersBehind(link)).toBe(0);
+  expect(link.scripts[1]?.keys).toEqual([names.moduleSet, names.workspaceProvisioningNodes]);
+  await node.stop();
+  expect(clock.pending()).toBe(0);
+  expect(link.sent).toEqual([
+    { command: 'HDEL', args: [names.workspaceProvisioningNodes, 'directory-a'] },
+  ]);
 });
 
 describe('a node that reads workspace grants says so', () => {

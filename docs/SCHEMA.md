@@ -235,7 +235,9 @@ CREATE TABLE sessions (
 
     -- Bounded as the request is (`NATIVE_DEVICE_NAME_PATTERN`). Added by 0057. (D-193)
     CONSTRAINT sessions_device_name_bounded
-        CHECK (device_name IS NULL OR char_length(device_name) BETWEEN 1 AND 64)
+        CHECK (device_name IS NULL OR char_length(device_name) BETWEEN 1 AND 64),
+    directory_id UUID,
+    CONSTRAINT sessions_directory_company CHECK (directory_id IS NULL OR company_workspace_id IS NOT NULL)
 );
 
 CREATE UNIQUE INDEX idx_sessions_native_owner ON sessions (id, user_id);
@@ -427,7 +429,15 @@ CREATE TABLE workspace_identity_connections (
         deleted_at IS NULL AND client_secret_encrypted IS NOT NULL
         AND tested_authentication_revision IS NOT NULL
         AND tested_authentication_revision = authentication_revision
-    ))
+    )),
+    directory_id UUID,
+    directory_claim TEXT,
+    CONSTRAINT workspace_identity_connections_directory_pair CHECK (
+            (directory_id IS NULL AND directory_claim IS NULL)
+            OR (directory_id IS NOT NULL AND directory_claim IS NOT NULL AND directory_claim IN ('sub', 'oid'))
+        ),
+    CONSTRAINT workspace_identity_connections_directory_reference FOREIGN KEY (workspace_id, directory_id)
+            REFERENCES workspace_directories(workspace_id, id)
 );
 CREATE UNIQUE INDEX idx_workspace_identity_connection_name
     ON workspace_identity_connections (workspace_id, name) WHERE deleted_at IS NULL;
@@ -469,7 +479,19 @@ CREATE TABLE workspace_identity_sessions (
     revoked_at TIMESTAMPTZ,
     PRIMARY KEY (session_id, connection_id),
     FOREIGN KEY (workspace_id, connection_id)
-        REFERENCES workspace_identity_connections(workspace_id, id) ON DELETE CASCADE
+        REFERENCES workspace_identity_connections(workspace_id, id) ON DELETE CASCADE,
+    directory_id UUID,
+    directory_link_reference UUID,
+    directory_authorization_revision UUID,
+    source_id UUID,
+    source_authorization_revision UUID,
+    admission_revision UUID,
+    CONSTRAINT workspace_identity_sessions_directory_tuple CHECK (
+            (directory_id IS NULL AND directory_link_reference IS NULL AND directory_authorization_revision IS NULL
+                AND source_id IS NULL AND source_authorization_revision IS NULL AND admission_revision IS NULL)
+            OR (directory_id IS NOT NULL AND directory_link_reference IS NOT NULL AND directory_authorization_revision IS NOT NULL
+                AND source_id IS NOT NULL AND source_authorization_revision IS NOT NULL AND admission_revision IS NOT NULL)
+        )
 );
 CREATE INDEX idx_workspace_identity_sessions_connection
     ON workspace_identity_sessions (workspace_id, connection_id, session_id);
@@ -1064,6 +1086,674 @@ CREATE TABLE workspace_invitation_mail_attempts (
 CREATE INDEX idx_invitation_attempts_recipient ON workspace_invitation_mail_attempts (workspace_id, recipient_id, id DESC);
 CREATE INDEX idx_invitation_recipients_creator ON workspace_invitation_recipients (created_by) WHERE created_by IS NOT NULL;
 CREATE INDEX idx_invitation_attempts_recipient_parent ON workspace_invitation_mail_attempts (recipient_id);
+```
+
+---
+
+### 4.4. Source-aware access, roles and groups
+
+Migration `0116_workspace_provisioning.sql` implements D-311. Native `workspace_members`
+remains the current membership; these core tables retain its admission provenance and project
+finite delegated actions. They do not reference chat-owned tables.
+
+| Table | Retained authority and constraints |
+|---|---|
+| `workspace_admission_controls` | One workspace/person control, initialized once, retained after native membership disappears. `blocked_at` prevents directory replay after full offboarding. `revision` binds optimistic UI and capability projections; it is not a shared authentication epoch. |
+| `workspace_access_sources` | Immutable source/person/workspace identity, manual or exact directory/link reference, active/inactive/terminal retired state, builtin role and admission time. Authorization revision changes invalidate only the issuing source. Directory sources grant member access only. Partial unique indexes prevent duplicate current manual or directory sources. |
+| `workspace_access_roles` | Named, revisioned role definitions with a nonempty unique one-dimensional subset of the five finite workspace/channel actions. No builtin owner/admin or global account capability. Retired definitions retain history. |
+| `workspace_access_groups` | Workspace access groups, manual or directory-owned, separate from personal sidebar folders. Directory identity is retained and cannot be relabelled manual. |
+| `workspace_access_group_members` | Exact group/person/admission-source contributions, with same-workspace and same-person foreign keys. Membership never invents a manual admission. |
+| `workspace_access_role_grants` | An existing role granted to exactly one source or group within this workspace; source and group are exclusive. |
+| `workspace_member_capabilities` | Finite projected workspace actions for a native full member, bound to the exact current admission projection revision. Stale, blocked or missing native membership grants nothing. |
+
+Display names are normalized by the service; generated name keys compare with explicit `C`
+collation. Native roles preserve their existing owner invariant. All source mutations acquire
+the workspace mutex and project the affected cohort atomically. Full offboarding rotates every
+source authorization revision and retains the local block. Explicit readmission projects
+currently active sources without restoring an earlier session's authority.
+
+Chat migration `chat/0018_channel_access_sources.sql` owns `channel_access_controls`,
+`channel_access_group_mappings`, `channel_access_member_grants`, `channel_access_role_grants`
+and `channel_member_capabilities`. Retained initialization prevents a later projected channel
+membership being mistaken for manual membership. Source/group contributions join the exact
+workspace and non-DM channel; scoped role grants do not add channel membership. Core asks the
+chat port to project these rows and never gains a foreign key to chat. Private visibility and
+post-join guest history remain independently guarded.
+
+### 4.5. Native directory provisioning
+
+Migration `0117_workspace_directory.sql` retains directory classification and exact native
+SCIM resources. `workspace_directories` belongs to one verified company connection in the same
+workspace, with an immutable `sub` or `oid` claim selection. Enabled/deleted security transitions
+rotate directory authorization revision; deletion is terminal. Name and creation policy changes
+do not revoke unrelated existing sessions.
+
+`workspace_directory_credentials` stores only unique SHA-256 bearer hashes. Identity, hash and
+creation time are immutable; expiry may shorten but never extend, revocation is terminal and
+last use never moves backwards. Credentials live at most 365 days. Raw bearers appear only in
+the creation/rotation response. `workspace_directory_identity_links` immutably binds a canonical
+native person to an exact directory external ID, through either a verified company link or
+transaction-bound native initialization. Email and user name never choose an existing person.
+
+The pinned native SCIM plugin owns seven core resource tables: `workspace_directory_scim_bindings`,
+`workspace_directory_scim_tombstones`, `workspace_directory_scim_subjects`,
+`workspace_directory_scim_users`, `workspace_directory_scim_grants`,
+`workspace_directory_scim_groups` and `workspace_directory_scim_group_members`. Their schema is
+compiled from the pinned SDK; opaque comparison keys use explicit `C` collation. Connection-scoped
+resources are filtered through the owning directory, including exports and cleanup. A global
+canonical subject row does not make another directory's profile source visible to this workspace.
+
+`workspace_identity_connections`, `sessions` and `native_authorizations` retain directory-origin
+classification. `workspace_identity_sessions` retains the complete immutable directory/link,
+directory authorization revision, source/authorization revision and captured admission revision
+tuple. No deletion foreign key clears that origin into manual authentication. Liveness checks the
+exact current issuing source and directory with an unblocked retained control; the captured
+admission projection revision is diagnostic. Migration `0118_directory_source_lookup.sql` builds
+the partial source/proof index concurrently, without blocking writes to the populated proof table.
+
+`0119_directory_native_initialization.sql` retains one immutable first-binding receipt per
+directory identity link. Its binding ID has no foreign key to the transient native binding or
+session, so unlinking or session cleanup cannot silently bootstrap the account again. An explicit
+user-authorized relink remains possible; true identity-link erasure also removes its receipt.
+
+### 4.6. Source and directory table definitions
+
+These are the table definitions introduced by the provisioning migrations. Their source files
+also own the indexes, immutable identity guards and subsequent structural constraints;
+`chat/0018_channel_access_sources.sql` owns the channel tables and adds the composite
+source/group member key used by its foreign keys. The native SCIM columns retain the pinned
+plugin schema and explicit bytewise identifier collation.
+
+#### `workspace_admission_controls`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_admission_controls (
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    initialized_at TIMESTAMPTZ NOT NULL,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    blocked_at TIMESTAMPTZ,
+    last_builtin_role user_role NOT NULL,
+    last_access_kind TEXT NOT NULL CHECK (last_access_kind IN ('member', 'guest')),
+    updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (workspace_id, user_id),
+    CHECK (isfinite(initialized_at) AND isfinite(updated_at)),
+    CHECK (blocked_at IS NULL OR isfinite(blocked_at)),
+    CHECK (last_access_kind <> 'guest' OR last_builtin_role = 'member')
+);
+```
+
+#### `workspace_access_sources`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_access_sources (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('manual', 'directory')),
+    name VARCHAR(128) CHECK (name IS NULL OR (name = btrim(name) AND length(name) > 0)),
+    -- Retained exact app-owned directory/plugin resource IDs. No guessed email/username key.
+    -- Native integration owns the directory's physical tables and will bind these references.
+    directory_id UUID,
+    directory_link_reference UUID,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    authorization_revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    state TEXT NOT NULL CHECK (state IN ('active', 'inactive', 'retired')),
+    builtin_role user_role NOT NULL DEFAULT 'member',
+    access_kind TEXT NOT NULL CHECK (access_kind IN ('member', 'guest')),
+    admitted_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    retired_at TIMESTAMPTZ,
+    UNIQUE (workspace_id, id),
+    UNIQUE (workspace_id, user_id, id),
+    FOREIGN KEY (workspace_id, user_id)
+        REFERENCES workspace_admission_controls(workspace_id, user_id) ON DELETE CASCADE,
+    CHECK (
+        (kind = 'manual' AND directory_id IS NULL AND directory_link_reference IS NULL)
+        OR (kind = 'directory' AND directory_id IS NOT NULL AND directory_link_reference IS NOT NULL
+            AND builtin_role = 'member' AND access_kind = 'member')
+    ),
+    CHECK (access_kind <> 'guest' OR builtin_role = 'member'),
+    CHECK ((state = 'retired') = (retired_at IS NOT NULL)),
+    CHECK (isfinite(admitted_at) AND isfinite(created_at) AND isfinite(updated_at)),
+    CHECK (retired_at IS NULL OR isfinite(retired_at))
+);
+```
+
+#### `workspace_access_roles`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_access_roles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name VARCHAR(64) COLLATE "C" NOT NULL CHECK (name = btrim(name) AND length(name) > 0),
+    name_key TEXT COLLATE "C" GENERATED ALWAYS AS (lower(name)) STORED,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    capabilities TEXT[] NOT NULL CHECK (workspace_access_capabilities_valid(capabilities)),
+    retired_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, id),
+    CHECK (isfinite(created_at) AND isfinite(updated_at)),
+    CHECK (retired_at IS NULL OR isfinite(retired_at))
+);
+```
+
+#### `workspace_access_groups`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_access_groups (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('manual', 'directory')),
+    name VARCHAR(64) COLLATE "C" NOT NULL CHECK (name = btrim(name) AND length(name) > 0),
+    name_key TEXT COLLATE "C" GENERATED ALWAYS AS (lower(name)) STORED,
+    directory_id UUID,
+    directory_group_reference UUID,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    state TEXT NOT NULL CHECK (state IN ('active', 'inactive', 'retired')),
+    retired_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, id),
+    CHECK (
+        (kind = 'manual' AND directory_id IS NULL AND directory_group_reference IS NULL)
+        OR (kind = 'directory' AND directory_id IS NOT NULL AND directory_group_reference IS NOT NULL)
+    ),
+    CHECK ((state = 'retired') = (retired_at IS NOT NULL)),
+    CHECK (retired_at IS NULL OR isfinite(retired_at)),
+    CHECK (isfinite(created_at) AND isfinite(updated_at))
+);
+```
+
+#### `workspace_access_group_members`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_access_group_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    group_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    source_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, group_id, user_id, source_id),
+    FOREIGN KEY (workspace_id, group_id) REFERENCES workspace_access_groups(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, user_id, source_id) REFERENCES workspace_access_sources(workspace_id, user_id, id) ON DELETE CASCADE,
+    CHECK (isfinite(created_at))
+);
+```
+
+#### `workspace_access_role_grants`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_access_role_grants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    role_id UUID NOT NULL,
+    source_id UUID,
+    group_id UUID,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, id),
+    FOREIGN KEY (workspace_id, role_id) REFERENCES workspace_access_roles(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, source_id) REFERENCES workspace_access_sources(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, group_id) REFERENCES workspace_access_groups(workspace_id, id) ON DELETE CASCADE,
+    CHECK ((source_id IS NOT NULL) <> (group_id IS NOT NULL)),
+    CHECK (isfinite(created_at))
+);
+```
+
+#### `workspace_member_capabilities`
+
+Introduced by `0116_workspace_provisioning.sql`.
+
+```sql
+CREATE TABLE workspace_member_capabilities (
+    workspace_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    capability TEXT NOT NULL CHECK (capability IN ('members.invite', 'members.manage_nonowners', 'audit.read')),
+    projection_revision UUID NOT NULL,
+    PRIMARY KEY (workspace_id, user_id, capability),
+    FOREIGN KEY (workspace_id, user_id) REFERENCES workspace_members(workspace_id, user_id) ON DELETE CASCADE
+);
+```
+
+#### `workspace_directories`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    connection_id UUID NOT NULL,
+    claim TEXT NOT NULL CHECK (claim IN ('sub', 'oid')),
+    name VARCHAR(64) COLLATE "C" NOT NULL CHECK (name = btrim(name) AND length(name) > 0),
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    authorization_revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    allow_create BOOLEAN NOT NULL DEFAULT false,
+    deleted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, id),
+    FOREIGN KEY (workspace_id, connection_id)
+        REFERENCES workspace_identity_connections(workspace_id, id) ON DELETE CASCADE,
+    CHECK (NOT enabled OR deleted_at IS NULL)
+);
+```
+
+#### `workspace_directory_credentials`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_credentials (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    directory_id UUID NOT NULL,
+    token_hash TEXT COLLATE "C" NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    last_used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (workspace_id, directory_id) REFERENCES workspace_directories(workspace_id, id) ON DELETE CASCADE,
+    CHECK (isfinite(created_at) AND isfinite(expires_at) AND expires_at > created_at
+        AND expires_at <= created_at + interval '365 days')
+);
+```
+
+#### `workspace_directory_identity_links`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_identity_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    directory_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    external_id TEXT COLLATE "C" NOT NULL CHECK (length(external_id) BETWEEN 1 AND 255),
+    origin TEXT NOT NULL CHECK (origin IN ('company_link', 'directory_created')),
+    binding_reference UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (workspace_id, directory_id) REFERENCES workspace_directories(workspace_id, id) ON DELETE CASCADE,
+    UNIQUE (directory_id, external_id),
+    UNIQUE (directory_id, user_id),
+    CHECK ((origin = 'company_link' AND binding_reference IS NOT NULL)
+        OR (origin = 'directory_created' AND binding_reference IS NULL))
+);
+```
+
+#### `workspace_directory_scim_bindings`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_bindings (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "connection_id" text COLLATE "C" not null,
+    "connection_key" text COLLATE "C" not null unique,
+    "provisioning_domain_id" text COLLATE "C" not null,
+    "created_at" timestamptz not null,
+    "decommissioned_at" timestamptz,
+    "decommission_status" text not null,
+    "decommission_cursor_user_id" text COLLATE "C",
+    "decommission_reconciled_user_count" integer not null,
+    "decommission_batch_count" integer not null,
+    "decommission_revision" integer not null,
+    "decommission_completed_at" timestamptz,
+    "decommission_lease_id" text COLLATE "C",
+    "decommission_lease_expires_at" timestamptz
+);
+```
+
+#### `workspace_directory_scim_tombstones`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_tombstones (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "connection_id" text COLLATE "C" not null,
+    "provisioning_domain_id" text COLLATE "C" not null,
+    "external_id" text COLLATE "C" not null,
+    "external_id_key" text COLLATE "C" not null unique,
+    "user_id" uuid not null references "users" ("id") on delete cascade,
+    "profile" text not null,
+    "deleted_at" timestamptz not null
+);
+```
+
+#### `workspace_directory_scim_subjects`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_subjects (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "user_id" uuid not null unique references "users" ("id") on delete cascade,
+    "profile_source_id" text COLLATE "C",
+    "revision" integer not null,
+    "created_at" timestamptz not null,
+    "updated_at" timestamptz not null
+);
+```
+
+#### `workspace_directory_scim_users`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_users (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "connection_id" text COLLATE "C" not null,
+    "provisioning_domain_id" text COLLATE "C" not null,
+    "user_id" uuid not null references "users" ("id") on delete cascade,
+    "connection_user_key" text COLLATE "C" not null unique,
+    "user_name" text not null,
+    "user_name_key" text COLLATE "C" not null unique,
+    "primary_email" text not null,
+    "work_email_value_index" text COLLATE "C" not null,
+    "email_value_index" text COLLATE "C" not null,
+    "display_name" text not null,
+    "formatted_name" text not null,
+    "given_name" text,
+    "family_name" text,
+    "serialized_emails" text not null,
+    "serialized_attributes" text,
+    "external_id" text COLLATE "C",
+    "external_id_key" text COLLATE "C" unique,
+    "active" boolean not null,
+    "order_key" text COLLATE "C" not null unique,
+    "created_at" timestamptz not null,
+    "updated_at" timestamptz not null
+);
+```
+
+#### `workspace_directory_scim_grants`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_grants (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "connection_id" text COLLATE "C" not null,
+    "provisioning_domain_id" text COLLATE "C" not null,
+    "scim_user_id" uuid not null references "workspace_directory_scim_users" ("id") on delete cascade,
+    "user_id" uuid not null references "users" ("id") on delete cascade,
+    "source_kind" text COLLATE "C" not null,
+    "source_id" text COLLATE "C" not null,
+    "source_value" text COLLATE "C",
+    "role" text COLLATE "C" not null,
+    "grant_key" text COLLATE "C" not null unique,
+    "created_at" timestamptz not null,
+    "updated_at" timestamptz not null
+);
+```
+
+#### `workspace_directory_scim_groups`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_groups (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "connection_id" text COLLATE "C" not null,
+    "provisioning_domain_id" text COLLATE "C" not null,
+    "revision" integer not null,
+    "display_name" text not null,
+    "display_name_key" text COLLATE "C" not null unique,
+    "external_id" text COLLATE "C",
+    "external_id_key" text COLLATE "C" unique,
+    "order_key" text COLLATE "C" not null unique,
+    "created_at" timestamptz not null,
+    "updated_at" timestamptz not null
+);
+```
+
+#### `workspace_directory_scim_group_members`
+
+Introduced by `0117_workspace_directory.sql`.
+
+```sql
+CREATE TABLE workspace_directory_scim_group_members (
+    "id" uuid default pg_catalog.gen_random_uuid() not null primary key,
+    "connection_id" text COLLATE "C" not null,
+    "group_id" uuid not null references "workspace_directory_scim_groups" ("id") on delete cascade,
+    "scim_user_id" uuid not null references "workspace_directory_scim_users" ("id") on delete cascade,
+    "membership_key" text COLLATE "C" not null unique,
+    "created_at" timestamptz not null
+);
+```
+
+#### `workspace_directory_native_initializations`
+
+Introduced by `0119_directory_native_initialization.sql`.
+
+```sql
+CREATE TABLE workspace_directory_native_initializations (
+    link_reference UUID PRIMARY KEY REFERENCES workspace_directory_identity_links(id) ON DELETE CASCADE,
+    binding_reference UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### `channel_access_controls`
+
+Introduced by `chat/0018_channel_access_sources.sql`.
+
+```sql
+CREATE TABLE channel_access_controls (
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    initialized_at TIMESTAMPTZ NOT NULL,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    PRIMARY KEY (channel_id, user_id),
+    UNIQUE (workspace_id, channel_id, user_id),
+    FOREIGN KEY (workspace_id, channel_id) REFERENCES channels(workspace_id, id) ON DELETE CASCADE,
+    CHECK (isfinite(initialized_at))
+);
+```
+
+#### `channel_access_group_mappings`
+
+Introduced by `chat/0018_channel_access_sources.sql`.
+
+```sql
+CREATE TABLE channel_access_group_mappings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    group_id UUID NOT NULL,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, id),
+    UNIQUE (workspace_id, channel_id, group_id),
+    FOREIGN KEY (workspace_id, channel_id) REFERENCES channels(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, group_id) REFERENCES workspace_access_groups(workspace_id, id) ON DELETE CASCADE,
+    CHECK (isfinite(created_at))
+);
+```
+
+#### `channel_access_member_grants`
+
+Introduced by `chat/0018_channel_access_sources.sql`.
+
+```sql
+CREATE TABLE channel_access_member_grants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('manual', 'source', 'group')),
+    source_id UUID,
+    group_id UUID,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    admitted_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, id),
+    FOREIGN KEY (workspace_id, channel_id, user_id)
+        REFERENCES channel_access_controls(workspace_id, channel_id, user_id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, user_id, source_id)
+        REFERENCES workspace_access_sources(workspace_id, user_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, channel_id, group_id)
+        REFERENCES channel_access_group_mappings(workspace_id, channel_id, group_id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, group_id, user_id, source_id)
+        REFERENCES workspace_access_group_members(workspace_id, group_id, user_id, source_id) ON DELETE CASCADE,
+    CHECK (
+        (kind = 'manual' AND source_id IS NULL AND group_id IS NULL)
+        OR (kind = 'source' AND source_id IS NOT NULL AND group_id IS NULL)
+        OR (kind = 'group' AND source_id IS NOT NULL AND group_id IS NOT NULL)
+    ),
+    CHECK (isfinite(admitted_at) AND isfinite(created_at))
+);
+```
+
+#### `channel_access_role_grants`
+
+Introduced by `chat/0018_channel_access_sources.sql`.
+
+```sql
+CREATE TABLE channel_access_role_grants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    role_id UUID NOT NULL,
+    source_id UUID,
+    group_id UUID,
+    revision UUID NOT NULL DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ NOT NULL,
+    UNIQUE (workspace_id, id),
+    FOREIGN KEY (workspace_id, channel_id) REFERENCES channels(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, role_id) REFERENCES workspace_access_roles(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, source_id) REFERENCES workspace_access_sources(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id, group_id) REFERENCES workspace_access_groups(workspace_id, id) ON DELETE CASCADE,
+    CHECK ((source_id IS NOT NULL) <> (group_id IS NOT NULL)),
+    CHECK (isfinite(created_at))
+);
+```
+
+#### `channel_member_capabilities`
+
+Introduced by `chat/0018_channel_access_sources.sql`.
+
+```sql
+CREATE TABLE channel_member_capabilities (
+    workspace_id UUID NOT NULL,
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    capability TEXT NOT NULL CHECK (capability IN ('channel.settings.manage', 'channel.members.manage')),
+    projection_revision UUID NOT NULL,
+    PRIMARY KEY (channel_id, user_id, capability),
+    FOREIGN KEY (workspace_id, channel_id) REFERENCES channels(workspace_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id, user_id) REFERENCES channel_members(channel_id, user_id) ON DELETE CASCADE
+);
+```
+
+#### Provisioning lookup indexes
+
+The source and directory lookups use these migration-owned indexes. The proof/source index
+is built concurrently by `0118_directory_source_lookup.sql`.
+
+```sql
+CREATE INDEX idx_workspace_admission_controls_user ON workspace_admission_controls(user_id);
+CREATE UNIQUE INDEX idx_workspace_access_sources_manual
+    ON workspace_access_sources(workspace_id, user_id) WHERE kind = 'manual' AND state <> 'retired';
+CREATE UNIQUE INDEX idx_workspace_access_sources_directory
+    ON workspace_access_sources(workspace_id, directory_id, directory_link_reference)
+    WHERE kind = 'directory' AND state <> 'retired';
+CREATE UNIQUE INDEX idx_workspace_access_sources_directory_user
+    ON workspace_access_sources(workspace_id, user_id, directory_id)
+    WHERE kind = 'directory' AND state <> 'retired';
+CREATE INDEX idx_workspace_access_sources_member ON workspace_access_sources(workspace_id, user_id, state, id);
+CREATE INDEX idx_workspace_access_sources_user ON workspace_access_sources(user_id);
+CREATE INDEX idx_workspace_access_sources_directory_state ON workspace_access_sources(workspace_id, directory_id, state, id);
+CREATE UNIQUE INDEX idx_workspace_access_roles_name ON workspace_access_roles(workspace_id, name_key) WHERE retired_at IS NULL;
+CREATE INDEX idx_workspace_access_roles_live ON workspace_access_roles(workspace_id, retired_at, id);
+CREATE UNIQUE INDEX idx_workspace_access_groups_manual_name
+    ON workspace_access_groups(workspace_id, name_key) WHERE kind = 'manual' AND state <> 'retired';
+CREATE UNIQUE INDEX idx_workspace_access_groups_directory
+    ON workspace_access_groups(workspace_id, directory_id, directory_group_reference)
+    WHERE kind = 'directory' AND state <> 'retired';
+CREATE INDEX idx_workspace_access_groups_live ON workspace_access_groups(workspace_id, state, id);
+CREATE INDEX idx_workspace_access_group_members_source ON workspace_access_group_members(workspace_id, user_id, source_id);
+CREATE INDEX idx_workspace_access_group_members_user ON workspace_access_group_members(user_id);
+CREATE UNIQUE INDEX idx_workspace_access_role_grants_source ON workspace_access_role_grants(workspace_id, role_id, source_id) WHERE source_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_workspace_access_role_grants_group ON workspace_access_role_grants(workspace_id, role_id, group_id) WHERE group_id IS NOT NULL;
+CREATE INDEX idx_workspace_access_role_grants_by_source ON workspace_access_role_grants(workspace_id, source_id) WHERE source_id IS NOT NULL;
+CREATE INDEX idx_workspace_access_role_grants_by_group ON workspace_access_role_grants(workspace_id, group_id) WHERE group_id IS NOT NULL;
+CREATE INDEX idx_workspace_member_capabilities_user ON workspace_member_capabilities(user_id);
+CREATE UNIQUE INDEX idx_workspace_directories_connection ON workspace_directories(connection_id);
+CREATE UNIQUE INDEX idx_workspace_directories_name ON workspace_directories(workspace_id, name) WHERE deleted_at IS NULL;
+CREATE INDEX idx_workspace_directories_live ON workspace_directories(workspace_id, deleted_at, id);
+CREATE INDEX idx_workspace_directory_credentials_live ON workspace_directory_credentials(directory_id, revoked_at, expires_at);
+CREATE INDEX idx_workspace_directory_identity_links_user ON workspace_directory_identity_links(user_id);
+create index "workspace_directory_scim_bindings_connection_id_idx" on "workspace_directory_scim_bindings" ("connection_id");
+create index "workspace_directory_scim_tombstones_connection_id_idx" on "workspace_directory_scim_tombstones" ("connection_id");
+create index "workspace_directory_scim_tombstones_provisioning_domain_id_idx" on "workspace_directory_scim_tombstones" ("provisioning_domain_id");
+create index "workspace_directory_scim_tombstones_user_id_idx" on "workspace_directory_scim_tombstones" ("user_id");
+create index "workspace_directory_scim_subjects_profile_source_id_idx" on "workspace_directory_scim_subjects" ("profile_source_id");
+create index "workspace_directory_scim_users_connection_id_idx" on "workspace_directory_scim_users" ("connection_id");
+create index "workspace_directory_scim_users_provisioning_domain_id_idx" on "workspace_directory_scim_users" ("provisioning_domain_id");
+create index "workspace_directory_scim_users_user_id_idx" on "workspace_directory_scim_users" ("user_id");
+create index "workspace_directory_scim_grants_connection_id_idx" on "workspace_directory_scim_grants" ("connection_id");
+create index "workspace_directory_scim_grants_provisioning_domain_id_idx" on "workspace_directory_scim_grants" ("provisioning_domain_id");
+create index "workspace_directory_scim_grants_scim_user_id_idx" on "workspace_directory_scim_grants" ("scim_user_id");
+create index "workspace_directory_scim_grants_user_id_idx" on "workspace_directory_scim_grants" ("user_id");
+create index "workspace_directory_scim_groups_connection_id_idx" on "workspace_directory_scim_groups" ("connection_id");
+create index "workspace_directory_scim_groups_provisioning_domain_id_idx" on "workspace_directory_scim_groups" ("provisioning_domain_id");
+create index "workspace_directory_scim_group_members_connection_id_idx" on "workspace_directory_scim_group_members" ("connection_id");
+create index "workspace_directory_scim_group_members_group_id_idx" on "workspace_directory_scim_group_members" ("group_id");
+create index "workspace_directory_scim_group_members_scim_user_id_idx" on "workspace_directory_scim_group_members" ("scim_user_id");
+CREATE INDEX CONCURRENTLY idx_workspace_identity_sessions_source
+    ON workspace_identity_sessions(source_id, source_authorization_revision, session_id)
+    WHERE directory_id IS NOT NULL;
+CREATE INDEX idx_channel_access_controls_user ON channel_access_controls(user_id);
+CREATE INDEX idx_channel_access_controls_workspace ON channel_access_controls(workspace_id, user_id);
+CREATE INDEX idx_channel_access_group_mappings_group ON channel_access_group_mappings(workspace_id, group_id);
+CREATE UNIQUE INDEX idx_channel_access_member_grants_manual ON channel_access_member_grants(channel_id, user_id) WHERE kind = 'manual';
+CREATE UNIQUE INDEX idx_channel_access_member_grants_source ON channel_access_member_grants(channel_id, user_id, source_id) WHERE kind = 'source';
+CREATE UNIQUE INDEX idx_channel_access_member_grants_group ON channel_access_member_grants(channel_id, user_id, source_id, group_id) WHERE kind = 'group';
+CREATE INDEX idx_channel_access_member_grants_user ON channel_access_member_grants(user_id);
+CREATE INDEX idx_channel_access_member_grants_source_member ON channel_access_member_grants(workspace_id, user_id, source_id);
+CREATE INDEX idx_channel_access_member_grants_group_mapping ON channel_access_member_grants(workspace_id, channel_id, group_id);
+CREATE INDEX idx_channel_access_member_grants_group_member ON channel_access_member_grants(workspace_id, group_id, user_id, source_id);
+CREATE UNIQUE INDEX idx_channel_access_role_grants_source ON channel_access_role_grants(channel_id, role_id, source_id) WHERE source_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_channel_access_role_grants_group ON channel_access_role_grants(channel_id, role_id, group_id) WHERE group_id IS NOT NULL;
+CREATE INDEX idx_channel_access_role_grants_role ON channel_access_role_grants(workspace_id, role_id);
+CREATE INDEX idx_channel_access_role_grants_source_lookup ON channel_access_role_grants(workspace_id, source_id) WHERE source_id IS NOT NULL;
+CREATE INDEX idx_channel_access_role_grants_group_lookup ON channel_access_role_grants(workspace_id, group_id) WHERE group_id IS NOT NULL;
+CREATE INDEX idx_channel_access_role_grants_workspace_channel ON channel_access_role_grants(workspace_id, channel_id);
+CREATE INDEX idx_channel_member_capabilities_user ON channel_member_capabilities(user_id);
+CREATE INDEX idx_channel_member_capabilities_workspace_member ON channel_member_capabilities(workspace_id, user_id);
+```
+
+#### Workspace-scoped directory references
+
+`0120_workspace_directory_validate.sql` validates the five directory-origin constraints and
+builds the two workspace-first reference indexes concurrently. Existing directory-origin
+columns and constraint names above remain unchanged.
+
+```sql
+CREATE INDEX CONCURRENTLY idx_workspace_directory_credentials_workspace
+    ON workspace_directory_credentials (workspace_id, directory_id, id);
+CREATE INDEX CONCURRENTLY idx_workspace_directory_identity_links_workspace
+    ON workspace_directory_identity_links (workspace_id, directory_id, user_id);
 ```
 
 ---
@@ -3375,7 +4065,10 @@ CREATE TABLE native_authorizations (
     CONSTRAINT native_authorizations_challenge_is_a_digest CHECK (challenge ~ '^[A-Za-z0-9_-]{43}$'),
     CONSTRAINT native_authorizations_wrong_verifiers_bounded CHECK (wrong_verifiers BETWEEN 0 AND 5),
     CONSTRAINT native_authorizations_lasts CHECK (expires_at >= created_at),
-    CONSTRAINT native_authorizations_code_unique UNIQUE (code_digest)
+    CONSTRAINT native_authorizations_code_unique UNIQUE (code_digest),
+    directory_id UUID,
+    CONSTRAINT native_authorizations_directory_company CHECK (directory_id IS NULL OR
+            (company_workspace_id IS NOT NULL AND company_source_session_id IS NOT NULL))
 );
 
 CREATE INDEX idx_native_authorizations_user ON native_authorizations (user_id, expires_at);
@@ -3742,6 +4435,11 @@ file that leaves its transaction runs statement by statement and must be safe to
 0113_deferred_author_session.sql  retain the actual native author source for workspace and personal exports (D-310)
 0114_personal_archive_workspaces.sql  bind prepared personal archive bytes to their exact workspace set, with legacy unknown retained (D-310)
 0115_workspace_policy_lookup.sql  index retained workspace policy history for legacy archive admission (D-310)
+0116_workspace_provisioning.sql  retained source-aware admission, finite roles/access groups and native capability projection (D-311)
+0117_workspace_directory.sql  native SCIM resources, directory credentials and immutable native source proof (D-311)
+0118_directory_source_lookup.sql  concurrent retained native source/proof lookup index (D-311)
+0119_directory_native_initialization.sql  immutable first native binding receipt independent of transient binding/session purge (D-311)
+0120_workspace_directory_validate.sql  validate directory-origin constraints and add concurrent workspace-first credential/link indexes (D-311)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
@@ -3759,6 +4457,7 @@ chat/0014_shared_catalogue.sql    rendered link projection, durable source jobs 
 chat/0015_shared_source_changes.sql capture source writes for rolling-upgrade/restart recovery (D-306)
 chat/0016_shared_source_indexes.sql restartable concurrent workspace-file keyset index (D-306)
 chat/0017_deferred_author_session.sql retain the actual author source for scheduled sends and message reminders (D-310)
+chat/0018_channel_access_sources.sql source/group channel admission and scoped capability projection owned by chat (D-311)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```

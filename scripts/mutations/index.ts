@@ -48,6 +48,7 @@ import { API_MODULES_WORKSPACES } from './api-modules-workspaces';
 import { API_PLATFORM } from './api-platform';
 import { API_REALTIME } from './api-realtime';
 import { API_ROOT } from './api-root';
+import { API_TESTING } from './api-testing';
 import { PACKAGES_DB } from './packages-db';
 import { PACKAGES_MARKDOWN } from './packages-markdown';
 import { PACKAGES_TOKENS } from './packages-tokens';
@@ -108,6 +109,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-modules-workspaces': API_MODULES_WORKSPACES,
   'api-platform': API_PLATFORM,
   'api-realtime': API_REALTIME,
+  'api-testing': API_TESTING,
   'web-core': WEB_CORE,
   'web-realtime': WEB_REALTIME,
   'web-features': WEB_FEATURES,

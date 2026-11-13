@@ -20,10 +20,13 @@
  * where it can be tested against something that actually tries.
  */
 import { sql, type Executor, type Transaction } from '@purlay/db';
+import { Value } from '@sinclair/typebox/value';
 import {
   MODULE_IDS,
+  WorkspaceAccessAction,
   type MeResponse,
   type Membership,
+  type ChannelAccessAction,
   type ModuleId,
   type Workspace,
   type WorkspaceMember,
@@ -139,6 +142,7 @@ export const membershipsOf = async (
   workspaceId?: string,
   /** The modules each workspace may use (D-289); left out, a membership says nothing of them and a client takes the server's. */
   effective?: EntitlementPolicy['effective'],
+  channels: WorkspaceChannels = noWorkspaceChannels,
 ): Promise<readonly Membership[]> => {
   const now = clock.now();
   let statement = executor
@@ -165,7 +169,48 @@ export const membershipsOf = async (
     .orderBy('workspace_members.joined_at', 'asc');
   if (workspaceId !== undefined) statement = statement.where('workspaces.id', '=', workspaceId);
   const rows = await statement.execute();
+  // One bounded batch for all of this caller's visible memberships; stale projections grant nothing.
+  const capabilities = new Map<string, WorkspaceAccessAction[]>();
+  if (rows.length > 0) {
+    const granted = await executor
+      .selectFrom('workspace_member_capabilities as capability')
+      .innerJoin('workspace_admission_controls as admission', (join) =>
+        join
+          .onRef('admission.workspace_id', '=', 'capability.workspace_id')
+          .onRef('admission.user_id', '=', 'capability.user_id')
+          .onRef('admission.revision', '=', 'capability.projection_revision'),
+      )
+      .innerJoin('workspace_members as native', (join) =>
+        join
+          .onRef('native.workspace_id', '=', 'capability.workspace_id')
+          .onRef('native.user_id', '=', 'capability.user_id'),
+      )
+      .select(['capability.workspace_id', 'capability.capability'])
+      .where('capability.user_id', '=', userId)
+      .where(
+        'capability.workspace_id',
+        'in',
+        rows.map((row) => row.id),
+      )
+      .where('admission.blocked_at', 'is', null)
+      .where('native.access_kind', '=', 'member')
+      .orderBy('capability.capability')
+      .execute();
+    for (const row of granted) {
+      if (!Value.Check(WorkspaceAccessAction, row.capability))
+        throw new Error('A workspace capability is outside the supported vocabulary');
+      const actions = capabilities.get(row.workspace_id) ?? [];
+      actions.push(row.capability);
+      capabilities.set(row.workspace_id, actions);
+    }
+  }
 
+  const channelCapabilities =
+    (await channels.access?.aggregateCapabilities(
+      executor,
+      userId,
+      rows.map((row) => row.id),
+    )) ?? new Map<string, readonly ChannelAccessAction[]>();
   return rows.map((row) => {
     const granted = effective?.(asGrants(row.grants), row.read_at);
     if (row.access_kind === 'guest' && (row.guest_since === null || row.guest_modules === null))
@@ -173,6 +218,8 @@ export const membershipsOf = async (
     return {
       workspace: asWorkspace(row),
       role: row.role,
+      workspaceCapabilities: capabilities.get(row.id) ?? [],
+      channelCapabilities: [...(channelCapabilities.get(row.id) ?? [])],
       joinedAt: new Date(row.joined_at).toISOString(),
       // Over when its instant has passed: ended by the clock, with no job to end it (D-108).
       deepWorkUntil:
@@ -212,6 +259,7 @@ export const meOf = async (
   userId: string,
   creators: WorkspaceCreators,
   effective?: EntitlementPolicy['effective'],
+  channels: WorkspaceChannels = noWorkspaceChannels,
   // Whether the person owes two-step verification is the sign-in policy's to say (D-239), not this module's.
 ): Promise<Omit<MeResponse, 'mustEnrolTwoFactor' | 'modules'>> => {
   const user = await executor
@@ -243,7 +291,9 @@ export const meOf = async (
       email: user.email,
     },
     profile: asProfile(user),
-    memberships: [...(await membershipsOf(executor, clock, userId, undefined, effective))],
+    memberships: [
+      ...(await membershipsOf(executor, clock, userId, undefined, effective, channels)),
+    ],
     mayCreateWorkspace: await mayCreateWorkspace(executor, creators, userId),
     isServerAdmin: user.is_server_admin,
     nameFromGitHub: isNameGitHubs(user),

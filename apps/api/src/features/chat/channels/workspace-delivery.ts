@@ -3,7 +3,7 @@ import type { Clock } from '../../../platform/clock';
 import type { ServerFrame } from '@purlay/types';
 import { AppError } from '../../../platform/errors';
 import { withinRequest, type RequestScope } from '../../../platform/logging';
-import type { AliasableExpression } from '@purlay/db';
+import { sql, type AliasableExpression } from '@purlay/db';
 import { visibleChannels } from './guard';
 import { guestMessageHistoryFor } from './history-access';
 import type {
@@ -38,7 +38,28 @@ export const workspaceFrameProjector = (
 ): WorkspaceFrameProjector => {
   const pending = new WeakMap<ServerFrame, Map<string, WaitingSource[]>>();
   const counters = new Map<string, WaitingSource[]>();
-  const channelRoutes = new WeakMap<ServerFrame, Promise<string | undefined>>();
+  const channelRoutes = new WeakMap<
+    ServerFrame,
+    Promise<
+      | {
+          readonly workspace_id: string;
+          readonly access_policy_epoch: string;
+        }
+      | undefined
+    >
+  >();
+  interface Route {
+    readonly workspace_id: string;
+    readonly access_policy_epoch: string;
+  }
+  const counterRoutes = new Map<string, Promise<Route | undefined>>();
+  const readRoute = async (channelId: string): Promise<Route | undefined> =>
+    await database
+      .selectFrom('channels')
+      .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
+      .select(['channels.workspace_id', 'workspaces.access_policy_epoch'])
+      .where('channels.id', '=', channelId)
+      .executeTakeFirst();
   const sourceFor = (
     frame: ServerFrame,
     workspaceId: string,
@@ -62,15 +83,19 @@ export const workspaceFrameProjector = (
         void (async (): Promise<void> => {
           try {
             const active = batch.filter((row) => !row.signal.aborted);
+            const routed = await channelRoutes.get(frame);
+            // Routing supplies only an epoch hint; the final statement still checks current visibility and policy.
             const workspace =
               active.length === 0
                 ? undefined
-                : await database
-                    .selectFrom('workspaces')
-                    .select('access_policy_epoch')
-                    .where('id', '=', workspaceId)
-                    .where('deleted_at', 'is', null)
-                    .executeTakeFirst();
+                : routed?.workspace_id === workspaceId
+                  ? routed
+                  : await database
+                      .selectFrom('workspaces')
+                      .select('access_policy_epoch')
+                      .where('id', '=', workspaceId)
+                      .where('deleted_at', 'is', null)
+                      .executeTakeFirst();
             const permits =
               workspace === undefined || workspace.access_policy_epoch === '0'
                 ? undefined
@@ -115,6 +140,15 @@ export const workspaceFrameProjector = (
     channelJoinedAt: Date | null;
     historyAllowed: boolean;
   }
+  interface VisibilityRow extends ReadyRow {
+    id: string;
+    workspace_id: string;
+    user_id: string;
+    access_policy_epoch: string;
+    access_kind: string;
+    guest_since: Date | null;
+    guest_expires_at: Date | null;
+  }
   interface Ready {
     readonly key: string;
     readonly identity: Identity;
@@ -124,11 +158,13 @@ export const workspaceFrameProjector = (
     readonly signal: AbortSignal;
     readonly scope: ChannelDeliveryScope | undefined;
     readonly query: () => AliasableExpression<ReadyRow>;
+    readonly permit: WorkspaceContentPermit | 'off';
     readonly resolve: (result: Result) => void;
     readonly reject: (error: unknown) => void;
   }
-  const readyGroups = new WeakMap<ServerFrame, Ready[]>();
-  let counterReady: Ready[] | undefined;
+  const readyGroups = new WeakMap<object, Ready[]>();
+  const personalReadyGroups = new WeakMap<object, Ready[]>();
+  const counterKey = {};
   const scopeKey = (row: ReadyRow, entry: Ready): string =>
     JSON.stringify([
       entry.workspaceId,
@@ -163,51 +199,99 @@ export const workspaceFrameProjector = (
       : { companySession: { userId: identity.userId, workspaceId: identity.companyWorkspaceId } }),
   });
   const finalQuery = (
-    entry: Omit<Ready, 'query' | 'resolve' | 'reject'>,
+    entry: Omit<Ready, 'query' | 'resolve' | 'reject' | 'permit'>,
     permit: WorkspaceContentPermit | 'off',
+    channelBatch = false,
   ): AliasableExpression<ReadyRow> =>
     withinRequest(sourceScope(entry.identity, entry.signal, permit !== 'off'), () => {
       if (permit !== 'off') permit.capture(clock.now());
-      const { identity, workspaceId, channelId, key } = entry;
-      if (channelId === undefined)
+      const { identity, workspaceId, key } = entry;
+      if (channelBatch)
         return database
-          .selectFrom('workspaces')
-          .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
-          .select((eb) => [
-            eb.val(key).as('sourceKey'),
-            'workspace_members.access_kind as accessKind',
-            'workspace_members.guest_since as guestSince',
-            'workspace_members.guest_expires_at as guestExpiresAt',
-            eb.val<Date | null>(null).as('channelJoinedAt'),
-            eb.val(true).as('historyAllowed'),
-          ])
-          .where('workspaces.id', '=', workspaceId)
-          .where('workspaces.deleted_at', 'is', null)
-          .where('workspace_members.user_id', '=', identity.userId)
-          .where(activeWorkspaceMembership())
-          .where((eb) =>
-            eb.or([
-              eb('workspace_members.access_kind', '=', 'member'),
-              eb(
-                eb.fn<number | null>('array_position', [
-                  eb.ref('workspace_members.guest_modules'),
-                  eb.val('chat'),
-                ]),
-                'is not',
-                null,
-              ),
-            ]),
+          .selectFrom(sql<VisibilityRow>`ready_channel_visibility`.as('workspaces'))
+          .innerJoin(sql<VisibilityRow>`ready_channel_visibility`.as('workspace_members'), (join) =>
+            join.onRef('workspace_members.sourceKey', '=', 'workspaces.sourceKey'),
           )
-          .$castTo<ReadyRow>();
-      const message =
-        entry.frame.event === 'MESSAGE_CREATED'
-          ? entry.frame.data.id
-          : 'messageId' in entry.frame.data
-            ? entry.frame.data.messageId
-            : undefined;
-      return visibleChannels(database, identity.userId)
+          .select([
+            'workspaces.sourceKey',
+            'workspaces.accessKind',
+            'workspaces.guestSince',
+            'workspaces.guestExpiresAt',
+            'workspaces.channelJoinedAt',
+            'workspaces.historyAllowed',
+          ])
+          .where('workspaces.sourceKey', '=', key)
+          .where(activeWorkspaceMembership());
+      return database
+        .selectFrom('workspaces')
+        .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
         .select((eb) => [
           eb.val(key).as('sourceKey'),
+          'workspace_members.access_kind as accessKind',
+          'workspace_members.guest_since as guestSince',
+          'workspace_members.guest_expires_at as guestExpiresAt',
+          eb.val<Date | null>(null).as('channelJoinedAt'),
+          eb.val(true).as('historyAllowed'),
+        ])
+        .where('workspaces.id', '=', workspaceId)
+        .where('workspaces.deleted_at', 'is', null)
+        .where('workspace_members.user_id', '=', identity.userId)
+        .where(activeWorkspaceMembership())
+        .where((eb) =>
+          eb.or([
+            eb('workspace_members.access_kind', '=', 'member'),
+            eb(
+              eb.fn<number | null>('array_position', [
+                eb.ref('workspace_members.guest_modules'),
+                eb.val('chat'),
+              ]),
+              'is not',
+              null,
+            ),
+          ]),
+        )
+        .$castTo<ReadyRow>();
+    });
+  /** Shared visibility facts stay in the final statement's snapshot; exact native fences are applied below. */
+  const channelVisibilityQuery = (
+    entries: readonly Ready[],
+  ): AliasableExpression<VisibilityRow> => {
+    const first = entries[0];
+    if (first === undefined) throw new Error('Missing channel recipients');
+    const recipients = sql<{
+      source_key: string;
+      user_id: string;
+      workspace_id: string;
+      channel_id: string;
+    }>`(values ${sql.join(
+      entries.map(
+        (entry) => sql`(${entry.key}::text, ${entry.identity.userId}::uuid,
+        ${entry.workspaceId}::uuid, ${entry.channelId}::uuid)`,
+      ),
+    )})`.as<'ready_recipients'>(
+      sql`ready_recipients(source_key, user_id, workspace_id, channel_id)`,
+    );
+    return withinRequest(sourceScope(first.identity, first.signal, true), () => {
+      const message =
+        first.frame.event === 'MESSAGE_CREATED'
+          ? first.frame.data.id
+          : 'messageId' in first.frame.data
+            ? first.frame.data.messageId
+            : undefined;
+      const access = visibleChannels(database, sql.ref<string>('ready_recipients.user_id'), {
+        visibilityOnly: true,
+      })
+        .where('channels.id', '=', sql.ref<string>('ready_recipients.channel_id'))
+        .where('channels.workspace_id', '=', sql.ref<string>('ready_recipients.workspace_id'))
+        .select((eb) => [
+          'workspaces.id',
+          'workspaces.access_policy_epoch',
+          'workspace_members.workspace_id',
+          'workspace_members.user_id',
+          'workspace_members.access_kind',
+          'workspace_members.guest_since',
+          'workspace_members.guest_expires_at',
+          sql.ref<string>('ready_recipients.source_key').as('sourceKey'),
           'workspace_members.access_kind as accessKind',
           'workspace_members.guest_since as guestSince',
           'workspace_members.guest_expires_at as guestExpiresAt',
@@ -221,17 +305,20 @@ export const workspaceFrameProjector = (
                     .selectFrom('messages as ready_message')
                     .select('ready_message.id')
                     .where('ready_message.id', '=', message)
-                    .where('ready_message.channel_id', '=', channelId)
-                    .where('ready_message.workspace_id', '=', workspaceId)
+                    .whereRef('ready_message.channel_id', '=', 'channels.id')
+                    .whereRef('ready_message.workspace_id', '=', 'channels.workspace_id')
                     .where(guestMessageHistoryFor('ready_message')),
                 ),
               ])
           ).as('historyAllowed'),
         ])
-        .where('channels.id', '=', channelId)
-        .where('channels.workspace_id', '=', workspaceId)
-        .$castTo<ReadyRow>();
+        .$castTo<VisibilityRow>();
+      return database
+        .selectFrom(recipients)
+        .innerJoinLateral(access.as('personal_access'), (join) => join.onTrue())
+        .selectAll('personal_access');
     });
+  };
   const ready = (
     identity: Identity,
     workspaceId: string,
@@ -241,20 +328,25 @@ export const workspaceFrameProjector = (
     scope: ChannelDeliveryScope | undefined,
     permit: WorkspaceContentPermit | 'off',
   ): Promise<Result> => {
-    let group = frame.event === 'CHANNEL_STATE' ? counterReady : readyGroups.get(frame);
+    const personal =
+      permit === 'off' && identity.companyWorkspaceId === undefined && channelId !== undefined;
+    const groups = personal ? personalReadyGroups : readyGroups;
+    const batchKey = frame.event === 'CHANNEL_STATE' ? counterKey : frame;
+    const limit = personal ? 100 : FINAL_BATCH_MAX;
+    let group = groups.get(batchKey);
     if (group === undefined) {
       group = [];
-      if (frame.event === 'CHANNEL_STATE') counterReady = group;
-      else readyGroups.set(frame, group);
+      groups.set(batchKey, group);
     }
     const batch = group;
     if (batch.length === 0)
       queueMicrotask(() => {
-        const selected = batch.splice(0, FINAL_BATCH_MAX);
-        if (readyGroups.get(frame) === batch) readyGroups.delete(frame);
-        if (counterReady === batch) counterReady = undefined;
+        const selected = batch.splice(0, limit);
+        if (groups.get(batchKey) === batch) groups.delete(batchKey);
         void (async (): Promise<void> => {
           const active: Ready[] = [];
+          const channelBatch = selected.every((entry) => entry.channelId !== undefined);
+          const visibilitySource = channelBatch ? channelVisibilityQuery(selected) : undefined;
           const proofBatch = buildCompanyProofBatch<ReadyRow>(
             selected
               .filter((entry) => !entry.signal.aborted)
@@ -267,7 +359,10 @@ export const workspaceFrameProjector = (
                   continue;
                 }
                 try {
-                  queries.push(entry.query());
+                  if (!personal)
+                    queries.push(
+                      channelBatch ? finalQuery(entry, entry.permit, true) : entry.query(),
+                    );
                   active.push(entry);
                 } catch (error) {
                   if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')
@@ -275,6 +370,22 @@ export const workspaceFrameProjector = (
                   else entry.reject(error);
                 }
               }
+              if (personal && active.length > 0)
+                queries.push(
+                  database
+                    .selectFrom(
+                      sql<VisibilityRow>`ready_channel_visibility`.as('personal_visibility'),
+                    )
+                    .select([
+                      'personal_visibility.sourceKey',
+                      'personal_visibility.accessKind',
+                      'personal_visibility.guestSince',
+                      'personal_visibility.guestExpiresAt',
+                      'personal_visibility.channelJoinedAt',
+                      'personal_visibility.historyAllowed',
+                    ])
+                    .where('personal_visibility.access_policy_epoch', '=', '0'),
+                );
               return queries;
             },
           );
@@ -286,6 +397,10 @@ export const workspaceFrameProjector = (
               .with(
                 (cte) => cte(proofBatch.name).materialized(),
                 () => proofBatch.source,
+              )
+              .with(
+                (cte) => cte('ready_channel_visibility').materialized(),
+                () => visibilitySource ?? sql<VisibilityRow>`(select null where false)`,
               )
               .selectFrom(first.as('ready_sources'))
               .selectAll('ready_sources');
@@ -324,10 +439,8 @@ export const workspaceFrameProjector = (
         signal,
         scope,
       };
-      batch.push({ ...entry, query: () => finalQuery(entry, permit), resolve, reject });
-      if (batch.length === FINAL_BATCH_MAX && readyGroups.get(frame) === batch)
-        readyGroups.delete(frame);
-      if (batch.length === FINAL_BATCH_MAX && counterReady === batch) counterReady = undefined;
+      batch.push({ ...entry, permit, query: () => finalQuery(entry, permit), resolve, reject });
+      if (batch.length === limit && groups.get(batchKey) === batch) groups.delete(batchKey);
     });
   };
   return async (identity, _channelIds, frame, signal, channelScope): Promise<Result> => {
@@ -394,17 +507,23 @@ export const workspaceFrameProjector = (
       case 'MESSAGE_VERSIONS_UPDATED':
       case 'TYPING': {
         channelId = frame.data.channelId;
-        let found = channelRoutes.get(frame);
+        let found =
+          frame.event === 'CHANNEL_STATE' ? counterRoutes.get(channelId) : channelRoutes.get(frame);
         if (found === undefined) {
-          found = database
-            .selectFrom('channels')
-            .select('workspace_id')
-            .where('id', '=', channelId)
-            .executeTakeFirst()
-            .then((row) => row?.workspace_id);
-          channelRoutes.set(frame, found);
+          if (frame.event === 'CHANNEL_STATE') {
+            const id = channelId;
+            found = new Promise<Route | undefined>((resolve, reject) => {
+              queueMicrotask(() => {
+                // Detach before dispatch so later recipients cannot reuse a started or completed routing read.
+                counterRoutes.delete(id);
+                void readRoute(id).then(resolve, reject);
+              });
+            });
+            counterRoutes.set(id, found);
+          } else found = readRoute(channelId);
         }
-        workspaceId = await found;
+        channelRoutes.set(frame, found);
+        workspaceId = (await found)?.workspace_id;
         break;
       }
       case 'PRESENCE': {

@@ -29,6 +29,7 @@ import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/del
 import { recordServerAudit } from '../audit/server-audit';
 import type { JobDependencies } from '../jobs/jobs';
 import { retirePushIntents } from '../push/retire';
+import { purgeWorkspaceDirectoryState } from './directory/erasure';
 
 /** Messages or uploads one transaction takes. Chat's steps are batched by it too. */
 export const WORKSPACE_PURGE_BATCH = 500;
@@ -40,6 +41,15 @@ export const WORKSPACE_PURGE_BATCH = 500;
  * the trail kept, to every table the catalogue says refers to a workspace.
  */
 export const CORE_REMAINING_TABLES = [
+  'workspace_member_capabilities',
+  'workspace_access_role_grants',
+  'workspace_access_group_members',
+  'workspace_access_sources',
+  'workspace_access_groups',
+  'workspace_access_roles',
+  'workspace_admission_controls',
+  'workspace_directory_credentials',
+  'workspace_directory_identity_links',
   'workspace_mfa_challenges',
   'workspace_session_assurances',
   'workspace_mfa_recovery_codes',
@@ -49,6 +59,7 @@ export const CORE_REMAINING_TABLES = [
   'workspace_identity_sessions',
   'workspace_identity_bindings',
   'workspace_identity_connections',
+  'workspace_directories',
   'workspace_identity_domains',
   'inbox_entries',
   'workspace_invitation_mail_attempts',
@@ -188,6 +199,15 @@ export const purgeWorkspaceContent = async (
   const done = { messages: 0, files: 0, leftBehind: 0 };
   const steps: readonly PurgeStep[] = [
     { batch: pushBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
+    {
+      batch: async (transaction, id) => ({
+        rows: await purgeWorkspaceDirectoryState(transaction, id, WORKSPACE_PURGE_BATCH),
+        files: 0,
+        keys: [],
+      }),
+      size: WORKSPACE_PURGE_BATCH,
+      messages: false,
+    },
     ...purge.before,
     { batch: uploadBatch, size: WORKSPACE_PURGE_BATCH, messages: false },
     { batch: exportBatch, size: Number.POSITIVE_INFINITY, messages: false },

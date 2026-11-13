@@ -140,6 +140,49 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
     kept: 'the stop stays until the administrator lifts it, which deletes the row; the trail keeps who stopped it and why (D-296)',
   }),
   workspace_members: decided('anonymised', 'until-removed'),
+  // Initialization/offboarding survives native membership deletion and anonymisation; it grants nothing.
+  workspace_admission_controls: decided('anonymised', 'until-removed'),
+  workspace_access_sources: decided('deleted', 'until-removed'),
+  workspace_access_roles: decided(
+    { nobody: 'workspace-owned named action definitions without user references' },
+    'until-removed',
+  ),
+  workspace_access_groups: decided(
+    { nobody: 'workspace-owned access group definitions without user references' },
+    'until-removed',
+  ),
+  workspace_access_group_members: decided('deleted', 'with-parent'),
+  workspace_access_role_grants: decided('deleted', 'with-parent'),
+  workspace_member_capabilities: decided('deleted', 'with-parent'),
+  workspace_directories: decided(
+    { nobody: 'workspace-owned directory configuration without a person reference' },
+    'until-removed',
+  ),
+  workspace_directory_credentials: decided(
+    { nobody: 'hashed directory bearer credentials scoped to their workspace configuration' },
+    'with-parent',
+  ),
+  workspace_directory_identity_links: decided('deleted', 'with-parent'),
+  workspace_directory_native_initializations: decided('deleted', 'with-parent'),
+  workspace_directory_scim_bindings: decided(
+    {
+      nobody:
+        'native directory configuration and group definitions without a canonical user reference',
+    },
+    'with-parent',
+  ),
+  workspace_directory_scim_tombstones: decided('deleted', 'with-parent'),
+  workspace_directory_scim_subjects: decided('deleted', 'with-parent'),
+  workspace_directory_scim_users: decided('deleted', 'with-parent'),
+  workspace_directory_scim_grants: decided('deleted', 'with-parent'),
+  workspace_directory_scim_groups: decided(
+    {
+      nobody:
+        'native directory configuration and group definitions without a canonical user reference',
+    },
+    'with-parent',
+  ),
+  workspace_directory_scim_group_members: decided('deleted', 'with-parent'),
   workspaces: decided('anonymised', {
     kept: 'the row stays, with its name, as what the trails refer to',
   }),
@@ -150,6 +193,14 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   // Deleted by the chat module's `userErased` hook: the key's CASCADE never fires on a soft deletion (D-256).
   channel_departures: decided('deleted', 'with-parent'),
   channel_members: decided('anonymised', 'until-removed'),
+  channel_access_controls: decided('deleted', 'with-parent'),
+  channel_access_group_mappings: decided(
+    { nobody: 'configured access groups mapped to workspace channels, without user references' },
+    'with-parent',
+  ),
+  channel_access_member_grants: decided('deleted', 'with-parent'),
+  channel_access_role_grants: decided('deleted', 'with-parent'),
+  channel_member_capabilities: decided('deleted', 'with-parent'),
   channels: decided('anonymised', { kept: 'for the life of the workspace' }),
   github_app_deliveries: decided({ nobody: 'a delivery’s id and its body’s digest' }, 'swept'),
   github_app_handshakes: decided('anonymised', 'swept'),

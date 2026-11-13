@@ -334,6 +334,17 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/deadline.integration.test.ts'],
   },
   {
+    id: 'directory-scim-media-exception-lost',
+    why: 'Real SCIM JSON mutations must reach the same bounded native protocol handler.',
+    file: 'apps/api/src/ingress/http/edge.ts',
+    find: "media === 'application/scim+json' &&",
+    replace: 'false &&',
+    tests: [
+      'apps/api/src/ingress/http/directory-protocol.integration.test.ts',
+      'apps/api/src/ingress/http/directory-media.test.ts',
+    ],
+  },
+  {
     id: 'document-served-under-the-api-policy',
     why: "the shell keeps `default-src 'none'`, or no policy at all, and the browser suite would see a blank page or nothing",
     file: 'apps/api/src/ingress/http/routes/client-routes.ts',
@@ -491,16 +502,16 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'guest-invitation-mail-blocks-answer',
     why: 'A throwing guest mail queue turns a committed invitation receipt into a failed answer.',
     file: 'apps/api/src/ingress/http/invitations.ts',
-    find: '  const { created, letters } = await atomicallyOn(database)(\n    async (transaction) =>\n      await makeAndMailGuestInvitation(\n        transaction,\n        clock,\n        context,\n        wanted,\n        { on: outbox !== undefined, appUrl },\n        workspaceChannels,\n        dependencies.guestAccessReady ?? false,\n      ),\n  );\n  if (outbox !== undefined && letters.length > 0) {\n    later(() => {\n      post({ database, clock, outbox }, letters);\n      return Promise.resolve();\n    });',
+    find: '  const { created, letters } = await atomicallyOn(database)(async (transaction) => {\n    await lockWorkspaceProvisioningSession(\n      transaction,\n      { clock, lifetime: () => auth.sessionLifetime },\n      { context, sessionId },\n    );\n    return await makeAndMailGuestInvitation(\n      transaction,\n      clock,\n      context,\n      wanted,\n      { on: outbox !== undefined, appUrl },\n      workspaceChannels,\n      dependencies.guestAccessReady ?? false,\n    );\n  });\n  if (outbox !== undefined && letters.length > 0) {\n    later(() => {\n      post({ database, clock, outbox }, letters);\n      return Promise.resolve();\n    });',
     replace:
-      '  const { created, letters } = await atomicallyOn(database)(\n    async (transaction) =>\n      await makeAndMailGuestInvitation(\n        transaction,\n        clock,\n        context,\n        wanted,\n        { on: outbox !== undefined, appUrl },\n        workspaceChannels,\n        dependencies.guestAccessReady ?? false,\n      ),\n  );\n  if (outbox !== undefined && letters.length > 0) {\n    post({ database, clock, outbox }, letters);',
+      '  const { created, letters } = await atomicallyOn(database)(async (transaction) => {\n    await lockWorkspaceProvisioningSession(\n      transaction,\n      { clock, lifetime: () => auth.sessionLifetime },\n      { context, sessionId },\n    );\n    return await makeAndMailGuestInvitation(\n      transaction,\n      clock,\n      context,\n      wanted,\n      { on: outbox !== undefined, appUrl },\n      workspaceChannels,\n      dependencies.guestAccessReady ?? false,\n    );\n  });\n  if (outbox !== undefined && letters.length > 0) {\n    post({ database, clock, outbox }, letters);',
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {
     id: 'guest-invitation-mail-transaction-omitted',
     why: 'A failed audit leaves a committed partial guest invitation outside the transaction.',
     file: 'apps/api/src/ingress/http/invitations.ts',
-    find: '  const { created, letters } = await atomicallyOn(database)(\n    async (transaction) =>\n      await makeAndMailGuestInvitation(\n        transaction,\n        clock,\n        context,\n        wanted,\n        { on: outbox !== undefined, appUrl },\n        workspaceChannels,\n        dependencies.guestAccessReady ?? false,\n      ),\n  );',
+    find: '  const { created, letters } = await atomicallyOn(database)(async (transaction) => {\n    await lockWorkspaceProvisioningSession(\n      transaction,\n      { clock, lifetime: () => auth.sessionLifetime },\n      { context, sessionId },\n    );\n    return await makeAndMailGuestInvitation(\n      transaction,\n      clock,\n      context,\n      wanted,\n      { on: outbox !== undefined, appUrl },\n      workspaceChannels,\n      dependencies.guestAccessReady ?? false,\n    );\n  });',
     replace:
       '  const { created, letters } = await makeAndMailGuestInvitation(\n    database as Parameters<typeof makeAndMailGuestInvitation>[0],\n    clock, context, wanted, { on: outbox !== undefined, appUrl },\n    workspaceChannels, dependencies.guestAccessReady ?? false,\n  );',
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
@@ -584,9 +595,9 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'invite-mail-letters-posted-inside-the-answer',
     why: 'the letters are handed to the mail server before the answer is made: a throw there is a 500 and the link is lost',
     file: 'apps/api/src/ingress/http/invitations.ts',
-    find: '      }),\n  );\n  if (outbox !== undefined && letters.length > 0) {\n    later(() => {\n      post({ database, clock, outbox }, letters);\n      return Promise.resolve();\n    });\n',
+    find: '  const { created, letters } = await atomicallyOn(database)(async (transaction) => {\n    await lockWorkspaceProvisioningSession(\n      transaction,\n      { clock, lifetime: () => auth.sessionLifetime },\n      { context, sessionId },\n    );\n    return await makeAndMailInvitation(transaction, clock, context, wanted, {\n      on: outbox !== undefined,\n      appUrl,\n    });\n  });\n  if (outbox !== undefined && letters.length > 0) {\n    later(() => {\n      post({ database, clock, outbox }, letters);\n      return Promise.resolve();\n    });',
     replace:
-      '      }),\n  );\n  if (outbox !== undefined && letters.length > 0) {\n    post({ database, clock, outbox }, letters);\n',
+      '  const { created, letters } = await atomicallyOn(database)(async (transaction) => {\n    await lockWorkspaceProvisioningSession(\n      transaction,\n      { clock, lifetime: () => auth.sessionLifetime },\n      { context, sessionId },\n    );\n    return await makeAndMailInvitation(transaction, clock, context, wanted, {\n      on: outbox !== undefined,\n      appUrl,\n    });\n  });\n  if (outbox !== undefined && letters.length > 0) {\n    post({ database, clock, outbox }, letters);',
     tests: ['apps/api/src/ingress/http/invitation-mail.integration.test.ts'],
   },
   {
@@ -1007,7 +1018,7 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'workspace-activity-mapper-drops-error-answer',
     why: 'Scheduling successful foreground activity must preserve the actual error response body and headers.',
     file: 'apps/api/src/ingress/http/request-hooks.ts',
-    find: '    return mapFrameworkResponse(responseValue, set, request);',
+    find: '    return error === undefined ? undefined : mapFrameworkResponse(responseValue, set, request);',
     replace: '    return undefined;',
     tests: [
       'apps/api/src/ingress/http/serving-the-client.test.ts',
@@ -1026,9 +1037,26 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'workspace-list-forgets-the-grants',
     why: 'the list of workspaces tells a client every module is usable in every workspace (D-289)',
     file: 'apps/api/src/ingress/http/workspaces.ts',
-    find: 'userId, undefined, dependencies.effectiveModules);',
-    replace: 'userId);',
+    find: '    undefined,\n    dependencies.effectiveModules,\n    dependencies.workspaceChannels,\n  );',
+    replace: '    undefined,\n    undefined,\n    dependencies.workspaceChannels,\n  );',
     tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
+  },
+  {
+    id: 'workspace-member-leave-publishes-former-workspace',
+    why: 'A person who left receives workspace metadata on another device despite having no remaining membership (D-124, D-311).',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: "    [\n      publication('ACCESS_REVOKED', () =>\n        publishAccessRevoked(bus, clock, caller.userId, channelIds),\n      ),\n    ],",
+    replace:
+      "    [\n      publication('WORKSPACE_UPDATED', () =>\n        publishWorkspaceUpdated(bus, clock, [caller.userId], workspaceId),\n      ),\n    ],\n    [\n      publication('ACCESS_REVOKED', () =>\n        publishAccessRevoked(bus, clock, caller.userId, channelIds),\n      ),\n    ],",
+    tests: ['apps/api/src/realtime/revocation.integration.test.ts'],
+  },
+  {
+    id: 'workspace-member-removal-publishes-former-workspace',
+    why: 'A removed person receives a workspace update even though the committed native audience excludes them (D-124, D-311).',
+    file: 'apps/api/src/ingress/http/workspaces.ts',
+    find: 'notifyUserIds ?? (caller.userId === userId ? [] : [caller.userId])',
+    replace: 'notifyUserIds ?? [caller.userId, userId]',
+    tests: ['apps/api/src/realtime/revocation.integration.test.ts'],
   },
   {
     id: 'workspace-modules-writable-by-workspace-owner',

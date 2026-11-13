@@ -121,10 +121,16 @@ describe('the local verify runs everything CI runs', () => {
   const verify = pkg.scripts['verify'] ?? '';
 
   // Steps that set the machine up rather than check the code.
-  const setup = /bun install|actions\/|uses:/;
-  const ciCommands = [...workflow.matchAll(/^\s+run:\s*(.+)$/gm)]
-    .map((m) => (m[1] ?? '').trim())
-    .filter((c) => !setup.test(c));
+  const setup = /bun install|actions\/|uses:|^docker compose exec -T postgres createdb\b/;
+  const controlFlow = /^(?:if .+; then|else|fi)$/;
+  const parsed = Bun.YAML.parse(workflow) as {
+    jobs: Record<string, { steps?: readonly { run?: string }[] }>;
+  };
+  const ciCommands = Object.values(parsed.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .flatMap((step) => (step.run ?? '').split('\n'))
+    .map((line) => line.trim())
+    .filter((command) => command !== '' && !setup.test(command) && !controlFlow.test(command));
 
   test('CI actually runs something', () => {
     expect(ciCommands.length).toBeGreaterThan(3);

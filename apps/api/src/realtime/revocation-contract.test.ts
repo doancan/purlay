@@ -212,6 +212,15 @@ const DECISIONS: Readonly<Record<string, Decision>> = {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',
   },
+  // Source projection journals the exact channel removals for its real commit owner (D-311).
+  'apps/api/src/modules/workspaces/provisioning/projection.ts#projectBatch': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/modules/workspaces/provisioning/administration.ts',
+  },
+  'apps/api/src/features/chat/channels/access-projection.ts#projectChannelAccess': {
+    publishes: 'publishAccessRevoked',
+    calledFrom: 'apps/api/src/modules/workspaces/provisioning/administration.ts',
+  },
   'apps/api/src/features/chat/channels/workspace-channel-cleanup.ts#forgetWorkspaceChannels': {
     publishes: 'publishAccessRevoked',
     calledFrom: 'apps/api/src/ingress/http/workspaces.ts',

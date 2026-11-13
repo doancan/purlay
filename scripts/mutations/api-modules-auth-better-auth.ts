@@ -398,7 +398,7 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'auth-username-taken-from-its-holder',
     why: 'a username somebody already has is asked for and given, so a sign-up fails on the index or a person is named as another (R23)',
     file: BETTER_AUTH,
-    find: '            const username = await availableUsername(deps.database, livingName(wanted), undefined);\n',
+    find: '            const username = await availableUsername(executor, livingName(wanted), undefined);\n',
     replace: '            const username = livingName(wanted);\n',
     tests: ['apps/api/src/modules/auth/better-auth.integration.test.ts'],
   },
@@ -913,8 +913,9 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'sign-in-link-promotes-an-unproven-account',
     why: 'a link spent past every check strips an unproven account, ends its sessions and marks it verified (D-179 §4)',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: '          before: (_user, context) => {\n            refusedWhileSpendingALink(context);\n',
-    replace: '          before: (_user, context) => {\n',
+    find: '          before: (_user, context) => {\n            directoryNative.denyGlobalProfileWrite();\n            refusedWhileSpendingALink(context);\n',
+    replace:
+      '          before: (_user, context) => {\n            directoryNative.denyGlobalProfileWrite();\n',
     tests: ['apps/api/src/ingress/http/magic-link-guard.integration.test.ts'],
   },
   {
@@ -965,9 +966,9 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'sign-in-link-strips-an-unproven-account',
     why: 'a link spent where no transaction can undo it removes the setup administrator’s password (D-179 §4)',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: "        delete: {\n          before: (account, context) => {\n            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))\n              throw new APIError('FORBIDDEN', {\n                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',\n                message: 'Unlink company identities from their workspace settings.',\n              });\n            refusedWhileSpendingALink(context);\n",
+    find: "        delete: {\n          before: (account, context) => {\n            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))\n              throw new APIError('FORBIDDEN', {\n                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',\n                message: 'Unlink company identities from their workspace settings.',\n              });\n            directoryNative.denyGlobalProfileWrite();\n            refusedWhileSpendingALink(context);\n",
     replace:
-      "        delete: {\n          before: (account, context) => {\n            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))\n              throw new APIError('FORBIDDEN', {\n                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',\n                message: 'Unlink company identities from their workspace settings.',\n              });\n",
+      "        delete: {\n          before: (account, context) => {\n            if (account.providerId.startsWith(COMPANY_PROVIDER_PREFIX))\n              throw new APIError('FORBIDDEN', {\n                code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',\n                message: 'Unlink company identities from their workspace settings.',\n              });\n            directoryNative.denyGlobalProfileWrite();\n",
     tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
   },
   {

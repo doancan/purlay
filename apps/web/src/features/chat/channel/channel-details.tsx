@@ -268,12 +268,17 @@ const mayRemove = (
   channel: Channel,
   actor: UserRole | undefined,
   target: UserRole | undefined,
+  fullMember: boolean,
 ): boolean =>
   channel.type !== 'direct_message' &&
   target !== undefined &&
   (actor === 'owner' ||
     (actor === 'admin' && target !== 'owner') ||
-    (channel.type === 'private' && channel.state !== null && target === 'member'));
+    (channel.type === 'private' && channel.state !== null && target === 'member') ||
+    (fullMember &&
+      channel.state !== null &&
+      target === 'member' &&
+      channel.channelCapabilities?.includes('channel.members.manage') === true));
 
 /** Who is in it, found by name when there are many, the way to bring somebody else in, and to take somebody out. */
 const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
@@ -282,7 +287,7 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   const client = useQueryClient();
   const api = useApi();
   const { user } = useSession();
-  const { workspace } = useWorkspace();
+  const { workspace, access } = useWorkspace();
   const actor = useWorkspaceRole();
   const people = useMembers(workspace.id);
   const members = useChannelMembers(channel.id);
@@ -403,7 +408,8 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
             >
               {shown.map(({ user: person }) => {
                 const you = person.id === user.id;
-                const removable = !you && mayRemove(channel, actor, roleOf(person.id));
+                const removable =
+                  !you && mayRemove(channel, actor, roleOf(person.id), access.kind === 'member');
                 return (
                   <li
                     key={person.id}
@@ -436,7 +442,7 @@ const Members = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
                         </Button>
                       )}
                     </div>
-                    {asking === person.id && (
+                    {removable && asking === person.id && (
                       <div
                         role="group"
                         aria-label={t('details.removeLabel', { name: person.displayName })}
@@ -507,7 +513,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   const describe = useDescribeFailure();
   const { leaveChannel, archiveChannel } = useActions();
   const leaveRefusal = useLeaveRefusal();
-  const { workspace } = useWorkspace();
+  const { workspace, access } = useWorkspace();
   const { memberships } = useSession();
   const { navigate } = useRoute();
   const { show } = useToast();
@@ -531,11 +537,19 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
   const [problem, setProblem] = useState<string | null>(null);
   const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
   const member = channel.state !== null;
-  const archiver = role === 'owner' || role === 'admin';
+  const archiver =
+    role === 'owner' ||
+    role === 'admin' ||
+    (access.kind === 'member' &&
+      channel.state !== null &&
+      channel.type !== 'direct_message' &&
+      channel.channelCapabilities?.includes('channel.settings.manage') === true);
+  const question = asking === 'archive' && !archiver ? null : asking;
   const name = channel.name ?? '';
   if (!member && !archiver) return null;
 
   const act = async (what: 'leave' | 'archive'): Promise<void> => {
+    if (what === 'archive' && !archiver) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -560,7 +574,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
         {t('details.danger')}
       </h3>
       <div ref={box} className="flex flex-col rounded-lg border-hairline border-danger">
-        {asking === null ? (
+        {question === null ? (
           <>
             {member && (
               <div className={dangerRow}>
@@ -596,7 +610,7 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
         ) : (
           <div role="group" aria-labelledby={questionId} className="flex flex-col gap-3 p-4">
             <p id={questionId} className="text-body text-ink">
-              {t(asking === 'leave' ? 'details.leaveAsk' : 'details.archiveAsk', { name })}
+              {t(question === 'leave' ? 'details.leaveAsk' : 'details.archiveAsk', { name })}
             </p>
             <div className="flex justify-end gap-2">
               <Button
@@ -613,10 +627,10 @@ const Farewell = ({ channel }: { readonly channel: Channel }): React.JSX.Element
                 variant="danger"
                 busy={busy}
                 onClick={() => {
-                  void act(asking);
+                  void act(question);
                 }}
               >
-                {t(asking === 'leave' ? 'details.leave' : 'details.archive')}
+                {t(question === 'leave' ? 'details.leave' : 'details.archive')}
               </Button>
             </div>
           </div>
@@ -640,7 +654,7 @@ type Tab = 'about' | 'members' | 'integrations';
  */
 const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t, format } = useI18n();
-  const { workspace } = useWorkspace();
+  const { workspace, access } = useWorkspace();
   const { memberships } = useSession();
   const members = useChannelMembers(channel.id);
   const [tab, setTab] = useState<Tab>('about');
@@ -649,6 +663,12 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
   // Repository feeds and incoming webhooks are an owner's or an admin's to see and set up (D-134 §2, D-245).
   const role = memberships.find((m) => m.workspace.id === workspace.id)?.role;
   const configures = (role === 'owner' || role === 'admin') && channel.type !== 'direct_message';
+  const settingsManager =
+    configures ||
+    (access.kind === 'member' &&
+      channel.state !== null &&
+      channel.type !== 'direct_message' &&
+      channel.channelCapabilities?.includes('channel.settings.manage') === true);
   const tabs: readonly Tab[] = configures
     ? ['about', 'members', 'integrations']
     : ['about', 'members'];
@@ -732,7 +752,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
               <NameAndTopic channel={channel} />
               <Notifications channel={channel} />
               {/* Who posts is an owner's or an admin's to say, from inside the channel (D-243). */}
-              {configures && channel.state !== null && <Posting channel={channel} />}
+              {settingsManager && channel.state !== null && <Posting channel={channel} />}
               {/* How long it keeps its history is an owner's, as the workspace's is (D-225). */}
               {role === 'owner' && channel.type !== 'direct_message' && (
                 <ChannelRetentionSection channel={channel} />

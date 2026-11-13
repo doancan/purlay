@@ -100,6 +100,8 @@ import {
 } from './company-sessions';
 import type { CredentialCipher } from '../../platform/crypto';
 import { companyIdentityPlugin } from '../workspaces/identity/native-auth';
+import { workspaceDirectoryNative } from '../workspaces/directory/native-auth';
+import type { WorkspaceChannels } from '../workspaces/channels-port';
 import { COMPANY_PROVIDER_PREFIX } from '../workspaces/identity/catalogue';
 import {
   nativeAuthenticationEvidence,
@@ -147,6 +149,11 @@ export interface SignInPolicy {
 const NO_SIGN_IN_POLICY: SignInPolicy = { requireTwoFactor: false, passwordSignIn: true };
 
 export interface AuthDependencies {
+  /** Native SCIM is fail-closed until every source-aware reader is attested. */
+  readonly directory?: {
+    readonly channels: WorkspaceChannels;
+    readonly readersReady: () => Promise<boolean>;
+  };
   /** Native workspace identity uses the installation's credential cipher; only tests replace its external provider. */
   readonly companyIdentity?: { readonly cipher: CredentialCipher; readonly fetch?: GithubFetch };
   readonly database: Executor;
@@ -1266,6 +1273,13 @@ export const createAuth = (deps: AuthDependencies): Auth => {
   }
   const { settings, log, mailer } = deps;
   const companyCookies = companySessionCookies(deps.database, deps.secret);
+  const directoryNative = workspaceDirectoryNative({
+    database: deps.database,
+    clock: deps.clock,
+    bus: deps.bus,
+    log: deps.log,
+    ...deps.directory,
+  });
   const policy = deps.signInPolicy ?? NO_SIGN_IN_POLICY;
   const lifetime = deps.sessionLifetime ?? NO_SESSION_LIFETIME;
   /** The requirement in force: on, and a password a way in for it to protect. */
@@ -1808,6 +1822,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
       }),
     },
     plugins: [
+      directoryNative.plugin,
       ...(deps.companyIdentity === undefined
         ? []
         : [
@@ -1923,6 +1938,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 code: 'COMPANY_IDENTITY_UNLINK_REQUIRED',
                 message: 'Unlink company identities from their workspace settings.',
               });
+            directoryNative.denyGlobalProfileWrite();
             refusedWhileSpendingALink(context);
             return Promise.resolve();
           },
@@ -1933,13 +1949,16 @@ export const createAuth = (deps: AuthDependencies): Auth => {
         // stripped the account: refused, so the transaction the spend runs in undoes all of it.
         update: {
           before: (_user, context) => {
+            directoryNative.denyGlobalProfileWrite();
             refusedWhileSpendingALink(context);
             return Promise.resolve();
           },
         },
         create: {
           before: async (user, context) => {
-            const admission = await readServerPreferences(deps.database);
+            const executor = directoryNative.executor() ?? deps.database;
+            const directoryAdmission = await directoryNative.consumeAdmission(user.email);
+            const admission = await readServerPreferences(executor);
             if (!emailDomainAllowed(user.email, admission.allowedEmailDomains)) {
               const round = signInRounds.getStore();
               if (round !== undefined) round.admissionRefused = true;
@@ -1948,7 +1967,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
                 message: 'This email domain cannot create an account on this server.',
               });
             }
-            if (settings.signUp === 'invite-only') {
+            if (settings.signUp === 'invite-only' && !directoryAdmission) {
               const invitationId = await admittedByPassport(deps, user.email, context);
               const invitationRound = signInRounds.getStore();
               if (invitationRound !== undefined && context?.path.startsWith('/callback/') === true)
@@ -1963,7 +1982,7 @@ export const createAuth = (deps: AuthDependencies): Auth => {
               (typeof supplied === 'string' ? shapedUsername(supplied) : null) ??
               usernameFrom(user.email) ??
               `user-${randomToken().slice(0, 6)}`;
-            const username = await availableUsername(deps.database, livingName(wanted), undefined);
+            const username = await availableUsername(executor, livingName(wanted), undefined);
             const round = signInRounds.getStore();
             const github = round?.profile;
             const google = round?.googleAccountId !== undefined;
@@ -2128,6 +2147,8 @@ export const createAuth = (deps: AuthDependencies): Auth => {
     },
   });
 
+  directoryNative.initialize(instance, authenticationEvidence.ready);
+
   /** Once the schema has passed, it is not asked again: nothing in this process changes it. */
   let passed = false;
   /** The last mismatch, kept a while: building a checker is a whole instance, and readiness asks often. */
@@ -2220,9 +2241,13 @@ export const createAuth = (deps: AuthDependencies): Auth => {
           );
         nativeHeaders.set('cookie', remaining.join('; '));
       }
-      let response = await authenticationEvidence.around(
-        path,
-        async () => await instance.handler(new Request(request, { headers: nativeHeaders })),
+      let response = await directoryNative.around(
+        request,
+        async () =>
+          await authenticationEvidence.around(
+            path,
+            async () => await instance.handler(new Request(request, { headers: nativeHeaders })),
+          ),
       );
       const redirect = response.headers.get('location');
       if (round.admissionRefused === true && redirect !== null) {

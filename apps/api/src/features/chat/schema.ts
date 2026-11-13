@@ -9,7 +9,17 @@
  */
 import type { ModuleDb, ModuleSchema, ModuleTransaction } from '@purlay/db';
 
-export const CORE_READS = ['users', 'workspaces', 'workspace_members', 'attachments'] as const;
+export const CORE_READS = [
+  'users',
+  'workspaces',
+  'workspace_members',
+  'attachments',
+  'workspace_admission_controls',
+  'workspace_access_sources',
+  'workspace_access_roles',
+  'workspace_access_groups',
+  'workspace_access_group_members',
+] as const;
 
 export type ChatSchema = ModuleSchema<'chat', (typeof CORE_READS)[number]>;
 export type ChatDb = ModuleDb<ChatSchema>;

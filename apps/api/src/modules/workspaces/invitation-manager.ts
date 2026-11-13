@@ -1,5 +1,6 @@
 import type { Transaction } from '@purlay/db';
 import { AppError } from '../../platform/errors';
+import { requireWorkspaceCapabilityNow } from './provisioning/authority';
 import { workspaceNotFound, type WorkspaceContext } from '../../platform/tenancy';
 
 export const requireInvitationManager = (context: WorkspaceContext): void => {
@@ -15,6 +16,12 @@ export const requireInvitationManagerNow = async (
   transaction: Transaction,
   context: WorkspaceContext,
 ): Promise<void> => {
+  await transaction
+    .selectFrom('workspaces')
+    .select('id')
+    .where('id', '=', context.workspaceId)
+    .forShare()
+    .executeTakeFirst();
   const row = await transaction
     .selectFrom('workspace_members')
     .select('role')
@@ -23,5 +30,5 @@ export const requireInvitationManagerNow = async (
     .forShare()
     .executeTakeFirst();
   if (row === undefined) throw workspaceNotFound();
-  requireInvitationManager({ ...context, role: row.role });
+  await requireWorkspaceCapabilityNow(transaction, context, 'members.invite');
 };

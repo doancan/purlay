@@ -53,7 +53,13 @@ import { send } from '../features/chat/messages/messages';
 import { fixedClock } from '../platform/clock';
 import { legacyPersonalWorkspaces, requirePreparedWorkspaceSet } from '../modules/export/source';
 import { companyWorkspaceMfaActor } from '../modules/workspaces/security/mfa.testing';
-import { requireWorkspaceSessionAccess } from '../platform/workspace-content-fence';
+import {
+  readWorkspaceContentPermits,
+  requireWorkspaceSessionAccess,
+} from '../platform/workspace-content-fence';
+import { lockWorkspaceProjectionScope } from '../modules/workspaces/provisioning/scope';
+import { requireManualWorkspaceSource } from '../modules/workspaces/provisioning/native-state';
+import { blockWorkspaceAdmission } from '../modules/workspaces/provisioning/source-offboarding';
 import { activeWorkspaceMembership } from '../platform/tenancy';
 import { createSocketLifecycle } from '../ingress/ws/socket';
 import { chatFrameHandlers } from '../features/chat/frames';
@@ -149,6 +155,39 @@ const fixture = async (
   };
 };
 type Fixture = Awaited<ReturnType<typeof fixture>>;
+
+const capturedCompanyRows = async (
+  f: Fixture,
+  sessionId: string,
+): Promise<() => Promise<number>> => {
+  const permit = (
+    await readWorkspaceContentPermits(f.db, {
+      workspaceId: f.a.workspaceId,
+      sessionIds: [sessionId],
+      now: f.clock.now(),
+      lifetime: f.dependencies.sessionLifetime(),
+    })
+  ).get(sessionId);
+  if (permit === undefined) throw new Error('Missing actual company content permit');
+  expect(permit.decision.allowed).toBe(true);
+  return async (): Promise<number> =>
+    await withinRequest(
+      { requestId: 'captured-company-origin', startedAt: 0, sessionId },
+      async () => {
+        permit.capture(f.clock.now());
+        return (
+          await f.db
+            .selectFrom('workspaces')
+            .innerJoin('workspace_members', 'workspace_members.workspace_id', 'workspaces.id')
+            .select('workspaces.id')
+            .where('workspaces.id', '=', f.a.workspaceId)
+            .where('workspace_members.user_id', '=', f.userId)
+            .where(activeWorkspaceMembership())
+            .execute()
+        ).length;
+      },
+    );
+};
 const endA = async (f: Fixture): Promise<void> => {
   await f.db
     .updateTable('workspace_session_assurances')
@@ -540,6 +579,96 @@ describe('integration: workspace delivery provenance', () => {
       }
     });
   });
+  test('a captured non-directory company source cannot adopt a different native directory origin', async () => {
+    await withRollback(async (db) => {
+      const f = await fixture(db);
+      const dependencies = {
+        ...f.dependencies,
+        lifetime: f.dependencies.sessionLifetime,
+        cipher: credentialCipher(Buffer.alloc(32, 7).toString('base64')),
+      };
+      const company = await companyWorkspaceMfaActor(dependencies, {
+        context: await requireWorkspaceSecurityMembership(db, f.userId, f.a.workspaceId),
+        sessionId: f.source.sessionId,
+      });
+      expect((await workspaceAccessStatus(dependencies, company.actor)).state).toBe('allowed');
+      const rows = await capturedCompanyRows(f, company.actor.sessionId);
+      expect(await rows()).toBe(1);
+      await db
+        .updateTable('sessions')
+        .set({ directory_id: crypto.randomUUID() })
+        .where('id', '=', company.actor.sessionId)
+        .execute();
+      expect(await rows()).toBe(0);
+      expect(
+        (
+          await readWorkspaceContentPermits(db, {
+            workspaceId: f.a.workspaceId,
+            sessionIds: [company.actor.sessionId],
+            now: f.clock.now(),
+            lifetime: f.dependencies.sessionLifetime(),
+          })
+        ).get(company.actor.sessionId)?.decision.allowed,
+      ).toBe(false);
+    });
+  });
+
+  test.each(['active', 'inactive', 'retired', 'blocked'] as const)(
+    'captured company manual admission remains exact when its retained state is %s',
+    async (state) => {
+      await withRollback(async (db) => {
+        const f = await fixture(db);
+        const dependencies = {
+          ...f.dependencies,
+          lifetime: f.dependencies.sessionLifetime,
+          cipher: credentialCipher(Buffer.alloc(32, 7).toString('base64')),
+        };
+        const company = await companyWorkspaceMfaActor(dependencies, {
+          context: await requireWorkspaceSecurityMembership(db, f.userId, f.a.workspaceId),
+          sessionId: f.source.sessionId,
+        });
+        const scope = await lockWorkspaceProjectionScope(db, f.a.workspaceId);
+        const source = await requireManualWorkspaceSource(db, f.clock, scope, f.userId);
+        expect((await workspaceAccessStatus(dependencies, company.actor)).state).toBe('allowed');
+        const rows = await capturedCompanyRows(f, company.actor.sessionId);
+        expect(await rows()).toBe(1);
+        if (state === 'blocked') await blockWorkspaceAdmission(db, f.clock, scope, f.userId);
+        else if (state !== 'active')
+          await db
+            .updateTable('workspace_access_sources')
+            .set({
+              state,
+              retired_at: state === 'retired' ? f.clock.now() : null,
+              revision: crypto.randomUUID(),
+              authorization_revision: crypto.randomUUID(),
+              updated_at: f.clock.now(),
+            })
+            .where('workspace_id', '=', f.a.workspaceId)
+            .where('id', '=', source.id)
+            .execute();
+        expect(await rows()).toBe(state === 'active' ? 1 : 0);
+        expect(
+          (
+            await readWorkspaceContentPermits(db, {
+              workspaceId: f.a.workspaceId,
+              sessionIds: [company.actor.sessionId],
+              now: f.clock.now(),
+              lifetime: f.dependencies.sessionLifetime(),
+            })
+          ).get(company.actor.sessionId)?.decision.allowed,
+        ).toBe(state === 'active');
+        expect(
+          await db
+            .selectFrom('workspace_members')
+            .select('user_id')
+            .where('workspace_id', '=', f.a.workspaceId)
+            .where('user_id', '=', f.userId)
+            .execute(),
+        ).toHaveLength(1);
+      });
+    },
+  );
+
   test.each(['guest', 'deleted', 'suspended'] as const)(
     'captured corporate final proof rejects current outer-row %s retirement',
     async (change) => {

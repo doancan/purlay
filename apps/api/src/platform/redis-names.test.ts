@@ -19,6 +19,7 @@ describe('the names in a namespace', () => {
       entitlementNodes: 'purlay:entitlement-nodes',
       suspensionNodes: 'purlay:suspension-nodes',
       workspaceAccessNodes: 'purlay:workspace-access-nodes',
+      workspaceProvisioningNodes: 'purlay:workspace-provisioning-nodes',
       typingPrefix: 'purlay:typing:',
       onlinePrefix: 'purlay:online:',
       lapseIndex: 'purlay:online-lapse',

@@ -14,6 +14,7 @@ import { recordAudit } from '../audit/audit';
 import { asProfile, PROFILE_COLUMNS } from '../users/profile';
 import type { WorkspaceChannels } from './channels-port';
 import { requireInvitationManager } from './invitation-manager';
+import { recordLegacyManualAdmission } from './provisioning/legacy-writers';
 import { guestAccessRecipients } from './guest-audience';
 
 const missing = (): AppError =>
@@ -114,6 +115,7 @@ export const convertGuest = async (
       .where('workspace_id', '=', current.workspaceId)
       .where('user_id', '=', userId)
       .execute();
+    await recordLegacyManualAdmission(transaction, clock, current.workspaceId, userId);
     await recordAudit(transaction, clock, {
       workspaceId: current.workspaceId,
       actorUserId: current.userId,

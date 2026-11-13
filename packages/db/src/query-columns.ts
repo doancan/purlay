@@ -99,33 +99,101 @@ const scopeTable = (written: string): ScopeTable => {
   return { table, alias };
 };
 
-/** The statements of the nearest enclosing blocks, innermost first. */
-const enclosingStatements = (node: ts.Node): ts.NodeArray<ts.Statement>[] => {
-  const lists: ts.NodeArray<ts.Statement>[] = [];
-  let parent = node.parent;
+const bindingHasName = (binding: ts.BindingName, name: string): boolean =>
+  ts.isIdentifier(binding)
+    ? binding.text === name
+    : binding.elements.some(
+        (element) => !ts.isOmittedExpression(element) && bindingHasName(element.name, name),
+      );
+
+/** Resolve a local initializer only before the nearest lexical binding of that name. */
+const declaredInitializer = (name: string, from: ts.Node): ts.Expression | undefined => {
+  let parent = from.parent;
   for (;;) {
-    if (ts.isSourceFile(parent)) return [...lists, parent.statements];
-    if (ts.isBlock(parent)) lists.push(parent.statements);
+    if (ts.isSourceFile(parent) || ts.isBlock(parent)) {
+      for (const statement of parent.statements) {
+        if (ts.isVariableStatement(statement)) {
+          for (const declaration of statement.declarationList.declarations) {
+            if (bindingHasName(declaration.name, name))
+              return ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
+          }
+        } else if (
+          (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+          statement.name?.text === name
+        )
+          return undefined;
+      }
+    }
+    if (
+      ts.isFunctionLike(parent) &&
+      parent.parameters.some((parameter) => bindingHasName(parameter.name, name))
+    )
+      return undefined;
+    if (ts.isFunctionExpression(parent) && parent.name?.text === name) return undefined;
+    if (
+      ts.isCatchClause(parent) &&
+      parent.variableDeclaration !== undefined &&
+      bindingHasName(parent.variableDeclaration.name, name)
+    )
+      return undefined;
+    if (
+      (ts.isForStatement(parent) || ts.isForOfStatement(parent) || ts.isForInStatement(parent)) &&
+      parent.initializer !== undefined &&
+      ts.isVariableDeclarationList(parent.initializer) &&
+      parent.initializer.declarations.some((declaration) => bindingHasName(declaration.name, name))
+    )
+      return undefined;
+    if (ts.isSourceFile(parent)) return undefined;
     parent = parent.parent;
   }
 };
 
-const declaredInitializer = (name: string, from: ts.Node): ts.Expression | undefined => {
-  for (const statements of enclosingStatements(from)) {
-    for (const statement of statements) {
-      if (!ts.isVariableStatement(statement)) continue;
-      for (const declaration of statement.declarationList.declarations) {
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.name.text === name &&
-          declaration.initializer !== undefined
-        ) {
-          return declaration.initializer;
-        }
-      }
-    }
+interface JoinChain {
+  readonly builder: string;
+  readonly calls: ReadonlySet<ts.CallExpression>;
+}
+const JOIN_CHAIN_METHODS = new Set(['on', 'onRef', 'onTrue']);
+const FILTER_CHAIN_METHODS = new Set(['where', 'whereRef']);
+
+/** Only explicit scope-preserving builder methods retain the receiver's provenance. */
+const methodChainOf = (
+  expression: ts.Expression,
+  methods: ReadonlySet<string> = JOIN_CHAIN_METHODS,
+): JoinChain | undefined => {
+  let current = unwrap(expression);
+  const calls = new Set<ts.CallExpression>();
+  while (ts.isCallExpression(current) && ts.isPropertyAccessExpression(current.expression)) {
+    if (!methods.has(current.expression.name.text)) return undefined;
+    calls.add(current);
+    current = unwrap(current.expression.expression);
   }
-  return undefined;
+  return ts.isIdentifier(current) ? { builder: current.text, calls } : undefined;
+};
+
+const returnedBody = (
+  callback: ts.ArrowFunction | ts.FunctionExpression,
+): ts.Expression | undefined => {
+  const body = callback.body;
+  const only = ts.isBlock(body) && body.statements.length === 1 ? body.statements[0] : undefined;
+  return ts.isBlock(body)
+    ? only !== undefined && ts.isReturnStatement(only)
+      ? only.expression
+      : undefined
+    : body;
+};
+
+/** A conditional filter may add predicates but cannot substitute another query. */
+const keepsFilterScope = (callback: ts.Expression | undefined): boolean => {
+  if (
+    callback === undefined ||
+    (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
+  )
+    return false;
+  const parameter = callback.parameters[0]?.name;
+  const returned = returnedBody(callback);
+  if (parameter === undefined || !ts.isIdentifier(parameter) || returned === undefined)
+    return false;
+  return methodChainOf(returned, FILTER_CHAIN_METHODS)?.builder === parameter.text;
 };
 
 /** The tables a chain reads, and the position its first call starts at: what tells one query from the next. */
@@ -150,10 +218,22 @@ const chainOf = (
       if (inherited !== undefined) {
         return { tables: [...tables, ...inherited.tables], root: inherited.root };
       }
+      root ??= current.getStart();
       break;
     }
-    if (!ts.isCallExpression(current) || !ts.isPropertyAccessExpression(current.expression)) break;
+    if (!ts.isCallExpression(current) || !ts.isPropertyAccessExpression(current.expression)) {
+      root ??= current.getStart();
+      break;
+    }
     const method = current.expression.name.text;
+    if (
+      method.startsWith('$') &&
+      method !== '$castTo' &&
+      !(method === '$if' && keepsFilterScope(current.arguments[1]))
+    ) {
+      root = current.getEnd();
+      break;
+    }
     const first = literalOf(current.arguments[0]);
     if ((ROOT_METHODS.has(method) || JOIN_METHODS.has(method)) && first !== undefined) {
       tables.push(scopeTable(first));
@@ -161,7 +241,7 @@ const chainOf = (
     root = current.getStart();
     current = unwrap(current.expression.expression);
   }
-  return tables.length > 0 && root !== undefined ? { tables, root } : undefined;
+  return root !== undefined ? { tables, root } : undefined;
 };
 
 /** An upsert guard probes its declared unique key first; it is not a scan by the guard column alone. */
@@ -197,6 +277,40 @@ const conflictOf = (
           const chain = chainOf(parent.expression.expression);
           if (chain !== undefined) return { chain, columns };
         }
+      }
+    }
+    parent = parent.parent;
+  }
+  return undefined;
+};
+
+/** A callback supplies scope only for its own directly returned, unchanged join chain. */
+const joinOf = (from: ts.CallExpression): Chain | undefined => {
+  const source = methodChainOf(from);
+  if (source === undefined) return undefined;
+  const builderName = source.builder;
+  let parent = from.parent;
+  while (!ts.isSourceFile(parent)) {
+    if (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) {
+      const parameter = parent.parameters.find(
+        ({ name }) => ts.isIdentifier(name) && name.text === builderName,
+      );
+      if (parameter !== undefined) {
+        const owner = parent.parent;
+        if (
+          parent.parameters[0] === parameter &&
+          ts.isCallExpression(owner) &&
+          ts.isPropertyAccessExpression(owner.expression) &&
+          JOIN_METHODS.has(owner.expression.name.text) &&
+          literalOf(owner.arguments[0]) !== undefined &&
+          owner.arguments[1] === parent
+        ) {
+          const returned = returnedBody(parent);
+          const callback = returned === undefined ? undefined : methodChainOf(returned);
+          if (callback?.builder !== builderName || !callback.calls.has(from)) return undefined;
+          return chainOf(owner);
+        }
+        return undefined;
       }
     }
     parent = parent.parent;
@@ -246,13 +360,17 @@ export const scanSource = (file: string, text: string): Scan => {
       note(call, 'unknown-chain');
       return;
     }
+    const queryKey =
+      chain === undefined
+        ? `unknown:${String(call.expression.getEnd())}`
+        : `query:${String(chain.root)}`;
     references.push({
       file,
       line: lineOf(source, argument),
       clause,
       written,
       scope,
-      query: `${file}:${String(chain?.root ?? lineOf(source, call))}`,
+      query: `${file}:${queryKey}`,
     });
   };
 
@@ -280,7 +398,10 @@ export const scanSource = (file: string, text: string): Scan => {
           method === 'where' || method === 'whereRef' || method === 'having'
             ? conflictOf(node.expression.expression, node)
             : undefined;
-        const chain = chainOf(node.expression.expression) ?? conflict?.chain;
+        const chain =
+          method === 'on' || method === 'onRef'
+            ? joinOf(node)
+            : (conflict?.chain ?? chainOf(node.expression.expression));
         if (conflict !== undefined)
           for (const column of conflict.columns) take(node, column, 'where', chain);
         if (method === 'where' || method === 'having') take(node, first, 'where', chain);

@@ -52,6 +52,11 @@ import { recordAudit } from '../audit/audit';
 import { recordInvitationApplicant } from './invitation-delivery';
 import { membershipsOf } from './workspaces';
 import { requireGuestAdmissionReady } from './guest-readiness';
+import { requireWorkspaceCapabilityNow } from './provisioning/authority';
+import {
+  requireLegacyAdmissionOpen,
+  recordLegacyManualAdmission,
+} from './provisioning/legacy-writers';
 
 export const notFound = (): AppError =>
   new AppError({
@@ -195,6 +200,7 @@ export const createInvitation = async (
   /** Server-owned scope, validated and locked by the guest admission service. */
   guest?: { readonly access: CreatedGuestInvitation['guest']; readonly moduleId: string },
 ): Promise<CreatedInvitation> => {
+  if (guest !== undefined) requireInvitationManager(context);
   await requireInvitationManagerNow(transaction, context);
   const now = clock.now();
   const token = randomToken();
@@ -255,7 +261,7 @@ export const listInvitations = async (
   context: WorkspaceContext,
   query: OlderPageQuery,
 ): Promise<InvitationPage> => {
-  requireInvitationManager(context);
+  await requireWorkspaceCapabilityNow(executor, context, 'members.invite');
   const limit = query.limit ?? PAGE_LIMIT.default;
   const rows = await openInvitations(executor, context, clock.now(), {
     before: query.before,
@@ -510,6 +516,7 @@ export const acceptInvitation = async (
     // Reopening an already accepted link does not create or reactivate a membership.
     if (existing === undefined) requireGuestAdmissionReady(guestAccessReady);
   }
+  await requireLegacyAdmissionOpen(transaction, workspace.id, userId);
   const inserted = await transaction
     .insertInto('workspace_members')
     .values({
@@ -530,6 +537,7 @@ export const acceptInvitation = async (
     .returning('id')
     .executeTakeFirst();
   if (inserted !== undefined) {
+    await recordLegacyManualAdmission(transaction, clock, workspace.id, userId);
     if (guest !== undefined) {
       if (channels?.guests === undefined) throw notFound();
       await channels.guests.grant(

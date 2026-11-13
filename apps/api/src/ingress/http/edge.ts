@@ -65,7 +65,16 @@ export const isCrossSiteMutation = (request: Request, appUrl: string): boolean =
 export const hasUnsupportedMediaType = (request: Request): boolean => {
   if (!STATE_CHANGING.has(request.method)) return false;
   const type = request.headers.get('content-type');
-  if (type !== null) return type.split(';')[0]?.trim().toLowerCase() !== 'application/json';
+  if (type !== null) {
+    const media = type.split(';')[0]?.trim().toLowerCase();
+    if (media === 'application/json') return false;
+    if (
+      media === 'application/scim+json' &&
+      /^\/auth\/scim\/v2\/(?:Users|Groups)(?:\/[^/]+)?$/.test(new URL(request.url).pathname)
+    )
+      return false;
+    return true;
+  }
   return request.body !== null && request.headers.get('content-length') !== '0';
 };
 

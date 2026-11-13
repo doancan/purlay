@@ -29,6 +29,8 @@ export interface RedisNames {
   readonly suspensionNodes: string;
   /** The hash of API nodes that enforce workspace authentication and session policy (D-310). */
   readonly workspaceAccessNodes: string;
+  /** Source-aware membership and directory-session readers advertise separately from policy-only nodes. */
+  readonly workspaceProvisioningNodes: string;
   /** Typing windows: this, then `channelId:userId`. */
   readonly typingPrefix: string;
   /** A person's online record: this, then `userId`. */
@@ -52,6 +54,7 @@ export const redisNames = (namespace: string = DEFAULT_REDIS_NAMESPACE): RedisNa
     entitlementNodes: `${prefix}entitlement-nodes`,
     suspensionNodes: `${prefix}suspension-nodes`,
     workspaceAccessNodes: `${prefix}workspace-access-nodes`,
+    workspaceProvisioningNodes: `${prefix}workspace-provisioning-nodes`,
     typingPrefix: `${prefix}typing:`,
     onlinePrefix: `${prefix}online:`,
     lapseIndex: `${prefix}online-lapse`,

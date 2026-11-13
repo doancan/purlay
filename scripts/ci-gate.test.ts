@@ -18,6 +18,7 @@ const results = (
   JSON.stringify({
     static: { result: over.static ?? 'success', outputs: {} },
     schema: { result: over.schema ?? 'success', outputs: {} },
+    'api-measurements': { result: over['api-measurements'] ?? 'success', outputs: {} },
     changes: {
       result: over.changes ?? 'success',
       outputs: { browser: touched, modules: touchedModules, mutations: touchedMutations },
@@ -25,6 +26,7 @@ const results = (
     browser: { result: over.browser ?? 'success', outputs: {} },
     modules: { result: over.modules ?? 'success', outputs: {} },
     'module-suites': { result: over['module-suites'] ?? 'success', outputs: {} },
+    'cohort-measurements': { result: over['cohort-measurements'] ?? 'success', outputs: {} },
     'mutations-changed': { result: over['mutations-changed'] ?? 'success', outputs: {} },
   });
 
@@ -75,6 +77,19 @@ describe('the gate', () => {
     expect(judge(results({ 'module-suites': 'failure' }, 'true', 'false'))).toEqual([
       'module-suites ended failure',
     ]);
+  });
+
+  test('permits the cohort measurement skip only for a successful explicit modules=false decision', () => {
+    expect(judge(results({ 'cohort-measurements': 'skipped' }, 'true', 'false'))).toEqual([]);
+    expect(judge(results({ 'cohort-measurements': 'skipped' }, 'false', 'true'))).toEqual([
+      'cohort-measurements ended skipped',
+    ]);
+    expect(judge(results({ 'cohort-measurements': 'skipped' }, 'true', ''))).toEqual([
+      'cohort-measurements ended skipped',
+    ]);
+    expect(
+      judge(results({ changes: 'failure', 'cohort-measurements': 'skipped' }, 'true', 'false')),
+    ).toEqual(['changes ended failure', 'cohort-measurements ended skipped']);
   });
 
   test('passes a change that touches no mutation file, whose mutations job was skipped for it, and refuses the skip for one that does', () => {
@@ -183,10 +198,8 @@ describe('the verify job in ci.yml', () => {
   });
 
   test('needs exactly the jobs the gate judges', () => {
-    const needs = /^ {4}needs: \[([^\]]*)\]$/m
-      .exec(job)?.[1]
-      ?.split(',')
-      .map((name) => name.trim());
+    const parsed = Bun.YAML.parse(workflow) as { jobs: { verify: { needs: unknown } } };
+    const needs = parsed.jobs.verify.needs;
     expect(needs).toEqual([...GATED]);
   });
 

@@ -3,7 +3,7 @@
  * The case with a database and no Redis needs a database, and is `test-all.integration.test.ts`.
  */
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,6 +26,12 @@ describe('test:all in CI', () => {
     expect(output).toContain('DATABASE_URL is not set, and CI provides the database. Refusing');
   });
 
+  test('refuses an unknown cohort mode before delegating the clock', () => {
+    const { exitCode, output } = testAll({ CI: 'true', PURLAY_WORKSPACE_COHORT: 'typo' });
+    expect(exitCode).toBe(1);
+    expect(output).toContain('PURLAY_WORKSPACE_COHORT must be functional or measure');
+  });
+
   test('refuses when nothing answers at the database', () => {
     const { exitCode, output } = testAll({
       CI: 'true',
@@ -36,4 +42,10 @@ describe('test:all in CI', () => {
       'nothing answers at 127.0.0.1:1, and CI provides the database. Refusing',
     );
   });
+});
+
+test('the general suite delegates only the cohort clock to the required standalone measurement', () => {
+  expect(readFileSync('scripts/test-all.ts', 'utf8')).toContain(
+    "env: { ...process.env, PURLAY_WORKSPACE_COHORT: 'functional' }",
+  );
 });

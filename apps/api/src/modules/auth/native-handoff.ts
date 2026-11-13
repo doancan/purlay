@@ -74,6 +74,8 @@ const sameChallenge = (stored: string, supplied: string): boolean => {
 /** Older readers cannot exchange a company grant as an independent native session. */
 const companyCodeDigest = async (code: string): Promise<string> =>
   await tokenDigest(`company-native-code@purlay/v1:${code}`);
+const directoryCodeDigest = async (code: string): Promise<string> =>
+  await tokenDigest(`directory-native-code@purlay/v1:${code}`);
 
 /**
  * A code for this person, bound to the application's `challenge` (the caller has checked its shape).
@@ -91,14 +93,23 @@ export const authorizeNative = async (
   const code = randomToken();
   const digest = await tokenDigest(code);
   const companyDigest = await companyCodeDigest(code);
+  const directoryDigest = await directoryCodeDigest(code);
   const now = clock.now();
   await atomicallyOn(database)(async (transaction) => {
     let companyWorkspaceId: string | undefined;
+    let directoryId: string | null = null;
     if (sourceSessionId !== undefined) {
       const source = await requireLiveSession(transaction, clock, sourceSessionId);
       if (source.userId !== userId)
         throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
       companyWorkspaceId = source.companyWorkspaceId;
+      const origin = await transaction
+        .selectFrom('sessions')
+        .select('directory_id')
+        .where('id', '=', sourceSessionId)
+        .where('user_id', '=', userId)
+        .executeTakeFirstOrThrow();
+      directoryId = origin.directory_id;
       if (companyWorkspaceId !== undefined) {
         await lockCompanySignInMember(transaction, companyWorkspaceId, userId);
         await requireLiveSession(transaction, clock, sourceSessionId);
@@ -114,7 +125,7 @@ export const authorizeNative = async (
       .executeTakeFirstOrThrow();
     const live = await transaction
       .selectFrom('native_authorizations')
-      .select(['id', 'company_workspace_id'])
+      .select(['id', 'company_workspace_id', 'directory_id'])
       .where('user_id', '=', userId)
       .where('spent_at', 'is', null)
       .where('expires_at', '>', now)
@@ -126,7 +137,10 @@ export const authorizeNative = async (
     const eligible =
       companyWorkspaceId === undefined
         ? live
-        : live.filter((row) => row.company_workspace_id === companyWorkspaceId);
+        : live.filter(
+            (row) =>
+              row.company_workspace_id === companyWorkspaceId && row.directory_id === directoryId,
+          );
     if (eligible.length < excess)
       throw new AppError({
         code: 'FORBIDDEN',
@@ -141,7 +155,13 @@ export const authorizeNative = async (
       .values({
         id: messageId(now),
         user_id: userId,
-        code_digest: companyWorkspaceId === undefined ? digest : companyDigest,
+        code_digest:
+          companyWorkspaceId === undefined
+            ? digest
+            : directoryId === null
+              ? companyDigest
+              : directoryDigest,
+        directory_id: directoryId,
         authentication_source_session_id: sourceSessionId ?? null,
         ...(companyWorkspaceId === undefined
           ? {}
@@ -209,6 +229,7 @@ export const exchangeNativeCode = async (
   const supplied = nativeChallengeOf(verifier);
   const digest = await tokenDigest(code);
   const companyDigest = await companyCodeDigest(code);
+  const directoryDigest = await directoryCodeDigest(code);
 
   return await atomicallyOn(database)(async (transaction) => {
     // Classify immutable provenance before locking the grant. Company operations lock source,
@@ -225,6 +246,7 @@ export const exchangeNativeCode = async (
         'native_authorizations.spent_at',
         'native_authorizations.company_workspace_id',
         'native_authorizations.company_source_session_id',
+        'native_authorizations.directory_id',
         'native_authorizations.authentication_source_session_id',
         'users.deleted_at',
         'users.suspended_at',
@@ -234,10 +256,17 @@ export const exchangeNativeCode = async (
           eb.and([
             eb('native_authorizations.code_digest', '=', digest),
             eb('native_authorizations.company_workspace_id', 'is', null),
+            eb('native_authorizations.directory_id', 'is', null),
           ]),
           eb.and([
             eb('native_authorizations.code_digest', '=', companyDigest),
             eb('native_authorizations.company_workspace_id', 'is not', null),
+            eb('native_authorizations.directory_id', 'is', null),
+          ]),
+          eb.and([
+            eb('native_authorizations.code_digest', '=', directoryDigest),
+            eb('native_authorizations.company_workspace_id', 'is not', null),
+            eb('native_authorizations.directory_id', 'is not', null),
           ]),
         ]),
       );
@@ -276,6 +305,12 @@ export const exchangeNativeCode = async (
           binding_reference: string;
           authentication_revision: string;
           authenticated_at: Date;
+          directory_id: string | null;
+          directory_link_reference: string | null;
+          directory_authorization_revision: string | null;
+          source_id: string | null;
+          source_authorization_revision: string | null;
+          admission_revision: string | null;
         }
       | undefined;
     if (origin.company_workspace_id !== null) {
@@ -307,6 +342,12 @@ export const exchangeNativeCode = async (
           'binding_reference',
           'authentication_revision',
           'authenticated_at',
+          'directory_id',
+          'directory_link_reference',
+          'directory_authorization_revision',
+          'source_id',
+          'source_authorization_revision',
+          'admission_revision',
         ])
         .where('session_id', '=', sourceId)
         .where('workspace_id', '=', origin.company_workspace_id)
@@ -319,7 +360,7 @@ export const exchangeNativeCode = async (
           ),
         )
         .executeTakeFirst();
-      if (proof === undefined) {
+      if (proof?.directory_id !== origin.directory_id) {
         refused?.('company-source-ended');
         return undefined;
       }
@@ -335,6 +376,7 @@ export const exchangeNativeCode = async (
       found?.user_id !== origin.user_id ||
       found.company_workspace_id !== origin.company_workspace_id ||
       found.company_source_session_id !== origin.company_source_session_id ||
+      found.directory_id !== origin.directory_id ||
       found.authentication_source_session_id !== origin.authentication_source_session_id
     ) {
       refused?.('unknown');
@@ -394,6 +436,7 @@ export const exchangeNativeCode = async (
         ipAddress,
         deviceName,
         companyWorkspaceId: found.company_workspace_id ?? undefined,
+        directoryId: found.directory_id ?? undefined,
       },
     );
     if (proof !== undefined && found.company_workspace_id !== null) {

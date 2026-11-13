@@ -12,6 +12,13 @@
  * last two members of a private channel leaving at once, take turns rather than both deciding on
  * what the other is about to change.
  */
+import {
+  aggregateChannelCapabilities,
+  channelCapabilityPredicate,
+  hasChannelCapability,
+} from './access-capabilities';
+import { visibleChannels } from './guard';
+import { sql } from '@purlay/db';
 import type { ChatDb, ChatTx } from '../schema';
 import { Value } from '@sinclair/typebox/value';
 import {
@@ -73,10 +80,6 @@ interface ChannelUpdate {
   readonly version: number;
 }
 
-const onlyAdmins = (role: UserRole, message: string): void => {
-  if (role === 'member') throw new AppError({ code: 'FORBIDDEN', message });
-};
-
 /** Who posts in a channel's feed, as the trail names it (D-243). */
 const postingOf = (onlyAdminsPost: boolean): string => (onlyAdminsPost ? 'admins' : 'everyone');
 
@@ -118,13 +121,23 @@ export const updateChannel = async (
   ) {
     return { channel: await channelFor(executor, context.userId, context.channelId), update: null };
   }
+  let delegatedPosting = false;
   if (onlyAdminsPost !== current.onlyAdminsPost) {
-    const { role } = await requireWorkspaceMembership(
+    const currentMember = await requireWorkspaceMembership(
       executor,
       context.userId,
       context.workspaceId,
     );
-    onlyAdmins(role, 'Only an owner or an admin says who posts in a channel.');
+    requireFullMembership(currentMember, 'Only a full member can manage channel settings.');
+    delegatedPosting = currentMember.role === 'member';
+    if (
+      delegatedPosting &&
+      !(await hasChannelCapability(executor, context, 'channel.settings.manage'))
+    )
+      throw new AppError({
+        code: 'FORBIDDEN',
+        message: 'Only a channel settings manager says who posts in this channel.',
+      });
   }
 
   if (name.toLowerCase() !== current.name.toLowerCase()) {
@@ -155,8 +168,20 @@ export const updateChannel = async (
       state_version: eb('state_version', '+', 1),
     }))
     .where('id', '=', context.channelId)
+    .where(
+      delegatedPosting
+        ? channelCapabilityPredicate(
+            executor,
+            context.userId,
+            context.channelId,
+            'channel.settings.manage',
+          )
+        : sql<boolean>`true`,
+    )
     .returning('state_version')
-    .executeTakeFirstOrThrow();
+    .executeTakeFirst();
+  if (written === undefined)
+    throw new AppError({ code: 'FORBIDDEN', message: 'This channel action is no longer allowed.' });
 
   if (name !== current.name) {
     // A name is what everybody finds the channel by: a workspace-visible act (D-26, D-123). A
@@ -208,19 +233,36 @@ export const archiveChannel = async (
   const current = await lockNamed(executor, context);
   // The role is read again inside the transaction, through the guard, so a demotion that committed
   // first is the answer here; and it is this workspace's role, never another membership's.
-  const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
-  if (role === 'member') {
+  const member = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  requireFullMembership(member, 'Only a full member can archive channels.');
+  if (
+    member.role === 'member' &&
+    !(await hasChannelCapability(executor, context, 'channel.settings.manage'))
+  ) {
     throw new AppError({
       code: 'FORBIDDEN',
       message: 'Only an owner or an admin archives a channel.',
     });
   }
   const now = clock.now();
-  await executor
+  const archived = await executor
     .updateTable('channels')
     .set({ deleted_at: now, updated_at: now })
     .where('id', '=', context.channelId)
-    .execute();
+    .where(
+      member.role === 'member'
+        ? channelCapabilityPredicate(
+            executor,
+            context.userId,
+            context.channelId,
+            'channel.settings.manage',
+          )
+        : sql<boolean>`true`,
+    )
+    .returning('id')
+    .executeTakeFirst();
+  if (archived === undefined)
+    throw new AppError({ code: 'FORBIDDEN', message: 'This channel action is no longer allowed.' });
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
     actorUserId: context.userId,
@@ -241,27 +283,35 @@ export const archivedChannels = async (
   executor: ChatDb,
   context: WorkspaceContext,
 ): Promise<ArchivedChannel[]> => {
-  onlyAdmins(context.role, 'Only an owner or an admin sees archived channels.');
-  const rows = await executor
-    .selectFrom('channels as channel')
-    .select(['channel.id', 'channel.name', 'channel.type', 'channel.deleted_at'])
-    .where('channel.workspace_id', '=', context.workspaceId)
-    .where('channel.deleted_at', 'is not', null)
-    .where('channel.type', '!=', 'direct_message')
-    .where((eb) =>
-      eb.or([
-        eb('channel.type', '=', 'public'),
-        eb.exists(
-          eb
-            .selectFrom('channel_members as member')
-            .select('member.id')
-            .whereRef('member.channel_id', '=', 'channel.id')
-            .where('member.user_id', '=', context.userId),
-        ),
-      ]),
-    )
-    .orderBy('channel.deleted_at', 'desc')
-    .orderBy('channel.id')
+  requireFullMembership(context, 'Only a full member can manage archived channels.');
+  if (
+    context.role === 'member' &&
+    !(await aggregateChannelCapabilities(executor, context.userId, [context.workspaceId]))
+      .get(context.workspaceId)
+      ?.includes('channel.settings.manage')
+  )
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only a channel settings manager sees archived channels.',
+    });
+  let statement = visibleChannels(executor, context.userId, { includeArchived: true })
+    .select(['channels.id', 'channels.name', 'channels.type', 'channels.deleted_at'])
+    .where('channels.workspace_id', '=', context.workspaceId)
+    .where('channels.deleted_at', 'is not', null)
+    .where('channels.type', '!=', 'direct_message');
+  if (context.role === 'member')
+    statement = statement.where(
+      channelCapabilityPredicate(
+        executor,
+        context.userId,
+        sql.ref<string>('channels.id'),
+        'channel.settings.manage',
+        true,
+      ),
+    );
+  const rows = await statement
+    .orderBy('channels.deleted_at', 'desc')
+    .orderBy('channels.id')
     .limit(ARCHIVED_CHANNELS_MAX)
     .execute();
   return rows.flatMap((row) =>
@@ -323,7 +373,21 @@ export const restoreChannel = async (
       .execute()
   ).map((member) => member.user_id);
   if (row.type === 'private' && !memberIds.includes(userId)) throw channelNotFound();
-  onlyAdmins(context.role, 'Only an owner or an admin restores a channel.');
+  requireFullMembership(context, 'Only a full member can restore a channel.');
+  const delegatedRestore = context.role === 'member';
+  if (
+    delegatedRestore &&
+    !(await hasChannelCapability(
+      executor,
+      { workspaceId: context.workspaceId, userId, channelId },
+      'channel.settings.manage',
+      true,
+    ))
+  )
+    throw new AppError({
+      code: 'FORBIDDEN',
+      message: 'Only a channel settings manager restores this channel.',
+    });
 
   const taken = await executor
     .selectFrom('channels')
@@ -341,11 +405,19 @@ export const restoreChannel = async (
   }
 
   const now = clock.now();
-  await executor
+  const restored = await executor
     .updateTable('channels')
     .set({ deleted_at: null, updated_at: now })
     .where('id', '=', channelId)
-    .execute();
+    .where(
+      delegatedRestore
+        ? channelCapabilityPredicate(executor, userId, channelId, 'channel.settings.manage', true)
+        : sql<boolean>`true`,
+    )
+    .returning('id')
+    .executeTakeFirst();
+  if (restored === undefined)
+    throw new AppError({ code: 'FORBIDDEN', message: 'This channel action is no longer allowed.' });
   await recordAudit(executor, clock, {
     workspaceId: row.workspace_id,
     actorUserId: userId,
@@ -397,6 +469,12 @@ export const leaveChannel = async (executor: ChatTx, context: ChannelContext): P
     .returning('user_id')
     .executeTakeFirst();
   if (left === undefined) return false;
+  await executor
+    .deleteFrom('channel_access_member_grants')
+    .where('workspace_id', '=', context.workspaceId)
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', context.userId)
+    .execute();
   await recordDeparture(executor, context.channelId, context.userId, 'left');
   return true;
 };
@@ -439,11 +517,13 @@ export const removeChannelMember = async (
     .where('id', '=', context.workspaceId)
     .forShare()
     .execute();
-  const { role: caller } = await requireWorkspaceMembership(
+  const currentCaller = await requireWorkspaceMembership(
     executor,
     context.userId,
     context.workspaceId,
   );
+  requireFullMembership(currentCaller, 'Only a full member can manage channel membership.');
+  const caller = currentCaller.role;
   const target = await executor
     .selectFrom('workspace_members')
     .select('role')
@@ -485,8 +565,27 @@ export const removeChannelMember = async (
     }
   }
 
-  await executor
+  const removed = await executor
     .deleteFrom('channel_members')
+    .where('channel_id', '=', context.channelId)
+    .where('user_id', '=', userId)
+    .where(
+      caller === 'member' && publicRemovalNeedsGrant(context)
+        ? channelCapabilityPredicate(
+            executor,
+            context.userId,
+            context.channelId,
+            'channel.members.manage',
+          )
+        : sql<boolean>`true`,
+    )
+    .returning('user_id')
+    .executeTakeFirst();
+  if (removed === undefined)
+    throw new AppError({ code: 'FORBIDDEN', message: 'This channel action is no longer allowed.' });
+  await executor
+    .deleteFrom('channel_access_member_grants')
+    .where('workspace_id', '=', context.workspaceId)
     .where('channel_id', '=', context.channelId)
     .where('user_id', '=', userId)
     .execute();
@@ -507,6 +606,9 @@ export const removeChannelMember = async (
 const personNotFound = (): AppError =>
   new AppError({ code: 'USER_NOT_FOUND', message: 'That person is not in this workspace.' });
 
+const publicRemovalNeedsGrant = (context: ChannelContext): boolean =>
+  context.channelType === 'public';
+
 /** Whether a caller of this role may take a person of that role out of this channel (D-172). */
 const mayRemove = async (
   executor: ChatDb,
@@ -516,10 +618,10 @@ const mayRemove = async (
 ): Promise<boolean> => {
   if (caller === 'owner') return true;
   if (caller === 'admin') return target !== 'owner';
+  if (target !== 'member') return false;
   return (
-    context.channelType === 'private' &&
-    target === 'member' &&
-    (await isChannelMember(executor, context))
+    (!publicRemovalNeedsGrant(context) && (await isChannelMember(executor, context))) ||
+    (await hasChannelCapability(executor, context, 'channel.members.manage'))
   );
 };
 

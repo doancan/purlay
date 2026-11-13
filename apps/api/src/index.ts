@@ -16,6 +16,7 @@ import { checkRelay } from './platform/mail';
 import { createDatabase, leasingExecutor } from '@purlay/db';
 import { databaseConnection } from './platform/database';
 import { loadConfig } from './platform/config';
+import { workspacePolicyReadersReady } from './platform/workspace-policy-readiness';
 import { systemClock } from './platform/clock';
 import { deriveAuthSecret } from './modules/auth/better-auth';
 import {
@@ -39,9 +40,11 @@ import {
   advertiseEntitlements,
   advertiseSuspension,
   advertiseWorkspaceAccess,
+  advertiseWorkspaceProvisioning,
   peersBehind,
   suspensionPeersBehind,
   workspaceAccessPeersBehind,
+  workspaceProvisioningPeersBehind,
 } from './realtime/entitlement-peers';
 import { moduleSetOf, watchModuleSet } from './realtime/module-set';
 import { sharedRealtime } from './realtime/shared';
@@ -233,8 +236,11 @@ const suspensionAdvertised =
   redis === undefined ? undefined : advertiseSuspension({ link: redis, nodeId, log });
 const workspaceAccessAdvertised =
   redis === undefined ? undefined : advertiseWorkspaceAccess({ link: redis, nodeId, log });
+const workspaceProvisioningAdvertised =
+  redis === undefined ? undefined : advertiseWorkspaceProvisioning({ link: redis, nodeId, log });
 const moduleSet = {
   stop: async (): Promise<void> => {
+    await workspaceProvisioningAdvertised?.stop();
     await workspaceAccessAdvertised?.stop();
     await suspensionAdvertised?.stop();
     await grantsAdvertised?.stop();
@@ -246,6 +252,20 @@ const moduleSet = {
 // derived from ENCRYPTION_KEY and never stored, and its routes answer under /auth (D-179). What it
 // takes that is not a setting is the process's own, from the environment.
 const runtimeBase: RuntimeBase = {
+  directory: {
+    channels: modules.workspaceChannels,
+    readersReady: async (): Promise<boolean> =>
+      await workspacePolicyReadersReady({
+        attested: config.WORKSPACE_PROVISIONING_READY,
+        redisConfigured: redis !== undefined,
+        ...(redis === undefined
+          ? {}
+          : {
+              peersBehind: async (): Promise<number> =>
+                await workspaceProvisioningPeersBehind(redis),
+            }),
+      }),
+  },
   companyIdentity: { cipher: credentialCipher(config.ENCRYPTION_KEY) },
   database,
   baseUrl: config.APP_URL,
@@ -289,6 +309,8 @@ const app = createApp({
         suspensionPeersBehind: async (): Promise<number> => await suspensionPeersBehind(redis),
         workspaceAccessPeersBehind: async (): Promise<number> =>
           await workspaceAccessPeersBehind(redis),
+        workspaceProvisioningPeersBehind: async (): Promise<number> =>
+          await workspaceProvisioningPeersBehind(redis),
       }),
   auth: services.auth,
   services,

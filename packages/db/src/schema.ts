@@ -95,6 +95,47 @@ export interface AuditLog {
   workspace_id: string;
 }
 
+export interface ChannelAccessControls {
+  channel_id: string;
+  initialized_at: Timestamp;
+  revision: Generated<string>;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface ChannelAccessGroupMappings {
+  channel_id: string;
+  created_at: Timestamp;
+  group_id: string;
+  id: Generated<string>;
+  revision: Generated<string>;
+  workspace_id: string;
+}
+
+export interface ChannelAccessMemberGrants {
+  admitted_at: Timestamp;
+  channel_id: string;
+  created_at: Timestamp;
+  group_id: string | null;
+  id: Generated<string>;
+  kind: string;
+  revision: Generated<string>;
+  source_id: string | null;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface ChannelAccessRoleGrants {
+  channel_id: string;
+  created_at: Timestamp;
+  group_id: string | null;
+  id: Generated<string>;
+  revision: Generated<string>;
+  role_id: string;
+  source_id: string | null;
+  workspace_id: string;
+}
+
 export interface ChannelBookmarks {
   added_at: Generated<Timestamp>;
   added_by: string | null;
@@ -123,6 +164,14 @@ export interface ChannelGroups {
   id: string;
   name: string;
   name_key: Generated<string | null>;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface ChannelMemberCapabilities {
+  capability: string;
+  channel_id: string;
+  projection_revision: string;
   user_id: string;
   workspace_id: string;
 }
@@ -479,6 +528,7 @@ export interface NativeAuthorizations {
   company_source_session_id: string | null;
   company_workspace_id: string | null;
   created_at: Timestamp;
+  directory_id: string | null;
   expires_at: Timestamp;
   id: string;
   spent_at: Timestamp | null;
@@ -748,6 +798,7 @@ export interface Sessions {
   company_workspace_id: string | null;
   created_at: Generated<Timestamp>;
   device_name: string | null;
+  directory_id: string | null;
   expires_at: Timestamp;
   id: Generated<string>;
   ip_address: string | null;
@@ -858,6 +909,30 @@ export interface Verifications {
   value: string;
 }
 
+export interface WorkspaceAccessGroupMembers {
+  created_at: Timestamp;
+  group_id: string;
+  id: Generated<string>;
+  source_id: string;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceAccessGroups {
+  created_at: Timestamp;
+  directory_group_reference: string | null;
+  directory_id: string | null;
+  id: Generated<string>;
+  kind: string;
+  name: string;
+  name_key: Generated<string | null>;
+  retired_at: Timestamp | null;
+  revision: Generated<string>;
+  state: string;
+  updated_at: Timestamp;
+  workspace_id: string;
+}
+
 export interface WorkspaceAccessPolicies {
   allowed_connection_ids: Generated<string[]>;
   created_at: Generated<Timestamp>;
@@ -898,6 +973,201 @@ export interface WorkspaceAccessPolicyTests {
   workspace_id: string;
 }
 
+export interface WorkspaceAccessRoleGrants {
+  created_at: Timestamp;
+  group_id: string | null;
+  id: Generated<string>;
+  revision: Generated<string>;
+  role_id: string;
+  source_id: string | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceAccessRoles {
+  capabilities: string[];
+  created_at: Timestamp;
+  id: Generated<string>;
+  name: string;
+  name_key: Generated<string | null>;
+  retired_at: Timestamp | null;
+  revision: Generated<string>;
+  updated_at: Timestamp;
+  workspace_id: string;
+}
+
+export interface WorkspaceAccessSources {
+  access_kind: string;
+  admitted_at: Timestamp;
+  authorization_revision: Generated<string>;
+  builtin_role: Generated<UserRole>;
+  created_at: Timestamp;
+  directory_id: string | null;
+  directory_link_reference: string | null;
+  id: Generated<string>;
+  kind: string;
+  name: string | null;
+  retired_at: Timestamp | null;
+  revision: Generated<string>;
+  state: string;
+  updated_at: Timestamp;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceAdmissionControls {
+  blocked_at: Timestamp | null;
+  initialized_at: Timestamp;
+  last_access_kind: string;
+  last_builtin_role: UserRole;
+  revision: Generated<string>;
+  updated_at: Timestamp;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceDirectories {
+  allow_create: Generated<boolean>;
+  authorization_revision: Generated<string>;
+  claim: string;
+  connection_id: string;
+  created_at: Generated<Timestamp>;
+  deleted_at: Timestamp | null;
+  enabled: Generated<boolean>;
+  id: Generated<string>;
+  name: string;
+  revision: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  workspace_id: string;
+}
+
+export interface WorkspaceDirectoryCredentials {
+  created_at: Generated<Timestamp>;
+  directory_id: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  last_used_at: Timestamp | null;
+  revoked_at: Timestamp | null;
+  token_hash: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceDirectoryIdentityLinks {
+  binding_reference: string | null;
+  created_at: Generated<Timestamp>;
+  directory_id: string;
+  external_id: string;
+  id: Generated<string>;
+  origin: string;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceDirectoryNativeInitializations {
+  binding_reference: string;
+  created_at: Generated<Timestamp>;
+  link_reference: string;
+}
+
+export interface WorkspaceDirectoryScimBindings {
+  connection_id: string;
+  connection_key: string;
+  created_at: Timestamp;
+  decommission_batch_count: number;
+  decommission_completed_at: Timestamp | null;
+  decommission_cursor_user_id: string | null;
+  decommission_lease_expires_at: Timestamp | null;
+  decommission_lease_id: string | null;
+  decommission_reconciled_user_count: number;
+  decommission_revision: number;
+  decommission_status: string;
+  decommissioned_at: Timestamp | null;
+  id: Generated<string>;
+  provisioning_domain_id: string;
+}
+
+export interface WorkspaceDirectoryScimGrants {
+  connection_id: string;
+  created_at: Timestamp;
+  grant_key: string;
+  id: Generated<string>;
+  provisioning_domain_id: string;
+  role: string;
+  scim_user_id: string;
+  source_id: string;
+  source_kind: string;
+  source_value: string | null;
+  updated_at: Timestamp;
+  user_id: string;
+}
+
+export interface WorkspaceDirectoryScimGroupMembers {
+  connection_id: string;
+  created_at: Timestamp;
+  group_id: string;
+  id: Generated<string>;
+  membership_key: string;
+  scim_user_id: string;
+}
+
+export interface WorkspaceDirectoryScimGroups {
+  connection_id: string;
+  created_at: Timestamp;
+  display_name: string;
+  display_name_key: string;
+  external_id: string | null;
+  external_id_key: string | null;
+  id: Generated<string>;
+  order_key: string;
+  provisioning_domain_id: string;
+  revision: number;
+  updated_at: Timestamp;
+}
+
+export interface WorkspaceDirectoryScimSubjects {
+  created_at: Timestamp;
+  id: Generated<string>;
+  profile_source_id: string | null;
+  revision: number;
+  updated_at: Timestamp;
+  user_id: string;
+}
+
+export interface WorkspaceDirectoryScimTombstones {
+  connection_id: string;
+  deleted_at: Timestamp;
+  external_id: string;
+  external_id_key: string;
+  id: Generated<string>;
+  profile: string;
+  provisioning_domain_id: string;
+  user_id: string;
+}
+
+export interface WorkspaceDirectoryScimUsers {
+  active: boolean;
+  connection_id: string;
+  connection_user_key: string;
+  created_at: Timestamp;
+  display_name: string;
+  email_value_index: string;
+  external_id: string | null;
+  external_id_key: string | null;
+  family_name: string | null;
+  formatted_name: string;
+  given_name: string | null;
+  id: Generated<string>;
+  order_key: string;
+  primary_email: string;
+  provisioning_domain_id: string;
+  serialized_attributes: string | null;
+  serialized_emails: string;
+  updated_at: Timestamp;
+  user_id: string;
+  user_name: string;
+  user_name_key: string;
+  work_email_value_index: string;
+}
+
 export interface WorkspaceExports {
   created_at: Timestamp;
   downloaded_at: Timestamp | null;
@@ -931,6 +1201,8 @@ export interface WorkspaceIdentityConnections {
   client_secret_encrypted: Buffer | null;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
+  directory_claim: string | null;
+  directory_id: string | null;
   domain_id: string;
   enabled: Generated<boolean>;
   id: Generated<string>;
@@ -959,12 +1231,21 @@ export interface WorkspaceIdentityDomains {
 }
 
 export interface WorkspaceIdentitySessions {
+  /**
+   * Diagnostic projection revision, not a global authentication epoch. Liveness requires exact issuing source authorization, directory revision and an unblocked retained control.
+   */
+  admission_revision: string | null;
   authenticated_at: Timestamp;
   authentication_revision: string;
   binding_reference: string;
   connection_id: string;
+  directory_authorization_revision: string | null;
+  directory_id: string | null;
+  directory_link_reference: string | null;
   revoked_at: Timestamp | null;
   session_id: string;
+  source_authorization_revision: string | null;
+  source_id: string | null;
   workspace_id: string;
 }
 
@@ -1003,6 +1284,13 @@ export interface WorkspaceInvitations {
   id: string;
   revoked_at: Timestamp | null;
   token_hash: string;
+  workspace_id: string;
+}
+
+export interface WorkspaceMemberCapabilities {
+  capability: string;
+  projection_revision: string;
+  user_id: string;
   workspace_id: string;
 }
 
@@ -1124,10 +1412,15 @@ export interface DB {
   admin_email_verification: AdminEmailVerification;
   attachments: Attachments;
   audit_log: AuditLog;
+  channel_access_controls: ChannelAccessControls;
+  channel_access_group_mappings: ChannelAccessGroupMappings;
+  channel_access_member_grants: ChannelAccessMemberGrants;
+  channel_access_role_grants: ChannelAccessRoleGrants;
   channel_bookmarks: ChannelBookmarks;
   channel_departures: ChannelDepartures;
   channel_group_channels: ChannelGroupChannels;
   channel_groups: ChannelGroups;
+  channel_member_capabilities: ChannelMemberCapabilities;
   channel_members: ChannelMembers;
   channel_read_scopes: ChannelReadScopes;
   channels: Channels;
@@ -1188,8 +1481,25 @@ export interface DB {
   two_factors: TwoFactors;
   users: Users;
   verifications: Verifications;
+  workspace_access_group_members: WorkspaceAccessGroupMembers;
+  workspace_access_groups: WorkspaceAccessGroups;
   workspace_access_policies: WorkspaceAccessPolicies;
   workspace_access_policy_tests: WorkspaceAccessPolicyTests;
+  workspace_access_role_grants: WorkspaceAccessRoleGrants;
+  workspace_access_roles: WorkspaceAccessRoles;
+  workspace_access_sources: WorkspaceAccessSources;
+  workspace_admission_controls: WorkspaceAdmissionControls;
+  workspace_directories: WorkspaceDirectories;
+  workspace_directory_credentials: WorkspaceDirectoryCredentials;
+  workspace_directory_identity_links: WorkspaceDirectoryIdentityLinks;
+  workspace_directory_native_initializations: WorkspaceDirectoryNativeInitializations;
+  workspace_directory_scim_bindings: WorkspaceDirectoryScimBindings;
+  workspace_directory_scim_grants: WorkspaceDirectoryScimGrants;
+  workspace_directory_scim_group_members: WorkspaceDirectoryScimGroupMembers;
+  workspace_directory_scim_groups: WorkspaceDirectoryScimGroups;
+  workspace_directory_scim_subjects: WorkspaceDirectoryScimSubjects;
+  workspace_directory_scim_tombstones: WorkspaceDirectoryScimTombstones;
+  workspace_directory_scim_users: WorkspaceDirectoryScimUsers;
   workspace_exports: WorkspaceExports;
   workspace_identity_bindings: WorkspaceIdentityBindings;
   workspace_identity_connections: WorkspaceIdentityConnections;
@@ -1198,6 +1508,7 @@ export interface DB {
   workspace_invitation_mail_attempts: WorkspaceInvitationMailAttempts;
   workspace_invitation_recipients: WorkspaceInvitationRecipients;
   workspace_invitations: WorkspaceInvitations;
+  workspace_member_capabilities: WorkspaceMemberCapabilities;
   workspace_members: WorkspaceMembers;
   workspace_mfa_challenges: WorkspaceMfaChallenges;
   workspace_mfa_factors: WorkspaceMfaFactors;

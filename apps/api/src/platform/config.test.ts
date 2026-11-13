@@ -73,6 +73,25 @@ test('workspace enforcement requires its own explicit operator rollout attestati
   }
 });
 
+test('provisioning needs a distinct attestation even beside enabled older workspace policies', () => {
+  for (const base of [
+    valid,
+    production,
+    { ...valid, REDIS_URL: 'redis://localhost:6379', WORKSPACE_ACCESS_READY: 'true' },
+  ]) {
+    expect(loadConfig(base).WORKSPACE_PROVISIONING_READY).toBe(false);
+    expect(
+      loadConfig({ ...base, WORKSPACE_PROVISIONING_READY: '' }).WORKSPACE_PROVISIONING_READY,
+    ).toBe(false);
+    expect(
+      loadConfig({ ...base, WORKSPACE_PROVISIONING_READY: 'false' }).WORKSPACE_PROVISIONING_READY,
+    ).toBe(false);
+    expect(
+      loadConfig({ ...base, WORKSPACE_PROVISIONING_READY: 'true' }).WORKSPACE_PROVISIONING_READY,
+    ).toBe(true);
+  }
+});
+
 /** The same 32 bytes spelled differently: the last character's two unused low bits flipped. */
 const aliasOf = (key: string): string => {
   const last = ALPHABET.indexOf(key.charAt(42));

@@ -25,6 +25,8 @@ export interface CompanyConnectionSnapshot {
   readonly revision: string;
   readonly authenticationRevision: string;
   readonly credentials: OidcCredentials;
+  readonly directoryId: string | null;
+  readonly directoryClaim: string | null;
 }
 
 /** Exact workspace address only: no public workspace directory, private issuer or credential inventory. */
@@ -106,6 +108,8 @@ export const companyConnectionSnapshot = async (
     name: row.name,
     revision: row.revision,
     authenticationRevision: row.authentication_revision,
+    directoryId: row.directory_id,
+    directoryClaim: row.directory_claim,
     credentials: {
       issuer: row.issuer,
       clientId: row.client_id,

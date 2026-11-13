@@ -228,6 +228,39 @@ jobs:
       - name: the suites that belong to no module, in this cell
         run: bun run modules:suites -- ${{ matrix.cell }}
 
+  # The same native cohort as the functional suites, measured alone. Every eligible module cell and
+  # both session kinds run in fresh sequential processes with the unchanged 200 ms bound. A complete
+  # over-budget case gets D-227's one fresh confirmation; every other failure refuses immediately.
+  cohort-measurements:
+    needs: changes
+    if: needs.changes.outputs.modules == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: start the database
+        run: bun run db:up:postgres
+      - name: every native workspace cohort stays below 200 ms
+        id: cohort
+        run: bun run budget:workspace-cohort
+      - name: keep every native cohort measurement
+        if: always() && steps.cohort.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: workspace-cohort-${{ github.sha }}
+          path: .budget/workspace-cohort
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
   # The mutations this pull request adds or changes, each applied to a copy of the tree and required to be caught
   # (`CONTRIBUTING.md` §5). `mutations.test.ts` only sees that an entry still applies; an equivalent or broken
   # mutant — one no test fails on — passed it, and was found months later (#1180). The ids come from diffing
@@ -472,9 +505,51 @@ jobs:
       - name: every test, with coverage
         run: bun run test:all
 
+  # Measure on a fresh runner and database, independently of the complete coverage suite.
+  # These remain required by verify; a latency regression is visible without waiting for every test.
+  api-measurements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: start the database and redis
+        run: bun run db:up:tests
+
       # PRD.md §5's other blocking budget (D-49): a real API, started and settled, under 120 MiB.
       - name: the API's idle memory is inside its budget
         run: bun run budget:api
+
+      # A PR compares with its actual main base on this runner, so host speed is not a code regression.
+      # Separate checkouts install their own pinned dependencies and run sequential fresh API processes.
+      - name: check out main's comparison source
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .budget/main-source
+          persist-credentials: false
+      - name: install main's pinned dependencies
+        if: github.event_name == 'pull_request'
+        working-directory: .budget/main-source
+        run: bun install --frozen-lockfile
+      - name: create main's isolated measurement database
+        if: github.event_name == 'pull_request'
+        run: docker compose exec -T postgres createdb --username=purlay --owner=purlay purlay_main_control
+      - name: measure main on the same runner
+        if: github.event_name == 'pull_request'
+        working-directory: .budget/main-source
+        env:
+          DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay_main_control
+        run: bun run budget:latency -- --record "$GITHUB_WORKSPACE/.budget/main-latency.json"
 
       # The ACK round-trip and fan-out p95 (D-49): measured on two real sockets, and blocking on a
       # regression against the last measurement on main — never on the line itself, which a shared
@@ -482,6 +557,7 @@ jobs:
       # downward); only main writes one, and only after its own run passed, so a regression that
       # reached main fails there and does not become the new normal (#73).
       - name: the last latency measured on main
+        if: github.event_name != 'pull_request'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .budget/latency.json
@@ -489,7 +565,12 @@ jobs:
           restore-keys: budget-latency-
       - name: the latency budgets hold against main's last measurement
         id: latency
-        run: bun run budget:latency -- --keep .budget/latency.json --record .budget/latency-current.json
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            bun run budget:latency -- --baseline .budget/main-latency.json --record .budget/latency-current.json
+          else
+            bun run budget:latency -- --keep .budget/latency.json --record .budget/latency-current.json
+          fi
       # The baseline is never replaced by a regression. Keep its raw trials separately,
       # including on a failed comparison, so the next investigation has more than one p95.
       - name: keep the current latency trials
@@ -497,7 +578,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-latency-${{ github.sha }}
-          path: .budget/latency-current.json
+          path: |
+            .budget/latency-current.json
+            .budget/main-latency.json
           include-hidden-files: true
           retention-days: 7
       - name: keep this measurement as main's baseline
@@ -511,7 +594,18 @@ jobs:
   # whatever happened before it — a job whose dependency failed is skipped by default, and branch protection
   # counts a skipped required check as passed — and passes only when each job it needs succeeded.
   verify:
-    needs: [static, schema, changes, browser, modules, module-suites, mutations-changed]
+    needs:
+      [
+        static,
+        schema,
+        api-measurements,
+        changes,
+        browser,
+        modules,
+        module-suites,
+        cohort-measurements,
+        mutations-changed,
+      ]
     if: always()
     runs-on: ubuntu-latest
     # Checkout and Bun's download, then a few milliseconds of judging; the margin is for a slow download.

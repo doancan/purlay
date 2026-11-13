@@ -7,6 +7,8 @@ import type { CollatedColumn } from '../../platform/readiness';
 
 export const CHAT_COLLATED_COLUMNS: readonly CollatedColumn[] = [
   ['channels', 'name'],
+  ['incoming_webhooks', 'secret_digest'],
+  ['missed_mail_letters', 'stop_digest'],
   ['github_repo_feeds', 'repository_full_name'],
   ['github_deliveries', 'delivery_id'],
   ['github_app_handshakes', 'state_digest'],

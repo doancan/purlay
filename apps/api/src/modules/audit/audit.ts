@@ -21,7 +21,13 @@ import {
 } from '@purlay/types';
 import { AppError } from '../../platform/errors';
 import type { AuditAccess } from '../../platform/module-kit/audit-access';
-import type { WorkspaceContext } from '../../platform/tenancy';
+import {
+  assertMinted,
+  requireFullMembership,
+  requireWorkspaceMembership,
+  type WorkspaceContext,
+} from '../../platform/tenancy';
+import { requireWorkspaceCapabilityNow } from '../workspaces/provisioning/authority';
 import type { Clock } from '../../platform/clock';
 import { currentRequest } from '../../platform/logging';
 import { writeAuditLine } from './lines';
@@ -76,17 +82,26 @@ export const recordAudit = async (
 };
 
 /**
- * Who reads the trail, and so who downloads it (D-222): whoever holds `audit.read` — an owner or an admin, as
- * managing members is (§7.4). A member is refused for what they are, after their membership has made the workspace exist
- * for them.
+ * Native role and finite delegated audit authority are read again for pages and streamed downloads.
+ * A workspace grant does not grant a module's separate owner-only audit permission (D-311).
  */
-export const requireTrailReader = (context: WorkspaceContext, access: AuditAccess): void => {
-  if (!access.mayRead(context.role)) {
+export const requireTrailReader = async (
+  executor: Executor,
+  context: WorkspaceContext,
+  access: AuditAccess,
+): Promise<{ readonly context: WorkspaceContext; readonly delegated: boolean }> => {
+  assertMinted(context);
+  const current = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
+  requireFullMembership(current, 'Only full members can read the workspace trail.');
+  if (access.mayRead(current.role)) return { context: current, delegated: false };
+  if (current.role !== 'member') {
     throw new AppError({
       code: 'FORBIDDEN',
-      message: 'Only an owner or an admin reads the trail.',
+      message: 'You do not have permission to read the trail.',
     });
   }
+  await requireWorkspaceCapabilityNow(executor, current, 'audit.read');
+  return { context: current, delegated: true };
 };
 
 /** A field of the filter refused, by name (`API.md` §1). */
@@ -146,6 +161,7 @@ export const trailPage = async (
   filter: AuditFilter,
   page: { readonly before?: string; readonly limit: number },
   access: AuditAccess,
+  delegatedAuditRead = false,
 ): Promise<AuditEntryShape[]> => {
   const from = instant('from', filter.from);
   const to = instant('to', filter.to);
@@ -174,7 +190,7 @@ export const trailPage = async (
     statement = statement.where('audit_log.action', '=', filter.action);
   }
   // What this role's permissions do not read is not in a page, whichever filter asks for it.
-  const unreadable = access.unreadable(context.role);
+  const unreadable = access.unreadable(context.role, delegatedAuditRead);
   if (unreadable.length > 0) {
     statement = statement.where('audit_log.action', 'not in', [...unreadable]);
   }
@@ -212,14 +228,15 @@ export const auditTrail = async (
   query: AuditQuery,
   access: AuditAccess,
 ): Promise<AuditPage> => {
-  requireTrailReader(context, access);
+  const reader = await requireTrailReader(executor, context, access);
   const { before, limit = PAGE_LIMIT.default, ...filter } = query;
   const rows = await trailPage(
     executor,
-    context,
+    reader.context,
     checkedFilter(filter),
     { ...(before === undefined ? {} : { before }), limit: limit + 1 },
     access,
+    reader.delegated,
   );
   const page = rows.slice(0, limit);
   return {

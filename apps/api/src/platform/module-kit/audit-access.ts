@@ -16,7 +16,7 @@ export interface AuditAccess {
   /** Whether the role may open the trail, and download it. */
   readonly mayRead: (role: UserRole) => boolean;
   /** The actions the role is not shown: a row of one is not in a page, a count or a download. */
-  readonly unreadable: (role: UserRole) => readonly string[];
+  readonly unreadable: (role: UserRole, delegatedAuditRead?: boolean) => readonly string[];
 }
 
 /** `groups` are those of every module the build carries, so a row of a module that is not run is still judged. */
@@ -30,7 +30,13 @@ export const auditAccess = (
   ];
   return {
     mayRead: (role) => permissions.holds(role, READ_THE_TRAIL),
-    unreadable: (role) =>
-      all.filter((group) => !permissions.holds(role, group.read)).flatMap((group) => group.actions),
+    unreadable: (role, delegatedAuditRead = false) =>
+      all
+        .filter(
+          (group) =>
+            !(delegatedAuditRead && group.read === READ_THE_TRAIL) &&
+            !permissions.holds(role, group.read),
+        )
+        .flatMap((group) => group.actions),
   };
 };

@@ -1,6 +1,6 @@
 /** A final SQL fence binds a shared access decision to the exact native, policy and factor facts it observed. */
 import { sql, type Executor, type RawBuilder } from '@purlay/db';
-import { companySessionAllowsWorkspace } from './company-session';
+import { liveCompanySessionProof } from './company-session';
 import { currentRequest } from './logging';
 import {
   evaluateWorkspaceAccess,
@@ -114,8 +114,19 @@ const captureWorkspaceSessionAccess = (
         and final_user.deleted_at is null and final_user.suspended_at is null
         and final_user.admission_state = 'approved'
         and (not final_user.admission_requires_verified_email or final_user.email_verified)
-        and ${session.company_workspace_id === null ? sql<boolean>`true` : companySessionAllowsWorkspace('final_session', input.workspaceId, { member: 'workspace_members', person: 'final_user', workspace: 'workspaces' })}
-    ) and ${primary} and ${assuranceFence(read, facts, input.workspaceId)}
+    ) and ${
+      session.company_workspace_id === null
+        ? sql<boolean>`true`
+        : liveCompanySessionProof(
+            input.sessionId,
+            input.workspaceId,
+            input.userId,
+            undefined,
+            undefined,
+            undefined,
+            session.directory_id,
+          )
+    } and ${primary} and ${assuranceFence(read, facts, input.workspaceId)}
   )`;
   scope.workspaceFences ??= new Map();
   const fence: WorkspaceContentFence = Object.freeze({

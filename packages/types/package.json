@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./workspace-identity": "./src/workspace-identity.ts",
-    "./workspace-security": "./src/workspace-security.ts"
+    "./workspace-security": "./src/workspace-security.ts",
+    "./workspace-provisioning": "./src/workspace-provisioning.ts",
+    "./workspace-directory": "./src/workspace-directory.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "0.34.52"

@@ -91,9 +91,9 @@ type VisibilityQuery = SelectQueryBuilder<
 export const visibleChannels = (
   executor: ChatDb,
   userId: string | RawBuilder<string>,
-  options: { readonly visibilityOnly?: boolean } = {},
-): VisibilityQuery =>
-  executor
+  options: { readonly visibilityOnly?: boolean; readonly includeArchived?: boolean } = {},
+): VisibilityQuery => {
+  const visible = executor
     .selectFrom('channels')
     .innerJoin('workspaces', 'workspaces.id', 'channels.workspace_id')
     .innerJoin('workspace_members', (join) =>
@@ -106,7 +106,6 @@ export const visibleChannels = (
         .onRef('channel_members.channel_id', '=', 'channels.id')
         .on('channel_members.user_id', '=', userId),
     )
-    .where('channels.deleted_at', 'is', null)
     .where('workspaces.deleted_at', 'is', null)
     .where(activeWorkspaceMembership(options))
     .where(
@@ -122,6 +121,10 @@ export const visibleChannels = (
         eb('channel_members.user_id', 'is not', null),
       ]),
     );
+  return options.includeArchived === true
+    ? visible
+    : visible.where('channels.deleted_at', 'is', null);
+};
 
 /** Final-statement authority for timestamped channel content, including formerly unrestricted contexts. */
 export const channelContentVisible = (

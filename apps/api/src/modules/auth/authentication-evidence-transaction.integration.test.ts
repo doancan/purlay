@@ -1,7 +1,7 @@
 /** Native adapter selection is limited to the exact live transaction callback. */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { betterAuth } from 'better-auth';
-import { runWithAdapter } from '@better-auth/core/context';
+import { getCurrentDBAdapterAsyncLocalStorage, runWithAdapter } from '@better-auth/core/context';
 import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
@@ -43,6 +43,35 @@ const nativeBridge = async (): Promise<{
 };
 
 describe('integration: native authentication transaction boundary', () => {
+  test('a retained native evidence frame survives a later adapter wrapper without recursive delegation', async () => {
+    const user = await aUserRow(clone.db, 'retained-native-frame');
+    const { native } = await nativeBridge();
+    const context = await native.$context;
+    const retained = context.adapter;
+    context.adapter = new Proxy(retained, {});
+    let reads = 0;
+    const rows = await runWithAdapter(retained, async () => {
+      const frame = (await getCurrentDBAdapterAsyncLocalStorage()).getStore();
+      if (frame === undefined) throw new Error('Missing actual native adapter frame.');
+      const selected = frame.adapter;
+      Object.defineProperty(frame, 'adapter', {
+        configurable: true,
+        get: (): typeof selected => {
+          reads++;
+          if (reads > 8)
+            throw new Error('Native adapter recursively selected its retained evidence wrapper.');
+          return selected;
+        },
+      });
+      return await context.adapter.findMany<{ id: string }>({
+        model: 'user',
+        where: [{ field: 'id', value: user.userId }],
+      });
+    });
+    expect(rows.map((row) => row.id)).toEqual([user.userId]);
+    expect(reads).toBeLessThan(8);
+  });
+
   test('admission uses no native connection and post-transaction work sees the released executor', async () => {
     const { capture } = await nativeBridge();
     let refunded = false;

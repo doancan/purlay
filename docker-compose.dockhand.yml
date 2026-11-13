@@ -61,6 +61,8 @@ x-environment: &environment
   GUEST_ACCESS_READY: ${GUEST_ACCESS_READY:-false}
   # Enable only after every API, scheduler and job/outbox reader runs workspace-policy-capable code (D-310).
   WORKSPACE_ACCESS_READY: ${WORKSPACE_ACCESS_READY:-false}
+  # Enable only after every API, scheduler, CLI and deferred reader runs source-aware directory code (D-311).
+  WORKSPACE_PROVISIONING_READY: ${WORKSPACE_PROVISIONING_READY:-false}
   # Kept with production for the scheduler; the API uses its built-in read-only receipt volume below.
   BACKUP_STATUS_DIRECTORY: ${BACKUP_STATUS_DIRECTORY:-}
   DATABASE_URL: postgres://purlay:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/purlay

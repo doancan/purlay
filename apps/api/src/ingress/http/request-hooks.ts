@@ -83,6 +83,7 @@ interface ResponseContext {
 }
 
 interface MappingContext extends ResponseContext {
+  readonly error?: unknown;
   readonly set: Parameters<typeof mapFrameworkResponse>[1];
 }
 
@@ -91,7 +92,7 @@ export interface RequestHooks {
   readonly onRequest: (context: RequestContext) => Response | undefined;
   readonly onBeforeHandle: (context: HandlerContext) => Promise<void>;
   readonly onAfterResponse: (context: ResponseContext) => void;
-  readonly onMapResponse: (context: MappingContext) => Response;
+  readonly onMapResponse: (context: MappingContext) => Response | undefined;
 }
 
 export const requestHooks = (input: RequestHooksInput): RequestHooks => {
@@ -262,7 +263,12 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
 
   // Runs before the framework returns the response. Its delayed after-response hook is too late for
   // drain/settled to account for newly queued work, even though the response has already succeeded.
-  const onMapResponse = ({ request, set, responseValue }: MappingContext): Response => {
+  const onMapResponse = ({
+    request,
+    set,
+    responseValue,
+    error,
+  }: MappingContext): Response | undefined => {
     const status =
       responseValue instanceof Response
         ? responseValue.status
@@ -278,8 +284,8 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
     }
     pending?.clear();
     requestScopes.delete(request);
-    // The pinned framework replaces an error answer with this mapper's return value, including undefined.
-    return mapFrameworkResponse(responseValue, set, request);
+    // Success keeps the framework's response path; its error handler replaces the answer with this return value.
+    return error === undefined ? undefined : mapFrameworkResponse(responseValue, set, request);
   };
 
   return { wrap, onRequest, onBeforeHandle, onAfterResponse, onMapResponse };

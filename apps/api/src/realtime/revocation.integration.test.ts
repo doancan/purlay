@@ -786,13 +786,17 @@ describe('integration: a session that ends on another node', () => {
     const bystander = await aSignedInUser(cloned.db, clock, 'bystander');
     const socket = await connect(alice.cookie);
     const other = await connect(bystander.cookie);
+    // WebSocket.open precedes server-side authentication and user-topic registration.
+    await settle(socket);
+    await settle(other);
+    const beforeDeletion = socket.frames.length;
 
     await publishUserDeleted(publisher, clock, alice.userId);
 
     expect(await socket.ended).toBe(CLOSE_CODES.SESSION_ENDED);
-    expect(socket.frames.filter((f) => f.event !== 'PRESENCE')).toMatchObject([
-      { event: 'SESSION_ENDED', data: { reason: 'account-deleted' } },
-    ]);
+    expect(socket.frames.slice(beforeDeletion).filter((f) => f.event !== 'PRESENCE')).toMatchObject(
+      [{ event: 'SESSION_ENDED', data: { reason: 'account-deleted' } }],
+    );
     // The control: the same publish left someone else's socket open and usable.
     await settle(other);
     expect(other.frames.some((f) => f.event === 'SESSION_ENDED')).toBe(false);
@@ -848,6 +852,75 @@ describe('integration: a workspace renamed (D-124)', () => {
     await bob.close();
     await stranger.close();
     await removed.close();
+  });
+
+  test('a member who leaves receives access revocation but no later workspace metadata', async () => {
+    const room = await aRoom();
+    const departed = await connect(room.bob.cookie);
+    try {
+      await settle(departed);
+      expect(
+        (await http('DELETE', `/api/workspaces/${room.workspaceId}/membership`, room.bob.cookie))
+          .status,
+      ).toBe(204);
+      await departed.until(
+        (frames) =>
+          frames.some(
+            (frame) =>
+              frame.event === 'ACCESS_REVOKED' && frame.data.channelIds.includes(room.channelId),
+          ),
+        'the revocation of the former workspace channels',
+      );
+      expect(
+        (
+          await http('PATCH', `/api/workspaces/${room.workspaceId}`, room.alice.cookie, {
+            name: 'renamed after leaving',
+          })
+        ).status,
+      ).toBe(200);
+      await settle(departed);
+      expect(departed.frames.some((frame) => frame.event === 'WORKSPACE_UPDATED')).toBe(false);
+    } finally {
+      await departed.close();
+    }
+  });
+
+  test('an owner removing their own membership receives revocation without workspace metadata', async () => {
+    const room = await aRoom();
+    await cloned.db
+      .updateTable('workspace_members')
+      .set({ role: 'owner' })
+      .where('workspace_id', '=', room.workspaceId)
+      .where('user_id', '=', room.bob.userId)
+      .execute();
+    const departed = await connect(room.alice.cookie);
+    try {
+      await settle(departed);
+      expect(
+        (
+          await http(
+            'DELETE',
+            `/api/workspaces/${room.workspaceId}/members/${room.alice.userId}`,
+            room.alice.cookie,
+          )
+        ).status,
+      ).toBe(204);
+      await departed.until(
+        (frames) => frames.some((frame) => frame.event === 'ACCESS_REVOKED'),
+        'the revocation of the former owner’s channels',
+      );
+      expect(
+        (
+          await http('PATCH', `/api/workspaces/${room.workspaceId}`, room.bob.cookie, {
+            name: 'renamed by the remaining owner',
+          })
+        ).status,
+      ).toBe(200);
+      await settle(departed);
+      expect(departed.frames.some((frame) => frame.event === 'WORKSPACE_UPDATED')).toBe(false);
+    } finally {
+      await departed.close();
+    }
   });
 });
 

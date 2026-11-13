@@ -137,6 +137,8 @@ export interface HandlerDependencies {
   readonly suspensionPeersBehind?: PeersBehind;
   /** API capability check, in addition to the operator's WORKSPACE_ACCESS_READY attestation (D-310). */
   readonly workspaceAccessPeersBehind?: PeersBehind;
+  /** Distinct from policy-only readers; never inferred from their capability or attestation. */
+  readonly workspaceProvisioningPeersBehind?: PeersBehind;
   /** What `find` holds a search source to, where a test wants less than `SEARCH_SOURCE_DEADLINE_MS`; a module's own shorter deadline always wins. */
   readonly findDeadlineMs?: number;
   /** The columns the modules declare `COLLATE "C"`, which readiness checks beside the core's (D-250); absent, chat's. */

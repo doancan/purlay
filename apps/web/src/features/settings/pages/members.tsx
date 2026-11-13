@@ -34,7 +34,7 @@ import { fold } from '../../chat/composer/mention-suggest';
 import { useRuns, useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage } from '../page';
-import { useWorkspaceRole } from '../role';
+import { useWorkspaceRole, useWorkspaceCapabilities } from '../role';
 import { GuestAdministration } from '../guests';
 
 const ROLES: readonly UserRole[] = ['owner', 'admin', 'member'];
@@ -74,6 +74,9 @@ export const MembersPage = (): React.JSX.Element => {
   const { user } = useSession();
   const members = useMembers(workspace.id);
   const actor = useWorkspaceRole();
+  const capabilities = useWorkspaceCapabilities();
+  const nativeAdmin = actor === 'owner' || actor === 'admin';
+  const mayInvite = nativeAdmin || capabilities.includes('members.invite');
   const [asking, setAsking] = useState<string | null>(null);
   // A role the person chose for their own row, asked about in the row before it is sent: they may not
   // be able to change it back themself (D-111).
@@ -100,7 +103,9 @@ export const MembersPage = (): React.JSX.Element => {
     member.accessKind !== 'guest' && mayManage(member);
   /** Whom this person may remove: as above, but never themself — that is leaving (Sessions & account). */
   const mayRemove = (member: WorkspaceMember): boolean =>
-    member.user.id !== user.id && mayManage(member);
+    member.user.id !== user.id &&
+    (mayManage(member) ||
+      (capabilities.includes('members.manage_nonowners') && member.role === 'member'));
   const offered = ROLES.filter((option) => actor === 'owner' || option !== 'owner');
 
   const start = (userId: string, action: 'role' | 'remove'): boolean => {
@@ -190,7 +195,9 @@ export const MembersPage = (): React.JSX.Element => {
     }
   };
 
-  const all = (members.data ?? []).filter((member) => !hasChat || member.accessKind !== 'guest');
+  const all = (members.data ?? []).filter(
+    (member) => !hasChat || !nativeAdmin || member.accessKind !== 'guest',
+  );
   const wanted = fold(query.trim());
   const shown = all
     .filter((member) => role === ALL || member.role === role)
@@ -212,7 +219,7 @@ export const MembersPage = (): React.JSX.Element => {
       title={t('settings.members.title')}
       description={t(guestView && hasChat ? 'guests.pageDescription' : 'members.description')}
       action={
-        !guestView || !hasChat ? (
+        mayInvite && (!guestView || !hasChat) ? (
           <Link
             to="settings"
             params={{ slug: workspace.slug, section: 'invitations' }}
@@ -224,7 +231,32 @@ export const MembersPage = (): React.JSX.Element => {
         ) : undefined
       }
     >
-      {hasChat && (
+      {nativeAdmin && (
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="settings"
+            params={{ slug: workspace.slug, section: 'access-people' }}
+            className={buttonStyle('secondary')}
+          >
+            {t('access.people.title')}
+          </Link>
+          <Link
+            to="settings"
+            params={{ slug: workspace.slug, section: 'access-roles' }}
+            className={buttonStyle('secondary')}
+          >
+            {t('access.roles.title')}
+          </Link>
+          <Link
+            to="settings"
+            params={{ slug: workspace.slug, section: 'access-groups' }}
+            className={buttonStyle('secondary')}
+          >
+            {t('access.groups.title')}
+          </Link>
+        </div>
+      )}
+      {hasChat && nativeAdmin && (
         <div role="group" aria-label={t('guests.view')} className="flex flex-wrap gap-2">
           <Button
             className="aria-pressed:border-accent aria-pressed:bg-accent-subtle aria-pressed:text-accent-text"

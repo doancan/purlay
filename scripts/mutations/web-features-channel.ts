@@ -30,7 +30,7 @@ export const WEB_FEATURES_CHANNEL: readonly Mutation[] = [
     id: 'announcement-offered-to-a-member',
     why: 'a member is offered the box saying who posts, which the server refuses them (D-243)',
     file: 'apps/web/src/features/chat/channel/channel-details.tsx',
-    find: '              {configures && channel.state !== null && <Posting channel={channel} />}\n',
+    find: '              {settingsManager && channel.state !== null && <Posting channel={channel} />}\n',
     replace: '              {channel.state !== null && <Posting channel={channel} />}\n',
     tests: ['apps/web/src/features/chat/channel/announcement.test.tsx'],
   },

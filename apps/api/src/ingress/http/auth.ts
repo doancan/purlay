@@ -426,10 +426,15 @@ const toldIfFailed = async (
  * path nobody serves is (`API.md` §1), never an empty body or the plain `Not Found` of a closed path,
  * which a client cannot read. A 404 the library answers in JSON is one of its own answers, and kept.
  */
-const libraryOrNotFound = (answered: Response): Response => {
+const libraryOrNotFound = (answered: Response, path: string): Response => {
   if (
     answered.status === 404 &&
-    !(answered.headers.get('content-type') ?? '').includes('application/json')
+    !(answered.headers.get('content-type') ?? '').includes('application/json') &&
+    !(
+      path.startsWith(`${AUTH_BASE_PATH}/scim/v2/`) &&
+      (answered.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ===
+        'application/scim+json'
+    )
   ) {
     throw new AppError({ code: 'ROUTE_NOT_FOUND', message: 'No such route.' });
   }
@@ -496,7 +501,10 @@ export const answerAuth = async (
     return asResponse(sentBack(config, 'expired'));
   }
   if (provider === undefined) {
-    return libraryOrNotFound(await toldIfFailed(dependencies, url, await auth.handler(request)));
+    return libraryOrNotFound(
+      await toldIfFailed(dependencies, url, await auth.handler(request)),
+      url.pathname,
+    );
   }
   const declined = url.searchParams.get('error');
   if (declined !== null) {

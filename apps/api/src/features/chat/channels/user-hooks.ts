@@ -17,6 +17,9 @@ export const forgetWhatChatKeeps = async (
   // Made by chat's own migration set, so absent from a database migrated without it, where there is nothing to forget.
   // `channel_departures` is how they left a channel, which names them (D-264).
   for (const table of [
+    'channel_member_capabilities',
+    'channel_access_member_grants',
+    'channel_access_controls',
     'hidden_messages',
     'message_reminders',
     'scheduled_messages',

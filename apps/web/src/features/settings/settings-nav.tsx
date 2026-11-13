@@ -13,7 +13,12 @@ import { cn } from '../../ui/cn';
 import { useWorkspace } from '../shell/workspace';
 import { FIRST_SECTION, sectionsFor, type SettingsSection } from './sections';
 import { useModules } from '../session/session';
-import { useIsServerAdmin, useWorkspaceRole } from './role';
+import {
+  useIsServerAdmin,
+  useWorkspaceRole,
+  useWorkspaceCapabilities,
+  useWorkspaceChannelCapabilities,
+} from './role';
 
 const rowClasses =
   'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
@@ -81,7 +86,13 @@ export const SettingsNav = (): React.JSX.Element => {
       : match.name === 'settingsHome'
         ? FIRST_SECTION
         : null;
-  const sections = sectionsFor(role, useIsServerAdmin(), useModules());
+  const sections = sectionsFor(
+    role,
+    useIsServerAdmin(),
+    useModules(),
+    useWorkspaceCapabilities(),
+    useWorkspaceChannelCapabilities(),
+  );
   return (
     <>
       <div className="flex flex-col gap-1 px-4 pt-3 pb-2">

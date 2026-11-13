@@ -12,6 +12,8 @@ import {
 } from '@purlay/db';
 import { parseServerMessage, type ServerFrame } from '@purlay/types';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { cohortMode, cohortReceiptPath } from '../testing/workspace-delivery-measurements';
 import { aSession, aTestAuth, TEST_AUTH_SECRET } from '../testing/signed-in';
 import { aRoom } from '../testing/rooms';
 import { aMovableClock } from '../testing/doubles';
@@ -35,12 +37,19 @@ import { companyWorkspaceMfaActor } from '../modules/workspaces/security/mfa.tes
 import { companySessionCookies } from '../modules/auth/company-sessions';
 import { companyFrameProjector } from '../features/chat/channels/company-delivery';
 
+const measurementMode = cohortMode(process.env);
+
 describe('integration: workspace delivery cohort bounds', () => {
   describe.each([false, true])(
     'integration: workspace delivery cohort bounds, company=%s',
     (company) => {
+      const receiptPath = cohortReceiptPath(
+        process.env,
+        `/tmp/purlay-workspace-ws-batch/performance-${company ? 'company' : 'independent'}.json`,
+      );
       let clone: ClonedDatabase;
       let runCohort: () => Promise<void>;
+      let closeCohort: (() => Promise<void>) | undefined;
       beforeAll(async () => {
         clone = await cloneIntegrationDatabase();
         const db = clone.db;
@@ -167,32 +176,35 @@ describe('integration: workspace delivery cohort bounds', () => {
             sessions.slice(1).map((session) => ({ ...assurance, session_id: session.sessionId })),
           )
           .execute();
-        runCohort = async (): Promise<void> => {
-          let reads = 0;
-          const roots = new Map<string, number>();
-          const starts = new Map<unknown, { at: number; kind: string }>();
-          let completedSelects = 0;
-          const queryTimes: { kind: string; ms: number; startMs: number; endMs: number }[] = [];
-          let fanoutStart = 0;
-          const counted = db.withPlugin({
-            transformQuery: (
-              args,
-            ): ReturnType<Parameters<Executor['withPlugin']>[0]['transformQuery']> => {
-              if (args.node.kind === 'SelectQueryNode') {
-                reads++;
-                const root =
-                  (args.node.from?.froms[0]?.kind ?? 'none') +
-                  ':' +
-                  String(args.node.setOperations?.length ?? 0);
-                roots.set(root, (roots.get(root) ?? 0) + 1);
-                starts.set(args.queryId, { at: performance.now(), kind: root });
-              }
-              return args.node;
-            },
-            transformResult: (args) => {
-              const start = starts.get(args.queryId);
-              if (start !== undefined) {
-                completedSelects++;
+        let reads = 0;
+        const roots = new Map<string, number>();
+        const starts = new Map<unknown, { at: number; kind: string }>();
+        let completedSelects = 0;
+        const queryTimes: { kind: string; ms: number; startMs: number; endMs: number }[] = [];
+        let fanoutStart = 0;
+        const counted = db.withPlugin({
+          transformQuery: (
+            args,
+          ): ReturnType<Parameters<Executor['withPlugin']>[0]['transformQuery']> => {
+            if (args.node.kind === 'SelectQueryNode') {
+              reads++;
+              const root =
+                (args.node.from?.froms[0]?.kind ?? 'none') +
+                ':' +
+                String(args.node.setOperations?.length ?? 0);
+              roots.set(root, (roots.get(root) ?? 0) + 1);
+              starts.set(args.queryId, {
+                at: measurementMode === 'measure' ? 0 : performance.now(),
+                kind: root,
+              });
+            }
+            return args.node;
+          },
+          transformResult: (args) => {
+            const start = starts.get(args.queryId);
+            if (start !== undefined) {
+              completedSelects++;
+              if (measurementMode !== 'measure') {
                 const end = performance.now();
                 queryTimes.push({
                   kind: start.kind,
@@ -201,9 +213,93 @@ describe('integration: workspace delivery cohort bounds', () => {
                   endMs: end - fanoutStart,
                 });
               }
-              return Promise.resolve(args.result);
-            },
-          });
+            }
+            return Promise.resolve(args.result);
+          },
+        });
+        const rawFrames: string[] = [];
+        const receipts: number[] = [];
+        const closed: number[] = [];
+        const hub = createSocketHub(aTestAuth(counted, { clock }), clock, {
+          log: NO_LOG,
+          listen: () => undefined,
+          leave: () => undefined,
+          workspaceFrame: workspaceFrameProjector(counted, clock, dependencies.sessionLifetime),
+          companyFrame: companyFrameProjector(counted, {
+            clock,
+            lifetime: dependencies.sessionLifetime,
+          }),
+        });
+        const close = async (): Promise<void> => {
+          for (const [index] of sessions.entries()) hub.closed(String(index));
+          await hub.settled();
+        };
+        closeCohort = close;
+        // Cookie conversion and authenticated socket opens belong to fixture preparation.
+        const setupStart = performance.now();
+        try {
+          const context = await withinDeferredSource(
+            dependencies,
+            { userId: person.userId, sessionId: first.sessionId },
+            async () => await requireChannelById(db, person.userId, room.channelId),
+          );
+          const channelScope = liveChannelScope()(counted, context);
+          for (const [index, session] of sessions.entries()) {
+            let cookie = `${SESSION_COOKIE}=${session.token}`;
+            if (company) {
+              const response = await companySessionCookies(db, TEST_AUTH_SECRET).publicResponse(
+                new Response(null, {
+                  headers: { 'set-cookie': `${cookie}; HttpOnly; Secure; Path=/` },
+                }),
+                false,
+              );
+              cookie = response.headers
+                .getSetCookie()
+                .map((line) => line.split(';')[0] ?? '')
+                .join('; ');
+            }
+            expect(
+              await hub.opened(
+                String(index),
+                {
+                  buffered: () => 0,
+                  close: (code) => {
+                    closed.push(code);
+                  },
+                  send: (text) => {
+                    rawFrames.push(text);
+                    if (fanoutStart > 0) receipts.push(performance.now() - fanoutStart);
+                    return text.length;
+                  },
+                },
+                new Request('https://purlay.test/ws', {
+                  headers: { cookie },
+                }),
+              ),
+            ).toBeDefined();
+            hub.restrictChannel?.(String(index), room.channelId, channelScope);
+          }
+        } catch (error) {
+          await close();
+          throw error;
+        }
+        const fixturePreparationMs = performance.now() - setupStart;
+        const frame: ServerFrame = {
+          event: 'MESSAGE_REVISED',
+          ts: 1,
+          version: 1,
+          data: {
+            channelId: room.channelId,
+            messageId: crypto.randomUUID(),
+            parentId: null,
+            content: 'actual bounded fanout',
+            editedAt: null,
+            deletedAt: null,
+            mentions: [],
+          },
+        };
+        runCohort = async (): Promise<void> => {
+          let cohortReceipt: Record<string, unknown>;
           const counts: number[] = [];
           for (const size of [12, 120]) {
             reads = 0;
@@ -241,75 +337,7 @@ describe('integration: workspace delivery cohort bounds', () => {
             return Promise.resolve();
           });
 
-          const rawFrames: string[] = [];
-          const receipts: number[] = [];
-          const closed: number[] = [];
-          const hub = createSocketHub(aTestAuth(counted, { clock }), clock, {
-            log: NO_LOG,
-            listen: () => undefined,
-            leave: () => undefined,
-            workspaceFrame: workspaceFrameProjector(counted, clock, dependencies.sessionLifetime),
-            companyFrame: companyFrameProjector(counted, {
-              clock,
-              lifetime: dependencies.sessionLifetime,
-            }),
-          });
           try {
-            const context = await withinDeferredSource(
-              dependencies,
-              { userId: person.userId, sessionId: first.sessionId },
-              async () => await requireChannelById(db, person.userId, room.channelId),
-            );
-            const channelScope = liveChannelScope()(counted, context);
-            for (const [index, session] of sessions.entries()) {
-              let cookie = `${SESSION_COOKIE}=${session.token}`;
-              if (company) {
-                const response = await companySessionCookies(db, TEST_AUTH_SECRET).publicResponse(
-                  new Response(null, {
-                    headers: { 'set-cookie': `${cookie}; HttpOnly; Secure; Path=/` },
-                  }),
-                  false,
-                );
-                cookie = response.headers
-                  .getSetCookie()
-                  .map((line) => line.split(';')[0] ?? '')
-                  .join('; ');
-              }
-              expect(
-                await hub.opened(
-                  String(index),
-                  {
-                    buffered: () => 0,
-                    close: (code) => {
-                      closed.push(code);
-                    },
-                    send: (text) => {
-                      rawFrames.push(text);
-                      if (fanoutStart > 0) receipts.push(performance.now() - fanoutStart);
-                      return text.length;
-                    },
-                  },
-                  new Request('https://purlay.test/ws', {
-                    headers: { cookie },
-                  }),
-                ),
-              ).toBeDefined();
-              hub.restrictChannel?.(String(index), room.channelId, channelScope);
-            }
-            const frame: ServerFrame = {
-              event: 'MESSAGE_REVISED',
-              ts: 1,
-              version: 1,
-              data: {
-                channelId: room.channelId,
-                messageId: crypto.randomUUID(),
-                parentId: null,
-                content: 'actual bounded fanout',
-                editedAt: null,
-                deletedAt: null,
-                mentions: [],
-              },
-            };
             reads = 0;
             completedSelects = 0;
             roots.clear();
@@ -336,15 +364,24 @@ describe('integration: workspace delivery cohort bounds', () => {
             expect(closed).toEqual([]);
             expect(elapsedMs).toBeLessThan(DEFAULT_DEADLINE_MS);
             const receipt = {
+              complete: false,
+              measurement: {
+                mode: measurementMode,
+                runId: process.env['PURLAY_WORKSPACE_COHORT_RUN'] ?? null,
+                modules: process.env['MODULES'] ?? 'all',
+                company,
+              },
               nativeSources: [12, 120],
               factualSelects: counts,
               fanout: {
                 sources: 120,
                 sent: sent.length,
+                receipts: receipts.length,
                 totalSelects: reads,
                 elapsedMs,
                 receiptP95Ms: p95,
               },
+              fixturePreparationMs,
               clientValidationMs,
               productFanoutBudgetMs: BUDGETS.fanOutMs,
               selectRootKinds: Object.fromEntries(roots),
@@ -352,20 +389,17 @@ describe('integration: workspace delivery cohort bounds', () => {
               queryTimes,
               existingDeadlineMs: DEFAULT_DEADLINE_MS,
             };
-            await mkdir('/tmp/purlay-workspace-ws-batch', { recursive: true, mode: 0o700 });
-            await writeFile(
-              `/tmp/purlay-workspace-ws-batch/performance-${company ? 'company' : 'independent'}.json`,
-              JSON.stringify(receipt, null, 2),
-              { mode: 0o600 },
-            );
-            if (!(p95 < BUDGETS.fanOutMs))
+            cohortReceipt = receipt;
+            await mkdir(dirname(receiptPath), { recursive: true, mode: 0o700 });
+            await writeFile(receiptPath, JSON.stringify(receipt, null, 2), { mode: 0o600 });
+            if (measurementMode !== 'functional' && !(p95 < BUDGETS.fanOutMs))
               console.error(
                 JSON.stringify({ workspaceDeliveryCohortFailure: { company, ...receipt } }),
               );
-            expect(p95).toBeLessThan(BUDGETS.fanOutMs);
+            // Measurements finish every native guard before the runner applies D-227's one confirmation.
+            if (measurementMode === 'strict') expect(p95).toBeLessThan(BUDGETS.fanOutMs);
           } finally {
-            for (const [index] of sessions.entries()) hub.closed(String(index));
-            await hub.settled();
+            await close();
           }
           await withinRequest(scope, async () => {
             permit.capture(clock.now());
@@ -436,13 +470,19 @@ describe('integration: workspace delivery cohort bounds', () => {
             }).toThrow('Verify workspace access');
             return Promise.resolve();
           });
+          await writeFile(
+            receiptPath,
+            JSON.stringify({ ...cohortReceipt, complete: true }, null, 2),
+            { mode: 0o600 },
+          );
         };
       }, CLONE_HOOK_MS);
       afterAll(async () => {
+        await closeCohort?.();
         await clone.drop();
         await closeIntegrationDatabase();
       }, DROP_HOOK_MS);
-      test('12 and 120 exact native sources use bounded factual reads and final fanout', async () => {
+      test(`12 and 120 exact native sources use bounded factual reads and final fanout, company=${String(company)}`, async () => {
         await runCohort();
       });
     },

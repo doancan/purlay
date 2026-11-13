@@ -24,10 +24,17 @@ import { AppError } from '../../platform/errors';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import { asProfile, PROFILE_COLUMNS } from '../users/profile';
 import { guestAccessRecipients } from './guest-audience';
+import { requireWorkspaceCapabilityNow } from './provisioning/authority';
+import {
+  synchronizeLegacyManualRole,
+  blockLegacyWorkspaceAdmission,
+} from './provisioning/legacy-writers';
 
 /** Whether a caller of this role may move a member from one role to another, or remove them (`to` absent). */
 const mayManage = (caller: UserRole, from: UserRole, to?: UserRole): boolean =>
-  caller === 'owner' || (caller === 'admin' && from !== 'owner' && to !== 'owner');
+  caller === 'owner' ||
+  (caller === 'admin' && from !== 'owner' && to !== 'owner') ||
+  (caller === 'member' && from === 'member' && (to === undefined || to === 'member'));
 
 const forbidden = (): AppError =>
   new AppError({ code: 'FORBIDDEN', message: 'Only an owner or an admin manages members.' });
@@ -59,7 +66,9 @@ const rolesUnderLock = async (
     .where('user_id', 'in', [context.userId, userId])
     .execute();
   const caller = rows.find((row) => row.user_id === context.userId)?.role;
-  if (caller === undefined || caller === 'member') throw forbidden();
+  if (caller === undefined) throw forbidden();
+  if (caller === 'member')
+    await requireWorkspaceCapabilityNow(executor, context, 'members.manage_nonowners');
   const target = rows.find((row) => row.user_id === userId);
   if (target === undefined) throw notFound();
   return { caller, target: target.role, targetIsGuest: target.access_kind === 'guest' };
@@ -94,7 +103,6 @@ export const changeRole = async (
   userId: string,
   role: UserRole,
 ): Promise<WorkspaceMember> => {
-  if (context.role === 'member') throw forbidden();
   if (!Value.Check(Uuid, userId)) throw notFound();
   const { caller, target, targetIsGuest } = await rolesUnderLock(executor, context, userId);
   if (targetIsGuest && role !== 'member')
@@ -104,6 +112,7 @@ export const changeRole = async (
     });
   if (!mayManage(caller, target, role)) throw forbidden();
   if (target === 'owner' && role !== 'owner') await keepAnOwner(executor, context);
+  await synchronizeLegacyManualRole(executor, clock, context, userId, role);
   // The same role again changes nothing, and records nothing.
   if (target !== role) {
     await recordAudit(executor, clock, {
@@ -170,12 +179,18 @@ export const removeMember = async (
 ): Promise<{
   readonly channelIds: readonly string[];
   readonly notifyUserIds?: readonly string[];
+  readonly endedCompanySessionIds?: readonly string[];
 }> => {
-  if (context.role === 'member') throw forbidden();
   if (!Value.Check(Uuid, userId)) throw notFound();
   const { caller, target, targetIsGuest } = await rolesUnderLock(executor, context, userId);
   if (!mayManage(caller, target)) throw forbidden();
   if (target === 'owner') await keepAnOwner(executor, context);
+  const endedCompanySessionIds = await blockLegacyWorkspaceAdmission(
+    executor,
+    clock,
+    context.workspaceId,
+    userId,
+  );
   const channelIds = await takeOut(executor, channels, context.workspaceId, userId);
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
@@ -187,6 +202,7 @@ export const removeMember = async (
   });
   return {
     channelIds,
+    endedCompanySessionIds,
     ...(targetIsGuest
       ? { notifyUserIds: await guestAccessRecipients(executor, context, userId) }
       : {}),
@@ -206,6 +222,7 @@ export const leaveWorkspace = async (
 ): Promise<{
   readonly channelIds: readonly string[];
   readonly notifyUserIds?: readonly string[];
+  readonly endedCompanySessionIds?: readonly string[];
 }> => {
   await lockWorkspace(executor, context);
   const row = await executor
@@ -215,6 +232,12 @@ export const leaveWorkspace = async (
     .where('user_id', '=', context.userId)
     .executeTakeFirstOrThrow();
   if (row.role === 'owner') await keepAnOwner(executor, context);
+  const endedCompanySessionIds = await blockLegacyWorkspaceAdmission(
+    executor,
+    clock,
+    context.workspaceId,
+    context.userId,
+  );
   const channelIds = await takeOut(executor, channels, context.workspaceId, context.userId);
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
@@ -226,6 +249,7 @@ export const leaveWorkspace = async (
   });
   return {
     channelIds,
+    endedCompanySessionIds,
     ...(row.access_kind === 'guest'
       ? { notifyUserIds: await guestAccessRecipients(executor, context, context.userId) }
       : {}),

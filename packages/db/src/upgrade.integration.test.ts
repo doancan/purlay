@@ -341,6 +341,11 @@ describe('integration: upgrading from the previous release', () => {
         '0113_deferred_author_session',
         '0114_personal_archive_workspaces',
         '0115_workspace_policy_lookup',
+        '0116_workspace_provisioning',
+        '0117_workspace_directory',
+        '0118_directory_source_lookup',
+        '0119_directory_native_initialization',
+        '0120_workspace_directory_validate',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -358,6 +363,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0015_shared_source_changes',
         'chat/0016_shared_source_indexes',
         'chat/0017_deferred_author_session',
+        'chat/0018_channel_access_sources',
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
@@ -480,6 +486,7 @@ describe('integration: the contract release on a database that has run the expan
         'chat/0015_shared_source_changes',
         'chat/0016_shared_source_indexes',
         'chat/0017_deferred_author_session',
+        'chat/0018_channel_access_sources',
       ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
@@ -702,6 +709,7 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0015_shared_source_changes',
         'chat/0016_shared_source_indexes',
         'chat/0017_deferred_author_session',
+        'chat/0018_channel_access_sources',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -778,6 +786,7 @@ describe('integration: moving development read scopes into chat’s own table', 
           'chat/0015_shared_source_changes',
           'chat/0016_shared_source_indexes',
           'chat/0017_deferred_author_session',
+          'chat/0018_channel_access_sources',
         ]);
         expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([
           {

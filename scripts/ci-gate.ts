@@ -19,10 +19,12 @@
 export const GATED = [
   'static',
   'schema',
+  'api-measurements',
   'changes',
   'browser',
   'modules',
   'module-suites',
+  'cohort-measurements',
   'mutations-changed',
 ] as const;
 
@@ -35,6 +37,7 @@ const SKIPPABLE: Readonly<Record<string, string>> = {
   browser: 'browser',
   modules: 'modules',
   'module-suites': 'modules',
+  'cohort-measurements': 'modules',
   'mutations-changed': 'mutations',
 };
 

@@ -501,9 +501,311 @@ const WORKSPACE_SECURITY_ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   }),
 };
 
+/** One constrained source/directory/channel graph per person, shared by its erasure probes. */
+const seedProvisioningLifecycle = async (db: Transaction, world: World): Promise<void> => {
+  if (
+    (await db
+      .selectFrom('workspace_access_sources')
+      .select('id')
+      .where('id', '=', world.sessionId)
+      .executeTakeFirst()) !== undefined
+  )
+    return;
+  const binding = await aCompanyBinding(db, world);
+  const native = await db
+    .selectFrom('workspace_members')
+    .select('role')
+    .where('workspace_id', '=', world.workspaceId)
+    .where('user_id', '=', world.adaId)
+    .executeTakeFirstOrThrow();
+  const id = world.sessionId;
+  await db
+    .insertInto('workspace_admission_controls')
+    .values({
+      workspace_id: world.workspaceId,
+      user_id: world.adaId,
+      initialized_at: NOW,
+      last_builtin_role: native.role,
+      last_access_kind: 'member',
+      updated_at: NOW,
+    })
+    .onConflict((conflict) => conflict.columns(['workspace_id', 'user_id']).doNothing())
+    .execute();
+  const admission = await db
+    .selectFrom('workspace_admission_controls')
+    .select('revision')
+    .where('workspace_id', '=', world.workspaceId)
+    .where('user_id', '=', world.adaId)
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('workspace_access_sources')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      user_id: world.adaId,
+      kind: 'manual',
+      state: 'active',
+      builtin_role: native.role,
+      access_kind: 'member',
+      admitted_at: NOW,
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_access_roles')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      name: id,
+      capabilities: ['audit.read', 'channel.settings.manage'],
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_access_groups')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      kind: 'manual',
+      name: id,
+      state: 'active',
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_access_group_members')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      group_id: id,
+      user_id: world.adaId,
+      source_id: id,
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_access_role_grants')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      role_id: id,
+      source_id: id,
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_member_capabilities')
+    .values({
+      workspace_id: world.workspaceId,
+      user_id: world.adaId,
+      capability: 'audit.read',
+      projection_revision: admission.revision,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directories')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      connection_id: binding.connectionId,
+      name: id,
+      claim: 'sub',
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_identity_links')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      directory_id: id,
+      user_id: world.adaId,
+      external_id: id,
+      origin: 'company_link',
+      binding_reference: binding.bindingId,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_native_initializations')
+    .values({
+      link_reference: id,
+      binding_reference: binding.bindingId,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_scim_subjects')
+    .values({
+      id,
+      user_id: world.adaId,
+      revision: 1,
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_scim_users')
+    .values({
+      id,
+      connection_id: id,
+      provisioning_domain_id: world.workspaceId,
+      user_id: world.adaId,
+      connection_user_key: id,
+      user_name: world.adaUsername,
+      user_name_key: id,
+      primary_email: world.adaEmail,
+      work_email_value_index: id,
+      email_value_index: id,
+      display_name: world.adaUsername,
+      formatted_name: world.adaUsername,
+      serialized_emails: '[]',
+      external_id: id,
+      external_id_key: id,
+      active: true,
+      order_key: id,
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_scim_tombstones')
+    .values({
+      id,
+      connection_id: id,
+      provisioning_domain_id: world.workspaceId,
+      user_id: world.adaId,
+      external_id: `${id}-retired`,
+      external_id_key: `${id}-retired`,
+      profile: '{}',
+      deleted_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_scim_grants')
+    .values({
+      id,
+      connection_id: id,
+      provisioning_domain_id: world.workspaceId,
+      scim_user_id: id,
+      user_id: world.adaId,
+      source_kind: 'direct',
+      source_id: id,
+      role: 'member',
+      grant_key: id,
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_scim_groups')
+    .values({
+      id,
+      connection_id: id,
+      provisioning_domain_id: world.workspaceId,
+      revision: 1,
+      display_name: id,
+      display_name_key: id,
+      order_key: id,
+      created_at: NOW,
+      updated_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('workspace_directory_scim_group_members')
+    .values({
+      id,
+      connection_id: id,
+      group_id: id,
+      scim_user_id: id,
+      membership_key: id,
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('channel_access_controls')
+    .values({
+      workspace_id: world.workspaceId,
+      channel_id: world.channelId,
+      user_id: world.adaId,
+      initialized_at: NOW,
+    })
+    .onConflict((conflict) => conflict.columns(['channel_id', 'user_id']).doNothing())
+    .execute();
+  const channel = await db
+    .selectFrom('channel_access_controls')
+    .select('revision')
+    .where('channel_id', '=', world.channelId)
+    .where('user_id', '=', world.adaId)
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('channel_access_member_grants')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      channel_id: world.channelId,
+      user_id: world.adaId,
+      kind: 'source',
+      source_id: id,
+      admitted_at: NOW,
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('channel_access_role_grants')
+    .values({
+      id,
+      workspace_id: world.workspaceId,
+      channel_id: world.channelId,
+      role_id: id,
+      source_id: id,
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('channel_member_capabilities')
+    .values({
+      workspace_id: world.workspaceId,
+      channel_id: world.channelId,
+      user_id: world.adaId,
+      capability: 'channel.settings.manage',
+      projection_revision: channel.revision,
+    })
+    .execute();
+};
+
+const provisioningProbe = (table: Table, column = 'id'): Probe => ({
+  seed: seedProvisioningLifecycle,
+  rows: async (db, world) =>
+    await countWhere(db, table, column, column === 'user_id' ? world.adaId : world.sessionId),
+});
+const WORKSPACE_PROVISIONING_ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
+  workspace_access_sources: provisioningProbe('workspace_access_sources'),
+  workspace_access_group_members: provisioningProbe('workspace_access_group_members'),
+  workspace_access_role_grants: provisioningProbe('workspace_access_role_grants'),
+  workspace_member_capabilities: provisioningProbe('workspace_member_capabilities', 'user_id'),
+  workspace_directory_identity_links: provisioningProbe('workspace_directory_identity_links'),
+  workspace_directory_native_initializations: provisioningProbe(
+    'workspace_directory_native_initializations',
+    'link_reference',
+  ),
+  workspace_directory_scim_tombstones: provisioningProbe('workspace_directory_scim_tombstones'),
+  workspace_directory_scim_subjects: provisioningProbe('workspace_directory_scim_subjects'),
+  workspace_directory_scim_users: provisioningProbe('workspace_directory_scim_users'),
+  workspace_directory_scim_grants: provisioningProbe('workspace_directory_scim_grants'),
+  workspace_directory_scim_group_members: provisioningProbe(
+    'workspace_directory_scim_group_members',
+  ),
+  channel_access_controls: provisioningProbe('channel_access_controls', 'user_id'),
+  channel_access_member_grants: provisioningProbe('channel_access_member_grants'),
+  channel_access_role_grants: provisioningProbe('channel_access_role_grants'),
+  channel_member_capabilities: provisioningProbe('channel_member_capabilities', 'user_id'),
+};
+
 /** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   ...WORKSPACE_SECURITY_ERASURE_PROBES,
+  ...WORKSPACE_PROVISIONING_ERASURE_PROBES,
   workspace_invitation_mail_attempts: {
     seed: async (db, world) => {
       await db
@@ -911,6 +1213,7 @@ const UNSEEDED_ERASURE: Readonly<Record<Table, string>> = {};
  * that names them, which the soft deletion keeps pointing at the same (anonymised) account.
  */
 const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
+  workspace_admission_controls: provisioningProbe('workspace_admission_controls', 'user_id'),
   workspace_access_policies: by(
     'workspace_access_policies',
     'updated_by',
@@ -1786,7 +2089,10 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
         await aWorld(db),
       ];
       const securityBefore: (readonly [Table, number, number])[] = [];
-      for (const [table, probe] of Object.entries(WORKSPACE_SECURITY_ERASURE_PROBES)) {
+      for (const [table, probe] of Object.entries({
+        ...WORKSPACE_SECURITY_ERASURE_PROBES,
+        ...WORKSPACE_PROVISIONING_ERASURE_PROBES,
+      })) {
         for (const control of controls) await probe.seed(db, control);
         securityBefore.push([
           table,
@@ -1821,7 +2127,10 @@ describe('integration: what TABLE_LIFECYCLE decides is what the code does', () =
       );
       expect(removed).toEqual([]);
       const securityAfter: (readonly [Table, number, number])[] = [];
-      for (const [table, probe] of Object.entries(WORKSPACE_SECURITY_ERASURE_PROBES)) {
+      for (const [table, probe] of Object.entries({
+        ...WORKSPACE_SECURITY_ERASURE_PROBES,
+        ...WORKSPACE_PROVISIONING_ERASURE_PROBES,
+      })) {
         securityAfter.push([
           table,
           await probe.rows(db, controls[0]),

@@ -870,3 +870,118 @@ describe('leaving and archiving', () => {
     view.unmountAll();
   });
 });
+
+test('an exact settings capability adds posting and archive for a full member without integration or history authority', async () => {
+  const channel = aChannel(IDS.api, 'api', { channelCapabilities: ['channel.settings.manage'] });
+  const changes: UpdateChannelRequest[] = [];
+  let archives = 0;
+  const view = await mountChannel({
+    channels: [channel],
+    messages: page([]),
+    api: {
+      me: () => Promise.resolve(asMember()),
+      channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+      updateChannel: (_id, input) => {
+        changes.push(input);
+        return Promise.resolve({ ...channel, ...input });
+      },
+      archiveChannel: () => {
+        archives++;
+        return Promise.resolve();
+      },
+    },
+  });
+  const dialog = await openDetails(view);
+  const about = within(dialog).getByRole('tabpanel', { name: 'About' });
+  expect(within(dialog).queryByRole('tab', { name: 'Integrations' })).toBeNull();
+  expect(within(about).queryByRole('button', { name: 'Save history setting' })).toBeNull();
+  await person().click(
+    within(about).getByRole('checkbox', { name: /Only owners and admins can post/ }),
+  );
+  await settle();
+  expect(changes).toEqual([{ onlyAdminsPost: true }]);
+  await person().click(within(about).getByRole('button', { name: 'Archive channel' }));
+  await person().click(within(about).getByRole('button', { name: 'Archive channel' }));
+  await settle();
+  expect(archives).toBe(1);
+  view.unmountAll();
+});
+
+test('an exact members capability removes only ordinary public-channel targets and disappears when revoked', async () => {
+  const channel = aChannel(IDS.api, 'api', { channelCapabilities: ['channel.members.manage'] });
+  const view = await mountChannel({
+    channels: [channel],
+    members: [
+      { user: ME, role: 'member' },
+      { user: ALICE, role: 'member' },
+      { user: BOB, role: 'admin' },
+    ],
+    messages: page([]),
+    api: {
+      me: () => Promise.resolve(asMember()),
+      channelMembers: () => Promise.resolve(inChannel(ME, ALICE, BOB)),
+    },
+  });
+  const dialog = await openDetails(view);
+  await showTab(dialog, /^Members/);
+  const members = within(dialog).getByRole('tabpanel', { name: /^Members/ });
+  expect(
+    within(members).getByRole('button', { name: 'Remove Alice from the channel' }),
+  ).toBeDefined();
+  expect(within(members).queryByRole('button', { name: 'Remove Bob from the channel' })).toBeNull();
+  await person().click(
+    within(members).getByRole('button', { name: 'Remove Alice from the channel' }),
+  );
+  act(() => {
+    view.world.client.setQueryData(keys.channels(IDS.workspace), [
+      { ...channel, channelCapabilities: [] },
+    ]);
+  });
+  await settle();
+  expect(
+    within(members).queryByRole('group', { name: 'Remove Alice from the channel' }),
+  ).toBeNull();
+  expect(
+    within(members).queryByRole('button', { name: 'Remove Alice from the channel' }),
+  ).toBeNull();
+  view.unmountAll();
+});
+
+test('a capability never joins a visible channel or gives a guest channel administration', async () => {
+  for (const guest of [false, true]) {
+    const session = asMember();
+    const channel = aChannel(IDS.api, 'api', {
+      channelCapabilities: ['channel.settings.manage', 'channel.members.manage'],
+      ...(guest ? {} : { state: null }),
+    });
+    const view = await mountChannel({
+      channels: [channel],
+      messages: page([]),
+      api: {
+        me: () =>
+          Promise.resolve(
+            guest
+              ? {
+                  ...session,
+                  memberships: session.memberships.map((membership) => ({
+                    ...membership,
+                    access: { kind: 'guest', historySince: WHEN, expiresAt: null },
+                  })),
+                }
+              : session,
+          ),
+        channelMembers: () => Promise.resolve(inChannel(ME, ALICE)),
+      },
+    });
+    const dialog = await openDetails(view);
+    expect(
+      within(dialog).queryByRole('checkbox', { name: /Only owners and admins can post/ }),
+    ).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Archive channel' })).toBeNull();
+    await showTab(dialog, /^Members/);
+    expect(
+      within(dialog).queryByRole('button', { name: 'Remove Alice from the channel' }),
+    ).toBeNull();
+    view.unmountAll();
+  }
+});

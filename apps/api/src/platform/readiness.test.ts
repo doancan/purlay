@@ -15,21 +15,40 @@ import {
 
 const MIGRATIONS = 'packages/db/migrations';
 
-/** `(table, column)` for every column a migration declares `COLLATE "C"`. */
-const collatedInMigrations = (): string[] => {
+/** Both handwritten DDL and the pinned native SDK's quoted one-line DDL declare real columns. */
+const collatedIn = (source: string): string[] => {
   const found: string[] = [];
-  for (const file of readdirSync(MIGRATIONS).filter((name) => name.endsWith('.sql'))) {
-    const sql = readFileSync(join(MIGRATIONS, file), 'utf8').replace(/--[^\n]*/g, '');
-    for (const table of sql.matchAll(/CREATE TABLE (\w+) \(([\s\S]*?)\n\);/g)) {
-      for (const column of (table[2] ?? '').matchAll(/^\s*(\w+)\s+[^\n]*COLLATE "C"/gm)) {
-        found.push(`${table[1] ?? ''}.${column[1] ?? ''}`);
-      }
+  const sql = source.replace(/--[^\n]*/g, '');
+  for (const table of sql.matchAll(/CREATE TABLE (?:IF NOT EXISTS )?"?(\w+)"? \(([\s\S]*?)\);/gi)) {
+    for (const column of (table[2] ?? '').matchAll(
+      /(?:^|[,\n])\s*"?(\w+)"?\s+[^,\n]*?\bCOLLATE\s+"([^"]+)"/gi,
+    )) {
+      if (column[2] === 'C') found.push(`${table[1] ?? ''}.${column[1] ?? ''}`);
     }
   }
-  return found.sort();
+  return found;
 };
 
+/** `(table, column)` for every column a migration declares `COLLATE "C"`. */
+const collatedInMigrations = (): string[] =>
+  readdirSync(MIGRATIONS)
+    .filter((name) => name.endsWith('.sql'))
+    .flatMap((file) => collatedIn(readFileSync(join(MIGRATIONS, file), 'utf8')))
+    .sort();
+
 describe('the columns readiness checks', () => {
+  test('reads native quoted one-line and ordinary multiline C columns without counting other collations', () => {
+    expect(
+      collatedIn(`create table "native_resource" ("id" uuid primary key, "connection_key" text COLLATE "C" not null, "profile" text, "lower_case" text COLLATE "c");
+CREATE TABLE ordinary (
+  key TEXT COLLATE "C",
+  label TEXT,
+  -- ignored TEXT COLLATE "C"
+  other TEXT COLLATE "default"
+);`),
+    ).toEqual(['native_resource.connection_key', 'ordinary.key']);
+  });
+
   test('are exactly the ones the migrations declare COLLATE "C"', () => {
     const declared = collatedInMigrations();
     expect(declared.length).toBeGreaterThan(0);

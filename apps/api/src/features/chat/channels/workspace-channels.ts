@@ -8,9 +8,19 @@ import type { WorkspaceContext } from '../../../platform/tenancy';
 import { forgetWorkspaceChannels } from './workspace-channel-cleanup';
 import type { WorkspaceChannels } from '../../../modules/workspaces/channels-port';
 import { chatGuestChannels } from './guest-grants';
+import { chatChannelAccessGrants } from './access-grants';
+import { aggregateChannelCapabilities } from './access-capabilities';
+import { projectChannelAccess, channelAccessCount, channelRoleUsers } from './access-projection';
 
 export const chatWorkspaceChannels: WorkspaceChannels = {
   guests: chatGuestChannels,
+  access: {
+    grants: chatChannelAccessGrants,
+    aggregateCapabilities: aggregateChannelCapabilities,
+    project: projectChannelAccess,
+    countFor: channelAccessCount,
+    roleUsers: channelRoleUsers,
+  },
   leaveAll: forgetWorkspaceChannels,
 
   keptLonger: async (executor: ChatDb, context: WorkspaceContext, retentionDays: number | null) => {

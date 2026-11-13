@@ -188,6 +188,21 @@ describe('the command', () => {
     expect(err[0]).toContain('no cell has MODULES no-such-cell');
   });
 
+  test('refuses an unknown cohort mode before running any cell', async () => {
+    let calls = 0;
+    let refused: unknown;
+    try {
+      await main({ PURLAY_WORKSPACE_COHORT: 'typo' }, recorded().say, () => {
+        calls++;
+        return Promise.resolve(0);
+      });
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(Error);
+    expect(calls).toBe(0);
+  });
+
   test('refuses with no database, running nothing', async () => {
     const { say, err } = recorded();
     expect(await main({}, say, () => Promise.resolve(0))).toBe(1);
@@ -221,4 +236,10 @@ describe('the workflow', () => {
     expect(matrixSettings()).toEqual(cells.flatMap((setting) => setting ?? []));
     expect(matrixSettings()).toContain('none');
   });
+});
+
+test('every functional cell delegates only the cohort clock to the required standalone measurement', () => {
+  expect(readFileSync(join(import.meta.dir, 'module-suites.ts'), 'utf8')).toContain(
+    "PURLAY_WORKSPACE_COHORT: 'functional'",
+  );
 });
