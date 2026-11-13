@@ -26,16 +26,22 @@ const canonicalLiveCompanySessionProof = (
   userId: string | RawBuilder<string>,
   connectionId?: string | RawBuilder<string>,
   companions?: CompanyProofCompanions,
+  reuseOuterProof = false,
 ): RawBuilder<boolean> => {
   const member = companions?.member ?? 'company_member';
   const person = companions?.person ?? 'company_person';
   const workspace = companions?.workspace ?? 'company_workspace';
+  const connectionKey = sql<boolean>`company_connection.workspace_id = company_proof.workspace_id
+    and company_connection.id = company_proof.connection_id`;
   return sql<boolean>`exists (
   select 1
-  from workspace_identity_sessions as company_proof
+  from ${
+    reuseOuterProof
+      ? sql`workspace_identity_connections as company_connection`
+      : sql`workspace_identity_sessions as company_proof
   join workspace_identity_connections as company_connection
-    on company_connection.workspace_id = company_proof.workspace_id
-    and company_connection.id = company_proof.connection_id
+    on ${connectionKey}`
+  }
   join workspace_identity_domains as company_domain
     on company_domain.workspace_id = company_connection.workspace_id
     and company_domain.id = company_connection.domain_id
@@ -54,7 +60,7 @@ const canonicalLiveCompanySessionProof = (
 `
       : sql``
   }
-  where company_proof.session_id = ${sessionId}
+  where ${reuseOuterProof ? sql`${connectionKey} and` : sql``} company_proof.session_id = ${sessionId}
     and company_proof.workspace_id = ${workspaceId}
     and ${connectionId === undefined ? sql<boolean>`true` : sql<boolean>`company_proof.connection_id = ${connectionId}`}
     and company_binding.user_id = ${userId}
@@ -144,26 +150,27 @@ export const buildCompanyProofBatch = <Row>(
   const ids = [...new Set(sessionIds)];
   // Pulling the canonical proof into the origin joins multiplied measured PostgreSQL planning work.
   const source = sql<CompanyProofBatchRow>`(select
-    batch_company_origin.session_id, batch_company_origin.workspace_id,
-    batch_company_origin.connection_id, batch_company_session.user_id
-    from workspace_identity_sessions as batch_company_origin
-    join sessions as batch_company_session on batch_company_session.id = batch_company_origin.session_id
+    company_proof.session_id, company_proof.workspace_id,
+    company_proof.connection_id, batch_company_session.user_id
+    from workspace_identity_sessions as company_proof
+    join sessions as batch_company_session on batch_company_session.id = company_proof.session_id
     join workspace_members as batch_company_member
-      on batch_company_member.workspace_id = batch_company_origin.workspace_id
+      on batch_company_member.workspace_id = company_proof.workspace_id
       and batch_company_member.user_id = batch_company_session.user_id
     join users as batch_company_person on batch_company_person.id = batch_company_session.user_id
-    join workspaces as batch_company_workspace on batch_company_workspace.id = batch_company_origin.workspace_id
+    join workspaces as batch_company_workspace on batch_company_workspace.id = company_proof.workspace_id
     where batch_company_session.id in (${ids.length === 0 ? sql`null` : sql.join(ids)})
     and (${canonicalLiveCompanySessionProof(
       sql.ref<string>('batch_company_session.id'),
-      sql.ref<string>('batch_company_origin.workspace_id'),
+      sql.ref<string>('company_proof.workspace_id'),
       sql.ref<string>('batch_company_session.user_id'),
-      sql.ref<string>('batch_company_origin.connection_id'),
+      sql.ref<string>('company_proof.connection_id'),
       {
         member: 'batch_company_member',
         person: 'batch_company_person',
         workspace: 'batch_company_workspace',
       },
+      true,
     )}) is true)`;
   return { name: COMPANY_PROOF_BATCH_NAME, source, queries };
 };
