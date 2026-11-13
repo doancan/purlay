@@ -184,7 +184,7 @@ const observeCell = async (
     );
     if (migrated.exitCode !== 0) throw new Error(`db:migrate failed for ${cell.label}`);
     const port = await freePort();
-    const api = Bun.spawn([process.execPath, '--no-env-file', 'apps/api/src/index.ts'], {
+    const api = Bun.spawn([process.execPath, '--no-env-file', '--smol', 'apps/api/src/index.ts'], {
       cwd: ROOT,
       env: {
         ...environmentOf(url, cell.setting),

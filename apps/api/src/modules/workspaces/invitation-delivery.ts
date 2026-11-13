@@ -14,7 +14,7 @@ import type { Clock } from '../../platform/clock';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { MailReceipt } from '../../platform/mail';
 import { AppError } from '../../platform/errors';
-import { requireInvitationManager } from './invitation-manager';
+import { requireWorkspaceCapabilityNow } from './provisioning/authority';
 import { literalPattern } from '../../platform/like-pattern';
 
 /** A process interrupted before its receipt committed leaves evidence of uncertainty, never invented success. */
@@ -142,7 +142,7 @@ export const listInvitationRecipients = async (
   context: WorkspaceContext,
   query: InvitationRecipientQuery,
 ): Promise<InvitationRecipientPage> => {
-  requireInvitationManager(context);
+  await requireWorkspaceCapabilityNow(db, context, 'members.invite');
   const now = clock.now();
   const status = sql<InvitationRecipientStatus>`case
     when r.joined_at is not null then 'joined'
@@ -239,7 +239,7 @@ const requireInvitationRecipient = async (
   context: WorkspaceContext,
   recipientId: string,
 ): Promise<void> => {
-  requireInvitationManager(context);
+  await requireWorkspaceCapabilityNow(db, context, 'members.invite');
   const row = await db
     .selectFrom('workspace_invitation_recipients')
     .select('id')

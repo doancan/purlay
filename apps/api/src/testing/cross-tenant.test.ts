@@ -12,6 +12,9 @@ import { describe, expect, test } from 'bun:test';
 import { createApp } from '../ingress/http/app';
 import {
   CROSS_TENANT,
+  PROVISIONING_CROSS_TENANT,
+  SCIM_CROSS_TENANT,
+  documentedScimEndpoints,
   WORKFLOW_CROSS_TENANT,
   EMPTY_FOR_THE_SEED,
   UNSCOPED,
@@ -89,12 +92,17 @@ describe('every served endpoint has a cross-tenant case', () => {
       const key = endpointKey(endpoint);
       const inCases = key in CROSS_TENANT;
       const inWorkflow = key in WORKFLOW_CROSS_TENANT;
+      const inProvisioning = key in PROVISIONING_CROSS_TENANT;
       const inUnscoped = key in UNSCOPED;
       expect({
         key,
-        classifications: Number(inCases) + Number(inWorkflow) + Number(inUnscoped),
-      }).toEqual({ key, classifications: inCases || inWorkflow || inUnscoped ? 1 : 0 });
-      if (!inCases && !inWorkflow && !inUnscoped && (await isServed(endpoint)))
+        classifications:
+          Number(inCases) + Number(inWorkflow) + Number(inProvisioning) + Number(inUnscoped),
+      }).toEqual({
+        key,
+        classifications: inCases || inWorkflow || inProvisioning || inUnscoped ? 1 : 0,
+      });
+      if (!inCases && !inWorkflow && !inProvisioning && !inUnscoped && (await isServed(endpoint)))
         unclassified.push(key);
     }
     // Add a real case to `CROSS_TENANT` or its bounded workflow suite, or say in `UNSCOPED` why there is no tenant to cross.
@@ -105,12 +113,16 @@ describe('every served endpoint has a cross-tenant case', () => {
     for (const key of [
       ...Object.keys(CROSS_TENANT),
       ...Object.keys(WORKFLOW_CROSS_TENANT),
+      ...Object.keys(PROVISIONING_CROSS_TENANT),
       ...Object.keys(UNSCOPED),
     ]) {
       expect({ key, documented: keys.has(key) }).toEqual({ key, documented: true });
     }
     for (const endpoint of documented.filter(
-      (each) => endpointKey(each) in CROSS_TENANT || endpointKey(each) in WORKFLOW_CROSS_TENANT,
+      (each) =>
+        endpointKey(each) in CROSS_TENANT ||
+        endpointKey(each) in WORKFLOW_CROSS_TENANT ||
+        endpointKey(each) in PROVISIONING_CROSS_TENANT,
     )) {
       expect({ key: endpointKey(endpoint), served: await isServed(endpoint) }).toEqual({
         key: endpointKey(endpoint),
@@ -141,10 +153,55 @@ describe('every served endpoint has a cross-tenant case', () => {
     }
   });
 
+  test('provisioning crossings name their actual bounded source and directory workflow suite', () => {
+    const workflows = Object.entries(PROVISIONING_CROSS_TENANT);
+    expect(workflows).toHaveLength(27);
+    for (const [key, crossing] of workflows) {
+      expect(
+        /^(GET|POST|PATCH|DELETE) \/api\/workspaces\/:workspaceId\/(access|directories)(?:\/|$)/.test(
+          key,
+        ),
+      ).toBe(true);
+      expect(crossing.suite).toBe('workspace-provisioning');
+      expect(crossing.testFile).toBe(
+        'apps/api/src/ingress/http/workspace-provisioning-cross-tenant.integration.test.ts',
+      );
+      expect(
+        existsSync(fileURLToPath(new URL(`../../../../${crossing.testFile}`, import.meta.url))),
+      ).toBe(true);
+      expect(crossing.visibility.kind).toBe('none');
+      expect(crossing.visibility.reason.length).toBeGreaterThan(0);
+      expect(key in UNSCOPED || key in CROSS_TENANT || key in WORKFLOW_CROSS_TENANT).toBe(false);
+    }
+  });
+
+  test('documented native SCIM mutations are exercised by their actual directory-bearer isolation suite', () => {
+    expect(documentedScimEndpoints().map(endpointKey).sort()).toEqual(
+      Object.keys(SCIM_CROSS_TENANT).sort(),
+    );
+    expect(Object.keys(SCIM_CROSS_TENANT)).toHaveLength(6);
+    for (const [key, crossing] of Object.entries(SCIM_CROSS_TENANT)) {
+      expect(crossing.suite).toBe('native-scim');
+      expect(crossing.testFile).toBe(
+        'apps/api/src/modules/workspaces/directory/native-auth.integration.test.ts',
+      );
+      expect(
+        existsSync(fileURLToPath(new URL(`../../../../${crossing.testFile}`, import.meta.url))),
+      ).toBe(true);
+      expect(
+        key in UNSCOPED ||
+          key in CROSS_TENANT ||
+          key in WORKFLOW_CROSS_TENANT ||
+          key in PROVISIONING_CROSS_TENANT,
+      ).toBe(false);
+    }
+  });
+
   test('nothing that names a channel opts out of the visibility axis', () => {
     for (const [key, crossing] of [
       ...Object.entries(CROSS_TENANT),
       ...Object.entries(WORKFLOW_CROSS_TENANT),
+      ...Object.entries(PROVISIONING_CROSS_TENANT),
     ]) {
       if (key.includes(':channelId')) {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'channel' });
@@ -156,6 +213,7 @@ describe('every served endpoint has a cross-tenant case', () => {
     for (const [key, crossing] of [
       ...Object.entries(CROSS_TENANT),
       ...Object.entries(WORKFLOW_CROSS_TENANT),
+      ...Object.entries(PROVISIONING_CROSS_TENANT),
     ]) {
       if (key.includes(':messageId')) {
         expect({ key, kind: crossing.visibility.kind }).toEqual({ key, kind: 'message' });

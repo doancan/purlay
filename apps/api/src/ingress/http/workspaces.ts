@@ -48,6 +48,10 @@ import {
   requireMayCreateWorkspace,
   type WorkspaceCreators,
 } from '../../modules/workspaces/creators';
+import {
+  lockWorkspaceProvisioningActor,
+  lockWorkspaceProvisioningSession,
+} from '../../modules/workspaces/provisioning/authority';
 import { changeRole, leaveWorkspace, removeMember } from '../../modules/workspaces/members';
 import { askToDelete, takeBackDeletion } from '../../modules/workspaces/deletion';
 import { auditTrail } from '../../modules/audit/audit';
@@ -61,6 +65,7 @@ import {
   NO_LOG,
   publication,
   publishAccessRevoked,
+  publishSessionsEnded,
   publishDeepWorkUpdated,
   publishAfterCommit,
   publishWorkspaceClosed,
@@ -122,6 +127,7 @@ export const readMe = async (
     userId,
     await dependencies.workspaceCreators(database),
     dependencies.effectiveModules,
+    dependencies.workspaceChannels,
   );
   return {
     ...me,
@@ -145,7 +151,14 @@ export const listMyWorkspaces = async (
 ): Promise<readonly Membership[]> => {
   const { database, clock } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
-  return await membershipsOf(database, clock, userId, undefined, dependencies.effectiveModules);
+  return await membershipsOf(
+    database,
+    clock,
+    userId,
+    undefined,
+    dependencies.effectiveModules,
+    dependencies.workspaceChannels,
+  );
 };
 
 export const createMyWorkspace = async (
@@ -250,19 +263,33 @@ export const updateWorkspace = async (
 
 /** `PATCH /api/workspaces/:workspaceId/members/:userId` — a member's new role (§7.4, I-2). */
 export const updateMemberRole = async (
-  dependencies: WorkspaceDependencies,
+  dependencies: MemberWriteDependencies,
   request: Request,
   workspaceId: string,
   userId: string,
   body: unknown,
 ): Promise<WorkspaceMember> => {
-  const { database, clock } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
   const { role } = validated(UpdateMemberRoleRequest, body);
-  return await atomicallyOn(database)(
-    async (transaction) => await changeRole(transaction, clock, context, userId, role),
-  );
+  const changed = await atomicallyOn(database)(async (transaction) => {
+    const locked = await lockWorkspaceProvisioningActor(
+      transaction,
+      { clock, lifetime: () => dependencies.auth.sessionLifetime },
+      { context, sessionId: caller.sessionId },
+      'members.manage_nonowners',
+    );
+    return await changeRole(transaction, clock, locked.context, userId, role);
+  });
+  await publishAfterCommit(log, [
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, [userId, caller.userId], workspaceId),
+      ),
+    ],
+  ]);
+  return changed;
 };
 
 /**
@@ -278,21 +305,37 @@ export const removeWorkspaceMember = async (
   const { database, clock, bus, log = NO_LOG } = dependencies;
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
-  const { channelIds, notifyUserIds } = await atomicallyOn(database)(
-    async (transaction) =>
-      await removeMember(transaction, clock, context, userId, dependencies.workspaceChannels),
+  const { channelIds, notifyUserIds, endedCompanySessionIds } = await atomicallyOn(database)(
+    async (transaction) => {
+      const locked = await lockWorkspaceProvisioningActor(
+        transaction,
+        { clock, lifetime: () => dependencies.auth.sessionLifetime },
+        { context, sessionId: caller.sessionId },
+        'members.manage_nonowners',
+      );
+      return await removeMember(
+        transaction,
+        clock,
+        locked.context,
+        userId,
+        dependencies.workspaceChannels,
+      );
+    },
   );
+  // Guest changes retain their explicit audience; ordinary workspace updates go only to a current member.
+  const workspaceRecipients = notifyUserIds ?? (caller.userId === userId ? [] : [caller.userId]);
   await publishAfterCommit(log, [
+    [
+      publication('SESSION_ENDED', () =>
+        publishSessionsEnded(bus, clock, endedCompanySessionIds ?? []),
+      ),
+    ],
     [publication('ACCESS_REVOKED', () => publishAccessRevoked(bus, clock, userId, channelIds))],
-    ...(notifyUserIds === undefined
-      ? []
-      : [
-          [
-            publication('WORKSPACE_UPDATED', () =>
-              publishWorkspaceUpdated(bus, clock, notifyUserIds, workspaceId),
-            ),
-          ],
-        ]),
+    [
+      publication('WORKSPACE_UPDATED', () =>
+        publishWorkspaceUpdated(bus, clock, workspaceRecipients, workspaceId),
+      ),
+    ],
   ]);
 };
 
@@ -309,11 +352,22 @@ export const leaveWorkspaceMembership = async (
   const { database, clock, bus, log = NO_LOG } = dependencies;
   const caller = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, caller.userId, workspaceId);
-  const { channelIds, notifyUserIds } = await atomicallyOn(database)(
-    async (transaction) =>
-      await leaveWorkspace(transaction, clock, context, dependencies.workspaceChannels),
+  const { channelIds, notifyUserIds, endedCompanySessionIds } = await atomicallyOn(database)(
+    async (transaction) => {
+      await lockWorkspaceProvisioningSession(
+        transaction,
+        { clock, lifetime: () => dependencies.auth.sessionLifetime },
+        { context, sessionId: caller.sessionId },
+      );
+      return await leaveWorkspace(transaction, clock, context, dependencies.workspaceChannels);
+    },
   );
   await publishAfterCommit(log, [
+    [
+      publication('SESSION_ENDED', () =>
+        publishSessionsEnded(bus, clock, endedCompanySessionIds ?? []),
+      ),
+    ],
     [
       publication('ACCESS_REVOKED', () =>
         publishAccessRevoked(bus, clock, caller.userId, channelIds),

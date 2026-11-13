@@ -17,6 +17,7 @@ import { aSession, aTestAuth } from './signed-in';
 import { aRoom } from './rooms';
 import { testConfig, testDependencies } from './doubles';
 import { anOidcStub, OIDC_STUB_CREDENTIALS } from './oidc-stub';
+import { runComposition } from './run-composition';
 
 const argument = (name: string): string => {
   const value = process.argv[process.argv.indexOf(name) + 1];
@@ -26,6 +27,7 @@ const argument = (name: string): string => {
 const port = Number(argument('--port'));
 if (!Number.isInteger(port) || port < 1024 || port > 65_534) throw new Error('Invalid port');
 const manifest = argument('--manifest');
+const provisioningReady = process.argv.includes('--provisioning-ready');
 const origin = `http://localhost:${String(port)}`;
 const capability = crypto.randomUUID();
 const records = new Map<string, string>();
@@ -81,6 +83,14 @@ const start = async (): Promise<void> => {
     baseUrl: origin,
     bus: backplane.node(() => undefined, NO_LOG),
     companyIdentity: { cipher: credentialCipher(DEVELOPMENT_ENCRYPTION_KEY), fetch: idp.fetch },
+    ...(provisioningReady
+      ? {
+          directory: {
+            channels: runComposition.workspaceChannels,
+            readersReady: (): Promise<boolean> => Promise.resolve(true),
+          },
+        }
+      : {}),
   });
   const dependencies = {
     ...testDependencies({
@@ -88,7 +98,11 @@ const start = async (): Promise<void> => {
       auth,
       backplane,
       clock: systemClock,
-      config: testConfig({ APP_URL: origin, PORT: port }),
+      config: testConfig({
+        APP_URL: origin,
+        PORT: port,
+        WORKSPACE_PROVISIONING_READY: provisioningReady,
+      }),
       client: openClient(new URL('../../../web/dist', import.meta.url).pathname),
       companyTxtLookup: (name) =>
         Promise.resolve(records.has(name) ? [[records.get(name) ?? '']] : []),

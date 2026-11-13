@@ -28,3 +28,24 @@ describe('the settings pages of the modules a server runs', () => {
     }
   });
 });
+
+test('the channel navigation hint opens only General, with chat, and never other workspace administration', () => {
+  expect(
+    sectionFor('general', 'member', false, ['chat'], [], ['channel.settings.manage'])?.id,
+  ).toBe('general');
+  expect(sectionFor('general', 'member', false, [], [], ['channel.settings.manage'])).toBeNull();
+  expect(
+    sectionFor('general', 'member', false, ['chat'], [], ['channel.members.manage']),
+  ).toBeNull();
+  expect(sectionFor('general', 'member', false, ['chat'])).toBeNull();
+  for (const id of [
+    'company',
+    'security',
+    'directory',
+    'access-people',
+    'access-roles',
+    'access-groups',
+    'data',
+  ])
+    expect(sectionFor(id, 'member', false, ['chat'], [], ['channel.settings.manage'])).toBeNull();
+});

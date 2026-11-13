@@ -23,10 +23,28 @@ import { PreferencesPage } from './pages/preferences';
 import { ProfilePage } from './pages/profile';
 import { ServerPage } from './pages/server';
 import { ShortcutsPage } from './pages/shortcuts';
-import { useModules } from '../session/session';
-import { useIsServerAdmin, useWorkspaceRole } from './role';
+import { useWorkspace } from '../shell/workspace';
+import { useSession, useModules } from '../session/session';
+import {
+  useIsServerAdmin,
+  useWorkspaceRole,
+  useWorkspaceCapabilities,
+  useWorkspaceChannelCapabilities,
+} from './role';
 import { sectionFor, type CoreSettingsSectionId } from './sections';
 
+const Directories = lazy(async () => ({
+  default: (await import('./access/directory')).WorkspaceDirectoriesPage,
+}));
+const AccessPeople = lazy(async () => ({
+  default: (await import('./access/people')).AccessPeoplePage,
+}));
+const AccessRoles = lazy(async () => ({
+  default: (await import('./access/roles')).AccessRolesPage,
+}));
+const AccessGroups = lazy(async () => ({
+  default: (await import('./access/groups')).AccessGroupsPage,
+}));
 const Security = lazy(async () => ({
   default: (await import('./security/policy')).WorkspaceSecurityPage,
 }));
@@ -61,6 +79,26 @@ const PAGES: Record<CoreSettingsSectionId, () => React.JSX.Element> = {
       <WorkspaceMfa />
     </Suspense>
   ),
+  directory: () => (
+    <Suspense fallback={<SecurityLoading />}>
+      <Directories />
+    </Suspense>
+  ),
+  'access-people': () => (
+    <Suspense fallback={<SecurityLoading />}>
+      <AccessPeople />
+    </Suspense>
+  ),
+  'access-roles': () => (
+    <Suspense fallback={<SecurityLoading />}>
+      <AccessRoles />
+    </Suspense>
+  ),
+  'access-groups': () => (
+    <Suspense fallback={<SecurityLoading />}>
+      <AccessGroups />
+    </Suspense>
+  ),
   members: MembersPage,
   invitations: InvitationsPage,
   audit: AuditPage,
@@ -81,11 +119,20 @@ const loadedPage = (load: Loader): LazyExoticComponent<ComponentType> => {
 export const SettingsScreen = ({ section }: { readonly section: string }): React.JSX.Element => {
   const { t } = useI18n();
   const role = useWorkspaceRole();
-  const found = sectionFor(section, role, useIsServerAdmin(), useModules());
+  const { workspace } = useWorkspace();
+  const { user } = useSession();
+  const found = sectionFor(
+    section,
+    role,
+    useIsServerAdmin(),
+    useModules(),
+    useWorkspaceCapabilities(),
+    useWorkspaceChannelCapabilities(),
+  );
   if (found === null) return <NotFound />;
   if (found.module === undefined) {
     const CorePage = PAGES[found.id];
-    return <CorePage />;
+    return <CorePage key={`${user.id}:${workspace.id}:${found.id}`} />;
   }
   const Page = loadedPage(found.load);
   return (

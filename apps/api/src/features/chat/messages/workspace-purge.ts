@@ -59,6 +59,11 @@ export const chatWorkspacePurge: WorkspacePurge = {
   ],
   after: [{ batch: channelBatch, size: CHANNEL_BATCH, messages: false }],
   tables: [
+    'channel_member_capabilities',
+    'channel_access_role_grants',
+    'channel_access_member_grants',
+    'channel_access_group_mappings',
+    'channel_access_controls',
     'message_shared_links',
     'message_shared_jobs',
     'scheduled_messages',

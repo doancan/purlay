@@ -96,7 +96,7 @@ export const exportTrail = async (
   query: AuditExportQuery,
   access: AuditAccess,
 ): Promise<TrailDownload> => {
-  requireTrailReader(context, access);
+  await requireTrailReader(executor, context, access);
   const { format, ...filter } = query;
   checkedFilter(filter);
   await atomicallyOn(executor)(async (transaction) => {
@@ -116,14 +116,17 @@ export const exportTrail = async (
     .executeTakeFirstOrThrow();
   const shape = FORMATS[format];
   const encoder = new TextEncoder();
-  const read = async (before?: string): Promise<AuditEntry[]> =>
-    await trailPage(
+  const read = async (before?: string): Promise<AuditEntry[]> => {
+    const reader = await requireTrailReader(executor, context, access);
+    return await trailPage(
       executor,
-      context,
+      reader.context,
       filter,
       { ...(before === undefined ? {} : { before }), limit: AUDIT_EXPORT_PAGE },
       access,
+      reader.delegated,
     );
+  };
   const chunkOf = (entries: readonly AuditEntry[], head = ''): Uint8Array =>
     encoder.encode(head + entries.map((entry) => shape.line(exportLineOf(entry))).join(''));
 
@@ -136,16 +139,26 @@ export const exportTrail = async (
     {
       pull: async (controller): Promise<void> => {
         if (pending !== null) {
-          controller.enqueue(chunkOf(pending, shape.head));
+          const reader = await requireTrailReader(executor, context, access);
+          const unreadable = new Set(access.unreadable(reader.context.role, reader.delegated));
+          controller.enqueue(
+            chunkOf(
+              pending.filter((entry) => !unreadable.has(entry.action)),
+              shape.head,
+            ),
+          );
           pending = null;
           if (exhausted) controller.close();
           return;
         }
         try {
           const next = await read(cursor);
+          const reader = await requireTrailReader(executor, context, access);
+          const unreadable = new Set(access.unreadable(reader.context.role, reader.delegated));
           cursor = next.at(-1)?.id ?? cursor;
           exhausted = next.length < AUDIT_EXPORT_PAGE;
-          if (next.length > 0) controller.enqueue(chunkOf(next));
+          if (next.length > 0)
+            controller.enqueue(chunkOf(next.filter((entry) => !unreadable.has(entry.action))));
           if (exhausted) controller.close();
         } catch (error) {
           // Its code and where, never what the page held: the entries name people (§10).

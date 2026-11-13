@@ -46,6 +46,7 @@ import {
   listInvitationDeliveries,
 } from '../../modules/workspaces/invitation-delivery';
 import { AppError } from '../../platform/errors';
+import { lockWorkspaceProvisioningSession } from '../../modules/workspaces/provisioning/authority';
 import { inviteCookie } from '../../platform/cookies';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import type { Outbox } from '../../platform/mail';
@@ -94,21 +95,25 @@ export const makeGuestInvitation = async (
   body: unknown,
 ): Promise<CreatedGuestInvitation> => {
   const { auth, database, clock, appUrl, outbox, later, workspaceChannels } = dependencies;
-  const { userId } = await requireSession(auth, request);
+  const { userId, sessionId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const wanted = validated(CreateGuestInvitationRequest, body);
-  const { created, letters } = await atomicallyOn(database)(
-    async (transaction) =>
-      await makeAndMailGuestInvitation(
-        transaction,
-        clock,
-        context,
-        wanted,
-        { on: outbox !== undefined, appUrl },
-        workspaceChannels,
-        dependencies.guestAccessReady ?? false,
-      ),
-  );
+  const { created, letters } = await atomicallyOn(database)(async (transaction) => {
+    await lockWorkspaceProvisioningSession(
+      transaction,
+      { clock, lifetime: () => auth.sessionLifetime },
+      { context, sessionId },
+    );
+    return await makeAndMailGuestInvitation(
+      transaction,
+      clock,
+      context,
+      wanted,
+      { on: outbox !== undefined, appUrl },
+      workspaceChannels,
+      dependencies.guestAccessReady ?? false,
+    );
+  });
   if (outbox !== undefined && letters.length > 0) {
     later(() => {
       post({ database, clock, outbox }, letters);
@@ -130,16 +135,20 @@ export const makeInvitation = async (
   workspaceId: string,
   body: unknown,
 ): Promise<CreatedInvitation> => {
-  const { userId } = await requireSession(auth, request);
+  const { userId, sessionId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   const wanted = validated(CreateInvitationRequest, body ?? {});
-  const { created, letters } = await atomicallyOn(database)(
-    async (transaction) =>
-      await makeAndMailInvitation(transaction, clock, context, wanted, {
-        on: outbox !== undefined,
-        appUrl,
-      }),
-  );
+  const { created, letters } = await atomicallyOn(database)(async (transaction) => {
+    await lockWorkspaceProvisioningSession(
+      transaction,
+      { clock, lifetime: () => auth.sessionLifetime },
+      { context, sessionId },
+    );
+    return await makeAndMailInvitation(transaction, clock, context, wanted, {
+      on: outbox !== undefined,
+      appUrl,
+    });
+  });
   if (outbox !== undefined && letters.length > 0) {
     later(() => {
       post({ database, clock, outbox }, letters);
@@ -183,9 +192,14 @@ export const dropInvitation = async (
   workspaceId: string,
   invitationId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(auth, request);
+  const { userId, sessionId } = await requireSession(auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
   await atomicallyOn(database)(async (transaction) => {
+    await lockWorkspaceProvisioningSession(
+      transaction,
+      { clock, lifetime: () => auth.sessionLifetime },
+      { context, sessionId },
+    );
     await revokeInvitation(transaction, clock, context, invitationId);
   });
 };
@@ -315,23 +329,27 @@ export const resendRecipient = async (
   workspaceId: string,
   recipientId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(deps.auth, request);
+  const { userId, sessionId } = await requireSession(deps.auth, request);
   const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
-  const letter = await atomicallyOn(deps.database)(
-    async (tx) =>
-      await resendInvitationRecipient(
-        tx,
-        deps.clock,
-        context,
-        validated(Uuid, recipientId),
-        {
-          on: deps.outbox !== undefined,
-          appUrl: deps.appUrl,
-        },
-        deps.workspaceChannels,
-        deps.guestAccessReady ?? false,
-      ),
-  );
+  const letter = await atomicallyOn(deps.database)(async (tx) => {
+    await lockWorkspaceProvisioningSession(
+      tx,
+      { clock: deps.clock, lifetime: () => deps.auth.sessionLifetime },
+      { context, sessionId },
+    );
+    return await resendInvitationRecipient(
+      tx,
+      deps.clock,
+      context,
+      validated(Uuid, recipientId),
+      {
+        on: deps.outbox !== undefined,
+        appUrl: deps.appUrl,
+      },
+      deps.workspaceChannels,
+      deps.guestAccessReady ?? false,
+    );
+  });
   const outbox = deps.outbox;
   if (outbox !== undefined)
     deps.later(() => {
@@ -345,9 +363,14 @@ export const dropRecipient = async (
   workspaceId: string,
   recipientId: string,
 ): Promise<void> => {
-  const { userId } = await requireSession(deps.auth, request);
+  const { userId, sessionId } = await requireSession(deps.auth, request);
   const context = await requireWorkspaceMembership(deps.database, userId, workspaceId);
   await atomicallyOn(deps.database)(async (tx) => {
+    await lockWorkspaceProvisioningSession(
+      tx,
+      { clock: deps.clock, lifetime: () => deps.auth.sessionLifetime },
+      { context, sessionId },
+    );
     await revokeInvitationRecipient(tx, deps.clock, context, validated(Uuid, recipientId));
   });
 };

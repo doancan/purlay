@@ -111,6 +111,37 @@ export const signInRoutes = (
       .post('/auth/*', async ({ request, server }) => await library(request, server), {
         parse: 'none',
       })
+      // Only native SCIM resources add protocol mutation verbs; the remaining auth surface stays closed.
+      .put(
+        '/auth/scim/v2/Users/:resourceId',
+        async ({ request, server }) => await library(request, server),
+        { parse: 'none' },
+      )
+      .put(
+        '/auth/scim/v2/Groups/:resourceId',
+        async ({ request, server }) => await library(request, server),
+        { parse: 'none' },
+      )
+      .patch(
+        '/auth/scim/v2/Users/:resourceId',
+        async ({ request, server }) => await library(request, server),
+        { parse: 'none' },
+      )
+      .patch(
+        '/auth/scim/v2/Groups/:resourceId',
+        async ({ request, server }) => await library(request, server),
+        { parse: 'none' },
+      )
+      .delete(
+        '/auth/scim/v2/Users/:resourceId',
+        async ({ request, server }) => await library(request, server),
+        { parse: 'none' },
+      )
+      .delete(
+        '/auth/scim/v2/Groups/:resourceId',
+        async ({ request, server }) => await library(request, server),
+        { parse: 'none' },
+      )
       .post('/auth/logout', async ({ request, set }) =>
         respond(set, await signOut({ ...dependencies, bus: sockets.bus }, request)),
       )

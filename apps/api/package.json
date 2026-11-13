@@ -7,6 +7,7 @@
   "dependencies": {
     "@better-auth/core": "1.7.14",
     "@better-auth/kysely-adapter": "1.7.14",
+    "@better-auth/scim": "1.7.14",
     "@better-auth/utils": "0.5.1",
     "@purlay/db": "workspace:*",
     "@purlay/markdown": "workspace:*",
@@ -20,7 +21,7 @@
     "pino": "10.4.0"
   },
   "scripts": {
-    "dev": "bun --env-file=../../.env run --watch src/index.ts"
+    "dev": "bun --env-file=../../.env --smol run --watch src/index.ts"
   },
   "devDependencies": {
     "@purlay/tokens": "workspace:*",

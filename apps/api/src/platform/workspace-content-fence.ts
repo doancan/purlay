@@ -114,7 +114,7 @@ const captureWorkspaceSessionAccess = (
         and final_user.deleted_at is null and final_user.suspended_at is null
         and final_user.admission_state = 'approved'
         and (not final_user.admission_requires_verified_email or final_user.email_verified)
-        and ${session.company_workspace_id === null ? sql<boolean>`true` : companySessionAllowsWorkspace('final_session', input.workspaceId, { member: 'workspace_members', person: 'final_user', workspace: 'workspaces' })}
+        and ${session.company_workspace_id === null ? sql<boolean>`true` : companySessionAllowsWorkspace('final_session', input.workspaceId, { member: 'workspace_members', person: 'final_user', workspace: 'workspaces' }, session.directory_id)}
     ) and ${primary} and ${assuranceFence(read, facts, input.workspaceId)}
   )`;
   scope.workspaceFences ??= new Map();

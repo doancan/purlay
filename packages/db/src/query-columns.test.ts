@@ -88,12 +88,156 @@ describe('what the scan reads', () => {
     ).toEqual(['a.x', 'a.y', 'b.z', 'issues.assignee_id', 'users.id'].sort());
   });
 
+  test('a composite join callback shares the filtered statement and resolves both aliases', () => {
+    const scan = scanSource(
+      'x.ts',
+      "db.selectFrom('issues as i').leftJoin('users as u', join => join.onRef('u.id', '=', 'i.assignee_id').on('u.deleted_at', 'is', null)).where('i.status', '=', 'open');",
+    );
+    expect(new Set(scan.references.map((r) => r.query)).size).toBe(1);
+    expect(scan.references.map((r) => resolveReference(r, COLUMNS))).toEqual([
+      { table: 'issues', column: 'status' },
+      { table: 'users', column: 'deleted_at' },
+      { table: 'users', column: 'id' },
+      { table: 'issues', column: 'assignee_id' },
+    ]);
+  });
+
+  test('an unrelated builder inside a join callback does not inherit its enclosing query', () => {
+    const scan = scanSource(
+      'x.ts',
+      "db.selectFrom('issues').innerJoin('users', join => other.onRef('users.id', '=', 'issues.assignee_id')).where('users.deleted_at', 'is', null);",
+    );
+    const [filter, other] = scan.references;
+    expect(filter?.scope).toHaveLength(2);
+    expect(other?.scope).toEqual([]);
+    expect(other?.query).not.toBe(filter?.query);
+  });
+
+  test('a factory, an unnamed joined table or a non-join callback cannot supply a known join scope', () => {
+    for (const code of [
+      "db.selectFrom('issues').innerJoin('users', join => wrap(join).onRef('users.id', '=', 'issues.assignee_id'));",
+      "db.selectFrom('issues').innerJoin(table, join => join.onRef('users.id', '=', 'issues.assignee_id'));",
+      "list.map(join => join.onRef('users.id', '=', 'issues.assignee_id'));",
+    ]) {
+      const scan = scanSource('x.ts', code);
+      expect(scan.references).toHaveLength(2);
+      expect(scan.references.every((reference) => reference.scope.length === 0)).toBe(true);
+    }
+  });
+
+  test('a function-expression join callback resolves its own builder and statement', () => {
+    const scan = scanSource(
+      'x.ts',
+      "db.selectFrom('issues as i').innerJoin('users as u', function(join) { return join.onRef('u.id', '=', 'i.assignee_id'); }).where('u.deleted_at', 'is', null);",
+    );
+    expect(new Set(scan.references.map((reference) => reference.query)).size).toBe(1);
+    expect(scan.references.map((reference) => resolveReference(reference, COLUMNS))).toEqual([
+      { table: 'users', column: 'deleted_at' },
+      { table: 'users', column: 'id' },
+      { table: 'issues', column: 'assignee_id' },
+    ]);
+  });
+
+  test('unknown transforms and shadowed bindings do not borrow a callback query', () => {
+    for (const body of [
+      "join.$call(unknownFactory).onRef('users.deleted_at', '=', 'issues.assignee_id')",
+      "{ const join = unknownFactory(); return join.onRef('users.deleted_at', '=', 'issues.assignee_id'); }",
+      "{ { const join = unknownFactory(); return join.onRef('users.deleted_at', '=', 'issues.assignee_id'); } }",
+      "(join = unknownFactory(), join.onRef('users.deleted_at', '=', 'issues.assignee_id'))",
+    ]) {
+      const scan = scanSource(
+        'x.ts',
+        ` db.selectFrom('issues').innerJoin('users', join => ${body}).where('users.id', '=', 1);`,
+      );
+      const [filter, unknown] = scan.references;
+      expect(filter?.scope).toHaveLength(2);
+      expect(unknown?.scope).toEqual([]);
+      expect(unknown?.query).not.toBe(filter?.query);
+    }
+  });
+
+  test('a callback parameter shadows an outer builder and supplies its own aliases', () => {
+    const scan = scanSource(
+      'x.ts',
+      "const join = db.selectFrom('issues'); db.selectFrom('issues as i').innerJoin('users as u', join => join.onRef('u.id', '=', 'i.assignee_id')).where('u.deleted_at', 'is', null);",
+    );
+    const [filter, joined] = scan.references;
+    expect(joined?.query).toBe(filter?.query);
+    expect(joined === undefined ? undefined : resolveReference(joined, COLUMNS)).toEqual({
+      table: 'users',
+      column: 'id',
+    });
+  });
+
+  test('unknown operations before and after a transform retain separate identities', () => {
+    const scan = scanSource(
+      'x.ts',
+      "db.selectFrom('issues').innerJoin('users', join => join.onRef('users.id', '=', 'issues.assignee_id').$call(unknownFactory).on('users.deleted_at', 'is', null));",
+    );
+    expect(new Set(scan.references.map((reference) => reference.query)).size).toBe(2);
+    expect(scan.references.every((reference) => reference.scope.length === 0)).toBe(true);
+  });
+
+  test('a helper query keeps its literal filters together until an opaque transform', () => {
+    const together = scanSource(
+      'x.ts',
+      "const q = helper().where('users.id', '=', 1); q.where('users.deleted_at', 'is', null);",
+    );
+    expect(new Set(together.references.map((reference) => reference.query)).size).toBe(1);
+    const split = scanSource(
+      'x.ts',
+      "helper().where('users.id', '=', 1).$call(unknownFactory).where('users.deleted_at', 'is', null);",
+    );
+    expect(new Set(split.references.map((reference) => reference.query)).size).toBe(2);
+  });
+
+  test('a conditional can retain the original query only through directly returned filters', () => {
+    const retained = scanSource(
+      'x.ts',
+      "helper().where('users.id', '=', 1).$if(flag, query => query.where('id', '>', after)).orderBy('users.deleted_at');",
+    );
+    expect(new Set(retained.references.map((reference) => reference.query)).size).toBe(1);
+    for (const callback of [
+      'unknownFactory',
+      '() => unknownFactory()',
+      'query => query.$call(unknownFactory)',
+      'query => other',
+      '({ query }) => query',
+      'query => { const query = unknownFactory(); return query; }',
+    ]) {
+      const split = scanSource(
+        'x.ts',
+        `helper().where('users.id', '=', 1).$if(flag, ${callback}).orderBy('users.deleted_at');`,
+      );
+      expect(new Set(split.references.map((reference) => reference.query)).size).toBe(2);
+    }
+  });
+
+  test('nearer parameters, declarations and loop bindings never inherit an outer query', () => {
+    for (const use of [
+      "function read(q) { return q.where('users.deleted_at', 'is', null); }",
+      "function read({ q }) { return q.where('users.deleted_at', 'is', null); }",
+      "function read([, q]) { return q.where('users.deleted_at', 'is', null); }",
+      "{ let q; q.where('users.deleted_at', 'is', null); }",
+      "{ const { q } = unknownFactory(); q.where('users.deleted_at', 'is', null); }",
+      "{ function q() {} q.where('users.deleted_at', 'is', null); }",
+      "{ class q {} q.where('users.deleted_at', 'is', null); }",
+      "try {} catch (q) { q.where('users.deleted_at', 'is', null); }",
+      "for (const q of queries) { q.where('users.deleted_at', 'is', null); }",
+      "(function q() { q.where('users.deleted_at', 'is', null); })();",
+    ]) {
+      const scan = scanSource('x.ts', `const q = helper().where('users.id', '=', 1); ${use}`);
+      expect(scan.references).toHaveLength(2);
+      expect(scan.references[0]?.query).not.toBe(scan.references[1]?.query);
+    }
+  });
+
   test('what it cannot read is counted, not guessed', () => {
     const { references, blind } = scanSource(
       'x.ts',
       "db.selectFrom('issues').where((eb) => eb('id', '=', 1)).orderBy(sql`id`).where(name, '=', 1);\nconst raw = sql`select 1`;\nhelper(db).where('status', '=', 1);\ndb.selectFrom('issues').innerJoin('users', (join) => join.onRef('a', '=', 'b')).where('id a b', '=', 1);",
     );
-    expect(references).toEqual([]);
+    expect(references.map((reference) => reference.written)).toEqual(['a', 'b']);
     expect(blind.map((b) => b.kind).sort()).toEqual([
       'callback',
       'callback',
@@ -102,8 +246,6 @@ describe('what the scan reads', () => {
       'not-a-literal',
       'raw-sql',
       'raw-sql',
-      'unknown-chain',
-      'unknown-chain',
       'unknown-chain',
     ]);
   });

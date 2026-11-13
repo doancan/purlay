@@ -321,6 +321,11 @@ const tables = [
 
 /** The tables of chat that are not in an export, and why. */
 type ChatExcluded =
+  | 'channel_access_controls'
+  | 'channel_access_group_mappings'
+  | 'channel_access_member_grants'
+  | 'channel_access_role_grants'
+  | 'channel_member_capabilities'
   | 'message_shared_links'
   | 'message_shared_jobs'
   | 'shared_link_backfill'
@@ -350,6 +355,13 @@ type ChatExcluded =
   | 'link_previews';
 
 const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
+  channel_access_controls: 'operational initialization of source-aware channel admission',
+  channel_access_group_mappings:
+    'administrator-only access-group scope configuration, potentially private channel identities',
+  channel_access_member_grants:
+    'private source-bound channel admission provenance; native channel membership is exported instead',
+  channel_access_role_grants: 'administrator-only scoped management grants, not content authority',
+  channel_member_capabilities: 'derived native channel management capabilities, not chat content',
   message_shared_jobs:
     'Durable source ids for the derived link worker; exported content remains the source messages.',
   shared_link_backfill: 'Internal bounded historical indexing checkpoint; no user content.',

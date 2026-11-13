@@ -3,6 +3,14 @@ import type { Mutation } from '../mutate';
 
 export const REPO: readonly Mutation[] = [
   {
+    id: 'api-production-runtime-loses-smaller-heap',
+    why: 'Production grows a different heap from the measured API, so a passing memory budget no longer describes the deployed process (D-49).',
+    file: 'Dockerfile',
+    find: 'CMD ["--smol", "apps/api/src/index.ts"]',
+    replace: 'CMD ["apps/api/src/index.ts"]',
+    tests: ['scripts/environment.test.ts'],
+  },
+  {
     id: 'archive-accepts-any-name',
     why: "a file name with a slash or a leading dot is written outside the segments, into the archive directory's hidden files or beyond",
     file: 'docker/wal-archive.sh',

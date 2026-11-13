@@ -8,7 +8,7 @@
  * rehearsal fail whenever readiness would. Runs inside the API image, where the
  * entry point is /app/apps/api/src/index.ts.
  */
-const server = Bun.spawn(['/usr/local/bin/bun', '/app/apps/api/src/index.ts'], {
+const server = Bun.spawn(['/usr/local/bin/bun', '--smol', '/app/apps/api/src/index.ts'], {
   stdout: 'inherit',
   stderr: 'inherit',
 });

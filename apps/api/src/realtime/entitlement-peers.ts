@@ -143,3 +143,14 @@ export const advertiseWorkspaceAccess = (advertising: Advertising): EntitlementP
 
 export const workspaceAccessPeersBehind = async (link: RedisLink): Promise<number> =>
   await behindIn(link, link.names.workspaceAccessNodes);
+
+/** Policy-only readers do not understand source revocation or delegated roles (D-311). */
+export const advertiseWorkspaceProvisioning = (advertising: Advertising): EntitlementPeers =>
+  advertiseIn(
+    advertising.link.names.workspaceProvisioningNodes,
+    'workspace access sources and directory sessions',
+    advertising,
+  );
+
+export const workspaceProvisioningPeersBehind = async (link: RedisLink): Promise<number> =>
+  await behindIn(link, link.names.workspaceProvisioningNodes);

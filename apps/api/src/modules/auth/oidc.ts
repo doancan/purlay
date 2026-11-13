@@ -392,6 +392,8 @@ export interface OidcProvider {
 
 /** What the provider's verified token says of the account, as the library keeps it beside the account. */
 export interface OidcProfile {
+  /** Optional signed directory object identifier; never inferred from email or sub. */
+  readonly oid?: string;
   readonly sub: string;
   readonly iss: string;
 }
@@ -550,7 +552,7 @@ export const createOidcProvider = (
       emailVerified: boolean;
       username: string;
     };
-    data: { readonly sub: string; readonly iss: string };
+    data: OidcProfile;
   } | null> => {
     if (tokens.idToken === undefined || tokens.idToken === '') {
       log.warn(`${logPrefix}: the token response held no id_token`);
@@ -603,7 +605,11 @@ export const createOidcProvider = (
         // (`better-auth.ts`) whatever is said here; nothing the provider chose reaches it.
         username: usernameFrom(email) ?? `user-${randomToken().slice(0, 6)}`,
       },
-      data: { sub: subject, iss: issuer },
+      data: {
+        sub: subject,
+        iss: issuer,
+        ...(typeof claims['oid'] === 'string' ? { oid: claims['oid'] } : {}),
+      },
     };
   };
 

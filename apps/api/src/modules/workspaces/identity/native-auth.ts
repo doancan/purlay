@@ -8,7 +8,8 @@ import {
 import { APIError, addOAuthServerContext, createAuthEndpoint } from 'better-auth/api';
 import { generateIdTokenNonce, handleOAuthUserInfo } from 'better-auth/oauth2';
 import { setSessionCookie } from 'better-auth/cookies';
-import { runWithTransaction } from '@better-auth/core/context';
+import { getCurrentAdapter, runWithTransaction } from '@better-auth/core/context';
+import { activeDirectoryIdentity, consentDirectoryIdentity } from '../directory/identity';
 import { Value } from '@sinclair/typebox/value';
 import type { Static, TSchema } from '@sinclair/typebox';
 import { AUTH_BASE_PATH } from '@purlay/types';
@@ -278,7 +279,7 @@ export const companyIdentityPlugin = (
               if (transaction === undefined)
                 throw new Error('Company identity requires the native transaction bridge');
               // Resolve the native person only from an exact external binding. A provider address is never consulted.
-              const binding =
+              let binding =
                 flow.intent === 'sign-in'
                   ? await transaction
                       .selectFrom('workspace_identity_bindings')
@@ -291,6 +292,64 @@ export const companyIdentityPlugin = (
                   : undefined;
               let context;
               if (flow.intent === 'sign-in') {
+                if (snapshot.directoryId !== null) {
+                  await transaction
+                    .selectFrom('workspaces')
+                    .select('id')
+                    .where('id', '=', flow.workspaceId)
+                    .where('deleted_at', 'is', null)
+                    .forUpdate()
+                    .executeTakeFirstOrThrow();
+                  const directory = await activeDirectoryIdentity(
+                    transaction,
+                    await getCurrentAdapter(ctx.context.adapter),
+                    snapshot,
+                    profile,
+                    binding?.user_id,
+                  );
+                  if (directory === null) throw identityChanged();
+                  if (binding === undefined) {
+                    const initial = await transaction
+                      .selectFrom('workspace_directory_identity_links')
+                      .select(['id', 'origin'])
+                      .where('workspace_id', '=', flow.workspaceId)
+                      .where('directory_id', '=', snapshot.directoryId)
+                      .where('user_id', '=', directory.userId)
+                      .executeTakeFirst();
+                    if (initial?.origin !== 'directory_created') throw identityChanged();
+                    const consumed = await transaction
+                      .selectFrom('workspace_directory_native_initializations')
+                      .select('link_reference')
+                      .where('link_reference', '=', initial.id)
+                      .executeTakeFirst();
+                    if (consumed !== undefined) throw identityChanged();
+                    binding = await transaction
+                      .insertInto('workspace_identity_bindings')
+                      .values({
+                        workspace_id: flow.workspaceId,
+                        connection_id: flow.connectionId,
+                        user_id: directory.userId,
+                        issuer: profile.iss,
+                        subject: profile.sub,
+                        created_at: dependencies.clock.now(),
+                      })
+                      .returningAll()
+                      .executeTakeFirstOrThrow();
+                    await transaction
+                      .insertInto('workspace_directory_native_initializations')
+                      .values({
+                        link_reference: initial.id,
+                        binding_reference: binding.id,
+                        created_at: dependencies.clock.now(),
+                      })
+                      .execute();
+                    await ctx.context.internalAdapter.createAccount({
+                      userId: directory.userId,
+                      providerId: companyProviderId(flow.connectionId),
+                      accountId: binding.id,
+                    });
+                  }
+                }
                 if (binding === undefined)
                   throw identityNotReady(
                     'Link this company identity from your signed-in account first.',
@@ -383,6 +442,14 @@ export const companyIdentityPlugin = (
                   })
                   .returningAll()
                   .executeTakeFirstOrThrow();
+                await consentDirectoryIdentity(
+                  transaction,
+                  current,
+                  profile,
+                  context.userId,
+                  owned.id,
+                  dependencies.clock.now(),
+                );
                 const account = await transaction
                   .selectFrom('accounts')
                   .select('id')
@@ -417,6 +484,13 @@ export const companyIdentityPlugin = (
                 .where('subject', '=', profile.sub)
                 .executeTakeFirst();
               if (binding === undefined || live?.id !== binding.id) throw identityChanged();
+              const directory = await activeDirectoryIdentity(
+                transaction,
+                await getCurrentAdapter(ctx.context.adapter),
+                current,
+                profile,
+                context.userId,
+              );
               const finalized = await handleOAuthUserInfo(ctx, {
                 userInfo: {
                   ...verified.user,
@@ -435,13 +509,17 @@ export const companyIdentityPlugin = (
                 throw identityNotReady('The existing company identity could not start a session.');
               await transaction
                 .updateTable('sessions')
-                .set({ company_workspace_id: context.workspaceId })
+                .set({
+                  company_workspace_id: context.workspaceId,
+                  directory_id: directory?.proof.directory_id ?? null,
+                })
                 .where('id', '=', finalized.data.session.id)
                 .where('user_id', '=', context.userId)
                 .executeTakeFirstOrThrow();
               await transaction
                 .insertInto('workspace_identity_sessions')
                 .values({
+                  ...(directory?.proof ?? {}),
                   session_id: finalized.data.session.id,
                   workspace_id: context.workspaceId,
                   connection_id: current.id,

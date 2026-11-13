@@ -70,6 +70,9 @@ export const companySessionCookies = (
   const companySecret = Buffer.from(
     hkdfSync('sha256', secret, '', 'company-session-cookie@purlay/v1', 32),
   ).toString('base64url');
+  const directorySecret = Buffer.from(
+    hkdfSync('sha256', secret, '', 'directory-session-cookie@purlay/v1', 32),
+  ).toString('base64url');
   const sign = async (token: string, key: string): Promise<string> =>
     encodeURIComponent(`${token}.${await makeSignature(token, key)}`);
   const clear = (name: string): string =>
@@ -95,16 +98,20 @@ export const companySessionCookies = (
     const decoded = valueOf(presented);
     if (decoded === undefined) return explicit === undefined ? headers : undefined;
     const expected = Buffer.from(await makeSignature(decoded.token, companySecret));
+    const directoryExpected = Buffer.from(await makeSignature(decoded.token, directorySecret));
     const actual = Buffer.from(decoded.signature);
-    if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
-      return explicit === undefined ? headers : undefined;
+    const companyValid = expected.length === actual.length && timingSafeEqual(expected, actual);
+    const directoryValid =
+      directoryExpected.length === actual.length && timingSafeEqual(directoryExpected, actual);
+    if (!companyValid && !directoryValid) return explicit === undefined ? headers : undefined;
     const row = await database
       .selectFrom('sessions')
-      .select('id')
+      .select(['id', 'directory_id'])
       .where('token_hash', '=', sessionTokenDigest(decoded.token))
       .where('company_workspace_id', 'is not', null)
       .executeTakeFirst();
-    if (row === undefined) return undefined;
+    if (row === undefined || (row.directory_id === null ? !companyValid : !directoryValid))
+      return undefined;
     const next = new Headers(headers);
     const others = (headers.get('cookie') ?? '')
       .split(';')
@@ -145,13 +152,13 @@ export const companySessionCookies = (
       }
       const row = await database
         .selectFrom('sessions')
-        .select('company_workspace_id')
+        .select(['company_workspace_id', 'directory_id'])
         .where('token_hash', '=', sessionTokenDigest(decoded.token))
         .executeTakeFirst();
       if (row !== undefined && row.company_workspace_id !== null) {
         headers.append(
           'set-cookie',
-          `${COMPANY_SESSION_COOKIE}=${await sign(decoded.token, companySecret)}${line.slice(first.length)}`,
+          `${COMPANY_SESSION_COOKIE}=${await sign(decoded.token, row.directory_id === null ? companySecret : directorySecret)}${line.slice(first.length)}`,
         );
         headers.append('set-cookie', clear(SESSION_COOKIE));
       } else {
@@ -168,7 +175,14 @@ export const companySessionCookies = (
   const nativeCookieValue = async (encoded: string): Promise<string> => {
     const decoded = valueOf(encoded);
     if (decoded === undefined) throw new Error('Expected a signed native session value');
-    return await sign(decoded.token, companySecret);
+    const row = await database
+      .selectFrom('sessions')
+      .select(['company_workspace_id', 'directory_id'])
+      .where('token_hash', '=', sessionTokenDigest(decoded.token))
+      .executeTakeFirst();
+    if (row?.company_workspace_id == null)
+      throw new Error('Expected a retained native company origin');
+    return await sign(decoded.token, row.directory_id === null ? companySecret : directorySecret);
   };
   return { nativeHeaders, independentHeaders, publicResponse, nativeCookieValue };
 };

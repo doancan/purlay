@@ -40,8 +40,8 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'announcement-a-members-call',
     why: 'a member says only owners and admins post in a channel, or lets everybody again (D-243)',
     file: 'apps/api/src/features/chat/channels/settings.ts',
-    find: "    onlyAdmins(role, 'Only an owner or an admin says who posts in a channel.');\n",
-    replace: '',
+    find: "    delegatedPosting = currentMember.role === 'member';",
+    replace: '    delegatedPosting = false;',
     tests: [ANNOUNCEMENT_TESTS, 'apps/api/src/ingress/http/permissions.integration.test.ts'],
   },
   {
@@ -56,8 +56,8 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'archived-list-shows-private-to-outsiders',
     why: 'an admin outside a private channel reads its name once it is archived (D-104, D-232)',
     file: 'apps/api/src/features/chat/channels/settings.ts',
-    find: "        eb('channel.type', '=', 'public'),\n",
-    replace: "        eb('channel.type', '!=', 'direct_message'),\n",
+    find: '  let statement = visibleChannels(executor, context.userId, { includeArchived: true })',
+    replace: "  let statement = executor.selectFrom('channels')",
     tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
   },
   {
@@ -111,6 +111,14 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/channels/read-scopes.integration.test.ts'],
   },
   {
+    id: 'channel-capability-request-filter-ignored',
+    why: 'A delegated member’s settings capability also grants member management because the requested exact action is not filtered (#1429).',
+    file: 'apps/api/src/features/chat/channels/access-capabilities.ts',
+    find: "  if (capability !== undefined)\n    query = query.where('channel_member_capabilities.capability', '=', capability);\n",
+    replace: '',
+    tests: ['apps/api/src/features/chat/channels/access-capabilities.integration.test.ts'],
+  },
+  {
     id: 'channel-create-stops-recording-its-audit',
     why: 'a channel is created and the trail says nothing of it: an administrative action nobody can find later (D-26)',
     file: 'apps/api/src/features/chat/channels/channels.ts',
@@ -138,8 +146,8 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'channel-removal-by-any-member-in-public',
     why: 'a member of a public channel takes anybody out of it, where only an owner or an admin may (D-172)',
     file: 'apps/api/src/features/chat/channels/settings.ts',
-    find: "    context.channelType === 'private' &&\n    target === 'member' &&\n",
-    replace: "    target === 'member' &&\n",
+    find: "const publicRemovalNeedsGrant = (context: ChannelContext): boolean =>\n  context.channelType === 'public';",
+    replace: 'const publicRemovalNeedsGrant = (_context: ChannelContext): boolean => false;',
     tests: ['apps/api/src/ingress/http/channel-removal.integration.test.ts'],
   },
   {
@@ -162,8 +170,8 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'channel-restore-by-a-member',
     why: 'a member brings back a channel an admin archived (D-232)',
     file: 'apps/api/src/features/chat/channels/settings.ts',
-    find: "  onlyAdmins(context.role, 'Only an owner or an admin restores a channel.');\n",
-    replace: '',
+    find: "  const delegatedRestore = context.role === 'member';",
+    replace: '  const delegatedRestore = false;',
     tests: ['apps/api/src/ingress/http/channel-settings.integration.test.ts'],
   },
   {

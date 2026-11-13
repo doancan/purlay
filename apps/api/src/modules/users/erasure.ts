@@ -35,6 +35,7 @@ import { addressCounterKey } from '../auth/magic-link';
 import { passportAddressDigest } from '../workspaces/invitation-passport';
 import { addressAttemptsPrefix } from '../auth/password-attempts';
 import { revokeAllSessions } from '../auth/sessions';
+import { eraseDirectoryUser } from '../workspaces/directory/erasure';
 import type { Hooks } from '../../platform/hooks';
 import { PUSH_PERSON_LOCK } from '../../platform/push-policy';
 
@@ -286,6 +287,26 @@ export const eraseAccount = async (
   await executor.deleteFrom('push_intents').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('push_notice_budgets').where('user_id', '=', person.id).execute();
   await executor.deleteFrom('push_subscriptions').where('user_id', '=', person.id).execute();
+  // Native membership tombstones survive erasure; source identity and derived permissions do not.
+  await executor
+    .updateTable('workspace_admission_controls')
+    .set((eb) => ({
+      blocked_at: eb.fn.coalesce('blocked_at', eb.val(now)),
+      revision: sql<string>`gen_random_uuid()`,
+      updated_at: now,
+    }))
+    .where('user_id', '=', person.id)
+    .execute();
+  await executor
+    .deleteFrom('workspace_member_capabilities')
+    .where('user_id', '=', person.id)
+    .execute();
+  await executor.deleteFrom('workspace_access_sources').where('user_id', '=', person.id).execute();
+  await executor
+    .deleteFrom('workspace_directory_identity_links')
+    .where('user_id', '=', person.id)
+    .execute();
+  await eraseDirectoryUser(executor, person.id);
   // What modules told them, in the core's inbox: theirs alone (D-286).
   await executor.deleteFrom('inbox_entries').where('user_id', '=', person.id).execute();
   // What the modules keep for a person — chat's saved searches and messages, followed threads, inbox and

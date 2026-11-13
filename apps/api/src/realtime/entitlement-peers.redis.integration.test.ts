@@ -6,7 +6,13 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { bunRedisClient, connectRedis, type RedisLink } from '../platform/redis';
 import { createLogger } from '../platform/logging';
 import { redisUrlForTests } from '../testing/redis';
-import { advertiseEntitlements, peersBehind } from './entitlement-peers';
+import {
+  advertiseEntitlements,
+  advertiseWorkspaceAccess,
+  advertiseWorkspaceProvisioning,
+  peersBehind,
+  workspaceProvisioningPeersBehind,
+} from './entitlement-peers';
 import { NODE_TTL_MS, moduleSetOf, watchModuleSet } from './module-set';
 import { requirePeersReady } from '../modules/entitlements/peers';
 import { aRecordingLogger } from '../testing/doubles';
@@ -24,7 +30,12 @@ beforeAll(async () => {
   }
 });
 afterAll(async () => {
-  await link.send('DEL', [link.names.moduleSet, link.names.entitlementNodes]);
+  await link.send('DEL', [
+    link.names.moduleSet,
+    link.names.entitlementNodes,
+    link.names.workspaceAccessNodes,
+    link.names.workspaceProvisioningNodes,
+  ]);
   link.close();
 });
 
@@ -33,6 +44,42 @@ const settle = async (): Promise<void> => {
 };
 
 describe('integration: the nodes that read workspace grants', () => {
+  test('integration: provisioning readiness distinguishes policy-only peers and a withdrawn capable reader', async () => {
+    const legacy = watchModuleSet({
+      link,
+      nodeId: 'policy-only',
+      set: moduleSetOf(['chat']),
+      mode: 'open',
+      log,
+    });
+    const capable = watchModuleSet({
+      link,
+      nodeId: 'source-aware',
+      set: moduleSetOf(['chat']),
+      mode: 'open',
+      log,
+    });
+    const policyOnly = advertiseWorkspaceAccess({ link, nodeId: 'policy-only', log });
+    const current = advertiseWorkspaceProvisioning({ link, nodeId: 'source-aware', log });
+    let upgraded: ReturnType<typeof advertiseWorkspaceProvisioning> | undefined;
+    try {
+      await settle();
+      expect(await workspaceProvisioningPeersBehind(link)).toBe(1);
+      upgraded = advertiseWorkspaceProvisioning({ link, nodeId: 'policy-only', log });
+      await settle();
+      expect(await workspaceProvisioningPeersBehind(link)).toBe(0);
+      await current.stop();
+      expect(await workspaceProvisioningPeersBehind(link)).toBe(1);
+      await capable.stop();
+      expect(await workspaceProvisioningPeersBehind(link)).toBe(0);
+    } finally {
+      await current.stop();
+      await upgraded?.stop();
+      await policyOnly.stop();
+      await capable.stop();
+      await legacy.stop();
+    }
+  });
   test('a node of the module set that does not say so is behind, until it does, and again when it leaves', async () => {
     const older = watchModuleSet({
       link,

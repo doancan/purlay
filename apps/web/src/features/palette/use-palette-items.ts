@@ -17,7 +17,12 @@ import { useTheme } from '../../theme/theme-provider';
 import { THEME_CHOICES } from '../../theme/theme';
 import { LOCALES } from '../../i18n/types';
 import { useModules, useSession } from '../session/session';
-import { useIsServerAdmin, useWorkspaceRole } from '../settings/role';
+import {
+  useIsServerAdmin,
+  useWorkspaceRole,
+  useWorkspaceCapabilities,
+  useWorkspaceChannelCapabilities,
+} from '../settings/role';
 import { sectionsFor } from '../settings/sections';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../shell/deep-work';
 import { useMarkAllRead } from '../shell/read-all';
@@ -41,6 +46,8 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
   const members = useMembers(workspace.id).data;
   const role = useWorkspaceRole();
   const serverAdmin = useIsServerAdmin();
+  const capabilities = useWorkspaceCapabilities();
+  const channelCapabilities = useWorkspaceChannelCapabilities();
 
   const currentChannelId = match.name === 'channel' ? match.params.channelId : null;
   const slug = workspace.slug;
@@ -152,7 +159,13 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     }
 
     // Every settings page this person may open, by its name (D-146, `PRD.md` §4.6).
-    for (const section of sectionsFor(role, serverAdmin, modules)) {
+    for (const section of sectionsFor(
+      role,
+      serverAdmin,
+      modules,
+      capabilities,
+      channelCapabilities,
+    )) {
       items.push({
         id: `settings:${section.id}`,
         group: 'settings',
@@ -242,6 +255,8 @@ export const usePaletteItems = (): readonly PaletteItem[] => {
     markAllRead,
     role,
     serverAdmin,
+    capabilities,
+    channelCapabilities,
     chat,
     modules,
   ]);

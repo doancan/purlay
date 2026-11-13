@@ -55,6 +55,9 @@ export type FailureKey =
   | 'failure.workspaceAccess'
   | 'failure.workspaceSecurityChanged'
   | 'failure.workspaceSecurityNotReady'
+  | 'failure.workspaceProvisioningChanged'
+  | 'failure.workspaceProvisioningNotReady'
+  | 'failure.workspaceMembershipManaged'
   | 'failure.workspaceMfaMissing'
   | 'failure.workspaceMfaInvalid'
   | 'failure.workspaceMfaLocked'
@@ -82,6 +85,20 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.workspaceSecurityChanged';
     case 'WORKSPACE_SECURITY_NOT_READY':
       return 'failure.workspaceSecurityNotReady';
+    case 'WORKSPACE_PROVISIONING_CHANGED':
+    case 'WORKSPACE_DIRECTORY_CHANGED':
+      return 'failure.workspaceProvisioningChanged';
+    case 'WORKSPACE_PROVISIONING_NOT_READY':
+    case 'WORKSPACE_DIRECTORY_NOT_READY':
+      return 'failure.workspaceProvisioningNotReady';
+    case 'WORKSPACE_MEMBERSHIP_MANAGED':
+      return 'failure.workspaceMembershipManaged';
+    case 'WORKSPACE_ACCESS_SOURCE_NOT_FOUND':
+    case 'WORKSPACE_ACCESS_ROLE_NOT_FOUND':
+    case 'WORKSPACE_ACCESS_GROUP_NOT_FOUND':
+    case 'WORKSPACE_ACCESS_GRANT_NOT_FOUND':
+    case 'WORKSPACE_DIRECTORY_NOT_FOUND':
+      return 'failure.gone';
     case 'WORKSPACE_MFA_NOT_FOUND':
       return 'failure.workspaceMfaMissing';
     case 'WORKSPACE_MFA_INVALID':

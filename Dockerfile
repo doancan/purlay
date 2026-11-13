@@ -106,6 +106,7 @@ EXPOSE 3001
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
   CMD ["/usr/local/bin/bun", "-e", "fetch(`http://127.0.0.1:${process.env.PORT ?? 3001}/health/ready`).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 
-# The entrypoint is `bun`; this is its argument. The process is PID 1 and handles
+# The entrypoint is `bun`; these are its arguments. The API uses the same smaller heap in every launcher (D-49).
+# The process is PID 1 and handles
 # SIGTERM itself (lifecycle.ts), so there is no init wrapper.
-CMD ["apps/api/src/index.ts"]
+CMD ["--smol", "apps/api/src/index.ts"]

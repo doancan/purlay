@@ -3,6 +3,15 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_AUDIT: readonly Mutation[] = [
   {
+    id: 'audit-export-later-page-source-recheck-lost',
+    why: 'an in-flight later audit page releases bytes after its exact company source was revoked, borrowing retained independent membership (D-311)',
+    file: 'apps/api/src/modules/audit/audit-export.ts',
+    find: '          const next = await read(cursor);\n          const reader = await requireTrailReader(executor, context, access);\n',
+    replace:
+      '          const next = await read(cursor);\n          const reader = { context, delegated: !access.mayRead(context.role) };\n',
+    tests: ['apps/api/src/ingress/http/audit-source-handoff.integration.test.ts'],
+  },
+  {
     id: 'audit-export-not-on-the-trail',
     why: 'somebody takes the whole trail away and the trail cannot say who (D-222)',
     file: 'apps/api/src/modules/audit/audit-export.ts',
@@ -62,8 +71,9 @@ export const API_MODULES_AUDIT: readonly Mutation[] = [
     id: 'audit-trail-read-by-a-member',
     why: 'any member reads who removed whom and who was made an admin',
     file: 'apps/api/src/modules/audit/audit.ts',
-    find: '  if (!access.mayRead(context.role)) {\n',
-    replace: '  if (false as boolean) {\n',
+    find: "  await requireWorkspaceCapabilityNow(executor, current, 'audit.read');\n",
+    replace:
+      "  if (current.userId.length === 0) await requireWorkspaceCapabilityNow(executor, current, 'audit.read');\n",
     tests: ['apps/api/src/modules/audit/audit.integration.test.ts'],
   },
   {

@@ -6,7 +6,7 @@
  * an admin's (D-111); how long history is kept and exports are an owner's alone (D-139 §4, D-140).
  * A page somebody may not open is not drawn, and its address is *not found*.
  */
-import type { UserRole } from '@purlay/types';
+import type { UserRole, WorkspaceAccessAction, ChannelAccessAction } from '@purlay/types';
 import type { GlyphName } from '../../components/icon';
 import type { SettingsAudience, SettingsGroup } from '../../modules/manifest';
 import { MODULES, type ModuleId, type ModuleManifestOf } from '../../modules/registry';
@@ -21,6 +21,10 @@ const CORE_SECTIONS = [
   { id: 'company', group: 'workspace', glyph: 'lock', for: 'admins' },
   { id: 'security', group: 'workspace', glyph: 'lock', for: 'admins' },
   { id: 'workspace-mfa', group: 'workspace', glyph: 'lock', for: 'everyone' },
+  { id: 'directory', group: 'workspace', glyph: 'people', for: 'admins' },
+  { id: 'access-people', group: 'workspace', glyph: 'people', for: 'admins' },
+  { id: 'access-roles', group: 'workspace', glyph: 'lock', for: 'admins' },
+  { id: 'access-groups', group: 'workspace', glyph: 'people', for: 'admins' },
   { id: 'members', group: 'workspace', glyph: 'people', for: 'admins' },
   { id: 'invitations', group: 'workspace', glyph: 'invite', for: 'admins' },
   { id: 'audit', group: 'workspace', glyph: 'audit', for: 'admins' },
@@ -69,20 +73,32 @@ const allowed = (
   role: UserRole | undefined,
   serverAdmin: boolean,
   modules: readonly string[],
+  capabilities: readonly WorkspaceAccessAction[],
+  channelCapabilities: readonly ChannelAccessAction[],
 ): boolean =>
   (section.module === undefined || modules.includes(section.module)) &&
   (section.for === 'everyone' ||
     (section.for === 'admins' && (role === 'owner' || role === 'admin')) ||
     (section.for === 'owners' && role === 'owner') ||
-    (section.for === 'serverAdmin' && serverAdmin));
+    (section.for === 'serverAdmin' && serverAdmin) ||
+    (section.id === 'members' && capabilities.includes('members.manage_nonowners')) ||
+    (section.id === 'invitations' && capabilities.includes('members.invite')) ||
+    (section.id === 'audit' && capabilities.includes('audit.read')) ||
+    (section.id === 'general' &&
+      modules.includes('chat') &&
+      channelCapabilities.includes('channel.settings.manage')));
 
 /** The pages this person may open, in the navigation's order. */
 export const sectionsFor = (
   role: UserRole | undefined,
   serverAdmin: boolean,
   modules: readonly string[],
+  capabilities: readonly WorkspaceAccessAction[] = [],
+  channelCapabilities: readonly ChannelAccessAction[] = [],
 ): readonly SettingsSection[] =>
-  SETTINGS_SECTIONS.filter((section) => allowed(section, role, serverAdmin, modules));
+  SETTINGS_SECTIONS.filter((section) =>
+    allowed(section, role, serverAdmin, modules, capabilities, channelCapabilities),
+  );
 
 /** The page an address names, if this person may open it; otherwise null, which is *not found*. */
 export const sectionFor = (
@@ -90,5 +106,9 @@ export const sectionFor = (
   role: UserRole | undefined,
   serverAdmin: boolean,
   modules: readonly string[],
+  capabilities: readonly WorkspaceAccessAction[] = [],
+  channelCapabilities: readonly ChannelAccessAction[] = [],
 ): SettingsSection | null =>
-  sectionsFor(role, serverAdmin, modules).find((section) => section.id === id) ?? null;
+  sectionsFor(role, serverAdmin, modules, capabilities, channelCapabilities).find(
+    (section) => section.id === id,
+  ) ?? null;

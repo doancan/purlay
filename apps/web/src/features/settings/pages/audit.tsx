@@ -115,6 +115,25 @@ export const AuditPage = (): React.JSX.Element => {
     const actor = entry.actor?.displayName ?? t('audit.someone');
     const action = known(entry.action);
     switch (action) {
+      case 'workspace.access.manual_added':
+      case 'workspace.access.source_revoked':
+      case 'workspace.access.role_created':
+      case 'workspace.access.role_updated':
+      case 'workspace.access.role_retired':
+      case 'workspace.access.group_created':
+      case 'workspace.access.group_updated':
+      case 'workspace.access.group_retired':
+      case 'workspace.access.group_members_changed':
+      case 'workspace.access.grant_assigned':
+      case 'workspace.access.grant_revoked':
+      case 'workspace.access.member_offboarded':
+      case 'workspace.access.member_readmitted':
+      case 'directory.created':
+      case 'directory.updated':
+      case 'directory.disabled':
+      case 'directory.deleted':
+      case 'directory.credential_rotated':
+      case 'directory.credential_revoked':
       case 'workspace.mfa.enrolled':
       case 'workspace.mfa.rotated':
       case 'workspace.mfa.revoked':

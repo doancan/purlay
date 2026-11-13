@@ -273,6 +273,76 @@ export const WORKFLOW_CROSS_TENANT = {
   'POST /api/workspaces/:workspaceId/security/mfa/recovery-codes': SECURITY_WORKFLOW,
 } as const satisfies Readonly<Record<string, WorkflowCrossTenantCase>>;
 
+/** Source/grant revisions and directory credentials need actual stateful positive preparation. */
+const PROVISIONING_WORKFLOW = {
+  suite: 'workspace-provisioning',
+  testFile: 'apps/api/src/ingress/http/workspace-provisioning-cross-tenant.integration.test.ts',
+  visibility: {
+    kind: 'none',
+    reason:
+      'Workspace source, role, group and directory administration; no conversation content or channel inventory.',
+  },
+} as const;
+export const PROVISIONING_CROSS_TENANT = {
+  'GET /api/workspaces/:workspaceId/access/people': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/access/people/:userId': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/people/:userId/manual': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/people/:userId/sources/:sourceId/revoke':
+    PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/people/:userId/offboarding/preview':
+    PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/people/:userId/offboarding': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/people/:userId/readmission': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/access/roles': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/roles': PROVISIONING_WORKFLOW,
+  'PATCH /api/workspaces/:workspaceId/access/roles/:roleId': PROVISIONING_WORKFLOW,
+  'DELETE /api/workspaces/:workspaceId/access/roles/:roleId': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/access/groups': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/groups': PROVISIONING_WORKFLOW,
+  'PATCH /api/workspaces/:workspaceId/access/groups/:groupId': PROVISIONING_WORKFLOW,
+  'DELETE /api/workspaces/:workspaceId/access/groups/:groupId': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/access/groups/:groupId/members': PROVISIONING_WORKFLOW,
+  'PATCH /api/workspaces/:workspaceId/access/groups/:groupId/members': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/access/groups/:groupId/candidates': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/access/grants': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/access/grants': PROVISIONING_WORKFLOW,
+  'DELETE /api/workspaces/:workspaceId/access/grants/:grantId': PROVISIONING_WORKFLOW,
+  'GET /api/workspaces/:workspaceId/directories': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/directories': PROVISIONING_WORKFLOW,
+  'PATCH /api/workspaces/:workspaceId/directories/:directoryId': PROVISIONING_WORKFLOW,
+  'DELETE /api/workspaces/:workspaceId/directories/:directoryId': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/directories/:directoryId/credentials': PROVISIONING_WORKFLOW,
+  'POST /api/workspaces/:workspaceId/directories/:directoryId/credentials/revoke':
+    PROVISIONING_WORKFLOW,
+} as const;
+
+/** Native SCIM is directory-bearer scoped, so it never borrows the workspace-cookie crossing. */
+const SCIM_WORKFLOW = {
+  suite: 'native-scim',
+  testFile: 'apps/api/src/modules/workspaces/directory/native-auth.integration.test.ts',
+} as const;
+export const SCIM_CROSS_TENANT = {
+  'PUT /auth/scim/v2/Users/:resourceId': SCIM_WORKFLOW,
+  'PUT /auth/scim/v2/Groups/:resourceId': SCIM_WORKFLOW,
+  'PATCH /auth/scim/v2/Users/:resourceId': SCIM_WORKFLOW,
+  'PATCH /auth/scim/v2/Groups/:resourceId': SCIM_WORKFLOW,
+  'DELETE /auth/scim/v2/Users/:resourceId': SCIM_WORKFLOW,
+  'DELETE /auth/scim/v2/Groups/:resourceId': SCIM_WORKFLOW,
+} as const;
+
+export const documentedScimEndpoints = (): readonly DocumentedEndpoint[] =>
+  readFileSync(API_DOCUMENT, 'utf8')
+    .split('\n')
+    .flatMap((line) => {
+      const match =
+        /^\|[^\n]*?`(PUT|PATCH|DELETE)`\s*\|\s*`(\/auth\/scim\/v2\/(?:Users|Groups)\/:resourceId)`/.exec(
+          line,
+        );
+      return match?.[1] === undefined || match[2] === undefined
+        ? []
+        : [{ method: match[1], path: match[2] }];
+    });
+
 export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   'GET /api/workspaces/:workspaceId/identity/domains': {
     refusal: 'WORKSPACE_NOT_FOUND',

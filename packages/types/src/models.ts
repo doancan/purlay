@@ -156,10 +156,30 @@ export const WorkspaceAccess = Type.Union([
 ]);
 export type WorkspaceAccess = Static<typeof WorkspaceAccess>;
 
+export const WorkspaceAccessAction = /* @__PURE__ */ Type.Union([
+  /* @__PURE__ */ Type.Literal('members.invite'),
+  /* @__PURE__ */ Type.Literal('members.manage_nonowners'),
+  /* @__PURE__ */ Type.Literal('audit.read'),
+]);
+export type WorkspaceAccessAction = Static<typeof WorkspaceAccessAction>;
+export const ChannelAccessAction = /* @__PURE__ */ Type.Union([
+  /* @__PURE__ */ Type.Literal('channel.settings.manage'),
+  /* @__PURE__ */ Type.Literal('channel.members.manage'),
+]);
+export type ChannelAccessAction = Static<typeof ChannelAccessAction>;
+
 /** Your membership of a workspace. Ownership is a role, never a column on the workspace (D-22). */
 export const Membership = Type.Object({
   workspace: Workspace,
   role: UserRole,
+  /** Workspace-scoped delegation only. An older server omits this and grants no custom actions. */
+  workspaceCapabilities: Type.Optional(
+    Type.Array(WorkspaceAccessAction, { maxItems: 3, uniqueItems: true }),
+  ),
+  /** Navigation hint from current joined-channel projections; it conveys no channel identity. */
+  channelCapabilities: Type.Optional(
+    Type.Array(ChannelAccessAction, { maxItems: 2, uniqueItems: true }),
+  ),
   joinedAt: Timestamp,
   /** An older server omits this; restricted membership is always explicit on a supporting server. */
   access: Type.Optional(WorkspaceAccess),
@@ -230,6 +250,10 @@ export const GITHUB_REPOSITORY_PATTERN =
 
 export const Channel = Type.Object({
   id: Uuid,
+  /** Exact scoped actions; omission on an older server grants no additional action. */
+  channelCapabilities: Type.Optional(
+    Type.Array(ChannelAccessAction, { maxItems: 2, uniqueItems: true }),
+  ),
   workspaceId: Uuid,
   /** Null for a direct message, which is identified by its members (D-6). */
   name: Type.Union([Type.String({ maxLength: 64 }), Type.Null()]),

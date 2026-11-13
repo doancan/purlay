@@ -578,6 +578,75 @@ carries.
 
 ---
 
+### Source-aware access administration and directory provisioning (D-311)
+
+These routes require a current native owner/admin, including a fresh native session check under
+the workspace lock. Custom roles cannot administer roles, access groups, sources or directories.
+Foreign workspace resources remain `404`; stale observed revisions return
+`409 WORKSPACE_PROVISIONING_CHANGED` or `WORKSPACE_DIRECTORY_CHANGED`. Bodies and list queries
+reject unknown fields. Enabling new grants or directory activity requires the separate
+`WORKSPACE_PROVISIONING_READY` operator attestation and capable API peers; turning it off leaves
+initialized provenance and revocations authoritative.
+
+| Phase | Method | Path | Request → response |
+|---|---|---|---|
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/people` | `WorkspaceAccessPeopleQuery`: bounded keyset, literal `q`, optional active/inactive/offboarded state → `WorkspaceAccessPeoplePage`; includes human-readable public users and exact source summaries. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/people/:userId` | `WorkspaceMemberAccess`; only people already related by native membership or retained admission control. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/people/:userId/manual` | `AddManualWorkspaceAccessRequest` → `WorkspaceMemberAccess`; explicit native manual access, never an inferred directory-to-manual conversion. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/people/:userId/sources/:sourceId/revoke` | `RevokeWorkspaceAccessSourceRequest` → `WorkspaceMemberAccess`; revokes only the observed source. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/people/:userId/offboarding/preview` | `PreviewWorkspaceOffboardingRequest` → `WorkspaceOffboardingPreview`; current effects and last-owner protection, without mutation. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/people/:userId/offboarding` | `ConfirmWorkspaceOffboardingRequest` → `WorkspaceMemberAccess`; explicit confirmation and retained local replay block. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/people/:userId/readmission` | `ReadmitWorkspaceMemberRequest` → `WorkspaceMemberAccess`; explicit confirmation, only currently active sources, no old proof revival. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/roles` | `WorkspaceAccessListQuery` → `WorkspaceAccessRolePage`. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/roles` | `CreateWorkspaceAccessRoleRequest` → `201 WorkspaceAccessRole`. |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/access/roles/:roleId` | `UpdateWorkspaceAccessRoleRequest` → `WorkspaceAccessRole`. |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/access/roles/:roleId` | `ProvisioningRevisionRequest` → `204`; retires the definition and projects affected people. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/groups` | `WorkspaceAccessListQuery` → `WorkspaceAccessGroupPage`; directory groups are managed by their provider. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/groups` | `CreateWorkspaceAccessGroupRequest` → `201 WorkspaceAccessGroup`. |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/access/groups/:groupId` | `UpdateWorkspaceAccessGroupRequest` → `WorkspaceAccessGroup`; manual groups only. |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/access/groups/:groupId` | `ProvisioningRevisionRequest` → `204`; manual groups only. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/groups/:groupId/members` | `WorkspaceAccessListQuery` → `WorkspaceAccessGroupMemberPage`; each contribution contains its public user and exact source. |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/access/groups/:groupId/members` | `UpdateWorkspaceGroupMembersRequest` → `WorkspaceAccessGroup`; bounded source IDs, exclusive add/remove operations, observed group revision. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/groups/:groupId/candidates` | `WorkspaceAccessGroupCandidateQuery` → `WorkspaceAccessGroupCandidatePage`. Its opaque `before` cursor is the returned person/source UUID pair, unlike the ordinary single-UUID cursor; clients forward it unchanged. First-use legacy initialization remains bounded to the selected page. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/access/grants` | `WorkspaceAccessGrantQuery` → `WorkspaceAccessGrantPage`; optional source ID or group ID, never both. Joins role, public subject and independently visible channel metadata before pagination. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/access/grants` | `AssignWorkspaceAccessGrantRequest` → `201 WorkspaceAccessGrant`; role and subject revisions, explicit workspace or exact visible non-DM channel scope. A grant creates no admission or channel membership. |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/access/grants/:grantId` | `ProvisioningRevisionRequest` → `204`. |
+| ○ | `GET` | `/api/workspaces/:workspaceId/directories` | `OlderPageQuery` → `WorkspaceDirectoryPage`; bounded current and recent credential metadata, never raw bearers. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/directories` | `CreateWorkspaceDirectoryRequest` → `201 WorkspaceDirectory`; an exact verified company connection and configured signed `sub`/`oid` claim. |
+| ○ | `PATCH` | `/api/workspaces/:workspaceId/directories/:directoryId` | `UpdateWorkspaceDirectoryRequest` → `WorkspaceDirectory`. |
+| ○ | `DELETE` | `/api/workspaces/:workspaceId/directories/:directoryId` | `DirectoryRevisionRequest` → `204`; terminal decommission, retained proof remains classified. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/directories/:directoryId/credentials` | `RotateDirectoryCredentialRequest` → `201 IssuedDirectoryCredential`, `Cache-Control: no-store`. The only response exposing the bearer; bounded expiry and overlap. |
+| ○ | `POST` | `/api/workspaces/:workspaceId/directories/:directoryId/credentials/revoke` | `RevokeDirectoryCredentialRequest` → `WorkspaceDirectory`; terminal revocation of the exact credential. |
+
+| Phase | Method | Endpoint | Contract |
+|-------|--------|----------|----------|
+| ○ | `PUT` | `/auth/scim/v2/Users/:resourceId` | Native SCIM User replacement; exact current directory bearer and retained source authority. |
+| ○ | `PUT` | `/auth/scim/v2/Groups/:resourceId` | Native SCIM Group replacement; directory-owned membership only. |
+| ○ | `PATCH` | `/auth/scim/v2/Users/:resourceId` | Native SCIM User update; no global profile or credential takeover. |
+| ○ | `PATCH` | `/auth/scim/v2/Groups/:resourceId` | Native SCIM Group update; source-scoped membership projection. |
+| ○ | `DELETE` | `/auth/scim/v2/Users/:resourceId` | Native SCIM User deletion; preserves independent manual and other-directory authority. |
+| ○ | `DELETE` | `/auth/scim/v2/Groups/:resourceId` | Native SCIM Group deletion; retained provenance is not reinterpreted as manual access. |
+
+Native SCIM resources live at `/auth/scim/v2`: service metadata and Users/Groups collection and
+resource reads, create, full replacement, patch and delete use the pinned native protocol. Each
+request needs the exact current directory bearer; a browser cookie grants no directory authority.
+`application/scim+json` preserves SCIM schemas, status and media type, including resource `404`.
+Requests retain the ordinary body cap and cross-site defenses. The JSON-media exception and
+PUT/PATCH/DELETE ingress routes apply only to exact SCIM resource paths.
+
+SCIM never guesses an existing native person by email or user name. New-person initialization
+preserves native domain and approval policy, without verifying email or creating credentials.
+Native directory groups project their exact directory/source membership; provider role words
+never become builtin privilege. Source deactivation preserves independent manual/other-directory
+authority. Company proof and native handoff retain their exact source origin and authorization
+revision; offboarding/readmission never revives an older proof.
+
+Custom workspace actions are `members.invite`, `members.manage_nonowners` and `audit.read`.
+Channel actions are `channel.settings.manage` and `channel.members.manage`, applied only with
+current full native membership of that exact non-DM channel. These cover posting/archive/restore
+and ordinary-target member management; they do not add private visibility, integrations,
+retention, builtin promotion or global credential/security/recovery authority.
+
 ## 4. Channels
 
 Personal channel groups (D-284) are only the caller's. `Channel.sidebarGroupId` is projected with the channel list; null for ungrouped, starred, unjoined and DM channels. The group metadata and placement are never sent on a workspace broadcast. A real change announces only `CHANNELS_UPDATED { workspaceId }` on the caller's own topic; an identical retry announces nothing.

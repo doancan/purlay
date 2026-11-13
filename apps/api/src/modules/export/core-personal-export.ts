@@ -156,6 +156,24 @@ export const corePersonalExport: CorePersonalContribution = {
 
 /** The tables of the core that are not in a person's export, and why. Every other table says it in its own module's. */
 export type CorePersonalExcluded =
+  | 'workspace_directory_native_initializations'
+  | 'workspace_directory_scim_bindings'
+  | 'workspace_directory_scim_tombstones'
+  | 'workspace_directory_scim_subjects'
+  | 'workspace_directory_scim_users'
+  | 'workspace_directory_scim_grants'
+  | 'workspace_directory_scim_groups'
+  | 'workspace_directory_scim_group_members'
+  | 'workspace_directories'
+  | 'workspace_directory_credentials'
+  | 'workspace_directory_identity_links'
+  | 'workspace_admission_controls'
+  | 'workspace_access_sources'
+  | 'workspace_access_roles'
+  | 'workspace_access_groups'
+  | 'workspace_access_group_members'
+  | 'workspace_access_role_grants'
+  | 'workspace_member_capabilities'
   | 'session_authentication_evidence'
   | 'workspace_access_policies'
   | 'workspace_access_policy_tests'
@@ -194,6 +212,36 @@ export type CorePersonalExcluded =
   | 'setup_state';
 
 export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, string>> = {
+  workspace_directory_native_initializations:
+    'private retained directory native-binding initialization evidence',
+  workspace_directory_scim_bindings:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directory_scim_tombstones:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directory_scim_subjects:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directory_scim_users:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directory_scim_grants:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directory_scim_groups:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directory_scim_group_members:
+    'private native SCIM identity/resource/provenance; never export another directory or global profile source through canonical user joins',
+  workspace_directories:
+    'administrator-only directory configuration and retained authentication source',
+  workspace_directory_credentials: 'hashed directory bearer credentials',
+  workspace_directory_identity_links:
+    'private exact directory external identity; native effective membership is exported instead',
+  workspace_admission_controls:
+    'retained local admission and offboarding authority, not workspace content',
+  workspace_access_sources:
+    'private directory identity and source authorization provenance; native effective membership is exported instead',
+  workspace_access_roles: 'administrator-managed scoped action definitions, not chat content',
+  workspace_access_groups: 'administrator-managed access groups and private directory references',
+  workspace_access_group_members: 'private exact source-bound access group membership',
+  workspace_access_role_grants: 'administrator-managed source-bound capability grants',
+  workspace_member_capabilities: 'derived native management capabilities, not workspace content',
   session_authentication_evidence:
     'private native authentication and MFA provenance, not exported credentials or workspace content',
   workspace_access_policies:

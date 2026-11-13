@@ -1,4 +1,5 @@
 import { beginReadScopes } from './read-scope';
+import { prepareManualChannelAdmission } from './access-projection';
 /**
  * Who is in a channel (D-104): a member brings in somebody from the workspace. A private channel
  * is reached no other way; a public one can also be joined by the person themselves
@@ -88,6 +89,7 @@ export const addMember = async (
   await requireChannelMember(executor, context, 'Join the channel to bring people into it.');
   await requireWorkspacePerson(executor, context, userId);
 
+  const recordAdmission = await prepareManualChannelAdmission(executor, clock, context, [userId]);
   const joinedAt = clock.now();
   const inserted = await executor
     .insertInto('channel_members')
@@ -102,6 +104,7 @@ export const addMember = async (
   // Who brought whom into which channel is the trail's: "who added X to #private?" has an answer.
   // Somebody already in it was not added, and is not recorded again.
   if (inserted !== undefined) {
+    await recordAdmission(context.channelId);
     await beginReadScopes(executor, context.channelId, [userId], joinedAt);
     await recordAudit(executor, clock, {
       workspaceId: context.workspaceId,

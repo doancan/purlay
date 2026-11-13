@@ -35,4 +35,11 @@ describe('the audit rows a role reads', () => {
   test('what the core records is read by whoever reads the trail, whichever modules run', () => {
     expect(auditAccess(permissionTable([...CORE_PERMISSIONS]), []).unreadable('admin')).toEqual([]);
   });
+
+  test('delegated audit.read does not grant a module-specific owner-only permission', () => {
+    expect(running.unreadable('member', true)).toEqual(['note.pinned']);
+    expect(running.unreadable('member')).toContain('note.created');
+    const notRun = auditAccess(permissionTable([...CORE_PERMISSIONS]), groups);
+    expect(notRun.unreadable('member', true)).toEqual(['note.pinned']);
+  });
 });

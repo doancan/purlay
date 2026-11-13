@@ -61,6 +61,7 @@ interface NativeEvidenceDependencies {
 }
 
 interface NativeEvidenceCapture {
+  readonly ready: Promise<unknown>;
   readonly around: (path: string, body: () => Promise<Response>) => Promise<Response>;
   readonly executor: () => Executor | undefined;
   readonly afterTransaction: (work: () => Promise<void>) => Promise<void>;
@@ -135,7 +136,7 @@ export const nativeAuthenticationEvidence = (
     // Native twoFactor writes directly through context.adapter. The handler also opens a fresh
     // native async frame, so retain the selected adapter only for our exact active SQL callback.
     const ordinary = context.adapter;
-    context.adapter = new Proxy(ordinary, {
+    const evidenceAdapter = new Proxy(ordinary, {
       get: (target, property): unknown => {
         const value: unknown = Reflect.get(target, property, target);
         if (typeof value !== 'function') return value;
@@ -154,13 +155,15 @@ export const nativeAuthenticationEvidence = (
           const selected =
             exact?.adapter ??
             (request === undefined ? await getCurrentAdapter(ordinary) : ordinary);
-          const current = selected === context.adapter ? ordinary : selected;
+          const current =
+            selected === evidenceAdapter || selected === context.adapter ? ordinary : selected;
           const operation: unknown = Reflect.get(current, property, current);
           if (typeof operation !== 'function') throw new Error('Native adapter operation was lost');
           return await Reflect.apply(operation, current, args);
         };
       },
     });
+    context.adapter = evidenceAdapter;
     const create = context.internalAdapter.createSession.bind(context.internalAdapter);
     context.internalAdapter.createSession = async (
       ...args: Parameters<typeof create>
@@ -277,6 +280,7 @@ export const nativeAuthenticationEvidence = (
   };
 
   return {
+    ready,
     around,
     executor: () => evidenceTransaction(database),
     afterTransaction: async (work): Promise<void> => {

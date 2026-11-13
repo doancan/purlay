@@ -75,6 +75,8 @@ import { linkFile } from './testing/sent-files';
 import { aMemoryStore, type MemoryStore } from './testing/storage';
 import { moduleCells } from './testing/module-cells';
 import { aUniqueSlug, aUserRow } from './testing/users';
+import { requireManualWorkspaceSource } from './modules/workspaces/provisioning/native-state';
+import { lockWorkspaceProjectionScope } from './modules/workspaces/provisioning/scope';
 
 /** Every table chat keeps of a person, by the column that names them. */
 const CHAT_PERSONAL_TABLES = [
@@ -346,6 +348,95 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
       };
     }
     const channel = room.channelId;
+    // Real constrained source/group/channel rows make the new chat lifecycle observable too.
+    const scope = await lockWorkspaceProjectionScope(tx, workspaceId);
+    const source = await requireManualWorkspaceSource(tx, clock, scope, ada.userId);
+    const accessRole = await tx
+      .insertInto('workspace_access_roles')
+      .values({
+        workspace_id: workspaceId,
+        name: crypto.randomUUID(),
+        capabilities: ['channel.settings.manage'],
+        created_at: NOW,
+        updated_at: NOW,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const accessGroup = await tx
+      .insertInto('workspace_access_groups')
+      .values({
+        workspace_id: workspaceId,
+        kind: 'manual',
+        name: crypto.randomUUID(),
+        state: 'active',
+        created_at: NOW,
+        updated_at: NOW,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await tx
+      .insertInto('workspace_access_group_members')
+      .values({
+        workspace_id: workspaceId,
+        group_id: accessGroup.id,
+        user_id: ada.userId,
+        source_id: source.id,
+        created_at: NOW,
+      })
+      .execute();
+    const accessControl = await tx
+      .insertInto('channel_access_controls')
+      .values({
+        workspace_id: workspaceId,
+        channel_id: channel,
+        user_id: ada.userId,
+        initialized_at: NOW,
+      })
+      .returning('revision')
+      .executeTakeFirstOrThrow();
+    await tx
+      .insertInto('channel_access_group_mappings')
+      .values({
+        workspace_id: workspaceId,
+        channel_id: channel,
+        group_id: accessGroup.id,
+        created_at: NOW,
+      })
+      .execute();
+    await tx
+      .insertInto('channel_access_member_grants')
+      .values({
+        workspace_id: workspaceId,
+        channel_id: channel,
+        user_id: ada.userId,
+        kind: 'group',
+        source_id: source.id,
+        group_id: accessGroup.id,
+        admitted_at: NOW,
+        created_at: NOW,
+      })
+      .execute();
+    await tx
+      .insertInto('channel_access_role_grants')
+      .values({
+        workspace_id: workspaceId,
+        channel_id: channel,
+        role_id: accessRole.id,
+        source_id: source.id,
+        created_at: NOW,
+      })
+      .execute();
+    await tx
+      .insertInto('channel_member_capabilities')
+      .values({
+        workspace_id: workspaceId,
+        channel_id: channel,
+        user_id: ada.userId,
+        capability: 'channel.settings.manage',
+        projection_revision: accessControl.revision,
+      })
+      .execute();
+
     const say = async (who: 'ada' | 'bob', at: Date, content: string): Promise<string> => {
       const sent = await sendMessage(tx, fixedClock(at), person(room, who).context, {
         id: anId(at),

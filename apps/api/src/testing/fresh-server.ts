@@ -125,7 +125,7 @@ const mailboxTimer = setInterval(() => {
 }, 50);
 const files = join(directory, 'files');
 let log = '';
-const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], {
+const api = Bun.spawn(['bun', '--no-env-file', '--smol', 'run', 'apps/api/src/index.ts'], {
   cwd: root,
   env: {
     ...process.env,

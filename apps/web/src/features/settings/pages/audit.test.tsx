@@ -8,6 +8,7 @@ import type { AuditEntry, AuditPage, ModuleId, UserRole } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import { ALICE, BOB, IDS, ME, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
@@ -74,6 +75,77 @@ const lines = (view: View): string[] =>
     .map((item) => item.querySelector('[data-audit-line]')?.textContent ?? '');
 
 describe('the audit log', () => {
+  test('delegated audit readers see source-aware access changes in words and lose the page when their capability is withdrawn', async () => {
+    const events = [
+      ['workspace.access.manual_added', 'added manual workspace access.'],
+      ['workspace.access.source_revoked', 'revoked an admission source.'],
+      ['workspace.access.role_created', 'created an access role.'],
+      ['workspace.access.role_updated', 'updated an access role.'],
+      ['workspace.access.role_retired', 'retired an access role.'],
+      ['workspace.access.group_created', 'created an access group.'],
+      ['workspace.access.group_updated', 'updated an access group.'],
+      ['workspace.access.group_retired', 'retired an access group.'],
+      ['workspace.access.group_members_changed', 'changed an access group’s admission sources.'],
+      ['workspace.access.grant_assigned', 'assigned a scoped access role.'],
+      ['workspace.access.grant_revoked', 'revoked a scoped access role.'],
+      [
+        'workspace.access.member_offboarded',
+        'offboarded a person and retained a local admission block.',
+      ],
+      ['workspace.access.member_readmitted', 'cleared a person’s local admission block.'],
+      ['directory.created', 'created a company directory.'],
+      ['directory.updated', 'updated a company directory.'],
+      ['directory.disabled', 'disabled a company directory.'],
+      ['directory.deleted', 'removed a company directory.'],
+      ['directory.credential_rotated', 'rotated a company directory credential.'],
+      ['directory.credential_revoked', 'revoked a company directory credential.'],
+    ] as const;
+    const session = aSession();
+    const delegated = {
+      ...session,
+      memberships: session.memberships.map((membership) => ({
+        ...membership,
+        role: 'member' as const,
+        workspaceCapabilities: ['audit.read' as const],
+      })),
+    };
+    let reads = 0;
+    const view = await openPage(
+      {
+        me: () => Promise.resolve(delegated),
+        audit: () => {
+          reads++;
+          return Promise.resolve(
+            page(
+              events.map(([action], n) =>
+                anEntry(n, {
+                  action,
+                  targetType: 'workspace',
+                  targetId: IDS.workspace,
+                  metadata: { secret: 'must-stay-unread' },
+                }),
+              ),
+            ),
+          );
+        },
+      },
+      'member',
+    );
+    expect(lines(view)).toEqual(events.map(([, sentence]) => `${ME.displayName} ${sentence}`));
+    expect(view.container.textContent).not.toContain('must-stay-unread');
+    expect(view.getByRole('link', { name: 'Download the filtered log as CSV' })).toBeDefined();
+    expect(view.queryByRole('link', { name: 'People access' })).toBeNull();
+    act(() => {
+      view.world.client.setQueryData(keys.me, {
+        ...session,
+        memberships: session.memberships.map((membership) => ({ ...membership, role: 'member' })),
+      });
+    });
+    await view.findByRole('heading', { name: 'Nothing here' });
+    expect(view.queryByRole('list', { name: 'Audit log' })).toBeNull();
+    expect(reads).toBe(1);
+    view.unmount();
+  });
   test('a failed background refresh preserves the visible audit trail and Retry reads it again', async () => {
     let reads = 0;
     const rows = page([

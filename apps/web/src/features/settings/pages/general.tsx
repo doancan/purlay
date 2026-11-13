@@ -69,6 +69,17 @@ export const GeneralPage = (): React.JSX.Element => {
     }
   };
 
+  // Delegation opens only the server-filtered archived inventory; workspace administration stays native.
+  if (role !== 'owner' && role !== 'admin')
+    return (
+      <SettingsPage
+        title={t('settings.archived.title')}
+        description={t('settings.archived.description')}
+      >
+        <ArchivedChannelsCard />
+      </SettingsPage>
+    );
+
   return (
     <SettingsPage
       title={t('settings.general.title')}
