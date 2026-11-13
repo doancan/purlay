@@ -226,6 +226,16 @@ export const buildCompanyProofBatch = <Row>(
   } finally {
     companyProofBatch = undefined;
   }
+  // No canonical proof was requested by these final queries; the relation cannot authorize a source.
+  if (context.calls === 0)
+    return {
+      name: COMPANY_PROOF_BATCH_NAME,
+      source: sql<CompanyProofBatchRow>`(select
+        null::uuid as session_id, null::uuid as workspace_id,
+        null::uuid as connection_id, null::uuid as user_id, null::uuid as directory_id
+        where false)`,
+      queries,
+    };
   const ids = [...new Set(sessionIds)];
   const workspaceIds = [...context.workspaceIds];
   const firstWorkspaceId = workspaceIds[0];

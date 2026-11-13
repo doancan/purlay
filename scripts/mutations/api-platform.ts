@@ -178,6 +178,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/company-session.integration.test.ts'],
   },
   {
+    id: 'company-proof-batch-empties-requested-proofs',
+    why: 'A personal-only batch may omit unused proof construction, but a mixed company batch must retain its current native source proof.',
+    file: 'apps/api/src/platform/company-session.ts',
+    find: '  if (context.calls === 0)',
+    replace: '  if (context.calls >= 0)',
+    tests: ['apps/api/src/modules/workspaces/security/company-proof-batch.integration.test.ts'],
+  },
+  {
     id: 'company-proof-batch-source-id-ignored',
     why: 'A revoked or unknown native source must not borrow another live proof in the same final statement.',
     file: 'apps/api/src/platform/company-session.ts',
