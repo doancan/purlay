@@ -20,6 +20,7 @@ import { AppError } from '../../../platform/errors';
 import { atomicallyOn } from '../../../platform/transactions';
 import {
   channelWebhooks,
+  recordIncomingOutcome,
   createWebhook,
   receivePost,
   revokeWebhook,
@@ -89,8 +90,22 @@ export const postIncomingWebhook = async (
     throw new AppError({ code: 'RATE_LIMITED', message: 'Too many posts. Slow down.' });
   }
   const { text } = validated(IncomingWebhookPost, body);
-  const messageId = await receivePost(dependencies, { ...params, text });
-  return { messageId };
+  try {
+    const messageId = await receivePost(dependencies, { ...params, text });
+    return { messageId };
+  } catch (error) {
+    if (error instanceof AppError && error.body.code === 'RATE_LIMITED') {
+      await recordIncomingOutcome(
+        dependencies.database,
+        dependencies.clock,
+        params.webhookId,
+        params.secret,
+        429,
+        error.body.code,
+      );
+    }
+    throw error;
+  }
 };
 
 /** The routes of this file, as the plugin chat's slot supplies (D-280). */

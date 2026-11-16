@@ -82,6 +82,48 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PATCH /api/workspaces/:workspaceId/guests/:userId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'renew an incoming webhook secret': {
+    endpoint: 'POST /api/channels/:channelId/incoming-webhooks/:webhookId/secret',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'list outgoing webhooks': {
+    endpoint: 'GET /api/channels/:channelId/outgoing-webhooks',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'make an outgoing webhook': {
+    endpoint: 'POST /api/channels/:channelId/outgoing-webhooks',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'pause an outgoing webhook': {
+    endpoint: 'PATCH /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'revoke an outgoing webhook': {
+    endpoint: 'DELETE /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'renew an outgoing webhook secret': {
+    endpoint: 'POST /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/secret',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'test an outgoing webhook': {
+    endpoint: 'POST /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/test',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'read outgoing deliveries': {
+    endpoint: 'GET /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/deliveries',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'read outgoing delivery attempts': {
+    endpoint:
+      'GET /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/deliveries/:deliveryId/attempts',
+    allowed: { owner: true, admin: true, member: false },
+  },
+  'retry an outgoing delivery': {
+    endpoint:
+      'POST /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/deliveries/:deliveryId/retry',
+    allowed: { owner: true, admin: true, member: false },
+  },
 
   'make a member an admin': {
     endpoint: 'PATCH /api/workspaces/:workspaceId/members/:userId',

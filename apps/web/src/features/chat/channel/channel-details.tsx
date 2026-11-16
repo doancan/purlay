@@ -44,6 +44,7 @@ import { useWorkspace } from '../../shell/workspace';
 import { forgetChannel } from '../../../data/last-channel';
 import { AddPeopleDialog } from './add-people';
 import { GitHubFeeds } from './github-feeds';
+import { OutgoingWebhooks } from './outgoing-webhooks';
 import { IncomingWebhooks } from './incoming-webhooks';
 import { ChannelRetentionSection } from './channel-retention';
 import { CHANNEL_NAME, finishedChannelName } from './channel-name';
@@ -766,6 +767,7 @@ const Details = ({ channel }: { readonly channel: Channel }): React.JSX.Element 
               <GitHubFeeds channel={channel} />
               {/* An owner's or an admin's, as a feed is (D-245). */}
               <IncomingWebhooks channel={channel} />
+              <OutgoingWebhooks channelId={channel.id} />
             </>
           )}
         </div>

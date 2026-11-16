@@ -125,3 +125,14 @@ describe('what a new deployment has never run', () => {
     ).toEqual([]);
   });
 });
+
+test('webhook dispatcher becomes overdue within its delivery lifetime', () => {
+  const now = new Date('2026-11-14T12:00:00.000Z');
+  const record = {
+    job_name: 'deliver:webhooks',
+    last_success_at: new Date(now.getTime() - 180_001),
+    consecutive_failures: 0,
+    last_error: null,
+  };
+  expect(jobReport(['deliver:webhooks'], [record], now).healthy).toBe(false);
+});

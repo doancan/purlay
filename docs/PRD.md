@@ -200,7 +200,7 @@ opt-in email about direct messages and mentions left unread, at most one an hour
 a person's export of their own data (D-241) · an owner deletes a workspace, with a week to take it back (D-242) ·
 announcement channels, whose feed only owners and admins post in (D-243) · a session lifetime
 policy: signed out after a time unused, and signed in again after a time at all (D-244) ·
-incoming webhooks: a channel's address that CI and monitoring post markdown to, quietly (D-245) ·
+incoming webhooks: a channel's address that CI and monitoring post markdown to, quietly (D-245), with secret renewal and request evidence; outgoing channel webhooks with signed durable delivery, pause, test, history and retry (D-312) ·
 GitHub issues from conversations, built in the order below — connecting the GitHub App, making an issue from a thread with the write recoverable, and linking and following existing issues and pull requests, are built (D-246) ·
 interface polish: keyboard-only focus rings on buttons, a calendar date field, sliding view marks, a firework for the party popper, softer control edges and styled select lists (D-247)
 

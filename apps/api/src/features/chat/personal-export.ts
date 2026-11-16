@@ -301,6 +301,9 @@ type ChatPersonalExcluded =
   | 'github_integrations'
   | 'github_deliveries'
   | 'incoming_webhooks'
+  | 'outgoing_webhooks'
+  | 'webhook_deliveries'
+  | 'webhook_delivery_attempts'
   | 'github_app_installations'
   | 'github_user_authorizations'
   | 'github_app_handshakes'
@@ -324,6 +327,9 @@ const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
   shared_link_backfill: 'Internal bounded historical indexing checkpoint; no user content.',
   message_shared_links:
     'a rebuildable index of the original message links; the source content follows the normal export scope',
+  outgoing_webhooks: 'workspace-owned integrations, no personal credentials',
+  webhook_deliveries: 'short-lived delivery payloads; source messages are exported',
+  webhook_delivery_attempts: 'operational results',
   channel_departures:
     'that they left a channel, or how: kept only to tell their own socket why it is gone, and a channel they are not in is not theirs to take',
   hidden_messages: 'markers of messages deleted for this person only: other people’s words, hidden',

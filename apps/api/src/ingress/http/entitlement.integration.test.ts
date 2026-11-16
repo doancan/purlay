@@ -137,6 +137,8 @@ const crossings = (
     bookmarkId: fresh(),
     issueId: fresh(),
     webhookId: fresh(),
+    outgoingWebhookId: fresh(),
+    deliveryId: fresh(),
     exportId: fresh(),
   };
   return Object.entries(CROSS_TENANT).flatMap(([key, crossing]) => {

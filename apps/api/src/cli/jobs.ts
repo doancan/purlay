@@ -102,6 +102,7 @@ const withMailer: JobContext['withMailer'] = async (use) => {
 const contextOn = (on: JobContext['database'], job: string): JobContext => ({
   database: on,
   entitled: composition.entitledFor(composition.owner.ofJob(job), on),
+  cipher: credentialCipher(config.ENCRYPTION_KEY),
   clock,
   sessionLifetime: (): WorkspaceAccessLifetime => {
     if (jobSessionLifetime === undefined)

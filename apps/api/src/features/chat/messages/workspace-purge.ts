@@ -86,5 +86,6 @@ export const chatWorkspacePurge: WorkspacePurge = {
     'github_links',
     'github_operations',
     'incoming_webhooks',
+    'outgoing_webhooks',
   ],
 };

@@ -220,6 +220,12 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   incident_updates: decided('anonymised', 'with-parent'),
   incidents: decided('anonymised', { kept: 'for the life of the channel' }),
   incoming_webhooks: decided('anonymised', 'until-removed'),
+  outgoing_webhooks: decided('anonymised', 'until-removed'),
+  webhook_deliveries: decided('deleted', 'swept'),
+  webhook_delivery_attempts: decided(
+    { nobody: 'delivery outcomes without content' },
+    'with-parent',
+  ),
   link_previews: decided({ nobody: 'a GitHub item’s public title and state' }, 'swept'),
   mentions: decided('anonymised', 'with-parent'),
   notifications: decided('deleted', 'with-parent'),

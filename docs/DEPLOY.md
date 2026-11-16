@@ -602,3 +602,68 @@ run. What the numbers say, and do not:
 - [GitHub: Container registry authentication and pulling by digest](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 - [GitHub: workflow_run events](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run)
 - [Docker: Compose health waiting](https://docs.docker.com/reference/cli/docker/compose/up/)
+
+**Channel webhooks (D-312).** An owner or administrator opens a channel's details → Integrations.
+Incoming hooks accept exactly `{ "text": "…" }`. Copy the URL when created or renewed; it is shown
+only once and contains the credential. Renewal invalidates the old URL immediately. The last request
+shows its time, HTTP status and fixed error category, without storing the submitted message again.
+Wrong credentials cannot change this evidence. Requests refused at the edge before authentication
+(for example an oversized or malformed body) are visible in operational logs, not attributed to a hook.
+
+Store the URL in the sender's secret store. A local shell or a CI step can post like this:
+
+```sh
+curl --fail-with-body --silent --show-error \
+  -H 'Content-Type: application/json' \
+  --data '{"text":"Deploy **finished**"}' \
+  "$PURLAY_WEBHOOK_URL"
+```
+
+In GitHub Actions, configure the repository secret `PURLAY_WEBHOOK_URL` and pass it as an environment
+variable to the step above:
+
+```yaml
+- name: Post deploy result
+  env:
+    PURLAY_WEBHOOK_URL: ${{ secrets.PURLAY_WEBHOOK_URL }}
+  run: |
+    curl --fail-with-body --silent --show-error \
+      -H 'Content-Type: application/json' \
+      --data '{"text":"Deploy **finished**"}' \
+      "$PURLAY_WEBHOOK_URL"
+```
+
+A failed incoming POST may already have committed; retrying can create another message. A quoted
+`@name` sends no notification. Native Grafana/Alertmanager payloads need a sender configured to emit
+this text-only shape; arbitrary `blocks`, `attachments` and provider-specific JSON are rejected.
+
+For outgoing hooks, choose a public HTTPS endpoint and the channel events it receives. Message content
+leaves this server: verify the destination before creating the hook. DMs and integration-authored
+messages are excluded. A paused hook retains queued work, whose original 24-hour expiry continues;
+resume before it expires. Revocation cancels queued work, while already-started requests may finish.
+Test events use the same durable dispatcher as channel events. The scheduler installed by Compose
+runs `deliver:webhooks` every minute; `bun run job jobs:status` and Administration show whether it has
+run. A dispatcher more than three minutes late is overdue. `sweep:webhook-deliveries` drains terminal evidence older than seven days in bounded batches each hour.
+
+The receiver must verify `X-Purlay-Signature` (`v1=<hex>`), HMAC-SHA256 under the signing secret over
+`X-Purlay-Timestamp + "." + raw HTTP body`. Verify before parsing JSON; use constant-time digest
+comparison, reject timestamps more than five minutes from the receiver's clock and deduplicate the
+payload's `id` (also `X-Purlay-Id`). Store the event and its deduplication record atomically before
+answering `2xx`. Delivery is at least once and unordered. New attempts retain the event id and body
+and get a fresh timestamp/signature. A lost response can therefore cause a repeated delivery.
+
+The payload is `WebhookPayload` in `@purlay/types`: `version: 1`, `id`, `type`, `occurredAt`,
+`workspaceId`, `channelId`, and `data` (`messageId`, `content`, `senderId`, `parentId`). No files,
+cookies or user tokens are forwarded. The receiver should return quickly; the total request deadline
+is ten seconds. Network failures, `408`, `429` and `5xx` retry with jitter until the delivery expires;
+other non-`2xx` statuses fail permanently, including redirects. Retry-After is bounded to the remaining
+window. Delivery history shows attempts and offers retry for failed deliveries. Manual retry keeps the
+same event identity and payload, with a new 24-hour window. Renewing the signing key requires updating
+the receiver immediately; subsequent requests use the new key.
+
+Targets are restricted to public HTTPS on port 443. Each connection resolves and validates all DNS
+answers and connects to a checked address; redirects are never followed. Secrets, payloads, response
+bodies and destination URLs are absent from delivery logs. Workspace exports contain outgoing hook
+configuration without target URLs or secrets; source tombstones and account erasure remove stored
+payload copies and attempts. Reverting the application needs no destructive migration: pause hooks,
+revert code and leave the additive schema in place.

@@ -199,6 +199,14 @@ export const WEB_FEATURES_CHANNEL: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/channel/notification-level-menu.test.tsx'],
   },
   {
+    id: 'outgoing-webhook-channel-state-not-keyed',
+    why: 'a channel switch keeps another channel’s one-time signing secret or a late creation response',
+    file: 'apps/web/src/features/chat/channel/outgoing-webhooks.tsx',
+    find: '<ChannelOutgoingWebhooks key={channelId} channelId={channelId} />',
+    replace: '<ChannelOutgoingWebhooks channelId={channelId} />',
+    tests: ['apps/web/src/features/chat/channel/outgoing-webhooks.test.tsx'],
+  },
+  {
     id: 'reading-misses-window-blur',
     why: 'losing window focus leaves the open conversation reading its new messages',
     file: 'apps/web/src/features/chat/channel/feed-ports.tsx',

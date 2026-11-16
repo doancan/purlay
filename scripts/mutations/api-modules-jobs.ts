@@ -56,8 +56,9 @@ export const API_MODULES_JOBS: readonly Mutation[] = [
     id: 'job-report-never-overdue',
     why: 'a scheduler that stopped a week ago still reports every job as well',
     file: 'apps/api/src/modules/jobs/report.ts',
-    find: 'record.last_success_at.getTime() > STALE_AFTER_MS',
-    replace: 'record.last_success_at.getTime() > STALE_AFTER_MS * 1000',
+    find: "record.last_success_at.getTime() >\n    (record.job_name === 'deliver:webhooks' ? 180_000 : STALE_AFTER_MS)",
+    replace:
+      "record.last_success_at.getTime() >\n    (record.job_name === 'deliver:webhooks' ? 180_000 : STALE_AFTER_MS) * 1000",
     tests: ['apps/api/src/modules/jobs/report.test.ts'],
   },
   {

@@ -4,6 +4,7 @@
  * `route-ownership.test.ts` fails for a path of chat's that `app.ts` registers.
  */
 import { Elysia, type AnyElysia } from 'elysia';
+import { outgoingWebhookRoutes } from './outgoing-webhooks';
 import { bookmarkRoutes } from './bookmarks';
 import { channelRoutes } from './channels';
 import { hiddenRoutes } from './hidden';
@@ -36,6 +37,7 @@ import { webPreviewRoutes, type PreviewRouteDependencies } from './web-previews'
 export const chatRoutes = (context: PreviewRouteDependencies): AnyElysia => {
   const wiring = githubWiring(context);
   return new Elysia()
+    .use(outgoingWebhookRoutes(context))
     .use(bookmarkRoutes(context))
     .use(channelRoutes(context))
     .use(messageRoutes(context))

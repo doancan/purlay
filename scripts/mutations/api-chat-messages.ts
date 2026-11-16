@@ -846,6 +846,22 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/messages/delete.integration.test.ts'],
   },
   {
+    id: 'outgoing-webhook-erasure-keeps-payload',
+    why: 'deleting a source message leaves another readable content copy in its delivery queue',
+    file: 'apps/api/src/features/chat/messages/tombstone.ts',
+    find: "      await executor.deleteFrom('webhook_deliveries').where('message_id', 'in', removed).execute();",
+    replace: '',
+    tests: ['apps/api/src/features/chat/integrations/outgoing-webhooks.integration.test.ts'],
+  },
+  {
+    id: 'outgoing-webhook-send-not-enqueued',
+    why: 'a committed human message has no durable delivery and is lost to integrations',
+    file: 'apps/api/src/features/chat/messages/messages.ts',
+    find: "  await enqueueWebhookEvent(executor, written, 'message.created', sentAt);\n",
+    replace: '',
+    tests: ['apps/api/src/features/chat/integrations/outgoing-webhooks.integration.test.ts'],
+  },
+  {
     id: 'own-delete-on-the-trail',
     why: 'every person taking back their own words fills the administrative trail',
     file: 'apps/api/src/features/chat/messages/delete.ts',

@@ -91,7 +91,7 @@ export const fetchExternal = async (url: URL, options: FetchOptions): Promise<Fe
     };
     const request = (options.transport ?? https).request(
       {
-        host: url.hostname,
+        host: url.hostname.replace(/^\[|\]$/g, ''),
         port: options.port ?? 443,
         path: `${url.pathname}${url.search}`,
         method: 'GET',
@@ -180,7 +180,7 @@ export const postExternal = async (
     };
     const request = (options.transport ?? https).request(
       {
-        host: url.hostname,
+        host: url.hostname.replace(/^\[|\]$/g, ''),
         port: options.port ?? 443,
         path: `${url.pathname}${url.search}`,
         method: 'POST',

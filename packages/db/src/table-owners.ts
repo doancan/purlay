@@ -105,6 +105,9 @@ export const TABLE_OWNERS = {
   incident_updates: 'chat',
   incidents: 'chat',
   incoming_webhooks: 'chat',
+  outgoing_webhooks: 'chat',
+  webhook_deliveries: 'chat',
+  webhook_delivery_attempts: 'chat',
   link_previews: 'chat',
   mentions: 'chat',
   // Written only by messages (a mention, a reply) and pointing at channels and messages: chat's own inbox. A

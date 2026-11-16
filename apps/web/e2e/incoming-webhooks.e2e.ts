@@ -64,6 +64,19 @@ test.describe('a channel’s incoming webhooks', () => {
     );
     await expectNoAxe(row);
 
+    // Renew in place: the old address is invalid even though the hook and its messages stay.
+    await hooks.getByRole('button', { name: 'Renew secret', exact: true }).click();
+    await hooks.getByRole('button', { name: 'Renew secret', exact: true }).last().click();
+    const renewedSetup = hooks.getByRole('region', { name: 'The address of CI' });
+    const renewedAddress = (await renewedSetup.locator('[data-hook-address]').textContent()) ?? '';
+    expect(renewedAddress).not.toBe(address);
+    expect((await request.post(address, { data: { text: 'old credential' } })).status()).toBe(404);
+    expect(
+      (await request.post(renewedAddress, { data: { text: 'renewed credential works' } })).status(),
+    ).toBe(201);
+    await renewedSetup.getByRole('button', { name: 'Done' }).click();
+    await expect(hooks.getByText(/Last request .*HTTP 201/)).toBeVisible();
+
     // Revoked from the list, the same address answers what an address nobody made answers.
     await hooks.getByRole('button', { name: 'Revoke CI' }).click();
     await hooks
@@ -73,6 +86,7 @@ test.describe('a channel’s incoming webhooks', () => {
     await expect(hooks.getByText(/No incoming webhook/)).toBeVisible();
     const after = await request.post(address, { data: { text: 'again' } });
     expect(after.status()).toBe(404);
+    expect((await request.post(renewedAddress, { data: { text: 'revoked' } })).status()).toBe(404);
     expect(((await after.json()) as { error: { code: string } }).error.code).toBe(
       'INCOMING_WEBHOOK_NOT_FOUND',
     );

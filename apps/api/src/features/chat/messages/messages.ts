@@ -16,6 +16,7 @@
  * the last id seen — no timestamp, no tie-break, because a UUIDv7 already sorts
  * by time and PostgreSQL compares `uuid` byte-wise.
  */
+import { enqueueWebhookEvent } from '../integrations/outgoing-webhooks';
 import { notHiddenBy } from './hidden';
 import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
@@ -432,6 +433,8 @@ export const sendMessage = async (
   if (written === undefined) {
     throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
   }
+
+  await enqueueWebhookEvent(executor, written, 'message.created', sentAt);
 
   // Denormalised so the sidebar can order channels without touching `messages`.
   //

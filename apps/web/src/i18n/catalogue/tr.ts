@@ -1126,6 +1126,10 @@ export const tr = {
   'audit.kind.integration.feed_created': 'Depo bağlandı',
   'audit.kind.integration.feed_removed': 'Deponun bağlantısı kesildi',
   'audit.kind.integration.webhook_created': 'Gelen webhook oluşturuldu',
+  'audit.kind.integration.webhook_rotated': 'Gelen webhook anahtarı yenilendi',
+  'audit.kind.integration.outgoing_webhook_changed': 'Giden webhook değiştirildi',
+  'audit.action.integration.webhook_rotated': '{actor}: Gelen webhook anahtarı yenilendi',
+  'audit.action.integration.outgoing_webhook_changed': '{actor}: Giden webhook değiştirildi',
   'audit.kind.integration.webhook_revoked': 'Gelen webhook iptal edildi',
   'audit.kind.integration.app_connected': 'GitHub App bağlandı',
   'audit.kind.integration.app_disconnected': 'GitHub App bağlantısı kesildi',
@@ -2006,6 +2010,52 @@ export const tr = {
   'hooks.title': 'Gelen webhook’lar',
   'hooks.empty':
     'Gelen webhook yok. Bir tane oluştur; bir CI işi ya da izleme aracı adresiyle buraya mesaj gönderebilir.',
+  'outHooks.lastRequest': 'Son istek {when}: HTTP {status}',
+  'outHooks.incomingRotate':
+    'Adres yenilensin mi? Eski adres hemen geçersiz olur. Yeni adresi kopyalayıp gönderen servisi güncelleyin.',
+  'failure.outgoingWebhooksLimit':
+    'Bu kanaldaki giden webhook sınırına ulaşıldı. Önce birini iptal edin.',
+  'outHooks.name': 'Webhook adı',
+  'outHooks.urlInvalid':
+    'Kimlik bilgisi veya fragment içermeyen, 443 portunda herkese açık bir HTTPS adresi kullanın.',
+  'outHooks.eventsInvalid': 'En az bir olay seçin.',
+  'outHooks.refreshFailed': 'Kaydedilen değişiklikler gösteriliyor. Son durum yenilenemedi.',
+  'outHooks.title': 'Giden webhook’lar',
+  'outHooks.body':
+    'Seçtiğiniz kanal olaylarını HTTPS adresinize gönderin. Teslimatlar tekrarlanabilir; olay kimliğiyle tekrarları ayıklayın.',
+  'outHooks.empty': 'Henüz giden webhook yok.',
+  'outHooks.url': 'Hedef HTTPS adresi',
+  'outHooks.events': 'Olaylar',
+  'outHooks.disclosure': 'Bu kanaldaki mesaj içerikleri bu harici adrese gönderilecek.',
+  'outHooks.make': 'Giden webhook oluştur',
+  'outHooks.event.message.created': 'Yeni mesaj',
+  'outHooks.event.thread.resolved': 'Konuşma çözüldü',
+  'outHooks.event.thread.reopened': 'Konuşma yeniden açıldı',
+  'outHooks.secret': 'İmza anahtarı',
+  'outHooks.secretOnce':
+    'Bu anahtarı şimdi kopyalayın. Yalnızca bir kez gösterilir. Alıcıda imzayı ve zaman damgasını doğrulayın.',
+  'outHooks.paused': 'Duraklatıldı',
+  'outHooks.active': 'Etkin',
+  'outHooks.pause': 'Duraklat',
+  'outHooks.resume': 'Devam ettir',
+  'outHooks.test': 'Test olayı gönder',
+  'outHooks.rotate': 'Anahtarı yenile',
+  'outHooks.rotateConfirm':
+    'Anahtar yenilensin mi? Alıcıyı hemen güncelleyin; sonraki gönderimler yeni anahtarı kullanır.',
+  'outHooks.revokeConfirm':
+    'Bu webhook iptal edilsin mi? Bekleyen teslimatlar durur. Başlamış bir istek tamamlanabilir.',
+  'outHooks.deliveries': 'Teslimatlar',
+  'outHooks.emptyDeliveries':
+    'Henüz teslimat yok. Bağlantıyı kontrol etmek için test olayı gönderin.',
+  'outHooks.attempts': 'Denemeler',
+  'outHooks.noAttempts': 'Henüz denenmedi.',
+  'outHooks.attemptCount': '{count} deneme',
+  'outHooks.more': 'Eski teslimatları yükle',
+  'outHooks.state.pending': 'Bekliyor',
+  'outHooks.state.sending': 'Gönderiliyor',
+  'outHooks.state.succeeded': 'Teslim edildi',
+  'outHooks.state.failed': 'Başarısız',
+  'outHooks.state.cancelled': 'İptal edildi',
   'hooks.name': 'Gönderen adı',
   'hooks.nameHint': 'Mesajlarının kimden geldiği, örneğin CI ya da Uyarılar.',
   'hooks.nameRequired': 'Webhook’a bir ad ver.',
@@ -2027,7 +2077,7 @@ export const tr = {
   'hooks.setup.example': 'Sipariş durumu güncellendi',
   'hooks.setup.copy': 'Adresi kopyala',
   'hooks.setup.once':
-    'Adres gizli anahtarını taşır ve yalnızca şimdi gösteriliyor. Kaybedilirse webhook’u iptal edip yenisini oluşturmak gerekir.',
+    'Adres gizli anahtarını taşır ve yalnızca şimdi gösterilir. Kaybedersen anahtarını yenileyerek yeni bir adres alabilirsin.',
   'hooks.workspace.title': 'Dış sistemlerden mesajlar',
   'hooks.workspace.description':
     'ERP, n8n veya CRM’den bir kanala mesaj gönderin. Webhook mesajları anlık bildirim göndermez.',
@@ -3719,7 +3769,7 @@ export const tr = {
     'Bu ayarlar dağıtım ortamından gelir. Sunucuda değiştirip süreci yeniden başlatın.',
   'admin.jobs': 'Zamanlanmış işler',
   'admin.jobsHint':
-    'Günlük işler, 48 saat başarı kaydı yoksa veya bir hata oluştuysa gecikmiş sayılır. Ayrıntılı hatalar sunucu günlüklerinde kalır.',
+    'Günlük işler, 48 saat başarı kaydı yoksa veya bir hata oluştuysa gecikmiş sayılır. Webhook gönderimi için bu süre üç dakikadır. Ayrıntılı hatalar sunucu günlüklerinde kalır.',
   'admin.job.never': 'Başarılı çalışma yok',
   'admin.job.ok': 'Güncel',
   'admin.job.overdue': 'İnceleme gerekiyor',

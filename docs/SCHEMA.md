@@ -3138,6 +3138,9 @@ CREATE TABLE incoming_webhooks (
     created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at    TIMESTAMPTZ NOT NULL,
     last_used_at  TIMESTAMPTZ,                        -- set by each post, under the row's lock
+    last_request_at TIMESTAMPTZ,
+    last_status INTEGER,
+    last_error TEXT,
 
     CONSTRAINT incoming_webhooks_name_length CHECK (char_length(name) BETWEEN 1 AND 80),
     -- The channel in this workspace. (I-4)
@@ -4440,6 +4443,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0118_directory_source_lookup.sql  concurrent retained native source/proof lookup index (D-311)
 0119_directory_native_initialization.sql  immutable first native binding receipt independent of transient binding/session purge (D-311)
 0120_workspace_directory_validate.sql  validate directory-origin constraints and add concurrent workspace-first credential/link indexes (D-311)
+0121_incoming_webhook_evidence.sql  incoming_webhooks last_request_at, last_status and last_error (D-312)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
@@ -4458,6 +4462,8 @@ chat/0015_shared_source_changes.sql capture source writes for rolling-upgrade/re
 chat/0016_shared_source_indexes.sql restartable concurrent workspace-file keyset index (D-306)
 chat/0017_deferred_author_session.sql retain the actual author source for scheduled sends and message reminders (D-310)
 chat/0018_channel_access_sources.sql source/group channel admission and scoped capability projection owned by chat (D-311)
+chat/0019_webhooks.sql             outgoing_webhooks, webhook_deliveries, webhook_delivery_attempts (D-312)
+chat/0020_webhook_retention_indexes.sql  indexes by attempt and completion age (D-312)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```
@@ -4467,3 +4473,64 @@ again when `0007_message_content_limit.sql` shipped in Phase 0, again with each 
 (`0008` to `0011`), again when `0016_tombstones_keep_their_place.sql` shipped with deletion, and
 again when the administration tables shipped before the integrations, and again when the invitations and the trail's session did, and again with the channel's version, and again with the attachments' channel, and again with the pins, and again with the profiles, and again with the stars, and again with the feeds' event messages, and again with their failures, and again with the message versions, and again with the incidents, and again with their responders, and again with their write-up. That is legal only because none of them had been applied — **a migration that has run is never renumbered and never edited.**
 (`CONTRIBUTING.md` §1.6)
+
+**Channel webhook delivery (D-312).** Chat migration `0019` adds the transactional outbox, `0020` its retention indexes; core migration `0121` adds incoming request evidence. Incoming outcome columns contain fixed categories, never content. Outgoing subscriptions are bounded by the service under the channel lock, with workspace and private-membership key-share locks preserving current authority. Deliveries and attempts cascade on source erasure and channel purge; terminal evidence lasts seven days.
+
+```sql
+CREATE TABLE outgoing_webhooks (
+    id UUID PRIMARY KEY,
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    channel_id UUID NOT NULL,
+    name VARCHAR(80) NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80),
+    url TEXT NOT NULL CHECK (char_length(url) <= 2048),
+    secret_encrypted TEXT NOT NULL,
+    events TEXT[] NOT NULL CHECK (cardinality(events) BETWEEN 1 AND 3 AND events <@ ARRAY['message.created', 'thread.resolved', 'thread.reopened']::text[]),
+    paused BOOLEAN NOT NULL DEFAULT FALSE,
+    revoked_at TIMESTAMPTZ,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT outgoing_webhooks_channel_workspace_fkey FOREIGN KEY (channel_id, workspace_id) REFERENCES channels(id, workspace_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_outgoing_webhooks_channel ON outgoing_webhooks(channel_id, created_at);
+CREATE INDEX idx_outgoing_webhooks_workspace ON outgoing_webhooks(workspace_id);
+CREATE INDEX idx_outgoing_webhooks_creator ON outgoing_webhooks(created_by);
+
+CREATE TABLE webhook_deliveries (
+    id UUID PRIMARY KEY,
+    webhook_id UUID NOT NULL REFERENCES outgoing_webhooks(id) ON DELETE CASCADE,
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+    actor_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    event_id UUID NOT NULL,
+    event_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','sending','succeeded','failed','cancelled')),
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    lease_token UUID,
+    lease_until TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL,
+    completed_at TIMESTAMPTZ,
+    last_status INTEGER,
+    last_error TEXT,
+    UNIQUE (webhook_id, event_id)
+);
+CREATE INDEX idx_webhook_deliveries_due ON webhook_deliveries(state, next_attempt_at);
+CREATE INDEX idx_webhook_deliveries_hook ON webhook_deliveries(webhook_id, created_at, id);
+CREATE INDEX idx_webhook_deliveries_message ON webhook_deliveries(message_id);
+CREATE INDEX idx_webhook_deliveries_actor ON webhook_deliveries(actor_id);
+CREATE INDEX idx_webhook_deliveries_expiry ON webhook_deliveries(expires_at);
+
+CREATE TABLE webhook_delivery_attempts (
+    id UUID PRIMARY KEY,
+    delivery_id UUID NOT NULL REFERENCES webhook_deliveries(id) ON DELETE CASCADE,
+    attempted_at TIMESTAMPTZ NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    status INTEGER,
+    error TEXT,
+    UNIQUE (delivery_id, id)
+);
+CREATE INDEX idx_webhook_delivery_attempts_delivery ON webhook_delivery_attempts(delivery_id, attempted_at);
+CREATE INDEX idx_webhook_attempts_age ON webhook_delivery_attempts(attempted_at);
+CREATE INDEX idx_webhook_deliveries_completed ON webhook_deliveries(completed_at) WHERE completed_at IS NOT NULL;
+```

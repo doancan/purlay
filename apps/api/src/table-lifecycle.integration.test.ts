@@ -25,6 +25,7 @@ import {
   type Transaction,
 } from '@purlay/db';
 import { messageId } from '@purlay/types';
+import { sweepWebhookDeliveries } from './features/chat/integrations/webhook-dispatcher';
 import { chatUserErased } from './features/chat/channels/user-hooks';
 import { mailMissedMessages } from './features/chat/notifications/missed-mail';
 import { sendMessage } from './features/chat/messages/messages';
@@ -251,6 +252,24 @@ const aPushIntent = async (
       expires_at: expires,
       next_check_at: created,
       state: 'admitted',
+    })
+    .execute();
+  return id;
+};
+
+const outgoingHook = async (db: Transaction, world: World): Promise<string> => {
+  const id = anId();
+  await db
+    .insertInto('outgoing_webhooks')
+    .values({
+      id,
+      ...inWorkspace(world),
+      name: 'CI',
+      url: 'https://example.com',
+      events: ['message.created'],
+      secret_encrypted: '',
+      created_by: world.adaId,
+      created_at: NOW,
     })
     .execute();
   return id;
@@ -802,10 +821,40 @@ const WORKSPACE_PROVISIONING_ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   channel_member_capabilities: provisioningProbe('channel_member_capabilities', 'user_id'),
 };
 
+const outgoingDelivery = async (
+  db: Transaction,
+  world: World,
+  at: Date,
+  id = anId(),
+  actorId: string | null = null,
+): Promise<string> => {
+  const hook = await outgoingHook(db, world);
+  await db
+    .insertInto('webhook_deliveries')
+    .values({
+      id,
+      webhook_id: hook,
+      actor_id: actorId,
+      event_id: crypto.randomUUID(),
+      event_type: 'webhook.test',
+      payload: '{}',
+      state: 'succeeded',
+      next_attempt_at: at,
+      expires_at: at,
+      created_at: at,
+      completed_at: at,
+    })
+    .execute();
+  return id;
+};
+
 /** Tables whose erasure is `deleted`: a row naming the person, and none left after `eraseAccount`. */
 const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
   ...WORKSPACE_SECURITY_ERASURE_PROBES,
   ...WORKSPACE_PROVISIONING_ERASURE_PROBES,
+  webhook_deliveries: by('webhook_deliveries', 'actor_id', adas, async (db, world) => {
+    await outgoingDelivery(db, world, NOW, anId(), world.adaId);
+  }),
   workspace_invitation_mail_attempts: {
     seed: async (db, world) => {
       await db
@@ -1266,6 +1315,9 @@ const KEPT_PROBES: Readonly<Record<Table, Probe>> = {
         ).count,
       ),
   },
+  outgoing_webhooks: by('outgoing_webhooks', 'created_by', adas, async (db, world) => {
+    await outgoingHook(db, world);
+  }),
   workspace_invitation_recipients: by(
     'workspace_invitation_recipients',
     'created_by',
@@ -1604,6 +1656,9 @@ const SWEEPS = {
   'worker:push': async (db: Transaction) => {
     await maintainPushes(db, NOW, NO_LOG, () => undefined);
   },
+  'sweep:webhook-deliveries': async (db: Transaction) => {
+    await sweepWebhookDeliveries(db, clock);
+  },
   'purge:retention': async (db: Transaction) => {
     await purgeRetention({ database: db, clock, log: NO_LOG, storage: aMemoryStore() });
   },
@@ -1751,6 +1806,13 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
         .execute();
     },
     rows: async (db, row) => await countWhere(db, 'push_notice_budgets', 'kind', row.mark),
+  },
+  webhook_deliveries: {
+    job: 'sweep:webhook-deliveries',
+    seed: async (db, world, row) => {
+      await outgoingDelivery(db, world, row.at, row.id);
+    },
+    rows: async (db, row) => await countWhere(db, 'webhook_deliveries', 'id', row.id),
   },
   messages: marked('purge:retention', 'messages', 'content', async (db, world, row) => {
     await db

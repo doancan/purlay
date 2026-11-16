@@ -23,10 +23,18 @@ export const API_MODULES_EXPORT: readonly Mutation[] = [
     id: 'export-catalogue-core-people-unasked',
     why: "the people the core's own rows name are left out of the users file (D-140, D-250)",
     file: 'apps/api/src/modules/export/catalogue.ts',
-    find: '        contributions\n          .filter((contribution) => !lacks(contribution.ownSet, scope.absent))',
-    replace:
-      '        modules\n          .filter((contribution) => !lacks(contribution.ownSet, scope.absent))',
+    find: 'contributions.flatMap((contribution) => contribution.people(scope))',
+    replace: 'modules.flatMap((contribution) => contribution.people(scope))',
     tests: ['apps/api/src/modules/export/catalogue.test.ts'],
+  },
+  {
+    id: 'export-catalogue-drops-partially-migrated-people',
+    why: 'a module disabled during upgrade loses departed historical authors when its newest table is absent',
+    file: 'apps/api/src/modules/export/catalogue.ts',
+    find: 'contributions.flatMap((contribution) => contribution.people(scope))',
+    replace:
+      'contributions.filter((contribution) => !(contribution.ownSet ?? []).some((table) => scope.absent?.includes(table) === true)).flatMap((contribution) => contribution.people(scope))',
+    tests: ['apps/api/src/features/chat/integrations/partial-set-export.integration.test.ts'],
   },
   {
     id: 'export-catalogue-module-not-prepared',

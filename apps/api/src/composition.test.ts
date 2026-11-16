@@ -743,20 +743,23 @@ describe('the work of the jobs a module names', () => {
     expect(compose([module], [module]).closedJob('other:send')).toBe(false);
   });
 
-  test('chat’s purge and sweeps are retention, its mail a job, and none is closed but the mail with chat off', () => {
+  test('chat delivery and mail act only with chat running; retention sweeps run with it off', () => {
     const alone = compositionFor('none');
     expect(Object.keys(alone.jobWork).sort()).toEqual([
+      'deliver:webhooks',
       'mail:missed',
       'purge:retention',
       'sweep:github-deliveries',
       'sweep:guest-expiry',
       'sweep:link-previews',
+      'sweep:webhook-deliveries',
     ]);
     expect(chatModule.manifest.retention).toEqual([
       'purge:retention',
       'sweep:link-previews',
       'sweep:github-deliveries',
       'sweep:guest-expiry',
+      'sweep:webhook-deliveries',
     ]);
     expect(
       [
@@ -764,9 +767,11 @@ describe('the work of the jobs a module names', () => {
         'sweep:link-previews',
         'sweep:github-deliveries',
         'sweep:guest-expiry',
+        'sweep:webhook-deliveries',
       ].map(alone.closedJob),
-    ).toEqual([false, false, false, false]);
+    ).toEqual([false, false, false, false, false]);
     expect(alone.closedJob('mail:missed')).toBe(true);
+    expect(alone.closedJob('deliver:webhooks')).toBe(true);
   });
 });
 

@@ -30,7 +30,7 @@ import {
   type IncomingWebhook,
   type IncomingWebhookList,
 } from '@purlay/types';
-import { channelNotFound, type ChannelContext } from '../channels/guard';
+import { channelNotFound, requireChannelById, type ChannelContext } from '../channels/guard';
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { EventBus } from '../../../platform/events';
@@ -54,6 +54,34 @@ const hookNotFound = (): AppError =>
  * first is the answer, and it is this workspace's role, never another membership's.
  */
 const mayConfigure = async (executor: ChatDb, context: ChannelContext): Promise<void> => {
+  await executor
+    .selectFrom('workspaces')
+    .select('id')
+    .where('id', '=', context.workspaceId)
+    .forKeyShare()
+    .execute();
+  await requireChannelById(executor, context.userId, context.channelId);
+  if (context.channelType === 'private') {
+    const member = await executor
+      .selectFrom('channel_members')
+      .select('id')
+      .where('channel_id', '=', context.channelId)
+      .where('user_id', '=', context.userId)
+      .forKeyShare()
+      .executeTakeFirst();
+    if (member === undefined) throw channelNotFound();
+  }
+  // Key-share locks above block authority removal but allow incoming posts' workspace/share
+  // and member counter updates. Serialize configuration on the channel without blocking send FKs.
+  const live = await executor
+    .selectFrom('channels')
+    .select('id')
+    .where('id', '=', context.channelId)
+    .where('deleted_at', 'is', null)
+    .forNoKeyUpdate()
+    .executeTakeFirst();
+  if (live === undefined) throw channelNotFound();
+  await requireChannelById(executor, context.userId, context.channelId);
   if (context.channelType === 'direct_message') throw channelNotFound();
   const { role } = await requireWorkspaceMembership(executor, context.userId, context.workspaceId);
   // Each role decided, so a role added later is refused until somebody says otherwise.
@@ -75,6 +103,9 @@ interface HookRow {
   readonly name: string;
   readonly created_at: Date | string;
   readonly last_used_at: Date | string | null;
+  readonly last_request_at: Date | string | null;
+  readonly last_status: number | null;
+  readonly last_error: string | null;
   readonly creator_id: string | null;
   readonly creator_username: string | null;
   readonly creator_display_name: string | null;
@@ -98,6 +129,13 @@ const webhookOf = (row: HookRow): IncomingWebhook => ({
         },
   createdAt: iso(row.created_at),
   lastUsedAt: row.last_used_at === null ? null : iso(row.last_used_at),
+  ...(row.last_request_at === null || row.last_status === null
+    ? {}
+    : {
+        lastRequestAt: iso(row.last_request_at),
+        lastStatus: row.last_status,
+        lastError: row.last_error,
+      }),
 });
 
 /** A channel's hooks, oldest first and bounded by the cap, or the one hook named — with who made each. */
@@ -114,6 +152,9 @@ const hookRows = async (
       'incoming_webhooks.name',
       'incoming_webhooks.created_at',
       'incoming_webhooks.last_used_at',
+      'incoming_webhooks.last_request_at',
+      'incoming_webhooks.last_status',
+      'incoming_webhooks.last_error',
       'users.id as creator_id',
       'users.username as creator_username',
       'users.display_name as creator_display_name',
@@ -149,14 +190,6 @@ export const createWebhook = async (
   request: CreateIncomingWebhookRequest,
 ): Promise<CreatedIncomingWebhook> => {
   await mayConfigure(transaction, context);
-  const live = await transaction
-    .selectFrom('channels')
-    .select('id')
-    .where('id', '=', context.channelId)
-    .where('deleted_at', 'is', null)
-    .forNoKeyUpdate()
-    .executeTakeFirst();
-  if (live === undefined) throw channelNotFound();
   const { count } = await transaction
     .selectFrom('incoming_webhooks')
     .select((eb) => eb.fn.countAll<string>().as('count'))
@@ -320,8 +353,9 @@ export const receivePost = async (
     // outright — then there is no row, and nothing is posted.
     const used = await transaction
       .updateTable('incoming_webhooks')
-      .set({ last_used_at: now })
+      .set({ last_used_at: now, last_request_at: now, last_status: 201, last_error: null })
       .where('id', '=', hook.id)
+      .where('secret_digest', '=', presented)
       .returning('id')
       .executeTakeFirst();
     if (used === undefined) return null;
@@ -375,4 +409,52 @@ export const receivePost = async (
   );
   log.info('incoming webhook', { webhookId: hook.id, outcome: 'posted' });
   return posted.message.id;
+};
+
+/** Rotate in place; the old URL immediately stops posting. */
+export const rotateIncomingWebhook = async (
+  transaction: ChatTx,
+  clock: Clock,
+  context: ChannelContext,
+  webhookId: string,
+): Promise<CreatedIncomingWebhook> => {
+  await mayConfigure(transaction, context);
+  const secret = randomToken();
+  const row = await transaction
+    .updateTable('incoming_webhooks')
+    .set({ secret_digest: await tokenDigest(secret) })
+    .where('id', '=', webhookId)
+    .where('channel_id', '=', context.channelId)
+    .returning('id')
+    .executeTakeFirst();
+  if (row === undefined) throw hookNotFound();
+  const [hook] = await hookRows(transaction, { webhookId });
+  if (hook === undefined) throw hookNotFound();
+  await recordAudit(transaction, clock, {
+    workspaceId: context.workspaceId,
+    actorUserId: context.userId,
+    action: 'integration.webhook_rotated',
+    targetType: 'integration',
+    targetId: webhookId,
+    metadata: { name: hook.name, channelId: context.channelId },
+  });
+  return { webhook: webhookOf(hook), path: `/api/webhooks/incoming/${webhookId}/${secret}` };
+};
+
+/** Fixed error categories only. An invalid credential cannot alter a hook's status. */
+export const recordIncomingOutcome = async (
+  db: ChatDb,
+  clock: Clock,
+  webhookId: string,
+  secret: string,
+  status: number,
+  error: string,
+): Promise<void> => {
+  if (!Value.Check(Uuid, webhookId)) return;
+  await db
+    .updateTable('incoming_webhooks')
+    .set({ last_request_at: clock.now(), last_status: status, last_error: error })
+    .where('id', '=', webhookId)
+    .where('secret_digest', '=', await tokenDigest(secret))
+    .execute();
 };

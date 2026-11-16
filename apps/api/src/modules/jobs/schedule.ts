@@ -14,6 +14,7 @@ import { DAY_MS, HOUR_MS, type Clock } from '../../platform/clock';
 const QUARTER_MS = 15 * 60 * 1000;
 
 export type Slot = { readonly job: string; readonly minute: number } & (
+  | { readonly every: 'minute' }
   | { readonly every: 'quarter-hour' }
   | { readonly every: 'hour' }
   | { readonly every: 'day'; readonly hour: number }
@@ -23,6 +24,8 @@ export type Slot = { readonly job: string; readonly minute: number } & (
 export const PLAN: readonly Slot[] = [
   // Authority expires immediately; pending attention is cleaned at :03, :18, :33 and :48 (D-300).
   { job: 'sweep:guest-expiry', every: 'quarter-hour', minute: 3 },
+  { job: 'deliver:webhooks', every: 'minute', minute: 0 },
+  { job: 'sweep:webhook-deliveries', every: 'hour', minute: 20 },
   { job: 'sweep:sessions', every: 'hour', minute: 15 },
   // Before the night's other work, so what a deleted workspace held is not purged or counted again (D-242).
   { job: 'purge:workspaces', every: 'day', hour: 2, minute: 0 },
@@ -50,10 +53,16 @@ export const PLAN: readonly Slot[] = [
 export const nextRun = (slot: Slot, after: Date): Date => {
   const candidate = new Date(after);
   candidate.setUTCSeconds(0, 0);
-  candidate.setUTCMinutes(slot.minute);
+  if (slot.every !== 'minute') candidate.setUTCMinutes(slot.minute);
   if (slot.every === 'day') candidate.setUTCHours(slot.hour);
   const step =
-    slot.every === 'quarter-hour' ? QUARTER_MS : slot.every === 'hour' ? HOUR_MS : DAY_MS;
+    slot.every === 'minute'
+      ? 60_000
+      : slot.every === 'quarter-hour'
+        ? QUARTER_MS
+        : slot.every === 'hour'
+          ? HOUR_MS
+          : DAY_MS;
   while (candidate.getTime() <= after.getTime()) candidate.setTime(candidate.getTime() + step);
   return candidate;
 };
@@ -92,12 +101,17 @@ export const runSchedule = async (ports: SchedulePorts): Promise<void> => {
   if (stopped()) return;
   await report(FIRST_RUN);
   while (!stopped()) {
-    const due = plan
-      .map((slot) => ({ job: slot.job, at: nextRun(slot, from) }))
-      .reduce((soonest, next) => (next.at < soonest.at ? next : soonest));
-    await sleep(Math.max(0, due.at.getTime() - clock.now().getTime()));
+    const runs = plan.map((slot) => ({ job: slot.job, at: nextRun(slot, from) }));
+    const next = runs.reduce((soonest, candidate) =>
+      candidate.at < soonest.at ? candidate : soonest,
+    );
+    await sleep(Math.max(0, next.at.getTime() - clock.now().getTime()));
     if (stopped()) return;
-    await report(due.job);
-    from = due.at;
+    // Minute jobs share slots with daily jobs: every job due at the same instant must run.
+    for (const due of runs.filter((run) => run.at.getTime() === next.at.getTime())) {
+      if (stopped()) return;
+      await report(due.job);
+    }
+    from = next.at;
   }
 };

@@ -298,6 +298,43 @@ const aTenant = async (
   const {
     webhook: { id: webhookId },
   } = (await hook.json()) as { webhook: { id: string } };
+  const outgoing = await call(db, 'POST', `/api/channels/${channelId}/outgoing-webhooks`, cookie, {
+    name: 'External CI',
+    url: 'https://example.com/hook',
+    events: ['message.created'],
+  });
+  expect(outgoing.status).toBe(201);
+  const {
+    webhook: { id: outgoingWebhookId },
+  } = (await outgoing.json()) as { webhook: { id: string } };
+  expect(
+    (
+      await call(
+        db,
+        'POST',
+        `/api/channels/${channelId}/outgoing-webhooks/${outgoingWebhookId}/test`,
+        cookie,
+      )
+    ).status,
+  ).toBe(204);
+  const delivery = await db
+    .updateTable('webhook_deliveries')
+    .set({ state: 'failed', completed_at: NOW, last_error: 'permanent_http' })
+    .where('webhook_id', '=', outgoingWebhookId)
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const deliveryId = delivery.id;
+  await db
+    .insertInto('webhook_delivery_attempts')
+    .values({
+      id: crypto.randomUUID(),
+      delivery_id: deliveryId,
+      attempted_at: NOW,
+      duration_ms: 1,
+      status: 400,
+      error: 'http_error',
+    })
+    .execute();
   // A ready export, its archive in the store: the one download its owner may make.
   const exportId = messageId(new Date(NOW.getTime() + 7));
   const { user_id: ownerId } = await db
@@ -375,6 +412,8 @@ const aTenant = async (
     bookmarkId,
     issueId,
     webhookId,
+    outgoingWebhookId,
+    deliveryId,
     exportId,
   };
 };
@@ -396,6 +435,8 @@ const NEVER_EXISTED: Ids = {
   bookmarkId: '00000000-0000-4000-8000-000000000000',
   issueId: '00000000-0000-4000-8000-000000000000',
   webhookId: '00000000-0000-4000-8000-000000000000',
+  outgoingWebhookId: '00000000-0000-4000-8000-000000000000',
+  deliveryId: '00000000-0000-4000-8000-000000000000',
   exportId: '00000000-0000-4000-8000-000000000000',
 };
 
@@ -416,6 +457,8 @@ const NOT_A_UUID: Ids = {
   bookmarkId: 'not-a-uuid',
   issueId: 'not-a-uuid',
   webhookId: 'not-a-uuid',
+  outgoingWebhookId: 'not-a-uuid',
+  deliveryId: 'not-a-uuid',
   exportId: 'not-a-uuid',
 };
 

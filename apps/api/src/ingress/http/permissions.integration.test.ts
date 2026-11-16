@@ -158,6 +158,17 @@ const companyCall = async (
   return await call(world, method, path, as, body?.(ids));
 };
 
+const hookFor = async (world: World): Promise<string> => {
+  const response = await call(
+    world,
+    'POST',
+    `/api/channels/${world.channelId}/outgoing-webhooks`,
+    world.people.owner,
+    { name: 'CI', url: 'https://example.com/hook', events: ['message.created'] },
+  );
+  const body = (await response.json()) as { webhook: { id: string } };
+  return body.webhook.id;
+};
 const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promise<Response>>> = {
   'list company domains': async (world, as) => await companyCall(world, as, 'GET', 'domains'),
   'create a company domain': async (world, as) =>
@@ -231,6 +242,120 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     );
   },
 
+  'renew an incoming webhook secret': async (world, as) => {
+    const response = await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/incoming-webhooks`,
+      world.people.owner,
+      { name: 'CI' },
+    );
+    const created = (await response.json()) as { webhook: { id: string } };
+    return await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/incoming-webhooks/${created.webhook.id}/secret`,
+      as,
+    );
+  },
+  'list outgoing webhooks': async (world, as) => {
+    return await call(world, 'GET', `/api/channels/${world.channelId}/outgoing-webhooks`, as);
+  },
+  'make an outgoing webhook': async (world, as) => {
+    return await call(world, 'POST', `/api/channels/${world.channelId}/outgoing-webhooks`, as, {
+      name: 'CI',
+      url: 'https://example.com/hook',
+      events: ['message.created'],
+    });
+  },
+  'pause an outgoing webhook': async (world, as) => {
+    const id = await hookFor(world);
+    return await call(
+      world,
+      'PATCH',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}`,
+      as,
+      { paused: true },
+    );
+  },
+  'revoke an outgoing webhook': async (world, as) => {
+    const id = await hookFor(world);
+    return await call(
+      world,
+      'DELETE',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}`,
+      as,
+    );
+  },
+  'renew an outgoing webhook secret': async (world, as) => {
+    const id = await hookFor(world);
+    return await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/secret`,
+      as,
+    );
+  },
+  'test an outgoing webhook': async (world, as) => {
+    const id = await hookFor(world);
+    return await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/test`,
+      as,
+    );
+  },
+  'read outgoing deliveries': async (world, as) => {
+    const id = await hookFor(world);
+    return await call(
+      world,
+      'GET',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/deliveries`,
+      as,
+    );
+  },
+  'read outgoing delivery attempts': async (world, as) => {
+    const id = await hookFor(world);
+    await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/test`,
+      world.people.owner,
+    );
+    const delivery = await world.db
+      .updateTable('webhook_deliveries')
+      .set({ state: 'failed' })
+      .where('webhook_id', '=', id)
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return await call(
+      world,
+      'GET',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/deliveries/${delivery.id}/attempts`,
+      as,
+    );
+  },
+  'retry an outgoing delivery': async (world, as) => {
+    const id = await hookFor(world);
+    await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/test`,
+      world.people.owner,
+    );
+    const delivery = await world.db
+      .updateTable('webhook_deliveries')
+      .set({ state: 'failed' })
+      .where('webhook_id', '=', id)
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return await call(
+      world,
+      'POST',
+      `/api/channels/${world.channelId}/outgoing-webhooks/${id}/deliveries/${delivery.id}/retry`,
+      as,
+    );
+  },
   'list invitation recipients': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/invitation-recipients`, as),
   'list invitation delivery history': async (world, as) =>
@@ -560,6 +685,15 @@ describe('integration: every administrative write is on the trail, once', () => 
 
   /** Rows the set-up of a case writes before its action (a link made, a token set), not its own. */
   const SET_UP_ROWS: Readonly<Record<string, number>> = {
+    'renew an incoming webhook secret': 1,
+    'pause an outgoing webhook': 1,
+    'revoke an outgoing webhook': 1,
+    'renew an outgoing webhook secret': 1,
+    'test an outgoing webhook': 1,
+    'read outgoing deliveries': 1,
+    'read outgoing delivery attempts': 2,
+    'retry an outgoing delivery': 2,
+
     'list invitation delivery history': 2,
     'resend an invitation recipient': 2,
     'revoke an invitation recipient': 2,

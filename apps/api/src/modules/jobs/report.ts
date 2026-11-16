@@ -30,11 +30,14 @@ export const neverSucceeded = (
 
 /** Same status for the CLI and the administration console; raw failure text stays in operator logs. */
 export const jobStatus = (
-  record: Pick<JobRecord, 'last_success_at' | 'consecutive_failures'> | undefined,
+  record:
+    | (Pick<JobRecord, 'last_success_at' | 'consecutive_failures'> & { readonly job_name?: string })
+    | undefined,
   now: Date,
 ): 'never' | 'ok' | 'overdue' => {
   if (record?.last_success_at == null) return 'never';
-  return now.getTime() - record.last_success_at.getTime() > STALE_AFTER_MS ||
+  return now.getTime() - record.last_success_at.getTime() >
+    (record.job_name === 'deliver:webhooks' ? 180_000 : STALE_AFTER_MS) ||
     record.consecutive_failures > 0
     ? 'overdue'
     : 'ok';

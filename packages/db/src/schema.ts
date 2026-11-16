@@ -383,6 +383,9 @@ export interface IncomingWebhooks {
   created_at: Timestamp;
   created_by: string | null;
   id: string;
+  last_error: string | null;
+  last_request_at: Timestamp | null;
+  last_status: number | null;
   last_used_at: Timestamp | null;
   name: string;
   secret_digest: string;
@@ -574,6 +577,20 @@ export interface Outbox {
   shape: Generated<number>;
   state: Generated<string>;
   type: string;
+  workspace_id: string;
+}
+
+export interface OutgoingWebhooks {
+  channel_id: string;
+  created_at: Timestamp;
+  created_by: string | null;
+  events: string[];
+  id: string;
+  name: string;
+  paused: Generated<boolean>;
+  revoked_at: Timestamp | null;
+  secret_encrypted: string;
+  url: string;
   workspace_id: string;
 }
 
@@ -907,6 +924,35 @@ export interface Verifications {
   identifier: string;
   updated_at: Generated<Timestamp>;
   value: string;
+}
+
+export interface WebhookDeliveries {
+  actor_id: string | null;
+  attempt_count: Generated<number>;
+  completed_at: Timestamp | null;
+  created_at: Timestamp;
+  event_id: string;
+  event_type: string;
+  expires_at: Timestamp;
+  id: string;
+  last_error: string | null;
+  last_status: number | null;
+  lease_token: string | null;
+  lease_until: Timestamp | null;
+  message_id: string | null;
+  next_attempt_at: Timestamp;
+  payload: string;
+  state: Generated<string>;
+  webhook_id: string;
+}
+
+export interface WebhookDeliveryAttempts {
+  attempted_at: Timestamp;
+  delivery_id: string;
+  duration_ms: number;
+  error: string | null;
+  id: string;
+  status: number | null;
 }
 
 export interface WorkspaceAccessGroupMembers {
@@ -1456,6 +1502,7 @@ export interface DB {
   notifications: Notifications;
   object_deletions: ObjectDeletions;
   outbox: Outbox;
+  outgoing_webhooks: OutgoingWebhooks;
   personal_exports: PersonalExports;
   pinned_messages: PinnedMessages;
   push_deliveries: PushDeliveries;
@@ -1481,6 +1528,8 @@ export interface DB {
   two_factors: TwoFactors;
   users: Users;
   verifications: Verifications;
+  webhook_deliveries: WebhookDeliveries;
+  webhook_delivery_attempts: WebhookDeliveryAttempts;
   workspace_access_group_members: WorkspaceAccessGroupMembers;
   workspace_access_groups: WorkspaceAccessGroups;
   workspace_access_policies: WorkspaceAccessPolicies;
