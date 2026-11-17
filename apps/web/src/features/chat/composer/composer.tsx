@@ -29,7 +29,8 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent } from '@purlay/types';
-import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { formattingRanges } from '@purlay/markdown';
 import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useEngine } from '../../../realtime/realtime-provider';
@@ -83,6 +84,7 @@ import {
 } from './suggestion-lists';
 import { EmojiPicker } from './emoji-picker';
 import { FormatToolbar } from './format-toolbar';
+import { activeFormatting } from './active-formatting';
 import { LinkDialog } from './link-dialog';
 import { insertLink } from './link-text';
 import { useComposerSize } from './use-composer-size';
@@ -161,7 +163,16 @@ const Inner = ({
     );
   };
   // Where the caret is, for the `@` list: it reads what was typed up to here.
-  const [caretAt, setCaretAt] = useState(text.length);
+  const [selection, setSelection] = useState<Selection>({ start: text.length, end: text.length });
+  const caretAt = selection.start;
+  const setCaretAt = (at: number): void => {
+    setSelection({ start: at, end: at });
+  };
+  const formatRanges = useMemo(() => (unitsOver(text) > 0 ? null : formattingRanges(text)), [text]);
+  const activeFormats = useMemo(
+    () => activeFormatting(text, formatRanges, selection),
+    [text, formatRanges, selection],
+  );
   // The `@` whose list Esc closed; it stays closed until a mention starts somewhere else.
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);
@@ -233,6 +244,7 @@ const Inner = ({
     inserted.current = null;
     box.focus();
     box.setSelectionRange(wanted.start, wanted.end);
+    setSelection(wanted);
   }, [text]);
 
   /** One of the three buttons: markdown inserted at the caret, as a key would type it (D-110). */
@@ -675,6 +687,7 @@ const Inner = ({
           </VisuallyHidden>
           <FormatToolbar
             previewing={previewing}
+            active={activeFormats}
             labels={labels}
             chord={chord}
             onInsert={insert}
@@ -705,7 +718,7 @@ const Inner = ({
               hidden={previewing}
               className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-muted max-narrow:text-title max-narrow:font-normal scrollbar-thin"
               onChange={(event) => {
-                const { value, selectionStart } = event.target;
+                const { value, selectionStart, selectionEnd } = event.target;
                 madeEmoji.current = null;
                 // A space or a new line after a face makes it an emoji (D-253); not while an IME is composing.
                 const made = composing.current ? null : typedAfterFace(text, value, selectionStart);
@@ -721,12 +734,13 @@ const Inner = ({
                   return;
                 }
                 change(value);
-                setCaretAt(selectionStart);
+                setSelection({ start: selectionStart, end: selectionEnd });
                 // The `@` that was dismissed is gone: the next one opens again.
                 if (mentionQuery(value, selectionStart) === null) setDismissedAt(null);
               }}
               onSelect={(event) => {
-                setCaretAt(event.currentTarget.selectionStart);
+                const { selectionStart, selectionEnd } = event.currentTarget;
+                setSelection({ start: selectionStart, end: selectionEnd });
               }}
               onKeyDown={onKeyDown}
               onPaste={pasteHandler.onPaste}

@@ -51,6 +51,22 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
   },
   {
+    id: 'composer-format-selection-any-overlap',
+    why: 'a mixed selection claims a format belonging to only part of the selected text',
+    file: 'apps/web/src/features/chat/composer/active-formatting.ts',
+    find: '    if (selection.start < start || selection.end > end) continue;',
+    replace: '    if (selection.end < start || selection.start > end) continue;',
+    tests: ['apps/web/src/features/chat/composer/active-formatting.test.ts'],
+  },
+  {
+    id: 'composer-formatting-pressed-state-missing',
+    why: 'the toolbar never exposes the current format to keyboard and assistive-technology users',
+    file: 'apps/web/src/features/chat/composer/format-toolbar.tsx',
+    find: '      aria-pressed={FORMATTING_STATES.has(kind) ? active.has(kind) : undefined}\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
+  },
+  {
     id: 'composer-link-address-not-checked',
     why: 'an unsafe address is accepted by the link insertion helper instead of leaving the draft intact',
     file: 'apps/web/src/features/chat/composer/link-text.ts',

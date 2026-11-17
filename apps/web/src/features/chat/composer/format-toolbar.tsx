@@ -16,9 +16,20 @@ import type { MarkdownKind } from './composer-text';
 
 /** Where the preview toggle sits in the row's order of stops, after the eleven markdown buttons. */
 const PREVIEW_STOP = 11;
+const FORMATTING_STATES: ReadonlySet<MarkdownKind> = new Set([
+  'bold',
+  'italic',
+  'strike',
+  'inlineCode',
+  'bullets',
+  'numbers',
+  'tasks',
+  'quote',
+]);
 
 export interface FormatToolbarProps {
   readonly previewing: boolean;
+  readonly active: ReadonlySet<MarkdownKind>;
   readonly labels: KeyLabels;
   /** The key names joined as this platform prints a chord. */
   readonly chord: (...parts: readonly string[]) => string;
@@ -53,6 +64,7 @@ const Divider = (): React.JSX.Element => (
 
 export const FormatToolbar = ({
   previewing,
+  active,
   labels,
   chord,
   onInsert,
@@ -79,6 +91,15 @@ export const FormatToolbar = ({
       glyph={glyph}
       {...(shortcut === undefined ? {} : { shortcut })}
       disabled={previewing}
+      aria-pressed={FORMATTING_STATES.has(kind) ? active.has(kind) : undefined}
+      data-active={active.has(kind) || undefined}
+      aria-description={
+        kind === 'code' && active.has(kind) ? t('composer.formatActive') : undefined
+      }
+      tooltip={
+        kind === 'code' && active.has(kind) ? `${label} · ${t('composer.formatActive')}` : label
+      }
+      className="data-[active=true]:bg-accent-subtle data-[active=true]:text-accent-text"
       tabIndex={!previewing && slot === stopAt ? 0 : -1}
       onFocus={() => {
         setStopAt(slot);

@@ -1032,4 +1032,50 @@ test.describe('writing tools', () => {
     await page.setViewportSize({ width: 390, height: 450 });
     await expect.poll(async () => await box.evaluate((element) => element.scrollTop)).toBe(100);
   });
+  test('active formatting follows the caret, mixed selections and button edits on a phone', async ({
+    page,
+    signIn,
+    room,
+    expectNoAxe,
+  }) => {
+    const made = await room();
+    await signIn();
+    await page.goto(made.path);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const box = boxOf(page, made.name);
+    const bold = page.getByRole('button', { name: 'Bold', exact: true });
+    const italic = page.getByRole('button', { name: 'Italic', exact: true });
+    const select = async (start: number, end = start): Promise<void> => {
+      await box.press('Home');
+      for (let at = 0; at < start; at++) await box.press('ArrowRight');
+      for (let at = start; at < end; at++) await box.press('Shift+ArrowRight');
+    };
+    await box.fill('**Bold** and _italic_');
+    await select(4);
+    await expect(bold).toHaveAttribute('aria-pressed', 'true');
+    await expect(italic).toHaveAttribute('aria-pressed', 'false');
+    await box.press('End');
+    await expect(bold).toHaveAttribute('aria-pressed', 'false');
+    await box.press('ArrowLeft');
+    await expect(italic).toHaveAttribute('aria-pressed', 'true');
+    await select(0, '**Bold** and _italic_'.length);
+    await expect(bold).toHaveAttribute('aria-pressed', 'false');
+    await expect(italic).toHaveAttribute('aria-pressed', 'false');
+    await box.fill('`**literal**`');
+    await select(6);
+    await expect(bold).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await box.fill('');
+    await bold.click();
+    await expect(bold).toHaveAttribute('aria-pressed', 'true');
+    await box.pressSequentially('new');
+    await select(2, 5);
+    await bold.click();
+    await expect(box).toHaveValue('new');
+    await expect(bold).toHaveAttribute('aria-pressed', 'false');
+    await expectNoAxe(page.locator('[data-composer-card]'));
+  });
 });

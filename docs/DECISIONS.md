@@ -9108,6 +9108,14 @@ for an address and display text in the existing dialog primitive, reuses `SafeHr
 labels and address parentheses, and replaces only the original selection. Cancelling or changing
 channels cannot write anything into another draft. No new editor dependency, wire shape or storage.
 
+The same refinement adds active formatting indicators. Source ranges come from the renderer's
+bounded parser and are cached by draft text; selection changes only classify those ranges. Inline
+content boundaries, the innermost list and conservative whole-selection containment decide state.
+Pending empty wrappers are read with a virtual character so an inserted empty format can be shown
+without treating escapes or URL characters as formatting. Link/table insertion remains an action.
+Indicators change no draft, renderer behaviour, wire contract or formatting shortcut.
+
+
 
 **Considered and rejected.** A WYSIWYG editor (PRD §4.1 fixes plain textarea and GFM); a full emoji dataset
 with search (cost out of proportion to what a team uses, and the system keyboard exists); a hidden toolbar
