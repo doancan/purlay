@@ -2210,6 +2210,7 @@ export const en = {
   'emoji.symbols': 'Symbols',
   'composer.preview': 'Preview',
   'composer.previewEmpty': 'Nothing to preview yet',
+  'composer.formatActive': 'Current format',
   'composer.format': 'Formatting',
   'composer.attach': 'Attach a file',
   'composer.files': 'Files to send',

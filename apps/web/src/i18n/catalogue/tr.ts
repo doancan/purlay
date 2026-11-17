@@ -2207,6 +2207,7 @@ export const tr = {
   'emoji.symbols': 'Semboller',
   'composer.preview': 'Önizleme',
   'composer.previewEmpty': 'Önizlenecek bir şey yok',
+  'composer.formatActive': 'Geçerli biçim',
   'composer.format': 'Biçimlendirme',
   'composer.attach': 'Dosya ekle',
   'composer.files': 'Gönderilecek dosyalar',

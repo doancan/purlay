@@ -800,6 +800,13 @@ The writing area starts at two lines and grows for soft wraps as well as typed n
 screens the text is at least 16px and the send button is an icon; with a keyboard the visible Send
 label is visible; the hints below the text name the shortcut appropriate to a normal message or an open code fence.
 
+**Active formatting** follows the caret and text selection. Emphasis, list and quote controls
+show their pressed state with the existing selected colours and `aria-pressed`. Code-block insertion
+shows its current context in the same colours and an accessible description, without claiming to be
+a toggle; link and table stay insertion actions. A mixed selection is never claimed as fully formatted. Nested lists identify
+the innermost list, and escaped markers or markup written inside code are not emphasis. The source
+remains ordinary Markdown and the existing button/shortcut actions are unchanged.
+
 **Add a link** opens a small form, from the button or `Mod+Shift+U`, preserving the current selection.
 Selected words prefill its display text; a selected full URL prefills its address. The renderer’s
 `SafeHref` policy accepts HTTP, HTTPS and mailto addresses. A refused address is explained in place;

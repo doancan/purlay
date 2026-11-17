@@ -3119,3 +3119,80 @@ describe('links in the writing area', () => {
     expect(box().value).toBe('A **clear** message');
   });
 });
+
+describe('active formatting controls', () => {
+  test('a code block shows context without claiming to be a formatting toggle', async () => {
+    const { view, box } = await mount({ storage: drafted('```ts\nconst value = 1;\n```') });
+    act(() => {
+      box().focus();
+      box().setSelectionRange(12, 12);
+      fireEvent.select(box());
+    });
+    const code = view.getByRole('button', { name: 'Code block' });
+    expect(code.getAttribute('data-active')).toBe('true');
+    expect(code.hasAttribute('aria-pressed')).toBe(false);
+    expect(code.getAttribute('aria-description')).toBe('Current format');
+  });
+
+  test('caret movement and mixed selections update the pressed state without changing the draft', async () => {
+    const text = '**Bold** and _italic_';
+    const { view, box } = await mount({ storage: drafted(text) });
+    const select = (start: number, end = start): void => {
+      act(() => {
+        box().focus();
+        box().setSelectionRange(start, end);
+        fireEvent.select(box());
+      });
+    };
+    const bold = view.getByRole('button', { name: 'Bold' });
+    const italic = view.getByRole('button', { name: 'Italic' });
+    select(4);
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    expect(italic.getAttribute('aria-pressed')).toBe('false');
+    select(17);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(italic.getAttribute('aria-pressed')).toBe('true');
+    select(0, text.length);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(italic.getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe(text);
+    expect(view.getByRole('button', { name: 'Link' }).hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  test('formatting with a button or shortcut updates the state immediately, including empty wrappers', async () => {
+    const { view, box, user } = await mount();
+    const bold = view.getByRole('button', { name: 'Bold' });
+    await user.click(bold);
+    expect(box().value).toBe('****');
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    await user.keyboard('hello');
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    act(() => {
+      box().setSelectionRange(2, 7);
+      fireEvent.select(box());
+    });
+    await user.keyboard('{Control>}b{/Control}');
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe('hello');
+  });
+
+  test('a selected word toggles formatting off again, and channel switches do not keep the old state', async () => {
+    const { view, box, user, rerender } = await mount({ storage: drafted('ship') });
+    act(() => {
+      box().focus();
+      box().setSelectionRange(0, 4);
+      fireEvent.select(box());
+    });
+    const bold = view.getByRole('button', { name: 'Bold' });
+    await user.click(bold);
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    await user.click(bold);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe('ship');
+    await user.click(bold);
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    await settle();
+    expect(view.getByRole('button', { name: 'Bold' }).getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe('');
+  });
+});
