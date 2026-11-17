@@ -5,10 +5,10 @@
  * live in" (`UX.md` §5). One entry per place a person can write — a channel, or one
  * thread in it — in `localStorage`, per device and with no schema, like the theme and
  * the language (D-41). Storage can be missing (a private window), full or refuse; none
- * of that is allowed to reach the composer, so every access is guarded and a failure
- * is a draft that is not remembered, not a composer that does not work.
+ * of that is allowed to throw through the composer. Accesses are guarded; failures are
+ * reported with retry while the text remains editable and sendable.
  */
-import { useEffect, type RefObject } from 'react';
+import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { isClaimedBy, noteStorageFailure } from '../../../data/browser-storage';
 import type { Schedule } from '../../../realtime/connection';
 import type { KeyValueStorage } from '../../../theme/theme';
@@ -44,13 +44,18 @@ export const readDraft = (storage: DraftStorage | null, key: string): string => 
 };
 
 /** An empty draft removes the entry: a person who sent what they wrote leaves nothing behind. */
-export const writeDraft = (storage: DraftStorage | null, key: string, text: string): void => {
+export const writeDraft = (storage: DraftStorage | null, key: string, text: string): boolean => {
+  if (storage === null) return text === '';
   try {
-    if (text === '') storage?.removeItem(key);
-    else storage?.setItem(key, text);
+    if (text === '') {
+      if (storage.getItem(key) === null) return true;
+      storage.removeItem(key);
+    } else storage.setItem(key, text);
+    return true;
   } catch {
     // Not remembered; the composer carries on.
     noteStorageFailure('draft-write');
+    return false;
   }
 };
 
@@ -106,23 +111,52 @@ export const useDraftWriter = (
   },
   text: string,
   latest: RefObject<string>,
-): void => {
+): { readonly failed: boolean; readonly retry: () => void } => {
   const { storage, schedule, userId, key, isCurrent } = place;
+  const [failed, setFailed] = useState(false);
+  const flush = useCallback(
+    (notify: boolean): void => {
+      // A closing page must obey exactly the same account/ownership boundary as a timer.
+      if (!isCurrent()) return;
+      if (storage !== null && !isClaimedBy(storage, userId)) {
+        if (notify) setFailed(latest.current !== '');
+        return;
+      }
+      const saved = writeDraft(storage, key, latest.current);
+      if (notify) setFailed(!saved);
+    },
+    [storage, userId, key, isCurrent, latest],
+  );
   // Debounced: written a moment after typing stops — while the page is still this person's.
   useEffect(() => {
     const cancel = schedule(() => {
-      if (isCurrent() && isClaimedBy(storage, userId)) writeDraft(storage, key, text);
+      flush(true);
     }, DRAFT_DEBOUNCE_MS);
     return cancel;
-  }, [text, key, storage, schedule, userId, isCurrent]);
+  }, [text, schedule, flush]);
 
   // Written for certain as the composer goes — a channel switch or a closed screen —
   // so the last keystrokes are never inside a timer that never fires. Not after a sign-out, or
   // after somebody else signed in in another tab: that would put the words back for them (#694).
-  useEffect(
-    () => (): void => {
-      if (isCurrent() && isClaimedBy(storage, userId)) writeDraft(storage, key, latest.current);
+  useEffect(() => {
+    const hide = (): void => {
+      flush(false);
+    };
+    const visibility = (): void => {
+      if (document.visibilityState === 'hidden') flush(true);
+    };
+    window.addEventListener('pagehide', hide);
+    document.addEventListener('visibilitychange', visibility);
+    return (): void => {
+      window.removeEventListener('pagehide', hide);
+      document.removeEventListener('visibilitychange', visibility);
+      flush(false);
+    };
+  }, [flush]);
+  return {
+    failed,
+    retry: (): void => {
+      flush(true);
     },
-    [key, storage, userId, latest, isCurrent],
-  );
+  };
 };

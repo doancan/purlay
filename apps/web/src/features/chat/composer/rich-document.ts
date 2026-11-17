@@ -295,6 +295,7 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
   };
   const inline = (parent: RichNode, start: number, table = false): void => {
     let lineText = '';
+    let protectedText = false;
     let opened: readonly Mark[] = [];
     const delimiters = new Map<string, readonly [string, string]>();
     const close = (from: number): void => {
@@ -307,10 +308,16 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
       marks: readonly Mark[];
       literal: boolean;
       hardBreak: boolean;
+      protect: boolean;
     }[] = [];
     parent.forEach((child, offset) => {
       const emptyLink = child.type.name === 'empty_link';
       const literal = emptyLink || child.marks.some((mark) => mark.type.name === 'code');
+      const value = child.text ?? '';
+      const protect =
+        !literal &&
+        !child.marks.some((mark) => mark.type.name === 'link') &&
+        (/https?:\/\/|www\./i.test(value) || /[^\s@]@[^\s@]/u.test(value));
       if (!child.isText || literal)
         tokens.push({
           value: emptyLink
@@ -320,6 +327,7 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
           marks: child.marks,
           literal,
           hardBreak: !child.isText,
+          protect: false,
         });
       else
         for (let i = 0; i < editorValue(child.text).length; i++)
@@ -329,6 +337,7 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
             marks: child.marks,
             literal: false,
             hardBreak: false,
+            protect,
           });
     });
     // Delimiters cannot enclose boundary whitespace. A whitespace run keeps only marks shared by
@@ -345,8 +354,26 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
       const before = tokens[first - 1]?.marks ?? [];
       const after = tokens[i + 1]?.marks ?? [];
       const shared = before.filter((mark) => after.some((other) => mark.eq(other)));
-      for (let at = first; at <= i; at++) editorValue(tokens[at]).marks = shared;
+      const boundary =
+        first === 0 ||
+        i === tokens.length - 1 ||
+        tokens[first - 1]?.hardBreak === true ||
+        tokens[i + 1]?.hardBreak === true ||
+        tokens.slice(first, i + 1).some((token) => token.value === '\n');
+      for (let at = first; at <= i; at++) {
+        const token = editorValue(tokens[at]);
+        token.marks = token.marks.filter(
+          (mark) => mark.type.name === 'link' || shared.some((other) => other.eq(mark)),
+        );
+        if (
+          boundary &&
+          token.value !== '\n' &&
+          !token.marks.some((mark) => mark.type.name === 'link')
+        )
+          token.protect = true;
+      }
     }
+    if (tokens[0]?.value === '  \n') write('[]()');
     for (const [tokenIndex, token] of tokens.entries()) {
       const endOfMark = (mark: Mark): number => {
         let end = tokenIndex;
@@ -377,6 +404,10 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
       )
         common++;
       const changed = common !== opened.length || common !== marks.length;
+      if (protectedText && (changed || !token.protect)) {
+        write(']()');
+        protectedText = false;
+      }
       if (changed) edge(position, opened);
       close(common);
       if (changed) edge(position, opened.slice(0, common));
@@ -409,6 +440,12 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
         write(delimiter[0]);
       }
       opened = marks;
+      // Empty destinations are rendered as their label by SafeHref. Unlike punctuation escapes,
+      // they also suppress GFM's post-decoding autolink pass without altering visible URL text.
+      if (token.protect && !protectedText) {
+        write('[');
+        protectedText = true;
+      }
       if (changed) edge(position, marks);
       at(position);
       if (!token.hardBreak) {
@@ -431,14 +468,19 @@ export const writeRichDocument = (doc: RichNode): RichSource => {
           at(position + i + 1);
         }
       } else {
-        write(token.value);
+        // A whitespace-only line would split the paragraph and drop an intentional empty line.
+        write(
+          token.value === '  \n' && tokens[tokenIndex - 1]?.value === '  \n' ? '\\\n' : token.value,
+        );
         lineText = '';
         at(position + 1);
       }
     }
     const end = start + parent.content.size;
+    if (protectedText) write(']()');
     if (opened.length > 0) edge(end, opened);
     close(0);
+    if (tokens.at(-1)?.value === '  \n') write('[]()');
     if (opened.length > 0) {
       at(end);
       edge(end, []);

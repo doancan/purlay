@@ -9139,6 +9139,19 @@ JSON, new wire shape or data migration is introduced. Source-mode behavior tests
 source; separate browser tests cover the actual formatted default, selection, undo, composition and
 accessibility.
 
+**Editing completion (owner, 2026-11-17).** The owner prioritizes four gaps: draft safety, clearing
+formatting, existing-link editing/removal and leaving a code block. Draft lifecycle flushes now share
+the timer's account/ownership checks and expose actual save/delete failures with a retry, without
+blocking writing or sending. Clear targets selected inline text and its block styles (the current
+paragraph for a caret), preserves code line boundaries and indentation, and is one native undo action.
+Existing-link address changes retain the exact label and its styles; removal retains the label.
+Code exit preserves the code and reuses or inserts a following paragraph. Source actions use the same
+bounded editing model; ordinary source link insertion still uses its selection-preserving helper.
+The existing SafeHref grammar renders empty-destination labels as text, so serialization uses them
+to retain boundary whitespace/blank lines and explicitly unlinked URL labels without invisible
+characters, HTML, character entities, or a new wire format. Empty formatted drafts cannot send,
+and sending still trims ordinary trailing whitespace while keeping code and link-label contents.
+
 **Originally considered and rejected (the live editing amendment supersedes the first item).** A WYSIWYG editor; a full emoji dataset
 with search (cost out of proportion to what a team uses, and the system keyboard exists); a hidden toolbar
 behind a "Aa" toggle (formatting that has to be discovered is not formatting people use); a preview in a

@@ -11,16 +11,22 @@ export const LinkDialog = ({
   onInsert,
   onClose,
   returnFocus,
+  existing,
+  onRemove,
 }: {
   readonly selection: string;
   readonly onInsert: (label: string, address: string) => void;
   readonly onClose: () => void;
   readonly returnFocus: () => HTMLElement | null;
+  readonly existing: { readonly label: string; readonly address: string } | null;
+  readonly onRemove: () => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
   const selectedAddress = SafeHref.of(selection.trim());
-  const [label, setLabel] = useState(selectedAddress === null ? selection : '');
-  const [address, setAddress] = useState(selectedAddress?.href ?? '');
+  const [label, setLabel] = useState(
+    existing?.label ?? (selectedAddress === null ? selection : ''),
+  );
+  const [address, setAddress] = useState(existing?.address ?? selectedAddress?.href ?? '');
   const [invalid, setInvalid] = useState(false);
   const addressField = useRef<HTMLInputElement>(null);
   return (
@@ -29,7 +35,7 @@ export const LinkDialog = ({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={t('composer.link.title')}
+      title={t(existing === null ? 'composer.link.title' : 'composer.link.editTitle')}
       description={t('composer.link.description')}
       closeLabel={t('common.close')}
       returnFocus={returnFocus}
@@ -71,11 +77,16 @@ export const LinkDialog = ({
           }}
         />
         <div className="flex flex-wrap justify-end gap-2">
+          {existing !== null && (
+            <Button type="button" variant="ghost" className="mr-auto" onClick={onRemove}>
+              {t('composer.link.remove')}
+            </Button>
+          )}
           <Button type="button" onClick={onClose}>
             {t('common.cancel')}
           </Button>
           <Button type="submit" variant="primary">
-            {t('composer.link.insert')}
+            {t(existing === null ? 'composer.link.insert' : 'composer.link.save')}
           </Button>
         </div>
       </form>

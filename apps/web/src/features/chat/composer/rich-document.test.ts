@@ -89,7 +89,9 @@ describe('formatted editing uses the message grammar', () => {
     const doc = richSchema.node('doc', null, [
       richSchema.node('paragraph', null, [richSchema.text(' hello ', [richSchema.mark('strong')])]),
     ]);
-    expect(writeRichDocument(doc).text).toBe(' **hello** ');
+    const source = writeRichDocument(doc).text;
+    expect(source).toContain('**hello**');
+    expect(readRichDocument(source).textContent).toBe(' hello ');
   });
 
   for (const middle of ['b', 'b`c', ' b ']) {

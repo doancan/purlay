@@ -2208,6 +2208,17 @@ export const tr = {
   'composer.preview': 'Önizleme',
   'composer.previewEmpty': 'Önizlenecek bir şey yok',
   'composer.formatActive': 'Geçerli biçim',
+  'composer.clearFormatting': 'Biçimi temizle',
+  'composer.clearFormattingHint':
+    'Seçili metnin biçimini temizle; seçim yoksa geçerli paragrafı normal metne dönüştür.',
+  'composer.leaveCode': 'Normal paragrafa devam et',
+  'composer.draftFailed':
+    'Taslak bu cihazda kaydedilemedi. Yazdıkların burada duruyor; ayrılmadan önce kopyala veya bu sayfayı açık tut.',
+  'composer.draftClearFailed':
+    'Eski taslak bu cihazdan silinemedi. Sayfayı yenilediğinde yeniden görünebilir.',
+  'composer.link.editTitle': 'Bağlantıyı düzenle',
+  'composer.link.save': 'Bağlantıyı kaydet',
+  'composer.link.remove': 'Bağlantıyı kaldır',
   'composer.sourceView': 'Markdown kaynağı',
   'composer.formattedView': 'Biçimlendirilmiş görünüm',
   'composer.loadingEditor': 'Yazı alanı yükleniyor…',

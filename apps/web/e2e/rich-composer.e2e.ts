@@ -9,6 +9,226 @@ const source = (page: Page): Locator => page.locator('textarea[data-composer]');
 const mode = (page: Page): Locator =>
   page.getByRole('button', { name: 'Markdown source', exact: true });
 
+test('immediate reload keeps the most recent formatted draft', async ({ page, signIn, room }) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await page.getByRole('button', { name: 'Bold', exact: true }).click();
+  await rich(page).pressSequentially('saved immediately');
+  await page.reload();
+  await expect(rich(page).locator('strong')).toHaveText('saved immediately');
+});
+
+test('a storage failure is explained, retry saves, and typing remains available', async ({
+  page,
+  signIn,
+  room,
+  expectNoAxe,
+}) => {
+  await page.addInitScript(() => {
+    const save: unknown = Object.getOwnPropertyDescriptor(Storage.prototype, 'setItem')?.value;
+    if (typeof save !== 'function') throw new Error('Storage.setItem is unavailable');
+    Storage.prototype.setItem = function (key: string, value: string): void {
+      if (key.startsWith('purlay.draft.') && sessionStorage.getItem('allow-draft-save') !== 'yes')
+        throw new DOMException('Quota', 'QuotaExceededError');
+      Reflect.apply(save, this, [key, value]);
+    };
+  });
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await rich(page).fill('keep these words');
+  await expect(page.getByText(/Draft could not be saved/)).toBeVisible();
+  await expect(rich(page)).toHaveText('keep these words');
+  await expectNoAxe(page.locator('main'));
+  await page.evaluate(() => {
+    sessionStorage.setItem('allow-draft-save', 'yes');
+  });
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByText(/Draft could not be saved/)).toHaveCount(0);
+  await expect(rich(page)).toBeFocused();
+  await page.reload();
+  await expect(rich(page)).toHaveText('keep these words');
+});
+
+test('clear formatting is one undoable action and preserves the text', async ({
+  page,
+  signIn,
+  room,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await mode(page).click();
+  await source(page).fill('> - **one**\n> - _two_');
+  await mode(page).click();
+  await rich(page).press('ControlOrMeta+a');
+  await page.getByRole('button', { name: 'Clear formatting', exact: true }).click();
+  await expect(rich(page).locator('strong,em,ul,ol,blockquote')).toHaveCount(0);
+  await expect(rich(page).locator('p')).toHaveText(['one', 'two']);
+  await rich(page).press('ControlOrMeta+z');
+  await expect(rich(page).locator('blockquote ul')).toHaveCount(1);
+});
+
+test('clear formatting also works from Markdown source', async ({ page, signIn, room }) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await mode(page).click();
+  await source(page).fill('**bold** and _italic_');
+  await source(page).press('ControlOrMeta+a');
+  await page.getByRole('button', { name: 'Clear formatting', exact: true }).click();
+  await expect(source(page)).toHaveValue('bold and italic');
+  await expect(source(page)).toBeFocused();
+});
+
+test('clearing multiline code preserves blank lines and indentation after reload', async ({
+  page,
+  signIn,
+  room,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await mode(page).click();
+  await source(page).fill('```\n\n  one\n\n    two\n\n```');
+  await mode(page).click();
+  await rich(page).press('ControlOrMeta+a');
+  await page.getByRole('button', { name: 'Clear formatting', exact: true }).click();
+  await expect(rich(page).locator('pre')).toHaveCount(0);
+  expect(await rich(page).textContent()).toBe('  one    two');
+  expect(await rich(page).locator('br').count()).toBeGreaterThanOrEqual(4);
+  await expect(rich(page)).toHaveAttribute('data-empty', 'false');
+  await page.reload();
+  expect(await rich(page).textContent()).toBe('  one    two');
+  expect(await rich(page).locator('br').count()).toBeGreaterThanOrEqual(4);
+});
+
+test('existing links can be safely edited and removed from source mode', async ({
+  page,
+  signIn,
+  room,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await mode(page).click();
+  await source(page).fill('Before [**notes**](https://example.com/old) after');
+  await source(page).evaluate((element: HTMLTextAreaElement) => {
+    element.setSelectionRange(12, 12);
+  });
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit link' });
+  await expect(dialog.getByLabel('Link address')).toHaveValue('https://example.com/old');
+  await dialog.getByLabel('Link address').fill('javascript:alert(1)');
+  await dialog.getByRole('button', { name: 'Save link', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await dialog.getByLabel('Link address').fill('https://example.com/new');
+  await dialog.getByRole('button', { name: 'Save link', exact: true }).click();
+  await expect(source(page)).toHaveValue(
+    /Before \[\*\*notes\*\*\]\(<https:\/\/example.com\/new>\) after/,
+  );
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove link', exact: true }).click();
+  await expect(source(page)).toHaveValue('Before **notes** after');
+});
+
+test('blank formatted lines stay editable but cannot send an empty message', async ({
+  page,
+  signIn,
+  room,
+  api,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await rich(page).press('Shift+Enter');
+  await rich(page).press('Shift+Enter');
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await rich(page).press('Enter');
+  expect(
+    (await api('dogancan').get<{ data: unknown[] }>(`/api/channels/${made.id}/messages`)).data,
+  ).toHaveLength(0);
+});
+
+test('existing links prefill their address, keep styled labels, and can be removed', async ({
+  page,
+  signIn,
+  room,
+  expectNoAxe,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await mode(page).click();
+  await source(page).fill('[  **release** notes  ](https://example.com/old)');
+  await mode(page).click();
+  await rich(page).getByRole('link').filter({ hasText: 'release' }).first().click();
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit link' });
+  await expect(dialog.getByLabel('Display text')).toHaveValue('  release notes  ');
+  await expect(dialog.getByLabel('Link address')).toHaveValue('https://example.com/old');
+  await expectNoAxe(dialog);
+  await dialog.getByLabel('Link address').fill('https://example.com/new');
+  await dialog.getByRole('button', { name: 'Save link', exact: true }).click();
+  await expect(rich(page).getByRole('link').first()).toHaveAttribute(
+    'href',
+    'https://example.com/new',
+  );
+  await expect(rich(page).locator('a[href="https://example.com/old"]')).toHaveCount(0);
+  await expect(rich(page).locator('strong')).toHaveText('release');
+  expect(await rich(page).textContent()).toBe('  release notes  ');
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove link', exact: true }).click();
+  await expect(rich(page).getByRole('link')).toHaveCount(0);
+  await expect(rich(page)).toHaveText('release notes');
+  await expect(rich(page).locator('strong')).toHaveText('release');
+});
+
+test('unlinking an address stays unlinked after a mode switch and reload', async ({
+  page,
+  signIn,
+  room,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await mode(page).click();
+  await source(page).fill('[https://example.com](https://example.com)');
+  await mode(page).click();
+  await rich(page).getByRole('link').click();
+  await page.getByRole('button', { name: 'Link', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove link', exact: true }).click();
+  await expect(rich(page).getByRole('link')).toHaveCount(0);
+  await expect(rich(page)).toHaveText('https://example.com');
+  await mode(page).click();
+  await mode(page).click();
+  await page.reload();
+  await expect(rich(page).getByRole('link')).toHaveCount(0);
+  await expect(rich(page)).toHaveText('https://example.com');
+});
+
+test('code has an explicit way back to normal writing, with its content preserved', async ({
+  page,
+  signIn,
+  room,
+}) => {
+  const made = await room();
+  await signIn();
+  await page.goto(made.path);
+  await page.getByRole('button', { name: 'Code block', exact: true }).click();
+  await rich(page).pressSequentially('const answer = 42;');
+  await rich(page).press('ControlOrMeta+a');
+  await page.getByRole('button', { name: 'Continue in a normal paragraph', exact: true }).click();
+  await expect(rich(page)).toBeFocused();
+  await rich(page).pressSequentially('explanation');
+  await expect(rich(page).locator('pre code')).toHaveText('const answer = 42;');
+  await expect(rich(page).locator(':scope > p')).toHaveText('explanation');
+});
+
 test('formatted text is editable by default; Markdown exposes the source and returns to editing', async ({
   page,
   signIn,

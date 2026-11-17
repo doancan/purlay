@@ -30,7 +30,7 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
-  .purlay-rich-editor:has(> p:only-child > br:only-child)::before {
+  .purlay-rich-editor[data-empty='true']::before {
     content: attr(data-placeholder);
     @apply pointer-events-none float-left h-0 text-ink-muted;
   }

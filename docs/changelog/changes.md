@@ -33,7 +33,7 @@ have it.
 
 ### Changed
 
-- **Writing** — Write directly in formatted text, switch to Markdown source when needed, see active formatting, and insert links through a labelled form. The writing area grows with wrapped text and stays usable on phones (D-181).
+- **Writing** — Write in formatted text or Markdown, see active formatting, clear styles, edit/remove links, and continue after code blocks. The area grows with wrapped text on phones; drafts survive quick reloads and explain storage failures with Retry (D-181).
 
 ### Security
 
