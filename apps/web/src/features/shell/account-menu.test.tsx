@@ -321,7 +321,7 @@ describe('signing out', () => {
     view.unmount();
   });
 
-  test('forgets what the browser kept for this person — drafts, the last channel, unsent messages — and keeps the theme', async () => {
+  test('forgets personal drafts, the last channel and unsent messages, keeping theme and editing preferences', async () => {
     // As the server answers: once signed out, nobody is (the sign-in screen asks, #694).
     let signedIn = true;
     const view = await open({
@@ -343,7 +343,7 @@ describe('signing out', () => {
     await menu(view);
     await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
     await settle();
-    expect(Object.keys(storage.data)).toEqual(['purlay.theme']);
+    expect(Object.keys(storage.data).sort()).toEqual(['purlay.composerSource', 'purlay.theme']);
     view.unmount();
   });
 

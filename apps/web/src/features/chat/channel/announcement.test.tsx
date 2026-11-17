@@ -75,7 +75,7 @@ describe('the composer of an announcement channel', () => {
   test('a member is told who posts here in its place, the header marks it, and the page passes the audit', async () => {
     const view = await mountAs('member');
     expect(view.getByText(NOTICE)).toBeDefined();
-    expect(view.queryByLabelText('Message api')).toBeNull();
+    expect(view.queryByRole('textbox', { name: 'Message api' })).toBeNull();
     expect(view.getByRole('img', { name: 'Only owners and admins post here' })).toBeDefined();
     await expectNoAxeViolations(view.container);
     view.unmountAll();
@@ -86,13 +86,13 @@ describe('the composer of an announcement channel', () => {
       path: `/w/acme/c/${IDS.api}?thread=${messageIdAt(ROOT)}`,
     });
     expect(view.getByText(NOTICE)).toBeDefined();
-    expect(view.getByLabelText('Message a thread in api')).toBeDefined();
+    expect(view.getByRole('textbox', { name: 'Message a thread in api' })).toBeDefined();
     view.unmountAll();
   });
 
   test.each(['owner', 'admin'] as const)('an %s has the composer', async (role) => {
     const view = await mountAs(role);
-    expect(view.getByLabelText('Message api')).toBeDefined();
+    expect(view.getByRole('textbox', { name: 'Message api' })).toBeDefined();
     expect(view.queryByText(NOTICE)).toBeNull();
     // The marker is for everybody: it says what the channel is, not what this person may do.
     expect(view.getByRole('img', { name: 'Only owners and admins post here' })).toBeDefined();
@@ -101,7 +101,7 @@ describe('the composer of an announcement channel', () => {
 
   test('a channel everybody posts in has neither the notice nor the marker', async () => {
     const view = await mountAs('member', { onlyAdminsPost: false });
-    expect(view.getByLabelText('Message api')).toBeDefined();
+    expect(view.getByRole('textbox', { name: 'Message api' })).toBeDefined();
     expect(view.queryByText(NOTICE)).toBeNull();
     expect(view.queryByRole('img', { name: 'Only owners and admins post here' })).toBeNull();
     view.unmountAll();
@@ -111,7 +111,7 @@ describe('the composer of an announcement channel', () => {
     const view = await mountAs('member');
     view.world.client.setQueryData(keys.channels(IDS.workspace), channelsWith(false));
     await settle();
-    expect(view.getByLabelText('Message api')).toBeDefined();
+    expect(view.getByRole('textbox', { name: 'Message api' })).toBeDefined();
     view.world.client.setQueryData(keys.channels(IDS.workspace), channelsWith(true));
     await settle();
     expect(view.getByText(NOTICE)).toBeDefined();

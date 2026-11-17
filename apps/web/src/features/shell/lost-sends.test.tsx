@@ -39,7 +39,7 @@ describe('unsent messages of a channel that went away', () => {
     });
     await settle();
     // Two sends the server never answers.
-    const box = view.getByLabelText(/^Message/);
+    const box = view.getByRole('textbox', { name: /^Message/ });
     await person().type(box, 'first{Enter}');
     await person().type(box, 'second{Enter}');
     await settle();
@@ -77,7 +77,7 @@ describe('unsent messages of a channel that went away', () => {
       view.world.sockets.open();
     });
     await settle();
-    await person().type(view.getByLabelText(/^Mesaj: /), 'yolda{Enter}');
+    await person().type(view.getByRole('textbox', { name: /^Mesaj: / }), 'yolda{Enter}');
     await settle();
     // Nobody said ACCESS_REVOKED: the channel is simply not in the list read again.
     list = list.filter((c) => c.id !== IDS.api);
