@@ -343,6 +343,36 @@ export const API_CHAT_INTEGRATIONS: readonly Mutation[] = [
     tests: [HOOKS_TESTS],
   },
   {
+    id: 'incoming-webhook-authority-private-membership-unlocked',
+    why: 'private-channel removal can pass a webhook creator waiting at channel admission',
+    file: HOOKS,
+    find: "      .where('user_id', '=', context.userId)\n      .forKeyShare()\n",
+    replace: "      .where('user_id', '=', context.userId)\n",
+    tests: [
+      'apps/api/src/features/chat/integrations/webhook-authority.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'incoming-webhook-authority-role-not-checked',
+    why: 'a demoted administrator still creates a webhook because the current member role is ignored',
+    file: HOOKS,
+    find: '  switch (role) {\n',
+    replace: "  switch (role === 'member' ? 'admin' : role) {\n",
+    tests: [
+      'apps/api/src/features/chat/integrations/webhook-authority.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'incoming-webhook-authority-workspace-unlocked',
+    why: 'role changes can pass a webhook creator waiting at channel admission',
+    file: HOOKS,
+    find: "    .where('id', '=', context.workspaceId)\n    .forKeyShare()\n",
+    replace: "    .where('id', '=', context.workspaceId)\n",
+    tests: [
+      'apps/api/src/features/chat/integrations/webhook-authority.concurrency.integration.test.ts',
+    ],
+  },
+  {
     id: 'incoming-webhook-bucket-skipped',
     why: 'one hook floods its channel without limit',
     file: HOOKS,
@@ -463,6 +493,36 @@ export const API_CHAT_INTEGRATIONS: readonly Mutation[] = [
     find: "    if (item.type === 'issue') {\n",
     replace: "    if (item.type === 'never') {\n",
     tests: ['apps/api/src/features/chat/integrations/unfurl.integration.test.ts'],
+  },
+  {
+    id: 'outgoing-webhook-authority-private-membership-unlocked',
+    why: 'private-channel removal can pass a webhook creator waiting at channel admission',
+    file: 'apps/api/src/features/chat/integrations/outgoing-webhooks.ts',
+    find: "      .where('user_id', '=', context.userId)\n      .forKeyShare()\n",
+    replace: "      .where('user_id', '=', context.userId)\n",
+    tests: [
+      'apps/api/src/features/chat/integrations/webhook-authority.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-authority-role-not-checked',
+    why: 'a demoted administrator still creates a webhook because the current member role is ignored',
+    file: 'apps/api/src/features/chat/integrations/outgoing-webhooks.ts',
+    find: "  if (member.role === 'member')\n",
+    replace: '  if (false)\n',
+    tests: [
+      'apps/api/src/features/chat/integrations/webhook-authority.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-authority-workspace-unlocked',
+    why: 'role changes can pass a webhook creator waiting at channel admission',
+    file: 'apps/api/src/features/chat/integrations/outgoing-webhooks.ts',
+    find: "    .where('id', '=', context.workspaceId)\n    .forKeyShare()\n",
+    replace: "    .where('id', '=', context.workspaceId)\n",
+    tests: [
+      'apps/api/src/features/chat/integrations/webhook-authority.concurrency.integration.test.ts',
+    ],
   },
   {
     id: 'outgoing-webhook-cap-not-serialized',

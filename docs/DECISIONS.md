@@ -15959,6 +15959,8 @@ as manual access or edit applied migration history.
 ### D-312. Channel webhooks in both directions — extends D-245
 
 **Decided by the owner, 2026-11-14.** Extend channel integrations with incoming diagnostics and signed outgoing events.
+**Authority serialization verified by Görkem, 2026-11-17.** Incoming and outgoing management take workspace KEY SHARE, then private-channel membership KEY SHARE, then channel NO KEY UPDATE, and re-read channel visibility and the current workspace role before writing. A demotion or private removal that wins refuses the stale admin context without a hook, credential receipt or webhook audit; a creator already waiting at channel admission holds authority until its transaction ends, so the authority change waits. Deterministic independent-connection regressions and mutations cover both orders and directions, alongside the existing delivery lock-order tests. No contract or schema change.
+
 Incoming hooks keep their text-only, quiet contract. Admins may rotate a secret in place; the old secret stops immediately. Authenticated request outcomes store time, HTTP status and a fixed error category, never content or credentials.
 
 Outgoing hooks belong to one visible non-DM channel, are configured by owners/admins and subscribe to `message.created`, `thread.resolved`, `thread.reopened`. Up to ten per channel. The setup explicitly says that message content leaves the server. Integration-authored messages are excluded, including thread events on those roots. Payloads are version 1, with a stable event id, timestamp, workspace/channel and message data.
