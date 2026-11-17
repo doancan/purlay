@@ -195,6 +195,8 @@ interface Fixtures {
     readonly settle: (context: BrowserContext) => Promise<void>;
   };
   readonly world: World;
+  /** Existing source-editing assertions opt into Markdown; native rich editing tests use the default UI. */
+  readonly sourceEditor: boolean;
   /** Carries the genuine session cookie of one of the seeded people; returns where it signed in. */
   readonly signIn: (persona?: Persona) => Promise<void>;
   /** Fails with every violation, named, if axe finds any on the page as it is now — the scope’s page, when one is given. */
@@ -265,9 +267,14 @@ const withoutRowsOut = async (page: Page, violations: readonly Result[]): Promis
 };
 
 export const test = base.extend<Fixtures>({
+  sourceEditor: [true, { option: true }],
   // The window of release notes belongs to a person's first visit: every browser here has had it (D-248).
-  context: async ({ context }, use): Promise<void> => {
+  context: async ({ context, sourceEditor }, use): Promise<void> => {
     await skipReleaseNotes(context);
+    if (sourceEditor)
+      await context.addInitScript(() => {
+        localStorage.setItem('purlay.composerSource', 'true');
+      });
     await use(context);
   },
 

@@ -1066,7 +1066,7 @@ describe('the keyboard', () => {
       b.focus();
     });
     press(b, 'Escape');
-    expectFocusOn(view.getByLabelText('Message api'));
+    expectFocusOn(view.getByRole('textbox', { name: 'Message api' }));
     act(() => {
       b.focus();
     });
@@ -1086,7 +1086,7 @@ describe('the keyboard', () => {
   test('Escape finds the composer even without its mark, and does nothing when there is none', async () => {
     const view = await mountChannel({ messages: page(three) });
     const [, b] = rowsOf(view) as [HTMLElement, HTMLElement];
-    const box = view.getByLabelText('Message api');
+    const box = view.getByRole('textbox', { name: 'Message api' });
     box.removeAttribute('data-composer');
     act(() => {
       b.focus();

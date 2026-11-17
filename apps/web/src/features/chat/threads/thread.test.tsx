@@ -196,7 +196,7 @@ describe('opening it, in the panel', () => {
     expect(inside.getByText('answer 4')).toBeDefined();
     expect(inside.getByRole('button', { name: /Resolve/ })).toBeDefined();
     expect(inside.getByRole('button', { name: 'Close thread' })).toBeDefined();
-    expect(inside.getByLabelText('Message a thread in api')).toBeDefined();
+    expect(inside.getByRole('textbox', { name: 'Message a thread in api' })).toBeDefined();
     // Beside the feed, not inside it: the root's row is marked as the one open, and its line says so.
     const row = rowOf(view, messageIdAt(ROOT));
     expect(row.contains(panel)).toBe(false);
@@ -350,7 +350,7 @@ describe('replying', () => {
     if (section === null) throw new Error('the reply box did not open');
     expect(within(section).getByText('No replies yet')).toBeDefined();
     expect(within(section).queryByRole('button', { name: /Resolve/ })).toBeNull();
-    const box = within(section).getByLabelText('Message a thread in api');
+    const box = within(section).getByRole('textbox', { name: 'Message a thread in api' });
     expectFocusOn(box);
     await expectNoAxeViolations(view.container);
     view.unmountAll();
@@ -361,7 +361,7 @@ describe('replying', () => {
     connect(view);
     await showThread(view);
     const section = sectionOf(view);
-    const box = within(section).getByLabelText('Message a thread in api');
+    const box = within(section).getByRole('textbox', { name: 'Message a thread in api' });
     await person().type(box, 'because of the rate limit{Enter}');
     await settle();
     const sent = view.world.sockets.sent('MESSAGE_SEND').at(-1);
@@ -400,7 +400,9 @@ describe('replying', () => {
     for (const name of ['Bold', 'Code block', 'Mention someone', 'Attach a file']) {
       expect(within(section).getByRole('button', { name })).toBeDefined();
     }
-    const box = within(section).getByLabelText<HTMLTextAreaElement>('Message a thread in api');
+    const box = within(section).getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Message a thread in api',
+    });
     await person().click(within(section).getByRole('button', { name: 'Bold' }));
     expect(box.value).toBe('****');
     const picker = section.querySelector<HTMLInputElement>('input[type="file"]');
@@ -712,7 +714,7 @@ describe('the keyboard (UX §7)', () => {
     expectFocusOn(row);
     key(row, 'r');
     await settle();
-    expectFocusOn(view.getByLabelText('Message a thread in api'));
+    expectFocusOn(view.getByRole('textbox', { name: 'Message a thread in api' }));
     view.unmountAll();
   });
 
@@ -726,7 +728,7 @@ describe('the keyboard (UX §7)', () => {
     expect(view.container.querySelector('[data-thread-root]')).toBeNull();
     key(row, 'r');
     await settle();
-    const box = view.getByLabelText('Message a thread in api');
+    const box = view.getByRole('textbox', { name: 'Message a thread in api' });
     key(box, 't');
     key(box, 'r');
     expectFocusOn(box);
@@ -808,7 +810,7 @@ describe('the keyboard (UX §7)', () => {
       },
     });
     await showThread(view);
-    const box = view.getByLabelText('Message a thread in api');
+    const box = view.getByRole('textbox', { name: 'Message a thread in api' });
     // The test DOM has no `oninput`, so React watches key events on the *focused* field; a key
     // sent to one nobody focused is a failure of the DOM, not of the code under test.
     act(() => {
@@ -825,7 +827,7 @@ describe('the keyboard (UX §7)', () => {
   test("Esc inside the panel closes it and puts the person back on its root; outside it, it is the feed's", async () => {
     const view = await mount();
     await showThread(view);
-    const box = view.getByLabelText('Message a thread in api');
+    const box = view.getByRole('textbox', { name: 'Message a thread in api' });
     act(() => {
       box.focus();
     });
@@ -839,7 +841,7 @@ describe('the keyboard (UX §7)', () => {
       other.focus();
     });
     key(other, 'Escape');
-    expectFocusOn(view.getByLabelText('Message api'));
+    expectFocusOn(view.getByRole('textbox', { name: 'Message api' }));
     view.unmountAll();
   });
 
@@ -863,7 +865,7 @@ describe('the keyboard (UX §7)', () => {
       other.focus();
     });
     key(other, 'Escape');
-    expectFocusOn(view.getByLabelText('Message api'));
+    expectFocusOn(view.getByRole('textbox', { name: 'Message api' }));
     view.unmountAll();
   });
 
@@ -873,7 +875,7 @@ describe('the keyboard (UX §7)', () => {
       within(rowOf(view, messageIdAt(ROOT))).getByRole('button', { name: 'Reply' }),
     );
     await settle();
-    expectFocusOn(view.getByLabelText('Message a thread in api'));
+    expectFocusOn(view.getByRole('textbox', { name: 'Message a thread in api' }));
     view.unmountAll();
   });
 });
@@ -1471,7 +1473,7 @@ describe('a readable continuation beneath an earlier hidden message', () => {
       expect(inside.getByText('answer 3')).toBeDefined();
       expect(inside.getByText('answer 4')).toBeDefined();
       expect(inside.queryByRole('button', { name: /Resolve/ }) === null).toBe(true);
-      const box = inside.getByLabelText('Message a thread in api');
+      const box = inside.getByRole('textbox', { name: 'Message a thread in api' });
       await person().type(box, 'A permitted new reply{Enter}');
       await settle();
       expect(view.world.sockets.sent('MESSAGE_SEND').at(-1)?.payload).toMatchObject({
@@ -1491,7 +1493,9 @@ describe('a readable continuation beneath an earlier hidden message', () => {
       await showThread(view);
       const inside = within(sectionOf(view));
       expect(inside.getByText('answer 3')).toBeDefined();
-      expect(inside.queryByLabelText('Message a thread in api') === null).toBe(true);
+      expect(inside.queryByRole('textbox', { name: 'Message a thread in api' }) === null).toBe(
+        true,
+      );
       expect(inside.getByText('New replies are unavailable for this conversation.')).toBeDefined();
       expect(
         within(rowOf(view, messageIdAt(ROOT))).queryByRole('button', { name: 'Reply' }) === null,

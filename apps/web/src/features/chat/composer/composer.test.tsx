@@ -72,7 +72,12 @@ const guestSession = (): MeResponse => {
 const mine = (channelId: string, parentId?: string): string => draftKey(ME, channelId, parentId);
 
 const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
-  const items = new Map<string, string>([[PERSON_KEY, ME]]);
+  // This suite exercises the explicit Markdown source editor; the formatted surface has its own
+  // browser suite, where native contenteditable input, selection and composition are available.
+  const items = new Map<string, string>([
+    [PERSON_KEY, ME],
+    ['purlay.composerSource', 'true'],
+  ]);
   return {
     items,
     getItem: (key): string | null => items.get(key) ?? null,
@@ -326,9 +331,9 @@ describe('what it shows', () => {
     expect(send.getAttribute('aria-disabled')).toBe('false');
   });
 
-  test('grows with its lines from one line to a ceiling of twelve', async () => {
+  test('starts with two lines and grows with its text to a ceiling of twelve', async () => {
     const { box, user } = await mount();
-    expect(Number(box().getAttribute('rows'))).toBe(1);
+    expect(Number(box().getAttribute('rows'))).toBe(2);
     await user.click(box());
     await user.type(
       box(),
@@ -725,6 +730,125 @@ describe('pasting', () => {
 });
 
 describe('drafts', () => {
+  test('pagehide writes the latest keystroke before the debounce fires', async () => {
+    const { box, storage, user } = await mount();
+    await user.type(box(), 'keep immediately');
+    expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(storage?.getItem(mine(IDS.api))).toBe('keep immediately');
+  });
+
+  test('backgrounding writes immediately, and lifecycle writes never cross an account boundary', async () => {
+    const { box, storage, user } = await mount();
+    await user.type(box(), 'only mine');
+    const visibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    try {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBe('only mine');
+      storage?.removeItem(mine(IDS.api));
+      storage?.setItem(PERSON_KEY, 'someone-else');
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    } finally {
+      if (visibility === undefined) Reflect.deleteProperty(document, 'visibilityState');
+      else Object.defineProperty(document, 'visibilityState', visibility);
+    }
+  });
+
+  test('a failed save is visible, retry recovers, and the writing area keeps its text', async () => {
+    const storage = memory();
+    const save = storage.setItem.bind(storage);
+    let refusing = true;
+    storage.setItem = (key, value): void => {
+      if (refusing && key.startsWith('purlay.draft.')) throw new Error('quota');
+      save(key, value);
+    };
+    const { view, box, timers, user } = await mount({ storage });
+    await user.type(box(), 'do not lose me');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    expect(view.getByText(/Draft could not be saved/)).toBeDefined();
+    expect(box().value).toBe('do not lose me');
+    refusing = false;
+    await user.click(view.getByRole('button', { name: 'Retry' }));
+    expect(storage.getItem(mine(IDS.api))).toBe('do not lose me');
+    expect(view.queryByText(/Draft could not be saved/)).toBeNull();
+    expectFocusOn(box());
+  });
+
+  test('an invalidated session cannot flush even when storage still claims the same person', async () => {
+    let current = true;
+    let restore = (): void => undefined;
+    const { view, box, storage, timers, user } = await mount({
+      inspect: (engine) => {
+        const probe = spyOn(engine, 'isCurrent').mockImplementation(() => current);
+        restore = (): void => {
+          probe.mockRestore();
+        };
+      },
+    });
+    try {
+      await user.type(box(), 'private unsent words');
+      current = false;
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+        timers.advance(DRAFT_DEBOUNCE_MS);
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+      view.unmount();
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    } finally {
+      view.unmount();
+      restore();
+    }
+  });
+
+  test('missing or unreadable storage is also explained without blocking typing', async () => {
+    const { view, box, timers, user } = await mount({ storage: null });
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
+    await user.type(box(), 'keep this page open');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    expect(view.getByText(/Draft could not be saved/)).toBeDefined();
+    expect(box().value).toBe('keep this page open');
+  });
+
+  test('a failed draft deletion is explained and retry really removes the old text', async () => {
+    const storage = drafted('old saved words');
+    const remove = storage.removeItem.bind(storage);
+    let refusing = true;
+    storage.removeItem = (key): void => {
+      if (refusing && key.startsWith('purlay.draft.')) throw new Error('blocked');
+      remove(key);
+    };
+    const { view, box, user, timers } = await mount({ storage });
+    await user.click(box());
+    await user.keyboard('{Control>}a{/Control}{Backspace}');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    expect(view.getByText(/old draft could not be cleared/)).toBeDefined();
+    expect(box().value).toBe('');
+    refusing = false;
+    await user.click(view.getByRole('button', { name: 'Retry' }));
+    expect(storage.getItem(mine(IDS.api))).toBeNull();
+    expect(view.queryByText(/old draft could not be cleared/)).toBeNull();
+  });
   test('are written a moment after typing stops, and not before', async () => {
     const { box, storage, timers, user } = await mount();
     await user.type(box(), 'half');
@@ -826,6 +950,7 @@ describe('drafts', () => {
     };
     for (const storage of [broken, null]) {
       const { box, sent, timers, user, view } = await mount({ storage });
+      await user.click(view.getByRole('button', { name: 'Markdown source' }));
       await user.type(box(), 'still works');
       act(() => {
         timers.advance(DRAFT_DEBOUNCE_MS);
@@ -930,7 +1055,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     const card = channel.view.container.querySelector('[data-composer-card]');
     for (const name of [
       ...FORMATTING,
-      'Preview',
+      'Markdown source',
       'Mention someone',
       'Add an emoji',
       'Attach a file',
@@ -956,7 +1081,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     const toolbar = view.getByRole('toolbar', { name: 'Formatting' });
     const bold = within(toolbar).getByRole('button', { name: 'Bold' });
     const italic = within(toolbar).getByRole('button', { name: 'Italic' });
-    const preview = within(toolbar).getByRole('button', { name: 'Preview' });
+    const preview = within(toolbar).getByRole('button', { name: 'Markdown source' });
     const codeBlock = within(toolbar).getByRole('button', { name: 'Code block' });
     act(() => {
       bold.focus();
@@ -1000,7 +1125,6 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     ['Italic', 'fix it', 4, 6, 'fix _it_'],
     ['Strikethrough', 'fix it', 4, 6, 'fix ~~it~~'],
     ['Code', 'fix it', 4, 6, 'fix `it`'],
-    ['Link', 'see docs', 4, 8, 'see [docs](https://)'],
     ['Bulleted list', 'one\ntwo', 0, 7, '- one\n- two'],
     ['Numbered list', 'one\ntwo', 0, 7, '1. one\n2. two'],
     ['Quote', 'one', 0, 3, '> one'],
@@ -1027,7 +1151,6 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     ['{Control>}i{/Control}', 'fix _it_'],
     ['{Control>}e{/Control}', 'fix `it`'],
     ['{Control>}{Shift>}x{/Shift}{/Control}', 'fix ~~it~~'],
-    ['{Control>}{Shift>}u{/Shift}{/Control}', 'fix [it](https://)'],
   ])('the key %s does what its button does', async (keys, expected) => {
     const { box, user } = await typed('fix it', 4, 6);
     await user.keyboard(keys);
@@ -1079,6 +1202,7 @@ describe('the emoji picker (D-181)', () => {
     });
     await user.click(view.getByRole('button', { name: 'Add an emoji' }));
     // Groups, so the grid is read in pieces.
+    await view.findByText('Faces');
     for (const group of ['Faces', 'Hands and people', 'Work', 'Symbols']) {
       expect(view.getByText(group)).toBeDefined();
     }
@@ -2559,44 +2683,139 @@ describe('typing', () => {
   });
 });
 
-describe('the preview (D-181)', () => {
-  test('shows the draft as the message will be drawn, and goes back to the text untouched', async () => {
+describe('formatted editing and Markdown source', () => {
+  test('a draft too different to map safely falls back to its exact source without changing the preference', async () => {
+    const text = '\n'.repeat(9000);
+    const storage = drafted(text);
+    storage.items.set('purlay.composerSource', 'false');
+    const { view, box } = await mount({ storage });
+    await settle();
+    expect(view.getByRole('button', { name: 'Markdown source' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(box().hidden).toBe(false);
+    expect(box().value).toBe(text);
+    expect(storage.items.get('purlay.composerSource')).toBe('false');
+  });
+
+  test('native toolbar commands, emoji insertion, clear formatting and code exit share the same draft', async () => {
+    const storage = drafted('words');
+    storage.items.set('purlay.composerSource', 'false');
+    const { view, user, box, sent } = await mount({ storage });
+    await settle();
+    const editor = view.getByRole('textbox');
+    expect(editor.getAttribute('contenteditable')).toBe('true');
+    await user.click(view.getByRole('button', { name: 'Bold' }));
+    expect(view.getByRole('button', { name: 'Bold' }).getAttribute('aria-pressed')).toBe('true');
+    const emoji = view.getByRole('button', { name: 'Add an emoji' });
+    act(() => {
+      emoji.focus();
+    });
+    await user.click(emoji);
+    await view.findByText('Faces');
+    await user.click(view.getByRole('menuitemcheckbox', { name: '🚀' }));
+    expect(editor.textContent).toBe('words🚀');
+    expect(editor.querySelector('strong')?.textContent).toBe('🚀');
+    const clear = view.getByRole('button', { name: 'Clear formatting' });
+    act(() => {
+      clear.focus();
+    });
+    expect(clear.tabIndex).toBe(0);
+    await user.click(clear);
+    expect(editor.querySelector('strong')).toBeNull();
+    await user.click(view.getByRole('button', { name: 'Code block' }));
+    await user.click(view.getByRole('button', { name: 'Continue in a normal paragraph' }));
+    expect(editor.querySelector('pre')?.textContent).toBe('words🚀');
+    fireEvent.keyDown(editor, { key: 'Escape' });
+    expect(document.activeElement === editor).toBe(false);
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
+    expect(box().value).toContain('words🚀');
+    expect(sent()).toEqual([]);
+  });
+
+  test.each([true, false])(
+    'existing links edit and remove through the %s source-mode setting',
+    async (sourceMode) => {
+      const storage = drafted('[label](https://old.example)');
+      storage.items.set('purlay.composerSource', String(sourceMode));
+      const { view, box, user } = await mount({ storage });
+      await settle();
+      if (sourceMode)
+        act(() => {
+          box().focus();
+          box().setSelectionRange(3, 3);
+        });
+      await user.click(view.getByRole('button', { name: 'Link' }));
+      const dialog = await view.findByRole('dialog', { name: 'Edit link' });
+      const address = within(dialog).getByLabelText('Link address');
+      const caption = within(dialog).getByLabelText('Display text');
+      await user.clear(caption);
+      await user.type(caption, 'readable label');
+      await user.clear(address);
+      await user.type(address, 'https://new.example/path');
+      await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
+      if (sourceMode) expect(box().value).toContain('readable label');
+      else expect(view.getByRole('textbox').querySelector('a')?.textContent).toBe('readable label');
+      await user.click(view.getByRole('button', { name: 'Link' }));
+      const again = await view.findByRole('dialog', { name: 'Edit link' });
+      await user.click(within(again).getByRole('button', { name: 'Remove link' }));
+      if (sourceMode) expect(box().value).toBe('readable label');
+      else expect(view.getByRole('textbox').querySelector('a')).toBeNull();
+    },
+  );
+
+  test('the source shortcut works while focus is on the toolbar', async () => {
+    const { view, box, user } = await mount();
+    const toggle = view.getByRole('button', { name: 'Markdown source' });
+    await user.click(view.getByRole('button', { name: 'Bold' }));
+    fireEvent.keyDown(view.getByRole('button', { name: 'Bold' }), {
+      key: 'p',
+      ctrlKey: true,
+      shiftKey: true,
+    });
+    await settle();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await user.click(toggle);
+    expect(box().hidden).toBe(false);
+  });
+
+  test('switches to an editable formatted surface and returns to the exact source', async () => {
     const { view, box, user } = await mount();
     await user.click(box());
     await user.keyboard('ship **it** now');
-    const toggle = view.getByRole('button', { name: 'Preview' });
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    await user.click(toggle);
+    const toggle = view.getByRole('button', { name: 'Markdown source' });
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    await user.click(toggle);
+    await settle();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
     // Drawn instead of the text, not beside it; the text is kept under it.
     expect(view.container.querySelector('textarea')?.hidden).toBe(true);
-    const drawn = view.container.querySelector('[data-composer-preview] strong');
+    const drawn = view.container.querySelector('[contenteditable="true"] strong');
     expect(drawn?.textContent).toBe('it');
     await user.click(toggle);
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    expect(view.container.querySelector('[data-composer-preview]')).toBeNull();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(box().hidden).toBe(false);
     expect(box().value).toBe('ship **it** now');
     expectFocusOn(box());
   });
 
-  test('Mod+Shift+P does the same from the box, and an empty draft says there is nothing to preview', async () => {
+  test('Mod+Shift+P switches an empty field and a written draft to formatted editing', async () => {
     const { view, box, user } = await mount();
     await user.click(box());
     await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
-    expect(view.container.querySelector('[data-composer-preview]')).not.toBeNull();
-    expect(view.getByText('Nothing to preview yet')).toBeDefined();
-    await user.click(view.getByRole('button', { name: 'Preview' }));
+    await settle();
+    expect(view.getByRole('textbox').getAttribute('contenteditable')).toBe('true');
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
     await user.keyboard('hi');
     await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
-    expect(view.container.querySelector('[data-composer-preview]')?.textContent).toBe('hi');
+    expect(view.container.querySelector('[contenteditable="true"]')?.textContent).toBe('hi');
   });
 
-  test('a preview that is open does not stop the send', async () => {
+  test('the formatted surface sends the same draft', async () => {
     const { view, box, user, sent } = await mount();
     await user.click(box());
     await user.keyboard('ready');
-    await user.click(view.getByRole('button', { name: 'Preview' }));
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['ready']);
   });
@@ -3035,5 +3254,165 @@ describe('faces become emoji (D-253)', () => {
     const { box, user } = await mount();
     await user.type(box(), '<3{Shift>}{Enter}{/Shift}x');
     expect(box().value).toBe('❤️\nx');
+  });
+});
+
+describe('links in the writing area', () => {
+  test.each(['button', 'shortcut'])(
+    '%s opens link details and inserts at the preserved selection',
+    async (entry) => {
+      const { view, box, user, sent } = await mount({
+        storage: drafted('See the release notes today'),
+      });
+      act(() => {
+        box().focus();
+        box().setSelectionRange(8, 21);
+      });
+      if (entry === 'button') await user.click(view.getByRole('button', { name: 'Link' }));
+      else await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}');
+      const dialog = await view.findByRole('dialog', { name: 'Add a link' });
+      expect(within(dialog).getByLabelText('Display text').getAttribute('value')).toBe(
+        'release notes',
+      );
+      await user.type(within(dialog).getByLabelText('Link address'), 'https://example.com/release');
+      await expectNoAxeViolations(dialog);
+      await user.click(within(dialog).getByRole('button', { name: 'Insert link' }));
+      expect(box().value).toBe('See the [release notes](https://example.com/release) today');
+      expectFocusOn(box());
+      expect(sent()).toEqual([]);
+    },
+  );
+
+  test('refuses unsafe addresses without losing the draft or the entered text, then recovers', async () => {
+    const { view, box, user } = await mount({ storage: drafted('Keep this draft') });
+    const draft = box();
+    await user.click(view.getByRole('button', { name: 'Link' }));
+    const dialog = view.getByRole('dialog', { name: 'Add a link' });
+    const address = within(dialog).getByLabelText('Link address');
+    await user.type(address, 'javascript:alert(1)');
+    await user.click(within(dialog).getByRole('button', { name: 'Insert link' }));
+    expect(address.getAttribute('aria-invalid')).toBe('true');
+    expect(within(dialog).getByRole('alert').textContent).toContain('full http://');
+    expect(draft.value).toBe('Keep this draft');
+    await user.clear(address);
+    await user.type(address, 'mailto:team@example.com');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(draft.value).toBe('Keep this draft');
+    expectFocusOn(box());
+  });
+
+  test('selected URLs prefill the address and Escape restores the unchanged selection', async () => {
+    const text = 'https://example.com/docs';
+    const { view, box, user } = await mount({ storage: drafted(text) });
+    act(() => {
+      box().focus();
+      box().setSelectionRange(0, text.length);
+    });
+    await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}');
+    const address = view.getByLabelText('Link address');
+    expect(address.getAttribute('value')).toBe(text);
+    await user.keyboard('{Escape}');
+    expect(box().value).toBe(text);
+    expect(box().selectionStart).toBe(0);
+    expect(box().selectionEnd).toBe(text.length);
+    expectFocusOn(box());
+  });
+
+  test('changing channels closes link details and cannot copy the old selection into the next draft', async () => {
+    const { view, user, rerender, box } = await mount({ storage: drafted('Private notes') });
+    await user.click(view.getByRole('button', { name: 'Link' }));
+    await user.type(view.getByLabelText('Link address'), 'https://example.com/private');
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(box().value).toBe('');
+  });
+
+  test('formatted editing keeps the toolbar usable and returns with its shortcut', async () => {
+    const { view, box, user } = await mount({ storage: drafted('A **clear** message') });
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
+    await settle();
+    expect(view.getByRole('button', { name: 'Bold' }).hasAttribute('disabled')).toBe(false);
+    expect(view.getByRole('textbox').getAttribute('contenteditable')).toBe('true');
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
+    expectFocusOn(box());
+    expect(box().value).toBe('A **clear** message');
+  });
+});
+
+describe('active formatting controls', () => {
+  test('a code block shows context without claiming to be a formatting toggle', async () => {
+    const { view, box } = await mount({ storage: drafted('```ts\nconst value = 1;\n```') });
+    act(() => {
+      box().focus();
+      box().setSelectionRange(12, 12);
+      fireEvent.select(box());
+    });
+    const code = view.getByRole('button', { name: 'Code block' });
+    expect(code.getAttribute('data-active')).toBe('true');
+    expect(code.hasAttribute('aria-pressed')).toBe(false);
+    expect(code.getAttribute('aria-description')).toBe('Current format');
+  });
+
+  test('caret movement and mixed selections update the pressed state without changing the draft', async () => {
+    const text = '**Bold** and _italic_';
+    const { view, box } = await mount({ storage: drafted(text) });
+    const select = (start: number, end = start): void => {
+      act(() => {
+        box().focus();
+        box().setSelectionRange(start, end);
+        fireEvent.select(box());
+      });
+    };
+    const bold = view.getByRole('button', { name: 'Bold' });
+    const italic = view.getByRole('button', { name: 'Italic' });
+    select(4);
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    expect(italic.getAttribute('aria-pressed')).toBe('false');
+    select(17);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(italic.getAttribute('aria-pressed')).toBe('true');
+    select(0, text.length);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(italic.getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe(text);
+    expect(view.getByRole('button', { name: 'Link' }).hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  test('formatting with a button or shortcut updates the state immediately, including empty wrappers', async () => {
+    const { view, box, user } = await mount();
+    const bold = view.getByRole('button', { name: 'Bold' });
+    await user.click(bold);
+    expect(box().value).toBe('****');
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    await user.keyboard('hello');
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    act(() => {
+      box().setSelectionRange(2, 7);
+      fireEvent.select(box());
+    });
+    await user.keyboard('{Control>}b{/Control}');
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe('hello');
+  });
+
+  test('a selected word toggles formatting off again, and channel switches do not keep the old state', async () => {
+    const { view, box, user, rerender } = await mount({ storage: drafted('ship') });
+    act(() => {
+      box().focus();
+      box().setSelectionRange(0, 4);
+      fireEvent.select(box());
+    });
+    const bold = view.getByRole('button', { name: 'Bold' });
+    await user.click(bold);
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    await user.click(bold);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe('ship');
+    await user.click(bold);
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    await settle();
+    expect(view.getByRole('button', { name: 'Bold' }).getAttribute('aria-pressed')).toBe('false');
+    expect(box().value).toBe('');
   });
 });

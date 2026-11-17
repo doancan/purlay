@@ -2,6 +2,7 @@ export * from './tree';
 export * from './href';
 export * from './scan';
 export * from './parse';
+export * from './formatting';
 export * from './metadata';
 export * from './web-links';
 export * from './shared-links';

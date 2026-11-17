@@ -31,6 +31,7 @@ import {
   Pin,
   PinOff,
   Bold,
+  Eraser,
   Braces,
   Eye,
   Italic,
@@ -183,6 +184,7 @@ const glyphs = {
   wrap: WrapText,
   quote: Quote,
   bold: Bold,
+  'clear-formatting': Eraser,
   code: Code,
   /** The formatting row (D-181): one glyph for each construct the renderer draws. */
   italic: Italic,

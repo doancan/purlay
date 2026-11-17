@@ -24,6 +24,75 @@
  */
 @custom-variant touch-only (@media (pointer: coarse) and (hover: none));
 
+@layer components {
+  .purlay-rich-editor {
+    @apply min-h-touch;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .purlay-rich-editor[data-empty='true']::before {
+    content: attr(data-placeholder);
+    @apply pointer-events-none float-left h-0 text-ink-muted;
+  }
+  .purlay-rich-editor strong {
+    @apply font-semibold;
+  }
+  .purlay-rich-editor em {
+    font-style: italic;
+  }
+  .purlay-rich-editor s {
+    text-decoration: line-through;
+  }
+  .purlay-rich-editor a {
+    @apply text-accent-text underline;
+  }
+  .purlay-rich-editor :is(ul, ol) {
+    @apply pl-6;
+  }
+  .purlay-rich-editor ul {
+    list-style-type: disc;
+  }
+  .purlay-rich-editor ol {
+    list-style-type: decimal;
+  }
+  .purlay-rich-editor blockquote {
+    @apply border-l-hairline border-border-subtle pl-3 text-ink-muted;
+  }
+  .purlay-rich-editor pre {
+    @apply my-2 overflow-x-auto rounded-md bg-surface-200 p-3 font-mono text-label;
+  }
+  .purlay-rich-editor :not(pre) > code {
+    @apply rounded-sm bg-surface-200 px-1 font-mono text-label;
+  }
+  .purlay-rich-editor table {
+    @apply my-2 w-full border-collapse text-label;
+  }
+  .purlay-rich-editor :is(th, td) {
+    @apply border-hairline border-border-subtle px-2 py-1;
+  }
+  .purlay-rich-editor th {
+    @apply bg-surface-200 font-semibold;
+  }
+  .purlay-rich-editor [data-task] {
+    @apply relative list-none;
+  }
+  .purlay-rich-editor [data-task-box] {
+    @apply absolute -left-6 cursor-pointer;
+  }
+  .purlay-rich-editor :is(h1, h2, h3) {
+    @apply font-semibold;
+  }
+  .purlay-rich-editor h1 {
+    @apply text-display;
+  }
+  .purlay-rich-editor h2 {
+    @apply text-title;
+  }
+  .purlay-rich-editor h3 {
+    @apply text-heading;
+  }
+}
+
 @layer base {
   html {
     background-color: var(--surface-100);

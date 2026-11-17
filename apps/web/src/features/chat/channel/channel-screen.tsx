@@ -195,7 +195,11 @@ const ChannelView = ({ channel }: { readonly channel: Channel }): React.JSX.Elem
                 ) : channel.onlyAdminsPost && role !== 'owner' && role !== 'admin' ? (
                   <AnnouncementNotice />
                 ) : (
-                  <Composer channelId={channel.id} channelName={title} autoFocus />
+                  <Composer
+                    channelId={channel.id}
+                    channelName={title}
+                    autoFocus={around === null}
+                  />
                 )}
               </ConversationColumn>
               <ThreadPanel

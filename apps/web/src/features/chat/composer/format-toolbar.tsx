@@ -1,32 +1,48 @@
 /**
- * The composer's formatting row: the markdown buttons and the preview toggle (D-110, D-181).
+ * The composer's formatting row and Markdown source toggle (D-110, D-181).
  *
  * One Tab stop for the whole row, with the arrows moving along it (the toolbar pattern); the stop is the
  * button used last. It holds no text and no caret: a button reports the markdown it stands for, and the
  * composer inserts it as the key that does the same would.
  */
 import { useState } from 'react';
-import type { GlyphName } from '../../../components/icon';
+import { Icon, type GlyphName } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { IconButton } from '../../../ui/icon-button';
+import { Tooltip } from '../../../ui/tooltip';
 import type { KeyLabels } from '../../shortcuts/platform';
 import type { MarkdownKind } from './composer-text';
 
-/** Where the preview toggle sits in the row's order of stops, after the eleven markdown buttons. */
-const PREVIEW_STOP = 11;
+/** Where the mode toggle sits in the row's order of stops, after the eleven formatting buttons. */
+const PREVIEW_STOP = 12;
+const FORMATTING_STATES: ReadonlySet<MarkdownKind> = new Set([
+  'bold',
+  'italic',
+  'strike',
+  'inlineCode',
+  'bullets',
+  'numbers',
+  'tasks',
+  'quote',
+]);
 
 export interface FormatToolbarProps {
-  readonly previewing: boolean;
+  readonly sourceMode: boolean;
+  readonly active: ReadonlySet<MarkdownKind>;
   readonly labels: KeyLabels;
   /** The key names joined as this platform prints a chord. */
   readonly chord: (...parts: readonly string[]) => string;
   readonly onInsert: (kind: MarkdownKind) => void;
   readonly onTogglePreview: () => void;
+  readonly editingReady: boolean;
+  readonly onClear: () => void;
 }
 
 /** ← → Home End along the row, round at its ends; Tab is left to leave it. */
 const onToolbarKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-  const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+  const buttons = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+  );
   const at = buttons.findIndex((button) => button === document.activeElement);
   const to =
     event.key === 'ArrowRight'
@@ -48,11 +64,14 @@ const Divider = (): React.JSX.Element => (
 );
 
 export const FormatToolbar = ({
-  previewing,
+  sourceMode,
+  active,
   labels,
   chord,
   onInsert,
   onTogglePreview,
+  editingReady,
+  onClear,
 }: FormatToolbarProps): React.JSX.Element => {
   const { t } = useI18n();
   // Which button is the Tab stop: the last one used.
@@ -70,6 +89,15 @@ export const FormatToolbar = ({
       label={label}
       glyph={glyph}
       {...(shortcut === undefined ? {} : { shortcut })}
+      aria-pressed={FORMATTING_STATES.has(kind) ? active.has(kind) : undefined}
+      data-active={active.has(kind) || undefined}
+      aria-description={
+        kind === 'code' && active.has(kind) ? t('composer.formatActive') : undefined
+      }
+      tooltip={
+        kind === 'code' && active.has(kind) ? `${label} · ${t('composer.formatActive')}` : label
+      }
+      className="data-[active=true]:bg-accent-subtle data-[active=true]:text-accent-text"
       tabIndex={slot === stopAt ? 0 : -1}
       onFocus={() => {
         setStopAt(slot);
@@ -84,7 +112,7 @@ export const FormatToolbar = ({
       role="toolbar"
       aria-label={t('composer.format')}
       aria-orientation="horizontal"
-      className="flex items-center px-2 pt-2"
+      className="flex min-w-0 items-center gap-1 border-b-hairline border-border-subtle px-2 py-1"
       onKeyDown={onToolbarKey}
     >
       {/* One row on every width: on a phone it scrolls sideways instead of breaking into two, and
@@ -121,19 +149,38 @@ export const FormatToolbar = ({
           chord(labels.mod, labels.alt, labels.shift, 'C'),
         )}
         {tool(10, 'table', t('composer.table'), 'table')}
+        <Divider />
+        <IconButton
+          label={t('composer.clearFormatting')}
+          tooltip={t('composer.clearFormattingHint')}
+          glyph="clear-formatting"
+          disabled={!editingReady}
+          tabIndex={stopAt === 11 ? 0 : -1}
+          onFocus={() => {
+            setStopAt(11);
+          }}
+          onClick={onClear}
+        />
       </div>
-      <IconButton
-        label={t('composer.preview')}
-        glyph="preview"
+      <Tooltip
+        content={t(sourceMode ? 'composer.formattedView' : 'composer.sourceView')}
         shortcut={chord(labels.mod, labels.shift, 'P')}
-        aria-pressed={previewing}
-        tabIndex={stopAt === PREVIEW_STOP ? 0 : -1}
-        onFocus={() => {
-          setStopAt(PREVIEW_STOP);
-        }}
-        className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-ink"
-        onClick={onTogglePreview}
-      />
+      >
+        <button
+          type="button"
+          aria-label={t('composer.sourceView')}
+          aria-pressed={sourceMode}
+          tabIndex={stopAt === PREVIEW_STOP ? 0 : -1}
+          onFocus={() => {
+            setStopAt(PREVIEW_STOP);
+          }}
+          className="inline-flex h-control shrink-0 items-center gap-2 rounded-md px-2 text-label text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink aria-pressed:bg-accent-subtle aria-pressed:text-accent-text max-narrow:h-touch"
+          onClick={onTogglePreview}
+        >
+          <Icon name="inline-code" size="sm" />
+          <span>Markdown</span>
+        </button>
+      </Tooltip>
     </div>
   );
 };

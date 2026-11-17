@@ -23,7 +23,8 @@ export interface ScrollMetrics {
   top: number;
 }
 
-const isScroller = (el: Element): boolean => el.className.includes('overflow-y-auto');
+const isScroller = (el: Element): boolean =>
+  el.tagName === 'DIV' && el.classList.contains('overflow-y-auto');
 
 /** Replaces the layout properties of a feed scroller; returns the numbers to drive and how to undo it. */
 export const installScrollMetrics = (): { metrics: ScrollMetrics; restore: () => void } => {
