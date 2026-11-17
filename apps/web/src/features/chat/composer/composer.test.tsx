@@ -2684,6 +2684,101 @@ describe('typing', () => {
 });
 
 describe('formatted editing and Markdown source', () => {
+  test('a draft too different to map safely falls back to its exact source without changing the preference', async () => {
+    const text = '\n'.repeat(9000);
+    const storage = drafted(text);
+    storage.items.set('purlay.composerSource', 'false');
+    const { view, box } = await mount({ storage });
+    await settle();
+    expect(view.getByRole('button', { name: 'Markdown source' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(box().hidden).toBe(false);
+    expect(box().value).toBe(text);
+    expect(storage.items.get('purlay.composerSource')).toBe('false');
+  });
+
+  test('native toolbar commands, emoji insertion, clear formatting and code exit share the same draft', async () => {
+    const storage = drafted('words');
+    storage.items.set('purlay.composerSource', 'false');
+    const { view, user, box, sent } = await mount({ storage });
+    await settle();
+    const editor = view.getByRole('textbox');
+    expect(editor.getAttribute('contenteditable')).toBe('true');
+    await user.click(view.getByRole('button', { name: 'Bold' }));
+    expect(view.getByRole('button', { name: 'Bold' }).getAttribute('aria-pressed')).toBe('true');
+    const emoji = view.getByRole('button', { name: 'Add an emoji' });
+    act(() => {
+      emoji.focus();
+    });
+    await user.click(emoji);
+    await view.findByText('Faces');
+    await user.click(view.getByRole('menuitemcheckbox', { name: '🚀' }));
+    expect(editor.textContent).toBe('words🚀');
+    expect(editor.querySelector('strong')?.textContent).toBe('🚀');
+    const clear = view.getByRole('button', { name: 'Clear formatting' });
+    act(() => {
+      clear.focus();
+    });
+    expect(clear.tabIndex).toBe(0);
+    await user.click(clear);
+    expect(editor.querySelector('strong')).toBeNull();
+    await user.click(view.getByRole('button', { name: 'Code block' }));
+    await user.click(view.getByRole('button', { name: 'Continue in a normal paragraph' }));
+    expect(editor.querySelector('pre')?.textContent).toBe('words🚀');
+    fireEvent.keyDown(editor, { key: 'Escape' });
+    expect(document.activeElement === editor).toBe(false);
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
+    expect(box().value).toContain('words🚀');
+    expect(sent()).toEqual([]);
+  });
+
+  test.each([true, false])(
+    'existing links edit and remove through the %s source-mode setting',
+    async (sourceMode) => {
+      const storage = drafted('[label](https://old.example)');
+      storage.items.set('purlay.composerSource', String(sourceMode));
+      const { view, box, user } = await mount({ storage });
+      await settle();
+      if (sourceMode)
+        act(() => {
+          box().focus();
+          box().setSelectionRange(3, 3);
+        });
+      await user.click(view.getByRole('button', { name: 'Link' }));
+      const dialog = await view.findByRole('dialog', { name: 'Edit link' });
+      const address = within(dialog).getByLabelText('Link address');
+      const caption = within(dialog).getByLabelText('Display text');
+      await user.clear(caption);
+      await user.type(caption, 'readable label');
+      await user.clear(address);
+      await user.type(address, 'https://new.example/path');
+      await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
+      if (sourceMode) expect(box().value).toContain('readable label');
+      else expect(view.getByRole('textbox').querySelector('a')?.textContent).toBe('readable label');
+      await user.click(view.getByRole('button', { name: 'Link' }));
+      const again = await view.findByRole('dialog', { name: 'Edit link' });
+      await user.click(within(again).getByRole('button', { name: 'Remove link' }));
+      if (sourceMode) expect(box().value).toBe('readable label');
+      else expect(view.getByRole('textbox').querySelector('a')).toBeNull();
+    },
+  );
+
+  test('the source shortcut works while focus is on the toolbar', async () => {
+    const { view, box, user } = await mount();
+    const toggle = view.getByRole('button', { name: 'Markdown source' });
+    await user.click(view.getByRole('button', { name: 'Bold' }));
+    fireEvent.keyDown(view.getByRole('button', { name: 'Bold' }), {
+      key: 'p',
+      ctrlKey: true,
+      shiftKey: true,
+    });
+    await settle();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    await user.click(toggle);
+    expect(box().hidden).toBe(false);
+  });
+
   test('switches to an editable formatted surface and returns to the exact source', async () => {
     const { view, box, user } = await mount();
     await user.click(box());

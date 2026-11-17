@@ -2,6 +2,17 @@ import { describe, expect, test } from 'bun:test';
 import { formattingRanges } from './formatting';
 
 describe('formatting source ranges', () => {
+  test.each([
+    '# Heading',
+    'one  \ntwo',
+    '<div>plain HTML</div>',
+    '[ref]: https://example.com\n\n[label][ref]',
+    '![alt](https://example.com/a.png)',
+    '[image]: https://example.com/a.png\n\n![alt][image]',
+    '[^note]: a footnote\n\nreference[^note]',
+  ])('unformatted syntax creates no toolbar marks: %s', (source) => {
+    expect(formattingRanges(source)).toEqual([]);
+  });
   test('positions use textarea UTF-16 offsets, including emoji before the format', () => {
     const source = '🚀 **İstanbul**';
     const ranges = formattingRanges(source);

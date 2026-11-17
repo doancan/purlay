@@ -92,6 +92,20 @@ describe('clear formatting', () => {
 });
 
 describe('sending a whitespace-preserving draft', () => {
+  test('whitespace in code or a link and empty link atoms remain meaningful', () => {
+    for (const inline of [
+      richSchema.text(' ', [richSchema.mark('code')]),
+      richSchema.text(' ', [richSchema.mark('link', { href: 'https://example.com' })]),
+      richSchema.node('empty_link', { href: 'https://example.com' }),
+    ]) {
+      const doc = richSchema.node('doc', null, [richSchema.node('paragraph', null, [inline])]);
+      expect(emptyRichDraft(doc)).toBe(false);
+      const source = writeRichDocument(doc).text;
+      expect(richMessageText(EditorState.create({ doc }), source)).toBe(source);
+    }
+    const table = '| A |\n|---|\n| value |';
+    expect(richMessageText(editing(table), table)).toBe(table);
+  });
   test('empty lines and spaces cannot produce a blank message', () => {
     const doc = richSchema.node('doc', null, [
       richSchema.node('paragraph', null, [
