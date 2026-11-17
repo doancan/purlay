@@ -13,6 +13,7 @@ import { insertText, insideFence, placeBlock, undoPaste } from './composer-text'
 import type { PendingOffer } from './file-offer';
 import { convertPaste, fileOfferFor, isLargeTable, type PasteKind } from './paste';
 import { pastedFiles } from './paste-shapes';
+import type { ComposerInput, ComposerKeyEvent, ComposerPasteEvent } from './composer-input';
 
 /** What the toast says of each conversion a paste can make (D-210, D-259). */
 const PASTE_SAID: Readonly<
@@ -46,22 +47,22 @@ export interface PasteTarget {
   readonly latest: React.RefObject<string>;
   /** Where the caret goes once the text a paste put in is in the box. */
   readonly caret: React.RefObject<number | null>;
-  readonly field: React.RefObject<HTMLTextAreaElement | null>;
+  readonly field: React.RefObject<ComposerInput | null>;
   readonly change: (next: string) => void;
   readonly addFiles: (files: readonly File[]) => void;
   readonly offerFile: (offer: PendingOffer) => void;
 }
 
 export interface PasteHandler {
-  readonly onPaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  readonly onPaste: (event: ComposerPasteEvent) => void;
   /** Called with every key: Mod+Shift+V, the platform's "paste as plain text", marks the paste that follows. */
-  readonly noteKey: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  readonly noteKey: (event: ComposerKeyEvent) => void;
   /** Takes the toast of the last conversion away: what it offered to undo has been sent. */
   readonly dismissNotice: () => void;
 }
 
 export const usePasteHandler = (target: PasteTarget): PasteHandler => {
-  const { key, text, latest, caret, field, change, addFiles, offerFile } = target;
+  const { key, latest, caret, field, change, addFiles, offerFile } = target;
   const { t } = useI18n();
   const toast = useToast();
   const { dismiss } = toast;
@@ -82,12 +83,13 @@ export const usePasteHandler = (target: PasteTarget): PasteHandler => {
     if (pasteToast.current !== null) dismiss(pasteToast.current);
   };
 
-  const noteKey = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+  const noteKey = (event: ComposerKeyEvent): void => {
     plainNext.current =
       (event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'v';
   };
 
-  const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+  const onPaste = (event: ComposerPasteEvent): void => {
+    const text = event.currentTarget.value;
     const data = event.clipboardData as DataTransfer | undefined;
     const raw = data?.getData('text/plain') ?? '';
     // Windows and old Macs end a line with CR LF or CR; a byte-order mark comes from a file's first line.

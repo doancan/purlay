@@ -72,7 +72,12 @@ const guestSession = (): MeResponse => {
 const mine = (channelId: string, parentId?: string): string => draftKey(ME, channelId, parentId);
 
 const memory = (): DraftStorage & { readonly items: Map<string, string> } => {
-  const items = new Map<string, string>([[PERSON_KEY, ME]]);
+  // This suite exercises the explicit Markdown source editor; the formatted surface has its own
+  // browser suite, where native contenteditable input, selection and composition are available.
+  const items = new Map<string, string>([
+    [PERSON_KEY, ME],
+    ['purlay.composerSource', 'true'],
+  ]);
   return {
     items,
     getItem: (key): string | null => items.get(key) ?? null,
@@ -826,6 +831,7 @@ describe('drafts', () => {
     };
     for (const storage of [broken, null]) {
       const { box, sent, timers, user, view } = await mount({ storage });
+      await user.click(view.getByRole('button', { name: 'Markdown source' }));
       await user.type(box(), 'still works');
       act(() => {
         timers.advance(DRAFT_DEBOUNCE_MS);
@@ -930,7 +936,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     const card = channel.view.container.querySelector('[data-composer-card]');
     for (const name of [
       ...FORMATTING,
-      'Preview',
+      'Markdown source',
       'Mention someone',
       'Add an emoji',
       'Attach a file',
@@ -956,7 +962,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     const toolbar = view.getByRole('toolbar', { name: 'Formatting' });
     const bold = within(toolbar).getByRole('button', { name: 'Bold' });
     const italic = within(toolbar).getByRole('button', { name: 'Italic' });
-    const preview = within(toolbar).getByRole('button', { name: 'Preview' });
+    const preview = within(toolbar).getByRole('button', { name: 'Markdown source' });
     const codeBlock = within(toolbar).getByRole('button', { name: 'Code block' });
     act(() => {
       bold.focus();
@@ -1077,6 +1083,7 @@ describe('the emoji picker (D-181)', () => {
     });
     await user.click(view.getByRole('button', { name: 'Add an emoji' }));
     // Groups, so the grid is read in pieces.
+    await view.findByText('Faces');
     for (const group of ['Faces', 'Hands and people', 'Work', 'Symbols']) {
       expect(view.getByText(group)).toBeDefined();
     }
@@ -2557,44 +2564,44 @@ describe('typing', () => {
   });
 });
 
-describe('the preview (D-181)', () => {
-  test('shows the draft as the message will be drawn, and goes back to the text untouched', async () => {
+describe('formatted editing and Markdown source', () => {
+  test('switches to an editable formatted surface and returns to the exact source', async () => {
     const { view, box, user } = await mount();
     await user.click(box());
     await user.keyboard('ship **it** now');
-    const toggle = view.getByRole('button', { name: 'Preview' });
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    await user.click(toggle);
+    const toggle = view.getByRole('button', { name: 'Markdown source' });
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    await user.click(toggle);
+    await settle();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
     // Drawn instead of the text, not beside it; the text is kept under it.
     expect(view.container.querySelector('textarea')?.hidden).toBe(true);
-    const drawn = view.container.querySelector('[data-composer-preview] strong');
+    const drawn = view.container.querySelector('[contenteditable="true"] strong');
     expect(drawn?.textContent).toBe('it');
     await user.click(toggle);
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    expect(view.container.querySelector('[data-composer-preview]')).toBeNull();
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(box().hidden).toBe(false);
     expect(box().value).toBe('ship **it** now');
     expectFocusOn(box());
   });
 
-  test('Mod+Shift+P does the same from the box, and an empty draft says there is nothing to preview', async () => {
+  test('Mod+Shift+P switches an empty field and a written draft to formatted editing', async () => {
     const { view, box, user } = await mount();
     await user.click(box());
     await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
-    expect(view.container.querySelector('[data-composer-preview]')).not.toBeNull();
-    expect(view.getByText('Nothing to preview yet')).toBeDefined();
-    await user.click(view.getByRole('button', { name: 'Preview' }));
+    await settle();
+    expect(view.getByRole('textbox').getAttribute('contenteditable')).toBe('true');
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
     await user.keyboard('hi');
     await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
-    expect(view.container.querySelector('[data-composer-preview]')?.textContent).toBe('hi');
+    expect(view.container.querySelector('[contenteditable="true"]')?.textContent).toBe('hi');
   });
 
-  test('a preview that is open does not stop the send', async () => {
+  test('the formatted surface sends the same draft', async () => {
     const { view, box, user, sent } = await mount();
     await user.click(box());
     await user.keyboard('ready');
-    await user.click(view.getByRole('button', { name: 'Preview' }));
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['ready']);
   });
@@ -3049,7 +3056,7 @@ describe('links in the writing area', () => {
       });
       if (entry === 'button') await user.click(view.getByRole('button', { name: 'Link' }));
       else await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}');
-      const dialog = view.getByRole('dialog', { name: 'Add a link' });
+      const dialog = await view.findByRole('dialog', { name: 'Add a link' });
       expect(within(dialog).getByLabelText('Display text').getAttribute('value')).toBe(
         'release notes',
       );
@@ -3107,14 +3114,13 @@ describe('links in the writing area', () => {
     expect(box().value).toBe('');
   });
 
-  test('preview has one usable toolbar stop and can return with its shortcut without altering text', async () => {
+  test('formatted editing keeps the toolbar usable and returns with its shortcut', async () => {
     const { view, box, user } = await mount({ storage: drafted('A **clear** message') });
-    await user.click(view.getByRole('button', { name: 'Preview' }));
-    expect(view.getByRole('button', { name: 'Bold' }).hasAttribute('disabled')).toBe(true);
-    const toggle = view.getByRole('button', { name: 'Preview' });
-    expectFocusOn(toggle);
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
+    await settle();
+    expect(view.getByRole('button', { name: 'Bold' }).hasAttribute('disabled')).toBe(false);
+    expect(view.getByRole('textbox').getAttribute('contenteditable')).toBe('true');
     await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
-    expect(view.container.querySelector('[data-composer-preview]')).toBeNull();
     expectFocusOn(box());
     expect(box().value).toBe('A **clear** message');
   });

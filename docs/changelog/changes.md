@@ -33,7 +33,7 @@ have it.
 
 ### Changed
 
-- **Writing** — The message area grows with wrapped text, links can be added through a labelled form, and preview and send controls are clearer on desktop and phones. Formatting buttons also show the format at the caret or selection (D-181).
+- **Writing** — Write directly in formatted text, switch to Markdown source when needed, see active formatting, and insert links through a labelled form. The writing area grows with wrapped text and stays usable on phones (D-181).
 
 ### Security
 

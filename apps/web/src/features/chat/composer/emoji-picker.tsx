@@ -7,97 +7,13 @@
  * is named by its emoji, which assistive technology reads as the emoji's own name.
  */
 import { useI18n } from '../../../i18n/i18n-provider';
-import type { MessageKey } from '../../../i18n/types';
+import { lazy, Suspense } from 'react';
 import { IconButton } from '../../../ui/icon-button';
-import { Menu, MenuTile, MenuTiles } from '../../../ui/menu';
+import { Menu } from '../../../ui/menu';
+import type * as EmojiChoiceModule from './emoji-choices';
 
-/** Sixteen to a group: two full rows of the grid. */
-const GROUPS = [
-  {
-    name: 'emoji.faces',
-    emoji: [
-      '😀',
-      '😄',
-      '😁',
-      '😂',
-      '🙂',
-      '😉',
-      '😊',
-      '😍',
-      '🤔',
-      '😅',
-      '😭',
-      '😴',
-      '😎',
-      '🥳',
-      '😬',
-      '🙃',
-    ],
-  },
-  {
-    name: 'emoji.hands',
-    emoji: [
-      '👍',
-      '👎',
-      '👏',
-      '🙌',
-      '🙏',
-      '💪',
-      '👋',
-      '🤝',
-      '👀',
-      '🫡',
-      '🤞',
-      '✌️',
-      '👌',
-      '🤷',
-      '🙋',
-      '🫶',
-    ],
-  },
-  {
-    name: 'emoji.work',
-    emoji: [
-      '🚀',
-      '✅',
-      '❌',
-      '⚠️',
-      '🔥',
-      '💡',
-      '🐛',
-      '🔧',
-      '🛠️',
-      '📌',
-      '📎',
-      '📝',
-      '🔒',
-      '⏰',
-      '📈',
-      '🧪',
-    ],
-  },
-  {
-    name: 'emoji.symbols',
-    emoji: [
-      '❤️',
-      '💯',
-      '🎉',
-      '⭐',
-      '✨',
-      '💥',
-      '☕',
-      '🍕',
-      '🎯',
-      '🏆',
-      '💬',
-      '🔔',
-      '➕',
-      '➖',
-      '❓',
-      '❗',
-    ],
-  },
-] as const satisfies readonly { readonly name: MessageKey; readonly emoji: readonly string[] }[];
+const choices = (): Promise<typeof EmojiChoiceModule> => import('./emoji-choices');
+const EmojiChoices = lazy(() => choices().then((module) => ({ default: module.EmojiChoices })));
 
 export const EmojiPicker = ({
   onPick,
@@ -117,28 +33,22 @@ export const EmojiPicker = ({
         onClosed();
         return false;
       }}
-      trigger={<IconButton label={t('composer.emoji')} glyph="emoji" />}
+      trigger={
+        <IconButton
+          label={t('composer.emoji')}
+          glyph="emoji"
+          onFocus={() => {
+            void choices();
+          }}
+          onPointerEnter={() => {
+            void choices();
+          }}
+        />
+      }
     >
-      {GROUPS.map((group) => (
-        <section key={group.name} aria-label={t(group.name)} className="flex flex-col gap-1 pb-1">
-          <h3 className="px-2 pt-1 text-caption text-ink-muted">{t(group.name)}</h3>
-          <MenuTiles grid>
-            {group.emoji.map((emoji) => (
-              <MenuTile
-                key={emoji}
-                label={emoji}
-                checked={false}
-                fill
-                onSelect={() => {
-                  onPick(emoji);
-                }}
-              >
-                {emoji}
-              </MenuTile>
-            ))}
-          </MenuTiles>
-        </section>
-      ))}
+      <Suspense fallback={null}>
+        <EmojiChoices onPick={onPick} />
+      </Suspense>
     </Menu>
   );
 };
