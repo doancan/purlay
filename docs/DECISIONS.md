@@ -3688,9 +3688,11 @@ true only while somebody remembered it.
   job of its own). A finding that cannot be fixed goes in `scripts/audit-allowlist.json` with an
   advisory id, a reason and an **expiry date** no more than 180 days out; the gate fails on an
   expired entry and on an entry that matches no finding, so an allowlist cannot become a place
-  findings are forgotten. It also runs weekly, because an advisory arrives without a commit. One
-  finding (`braces`, a development-time dependency with no patched release) is allowed this way
-  today.
+  findings are forgotten. It also runs weekly, because an advisory arrives without a commit. The
+  current findings, reasons and expiry dates are owned only by `scripts/audit-allowlist.json`.
+  **Reviewed by Görkem, 2026-11-18:** the no-fix picomatch development-tool finding follows this policy;
+  `docs/spikes/picomatch-audit.md` records the exact production-install exclusion experiment, dependency paths,
+  residual build-time risk and owner follow-up. Expiry and stale-entry failures remain required.
 - **CodeQL scans JavaScript and TypeScript** on pull requests, on main and weekly, with read-only
   permissions except the one write it needs to report. On a private repository without Advanced
   Security it cannot upload results, so the job fails on any result in the SARIF itself.
