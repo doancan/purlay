@@ -852,7 +852,7 @@ test.describe('the formatting row, the emoji picker and the preview (D-181)', ()
     expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual(['done🚀']);
   });
 
-  test('the preview draws the draft as it will be sent, and a second press goes back to the text untouched', async ({
+  test('formatted editing draws the source and returns to it untouched', async ({
     page,
     signIn,
     room,
@@ -862,16 +862,16 @@ test.describe('the formatting row, the emoji picker and the preview (D-181)', ()
     await page.goto(made.path);
     const box = boxOf(page, made.name);
     await box.fill('a **bold** and `code` word');
-    await page.getByRole('button', { name: 'Preview' }).click();
-    const preview = page.locator('[data-composer-preview]');
+    await page.getByRole('button', { name: 'Markdown source' }).click();
+    const preview = page.locator('[contenteditable="true"]');
     await expect(preview.locator('strong')).toHaveText('bold');
     await expect(preview.locator('code')).toHaveText('code');
-    await expect(page.getByRole('button', { name: 'Preview' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Markdown source' })).toHaveAttribute(
       'aria-pressed',
-      'true',
+      'false',
     );
-    await page.getByRole('button', { name: 'Preview' }).click();
-    await expect(preview).toHaveCount(0);
+    await page.getByRole('button', { name: 'Markdown source' }).click();
+    await expect(preview).toBeHidden();
     await expect(box).toBeFocused();
     await expect(box).toHaveValue('a **bold** and `code` word');
   });
@@ -942,14 +942,14 @@ test.describe('writing tools', () => {
     await dialog.getByRole('button', { name: 'Insert link' }).click();
     await expect(box).toBeFocused();
     await expect(box).toHaveValue('See the [release notes](https://example.com/release) today');
-    const preview = page.getByRole('button', { name: 'Preview', exact: true });
+    const preview = page.getByRole('button', { name: 'Markdown source', exact: true });
     await preview.click();
     await expect(
-      page.locator('[data-composer-preview]').getByRole('link', { name: 'release notes' }),
+      page.locator('[contenteditable="true"]').getByRole('link', { name: 'release notes' }),
     ).toHaveAttribute('href', 'https://example.com/release');
-    await expect(page.getByRole('button', { name: 'Bold', exact: true })).toBeDisabled();
-    await expect(preview).toBeFocused();
-    await preview.press('ControlOrMeta+Shift+P');
+    await expect(page.getByRole('button', { name: 'Bold', exact: true })).toBeEnabled();
+    await expect(page.locator('[contenteditable="true"]')).toBeFocused();
+    await page.locator('[contenteditable="true"]').press('ControlOrMeta+Shift+P');
     await expect(box).toBeFocused();
     await box.press('Enter');
     await expectDelivered(page, 'release notes');
@@ -981,17 +981,16 @@ test.describe('writing tools', () => {
     await dialog.getByRole('button', { name: 'Vazgeç', exact: true }).click();
     await expect(box).toHaveValue('Notları inceleyelim');
     await box.fill('**İstanbul ekibi** için durum güncellemesi.\n\n'.repeat(40));
-    await page.getByRole('button', { name: 'Önizleme', exact: true }).click();
-    const preview = page.locator('[data-composer-preview]');
+    await page.getByRole('button', { name: 'Markdown kaynağı', exact: true }).click();
+    const preview = page.locator('[contenteditable="true"]').locator('..');
     expect(await preview.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
       true,
     );
     expect(
       await preview.evaluate((element) => element.getBoundingClientRect().height),
     ).toBeLessThanOrEqual(844 * 0.4);
-    await page.keyboard.press('Tab');
-    await expect(preview).toBeFocused();
-    await preview.press('PageDown');
+    await expect(page.locator('[contenteditable="true"]')).toBeFocused();
+    await page.locator('[contenteditable="true"]').press('PageDown');
     await expect
       .poll(async () => await preview.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);

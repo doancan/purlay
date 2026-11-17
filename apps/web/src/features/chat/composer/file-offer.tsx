@@ -62,7 +62,7 @@ export interface FileOfferTarget {
   readonly latest: React.RefObject<string>;
   /** Where the caret goes once the words have left the box. */
   readonly caret: React.RefObject<number | null>;
-  readonly field: React.RefObject<HTMLTextAreaElement | null>;
+  readonly field: React.RefObject<{ focus(): void } | null>;
   readonly change: (next: string) => void;
   /** How many files the message already carries. */
   readonly attached: number;

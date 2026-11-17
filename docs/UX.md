@@ -782,20 +782,23 @@ finished answering.* Slack cannot produce it at any price. It ships in Phase 1, 
 
 ## 5. Composer
 
-Plain textarea, GFM, no WYSIWYG (`PRD.md` §4.1). **A formatting row above the text** has a button for every
+Directly editable formatted text is the default (owner's D-181 amendment). **Markdown** opens the raw
+GFM source; pressing it again returns to formatted editing. The button is pressed in source mode,
+the browser remembers the choice, and switching modes preserves the draft and selection. What is
+stored and sent remains GFM. **A formatting row above the text** has a button for every
 construct the renderer draws — bold, italic, strike, link, bulleted list, numbered list, quote, inline code,
-code block, table (two columns and a row to fill in, its first heading selected, D-210) — and a preview toggle
+code block, table (two columns and a row to fill in, its first heading selected, D-210) — and the Markdown toggle
 at its end; under the text sit the mention, an emoji picker and the file
-attach. Each button only *inserts markdown* that the keys below also produce (D-110, D-181). **A thread's
+attach. Buttons and their shortcuts apply formatting immediately; source mode inserts the equivalent
+Markdown (D-110, D-181). **A thread's
 box has the same row** (D-164, D-181): in the panel's width the key hints are not drawn (a screen reader
 still reads them) and Send is the icon alone.
 
 The **emoji picker** is a grid of four groups (faces, hands and people, work, symbols), arrow keys move
 through it, `Enter` writes the emoji where the caret is and the focus goes back to the box; `Esc` closes it
-with nothing written. The **preview** draws the draft as the message will be drawn; the text is still there
-under it, and Send works while it is open (D-181). Formatting buttons are unavailable in preview;
-the preview toggle keeps focus and `Mod+Shift+P` returns to the preserved selection. Both text and
-preview stay within twelve text lines or 40% of the current viewport; longer content scrolls inside.
+with nothing written. Both formatted and source modes remain editable, keep the formatting controls
+available, and support Send. `Mod+Shift+P` changes modes and focuses the text. Both modes stay within
+twelve text lines or 40% of the current viewport; longer content scrolls inside.
 The writing area starts at two lines and grows for soft wraps as well as typed newlines. On narrow
 screens the text is at least 16px and the send button is an icon; with a keyboard the visible Send
 label is visible; the hints below the text name the shortcut appropriate to a normal message or an open code fence.
@@ -823,7 +826,7 @@ straight after puts the face back as it was typed, and that one stays.
 | `Cmd/Ctrl+Enter` | Send, wherever the caret is (on a phone `Enter` is a new line and the Send button sends); the hint under the box names it while the caret is inside a fence (D-188) |
 | `Shift+Enter` | Newline; in a list or a quote it carries the list on, and an empty item ends it (D-181) |
 | `Cmd/Ctrl+B` `I` `E` | Bold, italic, inline code |
-| `Cmd/Ctrl+Shift+X` `U` `7` `8` `9` `P` | Strike, link, numbered list, bulleted list, quote, preview (D-181) |
+| `Cmd/Ctrl+Shift+X` `U` `7` `8` `9` `P` | Strike, link, numbered list, bulleted list, quote, Markdown source (D-181) |
 | ` ``` ` then `Enter` | Opens a code block; see `Enter` above |
 | `Cmd/Ctrl+Alt+Shift+C` | A code block round the selection, or an empty one (D-188). Not on AltGr layouts that type a letter there |
 | a backtick over a selection | Wraps it in inline code instead of replacing it (D-188) |

@@ -1,8 +1,7 @@
 /**
  * The composer: one rounded card at the foot of the channel (`UX.md` §2, D-100).
  *
- * Plain text in a plain textarea, and a send button on the card's right edge. What it adds is what a person who types all day
- * needs and nothing a toolbar would: Enter sends and Shift+Enter does not; a fence
+ * Formatted editing by default, with a Markdown source toggle and a send button. Enter sends and Shift+Enter does not; a fence
  * opened with ``` keeps Enter as a newline until it is closed, and Cmd/Ctrl+Enter sends
  * from inside it; a long paste becomes a code block with an Undo; the draft is
  * remembered per channel and per thread.
@@ -29,7 +28,17 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent } from '@purlay/types';
-import { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { formattingRanges } from '@purlay/markdown';
 import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
@@ -65,9 +74,6 @@ import { useClientStorage } from '../../../data/storage-provider';
 import { draftKey, readDraft, useDraftWriter, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
-import { renderContent } from '../../content/render-content';
-import { useCodeRepository } from '../../../data/queries';
-import { useWorkspaceIfAny } from '../../shell/workspace';
 import { duringComposition, useComposition } from './composition';
 import { FileOfferBar, useFileOffer } from './file-offer';
 import { usePasteHandler } from './paste-handler';
@@ -85,13 +91,30 @@ import {
 import { EmojiPicker } from './emoji-picker';
 import { FormatToolbar } from './format-toolbar';
 import { activeFormatting } from './active-formatting';
-import { LinkDialog } from './link-dialog';
 import { insertLink } from './link-text';
 import { useComposerSize } from './use-composer-size';
 import { KeyHints } from './key-hints';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
 import { UploadList, useUploads } from './uploads';
+import type { ComposerInput, ComposerKeyEvent } from './composer-input';
+import type { RichInput } from './rich-editor';
+
+const RichEditor = lazy(() =>
+  import('./rich-editor').then((module) => ({ default: module.RichEditor })),
+);
+const LinkDialog = lazy(() =>
+  import('./link-dialog').then((module) => ({ default: module.LinkDialog })),
+);
+
+const SOURCE_MODE_KEY = 'purlay.composerSource';
+const readSourceMode = (storage: ComposerPorts['storage']): boolean => {
+  try {
+    return storage?.getItem(SOURCE_MODE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 export interface ComposerProps {
   readonly channelId: string;
@@ -119,30 +142,56 @@ const Inner = ({
   const client = useQueryClient();
   const session = useSession();
   const key = draftKey(session.user.id, channelId, parentId);
-  // The preview links code references as the sent message will (D-223).
-  const repository = useCodeRepository(useWorkspaceIfAny()?.workspace.id ?? null, channelId);
   const editing = useEditing();
-  const field = useRef<HTMLTextAreaElement>(null);
+  const rawField = useRef<HTMLTextAreaElement>(null);
+  const richField = useRef<RichInput | null>(null);
+  const field = useRef<ComposerInput | null>(null);
+  const card = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
   const [error, setError] = useState<string | null>(null);
   // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
   const [focused, setFocused] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
-  // The draft drawn as it will be sent (D-181): a look, never a second copy of the text.
-  const [previewing, setPreviewing] = useState(false);
-  const returningFromPreview = useRef(false);
+  const [sourceMode, setSourceMode] = useState(
+    () => readSourceMode(ports.storage) || unitsOver(text) > 0,
+  );
+  const input = (): ComposerInput | null => (sourceMode ? rawField.current : richField.current);
+  field.current = {
+    get value(): string {
+      return input()?.value ?? text;
+    },
+    get selectionStart(): number {
+      return input()?.selectionStart ?? text.length;
+    },
+    get selectionEnd(): number {
+      return input()?.selectionEnd ?? text.length;
+    },
+    focus: (): void => {
+      input()?.focus();
+    },
+    blur: (): void => {
+      input()?.blur();
+    },
+    setSelectionRange: (start, end): void => {
+      input()?.setSelectionRange(start, end);
+    },
+  };
+  const modeChanged = useRef(false);
+  const modeSelection = useRef<Selection | null>(null);
   const [linkSelection, setLinkSelection] = useState<Selection | null>(null);
-  const previewField = useRef<HTMLDivElement>(null);
-  useComposerSize(field, previewField, text, previewing);
+  useComposerSize(rawField, text, sourceMode);
   useEffect(() => {
-    if (previewing || !returningFromPreview.current) return;
-    returningFromPreview.current = false;
+    if (!modeChanged.current) return;
+    modeChanged.current = false;
+    const wanted = modeSelection.current;
+    if (wanted !== null) field.current?.setSelectionRange(wanted.start, wanted.end);
+    modeSelection.current = null;
     field.current?.focus();
-  }, [previewing]);
+  }, [sourceMode]);
   const hintsId = useId();
   // Where the caret goes after a change that is made by script (a paste, an undo).
   const caret = useRef<number | null>(null);
-  const composing = useComposition(field);
+  const composing = useComposition(card);
   const latest = useRef(text);
   /** The face the last space turned into an emoji, and where the caret was then: Backspace there undoes it (D-253). */
   const madeEmoji = useRef<{
@@ -168,11 +217,16 @@ const Inner = ({
   const setCaretAt = (at: number): void => {
     setSelection({ start: at, end: at });
   };
-  const formatRanges = useMemo(() => (unitsOver(text) > 0 ? null : formattingRanges(text)), [text]);
-  const activeFormats = useMemo(
+  const formatRanges = useMemo(
+    () => (!sourceMode || unitsOver(text) > 0 ? null : formattingRanges(text)),
+    [text, sourceMode],
+  );
+  const sourceFormats = useMemo(
     () => activeFormatting(text, formatRanges, selection),
     [text, formatRanges, selection],
   );
+  const [richFormats, setRichFormats] = useState<ReadonlySet<MarkdownKind>>(new Set());
+  const activeFormats = sourceMode ? sourceFormats : richFormats;
   // The `@` whose list Esc closed; it stays closed until a mention starts somewhere else.
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);
@@ -205,6 +259,7 @@ const Inner = ({
   }, [text]);
 
   const change = (next: string): void => {
+    if (!sourceMode && unitsOver(next) > 0) setSourceMode(true);
     setText(next);
     // A new letter is a new list, and its best match is the one Enter takes.
     setActive(0);
@@ -249,6 +304,16 @@ const Inner = ({
 
   /** One of the three buttons: markdown inserted at the caret, as a key would type it (D-110). */
   const insert = (kind: MarkdownKind): void => {
+    if (
+      !sourceMode &&
+      richField.current !== null &&
+      kind !== 'link' &&
+      kind !== 'table' &&
+      kind !== 'mention'
+    ) {
+      richField.current.format(kind);
+      return;
+    }
     const box = field.current;
     const at = box === null ? text.length : box.selectionStart;
     const to = box === null ? text.length : box.selectionEnd;
@@ -256,7 +321,7 @@ const Inner = ({
       setLinkSelection({ start: at, end: to });
       return;
     }
-    const next = insertMarkdown(text, { start: at, end: to }, kind);
+    const next = insertMarkdown(box?.value ?? text, { start: at, end: to }, kind);
     inserted.current = next.selection;
     change(next.text);
   };
@@ -265,7 +330,7 @@ const Inner = ({
    * Backspace straight after a face became an emoji: the face comes back as it was typed, with its
    * space, and stays — the space is already there, so nothing turns it again (D-253).
    */
-  const undoEmoji = (box: HTMLTextAreaElement): boolean => {
+  const undoEmoji = (box: ComposerInput): boolean => {
     const made = madeEmoji.current;
     madeEmoji.current = null;
     if (made?.caret !== box.selectionStart || box.selectionEnd !== box.selectionStart) return false;
@@ -281,6 +346,10 @@ const Inner = ({
 
   /** An emoji from the picker: text where the caret is, as a key would type it. */
   const insertEmoji = (emoji: string): void => {
+    if (!sourceMode && richField.current !== null) {
+      richField.current.insertText(emoji);
+      return;
+    }
     const box = field.current;
     const at = box === null ? text.length : box.selectionStart;
     const to = box === null ? text.length : box.selectionEnd;
@@ -351,7 +420,11 @@ const Inner = ({
   /** Sends what is written — or, from a command, the words it wrote (`/me`, `/shrug`). */
   const send = (written?: string): void => {
     // A face that ends the message becomes its emoji, as the space after it would have made it (D-253).
-    const typed = written ?? withClosingEmoji(trimEnd(text));
+    const typed =
+      written ??
+      (!sourceMode && richField.current !== null
+        ? trimEnd(richField.current.forSend())
+        : withClosingEmoji(trimEnd(text)));
     // A line that starts with `/` asks for a command (D-214) — unless files go with it, when it is words.
     const line = written === undefined && uploads.items.length === 0 ? parseSlash(typed) : null;
     if (line?.kind === 'unknown') {
@@ -422,7 +495,7 @@ const Inner = ({
     onSent?.(id);
   };
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+  const onKeyDown = (event: ComposerKeyEvent): void => {
     // The platform's "paste as plain text": the paste that follows is taken as it is (D-210).
     pasteHandler.noteKey(event);
     if (
@@ -447,7 +520,7 @@ const Inner = ({
     // says so with the key, and one that fires `compositionend` first (Safari) is covered
     // by the flag the composition events keep.
     if (duringComposition(event, composing)) return;
-    if (event.key === 'Backspace' && undoEmoji(event.currentTarget)) {
+    if (sourceMode && event.key === 'Backspace' && undoEmoji(event.currentTarget)) {
       event.preventDefault();
       return;
     }
@@ -510,7 +583,9 @@ const Inner = ({
       return;
     }
     const box = event.currentTarget;
-    const wrapped = typedWrap(event, { start: box.selectionStart, end: box.selectionEnd });
+    const wrapped = sourceMode
+      ? typedWrap(event, { start: box.selectionStart, end: box.selectionEnd })
+      : null;
     if (wrapped !== null) {
       event.preventDefault();
       insert(wrapped);
@@ -518,7 +593,7 @@ const Inner = ({
     }
     const action = enterAction(
       event,
-      box.value.slice(0, box.selectionStart),
+      !sourceMode && richField.current?.inCode ? '```\n' : box.value.slice(0, box.selectionStart),
       ports.touchOnly?.() ?? false,
     );
     if (action === null) return;
@@ -527,9 +602,10 @@ const Inner = ({
       send();
       return;
     }
+    if (!sourceMode) richField.current?.finishFace();
     // A new line. In a list or a quote it carries the marker on, and an empty item ends the list;
     // elsewhere — and inside a fence — the browser's own line break is right (D-181, D-188).
-    if (!event.metaKey && !event.ctrlKey && box.selectionStart === box.selectionEnd) {
+    if (sourceMode && !event.metaKey && !event.ctrlKey && box.selectionStart === box.selectionEnd) {
       const carried = continueList(box.value, box.selectionStart);
       if (carried !== null) {
         event.preventDefault();
@@ -565,10 +641,19 @@ const Inner = ({
   const mac = isMacPlatform(typeof navigator === 'undefined' ? {} : navigator);
   const labels = keyLabels(mac);
   const chord = (...parts: readonly string[]): string => parts.join(mac ? '' : '+');
-  /** Preview on or off; back on the text, the box has the focus again where it left it. */
+  /** Both modes edit the same GFM draft and restore the current selection. */
   const togglePreview = (): void => {
-    setPreviewing((now) => !now);
-    returningFromPreview.current = previewing;
+    if (sourceMode && unitsOver(text) > 0) return;
+    const box = field.current;
+    modeSelection.current =
+      box === null ? null : { start: box.selectionStart, end: box.selectionEnd };
+    modeChanged.current = true;
+    try {
+      ports.storage?.setItem(SOURCE_MODE_KEY, String(!sourceMode));
+    } catch {
+      /* Writing remains available when storage is blocked. */
+    }
+    setSourceMode((now) => !now);
   };
   const left = unitsLeft(text);
   const rows = rowsFor(text, 2);
@@ -577,7 +662,10 @@ const Inner = ({
   const empty = trimEnd(text) === '';
   // Inside an open fence, and on a phone, Enter is a new line, so the key that sends is the one the hint
   // names (D-188) — and the field's description, which a screen reader reads at every width, says it too.
-  const fenced = insideFence(text.slice(0, caretAt)) || (ports.touchOnly?.() ?? false);
+  const fenced =
+    (!sourceMode && richFormats.has('code')) ||
+    insideFence(text.slice(0, caretAt)) ||
+    (ports.touchOnly?.() ?? false);
   const counter = (
     <span aria-live="polite" className="ml-auto text-caption text-ink-muted">
       {left === null
@@ -606,14 +694,28 @@ const Inner = ({
   );
 
   const pendingOffer = fileOffer.offer;
+  const fieldLabel = t('composer.label', { channel: channelName });
+  const fieldPlaceholder = t('composer.placeholder', { channel: channelName });
+  const controls = commandsOpen ? commandListId(listId) : open ? mentionListId(listId) : undefined;
+  const activeDescendant = commandsOpen
+    ? commandOptionId(listId, commands[currentCommand] ?? '')
+    : open
+      ? mentionOptionId(listId, current)
+      : undefined;
 
   return (
     <div className="shrink-0 pb-4 pt-2">
       <div className="flex w-full flex-col gap-2 px-6 max-narrow:px-4">
         <div
+          ref={card}
           data-composer-card=""
           onKeyDown={(event) => {
-            if (previewing && formatKey(event) === 'preview') {
+            if (
+              !event.defaultPrevented &&
+              event.target instanceof HTMLElement &&
+              event.currentTarget.contains(event.target) &&
+              formatKey(event) === 'preview'
+            ) {
               event.preventDefault();
               togglePreview();
             }
@@ -686,7 +788,7 @@ const Inner = ({
             {open ? t('mention.results', { count: suggestions.length }) : ''}
           </VisuallyHidden>
           <FormatToolbar
-            previewing={previewing}
+            sourceMode={sourceMode}
             active={activeFormats}
             labels={labels}
             chord={chord}
@@ -695,27 +797,19 @@ const Inner = ({
           />
           <div className="flex gap-2 px-4 pb-2 pt-3 max-narrow:px-3">
             <textarea
-              data-composer=""
-              ref={field}
+              data-composer={sourceMode ? '' : undefined}
+              ref={rawField}
               rows={rows}
               value={text}
-              aria-label={t('composer.label', { channel: channelName })}
+              aria-label={fieldLabel}
               aria-invalid={error === null ? undefined : true}
               aria-describedby={hintsId}
               aria-autocomplete="list"
               aria-haspopup="listbox"
-              aria-controls={
-                commandsOpen ? commandListId(listId) : open ? mentionListId(listId) : undefined
-              }
-              aria-activedescendant={
-                commandsOpen
-                  ? commandOptionId(listId, commands[currentCommand] ?? '')
-                  : open
-                    ? mentionOptionId(listId, current)
-                    : undefined
-              }
-              placeholder={t('composer.placeholder', { channel: channelName })}
-              hidden={previewing}
+              aria-controls={controls}
+              aria-activedescendant={activeDescendant}
+              placeholder={fieldPlaceholder}
+              hidden={!sourceMode}
               className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-muted max-narrow:text-title max-narrow:font-normal scrollbar-thin"
               onChange={(event) => {
                 const { value, selectionStart, selectionEnd } = event.target;
@@ -745,22 +839,42 @@ const Inner = ({
               onKeyDown={onKeyDown}
               onPaste={pasteHandler.onPaste}
             />
-            {previewing && (
-              <div
-                data-composer-preview=""
-                role="region"
-                aria-label={t('composer.preview')}
-                tabIndex={0}
-                className="min-h-touch min-w-0 flex-1 overflow-y-auto rounded-md focus-visible:outline-focus focus-visible:outline-focus-ring focus-visible:-outline-offset-focus scrollbar-thin"
-                ref={previewField}
+            {
+              <Suspense
+                fallback={
+                  <div role="status" className="min-h-touch flex-1 text-body text-ink-muted">
+                    {t('composer.loadingEditor')}
+                  </div>
+                }
               >
-                {empty ? (
-                  <p className="text-body text-ink-muted">{t('composer.previewEmpty')}</p>
-                ) : (
-                  renderContent(text, { repository })
-                )}
-              </div>
-            )}
+                <RichEditor
+                  input={richField}
+                  hidden={sourceMode}
+                  autoFocus={autoFocus}
+                  value={text}
+                  label={fieldLabel}
+                  description={hintsId}
+                  placeholder={fieldPlaceholder}
+                  taskLabel={t('composer.tasks')}
+                  invalid={error !== null}
+                  controls={controls}
+                  activeDescendant={activeDescendant}
+                  onChange={(next, selected) => {
+                    change(next);
+                    setSelection(selected);
+                  }}
+                  onSelect={(selected, formats) => {
+                    setSelection(selected);
+                    setRichFormats(formats);
+                  }}
+                  onKeyDown={onKeyDown}
+                  onPaste={pasteHandler.onPaste}
+                  onUseSource={() => {
+                    setSourceMode(true);
+                  }}
+                />
+              </Suspense>
+            }
           </div>
           <UploadList uploads={uploads} />
           <input
@@ -820,20 +934,33 @@ const Inner = ({
             {sendButton}
           </div>
           {linkSelection !== null && (
-            <LinkDialog
-              selection={text.slice(linkSelection.start, linkSelection.end)}
-              returnFocus={() => field.current}
-              onClose={() => {
-                setLinkSelection(null);
-              }}
-              onInsert={(label, address) => {
-                const next = insertLink(text, linkSelection, label, address);
-                if (next === null) return;
-                inserted.current = next.selection;
-                change(next.text);
-                setLinkSelection(null);
-              }}
-            />
+            <Suspense fallback={null}>
+              <LinkDialog
+                selection={
+                  !sourceMode
+                    ? (richField.current?.selectedText ?? '')
+                    : text.slice(linkSelection.start, linkSelection.end)
+                }
+                returnFocus={() =>
+                  sourceMode ? rawField.current : (richField.current?.element ?? null)
+                }
+                onClose={() => {
+                  setLinkSelection(null);
+                }}
+                onInsert={(label, address) => {
+                  if (!sourceMode && richField.current !== null) {
+                    richField.current.insertLink(label, address);
+                    setLinkSelection(null);
+                    return;
+                  }
+                  const next = insertLink(text, linkSelection, label, address);
+                  if (next === null) return;
+                  inserted.current = next.selection;
+                  change(next.text);
+                  setLinkSelection(null);
+                }}
+              />
+            </Suspense>
           )}
         </div>
         {waiting && (

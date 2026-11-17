@@ -58,6 +58,7 @@ const box = (view: ChannelView): HTMLTextAreaElement =>
 describe('quote reply in a channel', () => {
   test('puts the whole message in the channel’s composer, the caret under it, focused', async () => {
     const view = await mountChannel({ messages: page([theirs]) });
+    await person().click(view.getByRole('button', { name: 'Markdown source' }));
     await quoteFrom(view);
     const value = box(view).value;
     expect(value.startsWith('> Pool size is 20 now.\n> Retry after 4s.\n> — ')).toBe(true);
@@ -69,6 +70,7 @@ describe('quote reply in a channel', () => {
 
   test('keeps what was already written, and quotes only the part selected', async () => {
     const view = await mountChannel({ messages: page([theirs]) });
+    await person().click(view.getByRole('button', { name: 'Markdown source' }));
     await person().type(box(view), 'About this:');
     const row = view.container.querySelector<HTMLElement>(`[data-message-id="${theirs.id}"]`);
     const words = row?.querySelector('[data-message-body]');

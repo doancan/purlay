@@ -9,7 +9,7 @@ import { useEffect, useRef } from 'react';
 
 /** The flag the composition events keep, for `endsComposition`. */
 export const useComposition = (
-  field: React.RefObject<HTMLTextAreaElement | null>,
+  field: React.RefObject<HTMLElement | null>,
 ): React.RefObject<boolean> => {
   const composing = useRef(false);
   useEffect(() => {
@@ -41,6 +41,6 @@ export const useComposition = (
  * (Safari) is covered by the flag.
  */
 export const duringComposition = (
-  event: React.KeyboardEvent,
+  event: Pick<React.KeyboardEvent, 'nativeEvent' | 'key'>,
   composing: React.RefObject<boolean>,
 ): boolean => event.nativeEvent.isComposing || event.key === 'Process' || composing.current;

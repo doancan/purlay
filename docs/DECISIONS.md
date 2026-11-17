@@ -9117,7 +9117,29 @@ Indicators change no draft, renderer behaviour, wire contract or formatting shor
 
 
 
-**Considered and rejected.** A WYSIWYG editor (PRD §4.1 fixes plain textarea and GFM); a full emoji dataset
+**Live editing amendment (owner, 2026-11-17).** The owner explicitly reverses the textarea/preview UI
+choice above: formatted text is directly editable by default. The **Markdown** toggle opens source
+editing, with `aria-pressed` true in source mode; `Mod+Shift+P` switches the same two modes. The
+choice is remembered on this browser. Both modes keep the same GFM draft, channel/thread isolation,
+upload/paste policy and send contract. Viewing or switching modes does not rewrite an existing draft;
+formatted edits serialize back to GFM. Marks, lists, quotes and code are native editing operations,
+including stored marks at an empty caret, undo/redo, input rules and IME handling. Tables retain GFM's
+single-line cells; Shift+Enter from a cell continues in a paragraph after the table.
+
+ProseMirror's model, state, view, commands, history, keymap, input rules, lists and tables are justified
+runtime dependencies: correct browser selection, composition and undo cannot be provided by a readonly
+renderer or a hand-maintained contenteditable DOM. The editor imports through the existing bounded,
+sanitized message grammar, never clipboard HTML. `diff` maps canonical editor offsets to an existing
+draft's exact source, with a 20 ms bound and source-mode fallback. Over-limit drafts use source mode.
+The editor loads in a separate chunk (81.68 KiB gzip in the measured build); the entry shell remains
+256.18 KiB against its unchanged 258 KiB bound. Chat's entry measures 52.11 KiB; its bound explicitly
+moves from 52 to 53 KiB for the two-mode controls and command/selection bridge. Link details and emoji
+choices now load when opened. No HTML document, editor
+JSON, new wire shape or data migration is introduced. Source-mode behavior tests explicitly select
+source; separate browser tests cover the actual formatted default, selection, undo, composition and
+accessibility.
+
+**Originally considered and rejected (the live editing amendment supersedes the first item).** A WYSIWYG editor; a full emoji dataset
 with search (cost out of proportion to what a team uses, and the system keyboard exists); a hidden toolbar
 behind a "Aa" toggle (formatting that has to be discovered is not formatting people use); a preview in a
 side panel (the width the thread panel needs).

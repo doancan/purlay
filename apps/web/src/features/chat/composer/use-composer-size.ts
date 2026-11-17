@@ -7,9 +7,8 @@ const VIEWPORT_SHARE = 0.4;
 
 export const useComposerSize = (
   field: RefObject<HTMLTextAreaElement | null>,
-  preview: RefObject<HTMLDivElement | null>,
   text: string,
-  previewing: boolean,
+  sourceMode: boolean,
 ): void => {
   const fit = useCallback((): void => {
     const box = field.current;
@@ -20,16 +19,15 @@ export const useComposerSize = (
     const viewport = window.visualViewport?.height ?? window.innerHeight;
     const minimum = line * MIN_LINES;
     const maximum = Math.max(minimum, Math.min(line * MAX_LINES, viewport * VIEWPORT_SHARE));
-    if (preview.current !== null) preview.current.style.maxHeight = `${String(maximum)}px`;
     if (box.hidden) return;
     const previousScroll = box.scrollTop;
     const atBottom = previousScroll + box.clientHeight >= box.scrollHeight - 1;
     box.style.height = 'auto';
     box.style.height = `${String(Math.min(maximum, Math.max(minimum, box.scrollHeight)))}px`;
     box.scrollTop = atBottom ? box.scrollHeight - box.clientHeight : previousScroll;
-  }, [field, preview]);
+  }, [field]);
 
-  useLayoutEffect(fit, [fit, text, previewing]);
+  useLayoutEffect(fit, [fit, text, sourceMode]);
   useLayoutEffect(() => {
     const box = field.current;
     if (box === null) return;
