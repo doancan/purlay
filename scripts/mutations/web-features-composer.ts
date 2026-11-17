@@ -51,11 +51,27 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
   },
   {
+    id: 'composer-link-address-not-checked',
+    why: 'an unsafe address is accepted by the link insertion helper instead of leaving the draft intact',
+    file: 'apps/web/src/features/chat/composer/link-text.ts',
+    find: '  const safe = SafeHref.of(address.trim());',
+    replace: "  const safe = SafeHref.of('https://example.com/');",
+    tests: ['apps/web/src/features/chat/composer/link-text.test.ts'],
+  },
+  {
     id: 'composer-paste-uploads-picture-over-words',
     why: "the composer uploads the clipboard's picture whatever words came with it",
     file: 'apps/web/src/features/chat/composer/paste-handler.ts',
     find: 'pastedFiles(carried, pasted, clock.now())',
     replace: 'carried',
+    tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
+  },
+  {
+    id: 'composer-preview-formatting-enabled',
+    why: 'formatting changes the hidden source while the person is only previewing it',
+    file: 'apps/web/src/features/chat/composer/format-toolbar.tsx',
+    find: '      disabled={previewing}',
+    replace: '      disabled={false}',
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
   },
   {

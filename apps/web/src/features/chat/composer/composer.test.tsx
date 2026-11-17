@@ -326,9 +326,9 @@ describe('what it shows', () => {
     expect(send.getAttribute('aria-disabled')).toBe('false');
   });
 
-  test('grows with its lines from one line to a ceiling of twelve', async () => {
+  test('starts with two lines and grows with its text to a ceiling of twelve', async () => {
     const { box, user } = await mount();
-    expect(Number(box().getAttribute('rows'))).toBe(1);
+    expect(Number(box().getAttribute('rows'))).toBe(2);
     await user.click(box());
     await user.type(
       box(),
@@ -1000,7 +1000,6 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     ['Italic', 'fix it', 4, 6, 'fix _it_'],
     ['Strikethrough', 'fix it', 4, 6, 'fix ~~it~~'],
     ['Code', 'fix it', 4, 6, 'fix `it`'],
-    ['Link', 'see docs', 4, 8, 'see [docs](https://)'],
     ['Bulleted list', 'one\ntwo', 0, 7, '- one\n- two'],
     ['Numbered list', 'one\ntwo', 0, 7, '1. one\n2. two'],
     ['Quote', 'one', 0, 3, '> one'],
@@ -1027,7 +1026,6 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     ['{Control>}i{/Control}', 'fix _it_'],
     ['{Control>}e{/Control}', 'fix `it`'],
     ['{Control>}{Shift>}x{/Shift}{/Control}', 'fix ~~it~~'],
-    ['{Control>}{Shift>}u{/Shift}{/Control}', 'fix [it](https://)'],
   ])('the key %s does what its button does', async (keys, expected) => {
     const { box, user } = await typed('fix it', 4, 6);
     await user.keyboard(keys);
@@ -3035,5 +3033,89 @@ describe('faces become emoji (D-253)', () => {
     const { box, user } = await mount();
     await user.type(box(), '<3{Shift>}{Enter}{/Shift}x');
     expect(box().value).toBe('❤️\nx');
+  });
+});
+
+describe('links in the writing area', () => {
+  test.each(['button', 'shortcut'])(
+    '%s opens link details and inserts at the preserved selection',
+    async (entry) => {
+      const { view, box, user, sent } = await mount({
+        storage: drafted('See the release notes today'),
+      });
+      act(() => {
+        box().focus();
+        box().setSelectionRange(8, 21);
+      });
+      if (entry === 'button') await user.click(view.getByRole('button', { name: 'Link' }));
+      else await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}');
+      const dialog = view.getByRole('dialog', { name: 'Add a link' });
+      expect(within(dialog).getByLabelText('Display text').getAttribute('value')).toBe(
+        'release notes',
+      );
+      await user.type(within(dialog).getByLabelText('Link address'), 'https://example.com/release');
+      await expectNoAxeViolations(dialog);
+      await user.click(within(dialog).getByRole('button', { name: 'Insert link' }));
+      expect(box().value).toBe('See the [release notes](https://example.com/release) today');
+      expectFocusOn(box());
+      expect(sent()).toEqual([]);
+    },
+  );
+
+  test('refuses unsafe addresses without losing the draft or the entered text, then recovers', async () => {
+    const { view, box, user } = await mount({ storage: drafted('Keep this draft') });
+    const draft = box();
+    await user.click(view.getByRole('button', { name: 'Link' }));
+    const dialog = view.getByRole('dialog', { name: 'Add a link' });
+    const address = within(dialog).getByLabelText('Link address');
+    await user.type(address, 'javascript:alert(1)');
+    await user.click(within(dialog).getByRole('button', { name: 'Insert link' }));
+    expect(address.getAttribute('aria-invalid')).toBe('true');
+    expect(within(dialog).getByRole('alert').textContent).toContain('full http://');
+    expect(draft.value).toBe('Keep this draft');
+    await user.clear(address);
+    await user.type(address, 'mailto:team@example.com');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(draft.value).toBe('Keep this draft');
+    expectFocusOn(box());
+  });
+
+  test('selected URLs prefill the address and Escape restores the unchanged selection', async () => {
+    const text = 'https://example.com/docs';
+    const { view, box, user } = await mount({ storage: drafted(text) });
+    act(() => {
+      box().focus();
+      box().setSelectionRange(0, text.length);
+    });
+    await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}');
+    const address = view.getByLabelText('Link address');
+    expect(address.getAttribute('value')).toBe(text);
+    await user.keyboard('{Escape}');
+    expect(box().value).toBe(text);
+    expect(box().selectionStart).toBe(0);
+    expect(box().selectionEnd).toBe(text.length);
+    expectFocusOn(box());
+  });
+
+  test('changing channels closes link details and cannot copy the old selection into the next draft', async () => {
+    const { view, user, rerender, box } = await mount({ storage: drafted('Private notes') });
+    await user.click(view.getByRole('button', { name: 'Link' }));
+    await user.type(view.getByLabelText('Link address'), 'https://example.com/private');
+    rerender({ channelId: IDS.deploys, channelName: 'deploys' });
+    await settle();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(box().value).toBe('');
+  });
+
+  test('preview has one usable toolbar stop and can return with its shortcut without altering text', async () => {
+    const { view, box, user } = await mount({ storage: drafted('A **clear** message') });
+    await user.click(view.getByRole('button', { name: 'Preview' }));
+    expect(view.getByRole('button', { name: 'Bold' }).hasAttribute('disabled')).toBe(true);
+    const toggle = view.getByRole('button', { name: 'Preview' });
+    expectFocusOn(toggle);
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}');
+    expect(view.container.querySelector('[data-composer-preview]')).toBeNull();
+    expectFocusOn(box());
+    expect(box().value).toBe('A **clear** message');
   });
 });

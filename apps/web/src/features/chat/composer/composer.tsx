@@ -83,6 +83,9 @@ import {
 } from './suggestion-lists';
 import { EmojiPicker } from './emoji-picker';
 import { FormatToolbar } from './format-toolbar';
+import { LinkDialog } from './link-dialog';
+import { insertLink } from './link-text';
+import { useComposerSize } from './use-composer-size';
 import { KeyHints } from './key-hints';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
@@ -126,6 +129,9 @@ const Inner = ({
   // The draft drawn as it will be sent (D-181): a look, never a second copy of the text.
   const [previewing, setPreviewing] = useState(false);
   const returningFromPreview = useRef(false);
+  const [linkSelection, setLinkSelection] = useState<Selection | null>(null);
+  const previewField = useRef<HTMLDivElement>(null);
+  useComposerSize(field, previewField, text, previewing);
   useEffect(() => {
     if (previewing || !returningFromPreview.current) return;
     returningFromPreview.current = false;
@@ -234,6 +240,10 @@ const Inner = ({
     const box = field.current;
     const at = box === null ? text.length : box.selectionStart;
     const to = box === null ? text.length : box.selectionEnd;
+    if (kind === 'link') {
+      setLinkSelection({ start: at, end: to });
+      return;
+    }
     const next = insertMarkdown(text, { start: at, end: to }, kind);
     inserted.current = next.selection;
     change(next.text);
@@ -549,7 +559,7 @@ const Inner = ({
     returningFromPreview.current = previewing;
   };
   const left = unitsLeft(text);
-  const rows = rowsFor(text, 1);
+  const rows = rowsFor(text, 2);
 
   const compact = parentId !== undefined;
   const empty = trimEnd(text) === '';
@@ -575,18 +585,11 @@ const Inner = ({
       aria-label={t('composer.send')}
       className={cn(
         'inline-flex h-control shrink-0 items-center justify-center gap-2 rounded-md bg-accent text-label font-medium text-on-accent transition-colors duration-hover ease-standard hover:bg-accent-hover aria-disabled:cursor-not-allowed aria-disabled:bg-surface-200 aria-disabled:text-ink-muted max-narrow:h-touch',
-        compact ? 'aspect-square' : 'px-3',
+        compact ? 'aspect-square' : 'px-3 max-narrow:aspect-square max-narrow:px-0',
       )}
     >
       <Icon name="send" size="sm" />
-      {!compact && (
-        <>
-          <span aria-hidden="true" className="h-4 border-l-hairline border-current" />
-          <span aria-hidden="true" className="font-mono text-caption">
-            ↵
-          </span>
-        </>
-      )}
+      {!compact && <span className="max-narrow:hidden">{t('composer.send')}</span>}
     </button>
   );
 
@@ -597,6 +600,12 @@ const Inner = ({
       <div className="flex w-full flex-col gap-2 px-6 max-narrow:px-4">
         <div
           data-composer-card=""
+          onKeyDown={(event) => {
+            if (previewing && formatKey(event) === 'preview') {
+              event.preventDefault();
+              togglePreview();
+            }
+          }}
           onDragOver={(event) => {
             if (event.dataTransfer.types.includes('Files')) event.preventDefault();
           }}
@@ -671,7 +680,7 @@ const Inner = ({
             onInsert={insert}
             onTogglePreview={togglePreview}
           />
-          <div className="flex gap-2 px-3 pt-2">
+          <div className="flex gap-2 px-4 pb-2 pt-3 max-narrow:px-3">
             <textarea
               data-composer=""
               ref={field}
@@ -694,7 +703,7 @@ const Inner = ({
               }
               placeholder={t('composer.placeholder', { channel: channelName })}
               hidden={previewing}
-              className="min-w-0 flex-1 resize-none bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-muted max-narrow:text-title max-narrow:font-normal scrollbar-thin"
               onChange={(event) => {
                 const { value, selectionStart } = event.target;
                 madeEmoji.current = null;
@@ -723,7 +732,14 @@ const Inner = ({
               onPaste={pasteHandler.onPaste}
             />
             {previewing && (
-              <div data-composer-preview="" className="min-h-control min-w-0 flex-1">
+              <div
+                data-composer-preview=""
+                role="region"
+                aria-label={t('composer.preview')}
+                tabIndex={0}
+                className="min-h-touch min-w-0 flex-1 overflow-y-auto rounded-md focus-visible:outline-focus focus-visible:outline-focus-ring focus-visible:-outline-offset-focus scrollbar-thin"
+                ref={previewField}
+              >
                 {empty ? (
                   <p className="text-body text-ink-muted">{t('composer.previewEmpty')}</p>
                 ) : (
@@ -789,6 +805,22 @@ const Inner = ({
             {counter}
             {sendButton}
           </div>
+          {linkSelection !== null && (
+            <LinkDialog
+              selection={text.slice(linkSelection.start, linkSelection.end)}
+              returnFocus={() => field.current}
+              onClose={() => {
+                setLinkSelection(null);
+              }}
+              onInsert={(label, address) => {
+                const next = insertLink(text, linkSelection, label, address);
+                if (next === null) return;
+                inserted.current = next.selection;
+                change(next.text);
+                setLinkSelection(null);
+              }}
+            />
+          )}
         </div>
         {waiting && (
           <p role="status" className="flex items-center gap-2 px-1 text-label text-ink-muted">
