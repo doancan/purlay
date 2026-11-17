@@ -2260,6 +2260,17 @@ export const en = {
   'composer.preview': 'Preview',
   'composer.previewEmpty': 'Nothing to preview yet',
   'composer.formatActive': 'Current format',
+  'composer.clearFormatting': 'Clear formatting',
+  'composer.clearFormattingHint':
+    'Clear the selected text’s formatting, or the current paragraph when nothing is selected.',
+  'composer.leaveCode': 'Continue in a normal paragraph',
+  'composer.draftFailed':
+    'Draft could not be saved on this device. Your text is still here; keep this page open or copy it before leaving.',
+  'composer.draftClearFailed':
+    'The old draft could not be cleared on this device. It may reappear after reloading.',
+  'composer.link.editTitle': 'Edit link',
+  'composer.link.save': 'Save link',
+  'composer.link.remove': 'Remove link',
   'composer.sourceView': 'Markdown source',
   'composer.formattedView': 'Formatted view',
   'composer.loadingEditor': 'Loading editor…',

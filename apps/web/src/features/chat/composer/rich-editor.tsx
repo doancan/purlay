@@ -12,7 +12,7 @@ import {
   toggleMark,
   wrapIn,
 } from 'prosemirror-commands';
-import { history, redo, undo } from 'prosemirror-history';
+import { closeHistory, history, redo, undo } from 'prosemirror-history';
 import { keymap } from 'prosemirror-keymap';
 import {
   InputRule,
@@ -38,15 +38,30 @@ import type { MarkdownKind, Selection } from './composer-text';
 import { emoticonEndingAt } from './emoticons';
 import { formattingRanges } from '@purlay/markdown';
 import { activeFormatting } from './active-formatting';
+import {
+  clearFormatting,
+  emptyRichDraft,
+  leaveCode,
+  richMessageText,
+  selectedLink,
+  writeLink,
+  type EditorLink,
+} from './rich-editing';
 export interface RichInput extends ComposerInput {
   readonly element: HTMLElement;
   readonly inCode: boolean;
   readonly selectedText: string;
+  readonly empty: boolean;
   format(kind: MarkdownKind): boolean;
   insertText(value: string): void;
   insertLink(label: string, address: string): void;
   forSend(): string;
   finishFace(): void;
+  loadSource(text: string, selected: Selection): void;
+  clearFormatting(): void;
+  currentLink(): EditorLink | null;
+  removeLink(): void;
+  leaveCode(): void;
 }
 interface Props {
   readonly value: string;
@@ -65,6 +80,7 @@ interface Props {
   readonly onKeyDown: (event: ComposerKeyEvent) => void;
   readonly onPaste: (event: ComposerPasteEvent) => void;
   readonly onUseSource: () => void;
+  readonly onReady: () => void;
 }
 const markNames = { bold: 'strong', italic: 'em', strike: 'strike', inlineCode: 'code' } as const;
 const markRule = (
@@ -231,13 +247,18 @@ export const RichEditor = (props: Props): React.JSX.Element => {
           tableEditing(),
         ],
       }),
-      attributes: {
+      attributes: (state): Record<string, string> => ({
         role: 'textbox',
         tabindex: '0',
         'aria-multiline': 'true',
         'data-composer': '',
         class: 'purlay-rich-editor outline-none',
-      },
+        'data-empty': String(
+          state.doc.childCount === 1 &&
+            state.doc.firstChild?.type === richSchema.nodes.paragraph &&
+            state.doc.firstChild.content.size === 0,
+        ),
+      }),
       dispatchTransaction(transaction): void {
         const state = view.state.apply(transaction);
         view.updateState(state);
@@ -379,6 +400,9 @@ export const RichEditor = (props: Props): React.JSX.Element => {
       get selectedText() {
         return view.state.doc.textBetween(view.state.selection.from, view.state.selection.to, '\n');
       },
+      get empty() {
+        return emptyRichDraft(view.state.doc);
+      },
       focus: () => {
         view.focus();
       },
@@ -416,33 +440,38 @@ export const RichEditor = (props: Props): React.JSX.Element => {
         view.focus();
       },
       insertLink: (label, address) => {
-        const { from, to } = view.state.selection;
-        const caption = label.trim() || address;
-        const mark = richSchema.mark('link', { href: address });
-        const chosen = view.state.doc.textBetween(from, to, '\n');
-        const tr =
-          caption === chosen
-            ? view.state.tr.addMark(from, to, mark)
-            : view.state.tr.replaceSelectionWith(richSchema.text(caption, [mark]), false);
-        view.dispatch(tr.scrollIntoView());
+        run(writeLink(label, address));
+      },
+      loadSource: (value, selected) => {
+        if (value !== source.text) externalUpdate.current?.(value);
+        input.setSelectionRange(selected.start, selected.end);
+      },
+      clearFormatting: () => {
+        run(clearFormatting);
+      },
+      currentLink: () => {
+        const link = selectedLink(view.state);
+        if (link !== null)
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.create(view.state.doc, link.from, link.to)),
+          );
+        return link;
+      },
+      removeLink: () => {
+        const link = selectedLink(view.state);
+        if (link === null) return;
+        view.dispatch(
+          closeHistory(
+            view.state.tr.removeMark(link.from, link.to, richSchema.marks.link).setStoredMarks([]),
+          ).scrollIntoView(),
+        );
         view.focus();
       },
+      leaveCode: () => {
+        run(leaveCode);
+      },
       forSend: () => {
-        let ending = view.state.doc.content.size - 1;
-        while (ending > 0 && !view.state.doc.resolve(ending).parent.isTextblock) ending--;
-        const position = view.state.doc.resolve(ending);
-        if (
-          position.parent.type.name === 'code_block' ||
-          richSchema.marks.code.isInSet(position.marks()) !== undefined
-        )
-          return source.text;
-        const before = position.parent.textBetween(0, position.parentOffset, '\n', '\n');
-        const face = emoticonEndingAt(before, before.length);
-        if (face === null) return source.text;
-        const start = position.start() + face.start;
-        return writeRichDocument(
-          view.state.tr.insertText(face.emoji, start, position.start() + face.end).doc,
-        ).text;
+        return richMessageText(view.state, source.text);
       },
       finishFace: () => {
         const { state } = view;
@@ -558,6 +587,7 @@ export const RichEditor = (props: Props): React.JSX.Element => {
     externalUpdate.current = updateExternal;
     view.dispatch(view.state.tr.setSelection(TextSelection.atEnd(view.state.doc)));
     if (current.current.autoFocus && !current.current.hidden) view.focus();
+    current.current.onReady();
     return (): void => {
       current.current.input.current = null;
       viewRef.current = null;

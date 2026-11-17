@@ -816,6 +816,23 @@ Selected words prefill its display text; a selected full URL prefills its addres
 Cancel/Escape changes nothing and restores focus to the writing area. Insert writes escaped Markdown
 at the original selection, without sending. A channel or account switch discards the form.
 
+With the caret or selection inside one existing link, the same control opens **Edit link**, prefills
+its address and exact label, and offers Save and Remove. Changing only the address preserves label
+whitespace and bold/italic styles. Remove keeps the label. An unlinked URL/email stays plain text after
+sending or reloading; source may use an empty-destination label to prevent automatic relinking.
+
+**Clear formatting** removes inline styles and link marks from the selection and returns its affected
+blocks to ordinary paragraphs, preserving other text, code indentation and blank lines. With only a
+caret it clears the current paragraph. Both editing modes support this action. It is one undoable
+operation in formatted editing. A code block also exposes **Continue in a normal paragraph**, which
+keeps all code and focuses a paragraph after it, reusing one already there.
+
+Drafts flush synchronously when the page hides and when the tab becomes hidden, as well as after
+300 ms idle and on channel/thread changes. Every write checks the current account and storage owner.
+A failed save keeps the current text editable and shows a localized notice with Retry; a failed
+deletion warns that the old draft may reappear. Retry restores focus to the writing area. Storage
+that is blocked or full cannot be guaranteed to persist text; sending remains available.
+
 A **face typed as text** — `:)`, `:D`, `;)`, `<3`, `xD` and the rest of the list in D-253 — becomes its emoji when
 the word ends: at a space, a new line or the send, and only when it stands alone, never inside code. `Backspace`
 straight after puts the face back as it was typed, and that one stays.

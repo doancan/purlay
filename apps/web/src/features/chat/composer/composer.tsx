@@ -145,6 +145,7 @@ const Inner = ({
   const editing = useEditing();
   const rawField = useRef<HTMLTextAreaElement>(null);
   const richField = useRef<RichInput | null>(null);
+  const [richReady, setRichReady] = useState(false);
   const field = useRef<ComposerInput | null>(null);
   const card = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
@@ -179,6 +180,11 @@ const Inner = ({
   const modeChanged = useRef(false);
   const modeSelection = useRef<Selection | null>(null);
   const [linkSelection, setLinkSelection] = useState<Selection | null>(null);
+  const pendingLink = useRef<Selection | null>(null);
+  const [editingLink, setEditingLink] = useState<{
+    readonly label: string;
+    readonly address: string;
+  } | null>(null);
   useComposerSize(rawField, text, sourceMode);
   useEffect(() => {
     if (!modeChanged.current) return;
@@ -241,7 +247,7 @@ const Inner = ({
   const candidates = useMentionCandidates(channelId);
   const { refresh: refreshCandidates } = candidates;
 
-  useDraftWriter(
+  const draft = useDraftWriter(
     { ...ports, userId: session.user.id, key, isCurrent: engine.isCurrent },
     text,
     latest,
@@ -258,14 +264,16 @@ const Inner = ({
     }
   }, [text]);
 
-  const change = (next: string): void => {
+  const change = (next: string, meaningful = true): void => {
+    latest.current = next;
     if (!sourceMode && unitsOver(next) > 0) setSourceMode(true);
     setText(next);
     // A new letter is a new list, and its best match is the one Enter takes.
     setActive(0);
     // Rationed by the engine; an emptied box says nothing, and the announcement runs out (D-114).
     // Not from a reply box: what is typed there never arrives in the channel's feed (`UX.md` §5).
-    if (parentId === undefined && next.trim() !== '') engine.announceTyping(channelId);
+    if (parentId === undefined && next.trim() !== '' && meaningful)
+      engine.announceTyping(channelId);
     // What was wrong with the old text is not known to be wrong with the new.
     setError(null);
   };
@@ -303,6 +311,15 @@ const Inner = ({
   }, [text]);
 
   /** One of the three buttons: markdown inserted at the caret, as a key would type it (D-110). */
+  const prepareEditor = (): RichInput | null => {
+    if (unitsOver(text) > 0) return null;
+    const editor = richField.current;
+    const box = field.current;
+    if (editor !== null && sourceMode && box !== null) {
+      editor.loadSource(text, { start: box.selectionStart, end: box.selectionEnd });
+    }
+    return editor;
+  };
   const insert = (kind: MarkdownKind): void => {
     if (
       !sourceMode &&
@@ -318,6 +335,11 @@ const Inner = ({
     const at = box === null ? text.length : box.selectionStart;
     const to = box === null ? text.length : box.selectionEnd;
     if (kind === 'link') {
+      if (richField.current === null) {
+        pendingLink.current = { start: at, end: to };
+        return;
+      }
+      setEditingLink(prepareEditor()?.currentLink() ?? null);
       setLinkSelection({ start: at, end: to });
       return;
     }
@@ -411,6 +433,7 @@ const Inner = ({
         setError(outcome.reason);
         return;
       }
+      latest.current = '';
       setText('');
       writeDraft(ports.storage, key, '');
       if (outcome.said !== '') toast.show({ message: outcome.said });
@@ -486,6 +509,7 @@ const Inner = ({
     setWaiting(false);
     fileOffer.set(null);
     pasteHandler.dismissNotice();
+    latest.current = '';
     setText('');
     setError(null);
     // Gone from storage now, not a debounce from now: a reload right after sending must
@@ -659,7 +683,7 @@ const Inner = ({
   const rows = rowsFor(text, 2);
 
   const compact = parentId !== undefined;
-  const empty = trimEnd(text) === '';
+  const empty = trimEnd(text) === '' || (!sourceMode && richField.current?.empty === true);
   // Inside an open fence, and on a phone, Enter is a new line, so the key that sends is the one the hint
   // names (D-188) — and the field's description, which a screen reader reads at every width, says it too.
   const fenced =
@@ -794,6 +818,10 @@ const Inner = ({
             chord={chord}
             onInsert={insert}
             onTogglePreview={togglePreview}
+            editingReady={richReady && unitsOver(text) <= 0}
+            onClear={() => {
+              prepareEditor()?.clearFormatting();
+            }}
           />
           <div className="flex gap-2 px-4 pb-2 pt-3 max-narrow:px-3">
             <textarea
@@ -860,7 +888,8 @@ const Inner = ({
                   controls={controls}
                   activeDescendant={activeDescendant}
                   onChange={(next, selected) => {
-                    change(next);
+                    if (sourceMode) inserted.current = selected;
+                    change(next, richField.current?.empty !== true);
                     setSelection(selected);
                   }}
                   onSelect={(selected, formats) => {
@@ -872,10 +901,35 @@ const Inner = ({
                   onUseSource={() => {
                     setSourceMode(true);
                   }}
+                  onReady={() => {
+                    setRichReady(true);
+                    const queued = pendingLink.current;
+                    const editor = richField.current;
+                    if (queued !== null && editor !== null) {
+                      pendingLink.current = null;
+                      if (sourceMode && unitsOver(latest.current) <= 0)
+                        editor.loadSource(latest.current, queued);
+                      setEditingLink(unitsOver(latest.current) <= 0 ? editor.currentLink() : null);
+                      setLinkSelection(queued);
+                    }
+                  }}
                 />
               </Suspense>
             }
           </div>
+          {!sourceMode && richFormats.has('code') && (
+            <div className="px-4 pb-2 max-narrow:px-3">
+              <button
+                type="button"
+                className="inline-flex min-h-control items-center rounded-md text-label text-accent-text underline max-narrow:min-h-touch"
+                onClick={() => {
+                  richField.current?.leaveCode();
+                }}
+              >
+                {t('composer.leaveCode')}
+              </button>
+            </div>
+          )}
           <UploadList uploads={uploads} />
           <input
             ref={picker}
@@ -936,6 +990,7 @@ const Inner = ({
           {linkSelection !== null && (
             <Suspense fallback={null}>
               <LinkDialog
+                existing={editingLink}
                 selection={
                   !sourceMode
                     ? (richField.current?.selectedText ?? '')
@@ -948,7 +1003,7 @@ const Inner = ({
                   setLinkSelection(null);
                 }}
                 onInsert={(label, address) => {
-                  if (!sourceMode && richField.current !== null) {
+                  if ((!sourceMode || editingLink !== null) && richField.current !== null) {
                     richField.current.insertLink(label, address);
                     setLinkSelection(null);
                     return;
@@ -959,10 +1014,33 @@ const Inner = ({
                   change(next.text);
                   setLinkSelection(null);
                 }}
+                onRemove={() => {
+                  richField.current?.removeLink();
+                  setLinkSelection(null);
+                }}
               />
             </Suspense>
           )}
         </div>
+        {draft.failed && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-2 px-1 text-label text-danger-text"
+          >
+            <Icon name="failed" size="sm" />
+            <span>{t(text === '' ? 'composer.draftClearFailed' : 'composer.draftFailed')}</span>
+            <button
+              type="button"
+              className="inline-flex min-h-control items-center rounded-md underline max-narrow:min-h-touch"
+              onClick={() => {
+                draft.retry();
+                field.current?.focus();
+              }}
+            >
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
         {waiting && (
           <p role="status" className="flex items-center gap-2 px-1 text-label text-ink-muted">
             <Icon name="sending" size="sm" />

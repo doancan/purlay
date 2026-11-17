@@ -730,6 +730,125 @@ describe('pasting', () => {
 });
 
 describe('drafts', () => {
+  test('pagehide writes the latest keystroke before the debounce fires', async () => {
+    const { box, storage, user } = await mount();
+    await user.type(box(), 'keep immediately');
+    expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(storage?.getItem(mine(IDS.api))).toBe('keep immediately');
+  });
+
+  test('backgrounding writes immediately, and lifecycle writes never cross an account boundary', async () => {
+    const { box, storage, user } = await mount();
+    await user.type(box(), 'only mine');
+    const visibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    try {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBe('only mine');
+      storage?.removeItem(mine(IDS.api));
+      storage?.setItem(PERSON_KEY, 'someone-else');
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    } finally {
+      if (visibility === undefined) Reflect.deleteProperty(document, 'visibilityState');
+      else Object.defineProperty(document, 'visibilityState', visibility);
+    }
+  });
+
+  test('a failed save is visible, retry recovers, and the writing area keeps its text', async () => {
+    const storage = memory();
+    const save = storage.setItem.bind(storage);
+    let refusing = true;
+    storage.setItem = (key, value): void => {
+      if (refusing && key.startsWith('purlay.draft.')) throw new Error('quota');
+      save(key, value);
+    };
+    const { view, box, timers, user } = await mount({ storage });
+    await user.type(box(), 'do not lose me');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    expect(view.getByText(/Draft could not be saved/)).toBeDefined();
+    expect(box().value).toBe('do not lose me');
+    refusing = false;
+    await user.click(view.getByRole('button', { name: 'Retry' }));
+    expect(storage.getItem(mine(IDS.api))).toBe('do not lose me');
+    expect(view.queryByText(/Draft could not be saved/)).toBeNull();
+    expectFocusOn(box());
+  });
+
+  test('an invalidated session cannot flush even when storage still claims the same person', async () => {
+    let current = true;
+    let restore = (): void => undefined;
+    const { view, box, storage, timers, user } = await mount({
+      inspect: (engine) => {
+        const probe = spyOn(engine, 'isCurrent').mockImplementation(() => current);
+        restore = (): void => {
+          probe.mockRestore();
+        };
+      },
+    });
+    try {
+      await user.type(box(), 'private unsent words');
+      current = false;
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+        timers.advance(DRAFT_DEBOUNCE_MS);
+      });
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+      view.unmount();
+      expect(storage?.getItem(mine(IDS.api))).toBeNull();
+    } finally {
+      view.unmount();
+      restore();
+    }
+  });
+
+  test('missing or unreadable storage is also explained without blocking typing', async () => {
+    const { view, box, timers, user } = await mount({ storage: null });
+    await user.click(view.getByRole('button', { name: 'Markdown source' }));
+    await user.type(box(), 'keep this page open');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    expect(view.getByText(/Draft could not be saved/)).toBeDefined();
+    expect(box().value).toBe('keep this page open');
+  });
+
+  test('a failed draft deletion is explained and retry really removes the old text', async () => {
+    const storage = drafted('old saved words');
+    const remove = storage.removeItem.bind(storage);
+    let refusing = true;
+    storage.removeItem = (key): void => {
+      if (refusing && key.startsWith('purlay.draft.')) throw new Error('blocked');
+      remove(key);
+    };
+    const { view, box, user, timers } = await mount({ storage });
+    await user.click(box());
+    await user.keyboard('{Control>}a{/Control}{Backspace}');
+    act(() => {
+      timers.advance(DRAFT_DEBOUNCE_MS);
+    });
+    expect(view.getByText(/old draft could not be cleared/)).toBeDefined();
+    expect(box().value).toBe('');
+    refusing = false;
+    await user.click(view.getByRole('button', { name: 'Retry' }));
+    expect(storage.getItem(mine(IDS.api))).toBeNull();
+    expect(view.queryByText(/old draft could not be cleared/)).toBeNull();
+  });
   test('are written a moment after typing stops, and not before', async () => {
     const { box, storage, timers, user } = await mount();
     await user.type(box(), 'half');

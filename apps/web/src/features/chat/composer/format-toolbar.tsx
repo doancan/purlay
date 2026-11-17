@@ -14,7 +14,7 @@ import type { KeyLabels } from '../../shortcuts/platform';
 import type { MarkdownKind } from './composer-text';
 
 /** Where the mode toggle sits in the row's order of stops, after the eleven formatting buttons. */
-const PREVIEW_STOP = 11;
+const PREVIEW_STOP = 12;
 const FORMATTING_STATES: ReadonlySet<MarkdownKind> = new Set([
   'bold',
   'italic',
@@ -34,6 +34,8 @@ export interface FormatToolbarProps {
   readonly chord: (...parts: readonly string[]) => string;
   readonly onInsert: (kind: MarkdownKind) => void;
   readonly onTogglePreview: () => void;
+  readonly editingReady: boolean;
+  readonly onClear: () => void;
 }
 
 /** ← → Home End along the row, round at its ends; Tab is left to leave it. */
@@ -68,6 +70,8 @@ export const FormatToolbar = ({
   chord,
   onInsert,
   onTogglePreview,
+  editingReady,
+  onClear,
 }: FormatToolbarProps): React.JSX.Element => {
   const { t } = useI18n();
   // Which button is the Tab stop: the last one used.
@@ -145,6 +149,18 @@ export const FormatToolbar = ({
           chord(labels.mod, labels.alt, labels.shift, 'C'),
         )}
         {tool(10, 'table', t('composer.table'), 'table')}
+        <Divider />
+        <IconButton
+          label={t('composer.clearFormatting')}
+          tooltip={t('composer.clearFormattingHint')}
+          glyph="clear-formatting"
+          disabled={!editingReady}
+          tabIndex={stopAt === 11 ? 0 : -1}
+          onFocus={() => {
+            setStopAt(11);
+          }}
+          onClick={onClear}
+        />
       </div>
       <Tooltip
         content={t(sourceMode ? 'composer.formattedView' : 'composer.sourceView')}
