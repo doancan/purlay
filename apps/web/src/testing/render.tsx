@@ -148,7 +148,9 @@ const makeWorld = ({
     },
     locale,
     sockets: fakeSockets(),
-    storage: memoryStorage(),
+    // Simulated-DOM screens exercise source typing. Native formatted input, browser selection and
+    // composition are covered by rich-composer.e2e.ts; a custom storage can choose either mode here.
+    storage: memoryStorage({ 'purlay.composerSource': 'true' }),
     clock: { now: () => new Date(Date.UTC(2026, 8, 9, 12, 0, 0)) },
   };
 };
