@@ -358,6 +358,10 @@ export const AuditPage = (): React.JSX.Element => {
           : t('audit.action.channel.posting_everyone_in', { actor, channel });
       }
       // The person is gone, so the sentence names nobody (D-139 §5).
+      case 'integration.webhook_rotated':
+        return t('audit.action.integration.webhook_rotated', { actor });
+      case 'integration.outgoing_webhook_changed':
+        return t('audit.action.integration.outgoing_webhook_changed', { actor });
       case 'account.erased':
         return t('audit.action.account.erased');
       // An owner's, or the server operator's when nobody in the workspace asked (D-140).

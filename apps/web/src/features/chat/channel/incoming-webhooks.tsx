@@ -7,6 +7,7 @@
  * server keeps only a digest of it — so it is copied now or the hook is revoked and made again. It stays
  * on the screen until the person says Done.
  */
+import { acceptWebhook } from './webhook-cache';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Channel, CreatedIncomingWebhook, IncomingWebhook } from '@purlay/types';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -144,12 +145,15 @@ const Setup = ({
 const Hook = ({
   hook,
   onRevoke,
+  onRotate,
 }: {
   readonly hook: IncomingWebhook;
   readonly onRevoke: (hook: IncomingWebhook) => Promise<boolean>;
+  readonly onRotate: (hook: IncomingWebhook) => Promise<void>;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
   const [asking, setAsking] = useState(false);
+  const [rotating, setRotating] = useState(false);
   const [busy, setBusy] = useState(false);
   const questionId = useId();
   const box = useRef<HTMLLIElement>(null);
@@ -191,6 +195,50 @@ const Hook = ({
           ? t('hooks.neverUsed')
           : t('hooks.lastUsed', { when: format.absolute(hook.lastUsedAt) })}
       </span>
+      {hook.lastRequestAt !== undefined && (
+        <p className="text-caption text-ink-muted">
+          {t('outHooks.lastRequest', {
+            when: format.absolute(hook.lastRequestAt),
+            status: hook.lastStatus ?? 0,
+          })}
+          {hook.lastError === null || hook.lastError === undefined ? '' : ` · ${hook.lastError}`}
+        </p>
+      )}
+      <Button
+        disabled={busy}
+        onClick={() => {
+          setRotating(true);
+        }}
+      >
+        {t('outHooks.rotate')}
+      </Button>
+      {rotating && (
+        <div className="flex flex-col gap-2">
+          <p className="text-body">{t('outHooks.incomingRotate')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setRotating(false);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              busy={busy}
+              onClick={() => {
+                setBusy(true);
+                void onRotate(hook).finally(() => {
+                  setBusy(false);
+                  setRotating(false);
+                });
+              }}
+            >
+              {t('outHooks.rotate')}
+            </Button>
+          </div>
+        </div>
+      )}
       {asking && (
         <div role="group" aria-labelledby={questionId} className="flex flex-col gap-2">
           <p id={questionId} className="text-label text-ink">
@@ -238,11 +286,12 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
   const [created, setCreated] = useState<CreatedIncomingWebhook | null>(null);
 
   const hooks = useQuery({
+    refetchInterval: 5000,
     queryKey: keys.incomingWebhooks(channel.id),
     queryFn: async ({ signal }) => await api.incomingWebhooks(channel.id, signal),
   });
-  const reread = async (): Promise<void> => {
-    await client.invalidateQueries({ queryKey: keys.incomingWebhooks(channel.id) });
+  const accepted = async (id: string, hook: IncomingWebhook | null): Promise<void> => {
+    await acceptWebhook(client, keys.incomingWebhooks(channel.id), id, hook);
   };
 
   const make = async (event: React.SyntheticEvent): Promise<void> => {
@@ -255,9 +304,10 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
     setBusy(true);
     setProblem(null);
     try {
-      setCreated(await api.createIncomingWebhook(channel.id, { name: wanted }));
+      const result = await api.createIncomingWebhook(channel.id, { name: wanted });
+      setCreated(result);
       setName('');
-      await reread();
+      await accepted(result.webhook.id, result.webhook);
     } catch (failure) {
       // What the server refused about the name is said on the field (D-142).
       setProblem(
@@ -274,7 +324,7 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
     setProblem(null);
     try {
       await api.revokeIncomingWebhook(channel.id, hook.id);
-      await reread();
+      await accepted(hook.id, null);
       return true;
     } catch (failure) {
       setProblem({ field: 'form', message: `${t('hooks.revokeFailed')} ${describe(failure)}` });
@@ -298,16 +348,33 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
             {t('common.retry')}
           </Button>
         </div>
-      ) : hooks.data === undefined ? (
-        <LoadingStatus label={t('common.loading')} className="flex flex-col gap-2">
-          <Skeleton />
-        </LoadingStatus>
+      ) : null}
+      {hooks.data === undefined ? (
+        hooks.isError ? null : (
+          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-2">
+            <Skeleton />
+          </LoadingStatus>
+        )
       ) : hooks.data.length === 0 ? (
         <p className="text-body text-ink-muted">{t('hooks.empty')}</p>
       ) : (
         <ul className="flex flex-col">
           {hooks.data.map((hook) => (
-            <Hook key={hook.id} hook={hook} onRevoke={revoke} />
+            <Hook
+              key={hook.id}
+              hook={hook}
+              onRevoke={revoke}
+              onRotate={async (chosen) => {
+                setProblem(null);
+                try {
+                  const result = await api.rotateIncomingWebhook(channel.id, chosen.id);
+                  setCreated(result);
+                  await accepted(result.webhook.id, result.webhook);
+                } catch (error) {
+                  setProblem({ field: 'form', message: describe(error) });
+                }
+              }}
+            />
           ))}
         </ul>
       )}

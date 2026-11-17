@@ -30,9 +30,11 @@ test('a rename shows in another person’s sidebar and header; leaving takes it 
   const dialog = page.getByRole('dialog');
   // Typed the way it is said; kept in the rule's form. Still a room's name, so the specs that read
   // the seeded workspace leave it out.
-  await dialog.getByLabel('Name').fill(`Room Yeni ${made.name.slice('room-'.length)}`);
+  await dialog
+    .getByLabel('Name', { exact: true })
+    .fill(`Room Yeni ${made.name.slice('room-'.length)}`);
   const renamed = `room-yeni-${made.name.slice('room-'.length)}`;
-  await expect(dialog.getByLabel('Name')).toHaveValue(renamed);
+  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue(renamed);
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog.getByText('Saved.')).toBeVisible();
   await expect(page.getByRole('dialog', { name: `Details of #${renamed}` })).toBeVisible();

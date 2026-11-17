@@ -13,6 +13,7 @@
  * decisions and the second finds the thread already closed: a no-op that says so
  * with the message and publishes nothing, because nothing changed.
  */
+import { enqueueWebhookEvent } from '../integrations/outgoing-webhooks';
 import { notHiddenBy } from './hidden';
 import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
@@ -271,6 +272,13 @@ export const setResolved = async (
     if (message === undefined) {
       throw new AppError({ code: 'INTERNAL', message: 'Something went wrong.' });
     }
+    if (changes)
+      await enqueueWebhookEvent(
+        transaction,
+        message,
+        resolved ? 'thread.resolved' : 'thread.reopened',
+        clock.now(),
+      );
     return {
       message,
       changed: changes,

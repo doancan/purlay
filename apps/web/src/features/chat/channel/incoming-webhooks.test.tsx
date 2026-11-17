@@ -306,3 +306,51 @@ describe('in Turkish', () => {
     view.unmountAll();
   });
 });
+
+test('request evidence and in-place secret renewal show failures, then the new one-time address', async () => {
+  const evidence = aHook({
+    lastRequestAt: '2026-11-14T12:00:00.000Z',
+    lastStatus: 429,
+    lastError: 'RATE_LIMITED',
+  });
+  let fail = true;
+  const path = `/api/webhooks/incoming/${HOOK_ID}/${'d'.repeat(64)}`;
+  const view = await mountChannel({
+    messages: page([]),
+    copy: () => Promise.reject(new Error('clipboard refused')),
+    api: {
+      incomingWebhooks: () => Promise.resolve([evidence]),
+      rotateIncomingWebhook: () =>
+        fail
+          ? Promise.reject(new ApiError(500, 'INTERNAL', 'failed'))
+          : Promise.resolve({ webhook: evidence, path }),
+    },
+  });
+  const hooks = hooksOf(await openDetails(view));
+  expect(within(hooks).getByText(/HTTP 429/)).toBeDefined();
+  const renew = async (): Promise<void> => {
+    await person().click(within(hooks).getByRole('button', { name: 'Renew secret' }));
+    await settle();
+    const confirm = within(hooks).getAllByRole('button', { name: 'Renew secret' }).at(-1);
+    if (confirm === undefined) throw new Error('no renew');
+    await person().click(confirm);
+    await settle();
+  };
+  await person().click(within(hooks).getByRole('button', { name: 'Renew secret' }));
+  await person().click(within(hooks).getByRole('button', { name: 'Cancel' }));
+  await settle();
+  await renew();
+  expect(within(hooks).getByRole('alert')).toBeDefined();
+  fail = false;
+  await renew();
+  expect(within(hooks).getByText(new RegExp(path))).toBeDefined();
+  expect(within(hooks).queryByRole('alert')).toBeNull();
+  await person().click(within(hooks).getByRole('button', { name: 'Copy the address' }));
+  await settle();
+  expect(view.getByText(/couldn.t copy/i)).toBeDefined();
+  expect(
+    JSON.stringify(view.world.client.getQueryData(['incoming-webhooks', IDS.api])),
+  ).not.toContain('d'.repeat(64));
+  await expectNoAxeViolations(hooks);
+  view.unmountAll();
+});

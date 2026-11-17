@@ -85,6 +85,8 @@ export interface Ids extends Partial<CompanyCatalogueIds> {
   readonly issueId: string;
   /** An incoming webhook of the channel: what revoking one acts on (D-245). */
   readonly webhookId: string;
+  readonly outgoingWebhookId: string;
+  readonly deliveryId: string;
   /** An owner's export of the workspace (D-140). */
   readonly exportId: string;
 }
@@ -117,6 +119,8 @@ export const pathFor = (path: string, ids: Ids): string =>
     if (name === 'incidentId') return ids.incidentId;
     if (name === 'bookmarkId') return ids.bookmarkId;
     if (name === 'issueId') return ids.issueId;
+    if (name === 'outgoingWebhookId') return ids.outgoingWebhookId;
+    if (name === 'deliveryId') return ids.deliveryId;
     if (name === 'webhookId') return ids.webhookId;
     if (name === 'exportId') return ids.exportId;
     if (name === 'emoji') return CROSSING_EMOJI;
@@ -656,6 +660,48 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: { kind: 'channel', admin: true },
   },
+  'POST /api/channels/:channelId/incoming-webhooks/:webhookId/secret': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/outgoing-webhooks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/outgoing-webhooks': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+    body: () => ({
+      name: 'Crossing',
+      url: 'https://example.com/hook',
+      events: ['message.created'],
+    }),
+  },
+  'PATCH /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+    body: () => ({ paused: true }),
+  },
+  'DELETE /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/secret': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'POST /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/test': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/deliveries': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    visibility: { kind: 'channel', admin: true },
+  },
+  'GET /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/deliveries/:deliveryId/attempts':
+    { refusal: 'CHANNEL_NOT_FOUND', visibility: { kind: 'channel', admin: true } },
+  'POST /api/channels/:channelId/outgoing-webhooks/:outgoingWebhookId/deliveries/:deliveryId/retry':
+    { refusal: 'CHANNEL_NOT_FOUND', visibility: { kind: 'channel', admin: true } },
   'GET /api/channels/:channelId/incoming-webhooks': {
     refusal: 'CHANNEL_NOT_FOUND',
     visibility: { kind: 'channel', admin: true },

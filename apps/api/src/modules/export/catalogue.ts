@@ -92,7 +92,7 @@ export interface ExportContribution {
   readonly tables: readonly TableExport[];
   /**
    * The tables its own migration set makes, which a database migrated without the set does not have. Where one is not
-   * there nothing is read from it and its people are not asked for: there is nothing to export (`MODULES.md` §5).
+   * there that table is not read; the people contribution uses scope.absent to omit only queries that need it (`MODULES.md` §5).
    */
   readonly ownSet?: readonly (keyof Database)[];
   /**
@@ -100,7 +100,7 @@ export interface ExportContribution {
    * the schema, so a table nobody decided is a compile error that names it.
    */
   readonly excluded?: Readonly<Record<string, string>>;
-  /** Each a `select <person's id> from …` over what the scope covers: the people its rows name. */
+  /** Each a `select <person's id> from …` over what the scope covers. Guard optional tables using scope.absent: a set can be partially applied when its module is off during an upgrade. */
   readonly people: (scope: Scope) => readonly RawBuilder<unknown>[];
   /** Decides what it covers of the workspace, before the snapshot is taken. */
   readonly prepare?: (executor: Executor, request: ScopeRequest) => Promise<unknown>;
@@ -132,12 +132,6 @@ export interface Catalogue {
   readonly audit: (rows: Readonly<Record<string, number>>) => Readonly<Record<string, string>>;
 }
 
-/** Whether any of a module's own tables is among those a database lacks. */
-const lacks = (
-  own: readonly (keyof Database)[] | undefined,
-  absent: readonly (keyof Database)[] | undefined,
-): boolean => (own ?? []).some((table) => absent?.includes(table) === true);
-
 export const assembleCatalogue = (
   core: CoreExportContribution,
   modules: readonly ExportContribution[],
@@ -159,9 +153,7 @@ export const assembleCatalogue = (
     },
     people: (scope: Scope): RawBuilder<unknown> =>
       sql.join(
-        contributions
-          .filter((contribution) => !lacks(contribution.ownSet, scope.absent))
-          .flatMap((contribution) => contribution.people(scope)),
+        contributions.flatMap((contribution) => contribution.people(scope)),
         sql` union `,
       ),
     files: (scope: Scope): RawBuilder<unknown> | undefined =>

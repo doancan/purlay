@@ -447,6 +447,51 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
     const recent = await say('ada', new Date(NOW.getTime() - 1000), 'hello http://intranet/policy');
     const old = await say('ada', new Date(NOW.getTime() - 40 * DAY_MS), 'long ago');
     const bobs = await say('bob', new Date(NOW.getTime() - 2000), 'hi');
+    // Real rows for the webhook module lifecycle: exported configuration, erased personal
+    // payloads, and cascading attempts when either the source or its channel is purged.
+    for (const who of [ada, bob]) {
+      const hook = crypto.randomUUID();
+      const delivery = anId();
+      await tx
+        .insertInto('outgoing_webhooks')
+        .values({
+          id: hook,
+          workspace_id: workspaceId,
+          channel_id: channel,
+          name: 'CI',
+          url: 'https://example.com/hook',
+          events: ['message.created'],
+          secret_encrypted: '',
+          created_by: who.userId,
+          created_at: NOW,
+        })
+        .execute();
+      await tx
+        .insertInto('webhook_deliveries')
+        .values({
+          id: delivery,
+          webhook_id: hook,
+          actor_id: who.userId,
+          event_id: crypto.randomUUID(),
+          event_type: 'webhook.test',
+          payload: '{}',
+          created_at: NOW,
+          next_attempt_at: NOW,
+          expires_at: new Date(NOW.getTime() + DAY_MS),
+        })
+        .execute();
+      await tx
+        .insertInto('webhook_delivery_attempts')
+        .values({
+          id: crypto.randomUUID(),
+          delivery_id: delivery,
+          attempted_at: NOW,
+          duration_ms: 1,
+          status: 500,
+          error: 'http_error',
+        })
+        .execute();
+    }
     const recentFile = await upload(tx, store, workspaceId, ada.userId);
     await linkFile(tx, { id: recentFile, workspaceId, messageId: recent, channelId: channel });
     const oldFile = await upload(tx, store, workspaceId, ada.userId);

@@ -29,6 +29,8 @@ have it.
 
 ### Added
 
+- **Webhooks** — Renew incoming addresses and inspect their last request; send signed channel events to external services with durable retries, pause, test events and delivery history. Ordinary text sends retain their eight-statement SQL budget (D-312).
+
 - **Workspace management** — Owners can manage people, scoped roles and groups, synchronize company directories through SCIM, and preview employee offboarding (D-311).
 
 ### Security

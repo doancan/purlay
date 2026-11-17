@@ -33,6 +33,9 @@ export const forgetWhatChatKeeps = async (
       await transaction.deleteFrom(table).where('user_id', '=', userId).execute();
     }
   }
+  if (await tableExists(transaction, 'webhook_deliveries')) {
+    await transaction.deleteFrom('webhook_deliveries').where('actor_id', '=', userId).execute();
+  }
   await transaction.deleteFrom('saved_searches').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('saved_messages').where('user_id', '=', userId).execute();
   await transaction.deleteFrom('thread_follows').where('user_id', '=', userId).execute();

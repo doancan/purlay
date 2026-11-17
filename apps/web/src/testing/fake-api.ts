@@ -76,6 +76,15 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   foldChannelGroup: unexpected('foldChannelGroup'),
   removeChannelGroup: unexpected('removeChannelGroup'),
   moveChannelGroup: unexpected('moveChannelGroup'),
+  rotateIncomingWebhook: unexpected('rotateIncomingWebhook'),
+  createOutgoingWebhook: unexpected('createOutgoingWebhook'),
+  rotateOutgoingWebhook: unexpected('rotateOutgoingWebhook'),
+  changeOutgoingWebhook: unexpected('changeOutgoingWebhook'),
+  testOutgoingWebhook: unexpected('testOutgoingWebhook'),
+  webhookDeliveries: unexpected('webhookDeliveries'),
+  webhookAttempts: unexpected('webhookAttempts'),
+  retryWebhookDelivery: unexpected('retryWebhookDelivery'),
+  outgoingWebhooks: () => Promise.resolve([]),
   // Public identity and own admission are read by sign-in/session gates; old servers have neither restriction.
   ownAdmission: () => Promise.resolve({ state: null }),
   instanceInfo: () =>

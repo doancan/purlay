@@ -41,7 +41,7 @@ describe('the next run of a slot', () => {
   });
 
   test('no two slots fall on the same minute, so the loop never passes one over', () => {
-    const minutes = PLAN.flatMap((slot) =>
+    const minutes = PLAN.filter((slot) => slot.every !== 'minute').flatMap((slot) =>
       slot.every === 'quarter-hour'
         ? [0, 15, 30, 45].map((offset) => `*:${String(slot.minute + offset)}`)
         : slot.every === 'hour'
@@ -59,6 +59,7 @@ describe('the next run of a slot', () => {
 
   test('the deployment’s plan names every job the runner knows, each once', () => {
     expect(PLAN.map((slot) => slot.job).sort()).toEqual([
+      'deliver:webhooks',
       'mail:missed',
       'purge:retention',
       'purge:workspaces',
@@ -73,6 +74,7 @@ describe('the next run of a slot', () => {
       'sweep:orphans',
       'sweep:outbox',
       'sweep:sessions',
+      'sweep:webhook-deliveries',
     ]);
   });
 });
@@ -122,7 +124,9 @@ describe('the loop', () => {
     const said: { msg: string; fields: Record<string, unknown> }[] = [];
     let stop = false;
     await runSchedule({
-      plan: PLAN,
+      plan: PLAN.filter(
+        (slot) => slot.every !== 'minute' && slot.job !== 'sweep:webhook-deliveries',
+      ),
       clock: { now: () => now },
       sleep: (ms) => {
         now = new Date(now.getTime() + ms);
@@ -166,4 +170,30 @@ describe('the plan and its modules', () => {
   test('every job the scheduler plans belongs to the core or to a module', () => {
     expect(PLAN.filter((slot) => composition.owner.ofJob(slot.job) === 'none')).toEqual([]);
   });
+});
+
+test('a minute dispatcher and another job due together both run', async () => {
+  let now = at('2026-11-14T12:19:30.000Z');
+  const ran: string[] = [];
+  let stopped = false;
+  await runSchedule({
+    plan: [
+      { job: 'deliver:webhooks', every: 'minute', minute: 0 },
+      { job: 'sweep:webhook-deliveries', every: 'hour', minute: 20 },
+    ],
+    clock: { now: () => now },
+    sleep: (ms) => {
+      now = new Date(now.getTime() + ms);
+      return Promise.resolve();
+    },
+    run: (job) => {
+      ran.push(job);
+      if (job === 'sweep:webhook-deliveries') stopped = true;
+      return Promise.resolve(0);
+    },
+    stopped: () => stopped,
+    moduleOf: () => 'chat',
+    log: { info: () => undefined, error: () => undefined },
+  });
+  expect(ran).toEqual(['jobs:first', 'deliver:webhooks', 'sweep:webhook-deliveries']);
 });

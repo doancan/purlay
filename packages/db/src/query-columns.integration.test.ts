@@ -10,6 +10,8 @@
  * every column would hold 98 columns of which most are post-filters. What the rule refuses is a statement
  * whose every column on a table is one no index starts with: that one reads the table.
  */
+// The source scan includes the queries of every module, so its catalogue must include their tables.
+// @needs-modules chat, issues
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Glob } from 'bun';
 import { readFileSync } from 'node:fs';

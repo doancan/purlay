@@ -49,6 +49,8 @@ export const EXTRA = {
     ['modules/attachments/images'],
     ['modules/attachments/readable'],
     ['modules/attachments/uploads'],
+    // Public destination validation before storing outgoing webhook targets; the transport rechecks DNS.
+    ['modules/images/addresses'],
     ['modules/images/fetch-external'],
     ['modules/images/proxy'],
     ['modules/jobs/jobs'],

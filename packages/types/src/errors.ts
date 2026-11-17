@@ -187,6 +187,8 @@ export const ErrorCode = Type.Union([
   Type.Literal('GITHUB_FEEDS_LIMIT'),
   /** The channel already has as many incoming webhooks as it may (D-245). */
   Type.Literal('INCOMING_WEBHOOKS_LIMIT'),
+  Type.Literal('OUTGOING_WEBHOOKS_LIMIT'),
+  Type.Literal('OUTGOING_WEBHOOK_NOT_FOUND'),
   /**
    * An attachment id already used for another upload — somebody else's, another workspace's, or
    * the same person's with other bytes. A retry of the same upload answers the attachment instead.
@@ -386,6 +388,8 @@ export const ERROR_STATUS: Record<ErrorCode, HttpStatus> = {
   BOOKMARKS_LIMIT: 409,
   GITHUB_FEEDS_LIMIT: 409,
   INCOMING_WEBHOOKS_LIMIT: 409,
+  OUTGOING_WEBHOOKS_LIMIT: 409,
+  OUTGOING_WEBHOOK_NOT_FOUND: 404,
   GITHUB_NOT_CONNECTED: 409,
   GITHUB_AUTHORIZATION_REQUIRED: 409,
   GITHUB_REQUEST_CONFLICT: 409,

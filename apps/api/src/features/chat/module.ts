@@ -39,13 +39,14 @@ export const chatModule = {
     // (its members, invitations, exports, retention window, deletion, uploads) and the account's are the core's, and
     // `routes.test.ts` of the door holds the two lists to the routes the application registers.
     // Only what acts for chat's users.
-    jobs: ['mail:missed'],
+    jobs: ['mail:missed', 'deliver:webhooks'],
     // What keeps the rows within their retention keeps running whether chat does or not: the rows are there.
     retention: [
       'purge:retention',
       'sweep:link-previews',
       'sweep:github-deliveries',
       'sweep:guest-expiry',
+      'sweep:webhook-deliveries',
     ],
     // What a person does in a channel over the socket: watch it, write in it, say they are typing.
     frames: ['SUBSCRIBE', 'UNSUBSCRIBE', 'MESSAGE_SEND', 'TYPING'],

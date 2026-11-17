@@ -34,10 +34,13 @@ export const issuesExport = {
   id: 'issues',
   tables,
   ownSet: ['issues'],
-  people: (scope: Scope): RawBuilder<unknown>[] => [
-    namedInWorkspace('issues', 'created_by', scope),
-    namedInWorkspace('issues', 'assignee_id', scope),
-  ],
+  people: (scope: Scope): RawBuilder<unknown>[] =>
+    scope.absent?.includes('issues') === true
+      ? []
+      : [
+          namedInWorkspace('issues', 'created_by', scope),
+          namedInWorkspace('issues', 'assignee_id', scope),
+        ],
   audit: (rows: Readonly<Record<string, number>>): Record<string, string> => ({
     issues: String(rows['issues'] ?? 0),
   }),

@@ -317,6 +317,23 @@ const tables = [
     },
     (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
   ),
+  tableExport(
+    'outgoing_webhooks',
+    {
+      id: 'export',
+      workspace_id: 'export',
+      channel_id: 'export',
+      name: 'export',
+      url: 'omit',
+      secret_encrypted: 'omit',
+      events: 'export',
+      paused: 'export',
+      revoked_at: 'export',
+      created_by: 'export',
+      created_at: 'export',
+    },
+    (s) => ({ where: sql`channel_id in (${channelsIn(s)})`, order: 'id' }),
+  ),
 ] as const;
 
 /** The tables of chat that are not in an export, and why. */
@@ -337,6 +354,8 @@ type ChatExcluded =
   | 'github_integrations'
   | 'github_deliveries'
   | 'incoming_webhooks'
+  | 'webhook_deliveries'
+  | 'webhook_delivery_attempts'
   | 'github_app_installations'
   | 'github_user_authorizations'
   | 'github_app_handshakes'
@@ -367,6 +386,8 @@ const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   shared_link_backfill: 'Internal bounded historical indexing checkpoint; no user content.',
   message_shared_links:
     'a rebuildable index of the original message links; the source content follows the normal export scope',
+  webhook_deliveries: 'short-lived operational payloads, source messages are exported',
+  webhook_delivery_attempts: 'operational delivery results',
   channel_departures:
     'how each person left a channel, kept only to tell their own socket why it is gone (D-264): their own state',
   hidden_messages: 'messages each person deleted for themselves alone: their own state',
@@ -407,7 +428,7 @@ const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
 export const chatExport = {
   id: 'chat',
   // Made by chat's own set (`chat/0001`): a database migrated without it has no link to export.
-  ownSet: ['message_attachments'],
+  ownSet: ['message_attachments', 'outgoing_webhooks'],
   prepare: async (executor, request): Promise<Prepared> => ({
     channels:
       request.kind === 'all'
@@ -432,6 +453,9 @@ export const chatExport = {
     sql`select actor_id from incident_updates where incident_id in (${incidentsOf(scope)})`,
     sql`select user_id from incident_responders where incident_id in (${incidentsOf(scope)})`,
     sql`select added_by from incident_responders where incident_id in (${incidentsOf(scope)})`,
+    ...(scope.absent?.includes('outgoing_webhooks') === true
+      ? []
+      : [sql`select created_by from outgoing_webhooks where channel_id in (${channelsIn(scope)})`]),
     sql`select created_by from github_repo_feeds where channel_id in (${channelsIn(scope)})`,
     sql`select created_by from github_links where channel_id in (${channelsIn(scope)})`,
   ],

@@ -145,6 +145,8 @@ const endpointsOf = (
     bookmarkId: fresh(),
     issueId: fresh(),
     webhookId: fresh(),
+    outgoingWebhookId: fresh(),
+    deliveryId: fresh(),
     exportId: fresh(),
   };
   const owns = ownsPath(module.manifest.routes ?? []);

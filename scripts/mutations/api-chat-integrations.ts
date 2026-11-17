@@ -407,6 +407,16 @@ export const API_CHAT_INTEGRATIONS: readonly Mutation[] = [
     tests: [HOOKS_TESTS],
   },
   {
+    id: 'incoming-webhook-management-lock-inversion',
+    why: 'incoming management holds an exclusive workspace lock while delivery owns its channel lock',
+    file: HOOKS,
+    find: "    .where('id', '=', context.workspaceId)\n    .forKeyShare()",
+    replace: "    .where('id', '=', context.workspaceId)\n    .forUpdate()",
+    tests: [
+      'apps/api/src/features/chat/integrations/incoming-webhooks.concurrency.integration.test.ts',
+    ],
+  },
+  {
     id: 'incoming-webhook-member-manages',
     why: 'any member of a channel makes, lists and revokes its hooks',
     file: HOOKS,
@@ -426,8 +436,8 @@ export const API_CHAT_INTEGRATIONS: readonly Mutation[] = [
     id: 'incoming-webhook-revoke-unscoped',
     why: 'an admin of one workspace revokes another workspace’s hook by its id',
     file: HOOKS,
-    find: "    .where('id', '=', webhookId)\n    .where('channel_id', '=', context.channelId)\n",
-    replace: "    .where('id', '=', webhookId)\n",
+    find: "    .deleteFrom('incoming_webhooks')\n    .where('id', '=', webhookId)\n    .where('channel_id', '=', context.channelId)\n",
+    replace: "    .deleteFrom('incoming_webhooks')\n    .where('id', '=', webhookId)\n",
     tests: [HOOKS_TESTS],
   },
   {
@@ -453,6 +463,65 @@ export const API_CHAT_INTEGRATIONS: readonly Mutation[] = [
     find: "    if (item.type === 'issue') {\n",
     replace: "    if (item.type === 'never') {\n",
     tests: ['apps/api/src/features/chat/integrations/unfurl.integration.test.ts'],
+  },
+  {
+    id: 'outgoing-webhook-cap-not-serialized',
+    why: 'concurrent administrators both take the last place under the outgoing hook cap',
+    file: 'apps/api/src/features/chat/integrations/outgoing-webhooks.ts',
+    find: '    .forNoKeyUpdate()\n',
+    replace: '',
+    tests: [
+      'apps/api/src/features/chat/integrations/outgoing-webhooks.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-erasure-check-before-decryption',
+    why: 'a revoke or source erasure committed while decryption waits still starts a new HTTP request',
+    file: 'apps/api/src/features/chat/integrations/webhook-dispatcher.ts',
+    find: "        // Decryption is asynchronous: finish it before the last live check, so a revoke or\n        // source erasure committed during decryption cannot start an HTTP request afterwards.\n        let secret: string | null = null;\n        try {\n          secret = await cipher.open(\n            Buffer.from(delivery.secret_encrypted, 'base64'),\n            delivery.webhook_id,\n          );\n        } catch {\n          /* A broken seal becomes a recorded delivery failure below. */\n        }\n        // Check again immediately before the call: a hook paused/revoked after claiming sends nothing.\n        const live = await database\n          .selectFrom('webhook_deliveries as d')\n          .innerJoin('outgoing_webhooks as h', 'h.id', 'd.webhook_id')\n          .innerJoin('channels as c', 'c.id', 'h.channel_id')\n          .innerJoin('workspaces as w', 'w.id', 'h.workspace_id')\n          .leftJoin('messages as m', 'm.id', 'd.message_id')\n          .select(['h.url', 'h.secret_encrypted'])\n          .where('d.id', '=', delivery.id)\n          .where('d.lease_token', '=', token)\n          .where('d.state', '=', 'sending')\n          .where('d.expires_at', '>', clock.now())\n          .where('h.revoked_at', 'is', null)\n          .where('h.paused', '=', false)\n          .where('c.deleted_at', 'is', null)\n          .where('w.deleted_at', 'is', null)\n          .where((eb) =>\n            eb.or([\n              eb('d.message_id', 'is', null),\n              eb.and([eb('m.id', 'is not', null), eb('m.deleted_at', 'is', null)]),\n            ]),\n          )\n          .executeTakeFirst();\n        if (live?.secret_encrypted !== delivery.secret_encrypted || live.url !== delivery.url) {\n          await database\n            .updateTable('webhook_deliveries')\n            .set({ state: 'pending', lease_token: null, lease_until: null })\n            .where('id', '=', delivery.id)\n            .where('lease_token', '=', token)\n            .where('state', '=', 'sending')\n            .execute();\n          return;\n        }\n",
+    replace:
+      "        // Check again immediately before the call: a hook paused/revoked after claiming sends nothing.\n        const live = await database\n          .selectFrom('webhook_deliveries as d')\n          .innerJoin('outgoing_webhooks as h', 'h.id', 'd.webhook_id')\n          .innerJoin('channels as c', 'c.id', 'h.channel_id')\n          .innerJoin('workspaces as w', 'w.id', 'h.workspace_id')\n          .leftJoin('messages as m', 'm.id', 'd.message_id')\n          .select(['h.url', 'h.secret_encrypted'])\n          .where('d.id', '=', delivery.id)\n          .where('d.lease_token', '=', token)\n          .where('d.state', '=', 'sending')\n          .where('d.expires_at', '>', clock.now())\n          .where('h.revoked_at', 'is', null)\n          .where('h.paused', '=', false)\n          .where('c.deleted_at', 'is', null)\n          .where('w.deleted_at', 'is', null)\n          .where((eb) =>\n            eb.or([\n              eb('d.message_id', 'is', null),\n              eb.and([eb('m.id', 'is not', null), eb('m.deleted_at', 'is', null)]),\n            ]),\n          )\n          .executeTakeFirst();\n        if (live?.secret_encrypted !== delivery.secret_encrypted || live.url !== delivery.url) {\n          await database\n            .updateTable('webhook_deliveries')\n            .set({ state: 'pending', lease_token: null, lease_until: null })\n            .where('id', '=', delivery.id)\n            .where('lease_token', '=', token)\n            .where('state', '=', 'sending')\n            .execute();\n          return;\n        }\n        // Decryption is asynchronous: finish it before the last live check, so a revoke or\n        // source erasure committed during decryption cannot start an HTTP request afterwards.\n        let secret: string | null = null;\n        try {\n          secret = await cipher.open(\n            Buffer.from(delivery.secret_encrypted, 'base64'),\n            delivery.webhook_id,\n          );\n        } catch {\n          /* A broken seal becomes a recorded delivery failure below. */\n        }\n",
+    tests: [
+      'apps/api/src/features/chat/integrations/outgoing-webhooks.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-management-lock-inversion',
+    why: 'outgoing management and incoming delivery acquire workspace/channel authority in incompatible modes',
+    file: 'apps/api/src/features/chat/integrations/outgoing-webhooks.ts',
+    find: "    .where('id', '=', context.workspaceId)\n    .forKeyShare()",
+    replace: "    .where('id', '=', context.workspaceId)\n    .forUpdate()",
+    tests: [
+      'apps/api/src/features/chat/integrations/incoming-webhooks.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-retention-deletes-retried-row',
+    why: 'a retention sweep selects an expired row before a manual retry and deletes the renewed delivery after waiting',
+    file: 'apps/api/src/features/chat/integrations/webhook-dispatcher.ts',
+    find: "      // Rechecked after any row-lock wait: manual retry may have extended this row's life.\n      .where(pastRetention)\n",
+    replace: '',
+    tests: [
+      'apps/api/src/features/chat/integrations/outgoing-webhooks.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-stale-worker-finishes',
+    why: 'a recovered lease can be overwritten by the worker whose response arrived late',
+    file: 'apps/api/src/features/chat/integrations/webhook-dispatcher.ts',
+    find: "            .where('lease_token', '=', token)\n            .where('state', '=', 'sending')\n            .returning('id')",
+    replace: "            .returning('id')",
+    tests: [
+      'apps/api/src/features/chat/integrations/outgoing-webhooks.concurrency.integration.test.ts',
+    ],
+  },
+  {
+    id: 'outgoing-webhook-target-allows-http',
+    why: 'a hook sends channel content over plaintext HTTP',
+    file: 'apps/api/src/features/chat/integrations/outgoing-webhooks.ts',
+    find: "url.protocol !== 'https:'",
+    replace: 'false',
+    tests: ['apps/api/src/features/chat/integrations/webhook-dispatcher.test.ts'],
   },
   {
     id: 'release-check-accepts-any-page',

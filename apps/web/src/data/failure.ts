@@ -42,6 +42,7 @@ export type FailureKey =
   | 'failure.githubFeedsLimit'
   | 'failure.githubFeedExists'
   | 'failure.incomingWebhooksLimit'
+  | 'failure.outgoingWebhooksLimit'
   | 'failure.githubUnavailable'
   | 'failure.githubNotConnected'
   | 'failure.githubAuthorization'
@@ -141,6 +142,7 @@ export const failureKey = (code: FailureCode): FailureKey => {
     case 'NATIVE_CODE_NOT_FOUND':
     case 'GITHUB_FEED_NOT_FOUND':
     case 'INCOMING_WEBHOOK_NOT_FOUND':
+    case 'OUTGOING_WEBHOOK_NOT_FOUND':
     case 'INCIDENT_NOT_FOUND':
     case 'IMAGE_NOT_AVAILABLE':
       return 'failure.gone';
@@ -165,6 +167,8 @@ export const failureKey = (code: FailureCode): FailureKey => {
       return 'failure.githubFeedsLimit';
     case 'GITHUB_FEED_EXISTS':
       return 'failure.githubFeedExists';
+    case 'OUTGOING_WEBHOOKS_LIMIT':
+      return 'failure.outgoingWebhooksLimit';
     case 'INCOMING_WEBHOOKS_LIMIT':
       return 'failure.incomingWebhooksLimit';
     case 'GITHUB_UNAVAILABLE':

@@ -1,5 +1,10 @@
 // The GitHub integration, the GitHub App and the channel hooks that bring events in.
 import {
+  OutgoingWebhookList,
+  type OutgoingWebhookRequest,
+  CreatedOutgoingWebhook,
+  WebhookDeliveryPage,
+  WebhookAttemptList,
   CreatedGitHubFeed,
   CreatedIncomingWebhook,
   GitHubAppRedirect,
@@ -90,6 +95,45 @@ export interface GitHubApi {
     path: CreatedIncomingWebhook['path'],
     text: string,
   ) => Promise<IncomingWebhookAnswer>;
+  readonly rotateIncomingWebhook: (
+    channelId: string,
+    webhookId: string,
+  ) => Promise<CreatedIncomingWebhook>;
+  readonly outgoingWebhooks: (
+    channelId: string,
+    signal?: AbortSignal,
+  ) => Promise<OutgoingWebhookList>;
+  readonly createOutgoingWebhook: (
+    channelId: string,
+    input: OutgoingWebhookRequest,
+  ) => Promise<CreatedOutgoingWebhook>;
+  readonly rotateOutgoingWebhook: (
+    channelId: string,
+    webhookId: string,
+  ) => Promise<CreatedOutgoingWebhook>;
+  readonly changeOutgoingWebhook: (
+    channelId: string,
+    webhookId: string,
+    paused: boolean | 'revoke',
+  ) => Promise<void>;
+  readonly testOutgoingWebhook: (channelId: string, webhookId: string) => Promise<void>;
+  readonly webhookDeliveries: (
+    channelId: string,
+    webhookId: string,
+    before?: string,
+    signal?: AbortSignal,
+  ) => Promise<WebhookDeliveryPage>;
+  readonly webhookAttempts: (
+    channelId: string,
+    webhookId: string,
+    deliveryId: string,
+    signal?: AbortSignal,
+  ) => Promise<WebhookAttemptList>;
+  readonly retryWebhookDelivery: (
+    channelId: string,
+    webhookId: string,
+    deliveryId: string,
+  ) => Promise<void>;
   readonly revokeIncomingWebhook: (channelId: string, webhookId: string) => Promise<void>;
 }
 
@@ -213,6 +257,66 @@ export const createGitHubApi = (http: Http): GitHubApi => ({
     ),
   postIncomingWebhook: (path, text) =>
     http.request('POST', path, IncomingWebhookAnswer, options({ body: { text } })),
+  rotateIncomingWebhook: (channelId, webhookId) =>
+    http.request(
+      'POST',
+      `/api/channels/${at(channelId)}/incoming-webhooks/${at(webhookId)}/secret`,
+      CreatedIncomingWebhook,
+      options(),
+    ),
+  outgoingWebhooks: (channelId, signal) =>
+    http.request(
+      'GET',
+      `/api/channels/${at(channelId)}/outgoing-webhooks`,
+      OutgoingWebhookList,
+      options({}, signal),
+    ),
+  createOutgoingWebhook: (channelId, input) =>
+    http.request(
+      'POST',
+      `/api/channels/${at(channelId)}/outgoing-webhooks`,
+      CreatedOutgoingWebhook,
+      options({ body: input }),
+    ),
+  rotateOutgoingWebhook: (channelId, webhookId) =>
+    http.request(
+      'POST',
+      `/api/channels/${at(channelId)}/outgoing-webhooks/${at(webhookId)}/secret`,
+      CreatedOutgoingWebhook,
+      options(),
+    ),
+  changeOutgoingWebhook: (channelId, webhookId, paused) =>
+    http.send(
+      paused === 'revoke' ? 'DELETE' : 'PATCH',
+      `/api/channels/${at(channelId)}/outgoing-webhooks/${at(webhookId)}`,
+      paused === 'revoke' ? options() : options({ body: { paused } }),
+    ),
+  testOutgoingWebhook: (channelId, webhookId) =>
+    http.send(
+      'POST',
+      `/api/channels/${at(channelId)}/outgoing-webhooks/${at(webhookId)}/test`,
+      options(),
+    ),
+  webhookDeliveries: (channelId, webhookId, before, signal) =>
+    http.request(
+      'GET',
+      `/api/channels/${at(channelId)}/outgoing-webhooks/${at(webhookId)}/deliveries${before === undefined ? '' : `?before=${at(before)}`}`,
+      WebhookDeliveryPage,
+      options({}, signal),
+    ),
+  webhookAttempts: (channelId, webhookId, deliveryId, signal) =>
+    http.request(
+      'GET',
+      `/api/channels/${at(channelId)}/outgoing-webhooks/${at(webhookId)}/deliveries/${at(deliveryId)}/attempts`,
+      WebhookAttemptList,
+      options({}, signal),
+    ),
+  retryWebhookDelivery: (channelId, webhookId, deliveryId) =>
+    http.send(
+      'POST',
+      `/api/channels/${at(channelId)}/outgoing-webhooks/${at(webhookId)}/deliveries/${at(deliveryId)}/retry`,
+      options(),
+    ),
   revokeIncomingWebhook: (channelId, webhookId) =>
     http.send(
       'DELETE',

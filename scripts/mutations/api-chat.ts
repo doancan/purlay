@@ -242,8 +242,9 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'export-leaks-a-feed-secret',
     why: 'a repository feed’s webhook secret leaves the server in an export',
     file: 'apps/api/src/features/chat/export.ts',
-    find: "      secret_encrypted: 'omit',\n",
-    replace: "      secret_encrypted: 'export',\n",
+    find: "      // The webhook's secret, sealed: a credential never leaves (D-134 §4).\n      secret_encrypted: 'omit',\n",
+    replace:
+      "      // The webhook's secret, sealed: a credential never leaves (D-134 §4).\n      secret_encrypted: 'export',\n",
     tests: ['apps/api/src/modules/export/export.integration.test.ts'],
   },
   {
@@ -537,8 +538,9 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'job-deadline-exemption-not-listed',
     why: 'chat’s jobs are left without a deadline and no test lists the exemption, so a runaway purge holds the scheduler (D-274)',
     file: 'apps/api/src/features/chat/module.ts',
-    find: "    jobs: ['mail:missed'],\n",
-    replace: "    jobs: ['mail:missed'],\n    jobDeadline: { none: 'a job nothing stops' },\n",
+    find: "    jobs: ['mail:missed', 'deliver:webhooks'],\n",
+    replace:
+      "    jobs: ['mail:missed', 'deliver:webhooks'],\n    jobDeadline: { none: 'a job nothing stops' },\n",
     tests: ['apps/api/src/module-deadlines.test.ts'],
   },
   {

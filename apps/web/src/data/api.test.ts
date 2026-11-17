@@ -1777,3 +1777,102 @@ describe('the endpoints that only a settings screen calls', () => {
     });
   });
 });
+
+describe('channel webhook endpoints', () => {
+  test('incoming management reads public evidence and exposes a one-time path only on creation or rotation', async () => {
+    const hook = {
+      id: ID,
+      channelId: ID,
+      name: 'Builds',
+      createdAt: WHEN,
+      createdBy: user,
+      lastUsedAt: null,
+      lastRequestAt: WHEN,
+      lastStatus: 201,
+      lastError: null,
+    };
+    const base = `/api/channels/${ID}/incoming-webhooks`;
+    const list = harness([hook]);
+    expect(await list.api.incomingWebhooks(ID)).toEqual([hook]);
+    expect(list.calls[0]).toEqual({ method: 'GET', url: base, body: undefined });
+    const made = { webhook: hook, path: `/api/webhooks/incoming/${ID}/${'a'.repeat(64)}` };
+    const create = harness(made);
+    expect(await create.api.createIncomingWebhook(ID, { name: 'Builds' })).toEqual(made);
+    expect(create.calls[0]).toEqual({ method: 'POST', url: base, body: { name: 'Builds' } });
+    const rotate = harness(made);
+    expect(await rotate.api.rotateIncomingWebhook(ID, ID)).toEqual(made);
+    expect(rotate.calls[0]).toEqual({
+      method: 'POST',
+      url: `${base}/${ID}/secret`,
+      body: undefined,
+    });
+    const revoke = harness(null);
+    await revoke.api.revokeIncomingWebhook(ID, ID);
+    expect(revoke.calls[0]).toEqual({ method: 'DELETE', url: `${base}/${ID}`, body: undefined });
+  });
+
+  test('outgoing management and delivery history use their strict contracts and scoped routes', async () => {
+    const input = {
+      name: 'Builds',
+      url: 'https://example.com/hook',
+      events: ['message.created' as const],
+    };
+    const hook = { ...input, id: ID, channelId: ID, paused: false, createdAt: WHEN };
+    const base = `/api/channels/${ID}/outgoing-webhooks`;
+    const list = harness([hook]);
+    expect(await list.api.outgoingWebhooks(ID)).toEqual([hook]);
+    expect(list.calls[0]).toEqual({ method: 'GET', url: base, body: undefined });
+    const made = { webhook: hook, secret: 'b'.repeat(64) };
+    const create = harness(made);
+    expect(await create.api.createOutgoingWebhook(ID, input)).toEqual(made);
+    expect(create.calls[0]).toEqual({ method: 'POST', url: base, body: input });
+    const rotate = harness(made);
+    expect(await rotate.api.rotateOutgoingWebhook(ID, ID)).toEqual(made);
+    expect(rotate.calls[0]).toEqual({
+      method: 'POST',
+      url: `${base}/${ID}/secret`,
+      body: undefined,
+    });
+    for (const paused of [true, false, 'revoke'] as const) {
+      const change = harness(null);
+      await change.api.changeOutgoingWebhook(ID, ID, paused);
+      expect(change.calls[0]).toEqual({
+        method: paused === 'revoke' ? 'DELETE' : 'PATCH',
+        url: `${base}/${ID}`,
+        body: paused === 'revoke' ? undefined : { paused },
+      });
+    }
+    const probe = harness(null);
+    await probe.api.testOutgoingWebhook(ID, ID);
+    expect(probe.calls[0]).toEqual({ method: 'POST', url: `${base}/${ID}/test`, body: undefined });
+    for (const before of [undefined, ID]) {
+      const page = { data: [], nextCursor: null };
+      const history = harness(page);
+      expect(await history.api.webhookDeliveries(ID, ID, before)).toEqual(page);
+      expect(history.calls[0]).toEqual({
+        method: 'GET',
+        url: `${base}/${ID}/deliveries${before === undefined ? '' : `?before=${ID}`}`,
+        body: undefined,
+      });
+    }
+    const attempt = { id: ID, attemptedAt: WHEN, durationMs: 20, status: 204, error: null };
+    const attempts = harness([attempt]);
+    expect(await attempts.api.webhookAttempts(ID, ID, ID)).toEqual([attempt]);
+    expect(attempts.calls[0]).toEqual({
+      method: 'GET',
+      url: `${base}/${ID}/deliveries/${ID}/attempts`,
+      body: undefined,
+    });
+    const retry = harness(null);
+    await retry.api.retryWebhookDelivery(ID, ID, ID);
+    expect(retry.calls[0]).toEqual({
+      method: 'POST',
+      url: `${base}/${ID}/deliveries/${ID}/retry`,
+      body: undefined,
+    });
+    const invalid = harness([{ ...hook, paused: 'no' }]);
+    expect(await invalid.api.outgoingWebhooks(ID).catch((error: unknown) => error)).toBeInstanceOf(
+      ApiError,
+    );
+  });
+});

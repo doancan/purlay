@@ -22,7 +22,9 @@ import { sendMessage } from '../messages/messages';
 import { fixedClock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { EventBus } from '../../../platform/events';
-import { aRecordingLogger } from '../../../testing/doubles';
+import { aRecordingLogger, testConfig } from '../../../testing/doubles';
+import { credentialCipher } from '../../../platform/crypto';
+import { createOutgoingWebhook } from './outgoing-webhooks';
 import { aRoom, counters } from '../../../testing/rooms';
 import { createWebhook, receivePost, revokeWebhook } from './incoming-webhooks';
 
@@ -429,4 +431,148 @@ describe('integration: incoming webhooks at once', () => {
       await sql`drop function pause_human_counter()`.execute(cloned.db);
     }
   });
+});
+
+describe('integration: webhook regression coverage', () => {
+  test('two posts already waiting on their hook can both finish without upgrading competing channel locks', async () => {
+    const { context } = await aliceOf();
+    const created = await cloned.db
+      .transaction()
+      .execute(async (tx) => await createWebhook(tx, clock, context, { name: 'Concurrent CI' }));
+    const { webhookId, secret } = partsOf(created.path);
+    let locked: () => void = () => undefined;
+    const ready = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const held = cloned.db.transaction().execute(async (tx) => {
+      await tx
+        .selectFrom('incoming_webhooks')
+        .select('id')
+        .where('id', '=', webhookId)
+        .forUpdate()
+        .execute();
+      locked();
+      await gate;
+    });
+    await ready;
+    const first = post(webhookId, secret, 'first');
+    const second = post(webhookId, secret, 'second');
+    let both = false;
+    for (let look = 0; look < 500; look++) {
+      const { rows } = await sql<{
+        count: number;
+      }>`select count(*)::int as count from pg_stat_activity where datname=current_database() and wait_event_type='Lock'`.execute(
+        cloned.db,
+      );
+      if ((rows[0]?.count ?? 0) >= 2) {
+        both = true;
+        break;
+      }
+    }
+    release();
+    await held;
+    expect(both).toBe(true);
+    const ids = await Promise.all([first, second]);
+    expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe('integration: webhook management beside incoming delivery', () => {
+  test.each(['incoming', 'outgoing'] as const)(
+    '%s creation and private-channel delivery complete without a lock inversion',
+    async (kind) => {
+      const room = await aRoom(cloned.db, ['alice', 'bob'], { type: 'private' });
+      const context = room.members['alice']?.context;
+      if (context === undefined) throw new Error('missing owner');
+      const made = await cloned.db
+        .transaction()
+        .execute(async (tx) => await createWebhook(tx, clock, context, { name: 'Existing' }));
+      const locked = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+      const held = cloned.db.transaction().execute(async (tx) => {
+        await tx
+          .selectFrom('channels')
+          .select('id')
+          .where('id', '=', context.channelId)
+          .forUpdate()
+          .execute();
+        locked.resolve(undefined);
+        await release.promise;
+      });
+      const waiting = async (name: string): Promise<boolean> => {
+        for (let look = 0; look < 500; look++) {
+          const { rows } = await sql<{
+            count: number;
+          }>`select count(*)::int as count from pg_stat_activity where datname=current_database() and application_name=${name} and wait_event_type='Lock'`.execute(
+            cloned.db,
+          );
+          if ((rows[0]?.count ?? 0) > 0) return true;
+        }
+        return false;
+      };
+      await locked.promise;
+      try {
+        const receiving = outcomeOf(
+          cloned.db.transaction().execute(async (tx) => {
+            await sql`select set_config('application_name','webhook-delivery-order',true)`.execute(
+              tx,
+            );
+            await receivePost(
+              {
+                database: tx,
+                clock,
+                bus: NOBODY_LISTENS,
+                log: aRecordingLogger().log,
+                mayPost: () => Promise.resolve(true),
+              },
+              { ...partsOf(made.path), text: 'Concurrent delivery' },
+            );
+          }),
+        );
+        const receiverWaited = await waiting('webhook-delivery-order');
+        const configuring = outcomeOf(
+          cloned.db.transaction().execute(async (tx) => {
+            await sql`select set_config('application_name','webhook-management-order',true)`.execute(
+              tx,
+            );
+            if (kind === 'incoming')
+              await createWebhook(tx, clock, context, { name: 'New incoming' });
+            else
+              await createOutgoingWebhook(
+                tx,
+                clock,
+                credentialCipher(testConfig().ENCRYPTION_KEY),
+                context,
+                {
+                  name: 'New outgoing',
+                  url: 'https://example.com/hook',
+                  events: ['message.created'],
+                },
+              );
+          }),
+        );
+        const managerWaited = await waiting('webhook-management-order');
+        release.resolve(undefined);
+        await held;
+        expect({
+          receiverWaited,
+          managerWaited,
+          outcomes: await Promise.all([receiving, configuring]),
+        }).toEqual({ receiverWaited: true, managerWaited: true, outcomes: ['done', 'done'] });
+        const messages = await cloned.db
+          .selectFrom('messages')
+          .select('id')
+          .where('channel_id', '=', context.channelId)
+          .execute();
+        expect(messages).toHaveLength(1);
+      } finally {
+        release.resolve(undefined);
+        await held;
+      }
+    },
+  );
 });

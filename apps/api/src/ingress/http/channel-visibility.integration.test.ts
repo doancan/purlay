@@ -209,6 +209,8 @@ interface World {
   readonly bookmark: string;
   /** An incoming webhook of the visible channel: the control for revoking one (D-245). */
   readonly webhook: string;
+  readonly outgoingWebhook: string;
+  readonly delivery: string;
   /** An earlier version of the outsider's own visible message: the control for removing one. */
   readonly version: string;
   /** Each one hidden from the outsider for a different reason. */
@@ -420,6 +422,47 @@ const aWorld = async (db: Executor): Promise<World> => {
     .select('id')
     .where('parent_id', '=', threads.visible)
     .executeTakeFirstOrThrow();
+  const outgoingWebhook = crypto.randomUUID();
+  const delivery = Bun.randomUUIDv7();
+  await db
+    .insertInto('outgoing_webhooks')
+    .values({
+      id: outgoingWebhook,
+      workspace_id: workspaceId,
+      channel_id: visible,
+      name: 'External CI',
+      url: 'https://example.com/hook',
+      secret_encrypted: '',
+      events: ['message.created'],
+      created_by: owner.id,
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('webhook_deliveries')
+    .values({
+      id: delivery,
+      webhook_id: outgoingWebhook,
+      event_id: crypto.randomUUID(),
+      event_type: 'webhook.test',
+      payload: '{}',
+      state: 'failed',
+      next_attempt_at: NOW,
+      expires_at: new Date(NOW.getTime() + 86_400_000),
+      created_at: NOW,
+    })
+    .execute();
+  await db
+    .insertInto('webhook_delivery_attempts')
+    .values({
+      id: crypto.randomUUID(),
+      delivery_id: delivery,
+      attempted_at: NOW,
+      duration_ms: 1,
+      status: 400,
+      error: 'http_error',
+    })
+    .execute();
   const world: World = {
     owner: owner.cookie,
     outsider: outsider.cookie,
@@ -437,6 +480,8 @@ const aWorld = async (db: Executor): Promise<World> => {
     feed: await aFeed(db, workspaceId, visible),
     incident: await anIncident(db, workspaceId, visible),
     bookmark: await aBookmark(db, workspaceId, visible),
+    outgoingWebhook,
+    delivery,
     webhook: await aWebhook(db, workspaceId, visible),
     version: await aVersion(db, workspaceId, visible, threads.ownVisible),
     hidden,
@@ -504,6 +549,8 @@ describe('integration: channel visibility', () => {
               bookmarkId: world.bookmark,
               issueId: NEVER_EXISTED,
               webhookId: world.webhook,
+              outgoingWebhookId: world.outgoingWebhook,
+              deliveryId: world.delivery,
               exportId: NEVER_EXISTED,
             });
 
@@ -554,6 +601,8 @@ describe('integration: channel visibility', () => {
               bookmarkId: NEVER_EXISTED,
               issueId: NEVER_EXISTED,
               webhookId: NEVER_EXISTED,
+              outgoingWebhookId: NEVER_EXISTED,
+              deliveryId: NEVER_EXISTED,
               exportId: NEVER_EXISTED,
             });
 
@@ -623,6 +672,8 @@ describe('integration: channel visibility', () => {
                 bookmarkId: NEVER_EXISTED,
                 issueId: NEVER_EXISTED,
                 webhookId: NEVER_EXISTED,
+                outgoingWebhookId: NEVER_EXISTED,
+                deliveryId: NEVER_EXISTED,
                 exportId: NEVER_EXISTED,
               }),
               cookie,

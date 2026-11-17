@@ -8,6 +8,7 @@
  * invisible is a job that will be absent. A failure is recorded, logged at `error` and thrown on, so
  * the process exits non-zero and the scheduler sees it too.
  */
+import type { CredentialCipher } from '../../platform/crypto';
 import { sql, type Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from '../../platform/clock';
 import {
@@ -48,6 +49,7 @@ export type Outcome = Readonly<Record<string, number>>;
  */
 export interface JobContext extends JobDependencies {
   readonly sessionLifetime?: () => WorkspaceAccessLifetime;
+  readonly cipher?: CredentialCipher;
   readonly storage: ObjectStore;
   readonly appUrl: string;
   /** The workspaces the job's module may act for now (D-289): for a job that acts for workspaces, `perWorkspaceJob` walks them. */

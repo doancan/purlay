@@ -881,6 +881,8 @@ export const AUDIT_ACTIONS = [
   'integration.feed_removed',
   'integration.webhook_created',
   'integration.webhook_revoked',
+  'integration.webhook_rotated',
+  'integration.outgoing_webhook_changed',
   /** A workspace's GitHub App installation connected by an owner, or let go — by an owner or by GitHub (D-246). */
   'integration.app_connected',
   'integration.app_disconnected',
@@ -1021,6 +1023,8 @@ export const CHAT_AUDIT_ACTIONS = [
   'integration.feed_removed',
   'integration.webhook_created',
   'integration.webhook_revoked',
+  'integration.webhook_rotated',
+  'integration.outgoing_webhook_changed',
   'integration.app_connected',
   'integration.app_disconnected',
   'integration.issue_created',
@@ -1752,6 +1756,9 @@ export const IncomingWebhook = Type.Object({
   createdAt: Timestamp,
   /** When it last posted; null until it has. */
   lastUsedAt: Type.Union([Timestamp, Type.Null()]),
+  lastRequestAt: Type.Optional(Timestamp),
+  lastStatus: Type.Optional(Type.Integer()),
+  lastError: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 });
 export type IncomingWebhook = Static<typeof IncomingWebhook>;
 

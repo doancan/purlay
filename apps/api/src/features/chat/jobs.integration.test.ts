@@ -8,7 +8,8 @@ import { fixedClock } from '../../platform/clock';
 import { noEntitledWorkspaces } from '../../platform/entitled-workspaces';
 import type { JobContext } from '../../modules/jobs/jobs';
 import type { SendMail } from '../../platform/mail';
-import { aRecordingLogger } from '../../testing/doubles';
+import { credentialCipher } from '../../platform/crypto';
+import { aRecordingLogger, testConfig } from '../../testing/doubles';
 import { aMemoryStore } from '../../testing/storage';
 import { chatModule } from './module';
 import { chatJobWork } from './jobs';
@@ -70,6 +71,34 @@ describe('integration: the work chat supplies for its jobs', () => {
       const outcome = await chatJobWork['mail:missed']?.(contextOn(db, relays));
       expect(relays).toHaveLength(1);
       expect(outcome).toEqual({ letters: 0, failed: 0, refused: 0, forgotten: 0 });
+    });
+  });
+});
+
+describe('integration: webhook regression coverage', () => {
+  test('webhook jobs dispatch and sweep an empty queue, and require the configured cipher', async () => {
+    await withRollback(async (db) => {
+      const context: JobContext = {
+        database: db,
+        clock: fixedClock(NOW),
+        log: aRecordingLogger().log,
+        storage: aMemoryStore(),
+        appUrl: 'https://purlay.test',
+        entitled: noEntitledWorkspaces,
+        withMailer: async (use) => await use(undefined),
+      };
+      const delivery = chatJobWork['deliver:webhooks'];
+      const sweep = chatJobWork['sweep:webhook-deliveries'];
+      if (delivery === undefined || sweep === undefined) throw new Error('missing webhook jobs');
+      const message = await delivery(context).then(
+        () => '',
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+      expect(message).toContain('credential cipher');
+      expect(
+        await delivery({ ...context, cipher: credentialCipher(testConfig().ENCRYPTION_KEY) }),
+      ).toEqual({ claimed: 0, succeeded: 0, failed: 0 });
+      expect(await sweep(context)).toEqual({ removed: 0 });
     });
   });
 });

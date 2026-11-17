@@ -211,7 +211,26 @@ const fill = async (
     targetType: 'channel',
     targetId: room.channelId,
   });
-  return { secrets: [feedSecret, tokenHash, storageKey], ids: [id, fileId, incident, issue] };
+  const outgoingId = crypto.randomUUID();
+  const outgoingSecret = `outgoing-secret-${crypto.randomUUID()}`;
+  const outgoingUrl = `https://example.com/${crypto.randomUUID()}`;
+  await db
+    .insertInto('outgoing_webhooks')
+    .values({
+      id: outgoingId,
+      ...where,
+      name: 'External CI',
+      url: outgoingUrl,
+      secret_encrypted: outgoingSecret,
+      events: ['message.created'],
+      created_by: author.userId,
+      created_at: NOW,
+    })
+    .execute();
+  return {
+    secrets: [feedSecret, tokenHash, storageKey, outgoingSecret, outgoingUrl],
+    ids: [id, fileId, incident, issue, outgoingId],
+  };
 };
 
 const lines = async (directory: string, table: string): Promise<Record<string, unknown>[]> =>
@@ -747,6 +766,7 @@ describe('integration: the shape of an export', () => {
  * second export: the first records that it was made.)
  */
 // D-300 adds membership/invitation access metadata so exports preserve the restricted authority.
+// D-312 adds public outgoing-hook configuration, with URL and signing credentials omitted.
 const FROZEN_SHAPES: Record<string, unknown> = {
   all: {
     files: [
@@ -767,6 +787,7 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       'message_attachments.ndjson',
       'message_versions.ndjson',
       'messages.ndjson',
+      'outgoing_webhooks.ndjson',
       'pinned_messages.ndjson',
       'reactions.ndjson',
       'users.ndjson',
@@ -896,6 +917,20 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       pinned_messages: {
         rows: 1,
         columns: ['channel_id', 'message_id', 'pinned_at', 'pinned_by', 'workspace_id'],
+      },
+      outgoing_webhooks: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'created_by',
+          'events',
+          'id',
+          'name',
+          'paused',
+          'revoked_at',
+          'workspace_id',
+        ],
       },
       channel_bookmarks: {
         rows: 1,
@@ -1039,6 +1074,7 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       'message_attachments.ndjson',
       'message_versions.ndjson',
       'messages.ndjson',
+      'outgoing_webhooks.ndjson',
       'pinned_messages.ndjson',
       'reactions.ndjson',
       'users.ndjson',
@@ -1168,6 +1204,20 @@ const FROZEN_SHAPES: Record<string, unknown> = {
       pinned_messages: {
         rows: 1,
         columns: ['channel_id', 'message_id', 'pinned_at', 'pinned_by', 'workspace_id'],
+      },
+      outgoing_webhooks: {
+        rows: 1,
+        columns: [
+          'channel_id',
+          'created_at',
+          'created_by',
+          'events',
+          'id',
+          'name',
+          'paused',
+          'revoked_at',
+          'workspace_id',
+        ],
       },
       channel_bookmarks: {
         rows: 1,

@@ -40,6 +40,7 @@ export const MESSAGE_REFERENCES: ReadonlySet<string> = new Set([
   'saved_messages_message_channel_fkey',
   'scheduled_messages_parent_id_channel_id_fkey',
   'scheduled_messages_sent_message_id_fkey',
+  'webhook_deliveries_message_id_fkey',
   'thread_follows_message_channel_fkey',
   'thread_reads_root_id_channel_id_fkey',
 ]);

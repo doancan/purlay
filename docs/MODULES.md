@@ -368,7 +368,7 @@ moves into that module.
   nothing to reach. **`tableExists` (`@purlay/db`) is the one primitive for that**, asked at the moment the table is
   needed and never remembered, since another node may apply the set while this one runs; `absentTables` is its
   list form, for the purge's tables and the exports' `ownSet`. `ownSet` stays because the catalogues need it for what
-  `tableExists` cannot say alone: which contribution's rows and people to leave out when its table is absent. The alternative,
+  `tableExists` cannot say alone: which table's rows to leave out when it is absent. People queries guard their optional tables individually, so a partially applied set does not discard historical authors (D-312). The alternative,
   a contribution split into a part held always and a part held only where the set is applied, would need the process to
   know the database's sets when it is composed, and a node that was composed before the set arrived would then miss
   rows that are there. A process that *runs* a module on a database without its set is not a cell: readiness refuses
@@ -1022,7 +1022,7 @@ telling the inbox and appearing in the find; every item is a defect or a gap of 
 the typed lifecycle decision per table (#990), the core-enum guard (#994), the member-of-two-workspaces list check
 (#988), its non-vacuous form (#1010), the purge coverage (#1009), the set-keyed enum allowance (#1007) and the row-level
 lifecycle proof for `deleted` and `window` decisions (#1011) are merged, and every `anonymised` lifecycle decision is
-probed (all 35; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
+probed (all 36; the allow-list of unprobed tables is empty and capped at 0). A statement that reads a table by columns
 no index starts with is held too (`query-columns.integration.test.ts`, seven reasoned exceptions, capped at 7), but
 only as far as a source scan sees: a `where` or `orderBy` with a literal column on a chain it can follow to its table.
 For an upsert’s guard it also reads the unique target columns of that same `onConflict` callback: a

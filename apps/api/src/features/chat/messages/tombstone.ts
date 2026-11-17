@@ -7,7 +7,7 @@ import { memberReadScope } from '../channels/read-scope';
  * erasure (many). Kept here, set-based, so the purge and the erasure cannot drift from the delete —
  * a copy of `uncount` that missed the notifications would leave a mention counted for ever.
  */
-import { sql } from '@purlay/db';
+import { sql, tableExists } from '@purlay/db';
 import type { ChatDb, ChatTx } from '../schema';
 import { NEEDS_YOU } from '@purlay/types';
 import type { ChannelStateUpdate } from './delivery';
@@ -63,6 +63,9 @@ export const tombstoneRows = async (
   const removed = rows.map((row) => row.id);
   if (removed.length > 0) {
     await executor.deleteFrom('message_shared_links').where('message_id', 'in', removed).execute();
+    if (await tableExists(executor, 'webhook_deliveries')) {
+      await executor.deleteFrom('webhook_deliveries').where('message_id', 'in', removed).execute();
+    }
     await executor.deleteFrom('mentions').where('message_id', 'in', removed).execute();
     await executor.deleteFrom('pinned_messages').where('message_id', 'in', removed).execute();
     await executor.deleteFrom('message_versions').where('message_id', 'in', removed).execute();

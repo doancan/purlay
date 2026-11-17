@@ -4,6 +4,7 @@
  * process (`retention`, `MODULES.md` §2). The core's job runner takes the work from here through the composition and
  * names none of it.
  */
+import { dispatchWebhooks, sweepWebhookDeliveries } from './integrations/webhook-dispatcher';
 import type { JobWork } from '../../modules/jobs/jobs';
 import { purgeRetention } from './messages/retention-purge';
 import { mailMissedMessages } from './notifications/missed-mail';
@@ -12,6 +13,12 @@ import { sweepExpiredGuests } from './channels/guest-expiry';
 
 export const chatJobWork: Readonly<Record<string, JobWork>> = {
   'sweep:guest-expiry': async ({ database }) => ({ ...(await sweepExpiredGuests({ database })) }),
+  'deliver:webhooks': async ({ database, clock, log, cipher }) => {
+    if (cipher === undefined) throw new Error('webhook delivery requires the credential cipher');
+    return await dispatchWebhooks({ database, clock, log, cipher });
+  },
+  'sweep:webhook-deliveries': async ({ database, clock }) =>
+    await sweepWebhookDeliveries(database, clock),
   'purge:retention': async ({ database, clock, log, storage }) =>
     await purgeRetention({ database, clock, log, storage }),
   'sweep:link-previews': async ({ database, clock }) =>
