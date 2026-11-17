@@ -5,10 +5,12 @@
  * button used last. It holds no text and no caret: a button reports the markdown it stands for, and the
  * composer inserts it as the key that does the same would.
  */
-import { useState } from 'react';
-import type { GlyphName } from '../../../components/icon';
+import { useEffect, useRef, useState } from 'react';
+import { Icon, type GlyphName } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { IconButton } from '../../../ui/icon-button';
+import { Tooltip } from '../../../ui/tooltip';
+import { cn } from '../../../ui/cn';
 import type { KeyLabels } from '../../shortcuts/platform';
 import type { MarkdownKind } from './composer-text';
 
@@ -26,7 +28,9 @@ export interface FormatToolbarProps {
 
 /** ← → Home End along the row, round at its ends; Tab is left to leave it. */
 const onToolbarKey = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-  const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+  const buttons = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+  );
   const at = buttons.findIndex((button) => button === document.activeElement);
   const to =
     event.key === 'ArrowRight'
@@ -57,6 +61,10 @@ export const FormatToolbar = ({
   const { t } = useI18n();
   // Which button is the Tab stop: the last one used.
   const [stopAt, setStopAt] = useState(0);
+  const previewButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (previewing) previewButton.current?.focus();
+  }, [previewing]);
   /** One button of the row: its markdown, its glyph and the key that does the same. */
   const tool = (
     slot: number,
@@ -70,7 +78,8 @@ export const FormatToolbar = ({
       label={label}
       glyph={glyph}
       {...(shortcut === undefined ? {} : { shortcut })}
-      tabIndex={slot === stopAt ? 0 : -1}
+      disabled={previewing}
+      tabIndex={!previewing && slot === stopAt ? 0 : -1}
       onFocus={() => {
         setStopAt(slot);
       }}
@@ -84,12 +93,17 @@ export const FormatToolbar = ({
       role="toolbar"
       aria-label={t('composer.format')}
       aria-orientation="horizontal"
-      className="flex items-center px-2 pt-2"
+      className="flex min-w-0 items-center gap-1 border-b-hairline border-border-subtle px-2 py-1"
       onKeyDown={onToolbarKey}
     >
       {/* One row on every width: on a phone it scrolls sideways instead of breaking into two, and
           the preview toggle stays where it is. */}
-      <div className="flex min-w-0 flex-1 items-center overflow-x-auto p-1 scrollbar-thin">
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 items-center p-1 scrollbar-thin',
+          previewing ? 'overflow-x-hidden' : 'overflow-x-auto',
+        )}
+      >
         {tool(0, 'bold', t('composer.bold'), 'bold', chord(labels.mod, 'B'))}
         {tool(1, 'italic', t('composer.italic'), 'italic', chord(labels.mod, 'I'))}
         {tool(2, 'strike', t('composer.strike'), 'strike', chord(labels.mod, labels.shift, 'X'))}
@@ -122,18 +136,26 @@ export const FormatToolbar = ({
         )}
         {tool(10, 'table', t('composer.table'), 'table')}
       </div>
-      <IconButton
-        label={t('composer.preview')}
-        glyph="preview"
+      <Tooltip
+        content={t(previewing ? 'composer.write' : 'composer.preview')}
         shortcut={chord(labels.mod, labels.shift, 'P')}
-        aria-pressed={previewing}
-        tabIndex={stopAt === PREVIEW_STOP ? 0 : -1}
-        onFocus={() => {
-          setStopAt(PREVIEW_STOP);
-        }}
-        className="ml-1 aria-pressed:bg-surface-200 aria-pressed:text-ink"
-        onClick={onTogglePreview}
-      />
+      >
+        <button
+          type="button"
+          ref={previewButton}
+          aria-label={t('composer.preview')}
+          aria-pressed={previewing}
+          tabIndex={previewing || stopAt === PREVIEW_STOP ? 0 : -1}
+          onFocus={() => {
+            setStopAt(PREVIEW_STOP);
+          }}
+          className="inline-flex h-control shrink-0 items-center gap-2 rounded-md px-2 text-label text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink aria-pressed:bg-accent-subtle aria-pressed:text-accent-text max-narrow:h-touch"
+          onClick={onTogglePreview}
+        >
+          <Icon name={previewing ? 'edit' : 'preview'} size="sm" />
+          <span>{t('composer.preview')}</span>
+        </button>
+      </Tooltip>
     </div>
   );
 };

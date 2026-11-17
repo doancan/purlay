@@ -33,6 +33,10 @@ have it.
 
 - **Workspace management** — Owners can manage people, scoped roles and groups, synchronize company directories through SCIM, and preview employee offboarding (D-311).
 
+### Changed
+
+- **Writing** — The message area grows with wrapped text, links can be added through a labelled form, and preview and send controls are clearer on desktop and phones (D-181).
+
 ### Security
 
 - **Workspace security** — Owners can require company sign-in, workspace authenticators and session limits, with enrollment, verification and recovery that preserve access to other workspaces (D-310).

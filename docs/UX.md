@@ -793,7 +793,18 @@ still reads them) and Send is the icon alone.
 The **emoji picker** is a grid of four groups (faces, hands and people, work, symbols), arrow keys move
 through it, `Enter` writes the emoji where the caret is and the focus goes back to the box; `Esc` closes it
 with nothing written. The **preview** draws the draft as the message will be drawn; the text is still there
-under it, and Send works while it is open (D-181).
+under it, and Send works while it is open (D-181). Formatting buttons are unavailable in preview;
+the preview toggle keeps focus and `Mod+Shift+P` returns to the preserved selection. Both text and
+preview stay within twelve text lines or 40% of the current viewport; longer content scrolls inside.
+The writing area starts at two lines and grows for soft wraps as well as typed newlines. On narrow
+screens the text is at least 16px and the send button is an icon; with a keyboard the visible Send
+label is visible; the hints below the text name the shortcut appropriate to a normal message or an open code fence.
+
+**Add a link** opens a small form, from the button or `Mod+Shift+U`, preserving the current selection.
+Selected words prefill its display text; a selected full URL prefills its address. The renderer’s
+`SafeHref` policy accepts HTTP, HTTPS and mailto addresses. A refused address is explained in place;
+Cancel/Escape changes nothing and restores focus to the writing area. Insert writes escaped Markdown
+at the original selection, without sending. A channel or account switch discards the form.
 
 A **face typed as text** — `:)`, `:D`, `;)`, `<3`, `xD` and the rest of the list in D-253 — becomes its emoji when
 the word ends: at a space, a new line or the send, and only when it stands alone, never inside code. `Backspace`

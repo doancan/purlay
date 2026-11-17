@@ -876,3 +876,160 @@ test.describe('the formatting row, the emoji picker and the preview (D-181)', ()
     await expect(box).toHaveValue('a **bold** and `code` word');
   });
 });
+
+test.describe('writing tools', () => {
+  test('wrapped text grows and shrinks at desktop and phone widths without consuming the conversation', async ({
+    page,
+    signIn,
+    room,
+    expectNoAxe,
+  }) => {
+    const made = await room();
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    const card = page.locator('[data-composer-card]');
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await box.fill('');
+      const emptyHeight = await box.evaluate((element) => element.getBoundingClientRect().height);
+      await box.fill(
+        'A clear update for the team, including İstanbul and the next release. '.repeat(30),
+      );
+      await expect
+        .poll(async () => await box.evaluate((element) => element.getBoundingClientRect().height))
+        .toBeGreaterThan(emptyHeight);
+      expect(
+        await box.evaluate((element) => element.getBoundingClientRect().height),
+      ).toBeLessThanOrEqual(900 * 0.4);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await expectNoAxe(card);
+      await box.fill('');
+      await expect
+        .poll(async () => await box.evaluate((element) => element.getBoundingClientRect().height))
+        .toBe(emptyHeight);
+    }
+  });
+
+  test('link details preserve selection, explain invalid input and insert a real previewed message', async ({
+    page,
+    signIn,
+    room,
+    api,
+    expectNoAxe,
+  }) => {
+    const made = await room();
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.fill('See the release notes today');
+    await box.evaluate((element) => {
+      if (element instanceof HTMLTextAreaElement) {
+        element.focus();
+        element.setSelectionRange(8, 21);
+      }
+    });
+    await box.press('ControlOrMeta+Shift+U');
+    const dialog = page.getByRole('dialog', { name: 'Add a link' });
+    await expect(dialog.getByLabel('Display text')).toHaveValue('release notes');
+    await dialog.getByLabel('Link address').fill('javascript:alert(1)');
+    await dialog.getByRole('button', { name: 'Insert link' }).click();
+    await expect(dialog.getByRole('alert')).toBeVisible();
+    await expectNoAxe(dialog);
+    await dialog.getByLabel('Link address').fill('https://example.com/release');
+    await dialog.getByRole('button', { name: 'Insert link' }).click();
+    await expect(box).toBeFocused();
+    await expect(box).toHaveValue('See the [release notes](https://example.com/release) today');
+    const preview = page.getByRole('button', { name: 'Preview', exact: true });
+    await preview.click();
+    await expect(
+      page.locator('[data-composer-preview]').getByRole('link', { name: 'release notes' }),
+    ).toHaveAttribute('href', 'https://example.com/release');
+    await expect(page.getByRole('button', { name: 'Bold', exact: true })).toBeDisabled();
+    await expect(preview).toBeFocused();
+    await preview.press('ControlOrMeta+Shift+P');
+    await expect(box).toBeFocused();
+    await box.press('Enter');
+    await expectDelivered(page, 'release notes');
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([
+      'See the [release notes](https://example.com/release) today',
+    ]);
+  });
+
+  test('Turkish link details and a long preview remain usable on a narrow screen', async ({
+    page,
+    signIn,
+    room,
+    expectNoAxe,
+  }) => {
+    const made = await room();
+    await signIn();
+    await page.goto(made.path);
+    await page.evaluate(() => {
+      localStorage.setItem('purlay.locale', 'tr');
+    });
+    await page.reload();
+    await page.setViewportSize({ width: 320, height: 844 });
+    const box = page.locator('[data-composer]');
+    await box.fill('Notları inceleyelim');
+    await page.getByRole('button', { name: 'Bağlantı', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Bağlantı ekle' });
+    await dialog.getByLabel('Bağlantı adresi').fill('mailto:ekip@example.com');
+    await expectNoAxe(dialog);
+    await dialog.getByRole('button', { name: 'Vazgeç', exact: true }).click();
+    await expect(box).toHaveValue('Notları inceleyelim');
+    await box.fill('**İstanbul ekibi** için durum güncellemesi.\n\n'.repeat(40));
+    await page.getByRole('button', { name: 'Önizleme', exact: true }).click();
+    const preview = page.locator('[data-composer-preview]');
+    expect(await preview.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+      true,
+    );
+    expect(
+      await preview.evaluate((element) => element.getBoundingClientRect().height),
+    ).toBeLessThanOrEqual(844 * 0.4);
+    await page.keyboard.press('Tab');
+    await expect(preview).toBeFocused();
+    await preview.press('PageDown');
+    await expect
+      .poll(async () => await preview.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+    await expectNoAxe(page.locator('[data-composer-card]'));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  });
+
+  test('a software-keyboard resize keeps the end caret visible and preserves a reader’s scroll position', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room();
+    await signIn();
+    await page.goto(made.path);
+    await page.setViewportSize({ width: 390, height: 500 });
+    const box = boxOf(page, made.name);
+    await box.fill(
+      Array.from({ length: 40 }, (_, index) => `Line ${String(index + 1)}: writing`).join('\n'),
+    );
+    await box.press('ControlOrMeta+End');
+    await box.pressSequentially('more');
+    await page.setViewportSize({ width: 390, height: 350 });
+    await expect
+      .poll(
+        async () =>
+          await box.evaluate((element) =>
+            Math.abs(element.scrollHeight - element.clientHeight - element.scrollTop),
+          ),
+      )
+      .toBeLessThanOrEqual(1);
+    await box.evaluate((element) => {
+      element.blur();
+      element.scrollTop = 100;
+    });
+    await page.setViewportSize({ width: 390, height: 450 });
+    await expect.poll(async () => await box.evaluate((element) => element.scrollTop)).toBe(100);
+  });
+});

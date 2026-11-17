@@ -9099,6 +9099,16 @@ the text. Nothing here is a second editor.
   works while it is open.
 - A thread's box has the same row (D-164's parity).
 
+**Writing-area refinement (owner, 2026-11-17).** Keep the plain-text/Markdown boundary while making
+long-form writing readable: start with two lines and grow for actual wrapped lines, bounded by twelve
+lines and 40% of the visual viewport. Preview is similarly bounded, exposes its toggle in words,
+holds keyboard focus and disables insertion controls until the person returns to writing. The send
+button shows its label where there is room, with the existing contextual hints below the text. Link insertion asks
+for an address and display text in the existing dialog primitive, reuses `SafeHref`, escapes literal
+labels and address parentheses, and replaces only the original selection. Cancelling or changing
+channels cannot write anything into another draft. No new editor dependency, wire shape or storage.
+
+
 **Considered and rejected.** A WYSIWYG editor (PRD §4.1 fixes plain textarea and GFM); a full emoji dataset
 with search (cost out of proportion to what a team uses, and the system keyboard exists); a hidden toolbar
 behind a "Aa" toggle (formatting that has to be discovered is not formatting people use); a preview in a
