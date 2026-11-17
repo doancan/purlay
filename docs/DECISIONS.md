@@ -3688,9 +3688,11 @@ true only while somebody remembered it.
   job of its own). A finding that cannot be fixed goes in `scripts/audit-allowlist.json` with an
   advisory id, a reason and an **expiry date** no more than 180 days out; the gate fails on an
   expired entry and on an entry that matches no finding, so an allowlist cannot become a place
-  findings are forgotten. It also runs weekly, because an advisory arrives without a commit. One
-  finding (`braces`, a development-time dependency with no patched release) is allowed this way
-  today.
+  findings are forgotten. It also runs weekly, because an advisory arrives without a commit. The
+  current findings, reasons and expiry dates are owned only by `scripts/audit-allowlist.json`.
+  **Reviewed by Görkem, 2026-11-18:** the no-fix picomatch development-tool finding follows this policy;
+  `docs/spikes/picomatch-audit.md` records the exact production-install exclusion experiment, dependency paths,
+  residual build-time risk and owner follow-up. Expiry and stale-entry failures remain required.
 - **CodeQL scans JavaScript and TypeScript** on pull requests, on main and weekly, with read-only
   permissions except the one write it needs to report. On a private repository without Advanced
   Security it cannot upload results, so the job fails on any result in the SARIF itself.
@@ -15959,6 +15961,8 @@ as manual access or edit applied migration history.
 ### D-312. Channel webhooks in both directions — extends D-245
 
 **Decided by the owner, 2026-11-14.** Extend channel integrations with incoming diagnostics and signed outgoing events.
+**Authority serialization verified by Görkem, 2026-11-17.** Incoming and outgoing management take workspace KEY SHARE, then private-channel membership KEY SHARE, then channel NO KEY UPDATE, and re-read channel visibility and the current workspace role before writing. A demotion or private removal that wins refuses the stale admin context without a hook, credential receipt or webhook audit; a creator already waiting at channel admission holds authority until its transaction ends, so the authority change waits. Deterministic independent-connection regressions and mutations cover both orders and directions, alongside the existing delivery lock-order tests. No contract or schema change.
+
 Incoming hooks keep their text-only, quiet contract. Admins may rotate a secret in place; the old secret stops immediately. Authenticated request outcomes store time, HTTP status and a fixed error category, never content or credentials.
 
 Outgoing hooks belong to one visible non-DM channel, are configured by owners/admins and subscribe to `message.created`, `thread.resolved`, `thread.reopened`. Up to ten per channel. The setup explicitly says that message content leaves the server. Integration-authored messages are excluded, including thread events on those roots. Payloads are version 1, with a stable event id, timestamp, workspace/channel and message data.
