@@ -19,8 +19,8 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'announcement-reply-refused',
     why: 'a member is refused a reply in an announcement channel’s thread, which stays everybody’s (D-243)',
     file: MESSAGES,
-    find: '  if (input.parentId === undefined && !(await mayPostRoot(executor, context))) {\n',
-    replace: '  if (!(await mayPostRoot(executor, context))) {\n',
+    find: '  if (input.parentId === undefined && !(await mayPostRoot(executor, context, onlyAdminsPost))) {\n',
+    replace: '  if (!(await mayPostRoot(executor, context, onlyAdminsPost))) {\n',
     tests: [ANNOUNCEMENT_TESTS],
   },
   {

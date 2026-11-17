@@ -327,6 +327,7 @@ export const isChannelMember = async (
  * The caller is in the channel, not only able to see it: seeing a public channel is not being in it,
  * so a visible non-member is refused `403 NOT_A_CHANNEL_MEMBER` with what to do (D-104, D-123 §1,
  * D-156). Every write into a channel goes through here.
+ * Returns the channel's posting policy from that same read, so sending needs no separate lookup.
  *
  * A read, not a lock. A send locks the channel's memberships in one order, after its own row is
  * written (#668), and a purge or a delete takes them all first (`lockMemberships`); a lock taken here,
@@ -338,10 +339,18 @@ export const requireChannelMember = async (
   executor: ChatDb,
   context: ChannelContext,
   refusal: string,
-): Promise<void> => {
-  if (!(await isChannelMember(executor, context))) {
+): Promise<{ readonly onlyAdminsPost: boolean }> => {
+  const member = await executor
+    .selectFrom('channel_members')
+    .innerJoin('channels', 'channels.id', 'channel_members.channel_id')
+    .select('channels.only_admins_post')
+    .where('channel_members.channel_id', '=', context.channelId)
+    .where('channel_members.user_id', '=', context.userId)
+    .executeTakeFirst();
+  if (member === undefined) {
     throw new AppError({ code: 'NOT_A_CHANNEL_MEMBER', message: refusal });
   }
+  return { onlyAdminsPost: member.only_admins_post };
 };
 
 /**

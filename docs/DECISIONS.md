@@ -15916,6 +15916,8 @@ HTTPS public destinations only, no URL credentials/fragments, no redirects, chec
 
 The existing external scheduler runs the bounded dispatcher each minute and the retention sweep hourly; it reports job failures and delivery outcomes without URLs, payloads, secrets or response bodies. No Redis or new runtime dependency. Growth is events × subscribed hooks × attempts: list endpoints paginate, hooks are capped, work per invocation is bounded and rows expire.
 
+The existing eight-statement budget for an ordinary text send stays: the channel membership guard returns the posting policy from its same query, replacing the separate policy lookup. Announcement roles are still read under the workspace lock; no cached authority or extra lock is introduced.
+
 **Cost of reversing.** Pause/revoke hooks and revert application code; additive tables and columns remain. No down migration. Existing incoming clients are unchanged. New routes return ordinary unknown-path responses with chat disabled. No DMs, arbitrary templates, custom headers, file downloads, provider-specific payload renderers, incoming deduplication, event ordering or exactly-once claims.
 
 Failure tests cover malformed/boundary input, tenant/private-channel authorization, role changes, rollback, duplicate sends, concurrent claims, crash/lease recovery, stale finishes, signatures, SSRF, retry exhaustion, pause/revoke, retention/erasure/export and EN/TR browser flows. A separate reviewer checks the diff against this decision before completion.

@@ -147,21 +147,20 @@ const requireRoot = async (
 
 /**
  * Whether this sender may write a root here: anywhere, except an announcement channel, whose roots are
- * its owners' and admins' (D-243). Anywhere else this is one read of the channel's row by its primary
- * key; a reply never asks.
+ * its owners' and admins' (D-243). The membership guard already read the posting policy in the same
+ * statement; ordinary channels need no further read, and a reply never asks.
  *
  * The role is read under the workspace row's `KEY SHARE` lock — the one the message's own foreign key
  * would take a moment later, taken first so the role is read under it — which a role change's
  * `FOR UPDATE` waits on and waits for (D-111 §2). A demotion that committed first is the answer; one
  * still in flight waits for this send, which was made while the sender was an admin.
  */
-const mayPostRoot = async (executor: ChatDb, context: ChannelContext): Promise<boolean> => {
-  const channel = await executor
-    .selectFrom('channels')
-    .select('only_admins_post')
-    .where('id', '=', context.channelId)
-    .executeTakeFirst();
-  if (channel?.only_admins_post !== true) return true;
+const mayPostRoot = async (
+  executor: ChatDb,
+  context: ChannelContext,
+  onlyAdminsPost: boolean,
+): Promise<boolean> => {
+  if (!onlyAdminsPost) return true;
   await executor
     .selectFrom('workspaces')
     .select('id')
@@ -322,12 +321,16 @@ export const sendMessage = async (
 
   // Seeing a public channel is not being in it: a message, or a reply, is written by its members
   // only, over HTTP and the socket alike, since both come here (D-156).
-  await requireChannelMember(executor, context, 'Join the channel to write in it.');
+  const { onlyAdminsPost } = await requireChannelMember(
+    executor,
+    context,
+    'Join the channel to write in it.',
+  );
 
   const root =
     input.parentId === undefined ? undefined : await requireRoot(executor, context, input.parentId);
 
-  if (input.parentId === undefined && !(await mayPostRoot(executor, context))) {
+  if (input.parentId === undefined && !(await mayPostRoot(executor, context, onlyAdminsPost))) {
     // A retry of a root this sender wrote before the channel became an announcement channel is
     // answered with it, as any retry is (D-8, D-33); anything else is refused before it is written.
     const existing = await readMessage(executor, input.id);
