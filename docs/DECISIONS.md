@@ -9099,7 +9099,7 @@ the text. Nothing here is a second editor.
   works while it is open.
 - A thread's box has the same row (D-164's parity).
 
-**Writing-area refinement (owner, 2026-11-17).** Keep the plain-text/Markdown boundary while making
+**Writing-area refinement (Görkem, 2026-11-17).** Keep the plain-text/Markdown boundary while making
 long-form writing readable: start with two lines and grow for actual wrapped lines, bounded by twelve
 lines and 40% of the visual viewport. Preview is similarly bounded, exposes its toggle in words,
 holds keyboard focus and disables insertion controls until the person returns to writing. The send
@@ -9117,7 +9117,7 @@ Indicators change no draft, renderer behaviour, wire contract or formatting shor
 
 
 
-**Live editing amendment (owner, 2026-11-17).** The owner explicitly reverses the textarea/preview UI
+**Live editing amendment (Görkem, 2026-11-17).** Görkem explicitly reverses the textarea/preview UI
 choice above: formatted text is directly editable by default. The **Markdown** toggle opens source
 editing, with `aria-pressed` true in source mode; `Mod+Shift+P` switches the same two modes. The
 choice is remembered on this browser. Both modes keep the same GFM draft, channel/thread isolation,
@@ -9139,7 +9139,7 @@ JSON, new wire shape or data migration is introduced. Source-mode behavior tests
 source; separate browser tests cover the actual formatted default, selection, undo, composition and
 accessibility.
 
-**Editing completion (owner, 2026-11-17).** The owner prioritizes four gaps: draft safety, clearing
+**Editing completion (Görkem, 2026-11-17).** Görkem prioritizes four gaps: draft safety, clearing
 formatting, existing-link editing/removal and leaving a code block. Draft lifecycle flushes now share
 the timer's account/ownership checks and expose actual save/delete failures with a retry, without
 blocking writing or sending. Clear targets selected inline text and its block styles (the current

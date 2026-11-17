@@ -199,6 +199,14 @@ export const WEB_FEATURES_CHANNEL: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/channel/notification-level-menu.test.tsx'],
   },
   {
+    id: 'linked-message-composer-takes-focus',
+    why: 'The composer takes initial focus away from the message a permalink is opening, including when its editor loads late.',
+    file: 'apps/web/src/features/chat/channel/channel-screen.tsx',
+    find: 'autoFocus={around === null}',
+    replace: 'autoFocus',
+    tests: ['apps/web/src/features/chat/channel/message-link.test.tsx'],
+  },
+  {
     id: 'outgoing-webhook-channel-state-not-keyed',
     why: 'a channel switch keeps another channel’s one-time signing secret or a late creation response',
     file: 'apps/web/src/features/chat/channel/outgoing-webhooks.tsx',

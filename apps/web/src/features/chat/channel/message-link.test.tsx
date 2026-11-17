@@ -32,6 +32,28 @@ const rowOf = (n: number): HTMLElement | null =>
   document.querySelector<HTMLElement>(`[data-message-row][data-message-id="${messageIdAt(n)}"]`);
 
 describe('opening a link to a message', () => {
+  test('keeps focus out of the composer while the linked message is loading', async () => {
+    let answer: (value: MessageWindow) => void = () => undefined;
+    const view = await mountChannel({
+      path: linkTo(LINKED),
+      api: {
+        messageWindow: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      },
+    });
+    const composer = view.getByRole('textbox', { name: 'Message api' });
+    expect(document.activeElement === composer).toBe(false);
+    await act(async () => {
+      answer(aWindow());
+      await Promise.resolve();
+    });
+    await settle();
+    expectFocusOn(rowOf(LINKED));
+    view.unmountAll();
+  });
+
   test('reads the window around it — not the newest page — and brings it into view, marked and focused', async () => {
     const scrolled: string[] = [];
     const spy = spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (

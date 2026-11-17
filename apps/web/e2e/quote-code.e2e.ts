@@ -1,8 +1,8 @@
-/** Quotes and code survive the toolbar, native clipboard, preview, send and edit. */
+/** Quotes and code survive the toolbar, native clipboard, formatted/source modes, send and edit. */
 import { expect, test } from './fixtures';
 import { canGrantClipboard } from './support';
 
-test('quote formatting keeps a list and its blank lines together through preview and send', async ({
+test('quote formatting keeps a list and its blank lines together through formatted editing and send', async ({
   page,
   signIn,
   room,
@@ -18,11 +18,11 @@ test('quote formatting keeps a list and its blank lines together through preview
   await page.getByRole('button', { name: 'Quote', exact: true }).click();
   const quoted = '> - first item\n> \n> - second item\n> > original quote';
   await expect(box).toHaveValue(quoted);
-  await page.getByRole('button', { name: 'Preview', exact: true }).click();
-  const preview = page.locator('[data-composer-preview]');
-  await expect(preview.locator('blockquote').first().locator('li')).toHaveCount(2);
-  await expectNoAxe(preview);
-  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Markdown source', exact: true }).click();
+  const formatted = page.locator('[contenteditable="true"][data-composer]');
+  await expect(formatted.locator('blockquote').first().locator('li')).toHaveCount(2);
+  await expectNoAxe(formatted);
+  await page.getByRole('button', { name: 'Markdown source', exact: true }).click();
   await expect(box).toHaveValue(quoted);
   await box.press('ControlOrMeta+Enter');
   await expect(page.locator('[data-message-row] blockquote').first().locator('li')).toHaveCount(2);

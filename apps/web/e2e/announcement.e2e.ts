@@ -25,7 +25,7 @@ test('an owner makes a channel an announcement channel; a member is told so live
   await expect(
     alice.locator('[data-message-row]', { hasText: `listening in ${made.name}` }),
   ).toBeVisible();
-  await expect(alice.getByLabel(`Message ${made.name}`)).toBeVisible();
+  await expect(alice.getByRole('textbox', { name: `Message ${made.name}` })).toBeVisible();
 
   await page.getByRole('heading', { level: 1 }).getByRole('button', { name: made.name }).click();
   const dialog = page.getByRole('dialog', { name: `Details of #${made.name}` });
@@ -37,13 +37,13 @@ test('an owner makes a channel an announcement channel; a member is told so live
 
   // Alice hears it on the socket: her composer gives way to the notice, and the header says it.
   await expect(alice.getByText(notice)).toBeVisible();
-  await expect(alice.getByLabel(`Message ${made.name}`)).toHaveCount(0);
+  await expect(alice.getByRole('textbox', { name: `Message ${made.name}` })).toHaveCount(0);
   await expect(alice.getByRole('img', { name: 'Only owners and admins post here' })).toBeVisible();
   await expectNoAxe();
 
   // The owner still has the composer, and posts.
   const announcement = `Bakım cuma 22:00'de, ${made.name}`;
-  const composer = page.getByLabel(`Message ${made.name}`);
+  const composer = page.getByRole('textbox', { name: `Message ${made.name}` });
   await composer.fill(announcement);
   await composer.press('Enter');
   const row = alice.locator('[data-message-row]', { hasText: announcement });
