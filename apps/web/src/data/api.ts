@@ -26,6 +26,7 @@ import { createChannelsApi, type ChannelsApi } from './endpoints/channels';
 import { createMessagesApi, type MessagesApi } from './endpoints/messages';
 import { createIncidentsApi, type IncidentsApi } from './endpoints/incidents';
 import { createSearchApi, type SearchApi } from './endpoints/search';
+import { createRemindersApi, type RemindersApi } from './endpoints/reminders';
 import { createIssuesApi, type IssuesApi } from './endpoints/issues';
 import { createNotificationsApi, type NotificationsApi } from './endpoints/notifications';
 import { createGitHubApi, type GitHubApi } from './endpoints/github';
@@ -44,6 +45,7 @@ export interface Api
     MessagesApi,
     IncidentsApi,
     SearchApi,
+    RemindersApi,
     IssuesApi,
     NotificationsApi,
     GitHubApi,
@@ -62,6 +64,7 @@ export const createApi = (http: Http): Api => ({
   ...createMessagesApi(http),
   ...createIncidentsApi(http),
   ...createSearchApi(http),
+  ...createRemindersApi(http),
   ...createIssuesApi(http),
   ...createNotificationsApi(http),
   ...createGitHubApi(http),

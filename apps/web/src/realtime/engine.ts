@@ -551,7 +551,7 @@ export const createEngine = (options: EngineOptions): Engine => {
 
   /**
    * What the person's own topic says, read again: a notification (D-106), what they saved or let go on
-   * another device (D-128), a module's notice in the core's inbox (D-286), a workspace's name, their role or Deep Work (D-124) and a profile (D-131).
+   * another device (D-128), a reminder they set or cancelled there, a module's notice in the core's inbox (D-286), a workspace's name, their role or Deep Work (D-124) and a profile (D-131).
    * Their frames go to a socket that is open, so each was read before the socket was, or while it was
    * down, and no frame says it moved. The API has no version to ask, so the cached reads themselves are
    * read again — only those that hold data, once per open, never on a timer.
@@ -563,6 +563,7 @@ export const createEngine = (options: EngineOptions): Engine => {
     readAgain(client, families.notifications);
     readAgain(client, families.inbox);
     readAgain(client, families.saved);
+    readAgain(client, families.reminders);
     readAgain(client, families.shared);
     readAgain(client, families.followedThreads);
     readAgain(client, families.unreads);
@@ -846,6 +847,8 @@ export const createEngine = (options: EngineOptions): Engine => {
         readAgain(client, keys.channelGroups(frame.data.workspaceId));
         return;
       case 'REMINDERS_UPDATED':
+        // No state in the frame: the person's reminders here are read again, in every view of them.
+        readAgain(client, keys.reminders(frame.data.workspaceId));
         return;
       case 'SAVED_UPDATED':
         // No state in the frame (D-128): what is saved is read again, in every view of it.

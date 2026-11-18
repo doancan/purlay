@@ -21,6 +21,7 @@
  * the icon's colour, and meaning is never carried by colour alone (`UX.md` §9).
  */
 import {
+  AlarmClock,
   ArrowLeft,
   AtSign,
   Bell,
@@ -165,6 +166,7 @@ const glyphs = {
   settings: Settings,
   preferences: Settings2,
   notifications: Bell,
+  reminder: AlarmClock,
   /** A channel set to tell every message (D-107): the bell ringing, apart from the default bell. */
   'notify-all': BellRing,
   star: Star,
