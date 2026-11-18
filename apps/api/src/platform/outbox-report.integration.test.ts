@@ -53,6 +53,25 @@ describe('integration: reading the outbox for the operator', () => {
     expect(await readOutbox(cloned.db, [], NOW)).toEqual([]);
   });
 
+  test('measures the wait from when a fact was published, not from when it is next tried', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    await anOutboxRow(cloned.db, workspaceId, { at: ago(30 * MINUTE) });
+    await anOutboxRow(cloned.db, workspaceId, { at: ago(2 * MINUTE) });
+    await sql`update outbox set next_attempt_at = ${new Date(NOW.getTime() + 60 * MINUTE)}`.execute(
+      cloned.db,
+    );
+    expect(await readOutbox(cloned.db, ['wiki'], NOW)).toEqual([
+      { consumer: 'wiki', pending: 2, oldestPendingSeconds: 30 * 60, dead: 0 },
+    ]);
+  });
+
+  test('has the index that makes the oldest wait the first entry of a consumer, not a minimum of its rows', async () => {
+    const { rows } = await sql<{ indexdef: string }>`
+      select indexdef from pg_indexes where tablename = 'outbox' and indexname = 'idx_outbox_pending_age'
+    `.execute(cloned.db);
+    expect(rows[0]?.indexdef).toMatch(/\(consumer, created_at\) WHERE \(state = 'pending'/);
+  });
+
   test('is, for the overview, the dead facts of every consumer and the longest wait of any', async () => {
     const workspaceId = await aWorkspaceRow(cloned.db);
     await anOutboxRow(cloned.db, workspaceId, { state: 'dead', at: ago(3 * MINUTE) });

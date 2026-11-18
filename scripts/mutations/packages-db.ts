@@ -519,6 +519,14 @@ export const PACKAGES_DB: readonly Mutation[] = [
     tests: ['packages/db/src/migration-sets.test.ts', 'apps/api/src/module-setting-pair.test.ts'],
   },
   {
+    id: 'outbox-oldest-age-index-is-by-the-retry',
+    why: 'the index the oldest wait is read through is ordered by when a fact is next tried, so the oldest wait is a minimum of every pending row again and the scrape grows with the backlog (#1303)',
+    file: 'packages/db/migrations/0122_outbox_pending_age.sql',
+    find: 'ON outbox (consumer, created_at) WHERE',
+    replace: 'ON outbox (consumer, next_attempt_at) WHERE',
+    tests: ['apps/api/src/platform/outbox-report.integration.test.ts'],
+  },
+  {
     id: 'query-scan-callback-borrows-unrelated-builder',
     why: 'An unrelated builder inside a join callback borrows another statement’s indexed columns, hiding an unindexed read (#1429).',
     file: 'packages/db/src/query-columns.ts',

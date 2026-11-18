@@ -3704,6 +3704,8 @@ CREATE INDEX idx_outbox_workspace ON outbox (workspace_id);
 -- What a publish counts before it writes (the facts a workspace has waiting for a consumer, D-288 §10) and a claim walks, from one
 -- workspace to the next and down each one's due times (D-288 §11). (0093; 0091 made it as (workspace_id, consumer).)
 CREATE INDEX idx_outbox_pending_by_workspace ON outbox (consumer, workspace_id, next_attempt_at) WHERE state = 'pending';
+-- How long a consumer's oldest pending fact has waited: the first entry, not the minimum of every pending row (0122, #1303).
+CREATE INDEX idx_outbox_pending_age ON outbox (consumer, created_at) WHERE state = 'pending';
 ```
 
 ### 9.5. `server_settings`
@@ -4444,6 +4446,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0119_directory_native_initialization.sql  immutable first native binding receipt independent of transient binding/session purge (D-311)
 0120_workspace_directory_validate.sql  validate directory-origin constraints and add concurrent workspace-first credential/link indexes (D-311)
 0121_incoming_webhook_evidence.sql  incoming_webhooks last_request_at, last_status and last_error (D-312)
+0122_outbox_pending_age.sql  idx_outbox_pending_age: the oldest pending fact of a consumer without reading all of them  (#1303)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

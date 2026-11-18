@@ -29,18 +29,29 @@ export const readOutbox = async (
   now: Date,
 ): Promise<readonly OutboxReading[]> => {
   if (consumers.length === 0) return [];
-  const [waiting, dead] = await Promise.all([
+  const [waiting, oldest, dead] = await Promise.all([
+    // The count reads `idx_outbox_due` and not the table. It is the one part that grows with the backlog.
     database
       .selectFrom('outbox')
-      .select((eb) => [
-        'consumer',
-        eb.fn.countAll<string>().as('rows'),
-        eb.fn.min('created_at').as('oldest'),
-      ])
+      .select((eb) => ['consumer', eb.fn.countAll<string>().as('rows')])
       .where('state', '=', 'pending')
       .where('consumer', 'in', consumers)
       .groupBy('consumer')
       .execute(),
+    // The first entry of `idx_outbox_pending_age`, for each consumer: not the minimum of every pending row it has.
+    Promise.all(
+      consumers.map(
+        async (consumer) =>
+          await database
+            .selectFrom('outbox')
+            .select('created_at')
+            .where('state', '=', 'pending')
+            .where('consumer', '=', consumer)
+            .orderBy('created_at', 'asc')
+            .limit(1)
+            .executeTakeFirst(),
+      ),
+    ),
     database
       .selectFrom('outbox')
       .select((eb) => ['consumer', eb.fn.countAll<string>().as('rows')])
@@ -49,15 +60,13 @@ export const readOutbox = async (
       .groupBy('consumer')
       .execute(),
   ]);
-  return consumers.map((consumer) => {
-    const pending = waiting.find((row) => row.consumer === consumer);
+  return consumers.map((consumer, at) => {
+    const first = oldest[at]?.created_at;
     return {
       consumer,
-      pending: Number(pending?.rows ?? 0),
+      pending: Number(waiting.find((row) => row.consumer === consumer)?.rows ?? 0),
       oldestPendingSeconds:
-        pending === undefined
-          ? 0
-          : Math.max(0, Math.floor((now.getTime() - pending.oldest.getTime()) / 1000)),
+        first === undefined ? 0 : Math.max(0, Math.floor((now.getTime() - first.getTime()) / 1000)),
       dead: Number(dead.find((row) => row.consumer === consumer)?.rows ?? 0),
     };
   });
