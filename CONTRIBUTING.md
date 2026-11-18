@@ -95,7 +95,8 @@ failure of the tests that use it.
 
 | Command | Does |
 |---|---|
-| `bun run queue` | What is startable now, and what each blocked issue waits on |
+| `bun run queue` | What is startable now, what is under way and by whom, and what each blocked issue waits on; `--apply` writes the stages to the board |
+| `bun run claim <number>` | Take an issue (or `--release` it); refuses one that is held, blocked or would collide, and suggests the branch name (D-313) |
 | `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, touches only what its issues are about (D-74), and answers each failure mode of §6.9 (D-178) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:up:tests` | Start PostgreSQL and Redis together and wait until both are healthy: every service the whole suite reads, as CI's `schema` job starts them |
@@ -526,6 +527,18 @@ what let it through, not who.
    closed. Dependencies live in the issue body as `**Blocked by** #N`, and the board's Status is
    **derived** from them rather than maintained by hand — the same argument D-45 makes about the
    database types, one layer up. Setting it by hand meant it was wrong the moment something merged.
+
+   **Take the issue before you start it:** `bun run claim <number>` assigns it to you, and refuses when
+   somebody holds it, it is blocked, or it would collide (a second `database` issue, or anything beside
+   an `exclusive` one in the same area), saying which issue it collides with. `bun run claim <number>
+   --release` gives it back. The board then shows five stages, all derived: **Ready**, **Backlog** (blocked),
+   **In progress** (it has an assignee), **In review** (an open pull request closes it, so write
+   `Closes #N` in the pull request body) and **Done** (D-313).
+
+   Two shared files collide on every rebase. A `D-` number in `docs/DECISIONS.md` is taken when the pull
+   request is ready to merge: rebase on `main` and use the next free number, keeping the other pull
+   request's entry. A migration number follows the same rule, which is why only one `database` issue
+   is under way at a time.
 3. **Minimal delta.** Only the code the task requires. Do not refactor unrelated files.
 4. **Update the documents in the same change.** Schema change → `SCHEMA.md`. Protocol change →
    `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in
