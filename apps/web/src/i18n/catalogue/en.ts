@@ -2315,6 +2315,11 @@ export const en = {
     one: '{count} person matches',
     other: '{count} people match',
   },
+  'shortcode.listLabel': 'Emoji by name',
+  'shortcode.results': {
+    one: '{count} emoji matches',
+    other: '{count} emoji match',
+  },
   'mention.hint.move': 'move',
   'mention.hint.insert': 'insert',
   'mention.hint.close': 'close',

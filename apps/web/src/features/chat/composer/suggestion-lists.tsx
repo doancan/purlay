@@ -15,11 +15,14 @@ import type { SlashName } from './slash';
 export const mentionListId = (listId: string): string => listId;
 export const mentionOptionId = (listId: string, index: number): string =>
   `${listId}-option-${String(index)}`;
+export const shortcodeListId = (listId: string): string => `${listId}-shortcodes`;
+export const shortcodeOptionId = (listId: string, index: number): string =>
+  `${listId}-shortcode-${String(index)}`;
 export const commandListId = (listId: string): string => `${listId}-commands`;
 export const commandOptionId = (listId: string, name: string): string =>
   `${listId}-command-${name}`;
 
-interface SuggestionPopoverProps {
+export interface SuggestionPopoverProps {
   readonly id: string;
   readonly label: string;
   /** The keys that drive the list, as `Kbd`s in spans. */
@@ -28,7 +31,7 @@ interface SuggestionPopoverProps {
   readonly children: React.ReactNode;
 }
 
-const SuggestionPopover = ({
+export const SuggestionPopover = ({
   id,
   label,
   hints,

@@ -73,6 +73,8 @@ import { isMacPlatform, keyLabels } from '../../shortcuts/platform';
 import { useClientStorage } from '../../../data/storage-provider';
 import { draftKey, readDraft, useDraftWriter, writeDraft } from './drafts';
 import { useMentionCandidates } from './mention-candidates';
+import { shortcodeQuery } from './emoji-shortcodes';
+import { useEmojiNames } from './use-emoji-names';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { duringComposition, useComposition } from './composition';
 import { FileOfferBar, useFileOffer } from './file-offer';
@@ -87,6 +89,8 @@ import {
   commandOptionId,
   mentionListId,
   mentionOptionId,
+  shortcodeListId,
+  shortcodeOptionId,
 } from './suggestion-lists';
 import { EmojiPicker } from './emoji-picker';
 import { FormatToolbar } from './format-toolbar';
@@ -236,6 +240,9 @@ const Inner = ({
   // The `@` whose list Esc closed; it stays closed until a mention starts somewhere else.
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const [active, setActive] = useState(0);
+  // The `:` whose list Esc closed; like the `@`'s, it stays closed until a shortcode starts elsewhere.
+  const [shortcodeDismissedAt, setShortcodeDismissedAt] = useState<number | null>(null);
+  const [shortcodeActive, setShortcodeActive] = useState(0);
   const listId = useId();
   const runSlash = useSlashRunner(channelId);
   const [commandActive, setCommandActive] = useState(0);
@@ -270,6 +277,7 @@ const Inner = ({
     setText(next);
     // A new letter is a new list, and its best match is the one Enter takes.
     setActive(0);
+    setShortcodeActive(0);
     // Rationed by the engine; an emptied box says nothing, and the announcement runs out (D-114).
     // Not from a reply box: what is typed there never arrives in the channel's feed (`UX.md` §5).
     if (parentId === undefined && next.trim() !== '' && meaningful)
@@ -393,6 +401,19 @@ const Inner = ({
     if (mentionStart !== null) refreshCandidates();
   }, [mentionStart, refreshCandidates]);
   const current = Math.min(active, suggestions.length - 1);
+  // An emoji by its name, while a colon and letters are all that is written before the caret.
+  const shortcode = focused ? shortcodeQuery(text, caretAt) : null;
+  const emojiNames = useEmojiNames(shortcode !== null);
+  const shortcodeChoices =
+    shortcode !== null && shortcode.start !== shortcodeDismissedAt && emojiNames !== null
+      ? emojiNames.suggestShortcodes(shortcode.query)
+      : [];
+  const shortcodesOpen = shortcodeChoices.length > 0;
+  const currentShortcode = Math.min(shortcodeActive, shortcodeChoices.length - 1);
+  const shortcodeStart = shortcode?.start ?? null;
+  useEffect(() => {
+    if (shortcodeStart === null) setShortcodeDismissedAt(null);
+  }, [shortcodeStart]);
   // The commands, while a `/` and letters are all that is written before the caret (D-214).
   const typedCommand = slashQuery(text, caretAt);
   const slash = focused ? typedCommand : null;
@@ -416,6 +437,15 @@ const Inner = ({
   const choose = (username: string): void => {
     if (mention === null) return;
     const next = insertMention(text, mention, username);
+    inserted.current = { start: next.caret, end: next.caret };
+    setCaretAt(next.caret);
+    change(next.text);
+  };
+
+  /** An emoji chosen by name: it replaces the colon and the letters typed after it. */
+  const chooseShortcode = (emoji: string): void => {
+    if (shortcode === null || emojiNames === null) return;
+    const next = emojiNames.insertShortcode(text, shortcode, emoji);
     inserted.current = { start: next.caret, end: next.caret };
     setCaretAt(next.caret);
     change(next.text);
@@ -594,6 +624,23 @@ const Inner = ({
         return;
       }
     }
+    if (shortcode !== null && emojiNames !== null) {
+      const asked = emojiNames.shortcodeKey(
+        event,
+        shortcode.query,
+        shortcodeChoices,
+        currentShortcode,
+      );
+      if (asked !== null) {
+        event.preventDefault();
+        if (asked === 'close') {
+          event.stopPropagation();
+          setShortcodeDismissedAt(shortcode.start);
+        } else if (typeof asked === 'number') setShortcodeActive(asked);
+        else chooseShortcode(asked.emoji);
+        return;
+      }
+    }
     // A formatting key does what its button does (`formatKey`, D-181): one answer, shared.
     const asked = formatKey(event);
     if (asked !== null) {
@@ -720,12 +767,20 @@ const Inner = ({
   const pendingOffer = fileOffer.offer;
   const fieldLabel = t('composer.label', { channel: channelName });
   const fieldPlaceholder = t('composer.placeholder', { channel: channelName });
-  const controls = commandsOpen ? commandListId(listId) : open ? mentionListId(listId) : undefined;
+  const controls = commandsOpen
+    ? commandListId(listId)
+    : open
+      ? mentionListId(listId)
+      : shortcodesOpen
+        ? shortcodeListId(listId)
+        : undefined;
   const activeDescendant = commandsOpen
     ? commandOptionId(listId, commands[currentCommand] ?? '')
     : open
       ? mentionOptionId(listId, current)
-      : undefined;
+      : shortcodesOpen
+        ? shortcodeOptionId(listId, currentShortcode)
+        : undefined;
 
   return (
     <div className="shrink-0 pb-4 pt-2">
@@ -808,8 +863,21 @@ const Inner = ({
               onHover={setActive}
             />
           )}
+          {shortcodesOpen && emojiNames !== null && (
+            <emojiNames.ShortcodeList
+              listId={listId}
+              choices={shortcodeChoices}
+              current={currentShortcode}
+              onChoose={chooseShortcode}
+              onHover={setShortcodeActive}
+            />
+          )}
           <VisuallyHidden role="status" aria-live="polite">
-            {open ? t('mention.results', { count: suggestions.length }) : ''}
+            {open
+              ? t('mention.results', { count: suggestions.length })
+              : shortcodesOpen
+                ? t('shortcode.results', { count: shortcodeChoices.length })
+                : ''}
           </VisuallyHidden>
           <FormatToolbar
             sourceMode={sourceMode}

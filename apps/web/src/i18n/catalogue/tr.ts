@@ -2312,6 +2312,10 @@ export const tr = {
   'mention.results': {
     other: 'Eşleşen kişi: {count}',
   },
+  'shortcode.listLabel': 'Ada göre emoji',
+  'shortcode.results': {
+    other: 'Eşleşen emoji: {count}',
+  },
   'mention.hint.move': 'gez',
   'mention.hint.insert': 'ekle',
   'mention.hint.close': 'kapat',
