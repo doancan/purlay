@@ -80,6 +80,46 @@ environment `verify` still passes, on the unit tests alone, behind the banner be
 points at is brought up to its latest migration by the run itself, so one last migrated a week ago is not a
 failure of the tests that use it.
 
+**Without Docker.** `bun run db:up` is a convenience, not a requirement: the application needs a
+PostgreSQL, of the major version the compose file pins, that is reachable and made the way the compose file makes it, and these steps make
+one by hand (the commands are those of a Homebrew or distribution install: `initdb`, `pg_ctl`,
+`createdb` on the path). They have been run end to end: migrations, the demo behind `bun run dev`, and an
+integration test file.
+
+```bash
+# 1. A free port, and a data directory in the repository (`pgdata/` is git-ignored).
+#    Refuse to initialise over a directory that already holds a cluster.
+PORT=$(bun -e "const s=Bun.listen({hostname:'127.0.0.1',port:0,socket:{data(){}}});console.log(s.port);s.stop()")
+test ! -e pgdata || { echo "pgdata exists: start it (step 2) instead"; exit 1; }
+initdb -D pgdata -U purlay --pwfile=<(echo purlay) --auth=scram-sha-256 --locale=C --encoding=UTF8
+
+# 2. Start it on the loopback address only; the password is for development, as compose's is.
+pg_ctl -D pgdata -o "-p $PORT -c listen_addresses=127.0.0.1" -l pgdata/server.log -w start
+PGPASSWORD=purlay createdb -h 127.0.0.1 -p "$PORT" -U purlay purlay
+
+# 3. The two environment files, with the port you got (§2 above: what each is for).
+cp .env.example .env
+cp .env.test.example .env.test
+sed -i.bak "s#^DATABASE_URL=.*#DATABASE_URL=postgres://purlay:purlay@127.0.0.1:$PORT/purlay#" .env .env.test
+sed -i.bak "s#^ENCRYPTION_KEY=.*#ENCRYPTION_KEY=$(openssl rand -base64 32)#" .env
+rm .env.bak .env.test.bak
+
+bun run db:migrate
+bun run dev
+```
+
+`--locale=C --encoding=UTF8` matter: identifier columns are `COLLATE "C"` and `/health/ready`
+refuses a server whose schema disagrees (`docs/CONFIG.md`, D-40). The server's role may create and
+drop the scratch databases the tests use, because it owns the cluster. Pick the port once: a later
+session starts the same cluster with the same `pg_ctl … start` line and the port in `.env`.
+`pg_ctl -D pgdata -m fast stop` stops it; deleting `pgdata/` after that is the twin of `db:reset`.
+
+The demo behind `bun run dev` keeps its attachments in a directory of its own, so nothing more is
+needed to try the application. Running the API against your own sign-in has no object store until
+you give it one: set `STORAGE_DIRECTORY` for a directory, or the `S3_*` variables for a bucket
+(`docs/CONFIG.md`); without either, uploads answer `503 STORAGE_UNAVAILABLE` and nothing else is
+affected. `bun run test:storage` needs the compose Garage and is not part of this path.
+
 **Two verification commands, and the difference matters:**
 
 | Command | Needs | Runs |

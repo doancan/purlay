@@ -97,8 +97,8 @@ on the same port, with people to sign in as; set both and it signs in through Gi
 how the two environment files differ, is [`CONTRIBUTING.md`](CONTRIBUTING.md) §2. `bun run verify`
 is the gate every change passes.
 
-There is no Docker-free installation guide: the documents describe PostgreSQL and object storage
-through the repository's compose files only.
+Without Docker, run PostgreSQL yourself: the steps, with a free port and the two environment files,
+are [`CONTRIBUTING.md`](CONTRIBUTING.md) §2, "Without Docker".
 
 ## Self-hosting
 
