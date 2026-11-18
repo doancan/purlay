@@ -47,6 +47,7 @@ import {
   BellRing,
   Check,
   ChevronDown,
+  CalendarClock,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -229,6 +230,8 @@ const glyphs = {
   next: ChevronRight,
   /** A day to pick: the date field's calendar. */
   calendar: CalendarDays,
+  /** A message held to be sent at a time: "Send later". */
+  schedule: CalendarClock,
   shortcuts: Keyboard,
   warning: TriangleAlert,
   info: Info,

@@ -10,6 +10,7 @@ import type {
   CreatedGuestInvitation,
   CreateGuestInvitationRequest,
   DeviceSession,
+  ScheduledMessage,
   SharedPage,
 } from '@purlay/types';
 import { createApi, type Api } from './api';
@@ -1902,7 +1903,7 @@ describe('channel webhook endpoints', () => {
 });
 
 describe('scheduled messages', () => {
-  const scheduled = {
+  const scheduled: ScheduledMessage = {
     id: ID,
     channelId: ID,
     parentId: null,

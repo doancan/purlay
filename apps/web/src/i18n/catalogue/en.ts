@@ -2649,6 +2649,8 @@ export const en = {
   'scheduled.time.invalid': 'Enter a date and a time.',
   'scheduled.time.tooSoon': 'Choose a time at least a minute from now.',
   'scheduled.time.tooFar': 'Choose a time within the next year.',
+  'scheduled.time.refused':
+    'That time isn’t allowed. Choose a time from a minute to a year from now.',
   'scheduled.when.today': 'Today at {time}',
   'scheduled.when.tomorrow': 'Tomorrow at {time}',
   'scheduled.when.on': '{day} at {time}',
@@ -2657,14 +2659,16 @@ export const en = {
   'scheduled.refuse.command': 'A command can’t be scheduled.',
   'scheduled.error': '{reason} Your message is still here.',
   'scheduled.error.network': 'Scheduling needs a connection, and there isn’t one right now.',
-  'scheduled.error.limit': 'You have {count} scheduled messages here. Cancel one to schedule another.',
+  'scheduled.error.limit':
+    'You have {count} scheduled messages here. Cancel one to schedule another.',
   'scheduled.done': 'Scheduled for {when}',
   'scheduled.view': 'View scheduled',
   'scheduled.loading': 'Loading your scheduled messages',
   'scheduled.loadFailed.title': 'Couldn’t load your scheduled messages',
   'scheduled.loadFailed.body': 'The server did not answer. Try again.',
   'scheduled.empty.title': 'Nothing scheduled',
-  'scheduled.empty.body': 'Write a message now, choose Send later beside Send, and it goes out at the time you pick.',
+  'scheduled.empty.body':
+    'Write a message now, choose Send later beside Send, and it goes out at the time you pick.',
   'scheduled.files': { one: '{count} file', other: '{count} files' },
   'scheduled.failed': 'Failed: {reason}',
   'scheduled.reason.channel': 'the channel is gone or you can no longer see it',

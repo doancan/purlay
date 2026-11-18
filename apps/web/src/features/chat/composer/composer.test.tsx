@@ -373,7 +373,7 @@ describe('sending', () => {
   test('the Send button sends too', async () => {
     const { view, box, sent, user } = await mount();
     await user.type(box(), 'by button');
-    await user.click(view.getByRole('button', { name: /Send/ }));
+    await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent()).toEqual([{ channelId: IDS.api, content: 'by button' }]);
     expectFocusOn(box());
   });
@@ -421,7 +421,7 @@ describe('sending', () => {
     const { view, box, user } = await mount({ api, open: false });
     expect(box().disabled).toBe(false);
     await user.type(box(), 'offline');
-    expect(view.getByRole('button', { name: /Send/ }).getAttribute('aria-disabled')).toBe('false');
+    expect(view.getByRole('button', { name: 'Send' }).getAttribute('aria-disabled')).toBe('false');
     await press(user, '{Enter}');
     await settle();
     expect(asked).toHaveLength(1);
@@ -1387,7 +1387,7 @@ describe('on a phone (D-188)', () => {
     await user.keyboard('one{Enter}two');
     expect(box().value).toBe('one\ntwo');
     expect(sent()).toEqual([]);
-    await user.click(view.getByRole('button', { name: /Send/ }));
+    await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent().map((frame) => frame.content)).toEqual(['one\ntwo']);
   });
 

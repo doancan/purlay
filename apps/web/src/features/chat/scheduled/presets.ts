@@ -104,12 +104,7 @@ export const inputBounds = (
 });
 
 /** A time in words: today or tomorrow with the hour, any other day by its date. */
-export const describeWhen = (
-  at: Date,
-  now: Date,
-  format: Formatters,
-  t: Translate,
-): string => {
+export const describeWhen = (at: Date, now: Date, format: Formatters, t: Translate): string => {
   const time = format.clock(at);
   const day = format.isoDay(at);
   const today = format.isoDay(now);
