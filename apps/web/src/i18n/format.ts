@@ -38,6 +38,14 @@ export interface Formatters {
    * moment whose day is that one, so a midnight a clock change skips begins at the hour after it.
    */
   readonly dayStart: (isoDay: string) => string;
+  /** The wall clock here at an instant, as a `datetime-local` input holds it: `YYYY-MM-DDTHH:mm`. */
+  readonly inputValue: (value: Date | string) => string;
+  /**
+   * The instant a `datetime-local` value names on the wall clock here, as the API's UTC timestamp; null
+   * for text that is not a real date and time. A time a clock change repeats is its first; one it skips
+   * is the moment after the gap.
+   */
+  readonly instantOf: (input: string) => string | null;
 }
 
 interface DayWords {
@@ -47,6 +55,7 @@ interface DayWords {
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
 const asDate = (value: Date | string): Date => (value instanceof Date ? value : new Date(value));
 
@@ -150,6 +159,26 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
     return new Date(start).toISOString();
   };
 
+  const inputValue = (at: number): string => {
+    const [, , , h = 0, min = 0] = wallAt(at);
+    return `${isoDay(at)}T${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  };
+  const instantOf = (input: string): string | null => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(input);
+    if (match === null) return null;
+    const [y = 0, m = 0, d = 0, h = 0, min = 0] = match.slice(1).map(Number);
+    const asUtc = utc(y, m, d, h, min);
+    // A date or a time that does not exist (a 30th of February, 25:00) reads back as another.
+    if (new Date(asUtc).toISOString().slice(0, 16) !== input) return null;
+    // The offsets a day before and a day after: the same, but across a clock change. The wall time
+    // is read with each; it was had by both if the clock repeated it, by neither if it skipped it.
+    const candidates = [offsetAt(asUtc - DAY), offsetAt(asUtc + DAY)]
+      .map((offset) => asUtc - offset)
+      .sort((a, b) => a - b);
+    const at = candidates.find((candidate) => inputValue(candidate) === input) ?? candidates[1];
+    return at === undefined ? null : new Date(at).toISOString();
+  };
+
   return {
     time: (value, now): string => {
       const date = asDate(value);
@@ -180,5 +209,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
             : inGigabytes.format(value / (1024 * 1024 * 1024)),
     isoDay: (value) => isoDay(asDate(value).getTime()),
     dayStart,
+    inputValue: (value) => inputValue(asDate(value).getTime()),
+    instantOf,
   };
 };
