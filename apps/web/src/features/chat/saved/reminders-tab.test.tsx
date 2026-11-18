@@ -126,6 +126,17 @@ describe('the Reminders tab', () => {
     view.unmount();
   });
 
+  test('a reminder on a reply opens the thread it is in', async () => {
+    const reply: MessageReminder = {
+      ...reminder(3, '2026-09-11T09:00:00.000Z'),
+      message: aMessage(3, { content: 'remind words 3', parentId: messageIdAt(1) }),
+    };
+    const view = await visit({ listReminders: () => Promise.resolve([reply]) });
+    await person().click(view.getByRole('button', { name: /remind words 3/ }));
+    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}?thread=${messageIdAt(1)}`);
+    view.unmount();
+  });
+
   test('Remove takes the row away at once and asks; a refusal puts it back and says so', async () => {
     const cancelled: string[] = [];
     let refuse = true;

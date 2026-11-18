@@ -10,7 +10,7 @@ import { Icon } from '../../../components/icon';
 import { useDeferred } from '../../../app/deferred-door';
 import { useChannels } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
-import { messageHref } from '../../../router/routes';
+import { messageHref, threadHref } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
@@ -141,8 +141,12 @@ export const RemindersTab = (): React.JSX.Element => {
             reminder={reminder}
             channel={byId.get(reminder.message.channelId)}
             onOpen={() => {
+              const { channelId, id, parentId } = reminder.message;
+              // A reply is read in its thread: the feed holds roots only.
               navigate(
-                messageHref(workspace.slug, reminder.message.channelId, reminder.message.id),
+                parentId === null
+                  ? messageHref(workspace.slug, channelId, id)
+                  : threadHref(workspace.slug, channelId, parentId),
               );
             }}
             onChange={() => {
