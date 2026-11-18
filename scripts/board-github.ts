@@ -7,13 +7,13 @@
  */
 import type { BoardIssue, Stage } from './board-rules';
 
-export const OWNER = 'doancan';
-export const REPO = 'purlay';
-export const PROJECT = 1;
+const OWNER = 'doancan';
+const REPO = 'purlay';
+const PROJECT = 1;
 
 const PAGE = 100;
 
-export const gh = (args: readonly string[]): string => {
+const gh = (args: readonly string[]): string => {
   const result = Bun.spawnSync(['gh', ...args], { stdout: 'pipe', stderr: 'pipe' });
   if (result.exitCode !== 0) {
     throw new Error(`gh ${args.join(' ')} failed: ${result.stderr.toString()}`);
@@ -130,7 +130,7 @@ export const unassign = (number: number, user: string): void => {
 
 interface ItemNode {
   readonly id: string;
-  readonly content: { readonly number?: number } | null;
+  readonly content: { readonly number?: number; readonly state?: string } | null;
   readonly fieldValueByName: { readonly name: string } | null;
 }
 
@@ -142,7 +142,33 @@ interface StatusField {
 
 const PROJECT_REF = `user(login:"${OWNER}"){projectV2(number:${String(PROJECT)})`;
 
-/** Writes the stages to the board's Status, skipping items already showing it. Returns how many changed. */
+/** The board's own copy of an issue the board does not have yet. Returns its item id. */
+const addToBoard = (projectId: string, number: number): string => {
+  const issue = JSON.parse(
+    gh([
+      'api',
+      'graphql',
+      '-f',
+      `query=query{repository(owner:"${OWNER}",name:"${REPO}"){issue(number:${String(number)}){id}}}`,
+    ]),
+  ) as { data: { repository: { issue: { id: string } } } };
+  const added = JSON.parse(
+    gh([
+      'api',
+      'graphql',
+      '-f',
+      `query=mutation{addProjectV2ItemById(input:{projectId:"${projectId}",
+        contentId:"${issue.data.repository.issue.id}"}){item{id}}}`,
+    ]),
+  ) as { data: { addProjectV2ItemById: { item: { id: string } } } };
+  return added.data.addProjectV2ItemById.item.id;
+};
+
+/**
+ * Writes the stages to the board's Status. An open issue the board does not hold yet is added first,
+ * and an issue already closed is shown as Done (nothing else closes a card). Items already showing the
+ * wanted value are left alone. Returns how many items changed.
+ */
 export const writeStages = (stages: ReadonlyMap<number, Stage>): number => {
   const head = JSON.parse(
     gh([
@@ -155,7 +181,7 @@ export const writeStages = (stages: ReadonlyMap<number, Stage>): number => {
   const { id: projectId, fields } = head.data.user.projectV2;
   const status = fields.nodes.find((f) => f.name === 'Status');
   if (!status?.options) throw new Error('the board has no Status field');
-  const optionId = (name: Stage): string => {
+  const optionId = (name: Stage | 'Done'): string => {
     const found = status.options?.find((o) => o.name === name);
     if (!found) throw new Error(`Status has no option ${name}`);
     return found.id;
@@ -164,26 +190,35 @@ export const writeStages = (stages: ReadonlyMap<number, Stage>): number => {
   const items = connection<ItemNode>(
     `query($after:String){${PROJECT_REF}{items(first:${String(PAGE)},after:$after){
       pageInfo{hasNextPage endCursor}
-      nodes{id content{... on Issue{number}} fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}`,
+      nodes{id content{... on Issue{number state}} fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}`,
     (data) =>
       (data as { data: { user: { projectV2: { items: Page<ItemNode> } } } }).data.user.projectV2
         .items,
   );
 
   let changed = 0;
-  for (const item of items) {
-    const number = item.content?.number;
-    const want = number === undefined ? undefined : stages.get(number);
-    if (want === undefined || item.fieldValueByName?.name === want) continue;
+  const set = (itemId: string, want: Stage | 'Done'): void => {
     gh([
       'api',
       'graphql',
       '-f',
       `query=mutation{updateProjectV2ItemFieldValue(input:{projectId:"${projectId}",
-        itemId:"${item.id}",fieldId:"${status.id}",value:{singleSelectOptionId:"${optionId(want)}"}}){
+        itemId:"${itemId}",fieldId:"${status.id}",value:{singleSelectOptionId:"${optionId(want)}"}}){
         projectV2Item{id}}}`,
     ]);
     changed += 1;
+  };
+
+  const held = new Set<number>();
+  for (const item of items) {
+    const number = item.content?.number;
+    if (number === undefined) continue;
+    held.add(number);
+    const want = item.content?.state === 'CLOSED' ? 'Done' : stages.get(number);
+    if (want !== undefined && item.fieldValueByName?.name !== want) set(item.id, want);
+  }
+  for (const [number, want] of stages) {
+    if (!held.has(number)) set(addToBoard(projectId, number), want);
   }
   return changed;
 };
