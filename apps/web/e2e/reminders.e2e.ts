@@ -17,6 +17,13 @@ interface Reminders {
 /** How long the API's delivery loop, which looks every 15 seconds, may take to bring a due reminder in. */
 const DUE_WITHIN_MS = 45_000;
 
+/** The server's own clock, from the `Date` header of its answer: it is what judges a reminder's time. */
+const serverNow = async (baseURL: string): Promise<number> => {
+  const stamp = (await fetch(`${baseURL}/health`)).headers.get('date');
+  expect(stamp, 'the server answers with a Date header').toBeTruthy();
+  return Date.parse(stamp ?? '');
+};
+
 test.describe('message reminders', () => {
   test('set from the menu, marked on the message, listed in Saved, and removed', async ({
     page,
@@ -50,7 +57,7 @@ test.describe('message reminders', () => {
     // The server has it, an hour ahead as asked.
     await expect.poll(async () => (await listed()).length).toBe(1);
     const [held] = await listed();
-    const ahead = new Date(held?.remindAt ?? 0).getTime() - Date.now();
+    const ahead = new Date(held?.remindAt ?? 0).getTime() - (await serverNow(tenant.baseURL));
     expect(ahead).toBeGreaterThan(55 * 60_000);
     expect(ahead).toBeLessThan(65 * 60_000);
 
@@ -83,7 +90,7 @@ test.describe('message reminders', () => {
     const message = await api('carol').say(made.id, words);
     // Six seconds ahead: the least the server takes is five.
     await api('dogancan').put(`/api/messages/${message.id}/reminder`, {
-      remindAt: new Date(Date.now() + 6_000).toISOString(),
+      remindAt: new Date((await serverNow(tenant.baseURL)) + 6_000).toISOString(),
     });
 
     await signIn();
