@@ -49,8 +49,15 @@ describe('board workflow', () => {
   });
 
   test('the board is written only when the secret exists', () => {
-    expect(text).toContain("if: env.BOARD_TOKEN != ''");
+    expect(text).toContain("if: env.HAS_BOARD_TOKEN == 'true'");
     expect(text).toContain('GH_TOKEN: ${{ secrets.BOARD_TOKEN }}');
+  });
+
+  test('the token itself is in the one step that writes the board, not in the job or in an install', () => {
+    const at = text.indexOf('    steps:');
+    expect(text.slice(0, at)).not.toContain('${{ secrets.BOARD_TOKEN }}');
+    expect(text.slice(at).match(/\$\{\{ secrets\.BOARD_TOKEN \}\}/g)).toHaveLength(1);
+    expect(text).not.toContain('bun install');
   });
 
   test('a pull request from a fork or a bot assigns nobody', () => {
