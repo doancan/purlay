@@ -5,6 +5,10 @@
  * is read again and the toast says why. The tab is in the address (`?state=`), so Back returns to it.
  *
  * Only what the person can read now is listed: a save in a channel they left waits, unshown (D-128).
+ *
+ * A fourth tab, Reminders, lists the messages the person asked to be reminded of (`reminders-tab.tsx`):
+ * it is not a state of a save — a reminder belongs to its person whether or not the message is saved —
+ * and is drawn only where the server reminds.
  */
 import { useMemo } from 'react';
 import {
@@ -39,6 +43,8 @@ import {
   listRowClasses,
 } from '../../../ui/list-column';
 import { useWorkspace } from '../../shell/workspace';
+import { useReminders, useRemindersAvailable } from '../reminders/use-reminders';
+import { RemindersTab } from './reminders-tab';
 import { authorOf } from '../../../lib/author';
 import { useMessageText } from '../../content/github-event';
 
@@ -49,6 +55,15 @@ export const stateIn = (search: string): SavedState => {
   const named = new URLSearchParams(search).get('state');
   return STATES.find((state) => state === named) ?? 'in_progress';
 };
+
+/** The tabs: the three states of a save, and the person's reminders. */
+type Tab = SavedState | 'reminders';
+
+/** The tab an address names, the reminders' only where they are drawn; In progress for anything else. */
+export const tabIn = (search: string, reminders: boolean): Tab =>
+  reminders && new URLSearchParams(search).get('state') === 'reminders'
+    ? 'reminders'
+    : stateIn(search);
 
 const pagesKey = (workspaceId: string, state: SavedState): readonly unknown[] => [
   ...keys.saved(workspaceId),
@@ -156,15 +171,14 @@ const Row = ({
   );
 };
 
-export const SavedScreen = (): React.JSX.Element => {
+const SavedList = ({ state }: { readonly state: SavedState }): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
-  const { navigate, search } = useRoute();
+  const { navigate } = useRoute();
   const api = useApi();
   const client = useQueryClient();
   const { show } = useToast();
   const describe = useDescribeFailure();
-  const state = stateIn(search);
   const query = useSaved(workspace.id, state);
   const channels = useChannels(workspace.id);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
@@ -268,6 +282,31 @@ export const SavedScreen = (): React.JSX.Element => {
     );
   }
 
+  return body;
+};
+
+export const SavedScreen = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const { workspace } = useWorkspace();
+  const { navigate, search } = useRoute();
+  const remindersOn = useRemindersAvailable();
+  const tab = tabIn(search, remindersOn);
+  const reminders = useReminders(workspace.id, { enabled: remindersOn });
+  const choices = [
+    ...STATES.map((state) => ({ value: state, label: t(`saved.tab.${state}`) })),
+    ...(remindersOn
+      ? [
+          {
+            value: 'reminders' as const,
+            label:
+              reminders.data === undefined
+                ? t('saved.tab.reminders')
+                : t('saved.tab.remindersCount', { count: reminders.data.length }),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <>
       <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
@@ -283,13 +322,13 @@ export const SavedScreen = (): React.JSX.Element => {
         {/* Over the rows it chooses, as the inbox's is (D-158); a phone gives it the column's width. */}
         <ListFilter
           label={t('saved.tabs')}
-          value={state}
-          choices={STATES.map((tab) => ({ value: tab, label: t(`saved.tab.${tab}`) }))}
-          onChange={(tab) => {
-            navigate(`${href('saved', { slug: workspace.slug })}?state=${tab}`);
+          value={tab}
+          choices={choices}
+          onChange={(next) => {
+            navigate(`${href('saved', { slug: workspace.slug })}?state=${next}`);
           }}
         />
-        {body}
+        {tab === 'reminders' ? <RemindersTab /> : <SavedList state={tab} />}
       </ListColumn>
     </>
   );
