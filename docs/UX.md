@@ -55,7 +55,7 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   questions (a neutral count: they are the team's, not a summons), search, and **saved** — the
   messages you kept to come back to, in three tabs, In progress, Archived and Completed — chosen
   above the list as the inbox's All and Unread are (D-158) — each moved or let go from its row
-  (D-128) — and **drafts and sent** (D-215): what the person started and has not sent, on this device,
+  (D-128), and a fourth, **Reminders**, with its count, where the server reminds (D-315) — and **drafts and sent** (D-215): what the person started and has not sent, on this device,
   each opening its composer, deleted with Undo, and what they sent, newest first. Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
@@ -232,6 +232,20 @@ at its foot, which opens the page on the same category. Opening a row reads it, 
 to the message; the panel remembers its category while closed. It carries no count of its own (D-110).
 In a category, **Mark all read** reads the rows shown — "up to the newest" is the whole inbox's, and would
 read what the other categories hold. Below the narrow breakpoint the rail's Inbox is the link to the page.
+
+**The Reminders tab of Saved** (D-315). The messages the person asked to be reminded of, the soonest first,
+each row saying when (the absolute time, in the viewer's zone), who wrote it, where, and its words in two
+lines, and opening the message in its conversation; **Change…** opens the date-and-time dialog and **Remove**
+cancels, painted at once and put back with the reason if refused. The tab says how many there are, is in the
+address (`?state=reminders`), and is read again on opening, when the window is focused again and when another
+device changes a reminder. Loading, failed (with Retry) and *No reminders* are drawn as Saved's are. It is
+not drawn, and its address is *In progress*, where the server does not remind. It lives in Saved and not in
+the inbox because the inbox is what has already happened — a reminder due is its notice — and a pending
+reminder is a list the person keeps, as saved messages are. Both are the person's own, and neither depends
+on the other.
+
+**A reminder that is due** is a row of the inbox like any other, in **All**: *Your message reminder is due*,
+the bell, where the message is and the message under it; opening it goes to the message and reads it.
 
 **Invitations** (D-115). An invitation is an address, `/invite#…`, that somebody pastes into the
 chat the team already uses.
@@ -625,7 +639,7 @@ page of the same name.
   (§7). Every control stays clickable and readable on every row.
 - **The bar holds** React · Reply (a thread's root) · Save · Pin · More, each the same square
   control on every window, each with its tooltip and its key where it has one (Reply `R`). **More
-  is on every message**: Copy text, Save and Pin again, then Edit (`E`) and Delete on your own; an
+  is on every message**: Copy text, Save and Pin again, **Remind me…** (below), then Edit (`E`) and Delete on your own; an
   owner or an admin may delete anybody's, told it goes on the audit trail. React opens the quick
   set as one row of tiles, the name of the one reached under it and yours marked as chosen, opening
   upward and kept inside the feed so it never covers the composer.
@@ -639,6 +653,18 @@ page of the same name.
 - **Edited** and **Pinned** share one line under the words, apart from each other.
 - **Save for later** sits beside React on any message the person can read (D-128): marked at once,
   put back and said with Retry if the server refuses; a saved message's mark is filled.
+- **Remind me…** is in every message's More menu, after Pin (D-315): on any message the person can
+  read, a channel's, a thread's reply or a conversation's, and on a phone as on a desktop. Its submenu
+  offers *In 20 minutes*, *In 1 hour*, *In 3 hours*, *Tomorrow at 09:00*, *Next Monday at 09:00* — the
+  viewer's own clock, so a clock change moves the hours and not the 09:00, and next Monday is never
+  today — and **Pick date and time…**, a dialog with the browser's date-and-time field in the viewer's
+  time zone, a minute ahead at the soonest and a year at the latest, starting on tomorrow morning; a
+  time that will not do is said under the field and nothing is asked of the server. A message that has a
+  reminder reads *Reminder: <time>* in its menu, with **Change…** and **Remove reminder**, and carries
+  the same words, quiet, on the line under its words with *Edited* and *Pinned*. Painted at once; a
+  refusal puts the mark back and says which reminder failed, with Retry when trying again could help.
+  The first one chosen says *Reminder set for <time>*. When it falls due the reminder is a notice in
+  the inbox — *Your message reminder is due*, the message quoted, opening on the message itself.
 - **The day** is a label at the column's left edge with a rule after it. (D-110)
 - **Copy link** is first in every message's **More** menu (D-149, D-150): the
   message's whole address on the clipboard, said with *Link copied*, or, when the browser refuses,
@@ -901,7 +927,7 @@ the list. A list copied as plain words — `•` bullets, `☐` `☑` boxes, `1)
 Markdown list, **Paste as text** one step away; a dash is never read (it is a speaker in a dialogue), and neither
 is a lone bullet or a `2)` out of order.
 
-**Emoji by name** (D-314). A `:` and at least two letters at the caret open a list of up to eight emoji whose name
+**Emoji by name** (D-315). A `:` and at least two letters at the caret open a list of up to eight emoji whose name
 starts with, then has a word that starts with, then contains what was typed (no case, no Turkish marks); arrows move,
 Enter or Tab write the emoji in place of the colon and the letters, Esc closes the list for that colon, and Enter
 never sends while it is open. `:tada:` written out, closing colon included, becomes the emoji whether or not the list
@@ -1116,9 +1142,10 @@ Decided here so Phase 0 does not invent one at random.
 
 ## 10. Not in Phase 1
 
-Custom themes · resizable panes · reminders · rich link previews for non-GitHub URLs · emoji
+Custom themes · resizable panes · rich link previews for non-GitHub URLs · emoji
 picker beyond a recent/frequent row · read receipts · threads in a popped-out window. Pinning,
-saved items and a status line were pulled into Phase 1 (D-130, D-128, D-131) and are in §2.
+saved items and a status line were pulled into Phase 1 (D-130, D-128, D-131) and are in §2; message reminders
+came later (D-315, §3).
 
 Some are permanent non-goals (`PRD.md` §6); the rest are simply not the wedge.
 
