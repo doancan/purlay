@@ -8,7 +8,7 @@
  * that is still possible. Editing moves the words back into the place's draft and cancels the schedule,
  * in that order, so nothing is lost when either step fails (`useEditScheduled`).
  */
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useContext, useMemo, useRef, useState } from 'react';
 import type { Channel, ScheduledMessage, ScheduledMessageList } from '@purlay/types';
 import { Icon } from '../../../components/icon';
@@ -33,22 +33,6 @@ import { ComposerPortsContext, browserPorts } from '../composer/composer-ports';
 import { draftKey, readDraft, writeDraft } from '../composer/drafts';
 import { Place } from '../drafts/place';
 import { describeWhen } from './presets';
-
-/** The caller's scheduled messages, read again when the window is focused and whenever the tab is opened. */
-export const useScheduledMessages = (enabled: boolean): UseQueryResult<ScheduledMessageList> => {
-  const api = useApi();
-  const { workspace } = useWorkspace();
-  const { user } = useSession();
-  return useQuery({
-    queryKey: keys.scheduled(workspace.id, user.id),
-    queryFn: ({ signal }) => api.listScheduledMessages(workspace.id, signal),
-    enabled,
-    // The server has no push for it: a list is as old as the last time it was asked for.
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchOnMount: 'always',
-  });
-};
 
 /** Why the server could not send it, in a few words: the codes `sendMessage` refuses with at delivery. */
 type ReasonKey =

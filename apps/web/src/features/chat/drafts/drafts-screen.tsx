@@ -11,7 +11,7 @@
  * A draft in a channel the person can no longer see is not listed: its composer is nowhere to open.
  */
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import type { Channel, Message } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { useApi } from '../../../data/api-provider';
@@ -42,7 +42,7 @@ import { useSession } from '../../session/session';
 import { NavToggle } from '../../shell/nav';
 import { Place } from './place';
 import { useCanScheduleMessages } from '../scheduled/capability';
-import { ScheduledList, useScheduledMessages } from '../scheduled/scheduled-list';
+import { useScheduledMessages } from '../scheduled/use-scheduled-messages';
 import { useWorkspace } from '../../shell/workspace';
 
 type Tab = 'drafts' | 'sent' | 'scheduled';
@@ -101,6 +101,11 @@ const SentRow = ({
     </li>
   );
 };
+
+// The list and what can be done to it are loaded when the tab is first opened: most visits never open it.
+const ScheduledList = lazy(() =>
+  import('../scheduled/scheduled-list').then((module) => ({ default: module.ScheduledList })),
+);
 
 const Loading = ({ label }: { readonly label: string }): React.JSX.Element => (
   <LoadingStatus label={label} className="flex flex-col gap-4 py-2">
@@ -308,7 +313,9 @@ export const DraftsScreen = (): React.JSX.Element => {
         ) : tab === 'sent' ? (
           <Sent byId={byId} />
         ) : (
-          <ScheduledList query={scheduled} byId={byId} />
+          <Suspense fallback={<Loading label={t('scheduled.loading')} />}>
+            <ScheduledList query={scheduled} byId={byId} />
+          </Suspense>
         )}
       </ListColumn>
     </>

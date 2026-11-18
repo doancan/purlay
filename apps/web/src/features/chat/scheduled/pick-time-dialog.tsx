@@ -12,15 +12,14 @@ import { systemClock } from '../../../system-clock';
 import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
 import { TextField } from '../../../ui/text-field';
+import { describeWhen, schedulePresets } from './presets';
 import {
   checkSendAt,
-  describeWhen,
   fromInputValue,
   inputBounds,
-  schedulePresets,
   toInputValue,
   type SendAtCheck,
-} from './presets';
+} from './typed-time';
 
 export const PickTimeDialog = ({
   onPick,
