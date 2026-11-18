@@ -56,7 +56,8 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   messages you kept to come back to, in three tabs, In progress, Archived and Completed — chosen
   above the list as the inbox's All and Unread are (D-158) — each moved or let go from its row
   (D-128), and a fourth, **Reminders**, with its count, where the server reminds (D-315) — and **drafts and sent** (D-215): what the person started and has not sent, on this device,
-  each opening its composer, deleted with Undo, and what they sent, newest first. Every entry is a route
+  each opening its composer, deleted with Undo, what they sent, newest first, and what is **scheduled** to be sent
+  later (D-316). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
 - **Sidebar (264px)** — the workspace's card (D-209): its mark, its name and, under it, your role and how many
@@ -954,6 +955,31 @@ workspace switch within the same account still preserves waiting uploads and dra
 
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
+
+**Send later** (D-316). Beside Send, in a channel's box and in a thread's, an icon button opens a menu of times:
+*In 1 hour*, *Tomorrow at 09:00*, *Monday at 09:00* — left out on a Sunday, when it is tomorrow, and on a Monday,
+when it would read as today — and *Pick date and time…*, a dialog with the browser's date and time field, in the
+person's zone, from a minute to a year ahead; a time outside that is explained under the field and not
+accepted, and a good one says when it will go. Choosing a time schedules what is in the box, in formatted editing
+and in Markdown alike, under the checks a send makes: nothing is scheduled while a file is still uploading or
+has failed, or from an empty box, or as a `/command`, and the reason is said under the box with the words kept. On
+success the box and its draft are emptied as a send empties them, and a toast says when — *Scheduled for
+Tomorrow at 09:00* — with *View scheduled*. If the server refuses (a hundred are already waiting, the time, no
+connection) the words and files stay and it is said under the box. The button is never disabled by sends waiting
+for the network; scheduling needs the network itself, and says so when there is none. A reply scheduled from a
+thread's box goes to that thread. Where the server does not hold messages for later there is no button.
+
+**The Scheduled tab** of drafts and sent (D-316) is the third beside Drafts and Sent, with the count of what is
+waiting, and `?tab=scheduled` opens on it. A row says where (the channel, or *in a thread*), when — *Today at
+17:30*, *Tomorrow at 09:00*, then the day — the words and how many files, and for one the server could not send,
+*Failed:* and why in plain words (the channel is gone, you are no longer in it, only admins post there now, the
+message you replied to is gone, a file is gone, you no longer have access). Pressing a row opens its channel or
+thread. **Cancel** asks the server and says *Scheduled message cancelled* with Undo, which asks for the same
+message again while that is still possible and says so when it is not. **Edit** writes the words into that
+place's draft — under any already there — cancels the schedule and opens the box, saying so; files are not
+kept in a draft and the toast says it when there were any. A message that was sent in the meantime says *It was
+already sent.* The list is read when the screen opens, when the tab opens and when the window is focused, since
+the server has no push for it; it is empty with a sentence about Send later, and a failure to load has Retry.
 
 **Who else is typing** is said quietly in the channel composer's footer, beside the hints — "Alice is
 typing…", two by name, more as "Several people are typing…" — in a row that is always there, so nothing
