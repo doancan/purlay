@@ -24,6 +24,7 @@ import { createWorkspacesApi, type WorkspacesApi } from './endpoints/workspaces'
 import { createInvitationsApi, type InvitationsApi } from './endpoints/invitations';
 import { createChannelsApi, type ChannelsApi } from './endpoints/channels';
 import { createMessagesApi, type MessagesApi } from './endpoints/messages';
+import { createScheduledApi, type ScheduledApi } from './endpoints/scheduled';
 import { createIncidentsApi, type IncidentsApi } from './endpoints/incidents';
 import { createSearchApi, type SearchApi } from './endpoints/search';
 import { createRemindersApi, type RemindersApi } from './endpoints/reminders';
@@ -43,6 +44,7 @@ export interface Api
     InvitationsApi,
     ChannelsApi,
     MessagesApi,
+    ScheduledApi,
     IncidentsApi,
     SearchApi,
     RemindersApi,
@@ -62,6 +64,7 @@ export const createApi = (http: Http): Api => ({
   ...createInvitationsApi(http),
   ...createChannelsApi(http),
   ...createMessagesApi(http),
+  ...createScheduledApi(http),
   ...createIncidentsApi(http),
   ...createSearchApi(http),
   ...createRemindersApi(http),

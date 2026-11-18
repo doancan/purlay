@@ -105,6 +105,8 @@ export const keys = {
   message: (messageId: string) => ['message', messageId] as const,
   /** What one person sent in a workspace, newest first (D-215): search narrowed to them. */
   sent: (workspaceId: string, userId: string) => ['sent', workspaceId, userId] as const,
+  /** The caller's own scheduled messages in a workspace ("Send later"): pending and failed, never another person's. */
+  scheduled: (workspaceId: string, userId: string) => ['scheduled', workspaceId, userId] as const,
   /** An attachment's words, read to preview it (D-210): a file never changes, so it is read once. */
   attachmentText: (attachmentId: string) => ['attachment-text', attachmentId] as const,
   /** The inbox panel's one page of a category (D-208): under the inbox's prefix, as every view is. */
