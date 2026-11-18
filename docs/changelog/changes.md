@@ -31,5 +31,6 @@ have it.
 
 - **Messages** — Typing a colon and two letters offers emoji by name (`:tada`, `:rocket`); Enter or Tab writes the emoji, and `:tada:` written out becomes it (D-314)
 - **Messages** — remind me about a message: choose *Remind me…* in its More menu for in 20 minutes, in 1 hour, in 3 hours, tomorrow or next Monday at 09:00, or a date and time of your own; the message carries a quiet *Reminder* line, and a new *Reminders* tab in Saved lists, changes and removes them (D-315)
+- **Messages** — Write a message now and send it later: Send later offers in an hour, tomorrow or Monday morning, or any time up to a year ahead, and a new Scheduled tab in Drafts and sent lists what is waiting and what could not be sent, with Cancel, Undo and Edit (D-316).
 
 ---
