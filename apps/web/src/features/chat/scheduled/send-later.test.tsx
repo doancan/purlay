@@ -548,6 +548,14 @@ describe('any other time', () => {
     expect(asked).toEqual([]);
   });
 
+  test('is closed with Escape, and the words stay', async () => {
+    const { box, user, asked } = await pick();
+    await user.keyboard('{Escape}');
+    expect(within(document.body).queryByRole('dialog')).toBeNull();
+    expect(box().value).toBe('on a chosen day');
+    expect(asked).toEqual([]);
+  });
+
   test('has no axe violations', async () => {
     await pick();
     await expectNoAxeViolations(within(document.body).getByRole('dialog'));

@@ -132,7 +132,7 @@ const rowAt = (view: Awaited<ReturnType<typeof visit>>, index: number): HTMLElem
 describe('the tab', () => {
   test('says how many are waiting, and none when there are none', async () => {
     const some = await visit([scheduled(FIRST), scheduled(SECOND)]);
-    expect(some.getByRole('button', { name: 'Scheduled (2)' })).toBeDefined();
+    expect(await some.findByRole('button', { name: 'Scheduled (2)' })).toBeDefined();
     some.unmount();
     const none = await visit([]);
     expect(none.getByRole('button', { name: 'Scheduled' })).toBeDefined();
@@ -140,7 +140,7 @@ describe('the tab', () => {
 
   test('is in Turkish', async () => {
     const view = await visit([scheduled(FIRST)], { locale: 'tr' });
-    expect(view.getByRole('button', { name: 'Zamanlananlar (1)' })).toBeDefined();
+    expect(await view.findByRole('button', { name: 'Zamanlananlar (1)' })).toBeDefined();
   });
 
   test('opens when the address asks for it, as View scheduled does', async () => {
