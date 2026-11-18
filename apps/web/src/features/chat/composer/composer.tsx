@@ -45,7 +45,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { useEngine } from '../../../realtime/realtime-provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { isApiError } from '../../../data/errors';
-import { useSession } from '../../session/session';
+import { useRunsIfAny, useSession } from '../../session/session';
 import { lastOwnMessage, useEditing } from '../messages/editing';
 import { cn } from '../../../ui/cn';
 import { IconButton } from '../../../ui/icon-button';
@@ -100,7 +100,6 @@ import { useComposerSize } from './use-composer-size';
 import { KeyHints } from './key-hints';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
-import { useCanScheduleMessages } from '../scheduled/capability';
 import { SendLater } from '../scheduled/send-later';
 import { useScheduleMessage } from '../scheduled/use-schedule-message';
 import { UploadList, useUploads } from './uploads';
@@ -559,7 +558,7 @@ const Inner = ({
     onSent?.(id);
   };
 
-  const canSchedule = useCanScheduleMessages();
+  const canSchedule = useRunsIfAny('chat');
   const scheduleMessage = useScheduleMessage();
   /** What is written, held to be sent at `sendAt`: refused for the reasons a send is, and kept where it is when the server says no. */
   const scheduleLater = (sendAt: Date): void => {
