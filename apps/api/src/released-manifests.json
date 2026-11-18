@@ -39,6 +39,7 @@
         "/api/workspaces/:workspaceId/unresolved"
       ],
       "jobs": [
+        "deliver:webhooks",
         "mail:missed"
       ],
       "frames": [
@@ -54,7 +55,8 @@
         "purge:retention",
         "sweep:github-deliveries",
         "sweep:guest-expiry",
-        "sweep:link-previews"
+        "sweep:link-previews",
+        "sweep:webhook-deliveries"
       ]
     },
     {
