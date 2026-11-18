@@ -33,6 +33,7 @@ import { useDeferred } from '../../../app/deferred-door';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
 import { PinMenuItem, PinToggle } from '../pins/pin-toggle';
+import { ReminderMenuItem } from '../reminders/reminder-menu';
 import { SaveMenuItem, SaveToggle } from '../saved/save-toggle';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 import { holdRow } from './active-row';
@@ -182,7 +183,8 @@ const MoreMenu = ({
   const selected = useRef<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [forwarding, setForwarding] = useState(false);
-  const deferred = useDeferred([forwarding, setForwarding]);
+  const [reminding, setReminding] = useState(false);
+  const deferred = useDeferred([forwarding, setForwarding], [reminding, setReminding]);
 
   const confirm = (): void => {
     setAsking(false);
@@ -295,6 +297,12 @@ const MoreMenu = ({
         )}
         <SaveMenuItem message={message} />
         <PinMenuItem message={message} />
+        <ReminderMenuItem
+          message={message}
+          onPick={() => {
+            setReminding(true);
+          }}
+        />
         {(mine || moderating) && <MenuSeparator />}
         {mine && (
           <MenuItem
@@ -321,6 +329,9 @@ const MoreMenu = ({
       </Menu>
       {member && deferred !== null && (
         <deferred.ForwardDialog message={message} open={forwarding} onOpenChange={setForwarding} />
+      )}
+      {deferred !== null && (
+        <deferred.ReminderDialog message={message} open={reminding} onOpenChange={setReminding} />
       )}
       <Dialog
         open={asking}
