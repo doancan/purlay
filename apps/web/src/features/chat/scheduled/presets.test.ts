@@ -7,14 +7,8 @@ import { createFormatters } from '../../../i18n/format';
 import { createTranslate } from '../../../i18n/translate';
 import { en } from '../../../i18n/catalogue/en';
 import { tr } from '../../../i18n/catalogue/tr';
-import {
-  checkSendAt,
-  describeWhen,
-  fromInputValue,
-  schedulePresets,
-  toInputValue,
-  type PresetId,
-} from './presets';
+import { describeWhen, schedulePresets, type PresetId } from './presets';
+import { checkSendAt, fromInputValue, toInputValue } from './typed-time';
 
 const presetsAt = (now: string, timeZone: string): Partial<Record<PresetId, string>> =>
   Object.fromEntries(
