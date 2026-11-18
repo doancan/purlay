@@ -86,6 +86,10 @@ export const claimRefusal = (issue: BoardIssue, all: World, me: string): Refusal
     );
   }
   if (issue.assignees.includes(me)) return null;
+  const [pullRequest] = issue.closingPullRequests;
+  if (pullRequest !== undefined) {
+    return refusal(`#${String(issue.number)} already has pull request #${String(pullRequest)}`);
+  }
 
   const blockers = openBlockers(issue, all);
   if (blockers.length > 0) {

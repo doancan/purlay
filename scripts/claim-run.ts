@@ -4,7 +4,8 @@
  *
  * GitHub has no compare-and-set on assignees, so two people claiming in the same
  * second can both be assigned. The claim therefore reads the issue again after
- * assigning: the assignee GitHub lists first holds it, the other backs off.
+ * assigning and backs off if anyone else is there; both may back off, and then
+ * one claims again. It never reports a claim it cannot see.
  */
 import {
   AREA_LABELS,
@@ -57,11 +58,18 @@ export const claim = (number: number, ports: ClaimPorts): ClaimResult => {
   if (issue.assignees.includes(ports.me)) return { ok: true, notices };
 
   ports.assign(number, ports.me);
-  const [first, ...rest] = ports.one(number).assignees;
-  if (first !== ports.me && [first, ...rest].includes(ports.me)) {
+  // GitHub lists assignees in no order we can rely on, so nobody "wins" by being first:
+  // if anyone but me is there, I step back, and the other may do the same. Claiming again is cheap.
+  const { assignees } = ports.one(number);
+  const others = assignees.filter((login) => login !== ports.me);
+  if (others.length > 0) {
     ports.unassign(number, ports.me);
-    return fail(`#${String(number)} was taken a moment earlier by @${String(first)}`);
+    return fail(
+      `#${String(number)} was taken at the same moment by ${others.map((o) => `@${o}`).join(' ')}`,
+    );
   }
+  if (!assignees.includes(ports.me))
+    return fail(`the assignment of #${String(number)} did not take`);
   return { ok: true, notices };
 };
 

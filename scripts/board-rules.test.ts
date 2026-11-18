@@ -99,6 +99,10 @@ describe('claimRefusal', () => {
     const i = issue({ number: 1, assignees: ['gorke'] });
     expect(claimRefusal(i, world(i), 'me')?.reason).toContain('gorke');
   });
+  test('an issue an open pull request already closes is refused and names the pull request', () => {
+    const i = issue({ number: 1, closingPullRequests: [77] });
+    expect(claimRefusal(i, world(i), 'me')?.reason).toContain('#77');
+  });
   test('an issue blocked by an open issue is refused and names it', () => {
     const i = issue({ number: 1, body: '> **Blocked by** #9' });
     expect(claimRefusal(i, world(i, issue({ number: 9 })), 'me')?.reason).toContain('#9');

@@ -113,10 +113,20 @@ describe('claim', () => {
     expect(p.one(1).assignees).toEqual(['gorke']);
   });
 
-  test('when I was assigned first, the claim stands', () => {
+  test('when somebody else is assigned beside me, I back off even if I am listed first', () => {
+    // GitHub's listing order is not the order of assignment, so "first" proves nothing.
     const p = fake([issue({ number: 1 })], () => ['me', 'gorke']);
-    expect(claim(1, p).ok).toBe(true);
-    expect(p.calls).toEqual(['assign 1 me']);
+    const result = claim(1, p);
+    expect(result.ok).toBe(false);
+    expect(reasonOf(result)).toContain('@gorke');
+    expect(p.calls).toEqual(['assign 1 me', 'unassign 1 me']);
+  });
+
+  test('when the assignment did not take, the claim is not reported as mine', () => {
+    const p = fake([issue({ number: 1 })], () => []);
+    const result = claim(1, p);
+    expect(result.ok).toBe(false);
+    expect(reasonOf(result)).toContain('did not take');
   });
 });
 
