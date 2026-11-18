@@ -88,9 +88,9 @@ test.describe('message reminders', () => {
     const made = await room({ members: ['dogancan', 'carol'] });
     const words = `the deploy window closes soon in ${made.name}`;
     const message = await api('carol').say(made.id, words);
-    // Six seconds ahead: the least the server takes is five.
+    // Eight seconds ahead: the least the server takes is five, and its clock is read to the second.
     await api('dogancan').put(`/api/messages/${message.id}/reminder`, {
-      remindAt: new Date((await serverNow(tenant.baseURL)) + 6_000).toISOString(),
+      remindAt: new Date((await serverNow(tenant.baseURL)) + 8_000).toISOString(),
     });
 
     await signIn();
