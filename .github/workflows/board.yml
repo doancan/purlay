@@ -25,13 +25,15 @@ concurrency:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: read
 
 jobs:
   stages:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
     env:
       BOARD_TOKEN: ${{ secrets.BOARD_TOKEN }}
     steps:
