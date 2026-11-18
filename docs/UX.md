@@ -927,7 +927,7 @@ the list. A list copied as plain words — `•` bullets, `☐` `☑` boxes, `1)
 Markdown list, **Paste as text** one step away; a dash is never read (it is a speaker in a dialogue), and neither
 is a lone bullet or a `2)` out of order.
 
-**Emoji by name** (D-315). A `:` and at least two letters at the caret open a list of up to eight emoji whose name
+**Emoji by name** (D-314). A `:` and at least two letters at the caret open a list of up to eight emoji whose name
 starts with, then has a word that starts with, then contains what was typed (no case, no Turkish marks); arrows move,
 Enter or Tab write the emoji in place of the colon and the letters, Esc closes the list for that colon, and Enter
 never sends while it is open. `:tada:` written out, closing colon included, becomes the emoji whether or not the list
