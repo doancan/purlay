@@ -65,6 +65,7 @@
     "lint": "bun run scripts/lint.ts",
     "lint:fix": "bun run scripts/lint.ts --fix",
     "mutate": "bun run scripts/run-mutations.ts",
+    "claim": "bun run scripts/claim.ts",
     "queue": "bun run scripts/queue.ts",
     "manifests:snapshot": "bun run apps/api/src/cli/manifest-snapshot.ts",
     "release": "bun run scripts/release.ts",
