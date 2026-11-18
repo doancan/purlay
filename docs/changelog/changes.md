@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **Messages** — Typing a colon and two letters offers emoji by name (`:tada`, `:rocket`); Enter or Tab writes the emoji, and `:tada:` written out becomes it (D-314)
 
 ---

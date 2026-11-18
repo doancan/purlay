@@ -901,6 +901,14 @@ the list. A list copied as plain words — `•` bullets, `☐` `☑` boxes, `1)
 Markdown list, **Paste as text** one step away; a dash is never read (it is a speaker in a dialogue), and neither
 is a lone bullet or a `2)` out of order.
 
+**Emoji by name** (D-314). A `:` and at least two letters at the caret open a list of up to eight emoji whose name
+starts with, then has a word that starts with, then contains what was typed (no case, no Turkish marks); arrows move,
+Enter or Tab write the emoji in place of the colon and the letters, Esc closes the list for that colon, and Enter
+never sends while it is open. `:tada:` written out, closing colon included, becomes the emoji whether or not the list
+was showing. It is not offered after a letter, a digit, a colon or a slash (`12:30`, `a:b`), inside code, or for one
+letter, so `:D` and `:P` stay faces typed as text. What is sent is the emoji, never the name. Both writing modes and a
+thread's box have it.
+
 **Slash commands** (D-214). A `/` at the very start opens a list of commands, narrowed as letters are
 typed; arrows move, Tab (or Enter, until the command is whole) writes it out with a space for its words, Esc
 closes the list. Each is a door to what the product already does, painted, refused and put back as its
