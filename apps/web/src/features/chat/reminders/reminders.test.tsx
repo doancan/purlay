@@ -10,6 +10,7 @@ import { ApiError } from '../../../data/errors';
 import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { mountChannel, page, settle } from '../../../testing/channel-harness';
+import { createFormatters } from '../../../i18n/format';
 import { installDom } from '../../../testing/dom';
 import { IDS, aMessage, aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
@@ -19,6 +20,9 @@ import { useReminderActions, useRemindersAvailable } from './use-reminders';
 import { person } from '../../../testing/user';
 
 installDom();
+
+/** A time as the page says it: the ICU of the machine decides how, so a test asks the same formatter. */
+const when = (iso: string): string => createFormatters('en', 'UTC').absolute(iso);
 
 const first = aMessage(1, { content: 'remember this one' });
 const second = aMessage(2, { content: 'and not this one' });
@@ -104,10 +108,10 @@ describe('a message with no reminder', () => {
       await settle();
       expect(server.set).toEqual([`${first.id} 2026-09-09T13:00:00.000Z`]);
       expect(markOf(view, 'remember this one')?.textContent).toBe(
-        'Reminder: Sep 9, 2026 at 1:00 PM',
+        `Reminder: ${when('2026-09-09T13:00:00Z')}`,
       );
       expect(markOf(view, 'and not this one')).toBeNull();
-      expect(view.getByText('Reminder set for Sep 9, 2026 at 1:00 PM.')).toBeDefined();
+      expect(view.getByText(`Reminder set for ${when('2026-09-09T13:00:00Z')}.`)).toBeDefined();
     } finally {
       view.unmountAll();
     }
@@ -141,7 +145,7 @@ describe('a message with no reminder', () => {
       await person().click(view.getByRole('menuitem', { name: 'In 3 hours' }));
       await settle();
       expect(markOf(view, 'remember this one')?.textContent).toBe(
-        'Reminder: Sep 9, 2026 at 3:00 PM',
+        `Reminder: ${when('2026-09-09T15:00:00Z')}`,
       );
       answer.reject(new ApiError(403, 'FORBIDDEN', 'No'));
       await settle();
@@ -191,12 +195,12 @@ describe('a message that has a reminder', () => {
     try {
       await settle();
       expect(markOf(view, 'remember this one')?.textContent).toBe(
-        'Reminder: Sep 10, 2026 at 8:30 AM',
+        `Reminder: ${when('2026-09-10T08:30:00Z')}`,
       );
       expect(markOf(view, 'remember this one')?.getAttribute('title')).toBe(
-        'Reminder: Sep 10, 2026 at 8:30 AM',
+        `Reminder: ${when('2026-09-10T08:30:00Z')}`,
       );
-      await openReminder(view, 'remember this one', 'Reminder: Sep 10, 2026 at 8:30 AM');
+      await openReminder(view, 'remember this one', `Reminder: ${when('2026-09-10T08:30:00Z')}`);
       expect(view.getByRole('menuitem', { name: 'Change…' })).toBeDefined();
       expect(view.getByRole('menuitem', { name: 'Remove reminder' })).toBeDefined();
       expect(view.queryByRole('menuitem', { name: 'In 1 hour' })).toBeNull();
@@ -347,7 +351,7 @@ describe('Pick date and time…', () => {
       await settle();
       expect(server.set).toEqual([`${first.id} 2026-09-11T07:15:00.000Z`]);
       expect(markOf(view, 'remember this one')?.textContent).toBe(
-        'Reminder: Sep 11, 2026 at 7:15 AM',
+        `Reminder: ${when('2026-09-11T07:15:00Z')}`,
       );
     } finally {
       view.unmountAll();
