@@ -35,9 +35,10 @@ describe('board workflow', () => {
     for (const line of uses) expect(line).toMatch(/@[0-9a-f]{40} # v\d/);
   });
 
-  test('the token is read-only except for the issues it assigns', () => {
+  test('the token reads by default, and only the job that assigns issues may write them', () => {
+    expect(text).toMatch(/\npermissions:\n {2}contents: read\n\n/);
     expect(text).toMatch(
-      /permissions:\n {2}contents: read\n {2}issues: write\n {2}pull-requests: read\n/,
+      /timeout-minutes: 10\n {4}permissions:\n {6}contents: read\n {6}issues: write\n {6}pull-requests: read\n/,
     );
   });
 
