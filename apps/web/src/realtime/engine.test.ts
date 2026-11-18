@@ -1603,6 +1603,21 @@ describe('Deep Work changed in another tab (#526)', () => {
     expect(stale(IDS.browse)).toBe(false);
   });
 
+  test('reminders changed elsewhere are read again, in that workspace only', () => {
+    const w = world();
+    w.client.setQueryData(keys.reminders(WS), []);
+    w.client.setQueryData(keys.reminders(IDS.browse), []);
+    w.engine.start();
+    w.open();
+    w.client.setQueryData(keys.reminders(WS), []);
+    w.client.setQueryData(keys.reminders(IDS.browse), []);
+    w.deliver(frame({ event: 'REMINDERS_UPDATED', data: { workspaceId: WS }, ts: T0 }));
+    const stale = (workspaceId: string): boolean | undefined =>
+      w.client.getQueryState(keys.reminders(workspaceId))?.isInvalidated;
+    expect(stale(WS)).toBe(true);
+    expect(stale(IDS.browse)).toBe(false);
+  });
+
   test('who is online: the largest version heard wins, whatever order frames come in (D-136)', () => {
     const w = world();
     w.engine.start();
@@ -3574,6 +3589,7 @@ describe('every family of cached reads is read again after the gap a frame can f
     search: { where: 'answer', key: keys.search(WS, 'words', null, null) },
     shared: { where: 'all', key: keys.shared(WS, { view: 'links' }) },
     saved: { where: 'open', key: keys.saved(WS) },
+    reminders: { where: 'open', key: keys.reminders(WS) },
     followedThreads: { where: 'all', key: keys.followedThreads(WS) },
     files: { where: 'answer', key: keys.files(CH) },
     channels: { where: 'both', key: keys.channels(WS) },

@@ -135,6 +135,8 @@ export const aSignedInApi = (overrides: Partial<Api> = {}): Api =>
     unresolved: () => Promise.resolve({ data: [], nextCursor: null }),
     // What every message asks, to mark the saved ones (D-128).
     savedIds: () => Promise.resolve([]),
+    // And the reminders that mark the messages with one: none, unless a test says.
+    listReminders: () => Promise.resolve([]),
     // And its channel's pins, to mark the pinned ones (D-130).
     pins: () => Promise.resolve([]),
     // And its bookmarks, under the header (D-218).

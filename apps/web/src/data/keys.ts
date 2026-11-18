@@ -158,6 +158,8 @@ export const keys = {
   /** Every view of a person's saved messages in a workspace: the ids, and each state's pages. */
   saved: (workspaceId: string) => ['saved', workspaceId] as const,
   savedIds: (workspaceId: string) => ['saved', workspaceId, 'ids'] as const,
+  /** The caller's pending message reminders in a workspace, as the server lists them. */
+  reminders: (workspaceId: string) => ['reminders', workspaceId] as const,
   /** A workspace's issues, every page of every status (D-254). */
   issues: (workspaceId: string) => ['issues', workspaceId] as const,
   /** A channel's files, every page (D-129). */
@@ -178,6 +180,7 @@ export const families = {
   unreads: ['unreads'] as const,
   search: ['search'] as const,
   saved: ['saved'] as const,
+  reminders: ['reminders'] as const,
   files: ['files'] as const,
   channels: ['channels'] as const,
   channelGroups: ['channel-groups'] as const,
