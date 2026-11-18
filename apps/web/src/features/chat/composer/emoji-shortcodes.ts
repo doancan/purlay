@@ -17,12 +17,6 @@ import { insideFence } from './composer-text';
 /** Fewer than this is punctuation (`:D`, `a :) b`), not a name. */
 export const QUERY_MIN = 2;
 
-/** Longer than any name in the table. */
-const QUERY_MAX = 32;
-
-/** What may not stand before the colon: `12:30`, `Note:tada` and `host:80` are not shortcodes. */
-const GLUED = /[\p{L}\p{N}_:/]/u;
-
 /** What a name is written with. */
 const NAME_LETTER = /[\p{L}\p{N}_+-]/u;
 
@@ -47,19 +41,9 @@ const insideInlineCode = (text: string, at: number): boolean =>
  * code. A caret in the middle of a name is moving through it, not writing it.
  */
 export const shortcodeQuery = (text: string, caret: number): ShortcodeQuery | null => {
-  const from = Math.max(0, caret - QUERY_MAX - 1);
-  let at = caret - 1;
-  while (at >= from) {
-    const character = text.charAt(at);
-    if (character === ':') break;
-    if (!NAME_LETTER.test(character)) return null;
-    at -= 1;
-  }
-  if (at < from || text.charAt(at) !== ':') return null;
-  const query = text.slice(at + 1, caret);
-  if (query.length < QUERY_MIN) return null;
-  if (NAME_LETTER.test(text.charAt(caret))) return null;
-  if (at > 0 && GLUED.test(text.charAt(at - 1))) return null;
-  if (insideInlineCode(text, at) || insideFence(text.slice(0, at))) return null;
-  return { start: at, query };
+  const typed = /(?<![\p{L}\p{N}_:/])(:)([\p{L}\p{N}_+-]{2,32})$/u.exec(text.slice(0, caret));
+  if (typed === null || NAME_LETTER.test(text.charAt(caret))) return null;
+  const start = typed.index;
+  if (insideInlineCode(text, start) || insideFence(text.slice(0, start))) return null;
+  return { start, query: typed[2] ?? '' };
 };
