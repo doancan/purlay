@@ -43,6 +43,7 @@ import { EditedMark } from './edit-history';
 import { ReactionBar } from './reactions';
 import { MessageEditor, useEditing } from './editing';
 import { PinnedMark } from '../pins/pin-toggle';
+import { ReminderMark } from '../reminders/reminder-menu';
 import { useActiveRow } from './active-row';
 import { MessageActions } from './message-actions';
 import { useRowStops } from './row-stops';
@@ -259,6 +260,7 @@ const MessageRowView = ({
           <div className="mt-1 flex items-center gap-3 empty:hidden">
             <EditedMark message={message} mine={own} />
             {!deleted && <PinnedMark message={message} />}
+            {!deleted && <ReminderMark message={message} />}
           </div>
         </div>
         {/* A tombstone hides what was shown with the words, as the server does (D-109 §6). */}

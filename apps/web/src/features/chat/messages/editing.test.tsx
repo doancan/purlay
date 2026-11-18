@@ -95,7 +95,7 @@ describe('the menu (D-150)', () => {
     view.unmountAll();
   });
 
-  test("is on every message: Copy link, Copy text, Quote reply, Mark unread, Save and Pin on anybody's, Edit and Delete on one's own", async () => {
+  test("is on every message: Copy link, Copy text, Quote reply, Mark unread, Save, Pin and Remind me on anybody's, Edit and Delete on one's own", async () => {
     const view = await mountChannel({ messages: page([mine, theirs]), api: asMember });
     open(view);
     await openMenu(view, mine);
@@ -108,6 +108,7 @@ describe('the menu (D-150)', () => {
       'Mark unread from here',
       'Save for later',
       'Pin',
+      'Remind me…',
       'Edit',
       'Delete',
     ]);
@@ -123,6 +124,7 @@ describe('the menu (D-150)', () => {
       'Mark unread from here',
       'Save for later',
       'Pin',
+      'Remind me…',
     ]);
     view.unmountAll();
   });

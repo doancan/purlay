@@ -55,6 +55,16 @@ export const useModules = (): readonly string[] => {
 /** Whether this module is run for what is drawn (D-250): a screen, a request or a shortcut of one that is not is not drawn. */
 export const useRuns = (module: string): boolean => useModules().some((id) => id === module);
 
+/**
+ * `useRuns` for a part that is also drawn where there is no session — a message row in a test, or on a page
+ * a person has not signed in to: false there, where `useRuns` would refuse.
+ */
+export const useRunsIfAny = (module: string): boolean => {
+  const session = useContext(SessionContext);
+  const scoped = useContext(WorkspaceModulesContext);
+  return (scoped ?? session?.modules ?? []).some((id) => id === module);
+};
+
 export const SessionGate = ({
   children,
 }: {

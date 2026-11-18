@@ -66,9 +66,7 @@ export const reminderBounds = (
   now: Date,
   zone: Pick<Formatters, 'inputValue'>,
 ): { readonly min: string; readonly max: string } => ({
-  min: zone.inputValue(
-    new Date(Math.ceil((now.getTime() + AHEAD_MIN_MS) / MINUTE_MS) * MINUTE_MS),
-  ),
+  min: zone.inputValue(new Date(Math.ceil((now.getTime() + AHEAD_MIN_MS) / MINUTE_MS) * MINUTE_MS)),
   max: zone.inputValue(new Date(now.getTime() + AHEAD_MAX_MS)),
 });
 
