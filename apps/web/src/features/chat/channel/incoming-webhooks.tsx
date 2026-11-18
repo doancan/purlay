@@ -16,14 +16,13 @@ import { isApiError, isUnconfirmedMutation } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
+import { Icon } from '../../../components/icon';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { TextField } from '../../../ui/text-field';
 import { useToast } from '../../../ui/toast';
 import { useContentPorts } from '../../content/content-ports';
 import { nameOf } from '../../../lib/author';
-
-const sectionTitle = 'text-label font-semibold text-ink';
 
 /** The address a tool posts to: this server's own origin and the path the hook was given. */
 const addressOf = (created: CreatedIncomingWebhook): string =>
@@ -83,7 +82,7 @@ const Setup = ({
   return (
     <section
       aria-labelledby={titleId}
-      className="flex flex-col gap-2 rounded-lg border-hairline border-border-subtle bg-surface-050 p-3"
+      className="flex min-w-0 flex-col gap-3 rounded-md border-hairline border-border-subtle bg-surface-050 p-4"
     >
       <h3 id={titleId} ref={heading} tabIndex={-1} className="text-label font-semibold text-ink">
         {t('hooks.setup.title', { name: created.webhook.name })}
@@ -93,15 +92,16 @@ const Setup = ({
           example: JSON.stringify({ text: t('hooks.setup.example') }),
         })}
       </p>
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border-hairline border-border-subtle bg-surface-100 p-2">
         <span
           data-hook-address=""
-          className="min-w-0 flex-1 truncate font-mono text-label text-ink"
+          className="min-w-0 flex-1 select-all break-all font-mono text-label text-ink"
         >
           {address}
         </span>
         <Button
           variant="ghost"
+          glyph="copy"
           aria-label={t('hooks.setup.copy')}
           onClick={() => {
             copy(address);
@@ -170,9 +170,14 @@ const Hook = ({
   const maker = hook.createdBy === null ? null : nameOf(hook.createdBy, t('user.erased'));
   const made = format.absolute(hook.createdAt);
   return (
-    <li ref={box} className="flex flex-col gap-1 rounded-lg px-2 py-2 hover:bg-surface-200">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-body text-ink">{hook.name}</span>
+    <li
+      ref={box}
+      className="flex min-w-0 flex-col gap-2 border-border-subtle py-4 first:pt-0 not-last:border-b-hairline last:pb-0"
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 wrap-anywhere text-body font-semibold text-ink">
+          {hook.name}
+        </span>
         {!asking && (
           <Button
             variant="dangerQuiet"
@@ -205,6 +210,8 @@ const Hook = ({
         </p>
       )}
       <Button
+        variant="ghost"
+        className="self-start"
         disabled={busy}
         onClick={() => {
           setRotating(true);
@@ -281,9 +288,18 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
   const describe = useDescribeFailure();
   const titleId = useId();
   const [name, setName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
   const [problem, setProblem] = useState<{ field: 'name' | 'form'; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<CreatedIncomingWebhook | null>(null);
+  useEffect(() => {
+    if (adding) nameInput.current?.focus();
+    else if (created === null && wasEditing.current) addButton.current?.focus();
+    wasEditing.current = adding || created !== null;
+  }, [adding, created]);
 
   const hooks = useQuery({
     refetchInterval: 5000,
@@ -306,6 +322,7 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
     try {
       const result = await api.createIncomingWebhook(channel.id, { name: wanted });
       setCreated(result);
+      setAdding(false);
       setName('');
       await accepted(result.webhook.id, result.webhook);
     } catch (failure) {
@@ -333,10 +350,21 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
   };
 
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-2">
-      <h3 id={titleId} className={sectionTitle}>
-        {t('hooks.title')}
-      </h3>
+    <section
+      aria-labelledby={titleId}
+      className="flex min-w-0 flex-col gap-4 rounded-lg border-hairline border-border-subtle bg-surface-100 p-4 max-narrow:p-3"
+    >
+      <header className="flex items-start gap-3">
+        <span className="flex size-control shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted">
+          <Icon name="download" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 id={titleId} className="text-body font-semibold text-ink">
+            {t('hooks.title')}
+          </h3>
+          <p className="text-label text-ink-muted">{t('hooks.body')}</p>
+        </div>
+      </header>
       {hooks.isError ? (
         <div className="flex items-center gap-3">
           <p className="text-body text-ink-muted">{describe(hooks.error)}</p>
@@ -356,7 +384,9 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
           </LoadingStatus>
         )
       ) : hooks.data.length === 0 ? (
-        <p className="text-body text-ink-muted">{t('hooks.empty')}</p>
+        <p className="border-t-hairline border-border-subtle pt-3 text-label text-ink-muted">
+          {t('hooks.empty')}
+        </p>
       ) : (
         <ul className="flex flex-col">
           {hooks.data.map((hook) => (
@@ -383,15 +413,29 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
           {problem.message}
         </p>
       )}
-      {created === null ? (
+      {created === null && (hooks.data?.length ?? 0) > 0 && !adding ? (
+        <div className="flex justify-end border-t-hairline border-border-subtle pt-3">
+          <Button
+            ref={addButton}
+            glyph="add"
+            onClick={() => {
+              setAdding(true);
+            }}
+          >
+            {t('hooks.make')}
+          </Button>
+        </div>
+      ) : created === null ? (
         <form
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-4 border-t-hairline border-border-subtle pt-4"
           onSubmit={(event) => {
             void make(event);
           }}
         >
           <TextField
+            ref={nameInput}
             label={t('hooks.name')}
+            placeholder={t('hooks.namePlaceholder')}
             hint={t('hooks.nameHint')}
             value={name}
             autoComplete="off"
@@ -400,8 +444,19 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
               setName(event.target.value);
             }}
           />
-          <div className="flex justify-end">
-            <Button type="submit" variant="primary" busy={busy}>
+          <div className="flex flex-wrap justify-end gap-2">
+            {adding && (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setAdding(false);
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+            )}
+            <Button type="submit" variant="primary" glyph="add" busy={busy}>
               {t('hooks.make')}
             </Button>
           </div>
@@ -417,7 +472,6 @@ const ChannelWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.
     </section>
   );
 };
-
 /** A new target must never inherit a previous channel's one-time credential or pending result. */
 export const IncomingWebhooks = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
   <ChannelWebhooks key={channel.id} channel={channel} />

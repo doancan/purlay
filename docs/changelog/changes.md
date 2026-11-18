@@ -34,6 +34,7 @@ have it.
 - **Shell** — the rail, the sidebar's workspace row and the screen's header now start on one line and end on the same hairline, where the first two began below an empty 28px strip kept for a desktop shell (D-317)
 - **Settings** — the workspace pages of the menu each carry their own mark (shield, link, table, sliders, group) where four of them shared one key and three shared one pair of people
 - **Appearance** — the dark theme is a near-black with a faint cool tint instead of charcoal grey, and the focus ring and the composer's edge are one moderate blue in both themes, neither loud nor dull (D-318)
+- **Webhooks** — Incoming and outgoing connections have clearer status, grouped controls and compact creation forms that open when needed (D-245, D-312).
 
 ### Fixed
 

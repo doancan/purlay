@@ -7,6 +7,8 @@ import { isApiError } from '../../../data/errors';
 import { useApi } from '../../../data/api-provider';
 import { useDescribeFailure } from '../../../data/failure';
 import { useI18n } from '../../../i18n/i18n-provider';
+import { Icon } from '../../../components/icon';
+import { cn } from '../../../ui/cn';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
 import { Checkbox } from '../../../ui/checkbox';
@@ -98,7 +100,7 @@ const Deliveries = ({
     }
   };
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-3 border-t-hairline border-border-subtle pt-4">
       <h4 className="text-label font-semibold">{t('outHooks.deliveries')}</h4>
       {query.isPending ? (
         <p role="status">{t('common.loading')}</p>
@@ -211,16 +213,28 @@ const Hook = ({
     }
   };
   return (
-    <li className="flex min-w-0 flex-col gap-2 border-b-hairline border-border-subtle py-3">
-      <h4 className="break-words text-body font-semibold">
-        {hook.name} · {hook.paused ? t('outHooks.paused') : t('outHooks.active')}
-      </h4>
-      <p className="break-all font-mono text-caption text-ink-muted">{hook.url}</p>
+    <li className="flex min-w-0 flex-col gap-3 border-border-subtle py-4 first:pt-0 not-last:border-b-hairline last:pb-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="min-w-0 wrap-anywhere text-body font-semibold text-ink">{hook.name}</h4>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 text-caption',
+            hook.paused ? 'text-ink-muted' : 'text-success-text',
+          )}
+        >
+          <Icon name={hook.paused ? 'sending' : 'resolved'} size="sm" />
+          {hook.paused ? t('outHooks.paused') : t('outHooks.active')}
+        </span>
+      </div>
+      <p className="break-all rounded-md bg-surface-050 px-3 py-2 font-mono text-caption text-ink-muted">
+        {hook.url}
+      </p>
       <p className="text-caption text-ink-muted">
         {hook.events.map((event) => t(`outHooks.event.${event}`)).join(' · ')}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
+          variant="ghost"
           busy={busy}
           onClick={() => {
             void run(async () => {
@@ -245,6 +259,9 @@ const Hook = ({
           {t('outHooks.test')}
         </Button>
         <Button
+          variant="ghost"
+          glyph="history"
+          aria-expanded={history}
           onClick={() => {
             setHistory(!history);
           }}
@@ -252,6 +269,7 @@ const Hook = ({
           {t('outHooks.deliveries')}
         </Button>
         <Button
+          variant="ghost"
           disabled={busy}
           onClick={() => {
             setConfirm('rotate');
@@ -270,8 +288,8 @@ const Hook = ({
         </Button>
       </div>
       {confirm !== null && (
-        <div className="flex flex-col gap-2">
-          <p className="text-body">
+        <div className="flex flex-col gap-3 rounded-md border-hairline border-border-subtle bg-surface-050 p-3">
+          <p className="text-label text-ink">
             {confirm === 'rotate' ? t('outHooks.rotateConfirm') : t('outHooks.revokeConfirm')}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -325,9 +343,18 @@ const ChannelOutgoingWebhooks = ({
   const ports = useContentPorts();
   const title = useId();
   const [name, setName] = useState('');
+  const [adding, setAdding] = useState(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const wasEditing = useRef(false);
   const [url, setUrl] = useState('');
   const [selected, setSelected] = useState<readonly WebhookEventType[]>(['message.created']);
   const [created, setCreated] = useState<CreatedOutgoingWebhook | null>(null);
+  useEffect(() => {
+    if (adding) nameInput.current?.focus();
+    else if (created === null && wasEditing.current) addButton.current?.focus();
+    wasEditing.current = adding || created !== null;
+  }, [adding, created]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -363,6 +390,7 @@ const ChannelOutgoingWebhooks = ({
         events: [...selected],
       });
       setCreated(result);
+      setAdding(false);
       setName('');
       setUrl('');
       await reread(result.webhook.id, result.webhook);
@@ -374,11 +402,21 @@ const ChannelOutgoingWebhooks = ({
     }
   };
   return (
-    <section aria-labelledby={title} className="flex min-w-0 flex-col gap-3">
-      <h3 id={title} className="text-label font-semibold text-ink">
-        {t('outHooks.title')}
-      </h3>
-      <p className="text-body text-ink-muted">{t('outHooks.body')}</p>
+    <section
+      aria-labelledby={title}
+      className="flex min-w-0 flex-col gap-4 rounded-lg border-hairline border-border-subtle bg-surface-100 p-4 max-narrow:p-3"
+    >
+      <header className="flex items-start gap-3">
+        <span className="flex size-control shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted">
+          <Icon name="send" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 id={title} className="text-body font-semibold text-ink">
+            {t('outHooks.title')}
+          </h3>
+          <p className="text-label text-ink-muted">{t('outHooks.body')}</p>
+        </div>
+      </header>
       {query.isPending ? (
         <p role="status">{t('common.loading')}</p>
       ) : query.data === undefined ? (
@@ -393,7 +431,9 @@ const ChannelOutgoingWebhooks = ({
           </Button>
         </div>
       ) : query.data.length === 0 ? (
-        <p className="text-body text-ink-muted">{t('outHooks.empty')}</p>
+        <p className="border-t-hairline border-border-subtle pt-3 text-label text-ink-muted">
+          {t('outHooks.empty')}
+        </p>
       ) : (
         <ul className="flex min-w-0 flex-col">
           {query.data.map((hook) => (
@@ -422,12 +462,14 @@ const ChannelOutgoingWebhooks = ({
         </div>
       )}
       {created !== null ? (
-        <div className="flex min-w-0 flex-col gap-2 rounded-lg border-hairline border-border-subtle bg-surface-050 p-3">
+        <div className="flex min-w-0 flex-col gap-3 rounded-md border-hairline border-border-subtle bg-surface-050 p-4">
           <h4 ref={secretHeading} tabIndex={-1} className="text-label font-semibold">
             {t('outHooks.secret')}
           </h4>
           <p className="text-body text-ink-muted">{t('outHooks.secretOnce')}</p>
-          <code className="break-all text-caption">{created.secret}</code>
+          <code className="select-all break-all rounded-md border-hairline border-border-subtle bg-surface-100 p-3 text-label text-ink">
+            {created.secret}
+          </code>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => {
@@ -454,15 +496,29 @@ const ChannelOutgoingWebhooks = ({
           </div>
           {copied && <p role="status">{t('common.copied')}</p>}
         </div>
+      ) : (query.data?.length ?? 0) > 0 && !adding ? (
+        <div className="flex justify-end border-t-hairline border-border-subtle pt-3">
+          <Button
+            ref={addButton}
+            glyph="add"
+            onClick={() => {
+              setAdding(true);
+            }}
+          >
+            {t('outHooks.make')}
+          </Button>
+        </div>
       ) : (
         <form
           onSubmit={(event) => {
             void make(event);
           }}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-4 border-t-hairline border-border-subtle pt-4"
         >
           <TextField
+            ref={nameInput}
             label={t('outHooks.name')}
+            placeholder={t('outHooks.namePlaceholder')}
             {...(fields['name'] === undefined ? {} : { error: t('hooks.nameInvalid') })}
             value={name}
             required
@@ -475,6 +531,7 @@ const ChannelOutgoingWebhooks = ({
             label={t('outHooks.url')}
             {...(fields['url'] === undefined ? {} : { error: t('outHooks.urlInvalid') })}
             type="url"
+            placeholder="https://example.com/webhooks/purlay"
             value={url}
             required
             autoComplete="off"
@@ -482,10 +539,15 @@ const ChannelOutgoingWebhooks = ({
               setUrl(event.target.value);
             }}
           />
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-label">{t('outHooks.events')}</legend>
+          <fieldset className="flex min-w-0 flex-col rounded-md border-hairline border-border-subtle">
+            <legend className="mx-3 px-1 text-label font-medium text-ink">
+              {t('outHooks.events')}
+            </legend>
             {events.map((event) => (
-              <label key={event} className="flex items-start gap-2 text-body">
+              <label
+                key={event}
+                className="flex min-h-control cursor-pointer items-start gap-3 px-3 py-2 text-label text-ink hover:bg-surface-050 max-narrow:min-h-touch"
+              >
                 <Checkbox
                   checked={selected.includes(event)}
                   onChange={(change) => {
@@ -505,10 +567,26 @@ const ChannelOutgoingWebhooks = ({
               {t('outHooks.eventsInvalid')}
             </p>
           )}
-          <p className="text-body text-warning-text">{t('outHooks.disclosure')}</p>
-          <Button type="submit" variant="primary" busy={busy}>
-            {t('outHooks.make')}
-          </Button>
+          <p className="flex items-start gap-2 rounded-md bg-warning-subtle p-3 text-caption text-warning-text">
+            <Icon name="info" size="sm" />
+            {t('outHooks.disclosure')}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            {adding && (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setAdding(false);
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+            )}
+            <Button type="submit" variant="primary" glyph="add" busy={busy}>
+              {t('outHooks.make')}
+            </Button>
+          </div>
         </form>
       )}
       {failure !== null && (
