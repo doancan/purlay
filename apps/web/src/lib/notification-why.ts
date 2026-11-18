@@ -4,7 +4,7 @@
  */
 import type { Channel, Notification } from '@purlay/types';
 import type { Translate } from '../i18n/types';
-import { href, threadHref } from '../router/routes';
+import { href, messageHref, threadHref } from '../router/routes';
 import { authorOf } from './author';
 
 /**
@@ -40,12 +40,16 @@ export const whyOf = (
   }
 };
 
-/** Where a notification takes the person: the thread a reply or a resolution belongs to, or the channel. */
+/**
+ * Where a notification takes the person: the thread a reply or a resolution belongs to, the message a
+ * reminder is about (it may be far up the channel by the time it is due), or the channel.
+ */
 export const targetOf = (slug: string, notification: Notification): string => {
   const { message } = notification;
   if (message.parentId !== null) return threadHref(slug, message.channelId, message.parentId);
   if (notification.type === 'thread_resolved' || notification.type === 'thread_reply') {
     return threadHref(slug, message.channelId, message.id);
   }
+  if (notification.type === 'reminder') return messageHref(slug, message.channelId, message.id);
   return href('channel', { slug, channelId: message.channelId });
 };

@@ -100,6 +100,14 @@ describe('where a notification takes the person', () => {
     );
     expect(at(told(5, 'thread_resolved'))).toBe(`/w/acme/c/${IDS.api}?thread=${messageIdAt(5)}`);
   });
+
+  test('a reminder to the message it is about, and to its thread when that is a reply', () => {
+    const at = (n: Notification): string => targetOf('acme', n);
+    expect(at(told(6, 'reminder'))).toBe(`/w/acme/c/${IDS.api}?message=${messageIdAt(6)}`);
+    expect(at(told(7, 'reminder', { parentId: messageIdAt(1) }))).toBe(
+      `/w/acme/c/${IDS.api}?thread=${messageIdAt(1)}`,
+    );
+  });
 });
 
 describe('the list', () => {
@@ -133,6 +141,26 @@ describe('the list', () => {
     expect(row?.textContent.match(/Bob/g)).toHaveLength(1);
     expect(row?.textContent).not.toContain('·');
     view.unmount();
+  });
+
+  test('a due reminder says so in each language, with the message it is about, and opens on it', async () => {
+    for (const [locale, words] of [
+      [undefined, 'Your message reminder is due'],
+      ['tr', 'Mesaj hatırlatmanın zamanı geldi'],
+    ] as const) {
+      const view = await visit(
+        { notifications: () => Promise.resolve(page([told(6, 'reminder')])) },
+        locale,
+      );
+      const [row] = view.getAllByRole('button', { name: /words 6/ });
+      expect(row?.textContent).toContain(words);
+      expect(row?.textContent).toContain('words 6');
+      await person().click(row as HTMLElement);
+      expect(view.world.history.stack.at(-1)).toBe(
+        `/w/acme/c/${IDS.api}?message=${messageIdAt(6)}`,
+      );
+      view.unmount();
+    }
   });
 
   test('each row says why, who, where and what, and which are unread', async () => {
