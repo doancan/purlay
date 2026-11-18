@@ -3320,7 +3320,7 @@ describe(': offers emoji by name (UX §5)', () => {
     await user.hover(second);
     expect(second.getAttribute('aria-selected')).toBe('true');
     await user.click(second);
-    expect(box().value).toBe(`go ${(second.textContent ?? '').split(':')[0] ?? ''}`);
+    expect(box().value).toBe(`go ${second.textContent.slice(0, second.textContent.indexOf(':'))}`);
     expect(list(view)).toBeNull();
   });
 
