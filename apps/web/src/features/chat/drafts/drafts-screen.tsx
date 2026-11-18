@@ -18,7 +18,7 @@ import { useApi } from '../../../data/api-provider';
 import { keys } from '../../../data/keys';
 import { useChannels } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
-import { href, messageHref, threadHref } from '../../../router/routes';
+import { href, messageHref, scheduledInSearch, threadHref } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
@@ -33,34 +33,19 @@ import {
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
-import { HeaderTile, useChannelTitle } from '../channel/channel-header';
+import { HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { ComposerPortsContext, browserPorts } from '../composer/composer-ports';
 import { listDrafts, writeDraft, type Draft } from '../composer/drafts';
 import { useMessageText } from '../../content/github-event';
 import { useSession } from '../../session/session';
 import { NavToggle } from '../../shell/nav';
+import { Place } from './place';
+import { useCanScheduleMessages } from '../scheduled/capability';
+import { ScheduledList, useScheduledMessages } from '../scheduled/scheduled-list';
 import { useWorkspace } from '../../shell/workspace';
 
-const TABS = ['drafts', 'sent'] as const;
-type Tab = (typeof TABS)[number];
-
-const Place = ({
-  channel,
-  thread,
-}: {
-  readonly channel: Channel;
-  readonly thread: boolean;
-}): React.JSX.Element => {
-  const { t } = useI18n();
-  const title = useChannelTitle(channel);
-  return (
-    <span className="flex items-baseline gap-2 text-label text-ink-muted">
-      <span className="min-w-0 truncate font-medium text-ink">{title}</span>
-      {thread && <span className="shrink-0">· {t('drafts.inThread')}</span>}
-    </span>
-  );
-};
+type Tab = 'drafts' | 'sent' | 'scheduled';
 
 const DraftRow = ({
   draft,
@@ -281,7 +266,19 @@ export const DraftsScreen = (): React.JSX.Element => {
   const { workspace } = useWorkspace();
   const channels = useChannels(workspace.id);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
-  const [tab, setTab] = useState<Tab>('drafts');
+  const { search } = useRoute();
+  const canSchedule = useCanScheduleMessages();
+  // Asked for as soon as the screen opens, so the tab can say how many there are before it is chosen.
+  const scheduled = useScheduledMessages(canSchedule);
+  const [tab, setTab] = useState<Tab>(() =>
+    canSchedule && scheduledInSearch(search) ? 'scheduled' : 'drafts',
+  );
+  const tabs: readonly Tab[] = canSchedule ? ['drafts', 'sent', 'scheduled'] : ['drafts', 'sent'];
+  const count = scheduled.data?.length ?? 0;
+  const tabLabel = (choice: Tab): string =>
+    choice === 'scheduled' && count > 0
+      ? t('drafts.tab.scheduledCount', { count })
+      : t(`drafts.tab.${choice}`);
   return (
     <>
       <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
@@ -297,15 +294,21 @@ export const DraftsScreen = (): React.JSX.Element => {
         <ListFilter
           label={t('drafts.tabs')}
           value={tab}
-          choices={TABS.map((choice) => ({ value: choice, label: t(`drafts.tab.${choice}`) }))}
-          onChange={setTab}
+          choices={tabs.map((choice) => ({ value: choice, label: tabLabel(choice) }))}
+          onChange={(choice) => {
+            setTab(choice);
+            // The list has no push: opening the tab is a reason to ask again.
+            if (choice === 'scheduled') void scheduled.refetch();
+          }}
         />
         {channels.isPending ? (
           <Loading label={t('drafts.loading')} />
         ) : tab === 'drafts' ? (
           <Drafts byId={byId} />
-        ) : (
+        ) : tab === 'sent' ? (
           <Sent byId={byId} />
+        ) : (
+          <ScheduledList query={scheduled} byId={byId} />
         )}
       </ListColumn>
     </>
