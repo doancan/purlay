@@ -153,9 +153,10 @@ describe('the list', () => {
         locale,
       );
       const [row] = view.getAllByRole('button', { name: /words 6/ });
-      expect(row?.textContent).toContain(words);
-      expect(row?.textContent).toContain('words 6');
-      await person().click(row as HTMLElement);
+      if (row === undefined) throw new Error('no row for the reminder');
+      expect(row.textContent).toContain(words);
+      expect(row.textContent).toContain('words 6');
+      await person().click(row);
       expect(view.world.history.stack.at(-1)).toBe(
         `/w/acme/c/${IDS.api}?message=${messageIdAt(6)}`,
       );
