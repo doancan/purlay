@@ -8,7 +8,6 @@ import { createTranslate } from '../../../i18n/translate';
 import { en } from '../../../i18n/catalogue/en';
 import { tr } from '../../../i18n/catalogue/tr';
 import { describeWhen, schedulePresets, type PresetId } from './presets';
-import { checkSendAt, fromInputValue, toInputValue } from './typed-time';
 
 const presetsAt = (now: string, timeZone: string): Partial<Record<PresetId, string>> =>
   Object.fromEntries(
@@ -81,34 +80,6 @@ describe('the presets', () => {
     expect(presetsAt('2026-02-28T10:00:00Z', 'UTC').monday).toBe('2026-03-02T09:00:00.000Z');
     // 2028 is a leap year.
     expect(presetsAt('2028-02-28T10:00:00Z', 'UTC').tomorrow).toBe('2028-02-29T09:00:00.000Z');
-  });
-});
-
-describe('the time that is typed', () => {
-  const istanbul = createFormatters('en', 'Europe/Istanbul');
-  const now = new Date('2026-09-09T12:00:00Z');
-
-  test('is read as a wall-clock time in the viewer’s zone, and written back the same way', () => {
-    const at = fromInputValue('2026-09-10T09:30', istanbul);
-    expect(at?.toISOString()).toBe('2026-09-10T06:30:00.000Z');
-    expect(at === null ? '' : toInputValue(at, istanbul)).toBe('2026-09-10T09:30');
-  });
-
-  test('is nothing when it is empty or not a date and time', () => {
-    for (const value of ['', '2026-09-10', '2026-02-30T10:00', '2026-09-10T24:00', 'soon']) {
-      expect(fromInputValue(value, istanbul)).toBeNull();
-    }
-  });
-
-  test('is refused when it is not a time, in the past, under a minute away or over a year away', () => {
-    const at = (value: string): Date | null => fromInputValue(value, istanbul);
-    expect(checkSendAt(null, now)).toBe('invalid');
-    expect(checkSendAt(at('2026-09-09T14:00'), now)).toBe('tooSoon');
-    expect(checkSendAt(at('2026-09-09T15:00'), now)).toBe('tooSoon');
-    expect(checkSendAt(at('2026-09-09T15:01'), now)).toBe('ok');
-    expect(checkSendAt(at('2026-09-09T14:59'), now)).toBe('tooSoon');
-    expect(checkSendAt(new Date(now.getTime() + 365 * 86_400_000), now)).toBe('ok');
-    expect(checkSendAt(new Date(now.getTime() + 365 * 86_400_000 + 1), now)).toBe('tooFar');
   });
 });
 

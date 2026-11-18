@@ -1,7 +1,7 @@
 /**
  * Any time from a minute to a year away, typed or picked in the browser's own date and time field.
  *
- * The field holds the viewer's wall-clock time, and that is how it is read (`fromInputValue`). A time
+ * The field holds the viewer's wall-clock time, and that is how it is read (`validateReminder`, the same check the reminders make). A time
  * that is not allowed is said in place, as it is typed, and the way on is to change it: nothing is
  * scheduled from here until the time is one the server would accept.
  */
@@ -13,13 +13,7 @@ import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
 import { TextField } from '../../../ui/text-field';
 import { describeWhen, schedulePresets } from './presets';
-import {
-  checkSendAt,
-  fromInputValue,
-  inputBounds,
-  toInputValue,
-  type SendAtCheck,
-} from './typed-time';
+import { reminderBounds, validateReminder } from '../reminders/presets';
 
 export const PickTimeDialog = ({
   onPick,
@@ -36,23 +30,22 @@ export const PickTimeDialog = ({
   // Opens on tomorrow morning: the commonest wish, and one the person only has to confirm.
   const [value, setValue] = useState(() => {
     const tomorrow = schedulePresets(clock(), format).find((preset) => preset.id === 'tomorrow');
-    return tomorrow === undefined ? '' : toInputValue(tomorrow.at, format);
+    return tomorrow === undefined ? '' : format.inputValue(tomorrow.at);
   });
   // Read at every render: the bounds move with the clock, and a dialog left open must not go stale.
   const now = clock();
-  const bounds = inputBounds(now, format);
-  const chosen = fromInputValue(value, format);
-  const check: SendAtCheck = checkSendAt(chosen, now);
-  const error =
-    check === 'ok'
-      ? undefined
-      : t(
-          check === 'invalid'
-            ? 'scheduled.time.invalid'
-            : check === 'tooSoon'
-              ? 'scheduled.time.tooSoon'
-              : 'scheduled.time.tooFar',
-        );
+  const bounds = reminderBounds(now, format);
+  const checked = validateReminder(value, now, format);
+  const chosen = checked.ok ? new Date(checked.at) : null;
+  const error = checked.ok
+    ? undefined
+    : t(
+        checked.reason === 'missing'
+          ? 'scheduled.time.invalid'
+          : checked.reason === 'past'
+            ? 'scheduled.time.tooSoon'
+            : 'scheduled.time.tooFar',
+      );
   return (
     <Dialog
       open
@@ -69,7 +62,7 @@ export const PickTimeDialog = ({
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (chosen === null || check !== 'ok') {
+          if (chosen === null) {
             field.current?.focus();
             return;
           }
@@ -87,7 +80,7 @@ export const PickTimeDialog = ({
             setValue(event.target.value);
           }}
           {...(error === undefined ? {} : { error })}
-          {...(chosen !== null && check === 'ok'
+          {...(chosen !== null
             ? { hint: t('scheduled.dialog.hint', { when: describeWhen(chosen, now, format, t) }) }
             : {})}
         />

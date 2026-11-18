@@ -506,7 +506,7 @@ describe('any other time', () => {
     expect(field.type).toBe('datetime-local');
     expect(field.value).toBe('2026-09-10T09:00');
     expect(field.min).toBe('2026-09-09T12:01');
-    expect(field.max).toBe('2027-09-09T12:00');
+    expect(field.max).toBe('2027-09-09T11:59');
   });
 
   test('says in place what the time will be, and schedules it on Schedule', async () => {

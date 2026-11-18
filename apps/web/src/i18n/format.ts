@@ -46,13 +46,6 @@ export interface Formatters {
    * is the moment after the gap.
    */
   readonly instantOf: (input: string) => string | null;
-  /**
-   * The instant a time of day on a calendar day (`YYYY-MM-DD`) is here, as the API's UTC timestamp. A time the
-   * clocks skip is the first moment after the gap; one they repeat is its first.
-   */
-  readonly dayAt: (isoDay: string, hour: number, minute: number) => string;
-  /** The time of day an instant is here, `HH:mm` on a 24-hour clock in every language. */
-  readonly clock: (value: Date | string) => string;
 }
 
 interface DayWords {
@@ -155,19 +148,16 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
     const [y = 0, m = 1, d = 1, h = 0, min = 0, sec = 0] = wallAt(at);
     return utc(y, m, d, h, min, sec) - (at - (at % 1000));
   };
-  const dayAt = (day: string, hour: number, minute: number): string => {
+  const dayStart = (day: string): string => {
     const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
-    const asUtc = utc(y, m, d, hour, minute);
-    // The offset at the wall time read as UTC is a guess; the offset at the guess is right unless a
-    // clock change falls between them. Of the two, the earliest moment that reads as this wall time
-    // here; a wall time the clocks skip reads as none, and is the first moment after the gap.
+    const asUtc = utc(y, m, d);
+    // The offset at UTC midnight is a guess; the offset at the guess is right unless a clock change
+    // falls between them. Of the two, the earliest moment that is already on that day here.
     const guess = asUtc - offsetAt(asUtc);
     const candidates = [guess, asUtc - offsetAt(guess)].sort((a, b) => a - b);
-    const wanted = [y, m, d, hour, minute, 0].join();
-    const found = candidates.find((at) => wallAt(at).join() === wanted);
-    return new Date(found ?? candidates[1] ?? guess).toISOString();
+    const start = candidates.find((at) => isoDay(at) === day) ?? guess;
+    return new Date(start).toISOString();
   };
-  const dayStart = (day: string): string => dayAt(day, 0, 0);
 
   const inputValue = (at: number): string => {
     const [, , , h = 0, min = 0] = wallAt(at);
@@ -221,7 +211,5 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
     dayStart,
     inputValue: (value) => inputValue(asDate(value).getTime()),
     instantOf,
-    dayAt,
-    clock: (value) => clock.format(asDate(value)),
   };
 };

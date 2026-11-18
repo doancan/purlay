@@ -38,10 +38,9 @@ import { useFeedPorts } from '../channel/feed-ports';
 import { ComposerPortsContext, browserPorts } from '../composer/composer-ports';
 import { listDrafts, writeDraft, type Draft } from '../composer/drafts';
 import { useMessageText } from '../../content/github-event';
-import { useSession } from '../../session/session';
+import { useRunsIfAny, useSession } from '../../session/session';
 import { NavToggle } from '../../shell/nav';
 import { Place } from './place';
-import { useCanScheduleMessages } from '../scheduled/capability';
 import { useScheduledMessages } from '../scheduled/use-scheduled-messages';
 import { useWorkspace } from '../../shell/workspace';
 
@@ -272,7 +271,7 @@ export const DraftsScreen = (): React.JSX.Element => {
   const channels = useChannels(workspace.id);
   const byId = useMemo(() => new Map((channels.data ?? []).map((c) => [c.id, c])), [channels.data]);
   const { search } = useRoute();
-  const canSchedule = useCanScheduleMessages();
+  const canSchedule = useRunsIfAny('chat');
   // Asked for as soon as the screen opens, so the tab can say how many there are before it is chosen.
   const scheduled = useScheduledMessages(canSchedule);
   const [tab, setTab] = useState<Tab>(() =>
