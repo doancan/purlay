@@ -3310,6 +3310,20 @@ describe(': offers emoji by name (UX §5)', () => {
     expect(box().value).toBe(`a ${chosen.slice(0, chosen.indexOf(':'))}`);
   });
 
+  test('a click on a name writes it, and the pointer makes a name the current one', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('go :he');
+    await opened(view);
+    const second = view.getAllByRole('option')[1];
+    if (second === undefined) throw new Error('fewer than two names matched');
+    await user.hover(second);
+    expect(second.getAttribute('aria-selected')).toBe('true');
+    await user.click(second);
+    expect(box().value).toBe(`go ${(second.textContent ?? '').split(':')[0] ?? ''}`);
+    expect(list(view)).toBeNull();
+  });
+
   test('Esc closes the list and keeps the words; the Enter after it sends them', async () => {
     const { view, box, sent, user } = await mount();
     await user.click(box());
