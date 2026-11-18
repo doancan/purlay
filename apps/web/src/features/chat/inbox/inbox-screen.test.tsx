@@ -146,7 +146,7 @@ describe('the list', () => {
   test('a due reminder says so in each language, with the message it is about, and opens on it', async () => {
     for (const [locale, words] of [
       [undefined, 'Your message reminder is due'],
-      ['tr', 'Mesaj hatırlatmanın zamanı geldi'],
+      ['tr', 'Mesaj hatırlatıcının zamanı geldi'],
     ] as const) {
       const view = await visit(
         { notifications: () => Promise.resolve(page([told(6, 'reminder')])) },

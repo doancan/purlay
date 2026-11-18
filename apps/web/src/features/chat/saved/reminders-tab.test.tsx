@@ -12,6 +12,7 @@ import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
 import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
+import { createFormatters } from '../../../i18n/format';
 import { installDom } from '../../../testing/dom';
 import { feedWorld } from '../../../testing/feed-world';
 import { IDS, aMessage, aSession, aSignedInApi, messageIdAt } from '../../../testing/fixtures';
@@ -22,6 +23,9 @@ import { FeedPortsContext } from '../channel/feed-ports';
 import { tabIn } from './saved-screen';
 
 installDom();
+
+/** A time as the page says it: the ICU of the machine decides how, so a test asks the same formatter. */
+const when = (iso: string): string => createFormatters('en', 'UTC').absolute(iso);
 
 const settle = async (): Promise<void> => {
   for (let turn = 0; turn < 4; turn++) {
@@ -98,7 +102,7 @@ describe('the Reminders tab', () => {
     const rows = main.getAllByRole('listitem').map((row) => row.textContent);
     expect(rows[0]).toContain('remind words 1');
     expect(rows[0]).toContain('#api');
-    expect(rows[0]).toContain('Sep 10, 2026 at 8:30 AM');
+    expect(rows[0]).toContain(when('2026-09-10T08:30:00Z'));
     expect(rows[1]).toContain('remind words 2');
     expect(
       view.container.querySelector('time[datetime="2026-09-10T08:30:00.000Z"]'),
