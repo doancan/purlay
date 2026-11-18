@@ -28,7 +28,7 @@
  * the source maps of the initial chunks, so it needs `bun run build:web:mapped`, and fails — rather than passing
  * unproven — when there is none. A bound goes with each chunk, and one with the shell's, set from the measured build
  * with a margin for a feature or two: the shell's 258 KB (2026-11-03: 242.04 KB gzipped, set at 250; 2026-11-07: 250.07 KB with the find's and the inbox's shared contract types, so raised by 6; 2026-11-11: owned departure probes measured 256.58 KB and incoming webhook setup/test contracts bring the combined v0.6.4 build to 256.87 KB, within the one KB added; 2026-11-12: Shared contracts/copy/cache integration measure 257.24 KB versus 256.87 KB in v0.6.4, so D-306 adds one KB) so the 400 KB
- * backstop above is no longer what catches a screen that crept back; chat's 53 KB (45.65 KB, initially set at 50; 2026-11-10: 50.12 KB, raised to 52 for the composer/feed split; 2026-11-17: 52.11 KB, raised to 53 for the owner's editable formatted default, native-command bridge and preserved Markdown source selection. The editor engine is a separate on-demand chunk; link details and the emoji grid load when opened. Shell bounds are unchanged); issues' 3 KB
+ * backstop above is no longer what catches a screen that crept back; chat's 54 KB (45.65 KB, initially set at 50; 2026-11-10: 50.12 KB, raised to 52 for the composer/feed split; 2026-11-17: 52.11 KB, raised to 53 for the owner's editable formatted default, native-command bridge and preserved Markdown source selection; 2026-11-18: 53.51 KB, raised to 54 for message reminders: the More menu's Remind me… and mark, the reminders list and its Saved tab, while the date dialog loads in the deferred chunk. The editor engine is a separate on-demand chunk; link details and the emoji grid load when opened. Shell bounds are unchanged); issues' 3 KB
  * (2026-11-06: 2.70 KB, 11% above). They move up in a commit that says why, as the backstop does.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -45,7 +45,7 @@ export const SHELL_BYTES = 258 * 1024;
  * A module without a bound fails the check, so a bound is chosen when a module is added, with a margin of about a tenth.
  */
 export const MODULE_BYTES: Readonly<Record<string, number>> = {
-  chat: 53 * 1024,
+  chat: 54 * 1024,
   issues: 3 * 1024,
 };
 
