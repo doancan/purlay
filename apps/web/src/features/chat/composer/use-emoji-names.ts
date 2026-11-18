@@ -14,17 +14,13 @@ export const useEmojiNames = (wanted: boolean): EmojiNames | null => {
   const [names, setNames] = useState<EmojiNames | null>(loaded);
   useEffect(() => {
     if (!wanted || names !== null) return;
-    let current = true;
     void import('./emoji-list').then(
       (module) => {
         loaded = module;
-        if (current) setNames(module);
+        setNames(module);
       },
       () => undefined,
     );
-    return (): void => {
-      current = false;
-    };
   }, [wanted, names]);
   return names;
 };
