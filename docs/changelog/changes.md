@@ -35,6 +35,7 @@ have it.
 - **Settings** — the workspace pages of the menu each carry their own mark (shield, link, table, sliders, group) where four of them shared one key and three shared one pair of people
 - **Appearance** — the dark theme is a near-black with a faint cool tint instead of charcoal grey, and the focus ring and the composer's edge are one moderate blue in both themes, neither loud nor dull (D-318)
 - **Webhooks** — Incoming and outgoing connections have clearer status, grouped controls and compact creation forms that open when needed (D-245, D-312).
+- **Operations** — The metrics page finds how long the oldest waiting fact has waited from an index, so a large backlog no longer makes the scrape slower; the count of waiting facts reads an index too.
 
 ### Fixed
 

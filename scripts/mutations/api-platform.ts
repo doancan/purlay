@@ -1394,8 +1394,8 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'outbox-oldest-age-takes-the-newest',
     why: 'the age of the oldest waiting fact is the age of the newest, so a fact stuck for hours reads as fresh (D-288)',
     file: 'apps/api/src/platform/outbox-report.ts',
-    find: "eb.fn.min('created_at')",
-    replace: "eb.fn.max('created_at')",
+    find: ".orderBy('created_at', 'asc')",
+    replace: ".orderBy('created_at', 'desc')",
     tests: ['apps/api/src/platform/outbox-report.integration.test.ts'],
   },
   {
