@@ -9,7 +9,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { apiAs, shellReady } from './support';
+import { apiAs, shellReady, wallClock } from './support';
 
 interface Scheduled {
   readonly id: string;
@@ -69,7 +69,7 @@ test.describe('send later', () => {
     await page.goto(`/w/${world.slug}/c/${world.channelId}`);
     await shellReady(page);
     await writeInBox(page, words);
-    const asked = Date.now();
+    const asked = wallClock().getTime();
 
     await page.getByRole('button', { name: 'Send later' }).click();
     await page.getByRole('menuitem', { name: 'In 1 hour' }).click();
@@ -83,7 +83,7 @@ test.describe('send later', () => {
     expect(held[0]).toMatchObject({ content: words, state: 'pending', parentId: null });
     const sendAt = Date.parse(held[0]?.sendAt ?? '');
     expect(sendAt).toBeGreaterThan(asked + HOUR_MS - 60_000);
-    expect(sendAt).toBeLessThan(Date.now() + HOUR_MS + 60_000);
+    expect(sendAt).toBeLessThan(wallClock().getTime() + HOUR_MS + 60_000);
     await expect(page.locator('[data-message-row]', { hasText: words })).toHaveCount(0);
 
     // View scheduled opens the tab, which counts it and shows it.
@@ -156,12 +156,12 @@ test.describe('send later', () => {
     expect(await world.list()).toEqual([]);
 
     // Three days ahead at 18:30 where the browser is: the field's wall clock, the server's instant.
-    const { typed, instant } = await page.evaluate(() => {
-      const day = new Date(Date.now() + 3 * 24 * 3_600_000);
+    const { typed, instant } = await page.evaluate((now) => {
+      const day = new Date(now + 3 * 24 * 3_600_000);
       const pad = (value: number): string => String(value).padStart(2, '0');
       const local = `${String(day.getFullYear())}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}T18:30`;
       return { typed: local, instant: new Date(local).toISOString() };
-    });
+    }, wallClock().getTime());
     await field.fill(typed);
     await expect(page.getByText(/^Sends .* at 18:30\.$/)).toBeVisible();
     await page.getByRole('button', { name: 'Schedule', exact: true }).click();
