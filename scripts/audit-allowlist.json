@@ -1,8 +1,1 @@
-[
-  {
-    "advisory": "GHSA-fc5q-39xc-vjpf",
-    "package": "picomatch",
-    "reason": "No patched release as of 2026-11-18 (npm latest 4.0.7). Development-only via Knip/Vite/tinyglobby/TypeScript-ESLint and micromatch/Kysely codegen (2.3.2); the exact frozen API production install contains none of these packages. Glob patterns come from checked-in developer/tool configuration, not API requests; untrusted repository/tool configuration must not be executed outside isolated CI. Production-install evidence and residual build-time risk: docs/spikes/picomatch-audit.md. Owner: Görkem; #1438 tracks the patched release and removal. Review by expiry; no automatic renewal.",
-    "expires": "2026-11-25"
-  }
-]
+[]
