@@ -1,9 +1,5 @@
 // Scheduled messages ("Send later"): the caller's own drafts held until a chosen time.
-import {
-  ScheduledMessage,
-  ScheduledMessageList,
-  type ScheduleMessageRequest,
-} from '@purlay/types';
+import { ScheduledMessage, ScheduledMessageList, type ScheduleMessageRequest } from '@purlay/types';
 import type { Http } from '../http';
 import { at, options } from './request';
 

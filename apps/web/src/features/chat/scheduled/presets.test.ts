@@ -13,9 +13,10 @@ import {
   fromInputValue,
   schedulePresets,
   toInputValue,
+  type PresetId,
 } from './presets';
 
-const presetsAt = (now: string, timeZone: string): Record<string, string> =>
+const presetsAt = (now: string, timeZone: string): Partial<Record<PresetId, string>> =>
   Object.fromEntries(
     schedulePresets(new Date(now), createFormatters('en', timeZone)).map((preset) => [
       preset.id,

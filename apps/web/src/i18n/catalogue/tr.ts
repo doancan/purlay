@@ -2628,6 +2628,8 @@ export const tr = {
   'scheduled.time.invalid': 'Bir tarih ve saat gir.',
   'scheduled.time.tooSoon': 'Şu andan en az bir dakika sonrası için bir zaman seç.',
   'scheduled.time.tooFar': 'Önümüzdeki bir yıl içinde bir zaman seç.',
+  'scheduled.time.refused':
+    'Bu zamana izin verilmiyor. Şu andan bir dakika ile bir yıl arasında bir zaman seç.',
   'scheduled.when.today': 'Bugün {time}',
   'scheduled.when.tomorrow': 'Yarın {time}',
   'scheduled.when.on': '{day} {time}',

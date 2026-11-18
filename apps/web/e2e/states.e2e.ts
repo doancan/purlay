@@ -299,7 +299,7 @@ test.describe('the connection', () => {
     await expect(page.locator('textarea[data-composer]')).toBeEnabled();
     // An empty box has nothing to send, and says so with aria-disabled; with a draft in it Send is live.
     await page.locator('textarea[data-composer]').fill('still writing');
-    await expect(page.getByRole('button', { name: /^Send/ })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
     // The bar alone: what is under it is the feed, which depends on the day the seed ran.
     await expect(bar).toHaveScreenshot('connection-lost.png');
 

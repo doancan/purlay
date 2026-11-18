@@ -100,6 +100,9 @@ import { useComposerSize } from './use-composer-size';
 import { KeyHints } from './key-hints';
 import { typedAfterFace, withClosingEmoji, type Emoticon } from './emoticons';
 import { TypingLine } from './typing-line';
+import { useCanScheduleMessages } from '../scheduled/capability';
+import { SendLater } from '../scheduled/send-later';
+import { useScheduleMessage } from '../scheduled/use-schedule-message';
 import { UploadList, useUploads } from './uploads';
 import type { ComposerInput, ComposerKeyEvent } from './composer-input';
 import type { RichInput } from './rich-editor';
@@ -470,14 +473,44 @@ const Inner = ({
     });
   };
 
+  /** What is written, as it would be sent: a face that ends the message becomes its emoji, as the space after it would have made it (D-253). */
+  const writtenWords = (): string =>
+    !sourceMode && richField.current !== null
+      ? trimEnd(richField.current.forSend())
+      : withClosingEmoji(trimEnd(text));
+
+  /**
+   * Why these words cannot be a message, in words — or null. A send and a schedule are refused for
+   * the same reasons, so they ask the same question: a file that failed, a message over the limit, a
+   * character the contract refuses and an `@here` this channel does not allow.
+   */
+  const refusalOf = (content: string): string | null => {
+    // A file that did not upload is the person's to retry or remove: nothing goes without it.
+    if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large'))
+      return t('composer.uploadFailed');
+    const over = unitsOver(content);
+    if (over > 0) return t('composer.tooLong', { count: over });
+    if (content !== '' && !Value.Check(MessageContent, content)) return t('composer.invalid');
+    const mention = broadcastMention(content);
+    return mention === null ? null : t('composer.broadcast', { mention });
+  };
+
+  /** The box and its draft emptied, as a send leaves them: gone from storage now, not a debounce from now (a reload must not bring back what was sent). */
+  const clearWritten = (): void => {
+    uploads.clear();
+    setWaiting(false);
+    fileOffer.set(null);
+    pasteHandler.dismissNotice();
+    latest.current = '';
+    setText('');
+    setError(null);
+    writeDraft(ports.storage, key, '');
+    field.current?.focus();
+  };
+
   /** Sends what is written — or, from a command, the words it wrote (`/me`, `/shrug`). */
   const send = (written?: string): void => {
-    // A face that ends the message becomes its emoji, as the space after it would have made it (D-253).
-    const typed =
-      written ??
-      (!sourceMode && richField.current !== null
-        ? trimEnd(richField.current.forSend())
-        : withClosingEmoji(trimEnd(text)));
+    const typed = written ?? writtenWords();
     // A line that starts with `/` asks for a command (D-214) — unless files go with it, when it is words.
     const line = written === undefined && uploads.items.length === 0 ? parseSlash(typed) : null;
     if (line?.kind === 'unknown') {
@@ -492,24 +525,11 @@ const Inner = ({
     }
     const content = line?.kind === 'escaped' ? line.text : typed;
     if (content === '' && uploads.items.length === 0) return;
-    // A file that did not upload is the person's to retry or remove: nothing goes without it.
-    if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large')) {
-      setWaiting(false);
-      setError(t('composer.uploadFailed'));
-      return;
-    }
-    const over = unitsOver(content);
-    if (over > 0) {
-      setError(t('composer.tooLong', { count: over }));
-      return;
-    }
-    if (content !== '' && !Value.Check(MessageContent, content)) {
-      setError(t('composer.invalid'));
-      return;
-    }
-    const mention = broadcastMention(content);
-    if (mention !== null) {
-      setError(t('composer.broadcast', { mention }));
+    const refusal = refusalOf(content);
+    if (refusal !== null) {
+      if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large'))
+        setWaiting(false);
+      setError(refusal);
       return;
     }
     // Still uploading: it goes when they land, and says so meanwhile (`UX.md` §5).
@@ -535,18 +555,52 @@ const Inner = ({
       return;
     }
     if (hasPartyPopper(content)) celebrate();
-    uploads.clear();
-    setWaiting(false);
-    fileOffer.set(null);
-    pasteHandler.dismissNotice();
-    latest.current = '';
-    setText('');
-    setError(null);
-    // Gone from storage now, not a debounce from now: a reload right after sending must
-    // not bring back what was sent.
-    writeDraft(ports.storage, key, '');
-    field.current?.focus();
+    clearWritten();
     onSent?.(id);
+  };
+
+  const canSchedule = useCanScheduleMessages();
+  const scheduleMessage = useScheduleMessage();
+  /** What is written, held to be sent at `sendAt`: refused for the reasons a send is, and kept where it is when the server says no. */
+  const scheduleLater = (sendAt: Date): void => {
+    const typed = writtenWords();
+    const line = uploads.items.length === 0 ? parseSlash(typed) : null;
+    if (line?.kind === 'unknown' || line?.kind === 'command') {
+      setError(t('scheduled.refuse.command'));
+      return;
+    }
+    const content = line?.kind === 'escaped' ? line.text : typed;
+    if (content === '' && uploads.items.length === 0) {
+      setError(t('scheduled.refuse.empty'));
+      return;
+    }
+    const refusal = refusalOf(content);
+    if (refusal !== null) {
+      setError(refusal);
+      return;
+    }
+    if (uploads.items.some((item) => item.status === 'uploading')) {
+      setError(t('scheduled.refuse.uploading'));
+      return;
+    }
+    const asked = latest.current;
+    setError(null);
+    void scheduleMessage({
+      channelId,
+      ...(parentId === undefined ? {} : { parentId }),
+      content,
+      attachmentIds: uploads.items.flatMap((item) =>
+        item.status === 'ready' ? [item.attachment.id] : [],
+      ),
+      sendAt,
+    }).then((failure) => {
+      if (failure !== null) {
+        setError(failure);
+        return;
+      }
+      // Words typed while it was on its way are the person's, and stay.
+      if (latest.current === asked) clearWritten();
+    });
   };
 
   const onKeyDown = (event: ComposerKeyEvent): void => {
@@ -1053,6 +1107,7 @@ const Inner = ({
             />
             {!compact && <TypingLine channelId={channelId} />}
             {counter}
+            {canSchedule && <SendLater onSchedule={scheduleLater} />}
             {sendButton}
           </div>
           {linkSelection !== null && (

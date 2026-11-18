@@ -194,6 +194,17 @@ export const messageInSearch = (search: string): string | null => {
   return value !== null && ID_SHAPE.test(value) ? value : null;
 };
 
+/** `?tab=scheduled` on the drafts screen's address: it opens on the scheduled messages, as "View scheduled" asks. */
+const TAB_PARAM = 'tab';
+const SCHEDULED_TAB = 'scheduled';
+
+export const scheduledHref = (slug: string): string =>
+  `${href('drafts', { slug })}?${TAB_PARAM}=${SCHEDULED_TAB}`;
+
+/** Whether an address asks the drafts screen to open on its scheduled messages. */
+export const scheduledInSearch = (search: string): boolean =>
+  new URLSearchParams(search).get(TAB_PARAM) === SCHEDULED_TAB;
+
 /**
  * `?q=` on the search screen's address: the words searched for, so Back, a reload and a shared
  * link all come back to the same results.
