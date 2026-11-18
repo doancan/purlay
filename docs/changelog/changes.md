@@ -29,6 +29,7 @@ have it.
 
 ### Added
 
-- **Messages** — Typing a colon and two letters offers emoji by name (`:tada`, `:rocket`); Enter or Tab writes the emoji, and `:tada:` written out becomes it (D-314)
+- **Messages** — Typing a colon and two letters offers emoji by name (`:tada`, `:rocket`); Enter or Tab writes the emoji, and `:tada:` written out becomes it (D-315)
+- **Messages** — remind me about a message: choose *Remind me…* in its More menu for in 20 minutes, in 1 hour, in 3 hours, tomorrow or next Monday at 09:00, or a date and time of your own; the message carries a quiet *Reminder* line, and a new *Reminders* tab in Saved lists, changes and removes them (D-315)
 
 ---
