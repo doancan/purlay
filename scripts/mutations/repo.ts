@@ -59,6 +59,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
+    id: 'board-workflow-runs-the-pull-requests-own-code',
+    why: 'the job that holds a token able to write the board runs whatever a pull request put in the scripts',
+    file: '.github/workflows/board.yml',
+    find: '          ref: ${{ github.event.repository.default_branch }}\n',
+    replace: '          ref: ${{ github.event.pull_request.head.sha }}\n',
+    tests: ['scripts/board-workflow.test.ts'],
+  },
+  {
     id: 'browser-budget-never-measures-again',
     why: 'the pipeline judges one measurement, and a runner’s bad minute fails a change that cannot have moved a screen (D-227)',
     file: '.github/workflows/ci.yml',

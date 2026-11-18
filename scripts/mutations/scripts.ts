@@ -35,14 +35,6 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/board-rules.test.ts'],
   },
   {
-    id: 'board-workflow-runs-the-pull-requests-own-code',
-    why: 'the job that holds a token able to write the board runs whatever a pull request put in the scripts',
-    file: '.github/workflows/board.yml',
-    find: '          ref: ${{ github.event.repository.default_branch }}\n',
-    replace: '          ref: ${{ github.event.pull_request.head.sha }}\n',
-    tests: ['scripts/board-workflow.test.ts'],
-  },
-  {
     id: 'budget-api-runtime-loses-default-heap',
     why: 'The RSS process runs a different heap policy from production, so the budget no longer measures the deployed runtime (D-49).',
     file: 'scripts/budget-api.ts',
