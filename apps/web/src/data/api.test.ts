@@ -1900,3 +1900,49 @@ describe('channel webhook endpoints', () => {
     );
   });
 });
+
+describe('scheduled messages', () => {
+  const scheduled = {
+    id: ID,
+    channelId: ID,
+    parentId: null,
+    content: 'later',
+    attachments: [],
+    sendAt: '2026-09-10T09:00:00.000Z',
+    state: 'pending',
+    sentMessageId: null,
+    failureCode: null,
+    createdAt: WHEN,
+    updatedAt: WHEN,
+  };
+
+  test('the list is the workspace’s and is checked against the contract', async () => {
+    const list = harness([scheduled]);
+    expect(await list.api.listScheduledMessages(ID)).toEqual([scheduled]);
+    expect(list.calls).toEqual([
+      { method: 'GET', url: `/api/workspaces/${ID}/scheduled`, body: undefined },
+    ]);
+    const bad = harness([{ ...scheduled, state: 'later' }]);
+    expect(await bad.api.listScheduledMessages(ID).catch((error: unknown) => error)).toBeInstanceOf(
+      ApiError,
+    );
+  });
+
+  test('scheduling replaces the draft under the id the client chose', async () => {
+    const put = harness(scheduled);
+    const input = { content: 'later', sendAt: scheduled.sendAt };
+    expect(await put.api.scheduleMessage(ID, ID, input)).toEqual(scheduled);
+    expect(put.calls).toEqual([
+      { method: 'PUT', url: `/api/channels/${ID}/scheduled/${ID}`, body: input },
+    ]);
+  });
+
+  test('cancelling asks and reads no answer', async () => {
+    const gone = harness(null);
+    await gone.api.cancelScheduledMessage(ID, ID);
+    expect(gone.calls[0]).toMatchObject({
+      method: 'DELETE',
+      url: `/api/channels/${ID}/scheduled/${ID}`,
+    });
+  });
+});
