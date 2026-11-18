@@ -438,6 +438,30 @@ describe('the endpoints', () => {
     });
   });
 
+  test('message reminders: set or replace, cancel, and the workspace list', async () => {
+    const reminder = { id: ID, message, remindAt: '2026-09-10T08:00:00.000Z', createdAt: WHEN };
+    const set = harness(reminder);
+    expect(await set.api.setMessageReminder(ID, reminder.remindAt)).toEqual(reminder);
+    const cancel = harness(null);
+    await cancel.api.cancelMessageReminder(ID);
+    const list = harness([reminder]);
+    expect(await list.api.listReminders(ID)).toEqual([reminder]);
+    expect(set.calls).toEqual([
+      {
+        method: 'PUT',
+        url: `/api/messages/${ID}/reminder`,
+        body: { remindAt: reminder.remindAt },
+      },
+    ]);
+    expect(cancel.calls).toEqual([
+      { method: 'DELETE', url: `/api/messages/${ID}/reminder`, body: undefined },
+    ]);
+    expect(list.calls[0]).toMatchObject({
+      method: 'GET',
+      url: `/api/workspaces/${ID}/reminders`,
+    });
+  });
+
   test('saved messages: save, move, let go, and the lists (D-128)', async () => {
     const write = harness(null);
     await write.api.saveMessage(ID);
