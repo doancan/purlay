@@ -227,6 +227,37 @@ describe('a day and its start, where the viewer is (D-224)', () => {
   });
 });
 
+describe('a time of day on a calendar day, where the viewer is', () => {
+  const at = (timeZone: string, day: string, hour: number, minute = 0): string =>
+    createFormatters('en', timeZone).dayAt(day, hour, minute);
+
+  test('is the wall clock there, said as the UTC instant', () => {
+    expect(at('UTC', '2026-10-31', 9)).toBe('2026-10-31T09:00:00.000Z');
+    expect(at('Europe/Istanbul', '2026-10-01', 9, 30)).toBe('2026-10-01T06:30:00.000Z');
+    expect(at('Asia/Kolkata', '2026-01-01', 9)).toBe('2026-01-01T03:30:00.000Z');
+  });
+
+  test('keeps the wall clock across a change of the clocks', () => {
+    // New York is at UTC-5 before 8 March 2026 and UTC-4 after it.
+    expect(at('America/New_York', '2026-03-07', 9)).toBe('2026-03-07T14:00:00.000Z');
+    expect(at('America/New_York', '2026-03-09', 9)).toBe('2026-03-09T13:00:00.000Z');
+    expect(at('Europe/Berlin', '2026-10-25', 9)).toBe('2026-10-25T08:00:00.000Z');
+  });
+
+  test('a time the clocks skip is the first moment after the gap; one they repeat is its first', () => {
+    // 02:30 on 8 March 2026 does not exist in New York: the clocks go from 02:00 to 03:00.
+    expect(at('America/New_York', '2026-03-08', 2, 30)).toBe('2026-03-08T07:30:00.000Z');
+    // 01:30 on 1 November 2026 happens twice: the first is still summer time.
+    expect(at('America/New_York', '2026-11-01', 1, 30)).toBe('2026-11-01T05:30:00.000Z');
+  });
+
+  test('reads back as the same time of day', () => {
+    const istanbul = createFormatters('en', 'Europe/Istanbul');
+    expect(istanbul.clock(istanbul.dayAt('2026-12-31', 23, 5))).toBe('23:05');
+    expect(istanbul.clock('2026-12-31T21:30:00.000Z')).toBe('00:30');
+  });
+});
+
 describe('day dividers', () => {
   const now = new Date('2026-10-10T14:40:00Z');
   const f = createFormatters('en', 'UTC');
