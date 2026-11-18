@@ -3257,6 +3257,101 @@ describe('faces become emoji (D-253)', () => {
   });
 });
 
+describe(': offers emoji by name (UX §5)', () => {
+  const list = (view: Mounted['view']): HTMLElement | null =>
+    view.queryByRole('listbox', { name: 'Emoji by name' });
+  /** The names arrive as a chunk of their own, on the first colon: the list is awaited, not assumed. */
+  const opened = async (view: Mounted['view']): Promise<HTMLElement> =>
+    await view.findByRole('listbox', { name: 'Emoji by name' });
+  const options = (view: Mounted['view']): string[] =>
+    view.queryAllByRole('option').map((option) => option.textContent);
+
+  test('a colon and two letters open a list of the names that match, the best one current', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('well :ta');
+    const shown = await opened(view);
+    expect(options(view)[0]).toContain(':');
+    expect(box().getAttribute('aria-controls')).toBe(shown.id);
+    expect(view.getByText(/emoji match/).getAttribute('role')).toBe('status');
+  });
+
+  test('one letter, a time and a face typed as text open nothing', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard(':t 12:30 :D');
+    expect(list(view)).toBeNull();
+    expect(box().getAttribute('aria-controls')).toBeNull();
+  });
+
+  test('Enter writes the emoji where the name was and does not send', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.click(box());
+    await user.keyboard('done :part');
+    await opened(view);
+    expect(options(view)).toEqual(['🥳:partying_face:']);
+    await press(user, '{Enter}');
+    expect(box().value).toBe('done 🥳');
+    expect(box().selectionStart).toBe(box().value.length);
+    expect(list(view)).toBeNull();
+    expect(sent()).toEqual([]);
+  });
+
+  test('↓ moves the current name and Tab chooses it', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('a :he');
+    await opened(view);
+    const first = options(view)[0] ?? '';
+    await press(user, '{ArrowDown}');
+    const chosen = view.getByRole('option', { selected: true }).textContent;
+    expect(chosen).not.toBe(first);
+    await press(user, '{Tab}');
+    expect(box().value).toBe(`a ${chosen.slice(0, chosen.indexOf(':'))}`);
+  });
+
+  test('Esc closes the list and keeps the words; the Enter after it sends them', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.click(box());
+    await user.keyboard(':part');
+    await opened(view);
+    await press(user, '{Escape}');
+    expect(list(view)).toBeNull();
+    expect(box().value).toBe(':part');
+    await press(user, '{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: ':part' }]);
+  });
+
+  test('a name written out in full becomes the emoji at the closing colon', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('ship it :rocke');
+    await opened(view);
+    await user.keyboard('t:');
+    expect(box().value).toBe('ship it 🚀');
+    await user.keyboard(' and :nosuchname:');
+    expect(box().value).toBe('ship it 🚀 and :nosuchname:');
+  });
+
+  test('inside code a colon is code', async () => {
+    const { view, box, user } = await mount();
+    await user.click(box());
+    await user.keyboard('`x :part');
+    expect(list(view)).toBeNull();
+    await user.clear(box());
+    await user.keyboard('```{Shift>}{Enter}{/Shift}:part');
+    expect(list(view)).toBeNull();
+  });
+
+  test('with no list open Enter sends as it always did', async () => {
+    const { box, sent, user } = await mount();
+    await user.click(box());
+    await user.keyboard('time is 12:30');
+    await press(user, '{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: 'time is 12:30' }]);
+  });
+});
+
 describe('links in the writing area', () => {
   test.each(['button', 'shortcut'])(
     '%s opens link details and inserts at the preserved selection',
