@@ -2039,6 +2039,9 @@ export const tr = {
     'Deponun Settings → Webhooks ekranında webhook’u düzenle ve yeni gizli anahtarı yapıştır. Adres ve content type aynı kalır.',
 
   // ── Bir kanalın gelen webhook’ları (D-245) ──────────────────────────────
+  'hooks.body': 'CI, izleme ve diğer araçlardan gelen güncellemeleri bu kanala aktarın.',
+  'hooks.namePlaceholder': 'Örn. Dağıtım bildirimleri',
+  'outHooks.namePlaceholder': 'Örn. Sürüm bildirimleri',
   'hooks.title': 'Gelen webhook’lar',
   'hooks.empty':
     'Gelen webhook yok. Bir tane oluştur; bir CI işi ya da izleme aracı adresiyle buraya mesaj gönderebilir.',

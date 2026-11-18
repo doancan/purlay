@@ -139,6 +139,11 @@ describe('a channel’s incoming webhooks, as an owner sees them', () => {
     await person().click(within(setup).getByRole('button', { name: 'Done' }));
     expect(within(hooks).queryByText(address)).toBeNull();
     expect(within(hooks).getByRole('button', { name: 'Make webhook' })).toBeDefined();
+    expect(within(hooks).queryByLabelText('Posts as')).toBeNull();
+    await person().click(within(hooks).getByRole('button', { name: 'Make webhook' }));
+    expectFocusOn(within(hooks).getByLabelText('Posts as'));
+    await person().click(within(hooks).getByRole('button', { name: 'Cancel' }));
+    expectFocusOn(within(hooks).getByRole('button', { name: 'Make webhook' }));
     view.unmountAll();
   });
 

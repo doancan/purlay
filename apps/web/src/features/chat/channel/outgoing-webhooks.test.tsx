@@ -112,6 +112,15 @@ describe('outgoing channel webhook management', () => {
     await settle();
     expect(within(region).queryByText(secret)).toBeNull();
     expect(within(region).getByText('https://example.com/hook')).toBeDefined();
+    expect(within(region).queryByLabelText('Webhook name')).toBeNull();
+    await person().click(within(region).getByRole('button', { name: 'Create outgoing webhook' }));
+    await person().type(within(region).getByLabelText('Webhook name'), 'Another integration');
+    await person().click(within(region).getByRole('button', { name: 'Cancel' }));
+    expect(within(region).queryByLabelText('Webhook name')).toBeNull();
+    await person().click(within(region).getByRole('button', { name: 'Create outgoing webhook' }));
+    expect(within(region).getByLabelText<HTMLInputElement>('Webhook name').value).toBe(
+      'Another integration',
+    );
     view.unmountAll();
   });
   test('pause, resume, test, rotation confirmation and revoke operate on the selected hook', async () => {

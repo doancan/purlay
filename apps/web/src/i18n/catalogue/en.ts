@@ -2038,6 +2038,9 @@ export const en = {
     'In the repository’s Settings → Webhooks, edit the webhook and paste the new secret. The address and content type stay as they are.',
 
   // ── A channel's incoming webhooks (D-245) ───────────────────────────────
+  'hooks.body': 'Bring updates from CI, monitoring and other tools into this channel.',
+  'hooks.namePlaceholder': 'e.g. Deploy alerts',
+  'outHooks.namePlaceholder': 'e.g. Release notifications',
   'hooks.title': 'Incoming webhooks',
   'hooks.empty': 'No incoming webhook. Connect ERP, n8n or another system to post here.',
   'outHooks.lastRequest': 'Last request {when}: HTTP {status}',
