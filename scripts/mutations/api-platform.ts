@@ -1022,6 +1022,14 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/module-kit/compatibility.test.ts'],
   },
   {
+    id: 'module-pool-capacity-counts-the-core-reserve-as-the-modules',
+    why: 'the arithmetic DEPLOY.md states for many modules counts the core’s fifth as the modules’, so a platform is sized for connections it will not have',
+    file: 'apps/api/src/platform/module-budget.ts',
+    find: 'Math.max(1, poolMax - coreReserve(poolMax));\n\ninterface Share',
+    replace: 'Math.max(1, poolMax);\n\ninterface Share',
+    tests: ['apps/api/src/module-pool-capacity.test.ts'],
+  },
+  {
     id: 'module-request-holds-a-slot-per-connection',
     why: 'a request that holds a transaction and reads again waits for a second slot of its own module’s share, and with a small share waits for itself (MODULES.md §7)',
     file: 'apps/api/src/platform/module-budget.ts',
@@ -1065,7 +1073,7 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'module-share-ignores-core-reserve',
     why: 'the modules together may take the whole pool, so chat and issues busy at once queue the core’s sign-in and session reads (D-269)',
     file: 'apps/api/src/platform/module-budget.ts',
-    find: 'const together = slots(Math.max(1, poolMax - coreReserve(poolMax)));',
+    find: 'const together = slots(modulesPool(poolMax));',
     replace: 'const together = slots(poolMax);',
     tests: ['apps/api/src/platform/module-budget.test.ts'],
   },

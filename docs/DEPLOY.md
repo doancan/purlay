@@ -552,6 +552,18 @@ buys a little and raising it is a decision for the number of nodes times the poo
 included; that cost was measured and is accepted, not cached, because a cache would delay a revoked
 session taking effect.
 
+**Many modules in one pool.** A module's share of the pool (D-266, D-281: a third for issues, the rest for chat)
+is a cap on the connections it holds at once, not a reservation, so the shares may add up to more than the
+pool and that is by design. What the pool promises is that no module is left without a connection, and that
+holds while every module can hold one at the same time. The core keeps a fifth of the pool (at least one, none
+in a pool of one), so the modules may hold `DATABASE_POOL_MAX` less that, together: 8 modules in the default
+pool of 10, 25 in a pool of 31 (31 less 6). So 25 modules need `DATABASE_POOL_MAX` of at least 31; with fewer
+connections the module that arrives last waits behind the others and, past its queue timeout, is answered
+`503 DATABASE_UNAVAILABLE`. The pool is the other side of the arithmetic above: nodes times the pool must stay
+under the database's `max_connections`, so 31 connections on each of three nodes is 93 of the default 100.
+`module-pool-capacity.test.ts` fails when the bundled modules outgrow the default pool, which is the moment
+to raise the default and this paragraph together.
+
 **Memory after a mass reconnect.** Budget the container for the storm, not the steady state. One run
 (2,000 sockets reconnecting with replay, three times in one process, macOS) took the process
 from about 380 MB to 1.2 GB on the first storm and added only 20-50 MB on each of the next two. The

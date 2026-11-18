@@ -82,6 +82,9 @@ export const coreReserve = (poolMax: number): number =>
 
 export const CORE_RESERVE_DIVISOR = 5;
 
+/** What the modules may hold together: the pool less the core's reserve, and at least one. */
+export const modulesPool = (poolMax: number): number => Math.max(1, poolMax - coreReserve(poolMax));
+
 interface Share {
   readonly module: string;
   readonly limits: ModuleBudget;
@@ -110,7 +113,7 @@ export const moduleConnections = (
     shares.set(id, { module: id, limits, slots: slots(limits.maxConcurrent) });
   }
   // Together the modules may have what the pool is, less what the core keeps.
-  const together = slots(Math.max(1, poolMax - coreReserve(poolMax)));
+  const together = slots(modulesPool(poolMax));
   const holds = new WeakMap<RequestScope, Hold>();
 
   const take = async (share: Share, rank: number): Promise<boolean> => {
