@@ -1078,3 +1078,31 @@ test.describe('writing tools', () => {
     await expectNoAxe(page.locator('[data-composer-card]'));
   });
 });
+
+test.describe('an emoji by its name (UX.md §5)', () => {
+  test('a colon and letters offer it, Enter writes the emoji instead of sending, and the closing colon does the same', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    const box = boxOf(page, made.name);
+    await box.click();
+    await box.pressSequentially('shipped :rock');
+    const list = page.getByRole('listbox', { name: 'Emoji by name' });
+    await expect(list.getByRole('option', { name: /:rocket:/ })).toBeVisible();
+    await box.press('Enter');
+    await expect(list).toHaveCount(0);
+    // Chosen, not sent: nothing is in the room yet.
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([]);
+    await box.pressSequentially(' and :tada:');
+    await box.press('Enter');
+    await expectDelivered(page, 'shipped 🚀 and 🎉');
+    expect(await stored((path) => api('dogancan').get(path), made.id)).toEqual([
+      'shipped 🚀 and 🎉',
+    ]);
+  });
+});
