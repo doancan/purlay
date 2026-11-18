@@ -1,0 +1,64 @@
+# The project board's Status, kept in step with the work (bun run queue --apply).
+#
+# Status is derived, not moved by hand: an assignee makes an issue In progress, an open pull request
+# that closes it makes it In review, an open blocker keeps it in the Backlog. A pull request that closes
+# an issue nobody holds assigns its author first, so work started on the web is not invisible.
+#
+# Two things matter for safety. The scripts run from the default branch, never from the pull request's
+# own code, because this job holds a token that can write the board. And GITHUB_TOKEN cannot write a
+# user-owned Project, so BOARD_TOKEN (a fine-grained token with Projects read and write) is a secret
+# the owner adds; without it the apply step is skipped and `bun run queue -- --apply` is run locally.
+name: board
+
+on:
+  issues:
+    types: [assigned, unassigned, closed, reopened]
+  pull_request:
+    types: [opened, reopened, closed, ready_for_review, edited]
+  schedule:
+    # Daily, after the night's merges and releases. Events cover the rest.
+    - cron: '41 4 * * *'
+
+concurrency:
+  group: board
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  stages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BOARD_TOKEN: ${{ secrets.BOARD_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+
+      - name: Give the issues a pull request closes to its author
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.type != 'Bot'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          for number in $(gh pr view "$PULL_REQUEST" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
+            if [ "$(gh issue view "$number" --json assignees --jq '.assignees | length')" = "0" ]; then
+              gh issue edit "$number" --add-assignee "$AUTHOR"
+            fi
+          done
+
+      - name: Write the stages to the board
+        if: env.BOARD_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.BOARD_TOKEN }}
+        run: bun run queue -- --apply
