@@ -4,7 +4,7 @@
  * when the server refuses. The fake clock is the feed's: 2026-09-09 12:00 UTC, and the page is in UTC.
  */
 import { describe, expect, test } from 'bun:test';
-import { act, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, waitFor, within } from '@testing-library/react';
 import type { MessageReminder } from '@purlay/types';
 import { ApiError } from '../../../data/errors';
 import { keys } from '../../../data/keys';
@@ -353,6 +353,33 @@ describe('Pick date and time…', () => {
       expect(markOf(view, 'remember this one')?.textContent).toBe(
         `Reminder: ${when('2026-09-11T07:15:00Z')}`,
       );
+    } finally {
+      view.unmountAll();
+    }
+  });
+
+  test('Cancel closes it and sets nothing; submitting the form asks as the button does', async () => {
+    const server = aServer();
+    const view = await mountChannel({ messages: page([first]), api: server.api });
+    try {
+      await openReminder(view, 'remember this one', 'Remind me…');
+      await person().click(view.getByRole('menuitem', { name: 'Pick date and time…' }));
+      const dialog = await view.findByRole('dialog', { name: 'Remind me about this message' });
+      await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => {
+        expect(view.queryByRole('dialog')).toBeNull();
+      });
+      expect(server.set).toEqual([]);
+
+      await openReminder(view, 'remember this one', 'Remind me…');
+      await person().click(view.getByRole('menuitem', { name: 'Pick date and time…' }));
+      await view.findByRole('dialog', { name: 'Remind me about this message' });
+      const form = field(view).closest('form');
+      if (form === null) throw new Error('the field is in no form');
+      // The browser submits a form of one field on Enter; this DOM does not, so the event is sent.
+      fireEvent.submit(form);
+      await settle();
+      expect(server.set).toEqual([`${first.id} 2026-09-10T09:00:00.000Z`]);
     } finally {
       view.unmountAll();
     }
