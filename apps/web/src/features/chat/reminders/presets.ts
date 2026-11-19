@@ -18,7 +18,7 @@ const MONDAY = 1;
 const AHEAD_MIN_MS = MINUTE_MS;
 const AHEAD_MAX_MS = SCHEDULE_AHEAD_MAX_DAYS * DAY_MS - MINUTE_MS;
 
-export type PresetId = 'in20m' | 'in1h' | 'in3h' | 'tomorrow' | 'monday';
+type PresetId = 'in20m' | 'in1h' | 'in3h' | 'tomorrow' | 'monday';
 
 export interface Preset {
   readonly id: PresetId;

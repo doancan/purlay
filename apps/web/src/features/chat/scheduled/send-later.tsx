@@ -11,7 +11,7 @@ import { RealtimePortsContext } from '../../../realtime/realtime-provider';
 import { systemClock } from '../../../system-clock';
 import { IconButton } from '../../../ui/icon-button';
 import { Menu, MenuItem, MenuSeparator } from '../../../ui/menu';
-import { schedulePresets, type PresetId } from './presets';
+import { schedulePresets, type PresetId, type SchedulePreset } from './presets';
 
 const PickTimeDialog = lazy(() =>
   import('./pick-time-dialog').then((module) => ({ default: module.PickTimeDialog })),
@@ -31,10 +31,11 @@ export const SendLater = ({
   const [opened, setOpened] = useState<Date | null>(null);
   const [picking, setPicking] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  const label = (id: PresetId): string =>
-    id === 'hour'
-      ? t('scheduled.preset.hour')
-      : t(id === 'tomorrow' ? 'scheduled.preset.tomorrow' : 'scheduled.preset.monday', {
+  // Every preset says the clock time it will send at, so a person picks a time and not a duration.
+  const label = (preset: SchedulePreset): string =>
+    preset.id === 'hour'
+      ? t('scheduled.preset.hour', { time: format.inputValue(preset.at).slice(-5) })
+      : t(preset.id === 'tomorrow' ? 'scheduled.preset.tomorrow' : 'scheduled.preset.monday', {
           time: MORNING,
         });
   const choose = (id: PresetId): void => {
@@ -60,7 +61,7 @@ export const SendLater = ({
               choose(preset.id);
             }}
           >
-            {label(preset.id)}
+            {label(preset)}
           </MenuItem>
         ))}
         <MenuSeparator />

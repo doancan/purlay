@@ -11,16 +11,20 @@ import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { MenuItem, MenuSub } from '../../../ui/menu';
 import { useFeedPorts } from '../channel/feed-ports';
-import { reminderPresets, type PresetId } from './presets';
+import { reminderPresets } from './presets';
 import { useReminderActions, useReminderOf } from './use-reminders';
 
-const PRESET_LABELS = {
+/** The presets that are a span from now: they say the clock time they come to, as Send later's do. */
+const SPAN_LABELS = {
   in20m: 'reminders.in20m',
   in1h: 'reminders.in1h',
   in3h: 'reminders.in3h',
+} as const;
+
+const DAY_LABELS = {
   tomorrow: 'reminders.tomorrow',
   monday: 'reminders.monday',
-} as const satisfies Record<PresetId, string>;
+} as const;
 
 /** The menu's reminder entry; `onPick` opens the dialog that asks for a date and time. */
 export const ReminderMenuItem = ({
@@ -63,7 +67,9 @@ export const ReminderMenuItem = ({
             actions.set(message, at);
           }}
         >
-          {t(PRESET_LABELS[id])}
+          {id === 'tomorrow' || id === 'monday'
+            ? t(DAY_LABELS[id])
+            : t(SPAN_LABELS[id], { time: format.inputValue(at).slice(-5) })}
         </MenuItem>
       ))}
       <MenuItem glyph="calendar" onSelect={onPick}>

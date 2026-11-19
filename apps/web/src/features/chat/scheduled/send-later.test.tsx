@@ -178,7 +178,7 @@ describe('the button', () => {
     const items = view.getAllByRole('menuitem').map((item) => item.textContent);
     // Wednesday: an hour from now, tomorrow, next Monday, and any other time.
     expect(items).toEqual([
-      'In 1 hour',
+      'In 1 hour (13:00)',
       'Tomorrow at 09:00',
       'Monday at 09:00',
       'Pick date and time…',
@@ -214,7 +214,7 @@ describe('the button', () => {
     const { view, later, user } = await mount({ locale: 'tr' });
     await user.click(later());
     expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      '1 saat sonra',
+      '1 saat sonra (13:00)',
       'Yarın 09:00',
       'Pazartesi 09:00',
       'Tarih ve saat seç…',
@@ -242,7 +242,7 @@ describe('scheduling what is in the box', () => {
   test('says when, in words, and View scheduled goes to the list', async () => {
     const { view, box, user, choose } = await mount();
     await user.type(box(), 'one hour');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(view.getByText('Scheduled for Today at 13:00')).toBeDefined();
     await user.click(view.getByRole('button', { name: 'View scheduled' }));
     expect(view.world.history.stack.at(-1)).toBe('/w/acme/drafts?tab=scheduled');
@@ -260,7 +260,7 @@ describe('scheduling what is in the box', () => {
     const { view, box, user, choose } = await mount();
     view.world.client.setQueryData(keys.scheduled(IDS.workspace, ME), []);
     await user.type(box(), 'again');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(view.world.client.getQueryState(keys.scheduled(IDS.workspace, ME))?.isInvalidated).toBe(
       true,
     );
@@ -280,14 +280,14 @@ describe('scheduling what is in the box', () => {
   test('is a message of the same words a send would carry: its end trimmed, a slash escaped', async () => {
     const { box, user, choose, asked } = await mount();
     await user.type(box(), '//shrug is a joke  ');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked[0]?.body.content).toBe('/shrug is a joke');
   });
 
   test('a command is not scheduled, and the words stay', async () => {
     const { view, box, user, choose, asked } = await mount();
     await user.type(box(), '/shrug');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(view.getByText('A command can’t be scheduled.')).toBeDefined();
     expect(box().value).toBe('/shrug');
@@ -311,7 +311,7 @@ describe('scheduling what is in the box', () => {
     if (!(picker instanceof HTMLInputElement)) throw new Error('no file picker');
     await user.upload(picker, new File(['plan'], 'plan.txt', { type: 'text/plain' }));
     await settle();
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked[0]?.body).toMatchObject({
       content: 'with a file',
       attachmentIds: [expect.any(String)],
@@ -327,7 +327,7 @@ describe('scheduling what is in the box', () => {
     const picker = view.container.querySelector('input[type="file"]');
     if (!(picker instanceof HTMLInputElement)) throw new Error('no file picker');
     await user.upload(picker, new File(['plan'], 'plan.txt'));
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(
       view.getByText('Wait for the files to finish uploading, then schedule it.'),
@@ -344,7 +344,7 @@ describe('scheduling what is in the box', () => {
     if (!(picker instanceof HTMLInputElement)) throw new Error('no file picker');
     await user.upload(picker, new File(['plan'], 'plan.txt'));
     await settle();
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(
       view.getByText(/A file did not upload/, { selector: '[role="alert"], [role="alert"] *' }),
@@ -355,7 +355,7 @@ describe('scheduling what is in the box', () => {
 describe('what is refused before it is asked, in the words a send uses', () => {
   test('an empty box', async () => {
     const { view, choose, asked } = await mount();
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(view.getByText('Write something or attach a file before scheduling it.')).toBeDefined();
   });
@@ -363,28 +363,28 @@ describe('what is refused before it is asked, in the words a send uses', () => {
   test('words of only spaces', async () => {
     const { view, box, user, choose, asked } = await mount();
     await user.type(box(), '   ');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(view.getByText('Write something or attach a file before scheduling it.')).toBeDefined();
   });
 
   test('a message over the limit, by how much', async () => {
     const { view, choose, asked } = await mount({ draft: 'a'.repeat(MESSAGE_CONTENT_MAX + 2) });
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(view.getByRole('alert').textContent).toContain('2');
   });
 
   test('a mention of everybody this channel does not allow', async () => {
     const { view, choose, asked } = await mount({ draft: 'hey @everyone' });
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(view.getByRole('alert').textContent).toContain('@everyone');
   });
 
   test('a character the contract refuses', async () => {
     const { view, choose, asked } = await mount({ draft: 'bad \u0000 character' });
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked).toEqual([]);
     expect(view.getByRole('alert').textContent).toContain('character');
   });
@@ -400,7 +400,7 @@ describe('when the server does not take it', () => {
       api: refuse('SCHEDULED_MESSAGE_LIMIT'),
     });
     await user.type(box(), 'too many');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     act(() => {
       timers.advance(DRAFT_DEBOUNCE_MS);
     });
@@ -417,7 +417,7 @@ describe('when the server does not take it', () => {
       api: refuse('VALIDATION_FAILED', { sendAt: 'between five seconds and one year from now' }),
     });
     await user.type(box(), 'late');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(view.getByRole('alert').textContent).toContain('That time isn’t allowed.');
     expect(box().value).toBe('late');
   });
@@ -427,7 +427,7 @@ describe('when the server does not take it', () => {
       api: refuse('NETWORK'),
     });
     await user.type(box(), 'offline words');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(view.getByRole('alert').textContent).toBe(
       'Scheduling needs a connection, and there isn’t one right now. Your message is still here.',
     );
@@ -455,10 +455,10 @@ describe('when the server does not take it', () => {
     await choose('Tomorrow at 09:00');
     await choose('Tomorrow at 09:00');
     expect(ids[1]).toBe(ids[0]);
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(ids[2]).not.toBe(ids[0]);
     await user.type(box(), ' and more');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(ids[3]).not.toBe(ids[2]);
     expect(box().value).toBe('');
   });
@@ -466,7 +466,7 @@ describe('when the server does not take it', () => {
   test('another answer is said by what it was, with the words kept', async () => {
     const { view, box, user, choose } = await mount({ api: refuse('CHANNEL_NOT_FOUND') });
     await user.type(box(), 'gone');
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(view.getByRole('alert').textContent).toContain('Your message is still here.');
     expect(box().value).toBe('gone');
   });
@@ -479,7 +479,7 @@ describe('beside a send that is waiting for the network', () => {
     await user.keyboard('{Enter}');
     await user.type(box(), 'and later');
     expect(view.getByRole('button', { name: 'Send later' }).hasAttribute('disabled')).toBe(false);
-    await choose('In 1 hour');
+    await choose(/^In 1 hour/);
     expect(asked.map((one) => one.body.content)).toEqual(['and later']);
   });
 });

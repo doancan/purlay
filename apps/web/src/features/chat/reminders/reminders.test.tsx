@@ -96,15 +96,15 @@ describe('a message with no reminder', () => {
     try {
       await openReminder(view, 'remember this one', 'Remind me…');
       for (const name of [
-        'In 20 minutes',
-        'In 1 hour',
-        'In 3 hours',
+        /^In 20 minutes \(\d\d:\d\d\)$/,
+        /^In 1 hour \(\d\d:\d\d\)$/,
+        /^In 3 hours \(\d\d:\d\d\)$/,
         'Tomorrow at 09:00',
         'Next Monday at 09:00',
         'Pick date and time…',
       ])
         expect(view.getByRole('menuitem', { name })).toBeDefined();
-      await person().click(view.getByRole('menuitem', { name: 'In 1 hour' }));
+      await person().click(view.getByRole('menuitem', { name: /^In 1 hour/ }));
       await settle();
       expect(server.set).toEqual([`${first.id} 2026-09-09T13:00:00.000Z`]);
       expect(markOf(view, 'remember this one')?.textContent).toBe(
@@ -142,7 +142,7 @@ describe('a message with no reminder', () => {
     });
     try {
       await openReminder(view, 'remember this one', 'Remind me…');
-      await person().click(view.getByRole('menuitem', { name: 'In 3 hours' }));
+      await person().click(view.getByRole('menuitem', { name: /^In 3 hours/ }));
       await settle();
       expect(markOf(view, 'remember this one')?.textContent).toBe(
         `Reminder: ${when('2026-09-09T15:00:00Z')}`,
@@ -173,7 +173,7 @@ describe('a message with no reminder', () => {
     });
     try {
       await openReminder(view, 'remember this one', 'Remind me…');
-      await person().click(view.getByRole('menuitem', { name: 'In 1 hour' }));
+      await person().click(view.getByRole('menuitem', { name: /^In 1 hour/ }));
       await settle();
       expect(markOf(view, 'remember this one')).toBeNull();
       await person().click(view.getByRole('button', { name: 'Retry' }));
@@ -203,7 +203,7 @@ describe('a message that has a reminder', () => {
       await openReminder(view, 'remember this one', `Reminder: ${when('2026-09-10T08:30:00Z')}`);
       expect(view.getByRole('menuitem', { name: 'Change…' })).toBeDefined();
       expect(view.getByRole('menuitem', { name: 'Remove reminder' })).toBeDefined();
-      expect(view.queryByRole('menuitem', { name: 'In 1 hour' })).toBeNull();
+      expect(view.queryByRole('menuitem', { name: /^In 1 hour/ })).toBeNull();
     } finally {
       view.unmountAll();
     }
@@ -418,7 +418,7 @@ describe('in Turkish', () => {
         within(rowOf(view, 'and not this one')).getByRole('button', { name: 'Daha fazla' }),
       );
       await person().click(view.getByRole('menuitem', { name: 'Bana hatırlat…' }));
-      expect(view.getByRole('menuitem', { name: '20 dakika sonra' })).toBeDefined();
+      expect(view.getByRole('menuitem', { name: /^20 dakika sonra \(\d\d:\d\d\)$/ })).toBeDefined();
       expect(view.getByRole('menuitem', { name: 'Gelecek pazartesi saat 09:00’da' })).toBeDefined();
       expect(view.getByRole('menuitem', { name: 'Tarih ve saat seç…' })).toBeDefined();
     } finally {
