@@ -3,6 +3,7 @@
  * native `<details>`, so the keyboard and a screen reader open it as they open Advanced filters. The
  * operators are written as typed, in the machine font; what each does is in the reader's language.
  */
+import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 
 const ROWS = [
@@ -18,8 +19,14 @@ const ROWS = [
 export const OperatorHelp = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
-    <details className="text-label text-ink">
-      <summary className="w-fit cursor-pointer rounded-sm py-1 text-ink-muted hover:text-ink">
+    <details className="group text-label text-ink">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-1 text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+        <span
+          aria-hidden="true"
+          className="inline-flex transition-transform duration-hover ease-standard group-open:rotate-90"
+        >
+          <Icon name="expand" size="sm" />
+        </span>
         {t('search.operators.title')}
       </summary>
       <p className="mt-2 text-caption text-ink-muted">{t('search.operators.intro')}</p>

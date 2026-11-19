@@ -419,7 +419,9 @@ const SearchView = ({
           />
           <OperatorHelp />
           <div className="flex justify-end">
-            <Button type="submit">{t('search.run')}</Button>
+            <Button type="submit" variant="primary">
+              {t('search.run')}
+            </Button>
           </div>
         </form>
         <SavedSearches

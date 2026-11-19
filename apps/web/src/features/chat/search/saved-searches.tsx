@@ -56,6 +56,8 @@ export const SavedSearches = ({
     <section className="flex flex-col gap-3" aria-label={t('search.saved')}>
       <Button
         variant="ghost"
+        glyph={open ? 'collapse' : 'expand'}
+        className="self-start"
         aria-expanded={open}
         onClick={() => {
           setOpen(!open);
