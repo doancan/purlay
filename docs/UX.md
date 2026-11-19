@@ -60,7 +60,7 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   later (D-316). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its first place sits in the same top band as the sidebar's workspace row and the screen's header (D-317).
-- **Sidebar (264px)** — a band as tall as the header (48px), ending on the same line (D-317), holds the workspace's row (D-209): its mark, its name and, under it, your role and how many
+- **Sidebar (264px)** — a band as tall as the header, ending on the same line (D-317), holds the workspace's row (D-209): its mark, its name and, under it, your role and how many
   are in it, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
   radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
   channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
