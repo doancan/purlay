@@ -644,7 +644,7 @@ page of the same name.
   owner or an admin may delete anybody's, told it goes on the audit trail. React opens the quick
   set as one row of tiles, the name of the one reached under it and yours marked as chosen, opening
   upward and kept inside the feed so it never covers the composer.
-- **A message that mentions you** fills your own `@name` in the text, and says so to a screen reader;
+- **A message that mentions you** tints your own `@name` in the text (a pale accent wash with the accent's text, D-321), and says so to a screen reader;
   the message has no edge (D-119 §5, amended). A **quotation** is a recessed block with a quote glyph,
   never an edge, so the two cannot be mistaken for each other.
 - **Timestamps** are relative under an hour, then `HH:mm`, then `MMM D`. Absolute time on hover.

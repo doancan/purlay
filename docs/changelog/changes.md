@@ -29,6 +29,7 @@ have it.
 
 ### Changed
 
+- **Messages** — a mention of you is a pale tint behind the accent text instead of a solid blue chip, so a feed with several of them is no longer led by them (D-321)
 - **Search** — the results say how many were found ("2 results", or "20 results so far" while there is more), announced to a screen reader (D-320)
 - **Reminders and Send later** — the menus that offer "In 20 minutes", "In 1 hour" and "In 3 hours" now say the clock time each comes to, as "Tomorrow at 09:00" already did (D-319)
 - **Profile** — an empty Time zone field shows the zone this device would fill in, so the button beside it says what it does
