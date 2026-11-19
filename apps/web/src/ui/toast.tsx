@@ -167,7 +167,7 @@ export const Toaster = ({ dismissLabel }: ToasterProps): React.JSX.Element => {
   return (
     <div
       role="status"
-      className="pointer-events-none fixed bottom-4 left-4 right-4 z-toast flex flex-col items-start gap-2"
+      className="pointer-events-none fixed bottom-16 left-4 right-4 z-toast flex flex-col items-start gap-2 max-narrow:bottom-4"
     >
       {toasts.map((toast) => (
         <div
