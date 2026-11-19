@@ -320,7 +320,7 @@ Refusing these **is** the product. Each is permanent, not deferred. (D-4)
 Audio / video / WebRTC · screen sharing · an app marketplace or plugin directory · a visual
 workflow or automation builder · AI summarization · end-to-end zero-knowledge encryption
 (incompatible with server-side search; self-hosting is our privacy answer) · custom emoji
-management UI · Slack import fidelity · **per-seat billing** · **open core** · message scheduling ·
+management UI · Slack import fidelity · **per-seat billing** · **open core** ·
 polls · status emoji · SAML · a SOC 2 / ISO certification programme until a customer
 contractually requires one (D-28)
 
