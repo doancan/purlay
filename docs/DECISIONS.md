@@ -5439,6 +5439,8 @@ the Starred section, collapsible sections, the typing line and the member stack 
 
 ### D-119. A conversation has two edges: bubbles, and your own messages on the right — reversed by D-187
 
+*Amended by D-321: a mention of you is a tint, no longer a fill (§5).*
+
 **Amends D-100 §avatars-and-no-bubbles, D-110 §5 and `UX.md` §3.** The owner looked at the channel
 drawn to D-118 and asked for it "not like Slack, left and right". The reference is the Superdesign
 draft *Purlay Chat — Left/Right Conversation* (project *Purlay — Chat Screen*), branched from a faithful
@@ -9369,6 +9371,8 @@ sign-in milestone closes.
 archived and the web client is the product, which D-51 was.
 
 ### D-187. One edge again: every message hangs from the left, in no bubble — reverses D-119
+
+*Amended by D-321: a mention of you is a tint, no longer a fill.*
 
 **Reverses D-119 and amends D-150 §1, D-177 and `UX.md` §3, §4.1 and §4.2.** The owner's audit of the interface
 (2026-10-26): messages are to sit on the left "like Slack", everywhere, direct messages included. D-119 had made the
@@ -16114,4 +16118,14 @@ change is `Formatters.inputValue`/`instantOf`, additive.
 **Rejected.** A count on every tab: it turns Drafts and Sent into numbers to keep at zero. A total count from the server for search: the search is paged by cursor and a count would make the server count every match for every query; "so far" is honest and free.
 
 **Cost of reversing.** The two message keys and the status line; the rule is prose.
+
+### D-321. A mention of you is a tint, not a fill — amends D-119 §5, D-187
+
+**Decided by the owner, 2026-11-19**, from a live comparison in the running product, in both themes. D-119 §5 made a mention of you fill your own name (`accent` with `on-accent`) because your own messages, then drawn as `accent-subtle` bubbles, would have swallowed a tint; D-187 kept the fill ("still fills") when it removed the bubbles. With the bubbles gone the reason was gone and the fill stayed: in a feed with several mentions the solid blue chips were the loudest thing on the page, louder than the unread marker.
+
+**What changes.** The name of the person themself in a message gets `accent-subtle` behind `accent-text` and `font-medium`; somebody else's mention stays the accent's text alone, so the two are still told apart by the wash. The pair is already in the contrast table (a mention's tint is named there since D-110), and the check was made on screen: in the light theme a pale blue pill with the deep blue text, in the dark theme the wash is close to the page and the pale blue text carries it, which still reads at once.
+
+**Rejected.** Keeping the fill because the owner chose it twice: the reason given for it no longer holds, and the comparison was made on the real screen, not on tokens. A yellow highlight, as other chat products use: a second accent colour for one purpose (D-110's one accent).
+
+**Cost of reversing.** One class string in `render-content.tsx`, its test and the screenshot baselines.
 
