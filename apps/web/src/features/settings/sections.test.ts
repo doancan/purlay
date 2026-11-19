@@ -49,3 +49,13 @@ test('the channel navigation hint opens only General, with chat, and never other
   ])
     expect(sectionFor(id, 'member', false, ['chat'], [], ['channel.settings.manage'])).toBeNull();
 });
+
+describe('the settings menu’s marks', () => {
+  test('no two pages of one group share a mark, so a long menu can be told apart at a glance', () => {
+    const pages = sectionsFor('owner', true, ['chat', 'issues']);
+    for (const group of new Set(pages.map((page) => page.group))) {
+      const marks = pages.filter((page) => page.group === group).map((page) => page.glyph);
+      expect(new Set(marks).size).toBe(marks.length);
+    }
+  });
+});
