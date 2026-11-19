@@ -6,6 +6,7 @@
 import { Value } from '@sinclair/typebox/value';
 import { useState } from 'react';
 import { SearchFilters } from '@purlay/types';
+import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Select } from '../../../ui/select';
 import { Button } from '../../../ui/button';
@@ -29,8 +30,17 @@ export const AdvancedFilters = ({
     if (Value.Check(SearchFilters, updated)) onChange(updated);
   };
   return (
-    <details open={Object.keys(value).length > 0 || undefined} className="text-label text-ink">
-      <summary className="w-fit cursor-pointer rounded-sm py-1 text-ink-muted hover:text-ink">
+    <details
+      open={Object.keys(value).length > 0 || undefined}
+      className="group text-label text-ink"
+    >
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-1 text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+        <span
+          aria-hidden="true"
+          className="inline-flex transition-transform duration-hover ease-standard group-open:rotate-90"
+        >
+          <Icon name="expand" size="sm" />
+        </span>
         {t('search.filters')}
       </summary>
       <div className="mt-3 grid grid-cols-2 gap-3 max-narrow:grid-cols-1">
