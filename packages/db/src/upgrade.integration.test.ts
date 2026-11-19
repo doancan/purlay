@@ -347,6 +347,7 @@ describe('integration: upgrading from the previous release', () => {
         '0119_directory_native_initialization',
         '0120_workspace_directory_validate',
         '0121_incoming_webhook_evidence',
+        '0122_outbox_pending_age',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
