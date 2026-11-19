@@ -141,7 +141,7 @@ const Prose = ({
           data-mention-me={span.name.toLowerCase() === scope.me ? '' : undefined}
           className={
             span.name.toLowerCase() === scope.me
-              ? 'rounded-sm bg-accent px-1 font-medium text-on-accent'
+              ? 'rounded-sm bg-accent-subtle px-1 font-medium text-accent-text'
               : 'font-medium text-accent-text'
           }
         >
