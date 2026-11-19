@@ -59,9 +59,9 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   each opening its composer, deleted with Undo, what they sent, newest first, and what is **scheduled** to be sent
   later (D-316). Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
-  **Settings** (D-146). Its top is an empty drag strip for the desktop shell (D-14).
-- **Sidebar (264px)** — the workspace's card (D-209): its mark, its name and, under it, your role and how many
-  are in it, framed, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
+  **Settings** (D-146). Its first place sits in the same top band as the sidebar's workspace row and the screen's header (D-317).
+- **Sidebar (264px)** — a band as tall as the header (48px), ending on the same line (D-317), holds the workspace's row (D-209): its mark, its name and, under it, your role and how many
+  are in it, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
   radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
   channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
   **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
