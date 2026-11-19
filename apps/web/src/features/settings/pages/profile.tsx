@@ -219,6 +219,7 @@ const IndependentProfilePage = (): React.JSX.Element => {
             label={t('profile.zoneLabel')}
             hint={t('profile.zoneHint')}
             value={shown('timeZone')}
+            placeholder={deviceZone()}
             list={zonesId}
             autoComplete="off"
             spellCheck={false}
