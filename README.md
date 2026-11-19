@@ -37,7 +37,9 @@ off is kept, exported and erased like any other.
   GitHub PR and issue links rendered as live cards. A thread opens in a panel beside its question,
   which stays in the feed with a status and can be marked **Resolved**; resolved threads stay
   searchable. PDF attachments read inside the conversation, and channels can be grouped under
-  personal headings.
+  personal headings. The writing box is formatted by default (Markdown source one click away) and
+  takes emoji by name (`:tada`); a message can be **sent later** at a time chosen, and any message
+  can carry a **reminder** that comes back in the inbox.
 - **Issues.** A module of its own over the same core; assigning an issue tells the assignee in the
   inbox and by push, in the same step as the assignment.
 - **Realtime.** Messages and updates arrive over a socket and survive an API restart; every action
@@ -155,7 +157,7 @@ documents.
 
 ## Status and what is not built yet
 
-Version 0.5.0 (see [`docs/changelog/v0.5.0.md`](docs/changelog/v0.5.0.md)). Where each phase stands
+Version 0.7.1 (see [`docs/changelog/v0.7.1.md`](docs/changelog/v0.7.1.md)). Where each phase stands
 is the milestone of the same number on the issue board, and `bun run queue` prints what is
 startable now. The honest gaps, kept current in [`docs/MODULES.md`](docs/MODULES.md) §10:
 

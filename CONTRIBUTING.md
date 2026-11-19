@@ -131,6 +131,8 @@ affected. `bun run test:storage` needs the compose Garage and is not part of thi
 | `bun run test:storage` | `bun run db:up` | The attachment store's S3 adapter against Garage, as the deployment runs it. Not in CI, which runs PostgreSQL alone; it refuses without `S3_ENDPOINT` (D-109) |
 | `bun run test:integration` | a database | The tests that exercise real SQL, each inside a transaction that is rolled back (D-46). **They refuse rather than skip** when there is no database — a suite that quietly runs nothing looks exactly like one where everything passed |
 
+**One file at a time:** `bun test --isolate apps/web/src/path/to.test.tsx`, run **from the repository root**. `bunfig.toml` is read from the directory `bun test` runs in, and it holds the Radix preload that the web's DOM tests need: run from `apps/web`, menus and dialogs never open and most web tests fail for no reason of the code's.
+
 **The rest of the commands**, so they are discoverable rather than folklore:
 
 | Command | Does |
