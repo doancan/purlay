@@ -29,6 +29,8 @@ have it.
 
 ### Changed
 
+- **Search** — the Search button is the screen's primary action, and Advanced filters, Search operators and Saved searches open with the product's own chevron, left-aligned like the others, instead of the browser's triangle or a centred label
+- **Inbox** — the read-state filter (All, Unread) sits apart from the kinds (All, Mentions, Direct, Threads, Updates), so the second "All" is no longer read as a sixth kind
 - **Shell** — the rail, the sidebar's workspace row and the screen's header now start on one line and end on the same hairline, where the first two began below an empty 28px strip kept for a desktop shell (D-317)
 - **Settings** — the workspace pages of the menu each carry their own mark (shield, link, table, sliders, group) where four of them shared one key and three shared one pair of people
 - **Appearance** — in the light theme the focus ring and the focused composer's edge are a calmer slate blue instead of the saturated accent blue, still above the 3:1 the focus ring needs on every surface

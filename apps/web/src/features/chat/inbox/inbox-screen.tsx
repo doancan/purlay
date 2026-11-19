@@ -241,15 +241,19 @@ export const InboxScreen = (): React.JSX.Element => {
             onChange={showCategory}
           />
           {category !== 'updates' && (
-            <ListFilter
-              label={t('inbox.show')}
-              value={filter}
-              choices={(['all', 'unread'] as const).map((choice) => ({
-                value: choice,
-                label: t(`inbox.filter.${choice}`),
-              }))}
-              onChange={setFilter}
-            />
+            // What kind of thing (left) and whether it is read (right) are two questions: apart, so the
+            // second "All" is not read as a sixth kind.
+            <div className="ml-auto">
+              <ListFilter
+                label={t('inbox.show')}
+                value={filter}
+                choices={(['all', 'unread'] as const).map((choice) => ({
+                  value: choice,
+                  label: t(`inbox.filter.${choice}`),
+                }))}
+                onChange={setFilter}
+              />
+            </div>
           )}
         </div>
         {body}
