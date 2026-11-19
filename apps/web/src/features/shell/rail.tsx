@@ -114,8 +114,7 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
           : 'flex w-rail shrink-0 flex-col items-center border-r-hairline border-nav-border bg-nav-rail pb-4'
       }
     >
-      <div className="h-drag w-full shrink-0" />
-      {/* The first place sits level with the workspace's name in the sidebar's header. */}
+      {/* The first place sits level with the workspace's name in the sidebar's band and the screen's header. */}
       <div className="flex flex-col items-center gap-4 pt-1">
         {running(modules).flatMap((module) =>
           module.rail.map((entry) => (

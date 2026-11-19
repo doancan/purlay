@@ -20,9 +20,11 @@ export const AppSkeleton = (): React.JSX.Element => (
   <div aria-hidden="true" className="flex h-screen bg-surface-100">
     {/* The rail holds places, not the workspace (D-206): nothing on it to draw before they load. */}
     <div className="w-rail shrink-0 border-r-hairline border-nav-border bg-nav-rail max-narrow:hidden" />
-    <div className="flex w-sidebar shrink-0 flex-col gap-4 border-r-hairline max-narrow:hidden border-nav-border bg-nav-surface px-2 pt-8 pb-3">
-      <Skeleton className="mx-3 w-members" />
-      <div className="flex flex-col gap-2 px-3">
+    <div className="flex w-sidebar shrink-0 flex-col border-r-hairline max-narrow:hidden border-nav-border bg-nav-surface pb-3">
+      <div className="flex h-header shrink-0 items-center border-b-hairline border-nav-border px-5">
+        <Skeleton className="w-members" />
+      </div>
+      <div className="flex flex-col gap-2 px-5 pt-4">
         <Skeleton />
         <Skeleton />
         <Skeleton />
@@ -30,7 +32,10 @@ export const AppSkeleton = (): React.JSX.Element => (
       </div>
     </div>
     <div className="flex min-w-0 flex-1 flex-col">
-      <div className="flex h-header shrink-0 items-center border-b-hairline border-border-subtle px-4">
+      <div
+        data-skeleton-header=""
+        className="flex h-header shrink-0 items-center border-b-hairline border-border-subtle px-4"
+      >
         <Skeleton className="w-sidebar" />
       </div>
       <div className="flex flex-1 flex-col gap-4 px-4 py-4">

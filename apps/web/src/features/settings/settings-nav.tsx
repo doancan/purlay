@@ -95,12 +95,12 @@ export const SettingsNav = (): React.JSX.Element => {
   );
   return (
     <>
-      <div className="flex flex-col gap-1 px-4 pt-3 pb-2">
+      <div className="flex h-header shrink-0 items-center border-b-hairline border-nav-border px-4">
         <h1 className="text-title text-nav-ink">{t('settings.title')}</h1>
       </div>
       <nav
         aria-label={t('settings.title')}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pt-2 pb-4"
       >
         <Link
           to="workspace"

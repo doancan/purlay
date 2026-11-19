@@ -129,7 +129,6 @@ export const sizeTokens = [
   'size-avatar-lg',
   'size-rail-item',
   'size-row',
-  'size-drag',
 ] as const;
 
 export const zIndexTokens = [

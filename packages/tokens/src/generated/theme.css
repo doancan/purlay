@@ -108,7 +108,6 @@
   --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
   --height-row: var(--size-row);
-  --height-drag: var(--size-drag);
   --breakpoint-narrow: 900px;
 
   /* Stroke widths */
