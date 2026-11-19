@@ -330,6 +330,14 @@ describe('your profile, on its page of Settings', () => {
     view.unmount();
   });
 
+  test('an empty time zone shows the zone this device would fill in, before it is pressed', async () => {
+    const view = await openFrame({}, { title: null, timeZone: null, status: null });
+    const zone = field(view, 'Time zone');
+    expect(zone.value).toBe('');
+    expect(zone.placeholder).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    view.unmount();
+  });
+
   test('this device’s time zone is one press away', async () => {
     const sent: UpdateProfileRequest[] = [];
     const view = await openFrame(

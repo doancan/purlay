@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **Profile** — an empty Time zone field shows the zone this device would fill in, so the button beside it says what it does
 
 ---
