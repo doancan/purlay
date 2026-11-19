@@ -440,6 +440,17 @@
 }
 
 /*
+ * A disclosure's summary without the browser's own triangle: the product draws its chevron (`expand`,
+ * turned a quarter when the details is open). Safari still draws its marker unless it is asked not to.
+ */
+@utility disclosure-summary {
+  list-style: none;
+  &::-webkit-details-marker {
+    display: none;
+  }
+}
+
+/*
  * A thin scrollbar that is always drawn, in the theme's tones: what scrolls sideways — a long line
  * of code — says so before it is scrolled. macOS hides an overlay scrollbar until then, which left a
  * line cut at the block's edge with no sign of more. Chromium and Safari draw a styled one always;
