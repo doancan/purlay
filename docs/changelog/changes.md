@@ -29,6 +29,7 @@ have it.
 
 ### Changed
 
+- **Reminders and Send later** — the menus that offer "In 20 minutes", "In 1 hour" and "In 3 hours" now say the clock time each comes to, as "Tomorrow at 09:00" already did (D-319)
 - **Profile** — an empty Time zone field shows the zone this device would fill in, so the button beside it says what it does
 
 ---

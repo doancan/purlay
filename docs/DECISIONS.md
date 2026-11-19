@@ -16011,6 +16011,8 @@ The query stands alone: it is not read after a letter, a digit, another colon or
 
 ### D-315. Message reminders are a Saved tab and a More-menu item, drawn where chat runs — builds on D-128, D-150, D-248
 
+*Amended by D-319: the spans in the menu say the clock time they come to.*
+
 **Context.** The server can remind a person about a message (`PUT`/`DELETE /api/messages/:messageId/reminder`, `GET
 /api/workspaces/:workspaceId/reminders`, `REMINDERS_UPDATED`, a `reminder` inbox notice when due), and the web
 client had no way to ask. The native client already did, behind `capabilities.messageReminders`, which only the
@@ -16055,6 +16057,8 @@ change is `Formatters.inputValue`/`instantOf`, additive.
 
 ### D-316. Send later: the web holds nothing itself, and reads the one fact it needs from the session
 
+*Amended by D-319: "In 1 hour" says the clock time it comes to.*
+
 **Decided by the owner, 2026-11-18.** The server already holds a scheduled message until its time (`PUT` and `DELETE /api/channels/:channelId/scheduled/:scheduledId`, `GET /api/workspaces/:workspaceId/scheduled`, `capabilities.scheduledMessages`, API.md "Scheduled messages"). The web client now uses it, and keeps nothing of its own: no copy of the list on the device, no timer, no queue.
 
 **The button.** Beside Send, in a channel's box and a thread's, a *Send later* button opens a menu: *In 1 hour*, *Tomorrow at 09:00*, *Monday at 09:00* and *Pick date and time…*. Monday is left out on a Sunday, when it is tomorrow, and on a Monday, when the word would read as today. The times are wall-clock times in the viewer's zone, turned into instants by the formatters (`instantOf`, shared with the reminders' presets, D-315), which know the zone's clock changes: *Tomorrow at 09:00* across the night the clocks move is still nine o'clock, and *In 1 hour* is still an hour. They are worked out when the menu opens and again when one is chosen, from the system clock, so a test names the instant. The dialog is the browser's own `datetime-local` field, from a minute to 365 days ahead, which says in place what is wrong with a time and what a good one means; it is loaded when first wanted.
@@ -16090,3 +16094,14 @@ change is `Formatters.inputValue`/`instantOf`, additive.
 **Rejected.** A ring drawn as a translucent halo: it cannot be held to the 3:1 the focus ring must keep over every surface, and a shadow would fight the cards that already carry one. Pure `#000` for the ground: it makes the raised layers look lit from inside and every edge look cut; a faint tint keeps the layers one family. Moving the dark theme to a tinted navy: that is the midnight theme.
 
 **Cost of reversing.** The fourteen values in `tokens.json` and the generated CSS; no component names a colour.
+
+### D-319. A preset that is a span from now says the clock time it comes to — amends D-315, D-316
+
+**Decided by the owner, 2026-11-19**, from a live review of v0.7.1. *Tomorrow at 09:00* and *Monday at 09:00* said when they would happen; *In 20 minutes*, *In 1 hour* and *In 3 hours* said only how long, so a person choosing a time to be reminded or to send at could not see it until the Scheduled list or the Saved tab, after choosing.
+
+**What changes.** The three spans in the Remind me… menu and *In 1 hour* in Send later carry the viewer's clock time in brackets — *In 1 hour (14:00)* — worked out when the menu opens, in the viewer's zone and 24-hour form like the rest of the product's times. What is set is still the span from the moment of choosing, so the minute can differ from the one shown if the menu stayed open.
+
+**Rejected.** Replacing the span with the time (*At 14:00*): people choose "in an hour" by the duration and confirm by the time, so both are shown. A second line under each item: the menu's items are one line everywhere (D-150).
+
+**Cost of reversing.** The five message keys and the two labels; no stored value or contract.
+

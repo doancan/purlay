@@ -656,7 +656,7 @@ page of the same name.
   put back and said with Retry if the server refuses; a saved message's mark is filled.
 - **Remind me…** is in every message's More menu, after Pin (D-315): on any message the person can
   read, a channel's, a thread's reply or a conversation's, and on a phone as on a desktop. Its submenu
-  offers *In 20 minutes*, *In 1 hour*, *In 3 hours*, *Tomorrow at 09:00*, *Next Monday at 09:00* — the
+  offers *In 20 minutes (13:20)*, *In 1 hour (14:00)*, *In 3 hours (16:00)* — each saying the clock time it comes to (D-319) — *Tomorrow at 09:00*, *Next Monday at 09:00* — the
   viewer's own clock, so a clock change moves the hours and not the 09:00, and next Monday is never
   today — and **Pick date and time…**, a dialog with the browser's date-and-time field in the viewer's
   time zone, a minute ahead at the soonest and a year at the latest, starting on tomorrow morning; a
@@ -957,7 +957,7 @@ workspace switch within the same account still preserves waiting uploads and dra
 switch is unforgivable in a tool people live in.
 
 **Send later** (D-316). Beside Send, in a channel's box and in a thread's, an icon button opens a menu of times:
-*In 1 hour*, *Tomorrow at 09:00*, *Monday at 09:00* — left out on a Sunday, when it is tomorrow, and on a Monday,
+*In 1 hour (14:00)* (the clock time said, D-319), *Tomorrow at 09:00*, *Monday at 09:00* — left out on a Sunday, when it is tomorrow, and on a Monday,
 when it would read as today — and *Pick date and time…*, a dialog with the browser's date and time field, in the
 person's zone, from a minute to a year ahead; a time outside that is explained under the field and not
 accepted, and a good one says when it will go. Choosing a time schedules what is in the box, in formatted editing
