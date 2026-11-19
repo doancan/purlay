@@ -1147,7 +1147,7 @@ Decided here so Phase 0 does not invent one at random.
   second) with a system stack behind them while they load (D-110). Base 14px, code 13px, line-height
   1.6 prose / 1.54 code.
 - **Colour:** dark and light ship together (D-98), the OS preference until a person chooses, the
-  choice kept per device. Both are designed together: neutral greys, one blue accent and a navigation
+  choice kept per device. Both are designed together: neutral greys (the dark theme's carry a faint cool tint, and its ground is a near-black, D-318), one blue accent and a navigation
   that is a light neutral in the light theme and the dark navy in the dark (D-110, D-180). Check boxes and radio buttons are one primitive, the browser's input drawn in these tokens (D-182). Every colour pair is computed in both. Never colour alone
   to carry meaning: resolved, failed and unread each pair colour with a glyph or weight, for contrast
   and colour-blindness both.
