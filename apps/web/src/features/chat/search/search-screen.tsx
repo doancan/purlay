@@ -293,6 +293,10 @@ const SearchView = ({
   } else if (found.length > 0) {
     body = (
       <>
+        {/* What came back, said before the list and announced: a screen reader hears the answer, not only the list. */}
+        <p role="status" className="text-label text-ink-muted">
+          {t(query.hasNextPage ? 'search.countSoFar' : 'search.count', { count: found.length })}
+        </p>
         <ListCard label={t('search.title')}>
           {found.map((message) => (
             <Found

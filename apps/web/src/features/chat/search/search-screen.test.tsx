@@ -190,8 +190,11 @@ describe('asking', () => {
       },
       { path: '/w/acme/search?q=deploy' },
     );
+    // Said before the list: one so far while there is more, the whole number when there is not.
+    expect(view.getByText('1 result so far')).toBeDefined();
     await person().click(view.getByRole('button', { name: 'Load more' }));
     await settle();
+    expect(view.getByText('2 results')).toBeDefined();
     expect(asked).toEqual([undefined, messageIdAt(4)]);
     expect(view.getByRole('button', { name: /deploy two/ })).toBeDefined();
     view.unmount();
