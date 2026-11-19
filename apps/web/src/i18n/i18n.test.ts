@@ -93,6 +93,13 @@ describe('looking a message up', () => {
     );
   });
 
+  test('an open question that has waited one day says "1 day", not "1 days"', () => {
+    expect(t('questions.waiting', { count: 0 })).toBe('Waiting 0 days');
+    expect(t('questions.waiting', { count: 1 })).toBe('Waiting 1 day');
+    expect(t('questions.waiting', { count: 3 })).toBe('Waiting 3 days');
+    expect(createTranslate('tr', tr)('questions.waiting', { count: 1 })).toBe('1 gündür bekliyor');
+  });
+
   test('chooses the plural form the language says', () => {
     expect(t('thread.replies', { count: 1 })).toBe('1 reply');
     expect(t('thread.replies', { count: 4 })).toBe('4 replies');

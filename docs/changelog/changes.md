@@ -33,5 +33,8 @@ have it.
 - **Settings** — the workspace pages of the menu each carry their own mark (shield, link, table, sliders, group) where four of them shared one key and three shared one pair of people
 - **Appearance** — in the light theme the focus ring and the focused composer's edge are a calmer slate blue instead of the saturated accent blue, still above the 3:1 the focus ring needs on every surface
 
+### Fixed
+
+- **Open questions** — a question that has waited one day says "Waiting 1 day" instead of "Waiting 1 days"
 
 ---

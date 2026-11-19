@@ -239,7 +239,7 @@ const QuestionRow = ({
             {textOf(question)}
           </span>
           <span className="block text-caption text-ink-muted">
-            {t('questions.waiting', { days: String(age) })}
+            {t('questions.waiting', { count: age })}
             {' · '}
             {owner?.user.displayName ?? t('knowledge.unassigned')}
           </span>

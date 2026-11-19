@@ -558,7 +558,7 @@ export const en = {
   'questions.sort': 'Order',
   'questions.oldest': 'Longest waiting first',
   'questions.newest': 'Newest first',
-  'questions.waiting': 'Waiting {days} days',
+  'questions.waiting': { one: 'Waiting {count} day', other: 'Waiting {count} days' },
   'search.clear': 'Clear advanced filters',
   'search.filters': 'Advanced filters',
   'search.status': 'Thread status',
