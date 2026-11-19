@@ -568,7 +568,7 @@ export const tr = {
   'questions.sort': 'Sıralama',
   'questions.oldest': 'En uzun bekleyen önce',
   'questions.newest': 'En yeni önce',
-  'questions.waiting': '{days} gündür bekliyor',
+  'questions.waiting': { other: '{count} gündür bekliyor' },
   'search.clear': 'Gelişmiş filtreleri temizle',
   'search.filters': 'Gelişmiş filtreler',
   'search.status': 'Konu durumu',
