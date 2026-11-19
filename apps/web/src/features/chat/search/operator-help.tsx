@@ -20,12 +20,12 @@ export const OperatorHelp = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
     <details className="group text-label text-ink">
-      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-1 text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
-        <span
-          aria-hidden="true"
-          className="inline-flex transition-transform duration-hover ease-standard group-open:rotate-90"
-        >
+      <summary className="flex w-fit cursor-pointer disclosure-summary items-center gap-1 rounded-sm py-1 text-ink-muted hover:text-ink">
+        <span aria-hidden="true" className="inline-flex group-open:hidden">
           <Icon name="expand" size="sm" />
+        </span>
+        <span aria-hidden="true" className="hidden group-open:inline-flex">
+          <Icon name="collapse" size="sm" />
         </span>
         {t('search.operators.title')}
       </summary>
