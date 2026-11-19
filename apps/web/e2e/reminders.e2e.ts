@@ -6,6 +6,7 @@
  * A room of the test's own (`support.ts`): specs run in parallel against one world, and the words carry the
  * room's name so another spec's message is never the one found.
  */
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { isNarrow, openNav, railLink, shellReady } from './support';
 
@@ -18,6 +19,21 @@ interface Reminders {
 const DUE_WITHIN_MS = 45_000;
 
 /** The server's own clock, from the `Date` header of its answer: it is what judges a reminder's time. */
+/**
+ * Chooses an item of the submenu that is open, the way a hand does: the pointer travels there over several
+ * moves. The browser tests' pointer otherwise jumps in one step, which leaves no path through the submenu's
+ * pointer-grace area, and WebKit then closes the submenu before the click lands (measured: three of eight
+ * runs sent no request at all).
+ */
+const chooseInSubmenu = async (page: Page, name: string): Promise<void> => {
+  const item = page.getByRole('menuitem', { name });
+  await expect(item).toBeVisible();
+  const box = await item.boundingBox();
+  if (box === null) throw new Error(`the submenu item ${name} has no box to point at`);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
+  await item.click();
+};
+
 const serverNow = async (baseURL: string): Promise<number> => {
   const stamp = (await fetch(`${baseURL}/health`)).headers.get('date');
   expect(stamp, 'the server answers with a Date header').toBeTruthy();
@@ -49,7 +65,7 @@ test.describe('message reminders', () => {
     await row.hover();
     await row.getByRole('button', { name: 'More' }).click();
     await page.getByRole('menuitem', { name: 'Remind me…' }).click();
-    await page.getByRole('menuitem', { name: 'In 1 hour' }).click();
+    await chooseInSubmenu(page, 'In 1 hour');
 
     const mark = row.locator('[data-reminder-mark]');
     await expect(mark).toBeVisible();
