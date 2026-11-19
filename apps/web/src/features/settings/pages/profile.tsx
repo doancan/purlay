@@ -34,9 +34,6 @@ import { CompanySessionNotice } from './company-parts';
 const zonesHere = (): readonly string[] =>
   typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
 
-/** This device's own zone. */
-const deviceZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
-
 type Field = 'title' | 'timeZone' | 'status';
 const FIELDS: readonly Field[] = ['title', 'timeZone', 'status'];
 
@@ -70,6 +67,8 @@ const IndependentProfilePage = (): React.JSX.Element => {
   const describe = useDescribeFailure();
   const formId = useId();
   const zonesId = useId();
+  // What this device would fill in: shown as the empty field's placeholder, and what the button writes.
+  const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { user, profile, nameFromGitHub } = useSession();
   const [edited, setEdited] = useState<Partial<Record<Field, string>>>({});
   // Each field the server refused, with what to say; `form` for what names no field.
@@ -219,7 +218,7 @@ const IndependentProfilePage = (): React.JSX.Element => {
             label={t('profile.zoneLabel')}
             hint={t('profile.zoneHint')}
             value={shown('timeZone')}
-            placeholder={deviceZone()}
+            placeholder={deviceZone}
             list={zonesId}
             autoComplete="off"
             spellCheck={false}
@@ -233,7 +232,7 @@ const IndependentProfilePage = (): React.JSX.Element => {
                 disabled={busy}
                 className="-ml-3"
                 onClick={() => {
-                  edit('timeZone', deviceZone());
+                  edit('timeZone', deviceZone);
                 }}
               >
                 {t('profile.zoneHere')}
