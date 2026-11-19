@@ -311,7 +311,7 @@ describe('what a row shows', () => {
     expect(other.getAllByRole('article').at(-1)?.tabIndex).toBe(-1);
   });
 
-  test('a mention of the person fills their name, says so in words, and leaves the body unmarked', async () => {
+  test('a mention of the person tints their name, says so in words, and leaves the body unmarked', async () => {
     // An edge on the bubble read as a quote (owner, 2026-10-13): the name itself carries it now.
     const view = await mount(
       props({ message: aMessage(1, { mentions: [ME.id], content: 'hi @dogancan' }) }),
@@ -322,8 +322,10 @@ describe('what a row shows', () => {
     expect(view.getByRole('article').textContent).toContain('You were mentioned');
     const name = view.getByText('@dogancan');
     expect(name.hasAttribute('data-mention-me')).toBe(true);
-    expect(name.className).toContain('bg-accent');
-    expect(name.className).toContain('text-on-accent');
+    // A pale accent wash with the accent's own text (D-321): marked, and never louder than the words around it.
+    expect(name.className).toContain('bg-accent-subtle');
+    expect(name.className).toContain('text-accent-text');
+    expect(name.className).not.toContain('text-on-accent');
   });
 
   test("somebody else's mention is highlighted in the text and does not mark the body", async () => {
@@ -334,6 +336,8 @@ describe('what a row shows', () => {
     expect(bubble?.className).not.toContain('border-accent-text');
     expect(view.getByText('@bob').className).toContain('text-accent-text');
     expect(view.getByText('@bob').hasAttribute('data-mention-me')).toBe(false);
+    // The wash is the person's own: somebody else's mention is the text colour alone.
+    expect(view.getByText('@bob').className).not.toContain('bg-accent');
   });
 
   test('a mention of a person the workspace does not list is plain text', async () => {
