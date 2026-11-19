@@ -83,13 +83,12 @@ export const WorkspaceMenu = (): React.JSX.Element => {
       <Menu
         side="bottom"
         trigger={
-          // A card (D-209): framed and lifted off the column, the workspace's mark, its name, and who
-          // you are in it — so the one door to the workspace says which, at a glance, and looks like one.
-          // Hover tints the fill in the accent's family and open frames it in the accent: the edge's
+          // The workspace's mark, its name, and who you are in it, in the sidebar's top band: the one door to the
+          // workspace says which, at a glance. Hover tints the fill and open frames it in the accent: the edge's
           // grammar (D-188) — hover changes the fill, never the line.
           <button
             type="button"
-            className="group flex min-w-0 flex-1 items-center gap-2 rounded-xl border-hairline border-nav-border bg-nav-surface p-1 pr-2 text-left shadow-card transition-colors duration-hover ease-standard hover:bg-nav-selected data-[state=open]:border-accent data-[state=open]:bg-nav-selected max-narrow:min-h-touch"
+            className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg border-hairline border-transparent p-1 pr-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-selected data-[state=open]:border-accent data-[state=open]:bg-nav-selected max-narrow:min-h-touch"
           >
             {/* A picture of the workspace, as an avatar's initials are; the name beside it says it. */}
             <span

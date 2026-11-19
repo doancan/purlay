@@ -21,7 +21,7 @@ test.describe('before JavaScript', () => {
     const narrow = (page.viewportSize()?.width ?? 0) < 900;
     if (narrow) await expect(root.locator('div.w-sidebar')).toBeHidden();
     else await expect(root.locator('div.w-sidebar')).toBeVisible();
-    await expect(root.locator('div.h-header').first()).toBeVisible();
+    await expect(root.locator('[data-skeleton-header]')).toBeVisible();
     expect(await root.locator('span.bg-surface-200').count()).toBeGreaterThanOrEqual(8);
     // Hidden from assistive technology: nothing to read yet, and "block, block, block" is noise.
     await expect(root.locator('[aria-hidden="true"]').first()).toBeAttached();
@@ -60,7 +60,7 @@ test.describe('the swap', () => {
     await before.goto(route);
     const skeleton = await before.evaluate(() => {
       const sidebar = document.querySelector('#root div.w-sidebar');
-      const header = document.querySelector('#root div.h-header');
+      const header = document.querySelector('#root [data-skeleton-header]');
       return {
         sidebarWidth: sidebar?.getBoundingClientRect().width ?? -1,
         headerHeight: header?.getBoundingClientRect().height ?? -1,

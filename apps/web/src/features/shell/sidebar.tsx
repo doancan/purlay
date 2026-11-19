@@ -47,7 +47,6 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
         overlay ? 'h-full' : 'border-r-hairline border-nav-border',
       )}
     >
-      <div className="h-drag shrink-0" />
       {settings ? (
         <LazySettingsNav />
       ) : (
@@ -57,14 +56,14 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           userId={user.id}
           workspaceId={workspace.id}
         >
-          {/* The workspace's card (D-209) is taller than a row: room below it, so the jump field under it
-              reads as the next thing and not as part of the card. */}
-          <div className="flex shrink-0 items-center gap-1 px-2 pt-1 pb-3">
+          {/* The workspace's band is as tall as the header beside it and ends on the same line, so the
+              first row of the sidebar and the first row of the screen read as one. */}
+          <div className="flex h-header shrink-0 items-center gap-1 border-b-hairline border-nav-border px-2">
             <WorkspaceMenu />
             <SidebarOptions />
           </div>
           <WhenRun module="chat">
-            <div className="px-2 pb-3">
+            <div className="px-2 py-3">
               <JumpField />
             </div>
           </WhenRun>

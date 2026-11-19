@@ -62,7 +62,6 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-focus-offset': '--outline-offset-focus',
   'size-rail-item': '--size-rail-item',
   'size-row': '--height-row',
-  'size-drag': '--height-drag',
 };
 
 /** The one size that is not a size: a viewport width, written as a literal because a media query cannot read a variable. */
