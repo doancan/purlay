@@ -105,9 +105,6 @@ import {
   ZoomIn,
   ListChecks,
   ShieldCheck,
-  Smartphone,
-  BookUser,
-  UserCog,
   UsersRound,
 } from 'lucide-react';
 
@@ -226,12 +223,6 @@ const glyphs = {
   audit: ScrollText,
   /** The workspace's sign-in and session rules, as a policy rather than one key. */
   shield: ShieldCheck,
-  /** A second factor held on a phone: the workspace authenticator. */
-  device: Smartphone,
-  /** The company directory: a book of people the workspace can be filled from. */
-  directory: BookUser,
-  /** What a role lets a person do. */
-  roles: UserCog,
   /** A named set of people that access is given to as one. */
   groups: UsersRound,
   /** How long the workspace keeps what was said. */
