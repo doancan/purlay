@@ -1155,7 +1155,7 @@ Decided here so Phase 0 does not invent one at random.
 - **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread folds
   on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, the
   inbox panel, a tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
-  fades as the dialog opens like the palette; a toast rises into its corner (D-211). No message entry
+  fades as the dialog opens like the palette; a toast rises into its corner (D-211), above the sidebar's account row and not over it (D-322). No message entry
   animation — at conversational speed it reads as lag. The selected tab of a side-by-side group slides to
   its new place in 200ms. The one longer motion is a celebration: sending 🎉 (in a message or as a
   reaction) sets off a one-shot SVG firework show over the screen (about 3s, one of five shows, never looping, the token gate's single
