@@ -2477,6 +2477,8 @@ export const en = {
   'search.prompt':
     'The words as typed, ignoring case, in every channel you can see — replies and resolved threads too.',
   'search.more': 'Load more',
+  'search.count': { one: '{count} result', other: '{count} results' },
+  'search.countSoFar': { one: '{count} result so far', other: '{count} results so far' },
   'state.search.empty.title': 'No matches for “{words}”',
   'state.search.empty.body':
     'Searched every channel you can see. A deleted message is never found.',

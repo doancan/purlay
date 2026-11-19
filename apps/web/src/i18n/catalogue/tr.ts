@@ -2471,6 +2471,8 @@ export const tr = {
   'search.prompt':
     'Yazdığın kelimeler, büyük küçük harf fark etmeden, görebildiğin tüm kanallarda — yanıtlar ve çözülmüş thread’ler de.',
   'search.more': 'Daha fazla yükle',
+  'search.count': { other: '{count} sonuç' },
+  'search.countSoFar': { other: 'şimdilik {count} sonuç' },
   'state.search.empty.title': '“{words}” için sonuç yok',
   'state.search.empty.body': 'Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
   'state.search.empty.bodyIn': '{channel} içinde arandı. Silinmiş bir mesaj hiç bulunmaz.',
