@@ -10413,6 +10413,8 @@ The shared Markdown engine reports whether the caret ends inside an open fenced 
 
 ### D-206. The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black — amends D-110, D-184
 
+*Amended by D-317: the rail and the sidebar no longer begin below an empty strip; they start on the header's line.*
+
 *Amended by D-209: Reactions are soft pills, and the workspace's door is a card over a vertical list.*
 
 **Decided (the owner, 2026-10-30).** Signed in, the workspace was drawn twice a hand's width apart: its tile at
@@ -10517,6 +10519,8 @@ its strings; `useNotificationsPanel` and the keys' category segment; two size to
 keeping either way.
 
 ### D-209. Reactions are soft pills, and the workspace's door is a card over a vertical list — amends D-150, D-206
+
+*Amended by D-317: the workspace's row lives in a band as tall as the header, without the card's frame and shadow.*
 
 **Decided (the owner, 2026-10-30).** Two surfaces the owner found plain or hard-edged:
 
@@ -16060,3 +16064,13 @@ change is `Formatters.inputValue`/`instantOf`, additive.
 **Rejected.** Keeping scheduled messages in the browser and sending them at their time: it needs the page open, which is what scheduling is for not needing, and a second device would not see them. Calling `GET /api/client` once per session for the flag: D-248's reason, one more request from every page load against the budget people sign in with. Adding `capabilities` to `GET /api/me`: a contract change on the server for a flag that follows a module the same response already names; it is the way to go if the flag ever stops following chat. The product's own date field (D-247) with a separate time input: two controls and two sets of messages for what the browser's one field says, with a native picker on a phone; D-247's complaint of the browser's date input was a field with no minimum to explain, which this dialog gives in words. A preset for *Monday* every day: on a Monday it would read as the day it is. Carrying files back into a draft: drafts are text on this device by D-41, and holding files there is another store. Offering a time less than a minute away: the server's floor is five seconds, but a time a minute away is the least a person can mean by *later*, and the typed field has nothing finer than a minute.
 
 **Cost of reversing.** Delete the button, the tab and the three endpoint methods. Messages already scheduled stay on the server and are delivered; the native client lists them. No schema, no stored format on the device, no contract change.
+
+### D-317. The shell's top is one band: the rail, the sidebar and the header start on the same line — amends D-209, D-206
+
+**Decided by the owner, 2026-11-19**, after a live review of the shell's alignment. The rail and the sidebar began below a 28px empty strip kept for a desktop shell's window buttons (D-14), so the first place of the rail and the workspace's row sat at y≈52 while the header beside them is 48px tall with its centre at 24: the first row of the sidebar straddled the line the header ends on, and every browser paid 28px of nothing for a shell that does not exist yet.
+
+**What changes.** The strip and its token `size-drag` are gone. The sidebar opens with a band as tall as the header (`h-header`) that ends on the same hairline: in it the workspace's row (mark, name, role and member count, and the sidebar options), without the frame and the shadow D-209 gave the card — the band is the frame, and hover and open keep the edge's grammar (D-188). In Settings the same band holds the title. The rail's first place now sits level with both (centre at 24). The skeleton draws the same band, and the first-response test finds its header by `data-skeleton-header` since the band comes before it in the document.
+
+**Rejected.** Keeping the strip behind a flag for the desktop: there is no desktop shell and no way to tell that one is the host, so the flag would guard nothing; when the shell is built (D-14) it adds its own inset where it can name its window. Making the card 48px tall to fill the band: a card that fills its band has no room to breathe and is read as a bar.
+
+**Cost of reversing.** Restore the token and the strip in `sidebar.tsx`, `rail.tsx`, `settings-nav.tsx` and the skeleton; no stored value or contract depends on it.
