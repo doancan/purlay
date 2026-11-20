@@ -11,7 +11,7 @@ import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
 import { installDom } from '../../../testing/dom';
 import { memoryStorage } from '../../../testing/fakes';
-import { IDS, WHEN, aSession, aSignedInApi } from '../../../testing/fixtures';
+import { IDS, WHEN, aMessage, aSession, aSignedInApi } from '../../../testing/fixtures';
 import { renderApp } from '../../../testing/render';
 import { settle } from '../../../testing/channel-harness';
 import { person } from '../../../testing/user';
@@ -54,6 +54,7 @@ const file = (id: string): Attachment => ({
 
 interface Calls {
   readonly listed: number;
+  readonly sentNow: { channelId: string; id: string }[];
   readonly cancelled: { channelId: string; id: string }[];
   readonly scheduled: { channelId: string; id: string; body: unknown }[];
 }
@@ -76,8 +77,9 @@ const visit = async (
   const storage = memoryStorage(options.drafts ?? {});
   // What the server holds: a cancel takes its message out of it, as the real one does.
   let held: ScheduledMessage[] = typeof rows === 'function' ? [] : [...rows];
-  const calls = { listed: 0, cancelled: [], scheduled: [] } as {
+  const calls = { listed: 0, sentNow: [], cancelled: [], scheduled: [] } as {
     listed: number;
+    sentNow: { channelId: string; id: string }[];
     cancelled: { channelId: string; id: string }[];
     scheduled: { channelId: string; id: string; body: unknown }[];
   };
@@ -96,6 +98,11 @@ const visit = async (
         listScheduledMessages: () => {
           calls.listed += 1;
           return typeof rows === 'function' ? rows() : Promise.resolve(held);
+        },
+        sendScheduledMessage: (channelId, id) => {
+          calls.sentNow.push({ channelId, id });
+          held = held.filter((item) => item.id !== id);
+          return Promise.resolve(aMessage(1, { channelId }));
         },
         cancelScheduledMessage: (channelId, id) => {
           calls.cancelled.push({ channelId, id });
@@ -491,5 +498,126 @@ describe('editing', () => {
     expect(
       view.getByText('This device couldn’t save the draft, so the message stays scheduled.'),
     ).toBeDefined();
+  });
+});
+
+describe('sending now', () => {
+  test('asks the server to send it, takes the row away and says where it went', async () => {
+    const view = await visit([scheduled(FIRST), scheduled(SECOND, { content: 'Another one' })]);
+    await openTab(view);
+    await person().click(within(rowAt(view, 0)).getByRole('button', { name: 'Send now' }));
+    await settle();
+    expect(view.calls.sentNow).toEqual([{ channelId: IDS.api, id: FIRST }]);
+    expect(view.queryByText('Pool size to 20?')).toBeNull();
+    expect(view.getByText('Another one')).toBeDefined();
+    expect(view.getByText('Sent in api.')).toBeDefined();
+    expect(view.getByRole('button', { name: 'Scheduled (1)' })).toBeDefined();
+  });
+
+  test('the row leaves before the server answers', async () => {
+    let release: () => void = () => undefined;
+    const view = await visit([scheduled(FIRST)], {
+      api: {
+        sendScheduledMessage: (channelId) =>
+          new Promise((resolve) => {
+            release = (): void => {
+              resolve(aMessage(1, { channelId }));
+            };
+          }),
+      },
+    });
+    await openTab(view);
+    await person().click(view.getByRole('button', { name: 'Send now' }));
+    await settle();
+    expect(view.queryByText('Pool size to 20?')).toBeNull();
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+  });
+
+  test('says it in Turkish', async () => {
+    const view = await visit([scheduled(FIRST)], { locale: 'tr' });
+    await openTab(view);
+    await person().click(view.getByRole('button', { name: 'Şimdi gönder' }));
+    await settle();
+    expect(view.getByText('api içinde gönderildi.')).toBeDefined();
+  });
+
+  test('one the server sent already is as good as sent: it says so and stays gone', async () => {
+    const view = await visit([scheduled(FIRST)], {
+      api: {
+        sendScheduledMessage: () =>
+          Promise.reject(new ApiError(409, 'SCHEDULED_MESSAGE_SENT', 'sent')),
+      },
+    });
+    await openTab(view);
+    await person().click(view.getByRole('button', { name: 'Send now' }));
+    await settle();
+    expect(view.getByText('It was already sent.')).toBeDefined();
+  });
+
+  test('a refusal brings the row back and says why, in the words a failed one uses', async () => {
+    let refused = false;
+    const view = await visit(
+      () =>
+        Promise.resolve([
+          refused
+            ? scheduled(FIRST, { state: 'failed', failureCode: 'NOT_A_CHANNEL_MEMBER' })
+            : scheduled(FIRST),
+        ]),
+      {
+        api: {
+          sendScheduledMessage: () => {
+            refused = true;
+            return Promise.reject(new ApiError(403, 'NOT_A_CHANNEL_MEMBER', 'not in it'));
+          },
+        },
+      },
+    );
+    await openTab(view);
+    await person().click(view.getByRole('button', { name: 'Send now' }));
+    await settle();
+    expect(view.getByText('It couldn’t be sent: you are no longer in the channel.')).toBeDefined();
+    expect(view.getByText('Pool size to 20?')).toBeDefined();
+    expect(view.getByText('Failed: you are no longer in the channel')).toBeDefined();
+  });
+
+  test('no connection is said, and the message stays in the list', async () => {
+    const view = await visit([scheduled(FIRST)], {
+      api: { sendScheduledMessage: () => Promise.reject(new ApiError(0, 'NETWORK', 'down')) },
+    });
+    await openTab(view);
+    await person().click(view.getByRole('button', { name: 'Send now' }));
+    await settle();
+    expect(view.getByText('Check your connection and try again.')).toBeDefined();
+    expect(view.getByText('Pool size to 20?')).toBeDefined();
+  });
+
+  test('a double press is one request', async () => {
+    let release: () => void = () => undefined;
+    const asked: string[] = [];
+    const view = await visit([scheduled(FIRST)], {
+      api: {
+        sendScheduledMessage: (channelId, id) => {
+          asked.push(id);
+          return new Promise((resolve) => {
+            release = (): void => {
+              resolve(aMessage(1, { channelId }));
+            };
+          });
+        },
+      },
+    });
+    await openTab(view);
+    const button = view.getByRole('button', { name: 'Send now' });
+    await person().click(button);
+    await person().click(button);
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(asked).toEqual([FIRST]);
   });
 });

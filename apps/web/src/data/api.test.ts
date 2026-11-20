@@ -3,7 +3,7 @@
  * contract says. The responses are real shapes, so the schema check in `http.ts`
  * is exercised too: an endpoint wired to the wrong schema fails here.
  */
-import { NO_PROFILE } from '../testing/fixtures';
+import { NO_PROFILE, aMessage } from '../testing/fixtures';
 import { describe, expect, test } from 'bun:test';
 import type {
   Attachment,
@@ -1936,6 +1936,19 @@ describe('scheduled messages', () => {
     expect(put.calls).toEqual([
       { method: 'PUT', url: `/api/channels/${ID}/scheduled/${ID}`, body: input },
     ]);
+  });
+
+  test('sending now asks once and answers the message, checked against the contract', async () => {
+    const message = aMessage(1);
+    const now = harness(message);
+    expect(await now.api.sendScheduledMessage(ID, ID)).toEqual(message);
+    expect(now.calls).toEqual([
+      { method: 'POST', url: `/api/channels/${ID}/scheduled/${ID}/send`, body: undefined },
+    ]);
+    const bad = harness({ ...message, id: 'not-an-id' });
+    expect(
+      await bad.api.sendScheduledMessage(ID, ID).catch((error: unknown) => error),
+    ).toBeInstanceOf(ApiError);
   });
 
   test('cancelling asks and reads no answer', async () => {

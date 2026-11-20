@@ -974,7 +974,9 @@ waiting, and `?tab=scheduled` opens on it. A row says where (the channel, or *in
 17:30*, *Tomorrow at 09:00*, then the day — the words and how many files, and for one the server could not send,
 *Failed:* and why in plain words (the channel is gone, you are no longer in it, only admins post there now, the
 message you replied to is gone, a file is gone, you no longer have access). Pressing a row opens its channel or
-thread. **Cancel** asks the server and says *Scheduled message cancelled* with Undo, which asks for the same
+thread. **Send now** (D-324) takes the row away at once and asks the server to send it, saying *Sent in ops.*; one
+the server cannot send comes back with *It couldn’t be sent:* and the reason a failed row gives, and one that was
+already sent says so. **Cancel** asks the server and says *Scheduled message cancelled* with Undo, which asks for the same
 message again while that is still possible and says so when it is not. **Edit** writes the words into that
 place's draft — under any already there — cancels the schedule and opens the box, saying so; files are not
 kept in a draft and the toast says it when there were any. A message that was sent in the meantime says *It was
