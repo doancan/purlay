@@ -98,7 +98,8 @@ declares:
   (`searchSources` of `BundledModule`, a `SearchSource` of `platform/ports/search-source.ts`; `compose` stops a build where the ids
   differ). **Built** (D-285, steps 14k and 14l): the core's route `GET /api/workspaces/:workspaceId/find` asks the source of every
   module that runs, at once, each as its own module (its share of the pool, an abort signal) under a deadline of 1.5 s or the
-  module's own if shorter, and answers a group for each source and a `skipped` list (`off`, `slow`, `error`); chat's own search
+  module's own if shorter, and answers a group for each source and a `skipped` list (`off`, `slow`, `error`); each group is cut
+  at the limit and says `more`, and an answer missing a `slow` or `error` source is `partial` (D-328); chat's own search
   stays as it is.
 
 That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. **Built in step 14b

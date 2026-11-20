@@ -12,7 +12,7 @@ export const API_MODULES_FIND: readonly Mutation[] = [
   },
   {
     id: 'find-asks-a-source-for-only-the-limit',
-    why: 'a source is asked for exactly what is shown, so the find never knows a source had more and a person is not told to look further (D-324)',
+    why: 'a source is asked for exactly what is shown, so the find never knows a source had more and a person is not told to look further (D-328)',
     file: 'apps/api/src/modules/find/find.ts',
     find: 'await source.search({ database, context, query, limit: limit + 1 })',
     replace: 'await source.search({ database, context, query, limit })',
@@ -28,7 +28,7 @@ export const API_MODULES_FIND: readonly Mutation[] = [
   },
   {
     id: 'find-calls-an-answer-without-an-off-source-partial',
-    why: 'a module that is not run makes every answer partial, so a client offers to ask again for what will never come (D-324)',
+    why: 'a module that is not run makes every answer partial, so a client offers to ask again for what will never come (D-328)',
     file: 'apps/api/src/modules/find/find.ts',
     find: "partial: skipped.some(({ reason }) => reason !== 'off')",
     replace: 'partial: skipped.length > 0',
@@ -60,7 +60,7 @@ export const API_MODULES_FIND: readonly Mutation[] = [
   },
   {
     id: 'find-never-says-a-source-had-more',
-    why: 'a source cut at the limit is answered as if it had nothing more (D-324)',
+    why: 'a source cut at the limit is answered as if it had nothing more (D-328)',
     file: 'apps/api/src/modules/find/find.ts',
     find: 'more: outcome.length > limit',
     replace: 'more: false',
@@ -68,7 +68,7 @@ export const API_MODULES_FIND: readonly Mutation[] = [
   },
   {
     id: 'find-never-says-the-answer-is-partial',
-    why: 'an answer missing a slow or failed source is given as whole (D-324)',
+    why: 'an answer missing a slow or failed source is given as whole (D-328)',
     file: 'apps/api/src/modules/find/find.ts',
     find: "partial: skipped.some(({ reason }) => reason !== 'off')",
     replace: 'partial: false',
