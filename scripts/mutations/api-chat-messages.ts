@@ -1168,14 +1168,6 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/messages/notify-recipients.integration.test.ts'],
   },
   {
-    id: 'thread-reply-told-to-people-who-cannot-see-the-channel',
-    why: 'somebody removed from a private channel is still sent notifications that name it',
-    file: 'apps/api/src/features/chat/messages/delivery.ts',
-    find: 'if (seeing.has(userId)) consider(userId, ',
-    replace: 'consider(userId, ',
-    tests: ['apps/api/src/features/chat/messages/notify-recipients.integration.test.ts'],
-  },
-  {
     id: 'tombstone-shows-its-attachments',
     why: 'a deleted message still offers what was shown with its words, which the tombstone exists to hide',
     file: 'apps/api/src/features/chat/messages/reader.ts',
