@@ -284,7 +284,7 @@ test and not by a consumer in the product. Each row below is a step of §10 step
   issues' assignment notice; 14i, the push of a notice of a `pushed` kind, held while the person is in Deep Work or their quiet
   hours and sent when they end; 14j, the web's *Updates* section (a category of the inbox, loaded on its own) and the rail's dot
   for an unread update. A notice to many people at once (`notifyMany`, `notifyManyIn`) is one batch in the caller's
-  transaction: one membership read, one insert and one update for the cap, however many it reaches (D-323). **Not built:** an
+  transaction: one membership read, one insert and one update for the cap, however many it reaches (D-327). **Not built:** an
   inbox for a server that runs no chat (the screen is chat's). Chat's `notifications` stays chat's and unmoved.
 - *The search fan-out* (14k to 14m): **built** in 14k and 14l (D-285): the `SearchSource` port, the route `find`, a deadline and a
   `skipped` list (`off`, `slow`, `error`) and the sources of chat and issues; each source's time and skips are counted

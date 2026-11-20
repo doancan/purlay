@@ -202,7 +202,7 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
   },
   {
     id: 'sink-many-collapses-across-people',
-    why: "the cap of a batch is kept over all its people together, so one person with many unread notices reads another person's new one as history (D-323)",
+    why: "the cap of a batch is kept over all its people together, so one person with many unread notices reads another person's new one as history (D-327)",
     file: 'apps/api/src/modules/inbox/sink.ts',
     find: 'row_number() over (partition by user_id order by id desc)',
     replace: 'row_number() over (order by id desc)',
@@ -210,7 +210,7 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
   },
   {
     id: 'sink-many-counts-a-collapse-for-each-notice',
-    why: "a person's collapse is answered on each of their notices in the batch, so the counter adds it once per notice (D-323)",
+    why: "a person's collapse is answered on each of their notices in the batch, so the counter adds it once per notice (D-327)",
     file: 'apps/api/src/modules/inbox/sink.ts',
     find: '      if (counted.has(answer.recipientId)) return answer;\n',
     replace: '',
@@ -218,7 +218,7 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
   },
   {
     id: 'sink-many-keeps-every-repeat',
-    why: 'two notices of one subject to one person in a batch are both inserted, and the insert fails the whole fan-out (D-323)',
+    why: 'two notices of one subject to one person in a batch are both inserted, and the insert fails the whole fan-out (D-327)',
     file: 'apps/api/src/modules/inbox/sink.ts',
     find: '      JSON.stringify([notice.recipientId, notice.kind, notice.subject.id]),',
     replace:
@@ -227,7 +227,7 @@ export const API_MODULES_INBOX: readonly Mutation[] = [
   },
   {
     id: 'sink-many-writes-one-at-a-time',
-    why: "a fan-out writes each notice in statements of its own, so a notice to a whole workspace costs a round trip per person inside the caller's transaction (D-323)",
+    why: "a fan-out writes each notice in statements of its own, so a notice to a whole workspace costs a round trip per person inside the caller's transaction (D-327)",
     file: 'apps/api/src/modules/inbox/sink.ts',
     find: '      return await write(transaction, whoFor, notices, authorized);\n    },\n    notifyIn:',
     replace:
