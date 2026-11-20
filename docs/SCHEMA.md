@@ -166,6 +166,10 @@ CREATE TABLE users (
     title         VARCHAR(80),
     time_zone     VARCHAR(64),
     status_text   VARCHAR(100),
+    -- The status line's one emoji and when it clears itself (D-330): read against the server's clock, so a
+    -- line past its end is answered as cleared without anything running; both NULL for a line kept for good.
+    status_emoji  VARCHAR(32),
+    status_until  TIMESTAMPTZ,
 
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -4468,6 +4472,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0120_workspace_directory_validate.sql  validate directory-origin constraints and add concurrent workspace-first credential/link indexes (D-311)
 0121_incoming_webhook_evidence.sql  incoming_webhooks last_request_at, last_status and last_error (D-312)
 0122_outbox_pending_age.sql  idx_outbox_pending_age: the oldest pending fact of a consumer without reading all of them  (#1303)
+0123_profile_status_end.sql  users.status_emoji, users.status_until: a status line that clears itself, with an emoji  (D-330)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

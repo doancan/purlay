@@ -162,7 +162,10 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   **profile** in the same place — name, handle, title, status line, the time where they are and its
   zone — and, on a wide window, their local time and status beside the name (D-131). **Your profile…**
   in the account menu sets your own title, status and time zone, with this device's zone one press
-  away; a field emptied is cleared. Where people are picked, each says their title and local time.
+  away; a field emptied is cleared. A status carries one emoji if you like, shown before its words, and
+  **Clear after** — 30 minutes, 1 hour, 4 hours, today, this week (midnights on this device's clock) or
+  don't clear; a line that clears says *Until 13:00* in the profile and is gone everywhere at that
+  minute (D-330). Where people are picked, each says their title and local time.
 - **Pins panel** — the same place again, opened by the header's **Pinned messages** control (D-130):
   the channel's pinned messages, newest pin first, each with who said it and when, its words, and who
   pinned it; a pinned reply opens its thread, and a member unpins from the row. **Pin** sits beside
