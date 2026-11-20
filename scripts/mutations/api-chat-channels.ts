@@ -1581,6 +1581,17 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/http/star.integration.test.ts'],
   },
   {
+    // The reply's participant read (`stillSeeing`) and the final writer (`notify`) each ask this audience, so
+    // removing either check alone is covered by the other and changes nothing; losing the audience's own
+    // visibility condition is the fault that reaches a person.
+    id: 'thread-reply-told-to-people-who-cannot-see-the-channel',
+    why: 'a thread reply is written as a notification to a participant removed from a private channel or gone from the workspace, naming a conversation they can no longer see (D-34)',
+    file: 'apps/api/src/features/chat/channels/guard.ts',
+    find: '    .where((eb) => eb.exists(visible));\n',
+    replace: '    ;\n',
+    tests: ['apps/api/src/features/chat/messages/notify-recipients.integration.test.ts'],
+  },
+  {
     id: 'unread-from-a-reply-reads-the-feed-wrong',
     why: 'marking a reply unread moves the feed position to just before the reply, so the root it answers counts as read',
     file: 'apps/api/src/features/chat/channels/read-state.ts',
