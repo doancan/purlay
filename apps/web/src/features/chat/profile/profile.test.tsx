@@ -482,3 +482,112 @@ describe('the name on Profile (D-235)', () => {
     view.unmount();
   });
 });
+
+describe('a status line that clears itself (D-330)', () => {
+  const LUNCH: Profile = {
+    ...TOKYO,
+    status: 'Öğle yemeğinde',
+    statusEmoji: '🍽️',
+    statusUntil: '2026-09-09T13:00:00.000Z',
+  };
+
+  test('is shown with its emoji and until when, beside the conversation and in the profile', async () => {
+    const view = await withAlice(LUNCH);
+    expect(view.container.querySelector('header')?.textContent).toContain('🍽️ Öğle yemeğinde');
+    await person().click(nameOf(view));
+    const panel = await view.findByRole('complementary', { name: /Profile/ });
+    expect(panel.textContent).toContain('🍽️ Öğle yemeğinde');
+    expect(panel.textContent).toContain('Until 13:00');
+    view.unmountAll();
+  });
+
+  test('past its end it is not shown, though the members were read before', async () => {
+    const view = await withAlice({ ...LUNCH, statusUntil: '2026-09-09T11:59:00.000Z' });
+    expect(view.container.querySelector('header')?.textContent).not.toContain('Öğle');
+    view.unmountAll();
+  });
+
+  test('set on Profile with an emoji and an hour: the three are sent together, the end an hour on', async () => {
+    const sent: UpdateProfileRequest[] = [];
+    const view = await openFrame({
+      updateProfile: (input) => {
+        sent.push(input);
+        return Promise.resolve({ ...MINE, status: 'Öğle yemeğinde' });
+      },
+    });
+    await person().type(textbox(view, 'Status'), 'Öğle yemeğinde');
+    await person().type(textbox(view, 'Emoji'), '🍽️');
+    const clear = within(view.getByRole('main')).getByRole('combobox', { name: 'Clear after' });
+    expect([...clear.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
+      'Don’t clear',
+      '30 minutes',
+      '1 hour',
+      '4 hours',
+      'Today',
+      'This week',
+    ]);
+    await person().selectOptions(clear, '1h');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
+    await settle();
+    // The page's clock is 12:00 UTC on Wednesday 9 September, its zone UTC.
+    expect(sent).toEqual([
+      { status: 'Öğle yemeğinde', statusEmoji: '🍽️', statusUntil: '2026-09-09T13:00:00.000Z' },
+    ]);
+    view.unmount();
+  });
+
+  test('today ends at midnight and this week at the Monday after, on this device’s clock', async () => {
+    const sent: UpdateProfileRequest[] = [];
+    const view = await openFrame({
+      updateProfile: (input) => {
+        sent.push(input);
+        return new Promise(() => undefined);
+      },
+    });
+    await person().type(textbox(view, 'Status'), 'Out');
+    const clear = within(view.getByRole('main')).getByRole('combobox', { name: 'Clear after' });
+    await person().selectOptions(clear, 'week');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(sent.map((input) => input.statusUntil)).toEqual(['2026-09-14T00:00:00.000Z']);
+    view.unmount();
+  });
+
+  test('a line that clears keeps its end when only its emoji changes, and offers that end first', async () => {
+    const sent: UpdateProfileRequest[] = [];
+    const view = await openFrame(
+      {
+        updateProfile: (input) => {
+          sent.push(input);
+          return new Promise(() => undefined);
+        },
+      },
+      { ...MINE, status: 'Lunch', statusEmoji: '🍽️', statusUntil: '2026-09-09T13:00:00.000Z' },
+    );
+    const clear = within(view.getByRole('main')).getByRole<HTMLSelectElement>('combobox', {
+      name: 'Clear after',
+    });
+    expect(clear.selectedOptions[0]?.textContent).toBe('Until 13:00');
+    await person().clear(textbox(view, 'Emoji'));
+    await person().type(textbox(view, 'Emoji'), '🥗');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(sent).toEqual([
+      { status: 'Lunch', statusEmoji: '🥗', statusUntil: '2026-09-09T13:00:00.000Z' },
+    ]);
+    view.unmount();
+  });
+
+  test('an emoji the server refuses is said on its field', async () => {
+    const view = await openFrame({
+      updateProfile: () =>
+        Promise.reject(new ApiError(400, 'VALIDATION_FAILED', 'no', { statusEmoji: 'bad' })),
+    });
+    await person().type(textbox(view, 'Emoji'), 'xx');
+    await person().click(within(view.getByRole('main')).getByRole('button', { name: 'Save' }));
+    await settle();
+    expect(textbox(view, 'Emoji').getAttribute('aria-invalid')).toBe('true');
+    expect(view.getByText('That is not one emoji.')).toBeDefined();
+    view.unmount();
+  });
+});

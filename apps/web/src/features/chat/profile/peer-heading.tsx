@@ -10,7 +10,8 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useSession } from '../../session/session';
 import { useSidePanel } from '../channel/side-panel';
-import { useLocalTime, useMember } from './local-time';
+import { useMember, useMinute, useTimeAt } from './local-time';
+import { statusLineAt } from '../../../lib/status-line';
 import { PROFILE_PANEL_ID } from './profile-panel';
 
 export const PeerHeading = ({
@@ -27,7 +28,10 @@ export const PeerHeading = ({
   const self = peer.id === user.id;
   const found = useMember(peer.id).member?.profile;
   const profile = self ? undefined : found;
-  const time = useLocalTime(profile);
+  const minute = useMinute();
+  const time = useTimeAt(profile, minute);
+  // Gone once its end has passed (D-330), whether or not the members were read again since.
+  const status = statusLineAt(profile, minute);
   const open = side.panel === 'profile';
   const hintId = useId();
   return (
@@ -59,9 +63,9 @@ export const PeerHeading = ({
           {t('profile.localTime', { time })}
         </span>
       )}
-      {profile?.status != null && (
+      {status !== null && (
         <span className="min-w-0 truncate text-label text-ink-muted max-narrow:hidden">
-          {profile.status}
+          {[status.emoji, status.words].filter((part) => part !== null).join(' ')}
         </span>
       )}
     </>

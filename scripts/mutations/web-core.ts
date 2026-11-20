@@ -921,6 +921,14 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/sidebar/sidebar-preferences.test.tsx'],
   },
   {
+    id: 'status-shown-past-its-end',
+    why: 'a status line past its end is still drawn from a member list read before the end (D-330)',
+    file: 'apps/web/src/lib/status-line.ts',
+    find: '  if (until !== null && new Date(until).getTime() <= now) return null;\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/profile/profile.test.tsx'],
+  },
+  {
     id: 'theme-init-forgets-midnight',
     why: 'the script that runs before first paint does not know Midnight, so it flashes black before the page settles (D-184)',
     file: 'apps/web/public/theme-init.js',

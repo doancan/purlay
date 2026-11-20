@@ -112,6 +112,7 @@ export const AREAS = [
       'apps/web/src/app/',
       'apps/web/src/data/',
       'apps/web/src/i18n/',
+      'apps/web/src/lib/',
       'apps/web/src/modules/',
       'apps/web/src/router/',
       'apps/web/src/theme/',
