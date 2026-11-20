@@ -34,6 +34,7 @@ have it.
 - **Operations** — an operator who cannot sign in can requeue or discard dead facts between modules with `bun run outbox:requeue` and `outbox:discard`, with a reason and on the server's trail, as the console does (D-325)
 - **Operations** — `/metrics` times each source of the workspace find and counts the ones it answered without and why, and a ready-made alert rule warns when a source keeps being skipped (D-326)
 - **API** — the workspace find says of each source whether it had more than the hits shown, and whether the answer is partial because a source was slow or failed (D-328)
+- **Notifications** — a channel or conversation can be muted for 15 minutes, 1 hour, 8 hours, 24 hours or until tomorrow morning; the bell says "Muted until 14:00", and the mute ends by itself on every device at once (D-329)
 
 ### Changed
 

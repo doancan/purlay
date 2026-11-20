@@ -252,7 +252,9 @@ What the shape is for, which the types do not say:
   nothing but the workspace in it, and the client reads what it shows again (D-128); a notification
   written for them, of any kind, is `NOTIFICATIONS_UPDATED` there, with nothing but the workspace, and
   an open inbox reads it again (D-106); a channel starred or
-  let go is `CHANNELS_UPDATED` there, and the client reads that workspace's channels again (D-132). Typing is a `TYPING` frame
+  let go, or its notification level chosen (for good or for a while), is `CHANNELS_UPDATED` there, and the client
+  reads that workspace's channels again (D-132, D-329). A level for a while that ends sends nothing: the server
+  reads the level in force against its clock, and a client reads the channels again at the end it was told. Typing is a `TYPING` frame
   each way (D-114): the client names a channel it can see and is answered with nothing; the room
   hears it only from a member — what a non-member types could not be sent (D-156) — and from a
   channel's box, never a thread's reply box (D-171); it hears who, and for how long, at most once per half window per person. Nothing says "stopped" — a
