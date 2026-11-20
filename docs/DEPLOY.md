@@ -287,7 +287,9 @@ batches or twenty seconds an iteration; the idle cost stays one claim every two 
 
 **The thresholds, as alert rules (D-288 §12).** `docker/alerts/purlay-outbox.rules.yml` is the set to load into Prometheus (`rule_files:`) or Grafana
 Alerting; a test holds every metric it names to the code, so a renamed metric fails the build and not the alert. Gauges are the same on every node (`max`), counters are per
-process (`sum`). `OUTBOX_DEAD_KEPT_DAYS` (180 unless set) is how long a dead or discarded fact stays to be looked at. The find's skipped sources have no metric yet, so no rule.
+process (`sum`). `OUTBOX_DEAD_KEPT_DAYS` (180 unless set) is how long a dead or discarded fact stays to be looked at. The same file holds the rule on the
+workspace find's sources (group `purlay-find`): `purlay_search_source_duration_seconds` times each source the find asked, by `module` and `source`, and
+`purlay_search_source_skipped_total` counts each it answered without, by `reason` (`off`, `slow`, `error`); `off` is a module not run or not granted, and never alerts.
 
 | Alert | Fires when | Severity | Then |
 | --- | --- | --- | --- |
@@ -300,6 +302,7 @@ process (`sum`). `OUTBOX_DEAD_KEPT_DAYS` (180 unless set) is how long a dead or 
 | `PurlayOutboxPublishRefused` | any publish refused by the backlog ceiling in 15 min | warning | The backlog is growing |
 | `PurlayEntitlementRefusalsSpike` | requests refused for a grant above 1 a second for 10 min | warning | A grant was withdrawn or a client is stale |
 | `PurlayInboxCollapsing` | over 100 notices read as history for lack of room in an hour | warning | A module is notifying in a loop |
+| `PurlaySearchSourceSkipped` | a source `slow` or `error` on over 20% of the finds that asked it, at least 3 times in 15 min, for 15 min | warning | A search source keeps being skipped |
 
 **The requests below** are made as the server's administrator: sign in, copy the `__Host-purlay_session` cookie from the browser, and send it with an `Origin` equal to `APP_URL`
 (`C` below). Anyone else gets the plain `404` of a path that does not exist. `C='-H "Cookie: __Host-purlay_session=<value>" -H "Origin: https://purlay.example" -H "Content-Type: application/json"'`.
@@ -343,6 +346,15 @@ left empty as `module:suspend` leaves it. The ids are the deliveries' (`outbox.i
 1. Read the module's log around the failures: each failed delivery names the module, the fact type and the error class, never the payload, and carries the correlation id of the request that published it.
 2. A slow handler holds the rest of its batch (they run one after another under the worker's deadline): `purlay_worker_failures_total` rising with no `purlay_outbox_failures_total` is a deadline, not a throw.
 3. If it needs a release to fix, stop the consumer's module (*A module misbehaves: stop it*, above) so its facts wait instead of burning tries, deploy, resume it, and requeue what died meanwhile as in *A fact is dead*.
+
+### A search source keeps being skipped
+
+`PurlaySearchSourceSkipped`. The workspace find answers without that source and says so in its `skipped` list, so people still get the other groups, but not this one.
+
+1. Which reason? `sum by (reason) (rate(purlay_search_source_skipped_total{module="<id>",source="<source>"}[15m]))`. `slow` is a source past its deadline (the find's, or the module's own if shorter); `error` is one that threw.
+2. `slow`: is the module's share of the pool full (the module's own routes in `purlay_http_request_duration_seconds` are slow too) or is the source's query slow on its own? `histogram_quantile(0.95, sum by (le) (rate(purlay_search_source_duration_seconds_bucket{source="<source>"}[15m])))` near the deadline is the query; the log says `a search source passed its deadline and was skipped` with the module, the source and the deadline.
+3. `error`: the log says `a search source failed and was skipped` with the module, the source and the error, never the words searched for. A missing index or a migration not run is the usual cause.
+4. Until it is fixed, stopping the module (*A module misbehaves: stop it*, above) turns the source `off`, which does not alert, and takes the rest of the module with it: only worth it when the source's failures hurt more than the module helps.
 
 **Backup evidence in server administration (D-278).** Dockhand writes an atomic receipt after `pg_dump` and `pg_restore --list` succeed, and mounts only the separate `backup-status` volume read-only into the API. Its receipt explicitly covers the database only: attachment volumes still need their own backup. A receipt older than two configured intervals plus five minutes is stale.
 
