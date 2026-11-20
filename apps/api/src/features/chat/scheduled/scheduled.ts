@@ -22,12 +22,12 @@ import { asAttachment } from '../../../modules/attachments/uploads';
 import { readBody } from '../messages/body';
 import { currentRequest } from '../../../platform/logging';
 
-const missing = (): AppError =>
+export const scheduledNotFound = (): AppError =>
   new AppError({ code: 'SCHEDULED_MESSAGE_NOT_FOUND', message: 'Scheduled message not found.' });
-const alreadySent = (): AppError =>
+export const alreadySent = (): AppError =>
   new AppError({ code: 'SCHEDULED_MESSAGE_SENT', message: 'This message has already been sent.' });
 
-type ScheduledRow = Selectable<ScheduledMessages>;
+export type ScheduledRow = Selectable<ScheduledMessages>;
 
 /**
  * Lets go of the files a draft reserved and answers their ids. The trigger on `scheduled_message_attachments`
@@ -91,7 +91,7 @@ export const scheduleMessage = async (
 ): Promise<ScheduledMessage> => {
   // The channel first: one the caller cannot see is not found whatever the draft's id (D-21).
   const context = await requireChannelById(transaction, userId, channelId);
-  if (!Value.Check(Uuid, scheduledId)) throw missing();
+  if (!Value.Check(Uuid, scheduledId)) throw scheduledNotFound();
   await requireChannelMember(transaction, context, 'Join the channel before scheduling a message.');
   // Serializes the per-person, per-workspace bound, including creates with different ids.
   await transaction
@@ -108,7 +108,7 @@ export const scheduleMessage = async (
     .forUpdate()
     .executeTakeFirst();
   if (existing !== undefined && (existing.user_id !== userId || existing.channel_id !== channelId))
-    throw missing();
+    throw scheduledNotFound();
   if (existing?.state === 'sent') throw alreadySent();
   const now = clock.now();
   const sendAt = new Date(input.sendAt);
@@ -170,7 +170,7 @@ export const scheduleMessage = async (
       .onConflict((conflict) => conflict.column('id').doNothing())
       .returning('id')
       .executeTakeFirst();
-    if (inserted === undefined) throw missing();
+    if (inserted === undefined) throw scheduledNotFound();
   } else {
     await transaction
       .updateTable('scheduled_messages')
@@ -219,9 +219,9 @@ export const scheduleMessage = async (
       .execute();
   }
   const row = await rowById(transaction, scheduledId);
-  if (row === undefined) throw missing();
+  if (row === undefined) throw scheduledNotFound();
   const [built] = await build(transaction, [row]);
-  if (built === undefined) throw missing();
+  if (built === undefined) throw scheduledNotFound();
   return built;
 };
 
@@ -232,7 +232,7 @@ export const cancelScheduledMessage = async (
   scheduledId: string,
 ): Promise<void> => {
   await requireChannelById(transaction, userId, channelId);
-  if (!Value.Check(Uuid, scheduledId)) throw missing();
+  if (!Value.Check(Uuid, scheduledId)) throw scheduledNotFound();
   const row = await transaction
     .selectFrom('scheduled_messages')
     .select(['user_id', 'channel_id', 'state'])
@@ -240,7 +240,7 @@ export const cancelScheduledMessage = async (
     .forUpdate()
     .executeTakeFirst();
   if (row === undefined) return;
-  if (row.user_id !== userId || row.channel_id !== channelId) throw missing();
+  if (row.user_id !== userId || row.channel_id !== channelId) throw scheduledNotFound();
   if (row.state === 'sent') throw alreadySent();
   await transaction.deleteFrom('scheduled_messages').where('id', '=', scheduledId).execute();
 };

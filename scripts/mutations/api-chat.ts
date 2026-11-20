@@ -929,6 +929,40 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/saved/saved.integration.test.ts'],
   },
   {
+    id: 'scheduled-send-now-for-anybody',
+    why: 'Send now sends somebody else’s scheduled message, in their name, when the caller can see the channel (D-324)',
+    file: 'apps/api/src/features/chat/scheduled/delivery.ts',
+    find: '      if (row?.user_id !== userId || row.channel_id !== channelId) throw scheduledNotFound();\n',
+    replace:
+      '      if (row === undefined || row.channel_id !== channelId) throw scheduledNotFound();\n',
+    tests: ['apps/api/src/features/chat/http/scheduled-send-now.integration.test.ts'],
+  },
+  {
+    id: 'scheduled-send-now-sends-again',
+    why: 'a second press of Send now, or one after the scheduler, sends the message a second time (D-324)',
+    file: 'apps/api/src/features/chat/scheduled/delivery.ts',
+    find: "      if (row.state === 'sent') throw alreadySent();\n      return await deliverRow(",
+    replace: '      return await deliverRow(',
+    tests: ['apps/api/src/features/chat/http/scheduled-send-now.integration.test.ts'],
+  },
+  {
+    id: 'scheduled-send-now-skips-a-held-row',
+    why: 'Send now gives up on a row a delivery holds and says it does not exist, instead of waiting to learn it was sent (D-324)',
+    file: 'apps/api/src/features/chat/scheduled/delivery.ts',
+    find: "        .where('id', '=', scheduledId)\n        .forUpdate()\n        .executeTakeFirst();",
+    replace:
+      "        .where('id', '=', scheduledId)\n        .forUpdate()\n        .skipLocked()\n        .executeTakeFirst();",
+    tests: ['apps/api/src/features/chat/http/scheduled-send-now.integration.test.ts'],
+  },
+  {
+    id: 'scheduled-sent-keeps-its-failure',
+    why: 'a failed scheduled message sent now keeps its failure code, which the table refuses on a sent row, so it can never be sent (D-324)',
+    file: 'apps/api/src/features/chat/scheduled/delivery.ts',
+    find: '        failure_code: null,\n        updated_at: clock.now(),\n      })\n      .where',
+    replace: '        updated_at: clock.now(),\n      })\n      .where',
+    tests: ['apps/api/src/features/chat/http/scheduled-send-now.integration.test.ts'],
+  },
+  {
     id: 'search-answer-of-another-thread',
     why: 'a root whose accepted answer is another thread’s reply is found by that reply’s words: the search stops asking that the answer is a reply to the root (#1019)',
     file: 'apps/api/src/features/chat/search/search.ts',

@@ -568,6 +568,16 @@ describe('integration: channel visibility', () => {
             });
           }
 
+          if (crossing.scheduled === true) {
+            const scheduled = await call(
+              db,
+              'PUT',
+              `/api/channels/${world.visible}/scheduled/${NEVER_EXISTED}`,
+              world.outsider,
+              { content: 'now, please', sendAt: new Date(NOW.getTime() + 3_600_000).toISOString() },
+            );
+            expect(scheduled.status).toBe(200);
+          }
           const control = await call(db, method, at(world.visible), world.outsider, body);
           expect({ status: control.status, ok: control.ok }).toEqual({
             status: control.status,

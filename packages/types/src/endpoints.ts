@@ -741,6 +741,13 @@ export const ENDPOINTS = [
     responses: { 200: ScheduledMessage },
   }),
   read({
+    id: 'sendScheduledMessage',
+    method: 'POST',
+    path: '/api/channels/:channelId/scheduled/:scheduledId/send',
+    auth: 'session',
+    responses: { 200: Message },
+  }),
+  read({
     id: 'cancelScheduledMessage',
     method: 'DELETE',
     path: '/api/channels/:channelId/scheduled/:scheduledId',

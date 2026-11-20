@@ -207,6 +207,11 @@ export interface CrossTenantCase {
    * is the visible one; the private one and the direct message, archived too, stay hidden.
    */
   readonly archived?: true;
+  /**
+   * It acts on a scheduled message of the caller's that must already be there, as sending one now does (D-324): the
+   * control's request names one, scheduled just before it, so the refusals before it had nothing to find.
+   */
+  readonly scheduled?: true;
   readonly visibility: Visibility;
 }
 
@@ -819,6 +824,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
   },
   'DELETE /api/channels/:channelId/scheduled/:scheduledId': {
     refusal: 'CHANNEL_NOT_FOUND',
+    visibility: CHANNEL,
+  },
+  'POST /api/channels/:channelId/scheduled/:scheduledId/send': {
+    refusal: 'CHANNEL_NOT_FOUND',
+    scheduled: true,
     visibility: CHANNEL,
   },
   'GET /api/workspaces/:workspaceId/scheduled': {
