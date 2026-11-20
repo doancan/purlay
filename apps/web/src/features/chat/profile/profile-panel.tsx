@@ -10,14 +10,15 @@ import { Avatar } from '../../../ui/avatar';
 import { PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useSidePanel } from '../channel/side-panel';
-import { useLocalTime, useMember } from './local-time';
+import { useMember, useMinute, useTimeAt } from './local-time';
+import { statusLineAt, untilText } from '../../../lib/status-line';
 import { usePresence } from '../../../realtime/realtime-provider';
 import { useSession } from '../../session/session';
 
 export const PROFILE_PANEL_ID = 'conversation-profile';
 
 const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Element => {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const { member, members } = useMember(person.id);
   const { user: me } = useSession();
   const presence = usePresence(person.id, me.id);
@@ -26,9 +27,12 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
     Math.max(members.dataUpdatedAt, members.errorUpdatedAt),
   );
   const profile = member?.profile;
-  const time = useLocalTime(profile);
+  const minute = useMinute();
+  const time = useTimeAt(profile, minute);
+  // The status line as it reads this minute: gone once its end has passed (D-330).
+  const status = statusLineAt(profile, minute);
   const empty =
-    profile !== undefined && (profile.title ?? profile.status ?? profile.timeZone) === null;
+    profile !== undefined && status === null && (profile.title ?? profile.timeZone) === null;
   const readAgain = (): void => {
     focus.answering();
     void members.refetch();
@@ -77,9 +81,14 @@ const ProfilePanelView = ({ person }: { readonly person: User }): React.JSX.Elem
         ) : (
           <>
             {profile?.title != null && <p className="text-body text-ink">{profile.title}</p>}
-            {profile?.status != null && (
+            {status !== null && (
               <p className="whitespace-pre-wrap break-words text-body text-ink-muted">
-                {profile.status}
+                {[status.emoji, status.words].filter((part) => part !== null).join(' ')}
+                {status.until !== null && (
+                  <span className="block text-label">
+                    {t('profile.statusUntil', { time: untilText(status.until, minute, format) })}
+                  </span>
+                )}
               </p>
             )}
             {profile?.timeZone != null && (

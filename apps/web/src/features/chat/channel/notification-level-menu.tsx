@@ -13,8 +13,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApi } from '../../../data/api-provider';
 import { channelLevelChanged } from '../../../data/cache';
 import { useDescribeFailure } from '../../../data/failure';
-import type { Formatters } from '../../../i18n/format';
 import { useI18n } from '../../../i18n/i18n-provider';
+import { untilText } from '../../../lib/status-line';
 import { IconButton } from '../../../ui/icon-button';
 import {
   Menu,
@@ -36,12 +36,6 @@ const levelOf = (value: string): NotificationLevel | undefined =>
 
 /** Until when a level chosen for a while lasts, or null for good — an older server sends nothing. */
 const untilOf = (channel: Channel): string | null => channel.notificationLevelUntil ?? null;
-
-/** The end as the viewer reads it: its clock time today, the whole date and time on another day. */
-const endText = (until: string, now: Date, format: Formatters): string =>
-  format.isoDay(until) === format.isoDay(now)
-    ? format.inputValue(until).slice(-5)
-    : format.absolute(until);
 
 /**
  * Choosing a level, for the header's menu and the channel's details alike: for good, or until an
@@ -81,7 +75,7 @@ export const NotificationLevelMenu = ({
   if (current === null) return null;
   const now = clock.now();
   const until = untilOf(channel);
-  const ends = until === null ? null : endText(until, now, format);
+  const ends = until === null ? null : untilText(until, now.getTime(), format);
 
   return (
     <Menu

@@ -34,10 +34,6 @@ export const useTimeAt = (profile: Profile | undefined, now: number): string | n
   return useMemo(() => (zone === null ? null : timeIn(zone, now, locale)), [zone, now, locale]);
 };
 
-/** The time where a profile's person is, now. */
-export const useLocalTime = (profile: Profile | undefined): string | null =>
-  useTimeAt(profile, useMinute());
-
 /**
  * A workspace member by their user id, from the members the workspace already holds — with the
  * read's own state, so a list still loading or failed is not taken for a person with no profile.

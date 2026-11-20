@@ -7,9 +7,12 @@
  * in another tab appears here and is never sent back over it. A field emptied is cleared. The time
  * zone offers this device's in one press, and the zones this browser knows as you type. A refusal
  * says which field, in words, and keeps what you typed (`UX.md` §8).
+ *
+ * The status line is its words, an emoji and when it clears itself (D-330), sent together whenever one of them
+ * is changed: 30 minutes, an hour, four hours, the end of today or of this week on this device's clock, or never.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useMemo, useState } from 'react';
+import { useContext, useId, useMemo, useState } from 'react';
 import {
   PROFILE_STATUS_MAX,
   PROFILE_TITLE_MAX,
@@ -23,8 +26,13 @@ import { useDescribeFailure } from '../../../data/failure';
 import { families, keys } from '../../../data/keys';
 import { profileTimeZoneChanged } from '../../../data/cache';
 import { useI18n } from '../../../i18n/i18n-provider';
+import { statusLineAt, untilText } from '../../../lib/status-line';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
+import { Select } from '../../../ui/select';
+import { RealtimePortsContext } from '../../../realtime/realtime-provider';
+import { systemClock } from '../../../system-clock';
+import { STATUS_CLEARS, statusEnd, type StatusClear } from './status-clears';
 import { useSession } from '../../session/session';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 import { NameRow } from './name-row';
@@ -34,8 +42,18 @@ import { CompanySessionNotice } from './company-parts';
 const zonesHere = (): readonly string[] =>
   typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
 
-type Field = 'title' | 'timeZone' | 'status';
-const FIELDS: readonly Field[] = ['title', 'timeZone', 'status'];
+type Field = 'title' | 'timeZone' | 'status' | 'statusEmoji';
+const FIELDS: readonly Field[] = ['title', 'timeZone'];
+/** The status line's own: written together, as the server takes it (D-330). */
+const LINE: readonly Field[] = ['status', 'statusEmoji'];
+/** What a refusal of each field is said as. */
+const REFUSED = {
+  title: 'profile.wordsInvalid',
+  status: 'profile.wordsInvalid',
+  timeZone: 'profile.zoneInvalid',
+  statusEmoji: 'profile.emojiInvalid',
+  statusUntil: 'profile.clearInvalid',
+} as const satisfies Readonly<Record<Field | 'statusUntil', string>>;
 
 export const ProfilePage = (): React.JSX.Element => {
   const { companyWorkspaceId } = useSession();
@@ -61,7 +79,7 @@ const CompanyProfilePage = (): React.JSX.Element => {
 };
 
 const IndependentProfilePage = (): React.JSX.Element => {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const api = useApi();
   const client = useQueryClient();
   const describe = useDescribeFailure();
@@ -71,23 +89,56 @@ const IndependentProfilePage = (): React.JSX.Element => {
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const { user, profile, nameFromGitHub } = useSession();
   const [edited, setEdited] = useState<Partial<Record<Field, string>>>({});
+  // When the status line clears itself, as chosen here; `keep` is the end it already has.
+  const [clear, setClear] = useState<StatusClear | 'keep' | undefined>(undefined);
   // Each field the server refused, with what to say; `form` for what names no field.
-  const [problems, setProblems] = useState<Partial<Record<Field | 'form', string>>>({});
+  const [problems, setProblems] = useState<Partial<Record<Field | 'statusUntil' | 'form', string>>>(
+    {},
+  );
   const zones = useMemo(zonesHere, []);
   const [state, setState] = useState<'idle' | 'busy' | 'saved'>('idle');
+  // This render's instant, on the page's clock: what "today" and a past end are judged by.
+  const minute = (useContext(RealtimePortsContext).clock ?? systemClock).now().getTime();
+  // The line as it reads now: one past its end is no line, whatever was read before (D-330).
+  const line = statusLineAt(profile, minute);
+  const stored: Readonly<Record<Field, string | null>> = {
+    title: profile.title,
+    timeZone: profile.timeZone,
+    status: line?.words ?? null,
+    statusEmoji: line?.emoji ?? null,
+  };
+  const keptUntil = line?.until ?? null;
+  const clearShown = clear ?? (keptUntil === null ? 'never' : 'keep');
 
-  const shown = (field: Field): string => edited[field] ?? profile[field] ?? '';
+  const shown = (field: Field): string => edited[field] ?? stored[field] ?? '';
   const asked = (field: Field): string | null | undefined => {
     const value = edited[field];
     if (value === undefined) return undefined;
     const trimmed = value.trim();
     return trimmed === '' ? null : trimmed;
   };
-  const wanted: UpdateProfileRequest = Object.fromEntries(
-    FIELDS.map((field) => [field, asked(field)] as const).filter(
-      ([field, value]) => value !== undefined && value !== profile[field],
+  const lineChanged =
+    clear !== undefined ||
+    LINE.some((field) => asked(field) !== undefined && asked(field) !== stored[field]);
+  const wantedLine = (): UpdateProfileRequest => {
+    if (!lineChanged) return {};
+    const words = asked('status');
+    const emoji = asked('statusEmoji');
+    return {
+      status: words === undefined ? stored.status : words,
+      statusEmoji: emoji === undefined ? stored.statusEmoji : emoji,
+      statusUntil:
+        clearShown === 'keep' ? keptUntil : statusEnd(clearShown, new Date(minute), format),
+    };
+  };
+  const wanted: UpdateProfileRequest = {
+    ...Object.fromEntries(
+      FIELDS.map((field) => [field, asked(field)] as const).filter(
+        ([field, value]) => value !== undefined && value !== stored[field],
+      ),
     ),
-  );
+    ...wantedLine(),
+  };
   const changed = Object.keys(wanted).length > 0;
   const busy = state === 'busy';
 
@@ -103,20 +154,18 @@ const IndependentProfilePage = (): React.JSX.Element => {
     setProblems({});
     let saved: Profile;
     try {
-      saved = await api.updateProfile(wanted);
+      // The end is worked out as Save is pressed, not when the choice was made.
+      saved = await api.updateProfile({ ...wanted, ...wantedLine() });
     } catch (failure) {
       setState('idle');
       if (isApiError(failure) && failure.code === 'VALIDATION_FAILED') {
-        const refused = FIELDS.filter((field) => field in failure.fields);
+        const refused = (Object.keys(REFUSED) as (keyof typeof REFUSED)[]).filter(
+          (field) => field in failure.fields,
+        );
         setProblems(
           refused.length === 0
             ? { form: `${t('profile.saveFailed')} ${describe(failure)}` }
-            : Object.fromEntries(
-                refused.map((field) => [
-                  field,
-                  t(field === 'timeZone' ? 'profile.zoneInvalid' : 'profile.wordsInvalid'),
-                ]),
-              ),
+            : Object.fromEntries(refused.map((field) => [field, t(REFUSED[field])])),
         );
       } else {
         setProblems({ form: `${t('profile.saveFailed')} ${describe(failure)}` });
@@ -129,12 +178,13 @@ const IndependentProfilePage = (): React.JSX.Element => {
     );
     if (saved.timeZone !== profile.timeZone) profileTimeZoneChanged(client, saved.timeZone);
     setEdited({});
+    setClear(undefined);
     setState('saved');
     // Wherever you are a member, your profile is read again — as the frame tells the others to.
     void client.invalidateQueries({ queryKey: families.members });
   };
 
-  const errorOf = (field: Field): { error: string } | Record<string, never> => {
+  const errorOf = (field: Field | 'statusUntil'): { error: string } | Record<string, never> => {
     const message = problems[field];
     return message === undefined ? {} : { error: message };
   };
@@ -213,6 +263,50 @@ const IndependentProfilePage = (): React.JSX.Element => {
               edit('status', event.target.value);
             }}
           />
+          <SettingsTextRow
+            readOnly={busy}
+            label={t('profile.emojiLabel')}
+            hint={t('profile.emojiHint')}
+            value={shown('statusEmoji')}
+            maxLength={32}
+            autoComplete="off"
+            spellCheck={false}
+            {...errorOf('statusEmoji')}
+            onChange={(event) => {
+              edit('statusEmoji', event.target.value);
+            }}
+          />
+          <SettingsRow
+            label={t('profile.clearLabel')}
+            description={problems.statusUntil ?? t('profile.clearHint')}
+            fill
+          >
+            <Select
+              aria-label={t('profile.clearLabel')}
+              disabled={busy}
+              value={clearShown}
+              className="w-full"
+              onChange={(event) => {
+                const value = event.target.value;
+                const chosen = value === 'keep' ? 'keep' : STATUS_CLEARS.find((c) => c === value);
+                if (chosen !== undefined) {
+                  setClear(chosen);
+                  setState('idle');
+                }
+              }}
+            >
+              {keptUntil !== null && (
+                <option value="keep">
+                  {t('profile.statusUntil', { time: untilText(keptUntil, minute, format) })}
+                </option>
+              )}
+              {STATUS_CLEARS.map((choice) => (
+                <option key={choice} value={choice}>
+                  {t(`profile.clear.${choice}`)}
+                </option>
+              ))}
+            </Select>
+          </SettingsRow>
           <SettingsTextRow
             readOnly={busy}
             label={t('profile.zoneLabel')}

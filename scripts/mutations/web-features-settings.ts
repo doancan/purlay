@@ -404,6 +404,15 @@ export const WEB_FEATURES_SETTINGS: readonly Mutation[] = [
     tests: ['apps/web/src/features/settings/sections.test.ts'],
   },
   {
+    id: 'status-end-not-sent-with-the-line',
+    why: 'Profile keeps the line’s old end when only its emoji changes — or drops it — instead of sending the end shown (D-330)',
+    file: 'apps/web/src/features/settings/pages/profile.tsx',
+    find: "        clearShown === 'keep' ? keptUntil : statusEnd(clearShown, new Date(minute), format),\n",
+    replace:
+      "        clearShown === 'keep' ? null : statusEnd(clearShown, new Date(minute), format),\n",
+    tests: ['apps/web/src/features/chat/profile/profile.test.tsx'],
+  },
+  {
     id: 'web-settings-page-before-its-anchor',
     why: 'a module’s settings page lands before the page its manifest says it follows, so the navigation is in another order than the manifest says',
     file: 'apps/web/src/features/settings/sections.ts',
