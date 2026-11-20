@@ -54,8 +54,12 @@ export interface ChannelsApi {
   readonly addChannelMember: (channelId: string, userId: string) => Promise<void>;
   /** Takes somebody out of the channel (D-172); they are told by the server. */
   readonly removeChannelMember: (channelId: string, userId: string) => Promise<void>;
-  /** What the caller is told about in this channel (D-107). */
-  readonly setNotificationLevel: (channelId: string, level: NotificationLevel) => Promise<void>;
+  /** What the caller is told about in this channel (D-107): for good, or until `until` (D-329). */
+  readonly setNotificationLevel: (
+    channelId: string,
+    level: NotificationLevel,
+    until?: string,
+  ) => Promise<void>;
   /** Stars a channel the caller is in, or lets the star go (D-132). */
   readonly star: (channelId: string, starred: boolean) => Promise<void>;
   readonly openDirectMessage: (workspaceId: string, userId: string) => Promise<Channel>;
@@ -143,11 +147,12 @@ export const createChannelsApi = (http: Http): ChannelsApi => ({
     http.send('POST', `/api/channels/${at(channelId)}/members`, options({ body: { userId } })),
   removeChannelMember: (channelId, userId) =>
     http.send('DELETE', `/api/channels/${at(channelId)}/members/${at(userId)}`, options()),
-  setNotificationLevel: (channelId, level) =>
+  setNotificationLevel: (channelId, level, until) =>
     http.send(
       'PUT',
       `/api/channels/${at(channelId)}/notification-level`,
-      options({ body: { level } }),
+      // An absent `until` is left out of the JSON, which is a level for good (D-329).
+      options({ body: { level, until } }),
     ),
   star: (channelId, starred) =>
     http.send(starred ? 'PUT' : 'DELETE', `/api/channels/${at(channelId)}/star`, options()),

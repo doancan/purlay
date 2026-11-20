@@ -2565,6 +2565,15 @@ export const en = {
   'level.mentions.short': 'mentions and replies',
   'level.none.short': 'nothing',
   'level.failed': 'The notification level was not changed.',
+  'level.buttonUntil': 'Notifications: {level} until {time}',
+  'level.mutedUntil': 'Muted until {time}',
+  'level.until': '{level} until {time}',
+  'level.muteFor': 'Mute for…',
+  'level.mute.15m': 'For 15 minutes ({time})',
+  'level.mute.1h': 'For 1 hour ({time})',
+  'level.mute.8h': 'For 8 hours ({time})',
+  'level.mute.24h': 'For 24 hours ({time})',
+  'level.mute.tomorrow': 'Until tomorrow',
 
   // ── Inbox (D-106) ──────────────────────────────────────────────────────
   'inbox.title': 'Inbox',

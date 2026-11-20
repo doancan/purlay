@@ -35,6 +35,14 @@ export const WEB_FEATURES_SIDEBAR: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/sidebar/invite-dialog.test.tsx'],
   },
   {
+    id: 'mute-never-read-again-at-its-end',
+    why: 'a mute for a while ends on the server and the sidebar keeps showing the channel muted until a reload (D-329)',
+    file: 'apps/web/src/features/chat/sidebar/level-ends.tsx',
+    find: '            readAgain(client, keys.channels(workspaceId));\n',
+    replace: '',
+    tests: ['apps/web/src/features/chat/sidebar/sidebar.test.tsx'],
+  },
+  {
     id: 'personal-groups-old-account-paints',
     why: 'A late group response populates the next account’s cache.',
     file: 'apps/web/src/features/chat/sidebar/group-actions.ts',

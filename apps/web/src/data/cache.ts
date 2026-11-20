@@ -623,13 +623,17 @@ export const allChannelsRead = (client: QueryClient, workspaceId: string): (() =
   };
 };
 
-/** The caller's notification level in a channel, as they chose it or as it was before a refusal. */
+/**
+ * The caller's notification level in a channel, as they chose it or as it was before a refusal: for good (`until`
+ * null), or until an instant (D-329).
+ */
 export const channelLevelChanged = (
   client: QueryClient,
   channelId: string,
   notificationLevel: NotificationLevel,
+  notificationLevelUntil: string | null = null,
 ): void => {
-  editChannels(client, channelId, (c) => ({ ...c, notificationLevel }));
+  editChannels(client, channelId, (c) => ({ ...c, notificationLevel, notificationLevelUntil }));
 };
 
 /**

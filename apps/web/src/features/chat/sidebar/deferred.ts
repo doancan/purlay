@@ -3,6 +3,7 @@ export { PersonalGroups } from './personal-groups';
 export { NewChannelDialog } from './new-channel-dialog';
 export { BrowseChannelsDialog } from './browse-channels-dialog';
 export { InviteDialog } from './invite-dialog';
+export { LevelEnds } from './level-ends';
 export { RowMenu } from './row-menu-body';
 export {
   ChannelGroupEditor,

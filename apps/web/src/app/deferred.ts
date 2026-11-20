@@ -30,6 +30,7 @@ export {
   DeleteChannelGroupDialog,
   MoveChannelGroupDialog,
   PersonalGroups,
+  LevelEnds,
 } from '../features/chat/sidebar/deferred';
 
 export { AdministrationScreen } from '../features/administration/screen';
