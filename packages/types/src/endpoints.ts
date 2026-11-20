@@ -93,6 +93,7 @@ import {
   UnfurlResponse,
   UnresolvedPage,
   UnresolvedQuery,
+  UpdateProfileRequest,
   UploadQuery,
   WorkspaceMember,
   WorkspaceMemberList,
@@ -100,7 +101,7 @@ import {
 import { FindQuery, FindResponse } from './find';
 import { InboxPage, InboxQuery, MarkInboxReadRequest } from './inbox';
 import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';
-import { Attachment, Channel, Message, Workspace } from './models';
+import { Attachment, Channel, Message, Profile, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
 import { WebLinkPreviewRequest, WebLinkPreviewResponse } from './web-link-previews';
 import {
@@ -221,6 +222,16 @@ export const ENDPOINTS = [
     auth: 'session',
     body: SetAwayRequest,
     responses: { 200: SetAwayResponse },
+  }),
+  // The person's own profile, and with it the status line that clears itself (D-131, D-330): what a tray or an
+  // account menu sets beside away.
+  read({
+    id: 'updateProfile',
+    method: 'PATCH',
+    path: '/api/me/profile',
+    auth: 'session',
+    body: UpdateProfileRequest,
+    responses: { 200: Profile },
   }),
   read({
     id: 'listWorkspaces',

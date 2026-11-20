@@ -59,12 +59,29 @@ describe('integration: PATCH /api/me/profile', () => {
         title: 'Engineer',
         timeZone: 'America/New_York',
         status: null,
+        statusEmoji: null,
+        statusUntil: null,
       });
       expect(told.sort()).toEqual([userTopic(alice), userTopic(bob)].sort());
 
       told.splice(0);
       await patch({ title: 'Engineer' });
       expect(told).toEqual([]);
+
+      // A status line that clears itself is a change like any other, heard by the same people (D-330).
+      const until = new Date(clock.now().getTime() + 30 * 60_000).toISOString();
+      expect(
+        await patch({
+          status: 'Toplantıda — çıkınca dönerim',
+          statusEmoji: '📅',
+          statusUntil: until,
+        }),
+      ).toMatchObject({
+        status: 'Toplantıda — çıkınca dönerim',
+        statusEmoji: '📅',
+        statusUntil: until,
+      });
+      expect(told.sort()).toEqual([userTopic(alice), userTopic(bob)].sort());
     });
   });
 
@@ -95,6 +112,26 @@ describe('integration: PATCH /api/me/profile', () => {
       expect(await patch({ timeZone: 'Atlantis/Lost' })).toBe(400);
       expect(await patch({ nickname: 'x' })).toBe(400);
       expect(await patch({ title: 'Lead' }, false)).toBe(401);
+      // The status line's emoji is one emoji (D-330): a flag, a joined family and a toned hand are; words, two
+      // emoji, a letter with an emoji and markup are not.
+      for (const statusEmoji of ['🇹🇷', '👨‍👩‍👧‍👦', '👍🏽', '🍽️', null]) {
+        expect(await patch({ status: 'Öğlen', statusEmoji })).toBe(200);
+      }
+      for (const statusEmoji of ['lunch', ':lunch:', '😀😀', 'a😀', '<b>😀</b>', '', '\u200d']) {
+        expect(await patch({ status: 'Öğlen', statusEmoji })).toBe(400);
+      }
+      const ahead = (hours: number): string =>
+        new Date(clock.now().getTime() + hours * 3_600_000).toISOString();
+      expect(await patch({ status: 'Öğlen', statusUntil: ahead(1) })).toBe(200);
+      for (const statusUntil of [
+        ahead(-1),
+        ahead(7 * 24 + 1),
+        'tomorrow',
+        '2026-13-40T99:00:00Z',
+        5,
+      ]) {
+        expect(await patch({ status: 'Öğlen', statusUntil })).toBe(400);
+      }
     });
   });
 });

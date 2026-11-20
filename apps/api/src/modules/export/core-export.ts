@@ -49,6 +49,8 @@ const head = [
       title: 'members',
       time_zone: 'members',
       status_text: 'members',
+      status_emoji: 'members',
+      status_until: 'members',
       // Identity with another service, and a person's own settings and traces.
       github_id: 'omit',
       github_login: 'omit',

@@ -110,7 +110,7 @@ describe('integration: workspace guest administration', () => {
   test('the general directory and same-role receipt identify guests without revealing their expiry or history floor', async () => {
     await withRollback(async (db) => {
       const { owner, guestIds, memberId } = await setup(db);
-      const directory = await membersIn(db, owner, chatWorkspaceChannels);
+      const directory = await membersIn(db, owner, new Date(), chatWorkspaceChannels);
       const guest = directory.find((row) => row.user.id === guestIds[0]);
       expect(guest).toMatchObject({ accessKind: 'guest', role: 'member' });
       expect(JSON.stringify(guest)).not.toContain('historySince');

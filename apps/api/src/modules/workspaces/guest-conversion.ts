@@ -143,7 +143,7 @@ export const convertGuest = async (
       },
       role: target.role,
       joinedAt: new Date(target.joined_at).toISOString(),
-      profile: asProfile(target),
+      profile: asProfile(target, clock.now()),
     },
     changed,
     notifyUserIds: changed ? await guestAccessRecipients(transaction, current, userId) : [],

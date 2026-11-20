@@ -486,8 +486,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'guest-directory-http-forgets-adapter',
     why: 'The real directory endpoint must pass the scoped module adapter.',
     file: 'apps/api/src/ingress/http/workspaces.ts',
-    find: 'return await membersIn(database, context, dependencies.workspaceChannels);',
-    replace: 'return await membersIn(database, context);',
+    find: '    dependencies.clock.now(),\n    dependencies.workspaceChannels,\n  );',
+    replace: '    dependencies.clock.now(),\n  );',
     tests: ['apps/api/src/ingress/http/guest-invitations.integration.test.ts'],
   },
   {

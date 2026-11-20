@@ -141,6 +141,17 @@ const STEPS: readonly Step[] = [
   { id: 'getMe', spec: () => ({}), status: 200 },
   { id: 'setAway', spec: () => ({ json: { away: true } }), status: 200 },
   { id: 'setAway', spec: () => ({ json: { away: false } }), status: 200 },
+  {
+    id: 'updateProfile',
+    spec: () => ({
+      json: {
+        status: 'Öğle yemeğinde',
+        statusEmoji: '🍽️',
+        statusUntil: new Date(NOW.getTime() + 3_600_000).toISOString(),
+      },
+    }),
+    status: 200,
+  },
   // The check is off in this server's configuration, so the answer is the empty one; `releases.integration.test.ts` has the rest.
   { id: 'getLatestRelease', spec: () => ({}), status: 200 },
 

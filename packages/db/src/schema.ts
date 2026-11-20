@@ -915,7 +915,9 @@ export interface Users {
   quiet_days: number | null;
   quiet_from: number | null;
   quiet_to: number | null;
+  status_emoji: string | null;
   status_text: string | null;
+  status_until: Timestamp | null;
   suspended_at: Timestamp | null;
   time_zone: string | null;
   title: string | null;

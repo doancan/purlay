@@ -63,7 +63,7 @@ describe('integration: tombstones are not listed', () => {
       const context = await requireWorkspaceMembership(db, owner.userId, workspace.id);
 
       // The control: before the tombstone, both are listed.
-      expect((await membersIn(db, context)).map((m) => m.user.id).sort()).toEqual(
+      expect((await membersIn(db, context, NOW)).map((m) => m.user.id).sort()).toEqual(
         [owner.userId, gone.userId].sort(),
       );
 
@@ -72,7 +72,7 @@ describe('integration: tombstones are not listed', () => {
         .set({ deleted_at: DELETED })
         .where('id', '=', gone.userId)
         .execute();
-      expect((await membersIn(db, context)).map((m) => m.user.id)).toEqual([owner.userId]);
+      expect((await membersIn(db, context, NOW)).map((m) => m.user.id)).toEqual([owner.userId]);
     });
   });
 

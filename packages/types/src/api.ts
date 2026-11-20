@@ -37,6 +37,7 @@ import {
   PROFILE_STATUS_MAX,
   PROFILE_TITLE_MAX,
   Profile,
+  StatusEmoji,
   AttachmentIds,
   Message,
   MessageContent,
@@ -1658,6 +1659,14 @@ export const UpdateProfileRequest = FromClient({
       Type.Null(),
     ]),
   ),
+  /**
+   * The status line is written whole (D-330): a request naming any of `status`, `statusEmoji` and `statusUntil`
+   * sets all three, and one it leaves out is cleared — so yesterday's client, which sends `status` alone, sets a
+   * line for good, as it always did. `statusUntil` is ahead and within `STATUS_UNTIL_MAX_DAYS`, the server's to
+   * judge; with neither words nor an emoji there is nothing to clear and it is not kept.
+   */
+  statusEmoji: Type.Optional(Type.Union([StatusEmoji, Type.Null()])),
+  statusUntil: Type.Optional(Type.Union([Timestamp, Type.Null()])),
 });
 export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
 
