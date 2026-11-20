@@ -98,6 +98,10 @@ const seeded = (): QueryClient => {
   client.setQueryData(keys.channels(WS), [channel()]);
   return client;
 };
+/** A few turns of the event loop: enough for a cancel, an invalidation and a refetch to run their course. */
+const fewTurns = async (): Promise<void> => {
+  for (let turn = 0; turn < 6; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+};
 /** What the cache holds under a key, as `unknown` — the typed overloads infer `void` from a bare key. */
 const cached = (client: QueryClient, key: readonly unknown[]): unknown => client.getQueryData(key);
 const feed = (client: QueryClient): string[] =>
@@ -475,6 +479,106 @@ describe('the channel list', () => {
       client.clear();
     }
   });
+
+  test('a burst of counters during one list read asks again once, not once per frame (#1464)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const answers = Array.from({ length: 41 }, () => Promise.withResolvers<Channel[]>());
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: keys.channels(WS),
+      initialData: [channel()],
+      queryFn: (): Promise<Channel[]> => answers[reads++]?.promise ?? Promise.resolve([channel()]),
+    });
+    const stop = observer.subscribe(() => undefined);
+    const latest = { ...state, unreadCount: 40 };
+    try {
+      expect(reads).toBe(1);
+      for (let n = 1; n <= 40; n++) channelStateChanged(client, CH, { ...state, unreadCount: n });
+      await fewTurns();
+      expect(reads).toBe(2);
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state).toEqual(latest);
+      answers[0]?.resolve([channel()]);
+      answers[1]?.resolve([channel({ state: latest })]);
+      await fewTurns();
+      expect(reads).toBe(2);
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state).toEqual(latest);
+    } finally {
+      for (const answer of answers) answer.resolve([]);
+      stop();
+      client.clear();
+    }
+  });
+
+  test('counters heard while the list is asked again wait for that answer and ask once more (#1464)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const answers = Array.from({ length: 41 }, () => Promise.withResolvers<Channel[]>());
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: keys.channels(WS),
+      initialData: [channel()],
+      queryFn: (): Promise<Channel[]> => answers[reads++]?.promise ?? Promise.resolve([channel()]),
+    });
+    const stop = observer.subscribe(() => undefined);
+    const latest = { ...state, unreadCount: 40 };
+    try {
+      // Each frame is its own task, as the socket delivers them, so the second already finds the
+      // list being asked again.
+      for (let n = 1; n <= 40; n++) {
+        channelStateChanged(client, CH, { ...state, unreadCount: n });
+        await fewTurns();
+      }
+      expect(reads).toBe(2);
+      expect(client.getQueryState(keys.channels(WS))?.fetchStatus).toBe('fetching');
+      // The second read began before most of the burst: what it brings back is stale, and is read again.
+      answers[1]?.resolve([channel({ state: { ...state, unreadCount: 1 } })]);
+      await fewTurns();
+      expect(reads).toBe(3);
+      answers[2]?.resolve([channel({ state: latest })]);
+      await fewTurns();
+      expect(reads).toBe(3);
+      expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.state).toEqual(latest);
+      expect(client.getQueryState(keys.channels(WS))?.fetchStatus).toBe('idle');
+    } finally {
+      for (const answer of answers) answer.resolve([]);
+      stop();
+      client.clear();
+    }
+  });
+
+  test.each(['replace', 'reset'] as const)(
+    'a list whose access is %sd while it is asked again is not read once more for the old one (#1464)',
+    async (operation) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const answers = Array.from({ length: 4 }, () => Promise.withResolvers<Channel[]>());
+      let reads = 0;
+      const observer = new QueryObserver(client, {
+        queryKey: keys.channels(WS),
+        initialData: [channel()],
+        queryFn: (): Promise<Channel[]> =>
+          answers[reads++]?.promise ?? Promise.resolve([channel()]),
+      });
+      const stop = observer.subscribe(() => undefined);
+      try {
+        channelStateChanged(client, CH, { ...state, unreadCount: 1 });
+        await fewTurns();
+        channelStateChanged(client, CH, { ...state, unreadCount: 2 });
+        await fewTurns();
+        expect(reads).toBe(2);
+        if (operation === 'replace') {
+          client.removeQueries({ queryKey: keys.channels(WS), exact: true });
+          client.setQueryData(keys.channels(WS), [channel({ name: 'another account' })]);
+        } else workspaceAccessChanged(client, WS);
+        answers[1]?.resolve([channel({ name: 'old access' })]);
+        await fewTurns();
+        // A reset reads the list once, for the new access; nothing more is asked for the old one.
+        expect(reads).toBe(operation === 'reset' ? 3 : 2);
+      } finally {
+        for (const answer of answers) answer.resolve([]);
+        stop();
+        client.clear();
+      }
+    },
+  );
 
   test.each(['replace', 'reset'] as const)(
     'a cancelled channel read cannot schedule work after access %s',
