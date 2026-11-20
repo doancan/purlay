@@ -10,6 +10,10 @@
  * is `off` and is not asked at all. What is asked of a source is the caller's `WorkspaceContext` and the words: the source
  * narrows by both in its own query.
  *
+ * **Each source's hits are capped** at the limit, whatever it answers: it is asked for one more than that, and the group says
+ * `more` when it had it. A source that answers a thousand costs the answer ten. The answer is `partial` when a source that could
+ * have answered was `slow` or failed: what came back in time is answered, and the person may ask again.
+ *
  * **Each source is measured** (`purlay_search_source_*`): how long it took to answer or to be given up on, and each time it was
  * skipped and why, by its module and its id, so an operator sees a source that keeps being skipped before a person stops using it.
  */
@@ -66,7 +70,8 @@ const askOne = async (
             signal,
             ...(request?.entitlements === undefined ? {} : { entitlements: request.entitlements }),
           },
-          async () => await source.search({ database, context, query, limit }),
+          // One more than is shown, to know whether there is more without counting every match.
+          async () => await source.search({ database, context, query, limit: limit + 1 }),
         ),
       () => SLOW,
     );
@@ -74,7 +79,7 @@ const askOne = async (
       owned.warn('a search source passed its deadline and was skipped', { deadlineMs: ms });
       return { source: source.id, reason: 'slow' };
     }
-    return { source: source.id, hits: outcome.slice(0, limit) };
+    return { source: source.id, hits: outcome.slice(0, limit), more: outcome.length > limit };
   } catch (error) {
     owned.error('a search source failed and was skipped', { err: error });
     return { source: source.id, reason: 'error' };
@@ -133,5 +138,5 @@ export const findAcross = async (
     countSkip(dependencies, series, 'off');
     skipped.push({ source: series.source, reason: 'off' });
   }
-  return { groups, skipped };
+  return { groups, skipped, partial: skipped.some(({ reason }) => reason !== 'off') };
 };

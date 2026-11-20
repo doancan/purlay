@@ -48,10 +48,15 @@ export const FindHit = /* @__PURE__ */ Type.Object({
 });
 export type FindHit = Static<typeof FindHit>;
 
-/** What one source found, newest first. A source that found nothing is a group with no hits, which is not a skipped one. */
+/**
+ * What one source found, newest first, cut at the limit however much the source holds. A source that found nothing is a group
+ * with no hits, which is not a skipped one. `more` says the source had more than the hits shown, so a client can say "10+" and
+ * send the person to the source's own screen; there is no total, which would cost every source a count of every match.
+ */
 export const FindGroup = /* @__PURE__ */ Type.Object({
   source: /* @__PURE__ */ Type.String(),
   hits: /* @__PURE__ */ Type.Array(FindHit, { maxItems: FIND_HITS_MAX }),
+  more: /* @__PURE__ */ Type.Boolean(),
 });
 export type FindGroup = Static<typeof FindGroup>;
 
@@ -69,8 +74,13 @@ export const SkippedSource = /* @__PURE__ */ Type.Object({
 });
 export type SkippedSource = Static<typeof SkippedSource>;
 
+/**
+ * `partial` is true when a source the person could have been answered by was `slow` or failed (`error`): the groups are what
+ * finished in time, and asking again may find more. A source that is `off` does not make an answer partial: it is not run here.
+ */
 export const FindResponse = /* @__PURE__ */ Type.Object({
   groups: /* @__PURE__ */ Type.Array(FindGroup),
   skipped: /* @__PURE__ */ Type.Array(SkippedSource),
+  partial: /* @__PURE__ */ Type.Boolean(),
 });
 export type FindResponse = Static<typeof FindResponse>;

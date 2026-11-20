@@ -11,7 +11,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { FindResponse, messageId, SEARCH_QUERY_MAX, SEARCH_QUERY_MIN } from '@purlay/types';
+import {
+  FIND_HITS_MAX,
+  FindResponse,
+  messageId,
+  SEARCH_QUERY_MAX,
+  SEARCH_QUERY_MIN,
+} from '@purlay/types';
 import { createApp } from './app';
 import { bundledModules, composeFor } from '../../composition';
 import { fixedClock } from '../../platform/clock';
@@ -135,8 +141,34 @@ describe('integration: find', () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       const found = await answer(await call(db, find(world, 'nothing like it'), world.alice));
-      expect(found.groups).toEqual(SOURCES.map((source) => ({ source, hits: [] })));
+      expect(found.groups).toEqual(SOURCES.map((source) => ({ source, hits: [], more: false })));
+      expect(found.partial).toBe(false);
       expect(found.skipped).toEqual([]);
+    });
+  });
+
+  test('cuts a source at the limit and says it had more, and says nothing more at exactly the limit', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      for (let at = 0; at < FIND_HITS_MAX + 1; at += 1) {
+        await anIssue(db, world.room.workspaceId, `Release ${String(at)}`);
+      }
+      for (const title of ['Çizelge bir', 'Çizelge iki', 'Çizelge üç']) {
+        await anIssue(db, world.room.workspaceId, title);
+      }
+      const issuesOf = async (
+        path: string,
+      ): Promise<FindResponse['groups'][number] | undefined> => {
+        const found = await answer(await call(db, path, world.alice));
+        expect(found.partial).toBe(false);
+        return found.groups.find((group) => group.source === 'issues');
+      };
+      const past = await issuesOf(find(world, 'release'));
+      expect([past?.hits.length, past?.more]).toEqual([FIND_HITS_MAX, true]);
+      const exactly = await issuesOf(`${find(world, 'çizelge')}&limit=3`);
+      expect([exactly?.hits.length, exactly?.more]).toEqual([3, false]);
+      const fewer = await issuesOf(`${find(world, 'çizelge')}&limit=2`);
+      expect([fewer?.hits.length, fewer?.more]).toEqual([2, true]);
     });
   });
 
@@ -191,6 +223,8 @@ describe('integration: find', () => {
       );
       expect(chatOff.groups.map((group) => group.source)).toEqual(['issues']);
       expect(chatOff.skipped).toEqual(othersOff('issues'));
+      // A module that is not run does not make the answer partial: nothing more would come of asking again.
+      expect(chatOff.partial).toBe(false);
       const issuesOff = await answer(
         await call(db, find(world, 'deploy'), world.alice, composeFor(bundledModules, 'chat')),
       );
