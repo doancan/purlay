@@ -25,7 +25,7 @@ export const updateMyProfile = async (
   const { userId } = await requireIndependentSession(dependencies.auth, request);
   const input = validated(UpdateProfileRequest, body);
   const change = await atomicallyOn(database)(
-    async (transaction) => await updateProfile(transaction, userId, input),
+    async (transaction) => await updateProfile(transaction, clock, userId, input),
   );
   await publishAfterCommit(
     log,

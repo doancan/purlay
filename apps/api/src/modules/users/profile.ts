@@ -10,18 +10,31 @@
  *   `timeZone`.
  * - **A change says who to tell**: everyone in every workspace the person is in, so each reads the
  *   members again. Nothing changed, nobody is told.
+ * - **The status line clears itself (D-330)**: its words, its emoji and its end are written together, and once the
+ *   end has passed every read answers the line as cleared — read against the clock, as Deep Work's end is (D-108),
+ *   so nothing has to run at the instant and no reader sees a stale line.
  */
 import type { Executor, Transaction } from '@purlay/db';
-import type { Profile, UpdateProfileRequest } from '@purlay/types';
+import { STATUS_UNTIL_MAX_DAYS, type Profile, type UpdateProfileRequest } from '@purlay/types';
+import type { Clock } from '../../platform/clock';
+import { requireEndAhead } from '../../platform/ends-ahead';
 import { AppError } from '../../platform/errors';
 
 /** The columns a profile is read from, beside a user's others. */
-export const PROFILE_COLUMNS = ['users.title', 'users.time_zone', 'users.status_text'] as const;
+export const PROFILE_COLUMNS = [
+  'users.title',
+  'users.time_zone',
+  'users.status_text',
+  'users.status_emoji',
+  'users.status_until',
+] as const;
 
 interface ProfileRow {
   readonly title: string | null;
   readonly time_zone: string | null;
   readonly status_text: string | null;
+  readonly status_emoji: string | null;
+  readonly status_until: Date | string | null;
 }
 
 /**
@@ -34,11 +47,56 @@ export const isNameGitHubs = (row: {
   readonly github_connected_at: unknown;
 }): boolean => row.github_id !== null && row.github_connected_at === null;
 
-export const asProfile = (row: ProfileRow): Profile => ({
-  title: row.title,
-  timeZone: row.time_zone,
-  status: row.status_text,
-});
+/** Whether the row's status line has cleared itself by `now` (D-330). */
+const statusOver = (row: ProfileRow, now: Date): boolean =>
+  row.status_until !== null && new Date(row.status_until).getTime() <= now.getTime();
+
+/** The profile as it reads at `now`: a status line past its end is no line at all (D-330). */
+export const asProfile = (row: ProfileRow, now: Date): Profile => {
+  const over = statusOver(row, now);
+  return {
+    title: row.title,
+    timeZone: row.time_zone,
+    status: over ? null : row.status_text,
+    statusEmoji: over ? null : row.status_emoji,
+    statusUntil:
+      over || row.status_until === null ? null : new Date(row.status_until).toISOString(),
+  };
+};
+
+/**
+ * The status line a request writes, whole (D-330), or undefined when it names none of its three fields. Words are
+ * stored as the other fields are; an end is ahead and within `STATUS_UNTIL_MAX_DAYS`; a line with neither words nor
+ * an emoji has nothing to clear, so its end is not kept.
+ */
+const statusLine = (
+  clock: Clock,
+  input: UpdateProfileRequest,
+): Pick<ProfileRow, 'status_text' | 'status_emoji' | 'status_until'> | undefined => {
+  if (
+    input.status === undefined &&
+    input.statusEmoji === undefined &&
+    input.statusUntil === undefined
+  )
+    return undefined;
+  const text = stored(input.status ?? null);
+  const emoji = input.statusEmoji ?? null;
+  const until =
+    input.statusUntil == null
+      ? null
+      : requireEndAhead(
+          clock,
+          input.statusUntil,
+          STATUS_UNTIL_MAX_DAYS * 24,
+          'A status line',
+          'statusUntil',
+        );
+  return {
+    status_text: text,
+    status_emoji: emoji,
+    status_until: text === null && emoji === null ? null : until,
+  };
+};
 
 /**
  * The zone's own name, as the runtime spells it — `europe/istanbul` is `Europe/Istanbul` — or null
@@ -72,9 +130,12 @@ export interface ProfileChange {
 
 export const updateProfile = async (
   transaction: Transaction,
+  clock: Clock,
   userId: string,
   input: UpdateProfileRequest,
 ): Promise<ProfileChange> => {
+  const line = statusLine(clock, input);
+  const now = clock.now();
   const zone = input.timeZone == null ? input.timeZone : canonicalZone(input.timeZone);
   if (zone === null && input.timeZone != null) {
     throw new AppError({
@@ -90,6 +151,8 @@ export const updateProfile = async (
       'title',
       'time_zone',
       'status_text',
+      'status_emoji',
+      'status_until',
       'display_name',
       'github_id',
       'github_connected_at',
@@ -112,22 +175,30 @@ export const updateProfile = async (
   const after: ProfileRow = {
     title: input.title === undefined ? before.title : stored(input.title),
     time_zone: zone === undefined ? before.time_zone : zone,
-    status_text: input.status === undefined ? before.status_text : stored(input.status),
+    ...(line ?? {
+      status_text: before.status_text,
+      status_emoji: before.status_emoji,
+      status_until: before.status_until,
+    }),
   };
+  const sameInstant = (a: Date | string | null, b: Date | string | null): boolean =>
+    (a === null ? null : new Date(a).getTime()) === (b === null ? null : new Date(b).getTime());
   if (
     after.title === before.title &&
     after.time_zone === before.time_zone &&
     after.status_text === before.status_text &&
+    after.status_emoji === before.status_emoji &&
+    sameInstant(after.status_until, before.status_until) &&
     displayName === before.display_name
   ) {
-    return { profile: asProfile(before), told: [] };
+    return { profile: asProfile(before, now), told: [] };
   }
   await transaction
     .updateTable('users')
     .set({ ...after, display_name: displayName })
     .where('id', '=', userId)
     .execute();
-  return { profile: asProfile(after), told: await workspacesOf(transaction, userId) };
+  return { profile: asProfile(after, now), told: await workspacesOf(transaction, userId) };
 };
 
 /**

@@ -8,13 +8,15 @@ import { AppError } from './errors';
 
 /**
  * The instant `until` names, when it is after now and at most `maxHours` from now; otherwise a refusal of the
- * field by name, which says the window. `what` begins the message: "Deep Work", "A timed level".
+ * field by name — `until`, or the one `field` names — which says the window. `what` begins the message: "Deep Work",
+ * "A timed level".
  */
 export const requireEndAhead = (
   clock: Clock,
   until: string,
   maxHours: number,
   what: string,
+  field = 'until',
 ): Date => {
   const end = new Date(until);
   const now = clock.now().getTime();
@@ -28,7 +30,7 @@ export const requireEndAhead = (
     throw new AppError({
       code: 'VALIDATION_FAILED',
       message: `${what} ends in the future, at most ${String(maxHours)} hours from now.`,
-      details: { fields: { until: `ahead, and at most ${String(maxHours)} hours` } },
+      details: { fields: { [field]: `ahead, and at most ${String(maxHours)} hours` } },
     });
   }
   return end;

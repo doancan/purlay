@@ -266,6 +266,8 @@ export const eraseAccount = async (
       title: null,
       time_zone: null,
       status_text: null,
+      status_emoji: null,
+      status_until: null,
       last_seen_at: null,
       github_id: null,
       github_login: null,

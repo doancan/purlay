@@ -241,9 +241,9 @@ export const API_MODULES_USERS: readonly Mutation[] = [
     id: 'profile-told-of-nothing',
     why: 'a profile saved unchanged tells everyone in every workspace the person is in',
     file: 'apps/api/src/modules/users/profile.ts',
-    find: '    return { profile: asProfile(before), told: [] };\n',
+    find: '    return { profile: asProfile(before, now), told: [] };\n',
     replace:
-      '    return { profile: asProfile(before), told: await workspacesOf(transaction, userId) };\n',
+      '    return { profile: asProfile(before, now), told: await workspacesOf(transaction, userId) };\n',
     tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
   },
   {
@@ -261,6 +261,30 @@ export const API_MODULES_USERS: readonly Mutation[] = [
     find: '    if ((await columnsOf(executor, userId)).time_zone === null) {\n',
     replace: '    if (false) {\n',
     tests: ['apps/api/src/ingress/http/quiet-hours.integration.test.ts'],
+  },
+  {
+    id: 'status-end-kept-with-no-line',
+    why: 'an end with neither words nor an emoji is kept, and clears nothing on a line written later (D-330)',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '    status_until: text === null && emoji === null ? null : until,\n',
+    replace: '    status_until: until,\n',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
+  },
+  {
+    id: 'status-line-not-written-whole',
+    why: 'yesterday’s client sets its words and an old end still clears them an hour later (D-330)',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '  const emoji = input.statusEmoji ?? null;\n',
+    replace: '  const emoji = input.statusEmoji === undefined ? undefined : input.statusEmoji;\n',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
+  },
+  {
+    id: 'status-never-clears',
+    why: 'a status line set to clear itself in an hour is shown for ever: its end is never compared with the clock (D-330)',
+    file: 'apps/api/src/modules/users/profile.ts',
+    find: '  row.status_until !== null && new Date(row.status_until).getTime() <= now.getTime();\n',
+    replace: '  row.status_until !== null && false;\n',
+    tests: ['apps/api/src/modules/users/profile.integration.test.ts'],
   },
   {
     id: 'suspension-keeps-the-sessions',

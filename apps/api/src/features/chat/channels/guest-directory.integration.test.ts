@@ -68,7 +68,9 @@ describe('integration: guest directory', () => {
         .execute();
       const guest = await requireWorkspaceMembership(db, guestId, room.workspaceId);
       expect(
-        (await membersIn(db, guest, chatWorkspaceChannels)).map((row) => row.user.id).sort(),
+        (await membersIn(db, guest, new Date(), chatWorkspaceChannels))
+          .map((row) => row.user.id)
+          .sort(),
       ).toEqual([guestId, room.members['owner']?.userId ?? ''].sort());
       const channel = await requireChannelById(db, guestId, room.channelId);
       expect((await channelMembers(db, channel)).map((row) => row.user.id).sort()).toEqual(
@@ -79,8 +81,8 @@ describe('integration: guest directory', () => {
         room.members['owner']?.userId ?? '',
         room.workspaceId,
       );
-      expect(await membersIn(db, owner)).toHaveLength(5);
-      expect(await attempt(db, () => membersIn(db, guest))).toBe('WORKSPACE_NOT_FOUND');
+      expect(await membersIn(db, owner, new Date())).toHaveLength(5);
+      expect(await attempt(db, () => membersIn(db, guest, new Date()))).toBe('WORKSPACE_NOT_FOUND');
       await withinRequest(
         {
           requestId: 'guest-directory-module-off',
@@ -99,7 +101,7 @@ describe('integration: guest directory', () => {
         },
         async () => {
           const stopped = await requireWorkspaceMembership(db, guestId, room.workspaceId);
-          expect(await membersIn(db, stopped, chatWorkspaceChannels)).toEqual([]);
+          expect(await membersIn(db, stopped, new Date(), chatWorkspaceChannels)).toEqual([]);
         },
       );
       await db
@@ -107,7 +109,7 @@ describe('integration: guest directory', () => {
         .where('user_id', '=', guestId)
         .where('channel_id', '=', room.channelId)
         .execute();
-      expect(await membersIn(db, guest, chatWorkspaceChannels)).toEqual([]);
+      expect(await membersIn(db, guest, new Date(), chatWorkspaceChannels)).toEqual([]);
     });
   });
 });

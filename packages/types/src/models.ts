@@ -116,6 +116,12 @@ export const DISPLAY_NAME_MAX = 128;
 export const PROFILE_TITLE_MAX = 80;
 export const PROFILE_STATUS_MAX = 100;
 
+/** The furthest ahead a status line may be set to clear itself (D-330): a week, so "this week" fits. */
+export const STATUS_UNTIL_MAX_DAYS = 7;
+
+/** A status line's emoji (D-330): one Unicode emoji, as a reaction's is. */
+export const StatusEmoji = Type.String({ minLength: 1, maxLength: 32, format: 'emoji' });
+
 /**
  * What a person says about themselves beyond the name GitHub gives them (D-131): a title, the time
  * zone their day is in (an IANA name), and a short status line. Each null until they set it.
@@ -124,6 +130,16 @@ export const Profile = Type.Object({
   title: Type.Union([Type.String({ minLength: 1, maxLength: PROFILE_TITLE_MAX }), Type.Null()]),
   timeZone: Type.Union([Type.String({ minLength: 1, maxLength: 64 }), Type.Null()]),
   status: Type.Union([Type.String({ minLength: 1, maxLength: PROFILE_STATUS_MAX }), Type.Null()]),
+  /**
+   * The status line's emoji, beside or instead of its words (D-330); null for none. Optional because it is an
+   * addition: a server before it never sends one.
+   */
+  statusEmoji: Type.Optional(Type.Union([StatusEmoji, Type.Null()])),
+  /**
+   * When the status line clears itself (D-330); null when it stays until changed. Once it has passed the server
+   * answers the line as cleared — words, emoji and this — so a reader never sees a stale one. Optional, as above.
+   */
+  statusUntil: Type.Optional(Type.Union([Timestamp, Type.Null()])),
 });
 export type Profile = Static<typeof Profile>;
 

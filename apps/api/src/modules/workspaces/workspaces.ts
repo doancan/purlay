@@ -273,6 +273,8 @@ export const meOf = async (
       'title',
       'time_zone',
       'status_text',
+      'status_emoji',
+      'status_until',
       'is_server_admin',
       'github_id',
       'github_connected_at',
@@ -290,7 +292,7 @@ export const meOf = async (
       avatarUrl: user.avatar_url,
       email: user.email,
     },
-    profile: asProfile(user),
+    profile: asProfile(user, clock.now()),
     memberships: [
       ...(await membershipsOf(executor, clock, userId, undefined, effective, channels)),
     ],
@@ -386,6 +388,7 @@ export const renameWorkspace = async (
 export const membersIn = async (
   executor: Executor,
   context: WorkspaceContext,
+  now: Date,
   channels: WorkspaceChannels = noWorkspaceChannels,
 ): Promise<readonly WorkspaceMember[]> => {
   let query = executor
@@ -419,7 +422,7 @@ export const membersIn = async (
     },
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
-    profile: asProfile(row),
+    profile: asProfile(row, now),
     ...(row.access_kind === 'guest' ? { accessKind: 'guest' as const } : {}),
   }));
 };

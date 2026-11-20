@@ -31,6 +31,8 @@ const head = [
       title: 'export',
       time_zone: 'export',
       status_text: 'export',
+      status_emoji: 'export',
+      status_until: 'export',
       locale: 'export',
       quiet_from: 'export',
       quiet_to: 'export',

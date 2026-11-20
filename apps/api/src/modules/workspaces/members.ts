@@ -145,7 +145,7 @@ export const changeRole = async (
     },
     role: row.role,
     joinedAt: new Date(row.joined_at).toISOString(),
-    profile: asProfile(user),
+    profile: asProfile(user, clock.now()),
     ...(targetIsGuest ? { accessKind: 'guest' as const } : {}),
   };
 };
