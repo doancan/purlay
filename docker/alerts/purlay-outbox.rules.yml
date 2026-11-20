@@ -1,4 +1,5 @@
-# Alert rules for the facts modules tell one another (the outbox, D-288). Load them in Prometheus (`rule_files:`) or Grafana
+# Alert rules for the facts modules tell one another (the outbox, D-288) and for what the core asks of them (the inbox, the grants,
+# the find of D-285). Load them in Prometheus (`rule_files:`) or Grafana
 # Alerting; the thresholds, what each alert means and what to do are in docs/DEPLOY.md, "Facts between modules". Every metric named
 # here is held to the code by apps/api/src/outbox-alert-rules.test.ts, so a metric renamed in the code breaks the build and not the
 # alert. The gauges are read from the table and are the same on every node, hence `max`; the counters are counted in each process,
@@ -89,3 +90,21 @@ groups:
         annotations:
           summary: 'Notices from {{ $labels.module }} are being read as history for lack of room'
           runbook: 'docs/DEPLOY.md, "Facts between modules"'
+
+  - name: purlay-find
+    rules:
+      # A source `off` is the operator's choice (a module not run, a workspace not granted it) and is never an alert; one that is
+      # `slow` or throws (`error`) on more than a fifth of the finds that asked it, at least three times, is a source people stop
+      # seeing results from without being told why. The histogram's _count is every time a source was asked, skipped or not.
+      - alert: PurlaySearchSourceSkipped
+        expr: |
+          sum by (module, source) (rate(purlay_search_source_skipped_total{reason=~"slow|error"}[15m]))
+            / sum by (module, source) (rate(purlay_search_source_duration_seconds_count[15m]))
+          > 0.2
+          and sum by (module, source) (increase(purlay_search_source_skipped_total{reason=~"slow|error"}[15m])) >= 3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'The search source {{ $labels.source }} of {{ $labels.module }} keeps being skipped by the find'
+          runbook: 'docs/DEPLOY.md, "A search source keeps being skipped"'

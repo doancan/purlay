@@ -1,5 +1,5 @@
 /**
- * The alert rules of the outbox (`docker/alerts/purlay-outbox.rules.yml`, D-288 §12) are code, so they are held to the code: every
+ * The alert rules of the outbox and the find (`docker/alerts/purlay-outbox.rules.yml`, D-288 §12, D-285) are code, so they are held to the code: every
  * metric a rule names is one the code has (a metric renamed breaks this and not the alert silently), each rule says what to do and
  * is in the thresholds table of `DEPLOY.md`, and the stale threshold is the overview's own.
  */
@@ -23,7 +23,7 @@ const rules = (): readonly Rule[] =>
     (group) => group.rules,
   );
 
-describe('the outbox alert rules', () => {
+describe('the outbox and find alert rules', () => {
   test('there are rules, each with an expression, a wait, a severity and a place in the runbook', () => {
     expect(rules().length).toBeGreaterThanOrEqual(8);
     for (const rule of rules()) {
@@ -52,6 +52,17 @@ describe('the outbox alert rules', () => {
   test('the stale threshold is the overview’s fifteen minutes', () => {
     const stale = rules().find(({ alert }) => alert === 'PurlayOutboxOldestPendingStale');
     expect(stale?.expr).toContain(`> ${String(OUTBOX_STALE_AFTER_SECONDS)}`);
+  });
+
+  test('the find’s rule watches the sources that were asked and failed them, never one that is off', () => {
+    const find = rules().find(({ alert }) => alert === 'PurlaySearchSourceSkipped');
+    // Every reading of the counter, with whatever selector follows it: each must leave `off` out.
+    const skips = find?.expr.match(/purlay_search_source_skipped_total(\{[^}]*\})?/g) ?? [];
+    expect(skips.length).toBeGreaterThan(0);
+    for (const skip of skips)
+      expect(skip).toBe('purlay_search_source_skipped_total{reason=~"slow|error"}');
+    expect(find?.expr).toContain('purlay_search_source_duration_seconds_count');
+    expect(find?.expr).toContain('by (module, source)');
   });
 
   test('every alert is in the thresholds table of DEPLOY.md, and the runbook sections the rules point to exist', () => {

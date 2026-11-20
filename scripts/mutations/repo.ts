@@ -195,6 +195,14 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
+    id: 'find-alert-rule-fires-on-a-source-that-is-off',
+    why: 'the rule on a skipped search source counts `off` too, so a server that does not run a module alerts for ever (D-323)',
+    file: 'docker/alerts/purlay-outbox.rules.yml',
+    find: 'sum by (module, source) (rate(purlay_search_source_skipped_total{reason=~"slow|error"}[15m]))',
+    replace: 'sum by (module, source) (rate(purlay_search_source_skipped_total[15m]))',
+    tests: ['apps/api/src/outbox-alert-rules.test.ts'],
+  },
+  {
     id: 'image-bun-drifts-from-package-manager',
     why: 'the image runs a Bun other than the one the tests and the pipeline ran, and nothing says so',
     file: 'Dockerfile',
