@@ -481,6 +481,13 @@ describe('integration: the administrator’s stop and its lifting (D-296)', () =
       expect(data.find(({ module }) => module === 'chat')).toMatchObject({
         state: 'active',
         reason: null,
+        // Chat is the product: the console asks for its stop to be meant before it is sent (D-323).
+        stopsWith: [],
+        stopNeedsForce: true,
+      });
+      expect(data.find(({ module }) => module === 'issues')).toMatchObject({
+        stopsWith: [],
+        stopNeedsForce: false,
       });
     });
   });

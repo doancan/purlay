@@ -64,6 +64,12 @@ const outOfService = (
   return new Set(catalogue.carried.map(({ id }) => id).filter((id) => !serving.has(id)));
 };
 
+/** Which of `newlyOut` the product cannot do without (`always`, chat): a stop that takes one down must be meant. */
+const takenDown = (catalogue: EntitlementCatalogue, newlyOut: readonly string[]): string[] =>
+  catalogue.carried
+    .filter(({ id, entitlement }) => entitlement === 'always' && newlyOut.includes(id))
+    .map(({ id }) => id);
+
 export const applySuspension = async (
   tx: Transaction,
   clock: Clock,
@@ -93,13 +99,11 @@ export const applySuspension = async (
 
   // Taking the product down is the one stop that asks twice: chat, or whatever would take chat with it.
   const newlyOut = [...outAfter].filter((id) => !outBefore.has(id));
-  const critical = catalogue.carried.filter(
-    ({ id, entitlement }) => entitlement === 'always' && newlyOut.includes(id),
-  );
+  const critical = takenDown(catalogue, newlyOut);
   if (stopping && critical.length > 0 && change.force !== true)
     throw refused(
       'force',
-      `Stopping ${change.module} takes ${critical.map(({ id }) => id).join(', ')} down for every workspace. Say force: true to mean it.`,
+      `Stopping ${change.module} takes ${critical.join(', ')} down for every workspace. Say force: true to mean it.`,
     );
 
   let changed: boolean;
@@ -146,6 +150,10 @@ export interface ModuleStatusRow {
   readonly reason: string | null;
   readonly suspendedAt: Date | null;
   readonly suspendedBy: string | null;
+  /** What a stop of it now would take out of service with it, because they require it, in the build's order. */
+  readonly stopsWith: readonly string[];
+  /** Whether a stop of it now takes down a module the product cannot do without, and so must say `force`. */
+  readonly stopNeedsForce: boolean;
 }
 
 /** Every module of the build and whether it is stopped, or out because a module it requires is. */
@@ -162,6 +170,14 @@ export const moduleStatuses = async (
   const out = outOfService(catalogue, new Set(stopped.keys()), now);
   return catalogue.carried.map(({ id }): ModuleStatusRow => {
     const row = stopped.get(id);
+    // What the writer would answer and ask for if this module were stopped now (`applySuspension`).
+    const newlyOut = [...outOfService(catalogue, new Set([...stopped.keys(), id]), now)].filter(
+      (other) => !out.has(other),
+    );
+    const effects = {
+      stopsWith: newlyOut.filter((other) => other !== id),
+      stopNeedsForce: takenDown(catalogue, newlyOut).length > 0,
+    };
     return row === undefined
       ? {
           module: id,
@@ -169,6 +185,7 @@ export const moduleStatuses = async (
           reason: null,
           suspendedAt: null,
           suspendedBy: null,
+          ...effects,
         }
       : {
           module: id,
@@ -176,6 +193,7 @@ export const moduleStatuses = async (
           reason: row.reason,
           suspendedAt: row.suspended_at,
           suspendedBy: row.suspended_by,
+          ...effects,
         };
   });
 };

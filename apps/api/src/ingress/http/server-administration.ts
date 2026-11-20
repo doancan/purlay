@@ -163,6 +163,8 @@ export const readAdministrationModules = async (
       reason: row.reason,
       suspendedAt: row.suspendedAt?.toISOString() ?? null,
       suspendedBy: row.suspendedBy,
+      stopsWith: [...row.stopsWith],
+      stopNeedsForce: row.stopNeedsForce,
     })),
   };
 };

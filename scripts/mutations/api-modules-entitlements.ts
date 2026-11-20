@@ -182,6 +182,25 @@ export const API_MODULES_ENTITLEMENTS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'suspension-status-hides-what-a-stop-takes',
+    why: 'the console asks for a stop without saying what goes with it, and the operator learns it only after (D-323)',
+    file: 'apps/api/src/modules/suspension/apply.ts',
+    find: '      stopsWith: newlyOut.filter((other) => other !== id),',
+    replace: '      stopsWith: [],',
+    tests: ['apps/api/src/modules/suspension/apply.integration.test.ts'],
+  },
+  {
+    id: 'suspension-status-never-asks-to-be-meant',
+    why: 'the console offers a stop of chat as an ordinary one, and the writer refuses it with no confirmation to give (D-323)',
+    file: 'apps/api/src/modules/suspension/apply.ts',
+    find: '      stopNeedsForce: takenDown(catalogue, newlyOut).length > 0,',
+    replace: '      stopNeedsForce: false,',
+    tests: [
+      'apps/api/src/modules/suspension/apply.integration.test.ts',
+      'apps/api/src/ingress/http/suspension.integration.test.ts',
+    ],
+  },
+  {
     id: 'suspension-stop-allowed-while-a-peer-is-behind',
     why: 'a module is stopped while a live node would go on serving it, and the operator believes it is off (D-296)',
     file: 'apps/api/src/modules/entitlements/peers.ts',
