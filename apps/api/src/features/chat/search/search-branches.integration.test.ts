@@ -4,8 +4,17 @@
  * in the same order, on the same pages, for the same people. So the `OR` is kept here, as it was, and
  * every search below is run through both and the two compared.
  */
-import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import {
+  cloneIntegrationDatabase,
+  closeIntegrationDatabase,
+  sql,
+  withRollback,
+  CLONE_HOOK_MS,
+  DROP_HOOK_MS,
+  type ClonedDatabase,
+  type Executor,
+} from '@purlay/db';
 import { messageId, type SearchQuery } from '@purlay/types';
 import { fixedClock } from '../../../platform/clock';
 import { limitOf } from '../../../platform/pagination';
@@ -340,71 +349,124 @@ describe('integration: the words, the note and the answer, each its own query (#
     });
   });
 
-  test('matches older than the newest messages are found, with the newer ones in front of them', async () => {
-    await withRollback(async (db) => {
-      const room = await aRoom(db, ['alice', 'bob']);
-      const as = member(room, 'alice').userId;
-      const oldWords = await post(db, room, 'alice', 'basalt in the old words');
-      const oldNoted = await post(db, room, 'alice', 'an old decision?');
-      await withNote(db, oldNoted, 'basalt, in the old note');
-      const oldAsked = await post(db, room, 'alice', 'an old question?');
-      const oldReply = await post(db, room, 'bob', 'basalt, old answer', oldAsked);
-      await acceptedAnswerOf(db, oldAsked, oldReply);
-      const sender = member(room, 'bob').userId;
-      await db
-        .insertInto('messages')
-        .values(
-          fillerIds(MORE_THAN_THE_NEWEST_LOOKED_THROUGH).map((id, index) => ({
-            id,
-            workspace_id: room.workspaceId,
-            channel_id: room.channelId,
-            sender_id: sender,
-            // Every 1000th has the term, and so is among the newest.
-            content:
-              index % 1000 === 999 ? `filler basalt ${String(index)}` : `filler ${String(index)}`,
-          })),
-        )
-        .execute();
-      const newer = await bothFind(db, room, as, { q: 'basalt' });
-      // 5 fillers carry the term and sit in front of the four old ones.
-      expect(newer.ids).toHaveLength(9);
-      expect(newer.ids.slice(5)).toEqual([oldReply, oldAsked, oldNoted, oldWords]);
+  describe('past the newest messages', () => {
+    // Seeding thousands of rows is setup, not the behaviour under test: it is done once, in a hook with the
+    // database's bound, on a database of this block's own, so each test's five seconds time only the
+    // searches (D-228). Each test still runs in a transaction that is rolled back.
+    let cloned: ClonedDatabase | undefined;
+    let basalt: {
+      room: Room;
+      oldWords: string;
+      oldNoted: string;
+      oldAsked: string;
+      oldReply: string;
+    };
+    let granite: Room;
+    const measured: Record<string, number> = {};
+    const elapsedSince = (began: number): number =>
+      Math.round((performance.now() - began) * 100) / 100;
 
-      // A page that the newest fill alone, then one that reaches back, then the rest.
-      expect((await bothFind(db, room, as, { q: 'basalt', limit: 3 })).ids).toHaveLength(3);
-      expect((await bothFind(db, room, as, { q: 'basalt', limit: 7 })).ids).toHaveLength(7);
-      const cursor = newer.ids[4] ?? '';
-      expect((await bothFind(db, room, as, { q: 'basalt', limit: 2, before: cursor })).ids).toEqual(
-        [oldReply, oldAsked],
-      );
-      expect((await bothFind(db, room, as, { q: 'no such term' })).ids).toEqual([]);
-      expect(
-        (await bothFind(db, room, as, { q: 'basalt', channelId: room.channelId, senderId: sender }))
-          .ids,
-      ).toHaveLength(5 + 1);
+    beforeAll(async () => {
+      const began = performance.now();
+      const local = await cloneIntegrationDatabase();
+      cloned = local;
+      measured['clone ms'] = elapsedSince(began);
+
+      const seeded = performance.now();
+      // A send must commit with the work it queues, so the history is written in one transaction.
+      await local.db.transaction().execute(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob']);
+        const oldWords = await post(db, room, 'alice', 'basalt in the old words');
+        const oldNoted = await post(db, room, 'alice', 'an old decision?');
+        await withNote(db, oldNoted, 'basalt, in the old note');
+        const oldAsked = await post(db, room, 'alice', 'an old question?');
+        const oldReply = await post(db, room, 'bob', 'basalt, old answer', oldAsked);
+        await acceptedAnswerOf(db, oldAsked, oldReply);
+        await db
+          .insertInto('messages')
+          .values(
+            fillerIds(MORE_THAN_THE_NEWEST_LOOKED_THROUGH).map((id, index) => ({
+              id,
+              workspace_id: room.workspaceId,
+              channel_id: room.channelId,
+              sender_id: member(room, 'bob').userId,
+              // Every 1000th has the term, and so is among the newest.
+              content:
+                index % 1000 === 999 ? `filler basalt ${String(index)}` : `filler ${String(index)}`,
+            })),
+          )
+          .execute();
+        basalt = { room, oldWords, oldNoted, oldAsked, oldReply };
+
+        granite = await aRoom(db, ['alice']);
+        await post(db, granite, 'alice', 'ancient granite');
+        await db
+          .insertInto('messages')
+          .values(
+            fillerIds(MORE_THAN_THE_NEWEST_LOOKED_THROUGH).map((id, index) => ({
+              id,
+              workspace_id: granite.workspaceId,
+              channel_id: granite.channelId,
+              sender_id: member(granite, 'alice').userId,
+              content: `granite ${String(index)}`,
+            })),
+          )
+          .execute();
+      });
+      measured['seed ms'] = elapsedSince(seeded);
+    }, CLONE_HOOK_MS);
+
+    afterAll(async () => {
+      await cloned?.drop();
+      console.info('Search past the newest messages, real SQL:', JSON.stringify(measured));
+    }, DROP_HOOK_MS);
+
+    const ownDatabase = (): ClonedDatabase => {
+      if (cloned === undefined) throw new Error('the volume database was not made');
+      return cloned;
+    };
+
+    test('matches older than the newest messages are found, with the newer ones in front of them', async () => {
+      await withRollback(async (db) => {
+        const { room, oldWords, oldNoted, oldAsked, oldReply } = basalt;
+        const as = member(room, 'alice').userId;
+        const sender = member(room, 'bob').userId;
+        const began = performance.now();
+        const newer = await bothFind(db, room, as, { q: 'basalt' });
+        // 5 fillers carry the term and sit in front of the four old ones.
+        expect(newer.ids).toHaveLength(9);
+        expect(newer.ids.slice(5)).toEqual([oldReply, oldAsked, oldNoted, oldWords]);
+
+        // A page that the newest fill alone, then one that reaches back, then the rest.
+        expect((await bothFind(db, room, as, { q: 'basalt', limit: 3 })).ids).toHaveLength(3);
+        expect((await bothFind(db, room, as, { q: 'basalt', limit: 7 })).ids).toHaveLength(7);
+        const cursor = newer.ids[4] ?? '';
+        expect(
+          (await bothFind(db, room, as, { q: 'basalt', limit: 2, before: cursor })).ids,
+        ).toEqual([oldReply, oldAsked]);
+        expect((await bothFind(db, room, as, { q: 'no such term' })).ids).toEqual([]);
+        expect(
+          (
+            await bothFind(db, room, as, {
+              q: 'basalt',
+              channelId: room.channelId,
+              senderId: sender,
+            })
+          ).ids,
+        ).toHaveLength(5 + 1);
+        measured['older matches: queries ms'] = elapsedSince(began);
+      }, ownDatabase().db);
     });
-  });
 
-  test('a term in every one of the newest messages fills the page from them', async () => {
-    await withRollback(async (db) => {
-      const room = await aRoom(db, ['alice']);
-      const as = member(room, 'alice').userId;
-      await post(db, room, 'alice', 'ancient granite');
-      await db
-        .insertInto('messages')
-        .values(
-          fillerIds(MORE_THAN_THE_NEWEST_LOOKED_THROUGH).map((id, index) => ({
-            id,
-            workspace_id: room.workspaceId,
-            channel_id: room.channelId,
-            sender_id: member(room, 'alice').userId,
-            content: `granite ${String(index)}`,
-          })),
-        )
-        .execute();
-      const first = await bothFind(db, room, as, { q: 'granite', limit: 50 });
-      expect(first.ids).toHaveLength(50);
-      expect(first.nextCursor).toBe(first.ids.at(-1) ?? null);
+    test('a term in every one of the newest messages fills the page from them', async () => {
+      await withRollback(async (db) => {
+        const as = member(granite, 'alice').userId;
+        const began = performance.now();
+        const first = await bothFind(db, granite, as, { q: 'granite', limit: 50 });
+        expect(first.ids).toHaveLength(50);
+        expect(first.nextCursor).toBe(first.ids.at(-1) ?? null);
+        measured['newest fill the page: queries ms'] = elapsedSince(began);
+      }, ownDatabase().db);
     });
   });
 });
