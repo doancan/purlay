@@ -152,7 +152,7 @@ describe('integration: company socket authority', () => {
       .select('id')
       .where('workspace_id', '=', identity.workspaceId)
       .executeTakeFirstOrThrow();
-    const own = await channelFor(clone.db, identity.userId, ownRow.id);
+    const own = await channelFor(clone.db, identity.userId, ownRow.id, systemClock.now());
     const added: ServerFrame = { event: 'CHANNEL_ADDED', data: own, ts: 2 };
     expect(await project(identity, added, signal)).toEqual(added);
     const context = await requireChannelById(clone.db, identity.userId, ownRow.id);
@@ -236,6 +236,8 @@ describe('integration: company socket authority', () => {
       clone.db,
       other.members['projection-outsider']?.userId ?? '',
       other.channelId,
+
+      systemClock.now(),
     );
     expect(
       await project(identity, { event: 'CHANNEL_ADDED', data: foreign, ts: 3 }, signal),

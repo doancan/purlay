@@ -27,6 +27,7 @@ export const forgetWhatChatKeeps = async (
     'thread_reads',
     'channel_read_scopes',
     'channel_group_channels',
+    'channel_level_timers',
     'channel_groups',
   ] as const) {
     if (await tableExists(transaction, table)) {

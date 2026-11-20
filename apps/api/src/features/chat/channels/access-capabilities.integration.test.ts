@@ -100,10 +100,9 @@ describe('integration: scoped channel management capabilities', () => {
       ]);
       const context = await requireChannelById(db, person, room.channelId);
       const workspace = await requireWorkspaceMembership(db, person, room.workspaceId);
-      expect((await channelFor(db, person, room.channelId)).channelCapabilities).toEqual([
-        'channel.members.manage',
-        'channel.settings.manage',
-      ]);
+      expect(
+        (await channelFor(db, person, room.channelId, clock.now())).channelCapabilities,
+      ).toEqual(['channel.members.manage', 'channel.settings.manage']);
       expect(
         (await membershipsOf(db, clock, person, undefined, undefined, channels))[0]
           ?.channelCapabilities,

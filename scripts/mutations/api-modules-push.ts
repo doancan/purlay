@@ -469,8 +469,8 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     id: 'push-source-occurrence-substituted',
     why: 'An unread later occurrence must not revive the read occurrence captured by this intent.',
     file: 'apps/api/src/modules/push/authority.ts',
-    find: 'notices.canDeliver(database, claim.recordId, claim.userId, claim.sourceId)',
-    replace: 'notices.canDeliver(database, claim.recordId, claim.userId)',
+    find: '            clock.now(),\n            claim.sourceId,\n',
+    replace: '            clock.now(),\n',
     tests: ['apps/api/src/modules/push/authority-recovery.integration.test.ts'],
   },
   {

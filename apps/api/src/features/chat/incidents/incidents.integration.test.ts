@@ -267,7 +267,7 @@ describe('integration: an incident’s timeline and its mark', () => {
       const alice = contextOf(room, 'alice');
       // The list's own read, as the sidebar gets it: one channel, as the caller sees it.
       const mark = async (): Promise<unknown> =>
-        (await channelFor(db, alice.userId, room.channelId)).incident;
+        (await channelFor(db, alice.userId, room.channelId, clock.now())).incident;
       expect(await mark()).toBeNull();
       const id = await declared(db, alice, 2);
       expect(await mark()).toEqual({ severity: 2, status: 'investigating' });

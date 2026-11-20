@@ -144,7 +144,7 @@ describe('integration: competing personal navigation changes', () => {
       db.transaction().execute(async (tx) => await moveToGroup(tx, member.context, id)),
       db.transaction().execute(async (tx) => await setStarred(tx, clock, member.context, true)),
     ]);
-    const channel = await channelFor(db, member.userId, room.channelId);
+    const channel = await channelFor(db, member.userId, room.channelId, clock.now());
     if (channel.starred) expect(channel.sidebarGroupId).toBeNull();
     else expect(channel.sidebarGroupId).toBe(id);
   });
@@ -164,7 +164,7 @@ describe('integration: competing personal navigation changes', () => {
     expect(results[1].status).toBe('fulfilled');
     if (results[0].status === 'rejected')
       expect(results[0].reason).toMatchObject({ body: { code: 'CHANNEL_GROUP_NOT_FOUND' } });
-    const channel = await channelFor(db, member.userId, room.channelId);
+    const channel = await channelFor(db, member.userId, room.channelId, clock.now());
     expect(channel.sidebarGroupId).toBeNull();
     expect(channel.state).not.toBeNull();
   });
@@ -201,7 +201,7 @@ describe('integration: competing personal navigation changes', () => {
     );
     try {
       expect((await move()).status).toBe(500);
-      expect(await channelFor(db, member.userId, room.channelId)).toMatchObject({
+      expect(await channelFor(db, member.userId, room.channelId, clock.now())).toMatchObject({
         starred: true,
         sidebarGroupId: null,
       });
@@ -217,7 +217,7 @@ describe('integration: competing personal navigation changes', () => {
       await sql`DROP FUNCTION refuse_group_unstar()`.execute(db);
     }
     expect((await move()).status).toBe(200);
-    expect(await channelFor(db, member.userId, room.channelId)).toMatchObject({
+    expect(await channelFor(db, member.userId, room.channelId, clock.now())).toMatchObject({
       starred: false,
       sidebarGroupId: id,
     });

@@ -269,6 +269,12 @@ export const Channel = Type.Object({
   state: Type.Union([ChannelState, Type.Null()]),
   /** The caller's level here (D-107); null when they are not a member, and so are told nothing. */
   notificationLevel: Type.Union([NotificationLevel, Type.Null()]),
+  /**
+   * Until when `notificationLevel` lasts when it was chosen for a while (D-329), after which the level before it is
+   * in force again; null when it is for good, and for a non-member. Optional because it is an addition: a server
+   * before it never times a level, which is what its absence means.
+   */
+  notificationLevelUntil: Type.Optional(Type.Union([Timestamp, Type.Null()])),
   /** Whether the caller keeps it among their starred (D-132); never for somebody not in it. */
   starred: Type.Boolean(),
   /** The caller's own sidebar heading; null for ungrouped, starred or unjoined channels and DMs. */

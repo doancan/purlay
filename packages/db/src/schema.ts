@@ -168,6 +168,13 @@ export interface ChannelGroups {
   workspace_id: string;
 }
 
+export interface ChannelLevelTimers {
+  channel_id: string;
+  ends_at: Timestamp;
+  then_level: NotificationLevel;
+  user_id: string;
+}
+
 export interface ChannelMemberCapabilities {
   capability: string;
   channel_id: string;
@@ -1466,6 +1473,7 @@ export interface DB {
   channel_departures: ChannelDepartures;
   channel_group_channels: ChannelGroupChannels;
   channel_groups: ChannelGroups;
+  channel_level_timers: ChannelLevelTimers;
   channel_member_capabilities: ChannelMemberCapabilities;
   channel_members: ChannelMembers;
   channel_read_scopes: ChannelReadScopes;

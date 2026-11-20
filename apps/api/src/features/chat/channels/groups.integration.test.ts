@@ -137,7 +137,9 @@ describe('integration: personal channel group storage', () => {
       expect(await refusal(saveGroup(db, await scope(db, room), id, 'Taken'))).toMatchObject({
         body: { code: 'CHANNEL_GROUP_NOT_FOUND' },
       });
-      expect((await channelFor(db, member(room).userId, room.channelId)).sidebarGroupId).toBeNull();
+      expect(
+        (await channelFor(db, member(room).userId, room.channelId, clock.now())).sidebarGroupId,
+      ).toBeNull();
     });
   });
 
@@ -153,16 +155,17 @@ describe('integration: personal channel group storage', () => {
       await setStarred(db, clock, context, true);
       expect(await moveToGroup(db, context, id)).toBe(true);
       expect(await moveToGroup(db, context, id)).toBe(false);
-      expect(await channelFor(db, context.userId, context.channelId)).toMatchObject({
+      expect(await channelFor(db, context.userId, context.channelId, clock.now())).toMatchObject({
         starred: false,
         sidebarGroupId: id,
       });
       expect(
-        (await channelFor(db, member(room, 'bob').userId, context.channelId)).sidebarGroupId,
+        (await channelFor(db, member(room, 'bob').userId, context.channelId, clock.now()))
+          .sidebarGroupId,
       ).toBeNull();
       await setStarred(db, clock, context, true);
       await setStarred(db, clock, context, false);
-      expect(await channelFor(db, context.userId, context.channelId)).toMatchObject({
+      expect(await channelFor(db, context.userId, context.channelId, clock.now())).toMatchObject({
         starred: false,
         sidebarGroupId: null,
       });
@@ -181,7 +184,7 @@ describe('integration: personal channel group storage', () => {
       await moveToGroup(db, member(room), id);
       expect(await removeGroup(db, context, id)).toBe(true);
       expect(await removeGroup(db, context, id)).toBe(false);
-      const channel = await channelFor(db, context.userId, room.channelId);
+      const channel = await channelFor(db, context.userId, room.channelId, clock.now());
       expect(channel.sidebarGroupId).toBeNull();
       expect(channel.state).not.toBeNull();
       expect(await refusal(foldGroup(db, context, id, true))).toMatchObject({
@@ -222,7 +225,9 @@ describe('integration: personal channel group storage', () => {
       await moveToGroup(db, member(room), id);
       await leaveChannel(db, member(room));
       await joinChannel(db, clock, member(room));
-      expect((await channelFor(db, context.userId, room.channelId)).sidebarGroupId).toBeNull();
+      expect(
+        (await channelFor(db, context.userId, room.channelId, clock.now())).sidebarGroupId,
+      ).toBeNull();
       await db
         .deleteFrom('workspace_members')
         .where('workspace_id', '=', context.workspaceId)

@@ -1,11 +1,17 @@
 /**
  * A member's notification level (D-107): what each level is told of a new message, what it moves
- * on the badge, and that only a member can set their own.
+ * on the badge, and that only a member can set their own — for good, or for a while (D-329).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import {
+  closeIntegrationDatabase,
+  withRollback,
+  type Executor,
+  type Transaction,
+} from '@purlay/db';
 import { messageId, type NotificationLevel } from '@purlay/types';
-import { fixedClock } from '../../../platform/clock';
+import { fixedClock, HOUR_MS, type Clock } from '../../../platform/clock';
+import { aMovableClock } from '../../../testing/doubles';
 import { AppError } from '../../../platform/errors';
 import { requireChannelById } from './guard';
 import { aRoom, counters, notificationsOf, type Room } from '../../../testing/rooms';
@@ -13,6 +19,11 @@ import { sendMessage, type Sent } from '../messages/messages';
 import { reviseMessage } from '../messages/edit';
 import { markRead } from './read-state';
 import { setNotificationLevel } from './notification-level';
+import { channelFor } from './channels';
+import { chatPushNotices } from '../notifications/push-notices';
+import { setResolved } from '../messages/threads';
+import { atomicallyOn } from '../../../platform/transactions';
+import { PUSH_QUIET_BUS } from '../../../testing/pending-push';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -43,12 +54,12 @@ const post = async (
   });
 
 const level = async (
-  db: Executor,
+  db: Transaction,
   room: Room,
   name: string,
   to: NotificationLevel,
 ): Promise<void> => {
-  await setNotificationLevel(db, member(room, name).context, to);
+  await setNotificationLevel(db, clock, member(room, name).context, to);
 };
 
 const refusalOf = async (attempt: Promise<unknown>): Promise<AppError> => {
@@ -159,8 +170,212 @@ describe('integration: setting it', () => {
       const room = await aRoom(db, ['alice'], { outsiders: ['dave'] });
       const dave = room.outsiders['dave']?.userId ?? '';
       const context = await requireChannelById(db, dave, room.channelId);
-      const refusal = await refusalOf(setNotificationLevel(db, context, 'all'));
+      const refusal = await refusalOf(setNotificationLevel(db, clock, context, 'all'));
       expect(refusal.body.code).toBe('CHANNEL_NOT_FOUND');
+      // Nor for a while: no timer is written for somebody with no membership to time.
+      const timed = await refusalOf(
+        setNotificationLevel(
+          db,
+          clock,
+          context,
+          'none',
+          new Date(NOW.getTime() + HOUR_MS).toISOString(),
+        ),
+      );
+      expect(timed.body.code).toBe('CHANNEL_NOT_FOUND');
+      expect(
+        await db
+          .selectFrom('channel_level_timers')
+          .select('user_id')
+          .where('user_id', '=', dave)
+          .execute(),
+      ).toEqual([]);
+    });
+  });
+});
+
+describe('integration: a level for a while (D-329)', () => {
+  /** A message sent at the moving clock's instant, so its id is within the skew the send allows. */
+  const postAt = async (
+    db: Executor,
+    at: Clock,
+    room: Room,
+    as: string,
+    content: string,
+  ): Promise<Sent> =>
+    await sendMessage(db, at, member(room, as).context, {
+      id: messageId(new Date(at.now().getTime() + (tick += 1))),
+      content,
+    });
+
+  const inAnHour = (from: Clock): string => new Date(from.now().getTime() + HOUR_MS).toISOString();
+
+  const levelOf = async (
+    db: Executor,
+    at: Clock,
+    room: Room,
+    name: string,
+  ): Promise<{ level: string | null; until: string | null | undefined }> => {
+    const channel = await channelFor(db, member(room, name).userId, room.channelId, at.now());
+    return { level: channel.notificationLevel, until: channel.notificationLevelUntil };
+  };
+
+  test('muted for an hour: nothing is told while it lasts, and the level before it is back when it ends', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob');
+      await setNotificationLevel(db, at, bob.context, 'all');
+      const until = inAnHour(at);
+      await setNotificationLevel(db, at, bob.context, 'none', until);
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'none', until });
+
+      await postAt(db, at, room, 'alice', `@${bob.username} while muted`);
+      expect(await notificationsOf(db, bob.userId)).toEqual([]);
+
+      // A minute before the end it still holds; at the end, `all` is in force again with no write.
+      at.advance(HOUR_MS - 60_000);
+      expect((await levelOf(db, at, room, 'bob')).level).toBe('none');
+      at.advance(60_000);
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'all', until: null });
+      const after = await postAt(db, at, room, 'alice', 'a plain message after');
+      expect(await notificationsOf(db, bob.userId)).toEqual([
+        { messageId: after.message.id, type: 'channel_message' },
+      ]);
+    });
+  });
+
+  test('the level that comes back is the one in force before: muting again for longer still returns to it', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').context;
+      await setNotificationLevel(db, at, bob, 'all');
+      await setNotificationLevel(db, at, bob, 'none', inAnHour(at));
+      at.advance(30 * 60_000);
+      // Chosen again while the first lasts: the level to return to is still `all`, not the first mute.
+      const later = new Date(at.now().getTime() + 8 * HOUR_MS).toISOString();
+      await setNotificationLevel(db, at, bob, 'mentions', later);
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'mentions', until: later });
+      at.advance(8 * HOUR_MS);
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'all', until: null });
+      // After one has ended, a new one returns to the level that had come back, not to anything older.
+      await setNotificationLevel(db, at, bob, 'none', inAnHour(at));
+      at.advance(HOUR_MS);
+      expect((await levelOf(db, at, room, 'bob')).level).toBe('all');
+    });
+  });
+
+  test('a level for good chosen while one for a while lasts ends the timer: no end, nothing comes back', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob');
+      await setNotificationLevel(db, at, bob.context, 'none', inAnHour(at));
+      await setNotificationLevel(db, at, bob.context, 'none');
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'none', until: null });
+      at.advance(2 * HOUR_MS);
+      expect((await levelOf(db, at, room, 'bob')).level).toBe('none');
+      expect(
+        await db
+          .selectFrom('channel_level_timers')
+          .select('user_id')
+          .where('channel_id', '=', room.channelId)
+          .execute(),
+      ).toEqual([]);
+    });
+  });
+
+  test('only the member’s own row is timed; nobody else’s level moves', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      await setNotificationLevel(db, at, member(room, 'bob').context, 'none', inAnHour(at));
+      expect(await levelOf(db, at, room, 'alice')).toEqual({ level: 'mentions', until: null });
+      const timers = await db
+        .selectFrom('channel_level_timers')
+        .select(['user_id', 'then_level'])
+        .where('channel_id', '=', room.channelId)
+        .execute();
+      expect(timers).toEqual([{ user_id: member(room, 'bob').userId, then_level: 'mentions' }]);
+    });
+  });
+
+  test('an end now, in the past, or past Deep Work’s bound is refused by name, and nothing is written', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob').context;
+      for (const until of [
+        NOW.toISOString(),
+        new Date(NOW.getTime() - 60_000).toISOString(),
+        new Date(NOW.getTime() + 24 * HOUR_MS + 1).toISOString(),
+      ]) {
+        const refusal = await refusalOf(setNotificationLevel(db, at, bob, 'none', until));
+        expect(refusal.body).toMatchObject({
+          code: 'VALIDATION_FAILED',
+          details: { fields: { until: 'ahead, and at most 24 hours' } },
+        });
+      }
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'mentions', until: null });
+      // The bound itself is allowed.
+      const bound = new Date(NOW.getTime() + 24 * HOUR_MS).toISOString();
+      await setNotificationLevel(db, at, bob, 'none', bound);
+      expect(await levelOf(db, at, room, 'bob')).toEqual({ level: 'none', until: bound });
+    });
+  });
+
+  test('a thread resolved while its author is muted tells them nothing; after the mute ends, it does', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob');
+      const resolve = async (rootId: string, resolved: boolean): Promise<void> => {
+        await setResolved(
+          { atomically: atomicallyOn(db), clock: at, bus: PUSH_QUIET_BUS },
+          member(room, 'alice').userId,
+          rootId,
+          resolved,
+        );
+      };
+      const root = await postAt(db, at, room, 'bob', 'my question');
+      await sendMessage(db, at, member(room, 'alice').context, {
+        id: messageId(new Date(at.now().getTime() + (tick += 1))),
+        content: 'an answer',
+        parentId: root.message.id,
+      });
+      await setNotificationLevel(db, at, bob.context, 'none', inAnHour(at));
+      await resolve(root.message.id, true);
+      const resolutions = async (): Promise<readonly string[]> =>
+        (await notificationsOf(db, bob.userId))
+          .filter((row) => row.type === 'thread_resolved')
+          .map((row) => row.messageId);
+      expect(await resolutions()).toEqual([]);
+      await resolve(root.message.id, false);
+      at.advance(HOUR_MS);
+      await resolve(root.message.id, true);
+      expect(await resolutions()).toEqual([root.message.id]);
+    });
+  });
+
+  test('a queued push is asked about the level in force as it goes', async () => {
+    await withRollback(async (db) => {
+      const at = aMovableClock(NOW);
+      const room = await aRoom(db, ['alice', 'bob']);
+      const bob = member(room, 'bob');
+      await setNotificationLevel(db, at, bob.context, 'all');
+      const sent = await postAt(db, at, room, 'alice', 'a plain message');
+      expect(await chatPushNotices.canDeliver(db, sent.message.id, bob.userId, at.now())).toBe(
+        true,
+      );
+      await setNotificationLevel(db, at, bob.context, 'none', inAnHour(at));
+      expect(await chatPushNotices.canDeliver(db, sent.message.id, bob.userId, at.now())).toBe(
+        false,
+      );
+      at.advance(HOUR_MS);
+      expect(await chatPushNotices.canDeliver(db, sent.message.id, bob.userId, at.now())).toBe(
+        true,
+      );
     });
   });
 });

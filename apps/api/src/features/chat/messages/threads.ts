@@ -41,6 +41,7 @@ import {
 import type { Logger } from '../../../platform/logging';
 import { requireLiveSession } from '../../../modules/auth/sessions';
 import { stillSeeing } from './delivery';
+import { levelInForce } from '../channels/notification-level';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { buildMessages, MESSAGE_COLUMNS, readBuilt, readSummary, type MessageRow } from './reader';
 
@@ -324,9 +325,14 @@ const notifyResolved = async (
   if (!(await stillSeeing(executor, target.context, [authorId])).has(authorId)) return [];
   const membership = await executor
     .selectFrom('channel_members')
-    .select('notification_level')
-    .where('channel_id', '=', target.context.channelId)
-    .where('user_id', '=', authorId)
+    .leftJoin('channel_level_timers as level_timer', (join) =>
+      join
+        .onRef('level_timer.channel_id', '=', 'channel_members.channel_id')
+        .onRef('level_timer.user_id', '=', 'channel_members.user_id'),
+    )
+    .select(levelInForce('channel_members', 'level_timer', now).as('notification_level'))
+    .where('channel_members.channel_id', '=', target.context.channelId)
+    .where('channel_members.user_id', '=', authorId)
     .executeTakeFirst();
   if (membership?.notification_level === 'none') return [];
   const written = await executor

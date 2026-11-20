@@ -29,6 +29,7 @@ import { channelAudienceQuery, type ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
 import { unreadMessage } from '../channels/unread';
+import { levelInForce } from '../channels/notification-level';
 
 /** A root has no thread to have chosen about. */
 const NO_CHOICES: ThreadChoices = { followed: [], unfollowed: new Set() };
@@ -152,9 +153,14 @@ export const notify = async (
         .onRef('read_scope.channel_id', '=', 'channel_members.channel_id')
         .onRef('read_scope.user_id', '=', 'channel_members.user_id'),
     )
+    .leftJoin('channel_level_timers as level_timer', (join) =>
+      join
+        .onRef('level_timer.channel_id', '=', 'channel_members.channel_id')
+        .onRef('level_timer.user_id', '=', 'channel_members.user_id'),
+    )
     .select([
       'channel_members.user_id',
-      'channel_members.notification_level',
+      levelInForce('channel_members', 'level_timer', now).as('notification_level'),
       'channel_members.last_read_message_id',
       'channel_members.joined_at',
       'read_scope.unread_since',
@@ -289,13 +295,19 @@ export const recordDelivery = async (executor: ChatDb, delivery: Delivery): Prom
   // it, and who let it go — told nothing for the thread's sake, nor for a channel at every message.
   const choices = thread === null ? NO_CHOICES : await threadChoices(executor, thread.rootId);
 
-  // A member who asked for every message (D-107) is told of this one, for the weakest reason.
+  // A member who asked for every message (D-107) is told of this one, for the weakest reason — the level in
+  // force now, so one whose `all` was for a while that has ended is not, and one it gave way to is (D-329).
   const following = await executor
     .selectFrom('channel_members')
-    .select('user_id')
-    .where('channel_id', '=', context.channelId)
-    .where('notification_level', '=', 'all')
-    .where('user_id', '<>', sender)
+    .leftJoin('channel_level_timers as level_timer', (join) =>
+      join
+        .onRef('level_timer.channel_id', '=', 'channel_members.channel_id')
+        .onRef('level_timer.user_id', '=', 'channel_members.user_id'),
+    )
+    .select('channel_members.user_id')
+    .where('channel_members.channel_id', '=', context.channelId)
+    .where((eb) => eb(levelInForce('channel_members', 'level_timer', now), '=', 'all'))
+    .where('channel_members.user_id', '<>', sender)
     .execute();
   for (const row of following) {
     if (!choices.unfollowed.has(row.user_id)) consider(row.user_id, 'channel_message');

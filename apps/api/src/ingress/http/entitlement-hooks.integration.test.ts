@@ -201,9 +201,9 @@ describe('integration: a module’s push notices are for the workspaces granted 
           (notice) => notice.workspaceId,
         ),
       ).toEqual([granted]);
-      expect(await ONLY_THINGS.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId)).toBe(
-        true,
-      );
+      expect(
+        await ONLY_THINGS.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId, NOW),
+      ).toBe(true);
       const unavailable = compose(
         [
           {
@@ -217,14 +217,14 @@ describe('integration: a module’s push notices are for the workspaces granted 
         carried,
         'open',
       );
-      expect(await unavailable.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId)).toBe(
-        false,
-      );
+      expect(
+        await unavailable.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId, NOW),
+      ).toBe(false);
       workspaceOfNotice.id = lost;
       expect(await ONLY_THINGS.pushNotices.of(db, crypto.randomUUID(), [owner.userId])).toEqual([]);
-      expect(await ONLY_THINGS.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId)).toBe(
-        false,
-      );
+      expect(
+        await ONLY_THINGS.pushNotices.canDeliver(db, crypto.randomUUID(), owner.userId, NOW),
+      ).toBe(false);
     });
   });
 });

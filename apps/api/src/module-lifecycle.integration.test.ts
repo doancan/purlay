@@ -90,6 +90,7 @@ const CHAT_PERSONAL_TABLES = [
   'channel_read_scopes',
   'channel_groups',
   'channel_group_channels',
+  'channel_level_timers',
   'notifications',
   'missed_mail_letters',
 ] as const;
@@ -562,6 +563,10 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
           user_id: who.userId,
           group_id: groupId,
         })
+        .execute();
+      await tx
+        .insertInto('channel_level_timers')
+        .values({ channel_id: channel, user_id: who.userId, ends_at: NOW, then_level: 'all' })
         .execute();
       // ... and in the tables that chat's own set makes.
       await tx

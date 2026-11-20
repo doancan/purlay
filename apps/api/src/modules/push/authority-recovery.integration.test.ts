@@ -72,7 +72,7 @@ describe('integration: recovered push authority', () => {
           ),
         },
         async () =>
-          await chatPushNotices.canDeliver(db, claim.recordId, claim.userId, claim.sourceId),
+          await chatPushNotices.canDeliver(db, claim.recordId, claim.userId, NOW, claim.sourceId),
       ).catch((error: unknown) => error);
       expect(denied).toMatchObject({
         body: {
@@ -141,9 +141,9 @@ describe('integration: recovered push authority', () => {
           created_at: NOW,
         })
         .execute();
-      expect(await chatPushNotices.canDeliver(db, world.message, world.reader)).toBe(true);
+      expect(await chatPushNotices.canDeliver(db, world.message, world.reader, NOW)).toBe(true);
       expect(
-        await chatPushNotices.canDeliver(db, world.message, world.reader, world.notification),
+        await chatPushNotices.canDeliver(db, world.message, world.reader, NOW, world.notification),
       ).toBe(false);
       expect(
         await chatPushNotices.of(db, world.message, [world.reader], world.notification),
