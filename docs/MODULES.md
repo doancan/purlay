@@ -286,8 +286,8 @@ test and not by a consumer in the product. Each row below is a step of §10 step
   for an unread update. **Not built:** an inbox for a server that runs no chat (the screen is chat's). Chat's
   `notifications` stays chat's and unmoved.
 - *The search fan-out* (14k to 14m): **built** in 14k and 14l (D-285): the `SearchSource` port, the route `find`, a deadline and a
-  `skipped` list (`off`, `slow`, `error`) and the sources of chat and issues. **Not built:** the web's groups (14m), and a metric
-  of how long each source took and how many were skipped.
+  `skipped` list (`off`, `slow`, `error`) and the sources of chat and issues; each source's time and skips are counted
+  (`purlay_search_source_*`, with an alert rule, D-326). **Not built:** the web's groups (14m).
 
 **Not built and not decided here, each with what would start it.** *`AttachmentOwner`*: the first module that is not chat to
 attach a file. *Mail for a module's notice*: a kind declared `mailed: true`. *A system message from a module into a chat channel*
@@ -563,7 +563,8 @@ In detail:
   always did; the scheduler adds an abort controller, one timer cleared at the iteration's end and a slot taken and given back
   per iteration (D-281 has the numbers);
 - *Built* (D-285, §10 step 14k): each search source of `find` runs as its own module, so in its share, under the abort signal of a
-  deadline of 1.5 s or the module's own if shorter, and the response says which was skipped and why; there is no metric of it yet;
+  deadline of 1.5 s or the module's own if shorter, and the response says which was skipped and why; each source's time and each
+  skip are counted by module and source (`purlay_search_source_*`, D-326), with an alert on a source that keeps being skipped;
 - the CI latency gate refuses **starvation**, and only that (`budget:latency`): after the quiet trials it runs
   two more with twelve people reading issues' list, one request at a time with a pause between, while the issues
   table is locked in turns, so that the readers hold their share of connections and there are more of them than
@@ -1089,7 +1090,7 @@ file and cluster check, and the scaffold. Not built:
 | Not built | What would start it | What watches for it today |
 |---|---|---|
 | A fact published by a module of the product | the first feature that must tell a module that may be absent (issues' link to a channel, D-254 §1) | nothing: a route has `publishFact` (`ModuleRouteDependencies`, `platform/ports/fact-publisher.ts`, `ingress/http/module-publish.integration.test.ts`), bound to its module, so the first publisher only declares its fact |
-| The web's search groups and the skipped line (14m) | the product wants the find drawn; the route answers them today | none; a metric of how long each source took and how many were skipped is also not built |
+| The web's search groups and the skipped line (14m) | the product wants the find drawn; the route answers them today | none |
 | Tracing across modules (OpenTelemetry) | a latency question that the per-module histograms, `purlay_worker_failures_total` and the request id in the logs cannot answer | none |
 | Per-tenant quotas of a module's work (requests, notices) | one workspace measured filling a share | the share of the pool and the rate limits are per module and per connection, not per tenant; facts have a ceiling per workspace and consumer (D-288 §10); D-283 §10 names `pg_stat_user_tables.n_dead_tup` of `outbox` and `purlay_outbox_pending` as the watchers of partitioning (`DEPLOY.md`) |
 | The web feature of a new module (C2b) | the client's API object, keys and catalogues gain a declaration a module can be added to without editing them (D-294 §5) | `module:new` makes the server side only; item 5 of §9 is by hand |

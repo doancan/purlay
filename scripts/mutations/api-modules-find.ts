@@ -20,7 +20,7 @@ export const API_MODULES_FIND: readonly Mutation[] = [
   },
   {
     id: 'find-counts-no-skip-of-a-source-that-answered-without',
-    why: 'a source that is slow or throws is answered without and nothing counts it, so the alert on a source that keeps being skipped never fires (D-323)',
+    why: 'a source that is slow or throws is answered without and nothing counts it, so the alert on a source that keeps being skipped never fires (D-326)',
     file: 'apps/api/src/modules/find/find.ts',
     find: "  if ('reason' in answer) countSkip(dependencies, series, answer.reason);\n",
     replace: '',

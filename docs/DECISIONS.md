@@ -16197,3 +16197,15 @@ shows the tick. *Computing the dependents in the browser from the manifests:* a 
 
 **Cost of reversing.** Delete the command, its two `package.json` lines and the CONTRIBUTING row; the writer split costs nothing to keep.
 
+### D-326. The find counts each source's time and skips, and an alert watches a source that keeps failing — builds on D-221, D-285, D-288 §12
+
+**Context.** D-285 left the find's skipped sources without a metric, and D-288 §12 without an alert: a source that kept passing its deadline or throwing was seen only by the person whose results lacked a group, and only if they read the `skipped` list.
+
+**Decision.**
+
+1. **Two families, labelled by `module` and `source`.** `purlay_search_source_duration_seconds` is a histogram of how long each source the find asked took to answer, or to be given up on (a `slow` one at its deadline), on the HTTP histogram's buckets; its `_count` is how often a source was asked. `purlay_search_source_skipped_total` counts each source the find answered without, by `reason`, the same words as the answer: `off`, `slow`, `error`. Both label values come from manifests (a source id is listed by its module's manifest, never sent by a caller), and every series of the counter is made at zero at start for each source the build carries, so a rate misses nothing. An `off` source has no time, since it was not asked; to be counted under its module, the composition's list of sources that are off now carries the module with each id.
+2. **An alert on `slow` and `error`, never on `off`.** `PurlaySearchSourceSkipped` (group `purlay-find` of `docker/alerts/purlay-outbox.rules.yml`) fires when a source is skipped `slow` or `error` on over a fifth of the finds that asked it, at least three times in fifteen minutes, for fifteen minutes. `off` is the operator's decision or the workspace's grant, not a fault. The floor of three keeps one slow find in a quiet hour from being a fifth. The runbook is `DEPLOY.md`, "A search source keeps being skipped", and the rules' test holds the rule to `slow|error`.
+
+**Rejected.** *A separate error counter beside the skip counter*: an error is a skip with its reason, and two counters of one event disagree the first time one is renamed. *A source label only, without the module*: the other families of the module platform are by `module`, and a dashboard groups by it. *A rule on `off`*: a server that does not run a module would alert for ever. *A file of its own for the rule*: an operator who loads the outbox's file gets it without another `rule_files:` line.
+
+**Cost of reversing.** Two families in `platform/metrics.ts`, their record in `modules/find/find.ts`, one rule and its runbook.
