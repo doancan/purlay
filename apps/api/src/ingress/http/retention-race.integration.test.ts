@@ -45,6 +45,11 @@ beforeAll(async () => {
     create function wait_insert() returns trigger language plpgsql as
     $$ begin perform pg_advisory_lock_shared(8391); perform pg_advisory_unlock_shared(8391); return new; end $$
   `.execute(cloned.db);
+  // A delete waits here while the test holds lock 8392: the purge, holding what it locked, until a send is queued.
+  await sql`
+    create function wait_delete() returns trigger language plpgsql as
+    $$ begin perform pg_advisory_lock_shared(8392); perform pg_advisory_unlock_shared(8392); return old; end $$
+  `.execute(cloned.db);
   await sql`
     create function hold_delete() returns trigger language plpgsql as
     $$ begin perform pg_sleep(0.3); return old; end $$
@@ -244,25 +249,48 @@ describe('integration: the purge against what happens at the same moment', () =>
       .execute();
     const cookie = await signedIn(room, 'bob');
     const app = createApp(testDependencies({ database: cloned.db, clock }));
-    // The purge holds what it has locked while it deletes the old reply; the send comes in then.
-    await sql`create trigger hold before delete on messages for each row execute function hold_delete()`.execute(
+    // The purge holds what it has locked while it deletes the old reply, until the send is queued behind it: a
+    // fixed sleep let a send that was slow to arrive (a busy runner) come after the first phase, when the second
+    // could take the emptied root first — the other outcome D-139 §2 allows, not the one this test is about.
+    await sql`create trigger hold before delete on messages for each row execute function wait_delete()`.execute(
       cloned.db,
     );
-    let outcome: [Awaited<ReturnType<typeof purgeWorkspace>>, Response];
+    let outcome: [Awaited<ReturnType<typeof purgeWorkspace>>, Response] | undefined;
     try {
-      outcome = await Promise.all([
-        purge(room),
-        app.handle(
-          request('POST', `/api/channels/${room.channelId}/messages`, cookie, {
-            id: messageId(NOW),
-            content: 'a new answer',
-            parentId: root,
-          }),
-        ),
-      ]);
+      await cloned.db.connection().execute(async (holder) => {
+        await sql`select pg_advisory_lock(8392)`.execute(holder);
+        try {
+          const purging = purge(room);
+          const replying = app.handle(
+            request('POST', `/api/channels/${room.channelId}/messages`, cookie, {
+              id: messageId(NOW),
+              content: 'a new answer',
+              parentId: root,
+            }),
+          );
+          // The positive condition: the purge is at its delete, holding the memberships, and the send is waiting
+          // on a row lock behind it — not merely started.
+          for (let waited = 0; ; waited += 1) {
+            const { rows } = await sql<{ advisory: number; row: number }>`
+              select count(*) filter (where wait_event = 'advisory')::int as advisory,
+                count(*) filter (where wait_event <> 'advisory')::int as row
+              from pg_stat_activity
+              where wait_event_type = 'Lock' and datname = current_database()
+            `.execute(holder);
+            if ((rows[0]?.advisory ?? 0) > 0 && (rows[0]?.row ?? 0) > 0) break;
+            if (waited > 500) throw new Error('the send never queued behind the purge');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          await sql`select pg_advisory_unlock(8392)`.execute(holder);
+          outcome = await Promise.all([purging, replying]);
+        } finally {
+          await sql`select pg_advisory_unlock_all()`.execute(holder);
+        }
+      });
     } finally {
       await sql`drop trigger hold on messages`.execute(cloned.db);
     }
+    if (outcome === undefined) throw new Error('the purge and the send did not both finish');
     const [purged, answer] = outcome;
     expect(answer.status).toBe(201);
     expect(purged.deleted).toBe(1);
