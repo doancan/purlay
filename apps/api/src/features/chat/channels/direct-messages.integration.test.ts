@@ -172,7 +172,7 @@ describe('integration: a direct message with somebody who is gone', () => {
         .where('id', '=', fay.userId)
         .execute();
 
-      const listed = await channelsVisibleIn(db, context);
+      const listed = await channelsVisibleIn(db, context, clock.now());
       const dm = listed.find((channel) => channel.id === opened.channel.id);
       expect(dm?.peer).toEqual(erasedPerson(fay.userId));
       // Opening it again does not bring the person back, nor fail.

@@ -249,6 +249,16 @@ const tables = [
     (userId) => ({ where: sql`user_id = ${userId}`, order: 'channel_id' }),
   ),
   personalTableExport(
+    'channel_level_timers',
+    {
+      channel_id: 'export',
+      user_id: 'export',
+      ends_at: 'export',
+      then_level: 'export',
+    },
+    (userId) => ({ where: sql`user_id = ${userId}`, order: 'channel_id' }),
+  ),
+  personalTableExport(
     'thread_follows',
     {
       workspace_id: 'export',
@@ -376,6 +386,7 @@ export const chatPersonalExport = {
     'channel_read_scopes',
     'channel_groups',
     'channel_group_channels',
+    'channel_level_timers',
   ],
   tables,
   workspaces: (userId: string): RawBuilder<unknown>[] => [

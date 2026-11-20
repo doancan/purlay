@@ -371,6 +371,7 @@ type ChatExcluded =
   | 'channel_read_scopes'
   | 'channel_groups'
   | 'channel_group_channels'
+  | 'channel_level_timers'
   | 'link_previews';
 
 const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
@@ -420,6 +421,8 @@ const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
   thread_reads: 'how far each person read each thread, their own state',
   channel_groups: 'each person’s named sidebar headings, their own private state',
   channel_group_channels: 'each person’s own sidebar placement of channels',
+  channel_level_timers:
+    'how long each person’s notification level lasts, and what follows it: their own state',
   channel_read_scopes:
     'each person’s join floor, historical rewind and reply baseline, their own state',
   link_previews: 'a cache of other sites’ pages',

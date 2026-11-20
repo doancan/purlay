@@ -1217,6 +1217,17 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  channel_level_timers: ofAda('channel_level_timers', async (db, world) => {
+    await db
+      .insertInto('channel_level_timers')
+      .values({
+        channel_id: world.channelId,
+        user_id: world.adaId,
+        ends_at: NOW,
+        then_level: 'all',
+      })
+      .execute();
+  }),
   channel_read_scopes: ofAda('channel_read_scopes', async (db, world) => {
     await db
       .insertInto('channel_read_scopes')

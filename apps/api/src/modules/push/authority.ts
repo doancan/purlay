@@ -86,7 +86,13 @@ export const currentPushSource = async (
         return false;
       if (claim.source === 'message')
         try {
-          return await notices.canDeliver(database, claim.recordId, claim.userId, claim.sourceId);
+          return await notices.canDeliver(
+            database,
+            claim.recordId,
+            claim.userId,
+            clock.now(),
+            claim.sourceId,
+          );
         } catch (error) {
           if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')
             return false;

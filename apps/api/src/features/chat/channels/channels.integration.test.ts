@@ -47,7 +47,7 @@ describe('integration: what a channel says about the person asking', () => {
         .where('user_id', '=', alice.userId)
         .execute();
 
-      const forAlice = await channelFor(db, alice.userId, channelId);
+      const forAlice = await channelFor(db, alice.userId, channelId, clock.now());
       expect(forAlice.state).toEqual({
         lastReadMessageId: last,
         unreadCount: 4,
@@ -56,7 +56,7 @@ describe('integration: what a channel says about the person asking', () => {
       expect(forAlice.peer).toBeNull();
 
       // Bob is in the workspace and the channel is public: he can see it, and has not joined.
-      const forBob = await channelFor(db, bob.userId, channelId);
+      const forBob = await channelFor(db, bob.userId, channelId, clock.now());
       expect(forBob.state).toBeNull();
     });
   });
@@ -64,9 +64,12 @@ describe('integration: what a channel says about the person asking', () => {
   test('a channel that does not exist is the answer a stranger gets', async () => {
     await withRollback(async (db) => {
       const { users } = await aConversation(db, 'cs-nobody');
-      const error = await channelFor(db, users[0]?.userId ?? '', crypto.randomUUID()).catch(
-        (thrown: unknown) => thrown,
-      );
+      const error = await channelFor(
+        db,
+        users[0]?.userId ?? '',
+        crypto.randomUUID(),
+        clock.now(),
+      ).catch((thrown: unknown) => thrown);
       expect(error).toMatchObject({ body: { code: 'CHANNEL_NOT_FOUND' } });
     });
   });
@@ -79,7 +82,7 @@ describe('integration: what a channel says about the person asking', () => {
       const context = await requireChannelById(db, joiner.userId, channelId);
 
       await joinChannel(db, clock, context);
-      expect((await channelIn(db, context)).state).toEqual({
+      expect((await channelIn(db, context, clock.now())).state).toEqual({
         lastReadMessageId: null,
         unreadCount: 0,
         unreadMentionCount: 0,
@@ -140,7 +143,7 @@ describe('integration: what a channel says about the person asking', () => {
         .where('id', '=', busy)
         .execute();
 
-      const listed = await channelsVisibleIn(db, context);
+      const listed = await channelsVisibleIn(db, context, clock.now());
       expect(listed.map((channel) => channel.id)).toEqual([busy, quiet]);
       expect(listed.every((channel) => channel.state !== null)).toBe(true);
     });
@@ -174,7 +177,7 @@ describe('integration: what a channel says about the person asking', () => {
       await aChannelWith(db, elsewhere.workspaceId, 'mc-busy', alice, bob, ...elsewhere.users);
 
       const context = await requireWorkspaceMembership(db, dave.userId, workspaceId);
-      const listed = await channelsVisibleIn(db, context);
+      const listed = await channelsVisibleIn(db, context, clock.now());
       const count = (id: string): number | undefined =>
         listed.find((channel) => channel.id === id)?.memberCount;
       // Dave has joined neither: he is told what is in them all the same.
@@ -184,10 +187,10 @@ describe('integration: what a channel says about the person asking', () => {
       expect(listed.map((channel) => channel.workspaceId)).toEqual(listed.map(() => workspaceId));
 
       // One channel's read says the same, and a join is counted in the answer to it.
-      expect((await channelFor(db, dave.userId, busy)).memberCount).toBe(2);
+      expect((await channelFor(db, dave.userId, busy, clock.now())).memberCount).toBe(2);
       const channel = await requireChannelById(db, dave.userId, busy);
       await joinChannel(db, clock, channel);
-      expect((await channelFor(db, dave.userId, busy)).memberCount).toBe(3);
+      expect((await channelFor(db, dave.userId, busy, clock.now())).memberCount).toBe(3);
     });
   });
 
@@ -224,7 +227,7 @@ describe('integration: what a channel says about the person asking', () => {
       await feed(two, 'acme/api');
       await feed(two, 'acme/web');
       const context = await requireWorkspaceMembership(db, alice.userId, workspaceId);
-      const listed = await channelsVisibleIn(db, context);
+      const listed = await channelsVisibleIn(db, context, clock.now());
       const repositoryOf = (id: string): string | null | undefined =>
         listed.find((channel) => channel.id === id)?.codeRepository;
       expect([repositoryOf(none), repositoryOf(one), repositoryOf(two)]).toEqual([
@@ -233,7 +236,7 @@ describe('integration: what a channel says about the person asking', () => {
         null,
       ]);
       // Told to whoever can see it, joined or not — the same people who read the feed's events there.
-      expect((await channelFor(db, bob.userId, one)).codeRepository).toBe('acme/api');
+      expect((await channelFor(db, bob.userId, one, clock.now())).codeRepository).toBe('acme/api');
 
       // A feed disconnected is the next read's answer: two become one.
       await db
@@ -241,7 +244,9 @@ describe('integration: what a channel says about the person asking', () => {
         .where('channel_id', '=', two)
         .where('repository_full_name', '=', 'acme/web')
         .execute();
-      expect((await channelFor(db, alice.userId, two)).codeRepository).toBe('acme/api');
+      expect((await channelFor(db, alice.userId, two, clock.now())).codeRepository).toBe(
+        'acme/api',
+      );
 
       // A direct message has no feed, and so no repository.
       const pair = await openDirectMessage(db, clock, context, bob.userId);
@@ -257,7 +262,7 @@ describe('integration: what a channel says about the person asking', () => {
 
       const cost = async (): Promise<number> => {
         const meter = counting(db);
-        await channelsVisibleIn(meter.db, context);
+        await channelsVisibleIn(meter.db, context, clock.now());
         return meter.count();
       };
 
@@ -271,7 +276,7 @@ describe('integration: what a channel says about the person asking', () => {
       // A meter that counted nothing would pass this for the wrong reason.
       expect(few).toBeGreaterThan(0);
       expect(many).toBe(few);
-      expect((await channelsVisibleIn(db, context)).length).toBe(51);
+      expect((await channelsVisibleIn(db, context, clock.now())).length).toBe(51);
     });
   });
 });

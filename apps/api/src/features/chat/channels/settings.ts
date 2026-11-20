@@ -119,7 +119,10 @@ export const updateChannel = async (
     topic === current.topic &&
     onlyAdminsPost === current.onlyAdminsPost
   ) {
-    return { channel: await channelFor(executor, context.userId, context.channelId), update: null };
+    return {
+      channel: await channelFor(executor, context.userId, context.channelId, clock.now()),
+      update: null,
+    };
   }
   let delegatedPosting = false;
   if (onlyAdminsPost !== current.onlyAdminsPost) {
@@ -208,7 +211,7 @@ export const updateChannel = async (
   }
 
   return {
-    channel: await channelFor(executor, context.userId, context.channelId),
+    channel: await channelFor(executor, context.userId, context.channelId, clock.now()),
     update: {
       channelId: context.channelId,
       name,

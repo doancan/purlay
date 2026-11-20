@@ -117,6 +117,8 @@ export const addMember = async (
   }
   return {
     forMember:
-      inserted === undefined ? null : await channelFor(executor, userId, context.channelId),
+      inserted === undefined
+        ? null
+        : await channelFor(executor, userId, context.channelId, joinedAt),
   };
 };

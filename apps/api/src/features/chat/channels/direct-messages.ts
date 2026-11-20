@@ -128,12 +128,15 @@ export const openConversation = async (
     }
   }
 
-  const channel = await channelFor(executor, context.userId, channelId);
+  const channel = await channelFor(executor, context.userId, channelId, clock.now());
   // Read once each, in turn, and only when it is new: at most nine, the same transaction.
   const forOthers: { userId: string; channel: Channel }[] = [];
   if (inserted !== undefined && !self) {
     for (const userId of people.filter((person) => person !== context.userId)) {
-      forOthers.push({ userId, channel: await channelFor(executor, userId, channelId) });
+      forOthers.push({
+        userId,
+        channel: await channelFor(executor, userId, channelId, clock.now()),
+      });
     }
   }
   return { channel, forOthers, created: inserted !== undefined };

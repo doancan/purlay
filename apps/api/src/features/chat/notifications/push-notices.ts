@@ -8,9 +8,10 @@ import type { PushNotices } from '../../../modules/push/notices';
 import { AppError } from '../../../platform/errors';
 import { requireMessageById } from '../channels/guard';
 import { notHiddenBy } from '../messages/hidden';
+import { levelInForce } from '../channels/notification-level';
 
 export const chatPushNotices: PushNotices = {
-  canDeliver: async (executor, messageId, userId, notificationId) => {
+  canDeliver: async (executor, messageId, userId, now, notificationId) => {
     try {
       const { context } = await requireMessageById(executor, userId, messageId);
       return (
@@ -21,6 +22,12 @@ export const chatPushNotices: PushNotices = {
             join
               .onRef('member.channel_id', '=', 'n.channel_id')
               .onRef('member.user_id', '=', 'n.user_id'),
+          )
+          // The level in force as the push goes, not as it was queued (D-329).
+          .leftJoin('channel_level_timers as level_timer', (join) =>
+            join
+              .onRef('level_timer.channel_id', '=', 'member.channel_id')
+              .onRef('level_timer.user_id', '=', 'member.user_id'),
           )
           .select('n.id')
           .where('n.message_id', '=', messageId)
@@ -36,14 +43,14 @@ export const chatPushNotices: PushNotices = {
           .where('person.suspended_at', 'is', null)
           .where((eb) =>
             eb.or([
-              eb('member.notification_level', 'is', null),
-              eb('member.notification_level', '<>', 'none'),
+              eb(levelInForce('member', 'level_timer', now), 'is', null),
+              eb(levelInForce('member', 'level_timer', now), '<>', 'none'),
             ]),
           )
           .where((eb) =>
             eb.or([
               eb('n.type', '<>', 'channel_message'),
-              eb('member.notification_level', '=', 'all'),
+              eb(levelInForce('member', 'level_timer', now), '=', 'all'),
             ]),
           )
           .where(notHiddenBy(userId, sql.ref('n.message_id')))

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { aDatabaseThatMustNotBeTouched } from '../../testing/doubles';
+import { aDatabaseThatMustNotBeTouched, NOW } from '../../testing/doubles';
 import { noNoticeWords, noPushNotices } from './notices';
 
 describe('the notices of a process that runs no chat', () => {
@@ -8,7 +8,7 @@ describe('the notices of a process that runs no chat', () => {
       await noPushNotices.of(aDatabaseThatMustNotBeTouched(), 'a-message', ['a-person']),
     ).toEqual([]);
     expect(
-      await noPushNotices.canDeliver(aDatabaseThatMustNotBeTouched(), 'a-message', 'a-person'),
+      await noPushNotices.canDeliver(aDatabaseThatMustNotBeTouched(), 'a-message', 'a-person', NOW),
     ).toBe(false);
   });
 });

@@ -137,6 +137,7 @@ export const TABLE_OWNERS = {
   channel_read_scopes: 'chat',
   channel_groups: 'chat',
   channel_group_channels: 'chat',
+  channel_level_timers: 'chat',
 
   // Issues: a workspace's issues (its own set, `migrations/issues/`).
   issues: 'issues',

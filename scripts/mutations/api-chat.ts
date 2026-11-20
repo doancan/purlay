@@ -544,6 +544,15 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/module-deadlines.test.ts'],
   },
   {
+    id: 'level-change-tells-no-tab',
+    why: 'a level changed in one tab is not heard by the person’s other tabs and devices (D-329)',
+    file: 'apps/api/src/features/chat/http/channels.ts',
+    find: '    await setNotificationLevel(transaction, clock, context, input.level, input.until);\n  });\n  await publishAfterCommit(log, [\n',
+    replace:
+      '    await setNotificationLevel(transaction, clock, context, input.level, input.until);\n  });\n  if (Math.random() > 2) await publishAfterCommit(log, [\n',
+    tests: ['apps/api/src/ingress/http/notification-level.integration.test.ts'],
+  },
+  {
     id: 'link-preview-kept-at-its-expiry',
     why: 'a preview at the instant it expires is kept another day, and the cache answers stale',
     file: 'apps/api/src/features/chat/sweeps.ts',
@@ -639,9 +648,9 @@ export const API_CHAT: readonly Mutation[] = [
     id: 'personal-groups-move-not-atomic',
     why: 'A database refusal after inserting placement leaves an unwanted placement behind.',
     file: 'apps/api/src/features/chat/http/channel-groups.ts',
-    find: '  const result = await atomicallyOn(dependencies.database)(async (transaction) => {\n    const changed = await moveToGroup(transaction, context, input.groupId);\n    return { changed, channel: await channelFor(transaction, userId, channelId) };\n  });',
+    find: '  const result = await atomicallyOn(dependencies.database)(async (transaction) => {\n    const changed = await moveToGroup(transaction, context, input.groupId);\n    return {\n      changed,\n      channel: await channelFor(transaction, userId, channelId, dependencies.clock.now()),\n    };\n  });',
     replace:
-      '  const changed = await moveToGroup(dependencies.database, context, input.groupId);\n  const result = { changed, channel: await channelFor(dependencies.database, userId, channelId) };',
+      '  const changed = await moveToGroup(dependencies.database, context, input.groupId);\n  const result = {\n    changed,\n    channel: await channelFor(dependencies.database, userId, channelId, dependencies.clock.now()),\n  };',
     tests: ['apps/api/src/features/chat/http/groups.concurrency.integration.test.ts'],
   },
   {

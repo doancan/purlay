@@ -44,6 +44,8 @@ export interface PushNotices {
     executor: Executor,
     messageId: string,
     userId: string,
+    /** The instant it is asked at: what the person chose may have been for a while that has ended (D-329). */
+    now: Date,
     notificationId?: string,
   ): Promise<boolean>;
 }

@@ -368,6 +368,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0018_channel_access_sources',
         'chat/0019_webhooks',
         'chat/0020_webhook_retention_indexes',
+        'chat/0021_channel_level_timers',
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
@@ -493,6 +494,7 @@ describe('integration: the contract release on a database that has run the expan
         'chat/0018_channel_access_sources',
         'chat/0019_webhooks',
         'chat/0020_webhook_retention_indexes',
+        'chat/0021_channel_level_timers',
       ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
@@ -718,6 +720,7 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0018_channel_access_sources',
         'chat/0019_webhooks',
         'chat/0020_webhook_retention_indexes',
+        'chat/0021_channel_level_timers',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -797,6 +800,7 @@ describe('integration: moving development read scopes into chat’s own table', 
           'chat/0018_channel_access_sources',
           'chat/0019_webhooks',
           'chat/0020_webhook_retention_indexes',
+          'chat/0021_channel_level_timers',
         ]);
         expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([
           {

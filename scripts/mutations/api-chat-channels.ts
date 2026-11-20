@@ -113,8 +113,8 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'add-member-tells-twice',
     why: 'somebody already in the channel is told it is new to them, every time anyone adds them',
     file: 'apps/api/src/features/chat/channels/members.ts',
-    find: '      inserted === undefined ? null : await channelFor(',
-    replace: '      false ? null : await channelFor(',
+    find: '      inserted === undefined\n        ? null\n',
+    replace: '      false\n        ? null\n',
     tests: ['apps/api/src/features/chat/channels/members.integration.test.ts'],
   },
   {
@@ -1321,6 +1321,17 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     ],
   },
   {
+    id: 'level-for-good-keeps-its-timer',
+    why: 'a level chosen for good while one for a while lasts is undone when the old timer ends (D-329)',
+    file: 'apps/api/src/features/chat/channels/notification-level.ts',
+    find: "      .deleteFrom('channel_level_timers')\n",
+    replace: "      .deleteFrom('channel_level_timers')\n      .where(sql<boolean>`false`)\n",
+    tests: [
+      'apps/api/src/features/chat/channels/notification-level.integration.test.ts',
+      'apps/api/src/ingress/http/notification-level.integration.test.ts',
+    ],
+  },
+  {
     id: 'level-recount-forgets-channel-messages',
     why: 'a read recounts the badge without what `all` was told, and a badge the send raised comes down at the first read',
     file: 'apps/api/src/features/chat/channels/read-state.ts',
@@ -1333,8 +1344,9 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     id: 'level-set-for-the-whole-channel',
     why: 'muting a channel mutes it for everybody in it',
     file: 'apps/api/src/features/chat/channels/notification-level.ts',
-    find: "    .where('user_id', '=', context.userId)\n",
-    replace: '',
+    find: "    .set({ notification_level: level })\n    .where('channel_id', '=', context.channelId)\n    .where('user_id', '=', context.userId)\n",
+    replace:
+      "    .set({ notification_level: level })\n    .where('channel_id', '=', context.channelId)\n",
     tests: ['apps/api/src/features/chat/channels/notification-level.integration.test.ts'],
   },
   {
@@ -1590,6 +1602,22 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     find: '    .where((eb) => eb.exists(visible));\n',
     replace: '    ;\n',
     tests: ['apps/api/src/features/chat/messages/notify-recipients.integration.test.ts'],
+  },
+  {
+    id: 'timed-level-never-ends',
+    why: 'a channel muted for an hour stays muted for ever: its end is never compared with the clock (D-329)',
+    file: 'apps/api/src/features/chat/channels/notification-level.ts',
+    find: 'case when ${sql.ref(`${timer}.ends_at`)} <= ${now}\n',
+    replace: 'case when ${sql.ref(`${timer}.ends_at`)} <= ${now} and false\n',
+    tests: ['apps/api/src/features/chat/channels/notification-level.integration.test.ts'],
+  },
+  {
+    id: 'timed-level-returns-to-the-mute',
+    why: 'muting again while a mute lasts makes the first mute the level to return to: the person is never unmuted (D-329)',
+    file: 'apps/api/src/features/chat/channels/notification-level.ts',
+    find: '    current.until !== null && current.then_level !== null ? current.then_level : current.level;\n',
+    replace: '    current.level;\n',
+    tests: ['apps/api/src/features/chat/channels/notification-level.integration.test.ts'],
   },
   {
     id: 'unread-from-a-reply-reads-the-feed-wrong',

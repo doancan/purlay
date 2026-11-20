@@ -26,6 +26,7 @@ import { AppError } from '../../../platform/errors';
 import type { Clock } from '../../../platform/clock';
 import type { ChannelContext } from './guard';
 import { visibleChannelIds } from './guard';
+import { levelInForce, levelInForceUntil } from './notification-level';
 import { requireFullMembership, type WorkspaceContext } from '../../../platform/tenancy';
 
 interface ChannelRow {
@@ -40,7 +41,9 @@ interface ChannelRow {
   readonly last_read_message_id: string | null;
   readonly unread_count: number | null;
   readonly unread_mention_count: number | null;
+  /** The level in force at the read's instant (D-329): a level for a while that has ended is the one it gave way to. */
   readonly notification_level: Channel['notificationLevel'];
+  readonly notification_level_until: Date | string | null;
   readonly starred_at: Date | string | null;
   readonly sidebar_group_id: string | null;
   /** Its open incident's, when one is open (D-137): the partial unique index finds it. */
@@ -117,6 +120,10 @@ const asChannel = (row: ChannelRow, userId: string): Channel => ({
           unreadMentionCount: row.unread_mention_count ?? 0,
         },
   notificationLevel: row.member_user_id === null ? null : row.notification_level,
+  notificationLevelUntil:
+    row.member_user_id === null || row.notification_level_until === null
+      ? null
+      : new Date(row.notification_level_until).toISOString(),
   starred: row.member_user_id !== null && row.starred_at !== null,
   sidebarGroupId:
     row.member_user_id !== null && row.starred_at === null && row.type !== 'direct_message'
@@ -156,6 +163,7 @@ const readChannels = async (
   executor: ChatDb,
   userId: string,
   only: { readonly ids?: readonly string[]; readonly id?: string },
+  now: Date,
 ): Promise<readonly ChannelRow[]> => {
   // How many live people each listed channel holds (D-167): one aggregate over the same channels,
   // grouped once and joined, so a hundred channels are one scan of their memberships, not a count
@@ -175,6 +183,11 @@ const readChannels = async (
       join
         .onRef('channel_members.channel_id', '=', 'channels.id')
         .on('channel_members.user_id', '=', userId),
+    )
+    .leftJoin('channel_level_timers as level_timer', (join) =>
+      join
+        .onRef('level_timer.channel_id', '=', 'channel_members.channel_id')
+        .onRef('level_timer.user_id', '=', 'channel_members.user_id'),
     )
     .leftJoin('channel_group_channels', (join) =>
       join
@@ -209,7 +222,8 @@ const readChannels = async (
       'channel_members.last_read_message_id as last_read_message_id',
       'channel_members.unread_count as unread_count',
       'channel_members.unread_mention_count as unread_mention_count',
-      'channel_members.notification_level as notification_level',
+      levelInForce('channel_members', 'level_timer', now).as('notification_level'),
+      levelInForceUntil('level_timer', now).as('notification_level_until'),
       'channel_members.starred_at as starred_at',
       'channel_group_channels.group_id as sidebar_group_id',
       'incidents.severity as incident_severity',
@@ -254,8 +268,9 @@ export const channelFor = async (
   executor: ChatDb,
   userId: string,
   channelId: string,
+  now: Date,
 ): Promise<Channel> => {
-  const [row] = await readChannels(executor, userId, { id: channelId });
+  const [row] = await readChannels(executor, userId, { id: channelId }, now);
   if (row === undefined)
     throw new AppError({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found.' });
   const capabilities = await channelCapabilitiesFor(executor, userId, [row.id]);
@@ -335,7 +350,7 @@ export const createChannel = async (
     metadata: { type: input.type ?? 'public' },
   });
 
-  return await channelFor(executor, context.userId, row.id);
+  return await channelFor(executor, context.userId, row.id, joinedAt);
 };
 
 /**
@@ -347,11 +362,12 @@ export const createChannel = async (
 export const channelsVisibleIn = async (
   executor: ChatDb,
   context: WorkspaceContext,
+  now: Date,
 ): Promise<readonly Channel[]> => {
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return [];
 
-  const rows = await readChannels(executor, context.userId, { ids: visible });
+  const rows = await readChannels(executor, context.userId, { ids: visible }, now);
   const capabilities = await channelCapabilitiesFor(
     executor,
     context.userId,
@@ -364,8 +380,11 @@ export const channelsVisibleIn = async (
 };
 
 /** The channel the context was minted for. There is no other one it could return. */
-export const channelIn = async (executor: ChatDb, context: ChannelContext): Promise<Channel> =>
-  await channelFor(executor, context.userId, context.channelId);
+export const channelIn = async (
+  executor: ChatDb,
+  context: ChannelContext,
+  now: Date,
+): Promise<Channel> => await channelFor(executor, context.userId, context.channelId, now);
 
 /**
  * Joins a channel you can already see.

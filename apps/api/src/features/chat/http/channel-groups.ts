@@ -120,7 +120,10 @@ const putPlacement = async (
   const input = validated(MoveChannelGroupRequest, body);
   const result = await atomicallyOn(dependencies.database)(async (transaction) => {
     const changed = await moveToGroup(transaction, context, input.groupId);
-    return { changed, channel: await channelFor(transaction, userId, channelId) };
+    return {
+      changed,
+      channel: await channelFor(transaction, userId, channelId, dependencies.clock.now()),
+    };
   });
   await told(dependencies, context, result.changed);
   return result.channel;

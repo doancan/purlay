@@ -722,8 +722,16 @@ export const CHAT_NOTIFICATION_KINDS = [
   { type: 'reminder', needsYou: false, pushed: true, mailed: false },
 ] as const satisfies readonly NotificationKind[];
 
-/** `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107). */
-export const SetNotificationLevelRequest = FromClient({ level: NotificationLevel });
+/**
+ * `PUT /api/channels/:channelId/notification-level` — the caller's own membership (D-107): for good, or with `until`
+ * for a while (D-329), after which the level in force before it returns. `until` is ahead and within
+ * `DEEP_WORK_MAX_HOURS`, Deep Work's bound; whether it is in that window is the server's to say, as Deep Work's is.
+ * Without `until` the level is for good, and a level for a while still running ends with it.
+ */
+export const SetNotificationLevelRequest = FromClient({
+  level: NotificationLevel,
+  until: /* @__PURE__ */ Type.Optional(Timestamp),
+});
 export type SetNotificationLevelRequest = Static<typeof SetNotificationLevelRequest>;
 
 /** How much of a thread's root the inbox quotes to name it (D-162): one line, not the message. */

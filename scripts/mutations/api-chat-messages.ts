@@ -577,6 +577,14 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/messages/followed.integration.test.ts'],
   },
   {
+    id: 'following-reads-the-stored-level',
+    why: 'a level of every message chosen before a mute is not back when the mute ends: delivery reads the stored level (D-329)',
+    file: 'apps/api/src/features/chat/messages/delivery.ts',
+    find: ".where((eb) => eb(levelInForce('channel_members', 'level_timer', now), '=', 'all'))",
+    replace: ".where('channel_members.notification_level', '=', 'all')",
+    tests: ['apps/api/src/features/chat/channels/notification-level.integration.test.ts'],
+  },
+  {
     id: 'fresh-send-attachments-lost',
     why: 'The initial response and publication omit uploads that were linked by this send.',
     file: 'apps/api/src/features/chat/messages/reader.ts',
@@ -844,6 +852,14 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     find: '  if (row.sender_id !== userId) {\n    await recordAudit(',
     replace: '  if (row.sender_id === "nobody") {\n    await recordAudit(',
     tests: ['apps/api/src/features/chat/messages/delete.integration.test.ts'],
+  },
+  {
+    id: 'muted-reads-the-stored-level',
+    why: 'a mention after a mute ended is still held back: delivery reads the stored level, not the one in force (D-329)',
+    file: 'apps/api/src/features/chat/messages/delivery.ts',
+    find: "      levelInForce('channel_members', 'level_timer', now).as('notification_level'),\n",
+    replace: "      'channel_members.notification_level',\n",
+    tests: ['apps/api/src/features/chat/channels/notification-level.integration.test.ts'],
   },
   {
     id: 'outgoing-webhook-erasure-keeps-payload',

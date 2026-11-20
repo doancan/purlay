@@ -84,7 +84,7 @@ const listChannels = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireWorkspaceMembership(database, userId, workspaceId);
-  return await channelsVisibleIn(database, context);
+  return await channelsVisibleIn(database, context, dependencies.clock.now());
 };
 
 /**
@@ -118,7 +118,7 @@ const readChannel = async (
   const { database } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
-  return await channelIn(database, context);
+  return await channelIn(database, context, dependencies.clock.now());
 };
 
 /**
@@ -137,7 +137,7 @@ export const joinPublicChannel = async (
   const joined = await atomicallyOn(database)(
     async (transaction) => await joinChannel(transaction, clock, context),
   );
-  const channel = await channelIn(database, context);
+  const channel = await channelIn(database, context, clock.now());
   if (joined) {
     await publishAfterCommit(log, [
       [publication('CHANNEL_ADDED', () => publishChannelAdded(bus, clock, userId, channel))],
@@ -319,20 +319,30 @@ export const addChannelMember = async (
 };
 
 /**
- * `PUT /api/channels/:channelId/notification-level` — what the caller is told about here (D-107).
- * Their own membership only; a channel they are not in is the stranger's `404`.
+ * `PUT /api/channels/:channelId/notification-level` — what the caller is told about here (D-107), for good or
+ * until `until` (D-329). Their own membership only; a channel they are not in is the stranger's `404`. Their other
+ * tabs and devices read their channels again after the commit; nobody else hears anything.
  */
-const setLevel = async (
-  dependencies: ChannelDependencies,
+export const setLevel = async (
+  dependencies: ChannelWriteDependencies,
   request: Request,
   channelId: string,
   body: unknown,
 ): Promise<void> => {
-  const { database } = dependencies;
+  const { database, clock, bus, log = NO_LOG } = dependencies;
   const { userId } = await requireSession(dependencies.auth, request);
   const context = await requireChannelById(database, userId, channelId);
   const input = validated(SetNotificationLevelRequest, body);
-  await setNotificationLevel(database, context, input.level);
+  await atomicallyOn(database)(async (transaction) => {
+    await setNotificationLevel(transaction, clock, context, input.level, input.until);
+  });
+  await publishAfterCommit(log, [
+    [
+      publication('CHANNELS_UPDATED', () =>
+        publishChannelsUpdated(bus, clock, userId, context.workspaceId),
+      ),
+    ],
+  ]);
 };
 
 /**
