@@ -412,7 +412,7 @@ export const API_ROOT: readonly Mutation[] = [
   },
   {
     id: 'composition-names-an-off-source-as-its-own-module',
-    why: 'a source of a module that is off is handed to the find under its own id as the module, so its skips are counted on a series no manifest made and a dashboard by module misses them (D-323)',
+    why: 'a source of a module that is off is handed to the find under its own id as the module, so its skips are counted on a series no manifest made and a dashboard by module misses them (D-326)',
     file: 'apps/api/src/composition.ts',
     find: '(module.manifest.searchSources ?? []).map((source) => ({\n          module: module.manifest.id,',
     replace: '(module.manifest.searchSources ?? []).map((source) => ({\n          module: source,',

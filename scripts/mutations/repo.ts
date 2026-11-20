@@ -196,7 +196,7 @@ export const REPO: readonly Mutation[] = [
   },
   {
     id: 'find-alert-rule-fires-on-a-source-that-is-off',
-    why: 'the rule on a skipped search source counts `off` too, so a server that does not run a module alerts for ever (D-323)',
+    why: 'the rule on a skipped search source counts `off` too, so a server that does not run a module alerts for ever (D-326)',
     file: 'docker/alerts/purlay-outbox.rules.yml',
     find: 'sum by (module, source) (rate(purlay_search_source_skipped_total{reason=~"slow|error"}[15m]))',
     replace: 'sum by (module, source) (rate(purlay_search_source_skipped_total[15m]))',

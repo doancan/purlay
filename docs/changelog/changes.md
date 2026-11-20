@@ -32,6 +32,7 @@ have it.
 - **Administration** — the server's administrator can stop a module for every workspace and let it run again from the console, with the reason, what stops with it and a confirmation before chat is stopped (D-323)
 - **Send later** — a scheduled message can be sent at once with *Send now* in the Scheduled list, and is sent exactly once even if its time comes at the same moment (D-324)
 - **Operations** — an operator who cannot sign in can requeue or discard dead facts between modules with `bun run outbox:requeue` and `outbox:discard`, with a reason and on the server's trail, as the console does (D-325)
+- **Operations** — `/metrics` times each source of the workspace find and counts the ones it answered without and why, and a ready-made alert rule warns when a source keeps being skipped (D-326)
 
 ### Changed
 
