@@ -74,7 +74,16 @@ test.describe('send later', () => {
     await page.getByRole('button', { name: 'Send later' }).click();
     await page.getByRole('menuitem', { name: 'In 1 hour' }).click();
     // The toast says when, and the box is empty as after a send.
-    await expect(page.getByText(/^Scheduled for Today at \d\d:\d\d$/)).toBeVisible();
+    // An hour on is the next day from 23:00 in the page's zone (UTC, the projects'), and the toast says so: the
+    // word is the one the press's own instant calls for, so the test means the same at every hour (#1508). Within
+    // a minute of the midnight either is right.
+    const dayOf = (at: number): string => new Date(at).toISOString().slice(0, 10);
+    const early = dayOf(asked + HOUR_MS);
+    const late = dayOf(asked + HOUR_MS + 60_000);
+    const day = early !== late ? '(Today|Tomorrow)' : early === dayOf(asked) ? 'Today' : 'Tomorrow';
+    await expect(
+      page.getByText(new RegExp(`^Scheduled for ${day} at \\d\\d:\\d\\d$`)),
+    ).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Message ops' })).toHaveText('');
 
     // The server holds it, an hour from the press, and nothing was sent to the channel.
