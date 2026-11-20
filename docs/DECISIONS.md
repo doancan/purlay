@@ -14092,6 +14092,8 @@ operator as any module's tables are (D-250 rule 5). Chat's `notifications` is un
 
 ### D-285. The workspace find asks each running module's search source at once, as that module and under a deadline, and answers a group for each source — builds on D-34, D-265, D-266, D-270, D-283; amends D-283 §4
 
+*Amended by D-328: each group is cut at the limit and says `more`, and an answer missing a slow or failed source says `partial`.*
+
 **Context.** D-283 §4 decided a core route `GET /api/workspaces/:workspaceId/find` that asks every running module's
 `SearchSource`, and left four things to the step that builds it: what a source is handed, what holds its deadline, what the
 answer says of a source that was not asked, and how issues is searched. The search of messages (`GET …/search`, chat's) answers
@@ -16223,3 +16225,18 @@ shows the tick. *Computing the dependents in the browser from the manifests:* a 
 **Rejected.** *A loop over `notify`*: the round trips this removes. *A cap per notice inside the insert* (a trigger or a CTE per row): the same work in a form a reader of the sink cannot see. *Batching the push's per-person advisory locks*: the push queue's own bound (D-286 §9), out of this change; with web push on, the enqueue still takes one lock per person.
 
 **Cost of reversing.** Two port members, the batch in `modules/inbox/sink.ts` and its tests; no data.
+
+### D-328. Each source of the find is cut at the limit and says whether it had more, and an answer missing a slow or failed source says it is partial — builds on D-285; amends D-285 §3
+
+**Context.** D-285 §3 answered up to ten hits for each source and a list of the sources skipped. A source with thousands of matches cost the answer only its limit already (it is asked for `limit`, and what it returns beyond is cut), but the answer could not say that there was more; and an answer missing a slow source looked complete unless the client read `skipped` and knew which reasons mean "ask again".
+
+**Decision.**
+
+1. **Each source is asked for one more than the limit**, cut to the limit, and its group carries `more`: true when it had that one more. A client can say "10+" and send the person to the source's own screen, which pages (D-285 §3 still holds: no cursor across sources). The cap is the core's, whatever a source answers.
+2. **`partial`** on the answer is true when a source the workspace could have been answered by was `slow` or `error`: the groups are what finished in time. `off` does not make an answer partial, since asking again would find nothing more.
+3. **No total count.** A count per source would be one more scan of every match for every source under the same deadline; `more` is free (D-320 made the same choice for search's "so far").
+4. Both fields are added to the response, and a client that does not read them is unchanged: `CONTRACT_VERSION` does not move (D-58).
+
+**Rejected.** *A count of every match*: see 3. *Hits a slow source had found before its deadline*: a source answers once, with all its hits or none; a source that streams is a different port and no source needs it. *Calling an answer with an `off` source partial*: a client would offer to try again for a module the server does not run.
+
+**Cost of reversing.** Two fields of `@purlay/types` (`FindGroup.more`, `FindResponse.partial`), which a reversal would have to keep emitting for clients that read them; the `limit + 1` in `modules/find/find.ts`.
