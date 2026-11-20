@@ -14351,6 +14351,8 @@ releases. The browser floor is unchanged and the compatibility tests exercise th
 
 ### D-288. The outbox is a table of deliveries, published in the publisher's transaction and claimed and delivered in two steps — builds on D-35, D-250, D-274, D-281, D-283; amends D-283 §2 and §3
 
+*Amended by D-325: §12's "no command-line twin" is reversed; `bun run outbox:requeue` and `outbox:discard` write through the console's writer.*
+
 **Context.** D-283 decided that a fact between modules is an outbox row and left the details to the step that builds it: what the
 row is, what `publishFact` refuses, what a claim and a delivery do when two nodes run at once, a node dies, a handler throws or a
 payload no longer fits. Step 14c of `MODULES.md` §10 builds the table and the publishing (§1 to §3, §6 and §7 below); the claim
@@ -16184,3 +16186,14 @@ shows the tick. *Computing the dependents in the browser from the manifests:* a 
 **Rejected.** Doing it in the client as a send and a cancel: two requests, and a duplicate whenever the second fails. A `PUT` with a `sendAt` of now: the five-second floor and the fifteen-second tick, and a person pressing *now* would wait for a timer. Skipping a locked row in *Send now* as the scheduler does: the press would answer before knowing whether the message went. Answering the updated `ScheduledMessage`: the client has nothing to do with a sent row but drop it, while the message is what a client that missed the socket frame can show.
 
 **Cost of reversing.** Remove the route, its endpoint entry, the client method and the button; no schema, stored format or frame changed, and the scheduler's delivery is the same code it was.
+
+### D-325. Requeue and discard have a command-line twin, on the trail as the server's command — builds on D-296; amends D-288 §12
+
+**Decided by the owner, 2026-11-20** (#1338, the follow-up D-288 §12 left after v0.5.3). §12 refused a command for requeueing and discarding dead facts: a command has no authenticated administrator, so its entries would say that nobody did it. The trigger written on the follow-up has the other side of it: an operator who cannot sign in (the only administrator gone, sign-in itself broken, a server reached only by a shell) and has dead facts to clear has only hand SQL on `outbox`, which leaves **no** entry at all and skips the rules the writer keeps (a delivered fact never brought back, a requeued one held seven days past its expiry, a repeat recording nothing). D-296 already chose the command's way for a stop of a module: the operator's reason on the trail, the actor left empty.
+
+**What changes.** `bun run outbox:requeue <id>… --reason "<why>"` and `bun run outbox:discard <id>… --reason "<why>"` (`apps/api/src/cli/outbox.ts`) call the writer the console calls (`applyOutboxChange` in `modules/administration/outbox.ts`; the console's `changeServerOutbox` is now the administrator's lock and then that writer), in one transaction, with the same limits read from the same contract (`ServerOutboxChangeRequest`: 1 to 50 distinct delivery ids, a reason of 1 to 200 characters that is not blank). Each delivery it changes is one entry, `server.fact_requeued` or `server.fact_discarded`, with the fact's id, workspace, consumer and the reason, and `actor_user_id` null. For these two actions a null actor can only be the command, since no job requeues or discards; the console's trail shows such an entry as it shows a stop by `module:suspend`. The trail's labels no longer say "Server administrator …" (*Fact between modules requeued*, *… discarded*), since that is no longer the only way. It prints what became of each id and never a payload; exits `2` on arguments it cannot use, having written nothing, `1` when an id was not found or its delivery is over (the others are changed, as the console changes them), `0` otherwise; a second run changes nothing and records nothing.
+
+**Rejected.** *Keeping §12 and pointing the operator at SQL:* the same person with the same access, and nothing on the trail. *A name for the actor from the shell (`$USER`, a `--by` flag):* a word the command cannot check, on a trail whose point is what can be checked; the operator's reason is where they say who and why. *A listing command as well:* the issue asks for the twin of the writes; without a session the dead deliveries' ids are read from `outbox` (`DEPLOY.md`), which the command needs the credentials of anyway.
+
+**Cost of reversing.** Delete the command, its two `package.json` lines and the CONTRIBUTING row; the writer split costs nothing to keep.
+
