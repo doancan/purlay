@@ -1088,9 +1088,11 @@ describe('integration: one bad delivery does not take its batch with it', () => 
       batch: BATCH,
       clock,
       log,
-      rowDeadlineMs: 100,
+      // Every row has this deadline, the honest ones too: it is far above what a real transaction takes on a busy
+      // runner (100 ms was not, #1504), and the whole drain still ends well before the default deadline would.
+      rowDeadlineMs: 1_000,
     });
-    expect(performance.now() - started).toBeLessThan(2000);
+    expect(performance.now() - started).toBeLessThan(2_500);
     expect(tally).toMatchObject({ delivered: 2, failed: 1 });
     expect(sawAbort).toBe(true);
     const rows = await rowOf(workspaceId);
