@@ -1342,3 +1342,40 @@ describe('a channel set to tell nothing (D-107)', () => {
     expect(muted[0]?.closest('a')?.textContent).toContain('deploys');
   });
 });
+
+describe('a channel muted for a while (D-329)', () => {
+  test('the list is read again when the mute ends, so the sidebar shows the level that came back', async () => {
+    let reads = 0;
+    let muted = true;
+    const api = aSignedInApi({
+      channels: () => {
+        reads += 1;
+        return Promise.resolve(
+          someChannels().map((channel) =>
+            channel.id === IDS.api && muted
+              ? {
+                  ...channel,
+                  notificationLevel: 'none' as const,
+                  notificationLevelUntil: '2026-09-09T12:30:00.000Z',
+                }
+              : channel,
+          ),
+        );
+      },
+    });
+    const view = await open(api);
+    const before = reads;
+    // The server's end: the level it gave way to is what the list says from now on.
+    muted = false;
+    act(() => {
+      view.world.timers.advance(30 * 60_000 - 1);
+    });
+    await settle();
+    expect(reads).toBe(before);
+    act(() => {
+      view.world.timers.advance(1);
+    });
+    await settle();
+    expect(reads).toBe(before + 1);
+  });
+});

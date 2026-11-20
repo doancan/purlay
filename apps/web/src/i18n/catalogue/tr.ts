@@ -2558,6 +2558,15 @@ export const tr = {
   'level.mentions.short': 'bahsetmeler ve yanıtlar',
   'level.none.short': 'hiçbir şey',
   'level.failed': 'Bildirim düzeyi değiştirilemedi.',
+  'level.buttonUntil': 'Bildirimler: {time} saatine kadar {level}',
+  'level.mutedUntil': '{time} saatine kadar sessiz',
+  'level.until': '{time} saatine kadar: {level}',
+  'level.muteFor': 'Sessize al…',
+  'level.mute.15m': '15 dakika ({time})',
+  'level.mute.1h': '1 saat ({time})',
+  'level.mute.8h': '8 saat ({time})',
+  'level.mute.24h': '24 saat ({time})',
+  'level.mute.tomorrow': 'Yarına kadar',
 
   // ── Inbox (D-106) ──────────────────────────────────────────────────────
   'inbox.title': 'Gelen kutusu',

@@ -70,8 +70,15 @@ const ChannelList = ({
   const { match } = useRoute();
   const [creating, setCreating] = useState(false);
   const [browsing, setBrowsing] = useState(false);
-  // Both dialogs are in the deferred chunk (D-163).
-  const deferred = useDeferred([creating, setCreating], [browsing, setBrowsing]);
+  // Both dialogs are in the deferred chunk (D-163), and so is what reads the list again when a mute for a while
+  // ends (D-329), asked for only while one has an end. That door has nothing of its own to close if the chunk does
+  // not come; it hands Browse's setter, which a failed load closes anyway.
+  const timed = channels.data?.some((channel) => channel.notificationLevelUntil != null) === true;
+  const deferred = useDeferred(
+    [creating, setCreating],
+    [browsing, setBrowsing],
+    [timed, setBrowsing],
+  );
   const currentId = match.name === 'channel' ? match.params.channelId : null;
   const { preferences, change } = useSidebarPreferences();
   const knownGroups = new Set(groups.map((group) => group.id));
@@ -196,6 +203,9 @@ const ChannelList = ({
         <>
           <deferred.NewChannelDialog open={creating} onOpenChange={setCreating} />
           <deferred.BrowseChannelsDialog open={browsing} onOpenChange={setBrowsing} />
+          {timed && (
+            <deferred.LevelEnds workspaceId={workspace.id} channels={channels.data ?? []} />
+          )}
         </>
       )}
     </nav>
