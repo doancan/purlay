@@ -116,11 +116,19 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/data/cache.test.ts'],
   },
   {
+    id: 'channel-state-burst-cancels-each-read',
+    why: 'Every counter frame heard during a channel-list read cancels and restarts it, so a busy workspace never gets its list (#1464).',
+    file: 'apps/web/src/data/cache.ts',
+    find: '  if (reask !== undefined) {',
+    replace: '  if (reask !== undefined && reask.heardSince < 0) {',
+    tests: ['apps/web/src/data/cache.test.ts'],
+  },
+  {
     id: 'channel-state-idle-read-requested',
     why: 'Ordinary counter frames refetch settled channel lists instead of copying their state.',
     file: 'apps/web/src/data/cache.ts',
-    find: "  if (client.getQueryState(key)?.fetchStatus !== 'fetching') return;",
-    replace: '',
+    find: "  if (query?.state.fetchStatus !== 'fetching') return;",
+    replace: '  if (query === undefined) return;',
     tests: ['apps/web/src/data/cache.test.ts'],
   },
   {
@@ -133,6 +141,14 @@ export const WEB_CORE: readonly Mutation[] = [
       'apps/web/src/features/alerts/background-alerts.test.tsx',
       'apps/web/src/data/cache.test.ts',
     ],
+  },
+  {
+    id: 'channel-state-reask-stale-answer-kept',
+    why: 'A change heard while the list is asked again is lost under that read’s older answer.',
+    file: 'apps/web/src/data/cache.ts',
+    find: '      if (own.heardSince === 0) break;',
+    replace: '      break;',
+    tests: ['apps/web/src/data/cache.test.ts'],
   },
   {
     id: 'channel-state-unknown-forgotten',
@@ -851,8 +867,8 @@ export const WEB_CORE: readonly Mutation[] = [
     id: 'reread-after-access-replaced',
     why: 'A cancelled old query invalidates and fetches after the account or access receipt is replaced.',
     file: 'apps/web/src/data/cache.ts',
-    find: "  if (current()) await client.invalidateQueries({ ...query, refetchType: 'all' });",
-    replace: "  await client.invalidateQueries({ ...query, refetchType: 'all' });",
+    find: '    while (current()) {',
+    replace: '    while (true) {',
     tests: ['apps/web/src/data/cache.test.ts'],
   },
   {

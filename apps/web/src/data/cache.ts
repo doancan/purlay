@@ -142,6 +142,12 @@ const messageLists = (client: QueryClient): [QueryKey, Pages][] => {
   return found;
 };
 
+/** A read `askAgainIfOnItsWay` asks for: how many changes were heard since it was asked. */
+interface Reask {
+  heardSince: number;
+}
+const reasks = new WeakMap<object, Reask>();
+
 /**
  * A list that is being fetched *now* was asked for before this change, and its answer may have been
  * written before it too: left alone, that answer replaces what the change just wrote, and the message,
@@ -150,14 +156,37 @@ const messageLists = (client: QueryClient): [QueryKey, Pages][] => {
  * send while the subscription's answer was re-reading a feed already on the screen (#347). Asking
  * again, the in-flight request is cancelled — which keeps what is cached, change included — in favour
  * of one that starts after the change.
+ *
+ * Once per read, not once per change. A change heard while the read asked here is out is counted, and
+ * one more read follows when it lands; a change heard before that read has started is covered by it.
+ * Cancelling for each change restarted the channel list once per channel-state frame: with other people
+ * writing in the person's channels it was asked for 140 times after one reload, and never answered
+ * while the frames came faster than it did (#1464). The stale answer shows until the next replaces it.
  */
 const askAgainIfOnItsWay = async (client: QueryClient, key: readonly unknown[]): Promise<void> => {
-  if (client.getQueryState(key)?.fetchStatus !== 'fetching') return;
-  const query = { queryKey: key, exact: true };
+  const query = client.getQueryCache().find({ queryKey: key, exact: true });
+  if (query?.state.fetchStatus !== 'fetching') return;
+  const reask = reasks.get(query);
+  if (reask !== undefined) {
+    reask.heardSince += 1;
+    return;
+  }
+  const own: Reask = { heardSince: 0 };
+  reasks.set(query, own);
+  const filters = { queryKey: key, exact: true };
   const current = captureAccess(client, key);
-  // Cancel first even when no data is cached: invalidation alone would join the old request.
-  await client.cancelQueries(query);
-  if (current()) await client.invalidateQueries({ ...query, refetchType: 'all' });
+  try {
+    // Cancel first even when no data is cached: invalidation alone would join the old request.
+    await client.cancelQueries(filters);
+    while (current()) {
+      // What was heard while the cancel ran is covered by the read asked for now.
+      own.heardSince = 0;
+      await client.invalidateQueries({ ...filters, refetchType: 'all' });
+      if (own.heardSince === 0) break;
+    }
+  } finally {
+    reasks.delete(query);
+  }
 };
 
 /**

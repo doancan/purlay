@@ -35,4 +35,8 @@ have it.
 - **Reminders and Send later** — the menus that offer "In 20 minutes", "In 1 hour" and "In 3 hours" now say the clock time each comes to, as "Tomorrow at 09:00" already did (D-319)
 - **Profile** — an empty Time zone field shows the zone this device would fill in, so the button beside it says what it does
 
+### Fixed
+
+- **Channels** — while other people are writing, the channel list is no longer asked for again at every unread count it hears while it loads; it loads once and is read once more, so a reloaded channel no longer waits on it
+
 ---
