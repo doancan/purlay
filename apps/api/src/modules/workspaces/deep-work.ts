@@ -14,10 +14,8 @@ import type { Executor } from '@purlay/db';
 import { DEEP_WORK_MAX_HOURS, type DeepWorkResponse, type SetDeepWorkRequest } from '@purlay/types';
 import { isQuietNow } from '../users/quiet-hours';
 import type { Clock } from '../../platform/clock';
-import { AppError } from '../../platform/errors';
+import { requireEndAhead } from '../../platform/ends-ahead';
 import type { WorkspaceContext } from '../../platform/tenancy';
-
-const HOUR_MS = 3_600_000;
 
 export const setDeepWork = async (
   executor: Executor,
@@ -25,18 +23,9 @@ export const setDeepWork = async (
   context: WorkspaceContext,
   input: SetDeepWorkRequest,
 ): Promise<DeepWorkResponse> => {
-  let until: Date | null = null;
-  if (input.active) {
-    until = new Date(input.until);
-    const now = clock.now().getTime();
-    if (until.getTime() <= now || until.getTime() > now + DEEP_WORK_MAX_HOURS * HOUR_MS) {
-      throw new AppError({
-        code: 'VALIDATION_FAILED',
-        message: `Deep Work ends in the future, at most ${String(DEEP_WORK_MAX_HOURS)} hours from now.`,
-        details: { fields: { until: `ahead, and at most ${String(DEEP_WORK_MAX_HOURS)} hours` } },
-      });
-    }
-  }
+  const until = input.active
+    ? requireEndAhead(clock, input.until, DEEP_WORK_MAX_HOURS, 'Deep Work')
+    : null;
   await executor
     .updateTable('workspace_members')
     .set({ is_deep_work_active: input.active, deep_work_until: until })

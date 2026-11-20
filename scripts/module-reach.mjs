@@ -12,6 +12,7 @@ const CORE = ['**/platform/**', '**/modules/**', '**/ingress/**', '**/realtime/*
  */
 const BASE = [
   ['platform/clock'],
+  ['platform/ends-ahead'],
   ['platform/errors'],
   ['platform/events'],
   ['platform/fact-consumers'],
