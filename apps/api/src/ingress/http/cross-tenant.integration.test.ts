@@ -523,6 +523,16 @@ describe('integration: cross-tenant isolation', () => {
               .where('user_id', '=', theirs.memberId)
               .execute();
           }
+          if (crossing.scheduled === true) {
+            const scheduled = await call(
+              db,
+              'PUT',
+              `/api/channels/${theirs.channelId}/scheduled/${theirs.messageId}`,
+              owner,
+              { content: 'now, please', sendAt: new Date(NOW.getTime() + 3_600_000).toISOString() },
+            );
+            expect(scheduled.status).toBe(200);
+          }
           const own = await call(
             db,
             method,

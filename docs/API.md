@@ -746,6 +746,7 @@ repaired. Nobody else hears it.
 | ○ | `PUT` | `/api/messages/:messageId/pin` | Pins the message for its channel. `204`, idempotent: pinned already, nothing changes and nobody is told. A member's: a visible non-member is `403 NOT_A_CHANNEL_MEMBER`; a deleted message is `404`; past `PINS_MAX` pins of messages not deleted in the channel, `409 PINS_LIMIT`. The channel hears `PINS_UPDATED` (D-130) |
 | ○ | `DELETE` | `/api/messages/:messageId/pin` | Lets the pin go, a deleted message's included. `204`, idempotent; a member's, as pinning is; the channel hears `PINS_UPDATED` when there was one |
 | ○ | `PUT` | `/api/channels/:channelId/scheduled/:scheduledId` | `ScheduleMessageRequest`: replace an owned pending or failed scheduled message; returns `ScheduledMessage`. The UUID makes retries one draft. Requires channel membership. |
+| ○ | `POST` | `/api/channels/:channelId/scheduled/:scheduledId/send` | Send an owned pending or failed message now, through the scheduler's delivery, and mark it sent in the same transaction; returns the `Message`. Already sent — a second press, or the scheduler first — is `409 SCHEDULED_MESSAGE_SENT`, never a second message (D-324). A refusal at delivery is the answer and is recorded as `failureCode`. |
 | ○ | `DELETE` | `/api/channels/:channelId/scheduled/:scheduledId` | Cancel an owned unsent message, `204`; already sent is `409 SCHEDULED_MESSAGE_SENT`. |
 | ○ | `GET` | `/api/workspaces/:workspaceId/scheduled` | `ScheduledMessageList`: the caller’s visible pending and failed drafts, ordered by send time, bounded by `SCHEDULED_MESSAGES_MAX` (100). |
 | ○ | `PUT` | `/api/messages/:messageId/hidden` | Delete for the caller only. Returns a `Message` with `hiddenForMe: true` and empty content. Idempotent; the shared message and other people’s data remain unchanged. |
@@ -948,13 +949,16 @@ Advertised by `capabilities.scheduledMessages`. `sendAt` must be an absolute tim
 and at most 365 days ahead. `content`, optional root `parentId`, and optional own uploaded `attachmentIds`
 follow ordinary send validation. PUT is a full replacement; `SCHEDULED_MESSAGE_LIMIT` refuses a new draft
 when the caller has 100 pending/failed drafts in the workspace. Other owners’ IDs return
-`SCHEDULED_MESSAGE_NOT_FOUND`. Sent IDs cannot be edited or cancelled.
+`SCHEDULED_MESSAGE_NOT_FOUND`. Sent IDs cannot be edited, cancelled or sent again.
 
 The API claims due rows every 15 seconds with `FOR UPDATE SKIP LOCKED`. It rechecks membership and the
 reply target, creates a UUIDv7 at delivery time, and atomically writes the message and sent marker.
 Reserved uploads cannot be discarded, swept or claimed by immediate sends. A domain refusal leaves
 `state: failed` with `failureCode`, editable for retry; transient database failures leave it pending.
-Sent/failed records expire after 30 days. Lists refresh on opening and while the native manager is open.
+*Send now* (`POST …/send`, D-324) is the same delivery at once: it locks the row and waits for a delivery that holds
+it, so whichever commits second finds it sent — the scheduler skips it, *Send now* answers `409
+SCHEDULED_MESSAGE_SENT` — and a race or a double press makes one message. Its refusal is the scheduler's, written
+on the row the same way, and is also the response. Sent/failed records expire after 30 days. Lists refresh on opening and while the native manager is open.
 Delivery continues without a desktop connection and catches up after a server restart; the requested
 time is a lower bound, not a guarantee while the server is unavailable.
 

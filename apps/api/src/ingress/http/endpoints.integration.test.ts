@@ -440,6 +440,19 @@ const STEPS: readonly Step[] = [
     spec: (c) => ({ params: { channelId: c.channelId, scheduledId: c.rootId } }),
     status: 204,
   },
+  {
+    id: 'scheduleMessage',
+    spec: (c) => ({
+      params: { channelId: c.channelId, scheduledId: c.replyId },
+      json: { content: 'Sooner', sendAt: new Date(NOW.getTime() + 60000).toISOString() },
+    }),
+    status: 200,
+  },
+  {
+    id: 'sendScheduledMessage',
+    spec: (c) => ({ params: { channelId: c.channelId, scheduledId: c.replyId } }),
+    status: 200,
+  },
   { id: 'unsaveMessage', spec: (c) => ({ params: { messageId: c.rootId } }), status: 204 },
   {
     id: 'setKnowledge',
