@@ -225,8 +225,29 @@ describe('preparing a release', () => {
     const create = place.calls.find((call) => call.startsWith('gh pr create')) ?? '';
     expect(create).toContain('--base main');
     expect(create).toContain(`--head ${BRANCH}`);
-    expect(create).toContain('deploys');
     expect(create).toContain('v0.1.0');
+    expect(create).toContain('publishes');
+    expect(create).toContain('release-image');
+    expect(create).toContain('Dockhand');
+    expect(create).toContain('not a deployment receipt');
+  });
+
+  // D-262: Actions publishes and promotes the tested image; Dockhand applies it and no workflow restores anything.
+  test('promises neither a server deploy, nor an automatic restore, nor publication after a live deploy', () => {
+    const place = checkout(PR);
+    prepare(options(place));
+    const create = place.calls.find((call) => call.startsWith('gh pr create')) ?? '';
+    for (const retired of [
+      /deploys? the commit to the server/i,
+      /smoke or revision check/i,
+      /restores? the database/i,
+      /previous release/i,
+      /after a successful deploy/i,
+      /a manual deploy/i,
+    ]) {
+      expect(create).not.toMatch(retired);
+    }
+    expect(create).toContain('No workflow rolls anything back');
   });
 
   test('answers every failure mode, so check:pr passes on the pull request it opens', () => {
