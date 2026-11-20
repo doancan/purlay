@@ -425,6 +425,17 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/platform/crypto.test.ts'],
   },
   {
+    id: 'deep-work-unbounded',
+    why: 'Deep Work, or a level for a while, can be set to end in a year, which is never',
+    file: 'apps/api/src/platform/ends-ahead.ts',
+    find: '    end.getTime() <= now ||\n    end.getTime() > now + maxHours * HOUR_MS\n',
+    replace: '    end.getTime() <= now\n',
+    tests: [
+      'apps/api/src/modules/workspaces/deep-work.integration.test.ts',
+      'apps/api/src/features/chat/channels/notification-level.integration.test.ts',
+    ],
+  },
+  {
     id: 'delivery-follow-up-forgets-its-cause',
     why: 'a fact published by a delivery does not say which fact it is a consequence of, so no chain can be bounded',
     file: 'apps/api/src/platform/outbox-drain.ts',
@@ -496,6 +507,17 @@ export const API_PLATFORM: readonly Mutation[] = [
     find: '(subscriptions.get(event.type) ?? []).filter((other) => other !== entry),',
     replace: '(subscriptions.get(event.type) ?? []),',
     tests: ['apps/api/src/platform/domain-bus.test.ts'],
+  },
+  {
+    id: 'end-ahead-takes-no-instant',
+    why: 'a timestamp that names no instant (month 13) reaches the database and answers 500',
+    file: 'apps/api/src/platform/ends-ahead.ts',
+    find: '    Number.isNaN(end.getTime()) ||\n',
+    replace: '',
+    tests: [
+      'apps/api/src/ingress/http/deep-work.integration.test.ts',
+      'apps/api/src/ingress/http/notification-level.integration.test.ts',
+    ],
   },
   {
     id: 'entitled-sql-asks-a-grant-of-a-module-no-grant-can-take',

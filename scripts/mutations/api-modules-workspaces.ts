@@ -175,14 +175,6 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     ],
   },
   {
-    id: 'deep-work-unbounded',
-    why: 'Deep Work can be set to end in a year, which is never',
-    file: 'apps/api/src/modules/workspaces/deep-work.ts',
-    find: '    if (until.getTime() <= now || until.getTime() > now + DEEP_WORK_MAX_HOURS * HOUR_MS) {\n',
-    replace: '    if (until.getTime() <= now) {\n',
-    tests: ['apps/api/src/modules/workspaces/deep-work.integration.test.ts'],
-  },
-  {
     id: 'directory-existing-global-profile-managed',
     why: 'A directory must never acquire ongoing management of an existing canonical profile.',
     file: 'apps/api/src/modules/workspaces/directory/native-auth.ts',

@@ -135,6 +135,8 @@ describe('integration: Deep Work over HTTP', () => {
         { active: true },
         { active: true, until: NOW.toISOString() },
         { active: true, until: new Date(NOW.getTime() + 25 * 3_600_000).toISOString() },
+        // Shaped like a timestamp and naming no instant: a refusal, not a 500.
+        { active: true, until: '2026-13-40T99:00:00Z' },
       ]) {
         const refused = await call(db, 'PUT', path, cookie, body);
         expect(refused.status).toBe(400);
