@@ -447,3 +447,18 @@ export const openPanel = async (
     await page.getByRole('button', { name }).click();
   }
 };
+
+/**
+ * Chooses an item of the submenu that is open, the way a hand does: the pointer travels there over several
+ * moves. The browser tests' pointer otherwise jumps in one step, which leaves no path through the submenu's
+ * pointer-grace area, and WebKit then closes the submenu before the click lands (measured: three of eight
+ * runs sent no request at all).
+ */
+export const chooseInSubmenu = async (page: Page, name: string | RegExp): Promise<void> => {
+  const item = page.getByRole('menuitem', { name });
+  await expect(item).toBeVisible();
+  const box = await item.boundingBox();
+  if (box === null) throw new Error(`the submenu item ${String(name)} has no box to point at`);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
+  await item.click();
+};
