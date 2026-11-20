@@ -144,6 +144,10 @@ export const ServerModuleStatus = Type.Object({
   reason: Type.Union([Type.String(), Type.Null()]),
   suspendedAt: Type.Union([Timestamp, Type.Null()]),
   suspendedBy: Type.Union([Uuid, Type.Null()]),
+  /** The modules a stop of it now would take out of service with it, because they require it, in the build's order (D-323). */
+  stopsWith: Type.Array(Type.String()),
+  /** Whether a stop of it now takes down a module the product cannot do without (chat), so the stop must say `force: true` (D-323). */
+  stopNeedsForce: Type.Boolean(),
 });
 export type ServerModuleStatus = Static<typeof ServerModuleStatus>;
 export const ServerModules = Type.Object({ data: Type.Array(ServerModuleStatus) });

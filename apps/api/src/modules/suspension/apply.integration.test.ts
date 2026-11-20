@@ -157,6 +157,36 @@ describe('integration: stopping and resuming a module', () => {
     });
   });
 
+  test('says before a stop what would go with it and whether it must be meant, as the writer then answers (D-323)', async () => {
+    await withRollback(async (tx) => {
+      const effects = async (): Promise<string[]> =>
+        (await moduleStatuses(tx, catalogue, NOW)).map(
+          ({ module, stopsWith, stopNeedsForce }) =>
+            `${module}:${stopsWith.join('+')}:${stopNeedsForce ? 'force' : 'plain'}`,
+        );
+      expect(await effects()).toEqual([
+        'chat::force',
+        'base:extra+app:force',
+        'extra::plain',
+        'app::force',
+      ]);
+      // What the list said is what the writer asks and answers.
+      expect(
+        await refusalOf(applySuspension(tx, clock, catalogue, ACTOR, stop('base'))),
+      ).toHaveProperty('force');
+      const forced = await applySuspension(
+        tx,
+        clock,
+        catalogue,
+        ACTOR,
+        stop('base', { force: true }),
+      );
+      expect(forced.alsoAffected).toEqual(['extra', 'app']);
+      // Out already, nothing more goes with a stop of them, and none of them must be meant.
+      expect(await effects()).toEqual(['chat::force', 'base::plain', 'extra::plain', 'app::plain']);
+    });
+  });
+
   test('asks to be meant when it takes down a module that is always granted, itself or by what it requires', async () => {
     await withRollback(async (tx) => {
       expect(
