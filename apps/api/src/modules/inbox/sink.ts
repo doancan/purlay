@@ -19,10 +19,13 @@
  *   bound and not a lock: two writes at once may leave a notice or two above it until the next one.
  * - **Another notice of the same subject**, while the first is unread, is raised to the top and takes the newer words, not added
  *   (`uq_inbox_unread_subject`): a retried request leaves one row.
+ * - **Many notices at once** (`notifyMany`, a notice for a whole workspace) are judged as one: the membership of every recipient is
+ *   read in one statement, the notices are written in one `INSERT`, and the cap is kept for every recipient in one `UPDATE`, so
+ *   the statements a fan-out costs do not grow with the people it reaches. One notice is a batch of one.
  */
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import type { Transaction } from '@purlay/db';
+import { sql, type Transaction } from '@purlay/db';
 import { messageId, Uuid } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { inboxUpdatedPublications, publishAfterCommit, type EventBus } from '../../platform/events';
@@ -33,7 +36,8 @@ import type {
   NotificationSink,
   WrittenNotice,
 } from '../../platform/ports/notification-sink';
-import { assertMinted } from '../../platform/tenancy';
+import type { WorkspaceScope } from '../../platform/ports/record-ref';
+import { assertMinted, type WorkspaceContext } from '../../platform/tenancy';
 import { assertTurn } from '../../platform/workspace-turn';
 import type { PushSender } from '../push/sender';
 import { enqueuePush } from '../../platform/push-work';
@@ -81,35 +85,63 @@ const problemWith = (notice: ModuleNotice): string | undefined => {
 };
 
 /**
- * Reads, as of `now`, every unread notice of the person's module beyond the newest `UNREAD_PER_MODULE_MAX`, and answers how many.
- * The newest are by `id`, the order the list shows (a raised notice has a new id), and the notice just written is among them.
- * Uses the unread index (`uq_inbox_unread_subject`'s prefix), so it looks at the unread rows and no read one.
+ * Reads, as of `now`, every unread notice of each person's module beyond their newest `UNREAD_PER_MODULE_MAX`, for all of them in
+ * one statement, and answers how many it read for each person. The newest are by `id`, the order the list shows (a raised notice
+ * has a new id), and the notices just written are among them. Uses the unread index (`uq_inbox_unread_subject`'s prefix), so it
+ * looks at the unread rows and no read one.
  */
 const collapseOldestUnread = async (
   transaction: Transaction,
   {
     workspaceId,
-    userId,
+    userIds,
     module,
     now,
-  }: { workspaceId: string; userId: string; module: string; now: Date },
-): Promise<number> => {
-  const beyond = transaction
+  }: { workspaceId: string; userIds: readonly string[]; module: string; now: Date },
+): Promise<ReadonlyMap<string, number>> => {
+  const ranked = transaction
     .selectFrom('inbox_entries')
-    .select('id')
-    .where('user_id', '=', userId)
+    .select([
+      'id',
+      sql<number>`row_number() over (partition by user_id order by id desc)`.as('newest'),
+    ])
+    .where('user_id', 'in', userIds)
     .where('workspace_id', '=', workspaceId)
     .where('module', '=', module)
-    .where('read_at', 'is', null)
-    .orderBy('id', 'desc')
-    .offset(UNREAD_PER_MODULE_MAX);
+    .where('read_at', 'is', null);
   const collapsed = await transaction
     .updateTable('inbox_entries')
     .set({ read_at: now })
-    .where('id', 'in', beyond)
-    .executeTakeFirst();
-  return Number(collapsed.numUpdatedRows);
+    .where('id', 'in', (eb) =>
+      eb
+        .selectFrom(ranked.as('ranked'))
+        .select('ranked.id')
+        .where('ranked.newest', '>', UNREAD_PER_MODULE_MAX),
+    )
+    .returning('user_id')
+    .execute();
+  const counts = new Map<string, number>();
+  for (const { user_id: userId } of collapsed) counts.set(userId, (counts.get(userId) ?? 0) + 1);
+  return counts;
 };
+
+/** Who writes a batch: a person in a workspace (`notify`) or a turn no person is taking (`notifyIn`). */
+interface Caller {
+  /** Read after the notices have been judged, so a call with nothing to write for names no workspace. */
+  readonly whoFor: () => { readonly workspaceId: string; readonly actorId: string | null };
+  /** Asked once the notices are known well formed and the module not stopped: throws for a workspace that was forged, false for one that may not be told. */
+  readonly authorized: () => boolean;
+}
+
+/** One row per person and subject: a second notice of one subject to one person in a batch is the later one, as it would be one after the other. */
+const lastOfEachSubject = (notices: readonly ModuleNotice[]): ModuleNotice[] => [
+  ...new Map(
+    notices.map((notice) => [
+      JSON.stringify([notice.recipientId, notice.kind, notice.subject.id]),
+      notice,
+    ]),
+  ).values(),
+];
 
 export const notificationSink = (dependencies: {
   /** The module this sink is handed to: the one every notice it writes is written as, and the one that must declare its kind. */
@@ -129,14 +161,8 @@ export const notificationSink = (dependencies: {
   /** Whether the administrator has stopped the module at run time (D-296): its notices are not written. Absent, never. */
   readonly suspended?: () => boolean;
 }): NotificationSink => {
-  const write = async (
-    transaction: Transaction,
-    /** Read after the notice has been judged, so a call with nothing to write for names no workspace. */
-    whoFor: () => { readonly workspaceId: string; readonly actorId: string | null },
-    notice: ModuleNotice,
-    /** Asked once the notice is known well formed and the module not stopped: throws for a workspace that was forged, false for one that may not be told. */
-    authorized: () => boolean,
-  ): Promise<WrittenNotice | undefined> => {
+  /** Refuses a notice the calling module may not send or that is not well formed: a mistake of the module, thrown. */
+  const check = (notice: ModuleNotice): void => {
     const { module } = dependencies;
     const declaredBy = dependencies.kinds.get(notice.kind);
     if (declaredBy === undefined) {
@@ -149,11 +175,22 @@ export const notificationSink = (dependencies: {
     }
     const problem = problemWith(notice);
     if (problem !== undefined) throw new Error(`a notice of kind "${notice.kind}": ${problem}`);
+  };
+
+  const write = async (
+    transaction: Transaction,
+    whoFor: Caller['whoFor'],
+    notices: readonly ModuleNotice[],
+    authorized: Caller['authorized'],
+  ): Promise<WrittenNotice[]> => {
+    const { module } = dependencies;
+    for (const notice of notices) check(notice);
     // A stopped module tells nobody anything, and what it would have said is not kept for later (D-296).
-    if (dependencies.suspended?.() === true) return undefined;
-    if (!authorized()) return undefined;
+    if (dependencies.suspended?.() === true) return [];
+    if (!authorized()) return [];
     const who = whoFor();
-    if (notice.recipientId === who.actorId) return undefined;
+    const owed = lastOfEachSubject(notices).filter((notice) => notice.recipientId !== who.actorId);
+    if (owed.length === 0) return [];
     // Erasure locks the workspace before its user; take the insert's foreign-key lock in that order.
     const workspace = await transaction
       .selectFrom('workspaces')
@@ -162,32 +199,40 @@ export const notificationSink = (dependencies: {
       .where('deleted_at', 'is', null)
       .forKeyShare()
       .executeTakeFirst();
-    if (workspace === undefined) return undefined;
-    const member = await transaction
+    if (workspace === undefined) return [];
+    // In one order, so two fan-outs to overlapping people take their locks the same way round.
+    const members = await transaction
       .selectFrom('workspace_members')
       .innerJoin('users', 'users.id', 'workspace_members.user_id')
       .select('workspace_members.user_id')
       .where('workspace_members.workspace_id', '=', who.workspaceId)
-      .where('workspace_members.user_id', '=', notice.recipientId)
+      .where('workspace_members.user_id', 'in', [
+        ...new Set(owed.map((notice) => notice.recipientId)),
+      ])
       .where('users.deleted_at', 'is', null)
+      .orderBy('workspace_members.user_id')
       .forKeyShare()
-      .executeTakeFirst();
-    if (member === undefined) return undefined;
+      .execute();
+    const current = new Set(members.map((member) => member.user_id));
+    const told = owed.filter((notice) => current.has(notice.recipientId));
+    if (told.length === 0) return [];
     const now = dependencies.clock.now();
     const written = await transaction
       .insertInto('inbox_entries')
-      .values({
-        id: messageId(now),
-        workspace_id: who.workspaceId,
-        user_id: notice.recipientId,
-        module,
-        kind: notice.kind,
-        actor_id: who.actorId,
-        subject_type: notice.subject.type,
-        subject_id: notice.subject.id,
-        params: JSON.stringify(notice.params),
-        created_at: now,
-      })
+      .values(
+        told.map((notice) => ({
+          id: messageId(now),
+          workspace_id: who.workspaceId,
+          user_id: notice.recipientId,
+          module,
+          kind: notice.kind,
+          actor_id: who.actorId,
+          subject_type: notice.subject.type,
+          subject_id: notice.subject.id,
+          params: JSON.stringify(notice.params),
+          created_at: now,
+        })),
+      )
       .onConflict((conflict) =>
         conflict
           .columns(['user_id', 'workspace_id', 'module', 'kind', 'subject_id'])
@@ -200,59 +245,80 @@ export const notificationSink = (dependencies: {
             created_at: builder.ref('excluded.created_at'),
           })),
       )
-      .returning('id')
-      .executeTakeFirstOrThrow();
+      .returning(['id', 'user_id', 'kind', 'subject_id'])
+      .execute();
     const collapsed = await collapseOldestUnread(transaction, {
       workspaceId: who.workspaceId,
-      userId: notice.recipientId,
+      userIds: [...new Set(written.map((row) => row.user_id))],
       module,
       now,
     });
-    if (dependencies.pushedKinds.has(notice.kind))
-      await enqueuePush(transaction, now, [
-        {
-          source: 'inbox',
-          sourceId: written.id,
-          recordId: written.id,
-          workspaceId: who.workspaceId,
-          userId: notice.recipientId,
-          module,
-          kind: notice.kind,
-          createdAt: now,
-        },
-      ]);
-    return {
-      entryId: written.id,
+    const answers = written.map((row): WrittenNotice => ({
+      entryId: row.id,
       workspaceId: who.workspaceId,
-      recipientId: notice.recipientId,
+      recipientId: row.user_id,
       module,
-      kind: notice.kind,
-      collapsed,
-    };
+      kind: row.kind,
+      collapsed: 0,
+    }));
+    // A person's collapse is counted once, on the first of their notices, so a sum over the answers is the rows read.
+    const counted = new Set<string>();
+    const withCollapsed = answers.map((answer) => {
+      if (counted.has(answer.recipientId)) return answer;
+      counted.add(answer.recipientId);
+      return { ...answer, collapsed: collapsed.get(answer.recipientId) ?? 0 };
+    });
+    await enqueuePush(
+      transaction,
+      now,
+      withCollapsed
+        .filter((answer) => dependencies.pushedKinds.has(answer.kind))
+        .map((answer) => ({
+          source: 'inbox' as const,
+          sourceId: answer.entryId,
+          recordId: answer.entryId,
+          workspaceId: who.workspaceId,
+          userId: answer.recipientId,
+          module,
+          kind: answer.kind,
+          createdAt: now,
+        })),
+    );
+    return withCollapsed;
   };
+  const contextOf = (context: WorkspaceContext): Caller => ({
+    whoFor: () => ({ workspaceId: context.workspaceId, actorId: context.userId }),
+    authorized: (): boolean => {
+      assertMinted(context);
+      return true;
+    },
+  });
+  const turnOf = (turn: WorkspaceScope): Caller => ({
+    whoFor: () => ({ workspaceId: turn.workspaceId, actorId: null }),
+    authorized: (): boolean => {
+      assertTurn(turn);
+      // A workspace that lost the module hears nothing from its loops, as it hears nothing from its routes (D-289).
+      return turn.modules === null || turn.modules.has(dependencies.module);
+    },
+  });
   return {
     notify: async (transaction, context, notice): Promise<WrittenNotice | undefined> => {
-      return await write(
-        transaction,
-        () => ({ workspaceId: context.workspaceId, actorId: context.userId }),
-        notice,
-        () => {
-          assertMinted(context);
-          return true;
-        },
-      );
+      const { whoFor, authorized } = contextOf(context);
+      const [written] = await write(transaction, whoFor, [notice], authorized);
+      return written;
+    },
+    notifyMany: async (transaction, context, notices): Promise<readonly WrittenNotice[]> => {
+      const { whoFor, authorized } = contextOf(context);
+      return await write(transaction, whoFor, notices, authorized);
     },
     notifyIn: async (transaction, turn, notice): Promise<WrittenNotice | undefined> => {
-      return await write(
-        transaction,
-        () => ({ workspaceId: turn.workspaceId, actorId: null }),
-        notice,
-        () => {
-          assertTurn(turn);
-          // A workspace that lost the module hears nothing from its loops, as it hears nothing from its routes (D-289).
-          return turn.modules === null || turn.modules.has(dependencies.module);
-        },
-      );
+      const { whoFor, authorized } = turnOf(turn);
+      const [written] = await write(transaction, whoFor, [notice], authorized);
+      return written;
+    },
+    notifyManyIn: async (transaction, turn, notices): Promise<readonly WrittenNotice[]> => {
+      const { whoFor, authorized } = turnOf(turn);
+      return await write(transaction, whoFor, notices, authorized);
     },
     announce: async (written): Promise<void> => {
       for (const { module, kind, collapsed } of written) {

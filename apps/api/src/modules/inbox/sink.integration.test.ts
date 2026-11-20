@@ -533,3 +533,214 @@ describe('integration: the unread notices of a person are bounded', () => {
     });
   });
 });
+
+describe('integration: a notice to many people at once', () => {
+  /** `count` members of the workspace, made in two statements so a test of hundreds stays quick. */
+  const manyMembers = async (
+    db: Transaction,
+    workspaceId: string,
+    count: number,
+  ): Promise<string[]> => {
+    const users = await db
+      .insertInto('users')
+      .values(
+        Array.from({ length: count }, (_, at) => {
+          const username = `many-${String(at)}-${crypto.randomUUID().slice(0, 8)}`;
+          return {
+            username,
+            email: `${username}@example.test`,
+            display_name: `Many ${String(at)}`,
+          };
+        }),
+      )
+      .returning('id')
+      .execute();
+    await db
+      .insertInto('workspace_members')
+      .values(users.map(({ id }) => ({ workspace_id: workspaceId, user_id: id, role: 'member' })))
+      .execute();
+    return users.map(({ id }) => id);
+  };
+
+  /** The transaction with every statement it runs counted by its kind (`InsertQueryNode`…): the seam the sink is handed. */
+  const counting = (db: Transaction): { db: Transaction; statements: string[] } => {
+    const statements: string[] = [];
+    return {
+      statements,
+      db: db.withPlugin({
+        transformQuery: ({ node }) => {
+          statements.push(node.kind);
+          return node;
+        },
+        transformResult: ({ result }) => Promise.resolve(result),
+      }),
+    };
+  };
+
+  test('writes one notice for each member in one insert, and costs as many statements for three hundred people as for three', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const bob = await aMember(db, workspaceId, 'bob');
+      const few = await manyMembers(db, workspaceId, 3);
+      const many = await manyMembers(db, workspaceId, 300);
+      const subjectId = anIssueId();
+
+      const small = counting(db);
+      const toFew = await sinkOn().notifyMany(
+        small.db,
+        bob.context,
+        few.map((userId) => noticeFor(userId, subjectId)),
+      );
+      const large = counting(db);
+      const toMany = await sinkOn().notifyMany(
+        large.db,
+        bob.context,
+        many.map((userId) => noticeFor(userId, subjectId)),
+      );
+
+      expect(toFew).toHaveLength(3);
+      expect(toMany).toHaveLength(300);
+      expect(new Set(toMany.map((notice) => notice.recipientId))).toEqual(new Set(many));
+      expect(large.statements.filter((kind) => kind === 'InsertQueryNode')).toHaveLength(1);
+      expect(large.statements).toEqual(small.statements);
+      const rows = await db
+        .selectFrom('inbox_entries')
+        .select(['id', 'user_id', 'actor_id', 'read_at'])
+        .where('workspace_id', '=', workspaceId)
+        .execute();
+      expect(rows).toHaveLength(303);
+      expect(rows.every((row) => row.actor_id === bob.userId && row.read_at === null)).toBe(true);
+      expect(new Set(toMany.map((notice) => notice.entryId))).toEqual(
+        new Set(rows.filter((row) => many.includes(row.user_id)).map((row) => row.id)),
+      );
+    });
+  });
+
+  test('tells only current members other than the one acting, and one subject once a person, with the later words', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const erased = await aMember(db, workspaceId, 'erased');
+      await db
+        .updateTable('users')
+        .set({ deleted_at: NOW })
+        .where('id', '=', erased.userId)
+        .execute();
+      const elsewhere = await aMember(db, await aWorkspace(db), 'elsewhere');
+      const subjectId = anIssueId();
+      const written = await sinkOn().notifyMany(db, bob.context, [
+        { ...noticeFor(ada.userId, subjectId), params: { title: 'first' } },
+        noticeFor(bob.userId, subjectId),
+        noticeFor(erased.userId, subjectId),
+        noticeFor(elsewhere.userId, subjectId),
+        { ...noticeFor(ada.userId, subjectId), params: { title: 'Çağrı — ﷺ 🚀' } },
+      ]);
+      expect(written.map((notice) => notice.recipientId)).toEqual([ada.userId]);
+      const [entry, ...rest] = await entriesOf(db, ada.userId);
+      expect(rest).toEqual([]);
+      expect(entry?.params).toEqual({ title: 'Çağrı — ﷺ 🚀' });
+      for (const nobody of [bob, erased, elsewhere]) {
+        expect(await entriesOf(db, nobody.userId)).toEqual([]);
+      }
+    });
+  });
+
+  test('keeps every person within the unread cap, counting what it read as history once for each person', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const carol = await aMember(db, workspaceId, 'carol');
+      const sink = sinkOn();
+      for (let i = 0; i < UNREAD_PER_MODULE_MAX - 1; i += 1) {
+        await sink.notify(db, bob.context, noticeFor(ada.userId));
+      }
+      const overflow = 5;
+      // A sink of its own reads a later clock: the batch is newer than every notice before it, as it is in a real fan-out.
+      const written = await sinkOn().notifyMany(db, bob.context, [
+        ...Array.from({ length: 1 + overflow }, () => noticeFor(ada.userId)),
+        noticeFor(carol.userId),
+      ]);
+      const unread = async (userId: string): Promise<number> =>
+        (await entriesOf(db, userId)).filter((row) => row.read_at === null).length;
+      expect(await unread(ada.userId)).toBe(UNREAD_PER_MODULE_MAX);
+      expect(await unread(carol.userId)).toBe(1);
+      const ofAda = written.filter((notice) => notice.recipientId === ada.userId);
+      expect(ofAda.map((notice) => notice.collapsed).sort()).toEqual([0, 0, 0, 0, 0, overflow]);
+      expect(written.find((notice) => notice.recipientId === carol.userId)?.collapsed).toBe(0);
+      // Every notice of this batch is among the newest the person keeps unread.
+      const kept = new Set(
+        (await entriesOf(db, ada.userId))
+          .filter((row) => row.read_at === null)
+          .map((row) => row.id),
+      );
+      expect(ofAda.every((notice) => kept.has(notice.entryId))).toBe(true);
+    });
+  });
+
+  test('a batch larger than the cap leaves the cap unread for one person', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const written = await sinkOn().notifyMany(
+        db,
+        bob.context,
+        Array.from({ length: UNREAD_PER_MODULE_MAX + 7 }, () => noticeFor(ada.userId)),
+      );
+      const rows = await entriesOf(db, ada.userId);
+      expect(rows).toHaveLength(UNREAD_PER_MODULE_MAX + 7);
+      expect(rows.filter((row) => row.read_at === null)).toHaveLength(UNREAD_PER_MODULE_MAX);
+      expect(written.reduce((sum, notice) => sum + notice.collapsed, 0)).toBe(7);
+    });
+  });
+
+  test('is atomic with the caller’s transaction: a rollback leaves none of the batch, and a refused notice writes none of it', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const bob = await aMember(db, workspaceId, 'bob');
+      const people = await manyMembers(db, workspaceId, 20);
+      const count = async (): Promise<number> =>
+        (
+          await db
+            .selectFrom('inbox_entries')
+            .select(sql<number>`count(*)::int`.as('n'))
+            .where('workspace_id', '=', workspaceId)
+            .executeTakeFirstOrThrow()
+        ).n;
+      await sql`savepoint before_the_batch`.execute(db);
+      await sinkOn().notifyMany(
+        db,
+        bob.context,
+        people.map((userId) => noticeFor(userId)),
+      );
+      expect(await count()).toBe(20);
+      await sql`rollback to savepoint before_the_batch`.execute(db);
+      expect(await count()).toBe(0);
+
+      const refusal = await failureOf(
+        sinkOn().notifyMany(db, bob.context, [
+          ...people.map((userId) => noticeFor(userId)),
+          { ...noticeFor(bob.userId), kind: 'not_declared' },
+        ]),
+      );
+      expect(refusal).toContain('not_declared');
+      expect(await count()).toBe(0);
+    });
+  });
+
+  test('a context the guard did not mint is refused, and an empty batch writes nothing', async () => {
+    await withRollback(async (db) => {
+      const workspaceId = await aWorkspace(db);
+      const ada = await aMember(db, workspaceId, 'ada');
+      const bob = await aMember(db, workspaceId, 'bob');
+      const forged = { ...bob.context };
+      expect(await failureOf(sinkOn().notifyMany(db, forged, [noticeFor(ada.userId)]))).toContain(
+        'did not mint',
+      );
+      expect(await sinkOn().notifyMany(db, bob.context, [])).toEqual([]);
+      expect(await entriesOf(db, ada.userId)).toEqual([]);
+    });
+  });
+});

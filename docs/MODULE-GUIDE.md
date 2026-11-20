@@ -56,7 +56,7 @@ module, and run `bun run verify`.
 | You need | Use | Absent partner means |
 |---|---|---|
 | a read that shapes your request (is this person in that channel) | a port you `use`, provided by the other module (`apps/api/src/platform/ports/`) | `undefined`: you say in code what you do instead |
-| to tell the core's inbox something in your transaction | the `NotificationSink` port | the sink refuses a kind no running module declares |
+| to tell the core's inbox something in your transaction | the `NotificationSink` port (`notifyMany` for many people at once: one batch, not a loop) | the sink refuses a kind no running module declares |
 | an effect on a module that may be absent or slow | a fact you `publish` and the other `consume`s, delivered by the outbox | the fact's `absent` policy |
 | a hint that may be lost (read again, presence) | the domain bus or the socket event bus | nobody listening is not an error |
 | a reference to another module's record | an opaque `(module, type, id)` and the label it had when linked (D-291) | a "not available here" view, never an error |
