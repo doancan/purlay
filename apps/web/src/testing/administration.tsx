@@ -108,7 +108,8 @@ export const adminError = (): Response =>
   adminJson({ error: { code: 'INTERNAL', message: 'Unavailable' } }, 500);
 export const renderAdministration = async (
   section: string,
-  answer: (call: AdministrationCall) => Response | undefined = () => undefined,
+  // A promise is an answer still on its way: what a screen shows while it waits.
+  answer: (call: AdministrationCall) => Response | Promise<Response> | undefined = () => undefined,
   options: {
     readonly modules?: ('chat' | 'issues')[];
     readonly api?: Partial<Api>;

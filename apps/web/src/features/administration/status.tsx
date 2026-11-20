@@ -59,7 +59,7 @@ export const Overview = (): React.JSX.Element => {
                 items={[
                   [t('admin.version'), data.version],
                   [t('admin.url'), data.appUrl],
-                  [t('admin.modules'), data.modules.join(', ') || t('admin.none')],
+                  [t('admin.enabledModules'), data.modules.join(', ') || t('admin.none')],
                   [t('admin.exportFailures'), data.exportFailures],
                 ]}
               />

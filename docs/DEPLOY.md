@@ -429,8 +429,8 @@ and nothing is deleted.
 
 1. **Stop it.** `bun run module:suspend <id> --reason "<why>"` on any host that reads the deployment's configuration (in the container,
    `docker compose -f "$DEPLOY_ROOT/current/docker-compose.production.yml" --env-file "$DEPLOY_ROOT/production.env" exec api bun run module:suspend issues --reason "leaks rows between tickets"`),
-   or as the administrator `POST /api/server/modules/<id>/suspension` with `{"state":"suspended","reason":"…"}`
-   (`API.md`). Chat is not exempt, and stopping it takes the product down: it needs `--force` (`"force": true`), as does a stop that
+   or as the administrator in Administration → Modules (`/server/modules`, D-323), which is `POST /api/server/modules/<id>/suspension`
+   with `{"state":"suspended","reason":"…"}` (`API.md`). Chat is not exempt, and stopping it takes the product down: it needs `--force` (`"force": true`), as does a stop that
    takes a module that is always granted down with it. A module that requires the one you stop stops with it and comes back with it;
    the answer names it. A second stop of a stopped module changes nothing and keeps the first reason.
 2. **On a cluster** (`REDIS_URL`) a stop is refused `409 PEERS_BEHIND` while a live node runs a release that does not read the stops,

@@ -8,6 +8,9 @@ import {
   ServerMailStatus,
   ServerPushSettings,
   ServerMailTest,
+  ServerModules,
+  ServerModuleSuspensionResult,
+  type ServerModuleSuspensionRequest,
   ServerAuditPage,
   ServerOperations,
   ServerOverview,
@@ -52,6 +55,11 @@ export const createAdministrationClient = (
   revokeSessions: (id: string) => Promise<void>;
   quota: (id: string, quotaBytes: number) => Promise<void>;
   workspaceModule: (id: string, body: ServerWorkspaceModuleRequest) => Promise<void>;
+  modules: (signal?: AbortSignal) => Promise<ServerModules>;
+  moduleSuspension: (
+    id: string,
+    body: ServerModuleSuspensionRequest,
+  ) => Promise<ServerModuleSuspensionResult>;
 } => {
   const call = jsonCaller(fetchFn);
   const read = async <S extends TSchema>(
@@ -117,6 +125,16 @@ export const createAdministrationClient = (
     },
     workspaceModule: async (id, body): Promise<void> => {
       await write(`/api/server/workspaces/${encodeURIComponent(id)}/modules`, body);
+    },
+    modules: async (signal) => await read('/api/server/modules', ServerModules, signal),
+    moduleSuspension: async (id, body): Promise<ServerModuleSuspensionResult> => {
+      const { status, json } = await call(
+        'POST',
+        `/api/server/modules/${encodeURIComponent(id)}/suspension`,
+        body,
+      );
+      if (!Value.Check(ServerModuleSuspensionResult, json)) throw malformed(status);
+      return json;
     },
   };
 };

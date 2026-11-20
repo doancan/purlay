@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Administration** — the server's administrator can stop a module for every workspace and let it run again from the console, with the reason, what stops with it and a confirmation before chat is stopped (D-323)
+
 ### Changed
 
 - **Notifications** — a toast (Link copied, Scheduled message cancelled…) rises above the sidebar's account row instead of covering the person's name (D-322)
