@@ -102,6 +102,51 @@ test.describe('send later', () => {
     expect(await world.list()).toEqual([]);
   });
 
+  test('Send now sends a scheduled message at once: it leaves the list and is in the channel', async ({
+    page,
+    signIn,
+    tenant,
+  }) => {
+    const world = await workspaceWithAlice(tenant);
+    const words = `şimdi gönder ${crypto.randomUUID().slice(0, 6)}`;
+    await signIn('alice');
+    await page.goto(`/w/${world.slug}/c/${world.channelId}`);
+    await shellReady(page);
+    await writeInBox(page, words);
+    await page.getByRole('button', { name: 'Send later' }).click();
+    await page.getByRole('menuitem', { name: 'Tomorrow at 09:00' }).click();
+    await expect(page.getByText(/^Scheduled for Tomorrow at 09:00$/)).toBeVisible();
+    const [held] = await world.list();
+    await expect(page.locator('[data-message-row]', { hasText: words })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'View scheduled' }).click();
+    const main = page.getByRole('main');
+    await expect(main.getByText(words)).toBeVisible();
+    const asked = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith(`/scheduled/${held?.id ?? ''}/send`),
+    );
+    await main.getByRole('button', { name: 'Send now' }).click();
+    expect((await asked).status()).toBe(200);
+    await expect(page.getByText('Sent in ops.')).toBeVisible();
+    await expect(main.getByText('Nothing scheduled')).toBeVisible();
+
+    // The server agrees from its side: nothing is waiting, and the channel has the message, a new id.
+    expect(await world.list()).toEqual([]);
+    const history = await apiAs(tenant, 'bob').get<{
+      data: readonly { id: string; content: string }[];
+    }>(`/api/channels/${world.channelId}/messages`);
+    const sent = history.data.filter((message) => message.content === words);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.id).not.toBe(held?.id);
+
+    // And the feed shows it, once.
+    await page.goto(`/w/${world.slug}/c/${world.channelId}`);
+    await shellReady(page);
+    await expect(page.locator('[data-message-row]', { hasText: words })).toHaveCount(1);
+  });
+
   test('Undo after Cancel puts the same message back under the same id', async ({
     page,
     signIn,

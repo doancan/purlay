@@ -261,6 +261,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   deleteMessage: unexpected('deleteMessage'),
   listScheduledMessages: unexpected('listScheduledMessages'),
   scheduleMessage: unexpected('scheduleMessage'),
+  sendScheduledMessage: unexpected('sendScheduledMessage'),
   cancelScheduledMessage: unexpected('cancelScheduledMessage'),
   eraseAccount: unexpected('eraseAccount'),
   requestWorkspaceDeletion: unexpected('requestWorkspaceDeletion'),

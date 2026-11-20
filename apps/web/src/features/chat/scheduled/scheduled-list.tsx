@@ -4,7 +4,8 @@
  *
  * The list is the server's — pending and failed, by send time, at most a hundred — and it has no push,
  * so it is read when the tab opens, when the window comes back into focus and after each change made
- * here. Cancelling says so with Undo, which asks for the same message again under the same id while
+ * here. Send now takes the row away at once and asks the server to send it by its own delivery, which
+ * never sends one twice (D-324). Cancelling says so with Undo, which asks for the same message again under the same id while
  * that is still possible. Editing moves the words back into the place's draft and cancels the schedule,
  * in that order, so nothing is lost when either step fails (`useEditScheduled`).
  */
@@ -71,6 +72,7 @@ const Row = ({
   channel,
   busy,
   onOpen,
+  onSendNow,
   onCancel,
   onEdit,
 }: {
@@ -78,6 +80,7 @@ const Row = ({
   readonly channel: Channel;
   readonly busy: boolean;
   readonly onOpen: () => void;
+  readonly onSendNow: (place: string) => void;
   readonly onCancel: () => void;
   readonly onEdit: (place: string) => void;
 }): React.JSX.Element => {
@@ -87,8 +90,18 @@ const Row = ({
   const failed = item.state === 'failed';
   const sendAt = new Date(item.sendAt);
   return (
-    <li className={cn('group relative', listRowClasses)}>
-      <button type="button" onClick={onOpen} className={listButtonClasses('flex-col gap-1 pr-24')}>
+    // The actions sit beside the row's button, in the flow, so its words wrap before them; the row is tinted as one.
+    <li
+      className={cn(
+        'flex items-start transition-colors duration-hover ease-standard hover:bg-surface-050',
+        listRowClasses,
+      )}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className={listButtonClasses('min-w-0 flex-1 flex-col gap-1 pr-2')}
+      >
         <Place channel={channel} thread={item.parentId !== null} />
         <time dateTime={item.sendAt} className="text-caption text-ink-muted">
           {describeWhen(sendAt, clock(), format, t)}
@@ -107,7 +120,15 @@ const Row = ({
           </span>
         )}
       </button>
-      <span className="absolute top-2 right-2 flex gap-1">
+      <span className="flex shrink-0 gap-1 py-2 pr-2">
+        <IconButton
+          glyph="send"
+          label={t('scheduled.sendNow')}
+          aria-disabled={busy}
+          onClick={() => {
+            if (!busy) onSendNow(place);
+          }}
+        />
         <IconButton
           glyph="edit"
           label={t('scheduled.edit')}
@@ -132,6 +153,7 @@ const Row = ({
 /** What the person can do with a scheduled message, each said in words when it cannot be done. */
 const useScheduledActions = (): {
   readonly busy: ReadonlySet<string>;
+  readonly sendNow: (item: ScheduledMessage, place: string) => void;
   readonly cancel: (item: ScheduledMessage) => void;
   readonly edit: (item: ScheduledMessage, place: string) => void;
 } => {
@@ -206,6 +228,34 @@ const useScheduledActions = (): {
 
   return {
     busy,
+    sendNow: (item, place): void => {
+      void exclusively(item.id, async () => {
+        // Gone from the list at once: the server sends it, or says why not and it comes back.
+        const before = client.getQueryData<ScheduledMessageList>(listKey);
+        without(item.id);
+        try {
+          await api.sendScheduledMessage(item.channelId, item.id);
+          show({ message: t('scheduled.sentNow', { place }) });
+          void client.invalidateQueries({ queryKey: keys.sent(workspace.id, user.id) });
+        } catch (failure) {
+          const code = codeOf(failure);
+          // Sent already — a second press, another device, or its own time came — is what was asked for.
+          if (code === 'SCHEDULED_MESSAGE_SENT') {
+            show({ message: t('scheduled.alreadySent') });
+          } else {
+            if (before !== undefined) client.setQueryData(listKey, before);
+            const reason = reasonKey(code);
+            show({
+              message:
+                reason === 'scheduled.reason.other'
+                  ? describe(failure)
+                  : t('scheduled.sendNowFailed', { reason: t(reason) }),
+            });
+          }
+        }
+        reread();
+      });
+    },
     cancel: (item): void => {
       void exclusively(item.id, async () => {
         if (!(await cancelled(item))) return;
@@ -318,6 +368,9 @@ export const ScheduledList = ({
                   ? href('channel', { slug: workspace.slug, channelId: item.channelId })
                   : threadHref(workspace.slug, item.channelId, item.parentId),
               );
+            }}
+            onSendNow={(place) => {
+              actions.sendNow(item, place);
             }}
             onCancel={() => {
               actions.cancel(item);
