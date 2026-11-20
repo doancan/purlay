@@ -175,9 +175,9 @@ describe('the channels section', () => {
     expect(buttons).toHaveLength(2);
     await person().click(some(buttons.at(-1)));
     // The dialog is in the deferred chunk (D-163): it is there once the chunk has come. Asked for at once, this
-    // passed when the chunk was already loaded by a file before it in the process, and failed when it was not.
-    await settle();
-    expect(view.getByRole('dialog', { name: 'New channel' })).toBeDefined();
+    // passed when the chunk was already loaded by a file before it in the process, and failed when it was not;
+    // a fixed number of turns failed where the chunk took longer to arrive (a cold, busy runner), so it is waited for.
+    expect(await view.findByRole('dialog', { name: 'New channel' })).toBeDefined();
   });
 
   test('in no channel while the workspace has public ones to join, it says that — not "create the first one" — and offers Browse', async () => {
@@ -191,9 +191,8 @@ describe('the channels section', () => {
     expect(view.getByText(en['state.channels.unjoined.body'])).toBeDefined();
     const browse = view.getAllByRole('button', { name: en['sidebar.browse'] });
     await person().click(some(browse.at(-1)));
-    // The dialog is in the deferred chunk (D-163): it is there once the chunk has come.
-    await settle();
-    expect(view.getByRole('dialog', { name: en['sidebar.browse'] })).toBeDefined();
+    // The dialog is in the deferred chunk (D-163): it is there once the chunk has come, however long that takes.
+    expect(await view.findByRole('dialog', { name: en['sidebar.browse'] })).toBeDefined();
   });
 
   test('with only private channels left out, there is nothing to join and the first-channel prompt stays', async () => {
