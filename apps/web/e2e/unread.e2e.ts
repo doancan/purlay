@@ -118,6 +118,8 @@ test.describe('a channel with unread messages', () => {
     await expect(await navLink(page, made.name)).not.toContainText('unread');
 
     await page.reload();
+    // A feed that never appears is a different failure from one at the wrong place: say which (#1464).
+    await expect(page.getByRole('feed')).toBeVisible();
     await expect(page.locator('[data-feed-marker]')).toHaveCount(0);
     await expect
       .poll(() => scroller(page).evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
