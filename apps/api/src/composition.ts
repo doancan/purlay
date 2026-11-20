@@ -337,8 +337,8 @@ export interface Composition {
   readonly searchSources: readonly string[];
   /** The sources `find` asks, each with the module it is asked as: the modules this process runs, and none that is off. */
   readonly findSources: readonly ModuleSearchSource[];
-  /** The ids of the sources of the modules the build carries and this process does not run, which `find` answers as `off` and never asks. */
-  readonly findSourcesOff: readonly string[];
+  /** The sources of the modules the build carries and this process does not run, by id with their module, which `find` answers as `off` and never asks. */
+  readonly findSourcesOff: readonly { readonly module: string; readonly source: string }[];
   /** The implementation of each capability the modules this process runs provide; one whose module is off is not a key, so a read of it is `undefined`. */
   readonly ports: Readonly<Record<string, object>>;
   /**
@@ -514,7 +514,12 @@ export const compose = (
     ),
     findSourcesOff: bundled
       .filter((module) => !modules.includes(module))
-      .flatMap((module) => module.manifest.searchSources ?? []),
+      .flatMap((module) =>
+        (module.manifest.searchSources ?? []).map((source) => ({
+          module: module.manifest.id,
+          source,
+        })),
+      ),
     // A getter, because a stop is of the moment.
     get ports(): Readonly<Record<string, object>> {
       return runningPorts();

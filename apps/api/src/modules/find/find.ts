@@ -9,10 +9,14 @@
  * throws is `error`, written to the log with its module and never to the caller; the source of a module this process does not run
  * is `off` and is not asked at all. What is asked of a source is the caller's `WorkspaceContext` and the words: the source
  * narrows by both in its own query.
+ *
+ * **Each source is measured** (`purlay_search_source_*`): how long it took to answer or to be given up on, and each time it was
+ * skipped and why, by its module and its id, so an operator sees a source that keeps being skipped before a person stops using it.
  */
 import type { Executor } from '@purlay/db';
 import type { FindGroup, FindHit, FindResponse, SkippedSource } from '@purlay/types';
 import type { Logger } from '../../platform/logging';
+import type { SearchSkip, ServerMetrics } from '../../platform/metrics';
 import { currentRequest, withinRequest } from '../../platform/logging';
 import type { ModuleSearchSource } from '../../platform/ports/search-source';
 import { withDeadline } from '../../platform/request-deadline';
@@ -27,12 +31,14 @@ export interface FindDependencies {
   readonly log: Logger;
   /** The sources of the modules this process runs. */
   readonly sources: readonly ModuleSearchSource[];
-  /** The ids of the sources of modules this process does not run. */
-  readonly off: readonly string[];
+  /** The sources of modules this process does not run, by id with their module. */
+  readonly off: readonly { readonly module: string; readonly source: string }[];
   /** A module's own request deadline in milliseconds, `undefined` where it declared none. */
   readonly deadlineOf: (module: string) => number | undefined;
   /** What a source is held to when its module's own deadline is longer. */
   readonly sourceDeadlineMs?: number;
+  /** Where each source's time and each skip are counted. */
+  readonly metrics: Pick<ServerMetrics, 'searchSourceDuration' | 'searchSourceSkipped'>;
 }
 
 const SLOW = Symbol('slow');
@@ -75,6 +81,30 @@ const askOne = async (
   }
 };
 
+const countSkip = (
+  { metrics }: FindDependencies,
+  series: { readonly module: string; readonly source: string },
+  reason: SearchSkip,
+): void => {
+  metrics.searchSourceSkipped.inc({ ...series, reason });
+};
+
+/** Asks one source and counts what became of it: the time it took, and a skip with its reason. */
+const askCounted = async (
+  dependencies: FindDependencies,
+  asked: ModuleSearchSource,
+  context: WorkspaceContext,
+  query: string,
+  limit: number,
+): Promise<FindGroup | SkippedSource> => {
+  const started = performance.now();
+  const answer = await askOne(dependencies, asked, context, query, limit);
+  const series = { module: asked.module, source: asked.source.id };
+  dependencies.metrics.searchSourceDuration.observe(series, (performance.now() - started) / 1_000);
+  if ('reason' in answer) countSkip(dependencies, series, answer.reason);
+  return answer;
+};
+
 /** Asks every source that runs at once; the groups keep the order of the composition, the skipped ones follow in it. */
 export const findAcross = async (
   dependencies: FindDependencies,
@@ -87,7 +117,7 @@ export const findAcross = async (
   const granted = dependencies.sources.filter(({ module }) => entitledTo(context, module));
   const withheld = dependencies.sources.filter(({ module }) => !entitledTo(context, module));
   const answers = await Promise.all(
-    granted.map(async (source) => await askOne(dependencies, source, context, query, limit)),
+    granted.map(async (source) => await askCounted(dependencies, source, context, query, limit)),
   );
   const groups: FindGroup[] = [];
   const skipped: SkippedSource[] = [];
@@ -95,8 +125,13 @@ export const findAcross = async (
     if ('hits' in answer) groups.push(answer);
     else skipped.push(answer);
   }
-  for (const source of [...withheld.map(({ source }) => source.id), ...dependencies.off]) {
-    skipped.push({ source, reason: 'off' });
+  const off = [
+    ...withheld.map(({ module, source }) => ({ module, source: source.id })),
+    ...dependencies.off,
+  ];
+  for (const series of off) {
+    countSkip(dependencies, series, 'off');
+    skipped.push({ source: series.source, reason: 'off' });
   }
   return { groups, skipped };
 };

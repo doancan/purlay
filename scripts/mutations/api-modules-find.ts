@@ -19,6 +19,14 @@ export const API_MODULES_FIND: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/entitlement.integration.test.ts'],
   },
   {
+    id: 'find-counts-no-skip-of-a-source-that-answered-without',
+    why: 'a source that is slow or throws is answered without and nothing counts it, so the alert on a source that keeps being skipped never fires (D-323)',
+    file: 'apps/api/src/modules/find/find.ts',
+    find: "  if ('reason' in answer) countSkip(dependencies, series, answer.reason);\n",
+    replace: '',
+    tests: ['apps/api/src/modules/find/find.integration.test.ts'],
+  },
+  {
     id: 'find-error-aborts-the-find',
     why: 'a source that throws takes the whole find down with it, so one module’s failure is every module’s (D-285)',
     file: 'apps/api/src/modules/find/find.ts',

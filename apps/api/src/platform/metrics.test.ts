@@ -220,6 +220,29 @@ describe("the server's instruments", () => {
     ).toBe(1);
   });
 
+  test('count the skips of the find by the module, source and reason, each at zero from the start for every source a manifest lists', () => {
+    const carried: readonly BundledModule[] = bundledModules;
+    const sources = carried.flatMap((module) =>
+      (module.manifest.searchSources ?? []).map((source) => ({
+        module: module.manifest.id,
+        source,
+      })),
+    );
+    expect(sources.length).toBeGreaterThan(1);
+    const metrics = serverMetrics(fixedProcess, [], [], [], [], sources);
+    const page = readExposition(renderMetrics(metrics));
+    expect(page.types.get('purlay_search_source_skipped_total')).toBe('counter');
+    expect(page.types.get('purlay_search_source_duration_seconds')).toBe('histogram');
+    for (const series of sources) {
+      for (const reason of ['off', 'slow', 'error']) {
+        expect(sampleOf(page, 'purlay_search_source_skipped_total', { ...series, reason })).toBe(0);
+      }
+    }
+    expect(
+      page.samples.filter((sample) => sample.name === 'purlay_search_source_skipped_total'),
+    ).toHaveLength(sources.length * 3);
+  });
+
   test('count no series for an owner it was not told of until a failure names it, and never one that is not an owner by name', () => {
     const page = readExposition(renderMetrics(serverMetrics(fixedProcess)));
     const modules = page.samples

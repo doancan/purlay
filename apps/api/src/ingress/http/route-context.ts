@@ -8,6 +8,7 @@ import type { Composition } from '../../composition';
 import { readWorkspaceCreators } from '../../modules/setup/settings';
 import type { WorkspaceCreators } from '../../modules/workspaces/creators';
 import type { Executor } from '@purlay/db';
+import type { ServerMetrics } from '../../platform/metrics';
 import type { SocketLifecycle } from '../ws/socket';
 import type { LeasedDependencies } from './dependencies';
 
@@ -22,6 +23,8 @@ export interface RouteContext {
   readonly sockets: Pick<SocketLifecycle, 'bus' | 'atomically' | 'online'>;
   /** What the inbox is told of the modules: the ids this process runs; a notice of any other is kept and not shown (D-286). */
   readonly inbox: { readonly running: readonly string[] };
+  /** What this process counts for `/metrics`: the given registry, or the application's own. */
+  readonly metrics: ServerMetrics;
 }
 
 /** Dependencies of a write that tells the sockets: through the bus, inside the transaction the write is in. */
