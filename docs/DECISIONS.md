@@ -4847,6 +4847,8 @@ window are unchanged: the instant is still taken before the transaction commits.
 
 ### D-107. What each notification level is told
 
+*Amended by D-329: A level may be chosen for a while, and the person's other tabs are told of a change.*
+
 `notification_level` has been in the schema since the start (`'mentions'` by default), and delivery
 honoured `none`; nothing said what `all` meant, and no endpoint set any of them. Served by #52; decided
 in the owner's standing instruction to decide and proceed, and open to their reversal.
@@ -16240,3 +16242,16 @@ shows the tick. *Computing the dependents in the browser from the manifests:* a 
 **Rejected.** *A count of every match*: see 3. *Hits a slow source had found before its deadline*: a source answers once, with all its hits or none; a source that streams is a different port and no source needs it. *Calling an answer with an `off` source partial*: a client would offer to try again for a module the server does not run.
 
 **Cost of reversing.** Two fields of `@purlay/types` (`FindGroup.more`, `FindResponse.partial`), which a reversal would have to keep emitting for clients that read them; the `limit + 1` in `modules/find/find.ts`.
+### D-329. A notification level for a while ends by itself, on the server’s clock — builds on D-108, amends D-107
+
+**Decided under the owner's standing instruction to decide and proceed**, from the request for a timed mute (Teams and Discord offer 15 minutes to "until tomorrow"). A level was for good: a person who silenced a busy channel for a meeting had to remember to turn it back on, and a client that faked it (set `none`, remember the old level, restore it later) ended the mute only while it ran, and no other device could say "muted until 18:00".
+
+1. **The contract.** `PUT /api/channels/:channelId/notification-level` takes an optional `until`. Without it nothing changes for yesterday's client: the level is for good, and it ends a level for a while still running. With it, `until` is ahead and at most `DEEP_WORK_MAX_HOURS` (24) ahead — Deep Work's bound, by the same rule (`platform/ends-ahead.ts`, now shared by both): a refusal names `until`, and a timestamp that names no instant (month 13) is a refusal too, not a 500, for Deep Work as well. `Channel.notificationLevelUntil` carries the end, null for good; it is optional in the schema because an older server never sends it. Any level may be timed, though the web offers only muting.
+2. **What comes back.** The level in force before the first of them: muting for an hour, then again for eight while the first lasts, returns to what the person had, never to the first mute. Read and written under the membership's row lock, so two tabs choosing at once are taken in turn.
+3. **Ends by itself, as Deep Work does (D-108): read against the clock, not run by a job.** Chat's own `channel_level_timers` (chat/0021, beside the read scopes of chat/0010) holds the end and the level after it; every reader of the level — the channel list, delivery's mute and every-message lists, a resolution's notice, a queued push asked again before it goes — reads the level *in force* at its own instant (`levelInForce`). Nothing has to run at the end, no node can miss it, and a restart changes nothing. A row past its end stays as history until the person chooses again.
+4. **Other tabs and devices are told** with `CHANNELS_UPDATED` on the person's own topic, as a star is (D-132): no new frame, and the list they read again carries the end. D-107's *not yet* is closed. The end itself sends nothing; a client that was told the end reads the list again at that instant (the web schedules it from the list), and any read after it is already right.
+5. **The web.** The header's bell offers *Mute for…* — 15 minutes, 1 hour, 8 hours and 24 hours, each with the clock time it comes to (D-319), and *Until tomorrow*, nine the next morning on the viewer's wall clock (this morning in the small hours), D-124's morning. Every end is kept one minute inside the bound, so a clock a little ahead of the server's is not refused. The bell then says *Notifications: nothing until 14:00*, and the menu *Muted until 14:00* (the whole date when it ends on another day); choosing *Nothing* again makes it for good.
+
+**Rejected.** A scheduled job that restores expired levels: it ends a mute up to its period late, needs a frame per restore, and adds a job that can be overdue — what D-108 already rejected for Deep Work. A new `NOTIFICATION_LEVEL_UPDATED` frame carrying the level and the end: a second wire shape for what `CHANNELS_UPDATED` and the list already say, and one more for every native client to learn. Columns on `channel_members`: chat keeps new private fields out of the core's table (chat/0010, D-282). Timing only `none`: the rule is the same for every level, and refusing the others would be a branch for nothing.
+
+**Cost of reversing.** Drop the table in a new migration and the optional field: a level for a while becomes the level it was set to, for good.

@@ -2017,6 +2017,27 @@ CREATE INDEX idx_channel_group_channels_user ON channel_group_channels(user_id);
 
 Both tables are private: own personal export only, omitted from workspace export, removed on account erasure. A membership removal cascades; rejoining starts without placement. The group cap is enforced under a membership lock by the service. A star and a move lock the same channel membership, then clear the other placement in the same transaction.
 
+**A notification level for a while (D-329).** One row per membership whose level was chosen until an instant: when it
+ends and the level it gives way to. `channel_members.notification_level` holds the level chosen; the level *in force* is
+read against the server's clock — `then_level` once `ends_at` has passed — by every reader (the channel list, delivery,
+a resolution's notice, a queued push), so nothing runs when it ends. A row past its end is history and stays until the
+person chooses again: a level for good deletes it, another for a while replaces it, keeping the level from before the
+first. Private: own personal export only, omitted from workspace export, removed on account erasure and with the
+membership.
+
+```sql
+CREATE TABLE channel_level_timers (
+    channel_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    ends_at TIMESTAMPTZ NOT NULL,
+    then_level notification_level NOT NULL,
+    PRIMARY KEY (channel_id, user_id),
+    FOREIGN KEY (channel_id, user_id)
+        REFERENCES channel_members(channel_id, user_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_channel_level_timers_user ON channel_level_timers(user_id);
+```
+
 ### 5.3. `channel_departures`
 
 How a person is no longer in a channel, kept for them alone (D-264). Leaving and being taken out delete the
@@ -4467,6 +4488,7 @@ chat/0017_deferred_author_session.sql retain the actual author source for schedu
 chat/0018_channel_access_sources.sql source/group channel admission and scoped capability projection owned by chat (D-311)
 chat/0019_webhooks.sql             outgoing_webhooks, webhook_deliveries, webhook_delivery_attempts (D-312)
 chat/0020_webhook_retention_indexes.sql  indexes by attempt and completion age (D-312)
+chat/0021_channel_level_timers.sql channel_level_timers: a notification level for a while, its end and the level it gives way to (D-329)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```
