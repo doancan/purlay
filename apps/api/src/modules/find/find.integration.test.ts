@@ -82,7 +82,7 @@ const sourcesOf = (found: Awaited<ReturnType<typeof findAcross>>): string[] =>
   found.groups.map((group) => group.source);
 
 describe('integration: find fan-out', () => {
-  test('a third module’s source is asked as that module, with the words and the limit', async () => {
+  test('a third module’s source is asked as that module, with the words and one more than the limit', async () => {
     await withRollback(async (db) => {
       const context = await asAlice(db);
       const seen: unknown[] = [];
@@ -95,8 +95,9 @@ describe('integration: find fan-out', () => {
       });
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 7);
       expect(sourcesOf(found)).toEqual(['messages', 'issues', 'notes']);
-      expect(seen).toEqual([['notes', 'deploy', 7, context]]);
+      expect(seen).toEqual([['notes', 'deploy', 8, context]]);
       expect(found.skipped).toEqual([]);
+      expect(found.partial).toBe(false);
     });
   });
 
@@ -138,6 +139,7 @@ describe('integration: find fan-out', () => {
       const found = await findAcross(dependenciesFor(db, notes, running), context, 'deploy', 10);
       expect(sourcesOf(found)).toEqual(['messages', 'issues']);
       expect(found.skipped).toEqual([{ source: 'notes', reason: 'off' }]);
+      expect(found.partial).toBe(false);
       expect(asked).toBe(0);
     });
   });
@@ -157,6 +159,8 @@ describe('integration: find fan-out', () => {
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 10);
       const took = performance.now() - started;
       expect(found.skipped).toEqual([{ source: 'notes', reason: 'slow' }]);
+      // What finished in time is answered, and the answer says it is not all there is.
+      expect(found.partial).toBe(true);
       expect(sourcesOf(found)).toEqual(['messages', 'issues']);
       expect(found.groups[1]?.hits.map((hit) => hit.title)).toEqual(['Deploy checklist']);
       expect(took).toBeGreaterThanOrEqual(DEADLINE_MS - 20);
@@ -203,6 +207,7 @@ describe('integration: find fan-out', () => {
       });
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 10);
       expect(found.skipped).toEqual([{ source: 'notes', reason: 'error' }]);
+      expect(found.partial).toBe(true);
       expect(JSON.stringify(found)).not.toContain('on fire');
       expect(sourcesOf(found)).toEqual(['messages', 'issues']);
     });
@@ -217,6 +222,35 @@ describe('integration: find fan-out', () => {
       });
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 2);
       expect(found.groups[2]?.hits.map((hit) => hit.title)).toEqual(['one', 'two']);
+      expect(found.groups[2]?.more).toBe(true);
+    });
+  });
+
+  test('a huge source costs the answer its limit, says it had more, and does not hold up the others', async () => {
+    await withRollback(async (db) => {
+      const context = await asAlice(db);
+      const huge = Array.from({ length: 10_000 }, (_, at) => aHit(`note ${String(at)}`));
+      const notes = aNotesModule({ id: 'notes', search: () => Promise.resolve(huge) });
+      const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 10);
+      const group = found.groups.find(({ source }) => source === 'notes');
+      expect(group?.hits).toHaveLength(10);
+      expect(group?.hits[0]?.title).toBe('note 0');
+      expect(group?.more).toBe(true);
+      expect(found.groups.find(({ source }) => source === 'issues')?.more).toBe(false);
+      expect(found.partial).toBe(false);
+    });
+  });
+
+  test('a source that answers exactly the limit has no more', async () => {
+    await withRollback(async (db) => {
+      const context = await asAlice(db);
+      const notes = aNotesModule({
+        id: 'notes',
+        search: () => Promise.resolve([aHit('one'), aHit('two')]),
+      });
+      const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 2);
+      expect(found.groups[2]?.hits).toHaveLength(2);
+      expect(found.groups[2]?.more).toBe(false);
     });
   });
 });
