@@ -94,6 +94,20 @@ describe('the suites of the repository', () => {
       for (const file of independent) expect(runs).toContain(file);
     }
   });
+
+  // A fixture that builds a channel makes a suite need chat (`module-needs.ts`), which once left issues' own search
+  // suite out of the issues-only cell, the one that proves it runs without chat.
+  test('run issues’ search suite in the issues-only cell, so its fixtures are the core’s and not chat’s', () => {
+    const cell = moduleCells(bundledModules).find((candidate) => candidate.setting === 'issues');
+    expect(cell?.ids).toEqual(['issues']);
+    const search = suites.find((file) =>
+      file.endsWith(join('features', 'issues', 'search.integration.test.ts')),
+    );
+    if (search === undefined) throw new Error('issues’ search suite is not among the suites');
+    const { runs, left } = partition(suites, needsReader(CARRIED), cell?.ids ?? []);
+    expect(left.filter(({ file }) => file === search)).toEqual([]);
+    expect(runs).toContain(search);
+  });
 });
 
 describe('the command', () => {

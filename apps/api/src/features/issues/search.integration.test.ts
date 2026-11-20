@@ -10,7 +10,7 @@ import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/d
 import { messageId } from '@purlay/types';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { NOW } from '../../testing/doubles';
-import { aRoom } from '../../testing/rooms';
+import { aUniqueSlug, aUserRow } from '../../testing/users';
 import { issuesSearchSource } from './search';
 
 afterAll(async () => {
@@ -30,9 +30,19 @@ const anIssue = async (
   return id;
 };
 
+/** A workspace and its owner, from the core's tables alone: nothing of chat, so the issues-only cell runs this suite. */
 const aWorkspace = async (db: Executor): Promise<{ workspaceId: string; userId: string }> => {
-  const room = await aRoom(db, ['alice']);
-  return { workspaceId: room.workspaceId, userId: room.members['alice']?.userId ?? '' };
+  const alice = await aUserRow(db, 'alice');
+  const workspace = await db
+    .insertInto('workspaces')
+    .values({ name: 'Issues', slug: aUniqueSlug('issues') })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('workspace_members')
+    .values({ workspace_id: workspace.id, user_id: alice.userId, role: 'owner' })
+    .execute();
+  return { workspaceId: workspace.id, userId: alice.userId };
 };
 
 const found = async (
