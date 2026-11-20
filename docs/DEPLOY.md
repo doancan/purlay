@@ -320,6 +320,12 @@ A fact is dead after eight tries, or at once when its payload no longer fits. It
 
 Every requeue and discard is one entry on the server's trail with the fact's id, its workspace and consumer, and your reason: that is the answer to "who decided what became of it".
 
+**Without a signed-in administrator** (D-325), on the server with its configuration: `bun run outbox:requeue <id>… --reason "consumer fixed in 1.4.2"` and
+`bun run outbox:discard <id>… --reason "…"` do steps 4 and 5 through the same writer, with the same limits and the same entries on the trail, the actor
+left empty as `module:suspend` leaves it. The ids are the deliveries' (`outbox.id`): without the list of step 1, read them with
+`psql "$DATABASE_URL" -c "select id, consumer, type, attempts, last_error from outbox where state = 'dead' order by id"`. It prints
+`changed`, `unchanged` or `refused` for each id; exit `2` is arguments it cannot use (nothing written), `1` an id not found or a delivery that is over.
+
 ### The outbox backlog is growing
 
 `PurlayOutboxOldestPendingStale`, `PurlayOutboxDepthGrowing` or `PurlayOutboxPublishRefused`. Find which module (the `module` label), then:

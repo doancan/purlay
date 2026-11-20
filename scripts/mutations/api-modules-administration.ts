@@ -8,7 +8,10 @@ export const API_MODULES_ADMINISTRATION: readonly Mutation[] = [
     file: 'apps/api/src/modules/administration/outbox.ts',
     find: '      note: input.reason.trim(),\n',
     replace: '',
-    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+    tests: [
+      'apps/api/src/ingress/http/server.integration.test.ts',
+      'apps/api/src/cli/outbox.integration.test.ts',
+    ],
   },
   {
     id: 'outbox-change-not-on-the-trail',
@@ -16,14 +19,17 @@ export const API_MODULES_ADMINISTRATION: readonly Mutation[] = [
     file: 'apps/api/src/modules/administration/outbox.ts',
     find: '  for (const fact of changed)\n',
     replace: '  for (const fact of [] as typeof changed)\n',
-    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+    tests: [
+      'apps/api/src/ingress/http/server.integration.test.ts',
+      'apps/api/src/cli/outbox.integration.test.ts',
+    ],
   },
   {
     id: 'outbox-change-skips-the-administrator-recheck',
     why: 'an administrator demoted a moment ago still requeues or discards a fact (D-288 §12, D-292 §2)',
     file: 'apps/api/src/modules/administration/outbox.ts',
-    find: '  await lockServerAdministrator(tx, admin);\n  const { verdicts',
-    replace: '  const { verdicts',
+    find: '  await lockServerAdministrator(tx, admin);\n  return await applyOutboxChange(',
+    replace: '  return await applyOutboxChange(',
     tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
   },
   {
