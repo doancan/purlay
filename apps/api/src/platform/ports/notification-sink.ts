@@ -47,6 +47,17 @@ export interface NotificationSink {
     notice: ModuleNotice,
   ) => Promise<WrittenNotice | undefined>;
   /**
+   * `notify` for many notices at once, a notice to a whole workspace: every rule of `notify` holds for each, and the answer is
+   * what was written, one for each person and subject (a second notice of one subject to one person in the call is the later
+   * one). The batch costs the same few statements however many people it reaches: their membership is read at once, the notices
+   * are one insert and the cap is kept for all of them in one update, all in `transaction`, so a rollback leaves none of them.
+   */
+  readonly notifyMany: (
+    transaction: Transaction,
+    context: WorkspaceContext,
+    notices: readonly ModuleNotice[],
+  ) => Promise<readonly WrittenNotice[]>;
+  /**
    * `notify` for work no person is doing: a worker's sweep or a fact's consumer, for the workspace of a `turn` the framework handed
    * it (`perWorkspaceWorker`, a delivery). The notice has no actor, so it is owed to the recipient even if they were the cause,
    * and a workspace that lost the module hears nothing. Every other rule of `notify` holds: the kind must be the calling module's
@@ -57,6 +68,12 @@ export interface NotificationSink {
     turn: WorkspaceScope,
     notice: ModuleNotice,
   ) => Promise<WrittenNotice | undefined>;
+  /** `notifyMany` for work no person is doing, with the rules of `notifyIn`. */
+  readonly notifyManyIn: (
+    transaction: Transaction,
+    turn: WorkspaceScope,
+    notices: readonly ModuleNotice[],
+  ) => Promise<readonly WrittenNotice[]>;
   /**
    * Called once the caller's transaction has **committed**, with what `notify` answered: counts the notices and tells each
    * person's own tabs to read their inbox again (`INBOX_UPDATED`). A hint, not the notice: it never throws, and a publish
