@@ -258,6 +258,34 @@ describe('stopping and resuming a module (D-296, D-323)', () => {
     view.unmount();
   });
 
+  test('a dialog closed without a stop sends nothing, and a repeat says nothing changed', async () => {
+    const writes: AdministrationCall[] = [];
+    const view = await renderAdministration('modules', (call) => {
+      if (isList(call))
+        return adminJson({
+          data: [ISSUES, status({ module: 'tasks', state: 'suspended', reason: null })],
+        });
+      if (!isWrite(call)) return undefined;
+      writes.push(call);
+      return adminJson({ module: 'tasks', state: 'running', changed: false, alsoAffected: [] });
+    });
+    const issues = within(await view.findByRole('region', { name: 'issues' }));
+    await person().click(issues.getByRole('button', { name: 'Stop…' }));
+    expect(view.getByRole('dialog')).toBeDefined();
+    await person().keyboard('{Escape}');
+    expect(view.queryByRole('dialog')).toBeNull();
+    await person().click(issues.getByRole('button', { name: 'Stop…' }));
+    await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(writes).toEqual([]);
+    // A stop with neither a reason nor a time kept still says so, rather than drawing nothing.
+    const tasks = within(view.getByRole('region', { name: 'tasks' }));
+    expect(tasks.getAllByText('None').length).toBeGreaterThan(0);
+    await person().click(tasks.getByRole('button', { name: 'Let it run again' }));
+    expect(await view.findByText('tasks was already running. Nothing changed.')).toBeDefined();
+    view.unmount();
+  });
+
   test('a failed resume is said on the card, and the stop stays', async () => {
     const view = await renderAdministration('modules', (call) =>
       isList(call)
