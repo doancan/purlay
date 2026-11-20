@@ -25,6 +25,7 @@ import { serverMetrics, renderMetrics } from '../../platform/metrics';
 import { ownsPath } from '../../platform/module-kit/routes';
 import { CROSS_TENANT, UNSCOPED, pathFor, requestInit, type Ids } from '../../testing/cross-tenant';
 import { NOW, testDependencies } from '../../testing/doubles';
+import { readExposition, sampleOf } from '../../testing/exposition';
 import { aSignedInUser, type SignedInUser } from '../../testing/signed-in';
 import { aUniqueSlug } from '../../testing/users';
 import { createApp } from './app';
@@ -374,10 +375,18 @@ describe('integration: what is asked of several modules at once', () => {
       const owner = await aSignedInUser(db, clock, 'Owner');
       const workspaceId = await aWorkspaceOf(db, owner);
       const path = `/api/workspaces/${workspaceId}/find?q=seen`;
-      const managed = caller(db, MANAGED);
+      const metrics = serverMetrics();
+      const managed = caller(db, MANAGED, metrics);
       const refused = (await managed('GET', path, owner)).body as Found;
       expect(refused.groups.map(({ source }) => source)).not.toContain('issues');
       expect(refused.skipped).toContainEqual({ source: 'issues', reason: 'off' });
+      // Counted as off under the module the source is withheld with, and never timed, since it was not asked.
+      const page = readExposition(renderMetrics(metrics));
+      const issues = { module: 'issues', source: 'issues' };
+      expect(
+        sampleOf(page, 'purlay_search_source_skipped_total', { ...issues, reason: 'off' }),
+      ).toBe(1);
+      expect(sampleOf(page, 'purlay_search_source_duration_seconds_count', issues)).toBeUndefined();
       await grant(db, workspaceId, 'issues', 'on');
       const granted = (await managed('GET', path, owner)).body as Found;
       expect(granted.groups.map(({ source }) => source)).toContain('issues');

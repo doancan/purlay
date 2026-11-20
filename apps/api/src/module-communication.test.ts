@@ -170,7 +170,7 @@ describe('the search sources of a module, asked by the find (D-285)', () => {
     expect(composition.findSources.map(({ module, source: asked }) => [module, asked.id])).toEqual([
       ['notes', 'notes'],
     ]);
-    expect(composition.findSourcesOff).toEqual(['pages']);
+    expect(composition.findSourcesOff).toEqual([{ module: 'wiki', source: 'pages' }]);
   });
 });
 

@@ -14,9 +14,11 @@ import { bundledModules, compose, type BundledModule } from '../../composition';
 import { currentRequest } from '../../platform/logging';
 import { createLogger } from '../../platform/logging';
 import type { SearchSource } from '../../platform/ports/search-source';
+import { renderMetrics, serverMetrics } from '../../platform/metrics';
 import { deadlinesOf } from '../../platform/request-deadline';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { NOW } from '../../testing/doubles';
+import { readExposition, sampleOf } from '../../testing/exposition';
 import { aRoom } from '../../testing/rooms';
 import { findAcross, type FindDependencies } from './find';
 
@@ -62,6 +64,7 @@ const dependenciesFor = (
     off: composition.findSourcesOff,
     deadlineOf: deadlinesOf(carried.map((module) => module.manifest)),
     sourceDeadlineMs: DEADLINE_MS,
+    metrics: serverMetrics(),
   };
 };
 
@@ -214,6 +217,73 @@ describe('integration: find fan-out', () => {
       });
       const found = await findAcross(dependenciesFor(db, notes), context, 'deploy', 2);
       expect(found.groups[2]?.hits.map((hit) => hit.title)).toEqual(['one', 'two']);
+    });
+  });
+});
+
+describe('integration: what the find counts of each source', () => {
+  const NOTES = { module: 'notes', source: 'notes' };
+  const ISSUES = { module: 'issues', source: 'issues' };
+
+  /** The find asked once with `notes` beside the bundled sources, and the page its metrics make. */
+  const findOnce = async (
+    db: Executor,
+    search: SearchSource['search'],
+    running?: readonly BundledModule[],
+  ): Promise<ReturnType<typeof readExposition>> => {
+    const context = await asAlice(db);
+    const notes = aNotesModule({ id: 'notes', search });
+    const metrics = serverMetrics();
+    await findAcross({ ...dependenciesFor(db, notes, running), metrics }, context, 'deploy', 10);
+    return readExposition(renderMetrics(metrics));
+  };
+
+  const skips = (page: ReturnType<typeof readExposition>, series: typeof NOTES): number[] =>
+    ['off', 'slow', 'error'].map(
+      (reason) => sampleOf(page, 'purlay_search_source_skipped_total', { ...series, reason }) ?? 0,
+    );
+
+  test('a source that answers is timed once, under its module, and counted as no skip', async () => {
+    await withRollback(async (db) => {
+      const page = await findOnce(db, () => Promise.resolve([aHit('a note')]));
+      expect(sampleOf(page, 'purlay_search_source_duration_seconds_count', NOTES)).toBe(1);
+      expect(sampleOf(page, 'purlay_search_source_duration_seconds_count', ISSUES)).toBe(1);
+      expect(skips(page, NOTES)).toEqual([0, 0, 0]);
+    });
+  });
+
+  test('a slow source is counted slow and timed at its deadline, and the others are not counted skipped', async () => {
+    await withRollback(async (db) => {
+      const page = await findOnce(db, () => new Promise<readonly FindHit[]>(() => undefined));
+      expect(skips(page, NOTES)).toEqual([0, 1, 0]);
+      expect(skips(page, ISSUES)).toEqual([0, 0, 0]);
+      expect(sampleOf(page, 'purlay_search_source_duration_seconds_count', NOTES)).toBe(1);
+      const took = sampleOf(page, 'purlay_search_source_duration_seconds_sum', NOTES) ?? 0;
+      expect(took).toBeGreaterThanOrEqual((DEADLINE_MS - 20) / 1_000);
+      expect(took).toBeLessThan((DEADLINE_MS * 4) / 1_000);
+    });
+  });
+
+  test('a source that throws is counted as an error and timed', async () => {
+    await withRollback(async (db) => {
+      const page = await findOnce(db, () => Promise.reject(new Error('the note index is on fire')));
+      expect(skips(page, NOTES)).toEqual([0, 0, 1]);
+      expect(sampleOf(page, 'purlay_search_source_duration_seconds_count', NOTES)).toBe(1);
+    });
+  });
+
+  test('a source of a module that is off is counted off under its module and never timed', async () => {
+    await withRollback(async (db) => {
+      const chatOff = bundledModules.filter(({ manifest }) => manifest.id !== 'chat');
+      const page = await findOnce(db, () => Promise.resolve([]), chatOff);
+      // Chat's source is `messages`: the module is the manifest's, not the source's id.
+      const MESSAGES = { module: 'chat', source: 'messages' };
+      expect(skips(page, MESSAGES)).toEqual([1, 0, 0]);
+      expect(
+        sampleOf(page, 'purlay_search_source_duration_seconds_count', MESSAGES),
+      ).toBeUndefined();
+      expect(skips(page, NOTES)).toEqual([1, 0, 0]);
+      expect(sampleOf(page, 'purlay_search_source_duration_seconds_count', ISSUES)).toBe(1);
     });
   });
 });

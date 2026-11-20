@@ -216,6 +216,11 @@ const PUSH_FAILURES: readonly PushFailure[] = [
 ];
 const RATE_DOORS: readonly RateDoor[] = ['http', 'socket'];
 
+/** Why `find` answered without a source (D-285 §3): the same words as the answer's `skipped`. */
+export type SearchSkip = 'off' | 'slow' | 'error';
+
+const SEARCH_SKIPS: readonly SearchSkip[] = ['off', 'slow', 'error'];
+
 /** What the process itself is, read when asked: the real process unless a test hands its own. */
 export interface ProcessReadings {
   readonly uptimeSeconds: () => number;
@@ -242,6 +247,8 @@ export interface ServerMetrics {
   readonly outboxFailures: Counter<'module' | 'fact'>;
   readonly outboxDropped: Counter<'module' | 'fact'>;
   readonly outboxRefused: Counter<'module' | 'fact'>;
+  readonly searchSourceDuration: Histogram<'module' | 'source'>;
+  readonly searchSourceSkipped: Counter<'module' | 'source' | 'reason'>;
 }
 
 /** A background loop a module declares: the pair that labels its failures (`MODULES.md` §7). */
@@ -262,6 +269,12 @@ export interface FactSeries {
   readonly fact: string;
 }
 
+/** A search source a module supplies, by its manifest: the pair that labels what `find` counts of it (D-285). */
+export interface SearchSourceSeries {
+  readonly module: string;
+  readonly source: string;
+}
+
 /**
  * `modules` are the ids of the modules the build carries: the `module` label of the counters below is one of them, `core`,
  * or `none` (`platform/module-kit/ownership.ts`), so the series each can have are known from the start and are made at zero.
@@ -272,6 +285,7 @@ export const serverMetrics = (
   workers: readonly WorkerSeries[] = [],
   notices: readonly NoticeSeries[] = [],
   facts: readonly FactSeries[] = [],
+  searchSources: readonly SearchSourceSeries[] = [],
 ): ServerMetrics => {
   const registry = createMetricsRegistry();
   registry.gauge(
@@ -345,6 +359,17 @@ export const serverMetrics = (
     'Facts not published because the workspace already had the most a consumer may have waiting (`OUTBOX_PENDING_MAX`), by the consuming module and the fact type; the publisher’s transaction ended with the refusal. A rise is a consumer that is behind or a module publishing in a loop.',
     ['module', 'fact'],
   );
+  const searchSourceDuration = registry.histogram(
+    'purlay_search_source_duration_seconds',
+    'How long each search source `find` asked took to answer or to be given up on, by the module it runs as and the source (both named by a manifest, never by a caller); a source past its deadline is observed at the deadline. _count is the number of times a source was asked.',
+    ['module', 'source'],
+    HTTP_DURATION_BUCKETS,
+  );
+  const searchSourceSkipped = registry.counter(
+    'purlay_search_source_skipped_total',
+    'Search sources `find` answered without, by the module, the source and the reason the answer gives: `off` (the module is not run or the workspace is not granted it, so it was not asked), `slow` (past its deadline) or `error` (it threw).',
+    ['module', 'source', 'reason'],
+  );
   // Every series a counter can have is there from the start, at zero: a rate over a series that
   // appears only with its first failure misses that failure.
   const owners = [CORE_OWNER, ...modules];
@@ -367,6 +392,9 @@ export const serverMetrics = (
     outboxDropped.inc({ module, fact }, 0);
     outboxRefused.inc({ module, fact }, 0);
   }
+  for (const { module, source } of searchSources) {
+    for (const reason of SEARCH_SKIPS) searchSourceSkipped.inc({ module, source, reason }, 0);
+  }
   return {
     registry,
     httpDuration,
@@ -381,6 +409,8 @@ export const serverMetrics = (
     outboxFailures,
     outboxDropped,
     outboxRefused,
+    searchSourceDuration,
+    searchSourceSkipped,
   };
 };
 

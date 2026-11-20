@@ -46,7 +46,7 @@ export const workspaceRoutes = (
   context: RouteContext,
   invitationLater: InvitationMailDependencies['later'],
 ): AnyElysia => {
-  const { dependencies, modules, deadlineOf, sockets, inbox } = context;
+  const { dependencies, modules, deadlineOf, sockets, inbox, metrics } = context;
   const creating = creatingOf(context);
   const sending = sendingOf(context);
   const inboxDependencies = { ...sending, ...inbox };
@@ -227,6 +227,7 @@ export const workspaceRoutes = (
             sources: modules.findSources,
             off: modules.findSourcesOff,
             deadlineOf,
+            metrics,
             ...(dependencies.findDeadlineMs === undefined
               ? {}
               : { sourceDeadlineMs: dependencies.findDeadlineMs }),

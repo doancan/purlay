@@ -171,7 +171,15 @@ export const createApp = (given: Dependencies): HttpApplication => {
   const inbox = {
     running: modules.modules.map((module) => module.manifest.id),
   };
-  const context: RouteContext = { dependencies, modules, moduleIds, deadlineOf, sockets, inbox };
+  const context: RouteContext = {
+    dependencies,
+    modules,
+    moduleIds,
+    deadlineOf,
+    sockets,
+    inbox,
+    metrics,
+  };
   const probes = probeRoutes(context, { metrics, outboxConsumers });
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);

@@ -141,6 +141,9 @@ const metrics = serverMetrics(
   modules.bundled.flatMap((module) =>
     (module.manifest.consumes ?? []).map((fact) => ({ module: module.manifest.id, fact })),
   ),
+  modules.bundled.flatMap((module) =>
+    (module.manifest.searchSources ?? []).map((source) => ({ module: module.manifest.id, source })),
+  ),
 );
 log.info(
   config.METRICS_TOKEN === undefined
