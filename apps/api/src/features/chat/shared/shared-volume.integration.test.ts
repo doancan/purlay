@@ -20,6 +20,8 @@ let channelId: string;
 let userId: string;
 let preparedRows = 0;
 const measured: { rows: number; milliseconds: number }[] = [];
+// The hooks' seeding, timed apart from the queries above: only the queries are the tests' to time (D-228).
+const seeded: { rows: number; milliseconds: number }[] = [];
 beforeAll(async () => {
   const local = await cloneIntegrationDatabase();
   cloned = local;
@@ -37,6 +39,7 @@ afterAll(async () => {
     await closeIntegrationDatabase();
   }
   console.info('Shared bounded page + old-link search, real SQL:', JSON.stringify(measured));
+  console.info('Shared volume seeding, outside the tests:', JSON.stringify(seeded));
 }, DROP_HOOK_MS);
 describe('integration: Shared bounded volume', () => {
   describe.each([1000, 10_000])('with %d links', (rows) => {
@@ -44,6 +47,7 @@ describe('integration: Shared bounded volume', () => {
       const local = cloned;
       if (local === undefined) throw new Error('Missing owned volume database');
       if (preparedRows > rows) throw new Error('Volume scenarios must grow the same history');
+      const began = performance.now();
       await local.db.transaction().execute(async (db) => {
         for (let start = preparedRows; start < rows; start += 1000) {
           const sources = Array.from({ length: 1000 }, (_, n) => ({
@@ -78,6 +82,7 @@ describe('integration: Shared bounded volume', () => {
           .where('name', '=', 'links')
           .execute();
       });
+      seeded.push({ rows, milliseconds: Math.round((performance.now() - began) * 100) / 100 });
       preparedRows = rows;
     }, CLONE_HOOK_MS);
 
