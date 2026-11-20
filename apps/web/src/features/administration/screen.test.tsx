@@ -91,13 +91,13 @@ const open = async (
 const json = (data: unknown, status = 200): Response => Response.json(data, { status });
 
 describe('server administration outside a workspace', () => {
-  test('an administrator with no memberships sees actual overview and all nine sections', async () => {
+  test('an administrator with no memberships sees actual overview and all ten sections', async () => {
     const view = await open('overview', () => json(overview));
     const main = within(await view.findByRole('main'));
     expect(await main.findByText('Database and application readiness checks passed')).toBeDefined();
     expect(main.getByText('0.3.0')).toBeDefined();
     const nav = within(view.getByRole('navigation', { name: 'Administration sections' }));
-    expect(nav.getAllByRole('link')).toHaveLength(10);
+    expect(nav.getAllByRole('link')).toHaveLength(11);
     expect(nav.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
     expect(main.getAllByText('Not configured')).toHaveLength(2);
     await expectNoAxeViolations(view.container);
@@ -138,6 +138,7 @@ describe('server administration outside a workspace', () => {
   test('members and unknown sections mount no administration requests', async () => {
     for (const [section, allowed] of [
       ['overview', false],
+      ['modules', false],
       ['made-up', true],
     ] as const) {
       let reads = 0;

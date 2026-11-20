@@ -526,6 +526,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/shell/rail.test.tsx'],
   },
   {
+    id: 'module-stop-sent-before-it-is-meant',
+    why: 'Enter in the reason field sends a stop that takes the product down before the operator ticked that it is meant (D-323)',
+    file: 'apps/web/src/features/administration/modules.tsx',
+    find: '    if (busy || (needsForce && !meant)) return;',
+    replace: '    if (busy) return;',
+    tests: ['apps/web/src/features/administration/modules.test.tsx'],
+  },
+  {
     id: 'new-conversation-filter-ignores-turkish-letters',
     why: 'typing `isik` finds nobody called Işık in the new conversation’s people list, as `ist` finds no İstanbul',
     file: 'apps/web/src/features/chat/conversations/new-conversation.tsx',

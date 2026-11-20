@@ -3,7 +3,7 @@ import { ServerPushCard } from './push';
 import { useSignOut } from '../shell/sign-out';
 import { Backups } from './backups';
 import { ServerPreferencesCard } from './preferences';
-import { useId, useState } from 'react';
+import { lazy, Suspense, useId, useState } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { Button } from '../../ui/button';
@@ -27,11 +27,16 @@ import { Audit } from './audit';
 import { Overview, Operations, DeploymentInventory } from './status';
 import { Users } from './users';
 import { Workspaces } from './workspaces';
+import { LoadingStatus, Skeleton } from '../../ui/skeleton';
+
+// Opened a few times a year, by one person: its own chunk, so the console's does not carry it.
+const Modules = lazy(async () => ({ default: (await import('./modules')).Modules }));
 
 const sections = [
   'overview',
   'users',
   'workspaces',
+  'modules',
   'security',
   'email',
   'data',
@@ -82,6 +87,21 @@ const Configuration = ({
     </ServerSettingsState>
   );
 };
+const LazyModules = (): React.JSX.Element => {
+  const { t } = useI18n();
+  return (
+    <Suspense
+      fallback={
+        <LoadingStatus label={t('common.loading')}>
+          <Skeleton />
+          <Skeleton />
+        </LoadingStatus>
+      }
+    >
+      <Modules />
+    </Suspense>
+  );
+};
 const Content = ({ section }: { readonly section: Section }): React.JSX.Element => {
   switch (section) {
     case 'overview':
@@ -95,6 +115,8 @@ const Content = ({ section }: { readonly section: Section }): React.JSX.Element 
       return <Users />;
     case 'workspaces':
       return <Workspaces />;
+    case 'modules':
+      return <LazyModules />;
     case 'email':
       return (
         <>
