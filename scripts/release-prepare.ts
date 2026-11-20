@@ -14,10 +14,12 @@
  *   exceptions, which is what the next release's manifests and the schema fingerprints of its facts are held against
  *   (`module-compat.test.ts`, D-250, D-288 §5).
  *
- * **Merging it is the release.** The `deploy` workflow deploys every commit that lands on `main`;
- * when the version in `package.json` is one with no tag yet, it also tags that commit and
- * publishes a GitHub Release (`scripts/release-publish.sh`). A merge that does not change the
- * version deploys and releases nothing: version numbers mark moments, they are not a count of merges.
+ * **Merging it is the release.** Once that exact commit's `ci` and `image` push runs have both succeeded,
+ * the `deploy` workflow, on a hosted runner, tags it and publishes a GitHub Release
+ * (`scripts/release-publish.sh`) when the version in `package.json` has no tag yet; `release-image` then
+ * names the commit's tested image `v<x.y.z>` and `release`, which Dockhand polls (D-262). No workflow
+ * touches the server. A merge that does not change the version publishes nothing: version numbers mark
+ * moments, they are not a count of merges.
  *
  * What it judges comes from `origin/main`, read with `git show`, never from whatever is on disk:
  * a local copy that is behind would otherwise release a version that already exists.
@@ -122,16 +124,17 @@ export const rollChanges = (
 
 /**
  * The release pull request's answers to `check:pr`'s failure modes (CONTRIBUTING.md §6.9). They
- * describe what merging does (docs/DEPLOY.md), not the code: a release changes none.
+ * describe what merging does (docs/DEPLOY.md, D-262), not the code: a release changes none. Publication and
+ * the server's update are separate: the workflows never reach the server, so they promise nothing about it.
  */
 const failureModes = (version: string): readonly string[] => [
   '## Failure modes',
   '',
   '- **Refused input:** the version must be newer than the last and the notes in the standard shape; `bun run release` refuses both before it opens this pull request. There is no user input.',
   '- **Authority:** merging needs the same rights as any pull request to `main`; no code or permission changes.',
-  '- **Concurrency:** the deploy workflow runs one deploy at a time; a merge that lands during one waits for it.',
-  `- **Partial failure:** if the smoke or revision check fails, the deploy restores the database backup and the previous release. The tag v${version} and the GitHub Release are made only after a successful deploy.`,
-  '- **Network and time:** a manual deploy never publishes a GitHub Release, so retrying a failed deploy by hand does not release this version; an automatic run deploys the commit of the run that started it, however late the runner starts.',
+  '- **Concurrency:** publication is serialized (`deploy`) and so is image promotion (`release-image`); a version already published is not published again, and `release` never moves back to an older release.',
+  `- **Partial failure:** if this commit's \`ci\` or \`image\` push run fails, nothing is published: no tag v${version}, no GitHub Release, and \`release\` does not move. No workflow rolls anything back (no database restore, no return to an earlier image): Dockhand migrates as the new API starts, and going back is the operator's (the stack's hourly dump and the earlier release's tag, docs/DEPLOY.md).`,
+  '- **Network and time:** publication waits for both push runs of this exact commit, whichever finishes last, and never reaches the server; a run of `deploy` by hand retries publication of a tested commit on `main`. Dockhand pulls `release` on its own schedule, so the running revision and readiness are checked on the host: publication is not a deployment receipt.',
   `- **Volume:** no code changes; the notes move from Unreleased to docs/changelog/v${version}.md.`,
 ];
 
@@ -212,8 +215,10 @@ export const prepare = (options: PrepareOptions): Prepared => {
       '',
       `Closes #${issue}`,
       '',
-      'Merging this deploys the commit to the server (the deploy workflow), then tags it',
-      `v${version} and publishes the GitHub Release.`,
+      `Merging this publishes v${version} once this exact commit's ci and image push runs have succeeded: the`,
+      `deploy workflow tags it and publishes the GitHub Release, then release-image names its tested image v${version}`,
+      'and `release`, which Dockhand pulls on its own schedule (D-262). No workflow touches the server, so the',
+      'publication is not a deployment receipt: the running revision is checked on the host.',
       '',
       ...failureModes(version),
     ].join('\n');
