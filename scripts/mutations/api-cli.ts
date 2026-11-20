@@ -400,6 +400,22 @@ export const API_CLI: readonly Mutation[] = [
     tests: ['apps/api/src/cli/frame-report.test.ts'],
   },
   {
+    id: 'outbox-command-takes-a-blank-reason',
+    why: 'the operator requeues or discards with a reason of spaces, which the console refuses, and the trail says nothing (D-288 §12)',
+    file: 'apps/api/src/cli/outbox.ts',
+    find: "  if (reason === undefined || reason.trim() === '' || reason.length > REASON_MAX)",
+    replace: '  if (reason === undefined || reason.length > REASON_MAX)',
+    tests: ['apps/api/src/cli/outbox.integration.test.ts'],
+  },
+  {
+    id: 'outbox-command-takes-too-many-ids',
+    why: 'the command changes more deliveries in one run than the console takes (D-288 §12)',
+    file: 'apps/api/src/cli/outbox.ts',
+    find: '  if (ids.length > IDS_MAX) return `at most ${String(IDS_MAX)} ids at a time`;\n',
+    replace: '',
+    tests: ['apps/api/src/cli/outbox.integration.test.ts'],
+  },
+  {
     id: 'outbox-sweep-job-ignores-the-retention-setting',
     why: 'the operator sets how long dead facts are kept and the job keeps its own figure (D-288 §12)',
     file: 'apps/api/src/cli/jobs.ts',
