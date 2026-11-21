@@ -25,7 +25,7 @@ export const SERVER_TESTS = 'apps/api/src/ingress/http/server.integration.test.t
  * disk: the list is also loaded from a commit's `scripts/` alone (`mutation-selection.ts`), where no `apps/` exists.
  * `mutations.test.ts` holds the count to the files.
  */
-export const CROSS_TENANT_PARTS = 16;
+const CROSS_TENANT_PARTS = 16;
 
 export const CROSS_TENANT_TESTS: readonly string[] = Array.from(
   { length: CROSS_TENANT_PARTS },
