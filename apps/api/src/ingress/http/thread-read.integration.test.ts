@@ -1,7 +1,7 @@
 /**
  * A reply is read in its thread, not by scrolling the feed past it (D-147, amending D-99 §4), and
  * `PUT /api/messages/:messageId/thread/read` is how a thread is read — through real requests. Its
- * cross-tenant and visibility crossings are in `cross-tenant.integration.test.ts` and
+ * cross-tenant and visibility crossings are in `testing/cross-tenant-suite.ts` and
  * `channel-visibility.integration.test.ts`, from the table the build checks against `API.md`.
  *
  * @needs-modules chat

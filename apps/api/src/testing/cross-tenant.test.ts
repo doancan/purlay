@@ -3,10 +3,10 @@
  *
  * Runs without a database, in `bun run verify`, so the omission is caught before
  * the integration job is reached. The crossings themselves are in
- * `cross-tenant.integration.test.ts`. (D-21, D-63)
+ * `cross-tenant-suite.ts`, run in the parts it names. (D-21, D-63)
  */
 import { tmpdir } from 'node:os';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'bun:test';
 import { createApp } from '../ingress/http/app';
@@ -27,6 +27,7 @@ import {
   type DocumentedEndpoint,
 } from './cross-tenant';
 import { testDependencies } from './doubles';
+import { CROSS_TENANT_PARTS, crossTenantPartOf } from './cross-tenant-suite';
 
 const SOME_ID = '00000000-0000-4000-8000-000000000000';
 
@@ -299,5 +300,29 @@ describe('a list that holds nothing proves nothing', () => {
         reason: true,
       });
     }
+  });
+});
+
+/**
+ * The crossings run split over files (`cross-tenant-suite.ts`), each every `CROSS_TENANT_PARTS`-th case. A part missing,
+ * or one too many, would leave cases unrun or crossed twice without any test failing; a part file with no number would
+ * register nothing.
+ */
+describe('the cross-tenant suite is run whole, in its parts', () => {
+  test('the part files are exactly 1 to CROSS_TENANT_PARTS', () => {
+    const parts = readdirSync(fileURLToPath(new URL('../ingress/http', import.meta.url)))
+      .filter((file) => file.startsWith('cross-tenant-') && /^cross-tenant-\d+\./.test(file))
+      .map(crossTenantPartOf)
+      .sort((a, b) => a - b);
+    expect(parts).toEqual(Array.from({ length: CROSS_TENANT_PARTS }, (_, index) => index + 1));
+  });
+
+  test('a file that is not a numbered part is refused, not run empty', () => {
+    expect(() => crossTenantPartOf('cross-tenant.integration.test.ts')).toThrow();
+    expect(() => crossTenantPartOf('cross-tenant-0.integration.test.ts')).toThrow();
+    expect(() =>
+      crossTenantPartOf(`cross-tenant-${String(CROSS_TENANT_PARTS + 1)}.integration.test.ts`),
+    ).toThrow();
+    expect(crossTenantPartOf('/x/cross-tenant-16.integration.test.ts')).toBe(16);
   });
 });

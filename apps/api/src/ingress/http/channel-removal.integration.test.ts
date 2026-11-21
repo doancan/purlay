@@ -3,7 +3,7 @@
  * what a direct message and a group answer, the last member, what the person's sockets are told, what
  * the trail keeps, and that what they are told about the channel stops while their messages stay.
  *
- * Crossing a tenant and the visibility axis is `cross-tenant.integration.test.ts` and
+ * Crossing a tenant and the visibility axis is `testing/cross-tenant-suite.ts` and
  * `channel-visibility.integration.test.ts`; the role table is `permissions.integration.test.ts`.
  *
  * @needs-modules chat

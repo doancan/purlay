@@ -1,7 +1,7 @@
 /**
  * `PUT /api/channels/:id/read` and `POST /api/workspaces/:id/dms`, through real
  * requests (`API.md` §4, D-99). Their cross-tenant and visibility crossings are in
- * `cross-tenant.integration.test.ts` and `channel-visibility.integration.test.ts`,
+ * `testing/cross-tenant-suite.ts` and `channel-visibility.integration.test.ts`,
  * from the table the build checks against `API.md` (D-63, D-64).
  *
  * @needs-modules chat

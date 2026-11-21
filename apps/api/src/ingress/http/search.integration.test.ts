@@ -4,7 +4,7 @@
  * What is found, and where, is the module's and is tested there; this file proves the door: the
  * bounds of `q` read from the contract, the words trimmed before they are measured, the refusals
  * and their statuses, and that what comes back is the contract's shape. The tenant crossing is in
- * `cross-tenant.integration.test.ts`.
+ * `testing/cross-tenant-suite.ts`.
  *
  * @needs-modules chat
  */

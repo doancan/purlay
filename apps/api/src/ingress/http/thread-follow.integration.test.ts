@@ -1,7 +1,7 @@
 /**
  * Following a thread, and letting it go (D-161): `GET` and `PUT /api/messages/:messageId/follow`,
  * and what a reply then tells whom — through real requests. The crossings into another workspace and
- * into a private channel are in `cross-tenant.integration.test.ts` and
+ * into a private channel are in `testing/cross-tenant-suite.ts` and
  * `channel-visibility.integration.test.ts`, from the table the build checks against `API.md`.
  */
 import { afterAll, describe, expect, test } from 'bun:test';

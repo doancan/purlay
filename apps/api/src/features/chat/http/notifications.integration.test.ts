@@ -2,7 +2,7 @@
  * The inbox doors (`API.md` §6, D-106): the query read from text, the refusals and their statuses,
  * the contract's shape, and that marking read tells the caller's devices and nobody else. What is
  * listed and what is marked is the module's, and is tested there; the tenant crossings are in
- * `cross-tenant.integration.test.ts` and `channel-visibility.integration.test.ts`.
+ * `testing/cross-tenant-suite.ts` and `channel-visibility.integration.test.ts`.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Value } from '@sinclair/typebox/value';

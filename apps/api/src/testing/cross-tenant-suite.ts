@@ -1,5 +1,8 @@
 /**
- * Every case in `CROSS_TENANT`, crossed for real.
+ * Every case in `CROSS_TENANT`, crossed for real, in `CROSS_TENANT_PARTS` files
+ * (`ingress/http/cross-tenant-<n>.integration.test.ts`). The suite is split because Bun runs files, not tests, in
+ * parallel: whole, it was one file of 221 slow tests, and the longest file is the least time the run can take.
+ * Each part registers every `CROSS_TENANT_PARTS`-th case, so the parts together are every case, once.
  *
  * The stranger is a member of a workspace of their own, so this is a crossing
  * between two tenants rather than a request from nobody. Each crossing asserts
@@ -22,7 +25,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
-import { createApp } from './app';
+import { createApp } from '../ingress/http/app';
 import {
   CROSS_TENANT,
   EMPTY_FOR_THE_SEED,
@@ -32,25 +35,21 @@ import {
   type Ids,
   requestInit,
   rowsIn,
-} from '../../testing/cross-tenant';
-import { aRecordingOutbox, NOW, testDependencies } from '../../testing/doubles';
-import { aGitHubAppStub, GITHUB_APP_STUB } from '../../testing/github-app-stub';
-import { aGitHubStub } from '../../testing/github-stub';
-import { keepAuthorization } from '../../features/chat/integrations/github-app';
-import { credentialCipher } from '../../platform/crypto';
-import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
-import { fixedClock } from '../../platform/clock';
-import { workspacePrefix } from '../../platform/storage';
-import { moduleSeeders } from '../../testing/module-seeders';
-import { aSignedInUser } from '../../testing/signed-in';
-import { aUniqueSlug } from '../../testing/users';
-import { twoColourPng } from '../../testing/png';
-import { aMemoryStore } from '../../testing/storage';
-import { aCompanyCatalogue, companyCatalogueDns } from '../../testing/company-catalogue';
-
-afterAll(async () => {
-  await closeIntegrationDatabase();
-});
+} from './cross-tenant';
+import { aRecordingOutbox, NOW, testDependencies } from './doubles';
+import { aGitHubAppStub, GITHUB_APP_STUB } from './github-app-stub';
+import { aGitHubStub } from './github-stub';
+import { keepAuthorization } from '../features/chat/integrations/github-app';
+import { credentialCipher } from '../platform/crypto';
+import { DEVELOPMENT_ENCRYPTION_KEY } from '../platform/config';
+import { fixedClock } from '../platform/clock';
+import { workspacePrefix } from '../platform/storage';
+import { moduleSeeders } from './module-seeders';
+import { aSignedInUser } from './signed-in';
+import { aUniqueSlug } from './users';
+import { twoColourPng } from './png';
+import { aMemoryStore } from './storage';
+import { aCompanyCatalogue, companyCatalogueDns } from './company-catalogue';
 
 const clock = fixedClock(NOW);
 
@@ -462,144 +461,173 @@ const NOT_A_UUID: Ids = {
   exportId: 'not-a-uuid',
 };
 
-describe('integration: cross-tenant isolation', () => {
-  for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
-    const [method = '', path = ''] = key.split(' ');
+/** How many files the suite is split into. A part file takes its number from its own name. */
+export const CROSS_TENANT_PARTS = 16;
 
-    // A discard names an upload nobody has sent; everything else, the one the root carries.
-    const aimed = (ids: Ids): Ids =>
-      crossing.unsent === true ? { ...ids, attachmentId: ids.unsentAttachmentId } : ids;
+const PART_FILE = /cross-tenant-(\d+)\.integration\.test\.ts$/;
 
-    for (const [what, query] of queriesFor(crossing)) {
-      test(`${key}${what} answers 404 across a tenant boundary, as if it did not exist`, async () => {
-        await withRollback(async (db) => {
-          const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
-          const owner = ownerUser.cookie;
-          const stranger = await signedIn(db, 'xt-stranger');
-          const theirs = await aTenant(
-            db,
-            owner,
-            'xt-theirs',
-            crossing.guestMember,
-            crossing.companyIdentity,
-          );
-          await aTenant(db, stranger, 'xt-own');
-          if (crossing.archived === true) {
-            const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
-            expect(archived.status).toBe(204);
-          }
-          const body = crossing.body?.(NOW, { ...theirs, userId: ownerUser.userId });
+/** The part a file is, from its name; anything else is refused rather than registering nothing. */
+export const crossTenantPartOf = (file: string): number => {
+  const part = Number(PART_FILE.exec(file)?.[1]);
+  if (!Number.isInteger(part) || part < 1 || part > CROSS_TENANT_PARTS)
+    throw new Error(`${file} is not a cross-tenant part 1..${String(CROSS_TENANT_PARTS)}`);
+  return part;
+};
 
-          const across = await call(
-            db,
-            method,
-            pathFor(`${path}${query}`, aimed(theirs)),
-            stranger,
-            body,
-          );
-          expect(across.status).toBe(404);
-          const refusal: unknown = await across.json();
-          expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
+/** Registers this file's share of the cases: every `CROSS_TENANT_PARTS`-th, counted across both describes. */
+export const crossTenantPart = (file: string): void => {
+  const part = crossTenantPartOf(file);
+  let index = 0;
+  const mine = (): boolean => index++ % CROSS_TENANT_PARTS === part - 1;
 
-          for (const ids of [NEVER_EXISTED, NOT_A_UUID]) {
-            const elsewhere = await call(
+  afterAll(async () => {
+    await closeIntegrationDatabase();
+  });
+
+  describe('integration: cross-tenant isolation', () => {
+    for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
+      const [method = '', path = ''] = key.split(' ');
+
+      // A discard names an upload nobody has sent; everything else, the one the root carries.
+      const aimed = (ids: Ids): Ids =>
+        crossing.unsent === true ? { ...ids, attachmentId: ids.unsentAttachmentId } : ids;
+
+      for (const [what, query] of queriesFor(crossing)) {
+        if (!mine()) continue;
+        test(`${key}${what} answers 404 across a tenant boundary, as if it did not exist`, async () => {
+          await withRollback(async (db) => {
+            const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
+            const owner = ownerUser.cookie;
+            const stranger = await signedIn(db, 'xt-stranger');
+            const theirs = await aTenant(
+              db,
+              owner,
+              'xt-theirs',
+              crossing.guestMember,
+              crossing.companyIdentity,
+            );
+            await aTenant(db, stranger, 'xt-own');
+            if (crossing.archived === true) {
+              const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
+              expect(archived.status).toBe(204);
+            }
+            const body = crossing.body?.(NOW, { ...theirs, userId: ownerUser.userId });
+
+            const across = await call(
               db,
               method,
-              pathFor(`${path}${query}`, aimed(ids)),
+              pathFor(`${path}${query}`, aimed(theirs)),
               stranger,
               body,
             );
-            expect({ status: elsewhere.status, body: await elsewhere.json() }).toEqual({
-              status: 404,
-              body: refusal,
-            });
-          }
+            expect(across.status).toBe(404);
+            const refusal: unknown = await across.json();
+            expect(refusal).toMatchObject({ error: { code: crossing.refusal } });
 
-          if (crossing.secondOwner === true) {
-            await db
-              .updateTable('workspace_members')
-              .set({ role: 'owner' })
-              .where('workspace_id', '=', theirs.workspaceId)
-              .where('user_id', '=', theirs.memberId)
-              .execute();
-          }
-          if (crossing.scheduled === true) {
-            const scheduled = await call(
+            for (const ids of [NEVER_EXISTED, NOT_A_UUID]) {
+              const elsewhere = await call(
+                db,
+                method,
+                pathFor(`${path}${query}`, aimed(ids)),
+                stranger,
+                body,
+              );
+              expect({ status: elsewhere.status, body: await elsewhere.json() }).toEqual({
+                status: 404,
+                body: refusal,
+              });
+            }
+
+            if (crossing.secondOwner === true) {
+              await db
+                .updateTable('workspace_members')
+                .set({ role: 'owner' })
+                .where('workspace_id', '=', theirs.workspaceId)
+                .where('user_id', '=', theirs.memberId)
+                .execute();
+            }
+            if (crossing.scheduled === true) {
+              const scheduled = await call(
+                db,
+                'PUT',
+                `/api/channels/${theirs.channelId}/scheduled/${theirs.messageId}`,
+                owner,
+                {
+                  content: 'now, please',
+                  sendAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
+                },
+              );
+              expect(scheduled.status).toBe(200);
+            }
+            const own = await call(
               db,
-              'PUT',
-              `/api/channels/${theirs.channelId}/scheduled/${theirs.messageId}`,
+              method,
+              pathFor(`${path}${query}`, aimed(theirs)),
               owner,
-              { content: 'now, please', sendAt: new Date(NOW.getTime() + 3_600_000).toISOString() },
+              body,
             );
-            expect(scheduled.status).toBe(200);
-          }
-          const own = await call(
+            expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
+          });
+        });
+      }
+    }
+  });
+
+  /**
+   * One person in two workspaces, with data in both: what the list of one holds of the other.
+   *
+   * The strangers above are refused before any query runs, so a list that forgot its `workspace_id`
+   * filter would pass them all and show a member the rows of their other workspace.
+   */
+  describe('integration: one member, two workspaces', () => {
+    for (const [key, crossing] of listEndpoints()) {
+      if (!mine()) continue;
+      const [method = '', path = ''] = key.split(' ');
+      const [, query = ''] = queriesFor(crossing)[0] ?? [];
+
+      test(`${key} lists nothing of the member's other workspace`, async () => {
+        await withRollback(async (db) => {
+          const member = await signedIn(db, 'xt-both');
+          const first = await aTenant(
             db,
-            method,
-            pathFor(`${path}${query}`, aimed(theirs)),
-            owner,
-            body,
+            member,
+            'xt-first',
+            crossing.guestMember,
+            crossing.companyIdentity,
           );
-          expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
+          const second = await aTenant(
+            db,
+            member,
+            'xt-second',
+            crossing.guestMember,
+            crossing.companyIdentity,
+          );
+
+          const directions: readonly (readonly [Ids, Ids])[] = [
+            [first, second],
+            [second, first],
+          ];
+          for (const [here, other] of directions) {
+            const own = await call(db, method, pathFor(`${path}${query}`, here), member);
+            expect(own.ok).toBe(true);
+            const text = await own.text();
+            // A list that holds nothing cannot leak: it would pass this case and prove nothing.
+            const isJson = own.headers.get('content-type')?.includes('json') === true;
+            if (isJson && EMPTY_FOR_THE_SEED[key] === undefined && rowsIn(JSON.parse(text)) === 0) {
+              throw new Error(
+                `${key} answered no rows for a workspace that owns data, so this case proves nothing about it: seed a row for it in aTenant`,
+              );
+            }
+            for (const [name, id] of Object.entries<string>({ ...other })) {
+              expect({ endpoint: key, field: name, leaked: text.includes(id) }).toEqual({
+                endpoint: key,
+                field: name,
+                leaked: false,
+              });
+            }
+          }
         });
       });
     }
-  }
-});
-
-/**
- * One person in two workspaces, with data in both: what the list of one holds of the other.
- *
- * The strangers above are refused before any query runs, so a list that forgot its `workspace_id`
- * filter would pass them all and show a member the rows of their other workspace.
- */
-describe('integration: one member, two workspaces', () => {
-  for (const [key, crossing] of listEndpoints()) {
-    const [method = '', path = ''] = key.split(' ');
-    const [, query = ''] = queriesFor(crossing)[0] ?? [];
-
-    test(`${key} lists nothing of the member's other workspace`, async () => {
-      await withRollback(async (db) => {
-        const member = await signedIn(db, 'xt-both');
-        const first = await aTenant(
-          db,
-          member,
-          'xt-first',
-          crossing.guestMember,
-          crossing.companyIdentity,
-        );
-        const second = await aTenant(
-          db,
-          member,
-          'xt-second',
-          crossing.guestMember,
-          crossing.companyIdentity,
-        );
-
-        const directions: readonly (readonly [Ids, Ids])[] = [
-          [first, second],
-          [second, first],
-        ];
-        for (const [here, other] of directions) {
-          const own = await call(db, method, pathFor(`${path}${query}`, here), member);
-          expect(own.ok).toBe(true);
-          const text = await own.text();
-          // A list that holds nothing cannot leak: it would pass this case and prove nothing.
-          const isJson = own.headers.get('content-type')?.includes('json') === true;
-          if (isJson && EMPTY_FOR_THE_SEED[key] === undefined && rowsIn(JSON.parse(text)) === 0) {
-            throw new Error(
-              `${key} answered no rows for a workspace that owns data, so this case proves nothing about it: seed a row for it in aTenant`,
-            );
-          }
-          for (const [name, id] of Object.entries<string>({ ...other })) {
-            expect({ endpoint: key, field: name, leaked: text.includes(id) }).toEqual({
-              endpoint: key,
-              field: name,
-              leaked: false,
-            });
-          }
-        }
-      });
-    });
-  }
-});
+  });
+};

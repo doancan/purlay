@@ -1,5 +1,6 @@
 // Area api-issues: ids ascending; areas.ts says what belongs here.
 import type { Mutation } from '../mutate';
+import { CROSS_TENANT_TESTS } from './shared';
 
 export const API_ISSUES: readonly Mutation[] = [
   {
@@ -8,7 +9,7 @@ export const API_ISSUES: readonly Mutation[] = [
     file: 'apps/api/src/features/issues/issues.ts',
     find: "    .select(ISSUE_COLUMNS)\n    .where('workspace_id', '=', context.workspaceId)\n    .orderBy('id', 'desc')",
     replace: "    .select(ISSUE_COLUMNS)\n    .orderBy('id', 'desc')",
-    tests: ['apps/api/src/ingress/http/cross-tenant.integration.test.ts'],
+    tests: CROSS_TENANT_TESTS,
   },
   {
     id: 'a-query-asks-by-a-column-no-index-starts-with',

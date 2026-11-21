@@ -2,7 +2,7 @@
  * A channel's settings and leaving it (D-123), driven through real requests: what each answers,
  * what it writes, and what it tells the sockets watching — read off the application's own bus.
  *
- * Crossing a tenant and the visibility axis is not here (`cross-tenant.integration.test.ts`,
+ * Crossing a tenant and the visibility axis is not here (`testing/cross-tenant-suite.ts`,
  * `channel-visibility.integration.test.ts`), nor is the archive per role
  * (`permissions.integration.test.ts`): each is a table the build checks against `API.md`.
  *

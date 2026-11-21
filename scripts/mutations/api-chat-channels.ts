@@ -1,6 +1,6 @@
 // Area api-chat-channels: ids ascending; areas.ts says what belongs here.
 import type { Mutation } from '../mutate';
-import { ANNOUNCEMENT_TESTS } from './shared';
+import { ANNOUNCEMENT_TESTS, CROSS_TENANT_TESTS } from './shared';
 
 export const API_CHAT_CHANNELS: readonly Mutation[] = [
   {
@@ -288,7 +288,7 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     replace: "      throw error instanceof AppError && error.body.code === 'NO_SUCH_CODE'\n",
     tests: [
       'apps/api/src/ingress/http/channel-settings.integration.test.ts',
-      'apps/api/src/ingress/http/cross-tenant.integration.test.ts',
+      ...CROSS_TENANT_TESTS,
     ],
   },
   {
