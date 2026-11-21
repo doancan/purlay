@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { mutate } from './mutate';
 import { MUTATIONS, MUTATIONS_BY_AREA } from './mutations';
 import { AREAS, areaOf } from './mutations/areas';
+import { CROSS_TENANT_TESTS } from './mutations/shared';
 
 const root = join(import.meta.dir, '..');
 const directory = join(import.meta.dir, 'mutations');
@@ -72,6 +73,16 @@ describe('the mutation list', () => {
       }
     });
   }
+});
+
+describe('the cross-tenant parts the entries name', () => {
+  test('are exactly the parts on disk, so a mutation is tried against every crossing', () => {
+    const onDisk = readdirSync(join(root, 'apps/api/src/ingress/http'))
+      .filter((file) => /^cross-tenant-\d+\.integration\.test\.ts$/.test(file))
+      .map((file) => `apps/api/src/ingress/http/${file}`)
+      .sort();
+    expect([...CROSS_TENANT_TESTS].sort()).toEqual(onDisk);
+  });
 });
 
 describe('areaOf', () => {

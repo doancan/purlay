@@ -1,5 +1,3 @@
-import { join } from 'node:path';
-
 export const MESSAGES_TESTS = ['apps/api/src/features/chat/messages/messages.integration.test.ts'];
 
 export const ANNOUNCEMENT_TESTS = 'apps/api/src/ingress/http/announcement.integration.test.ts';
@@ -22,16 +20,17 @@ export const LIFECYCLE_TESTS = 'apps/api/src/lifecycle.test.ts';
 
 export const SERVER_TESTS = 'apps/api/src/ingress/http/server.integration.test.ts';
 
-const HTTP_TESTS = 'apps/api/src/ingress/http';
+/**
+ * Every part of the split cross-tenant suite (`testing/cross-tenant-suite.ts`). Built from the count, not read from
+ * disk: the list is also loaded from a commit's `scripts/` alone (`mutation-selection.ts`), where no `apps/` exists.
+ * `mutations.test.ts` holds the count to the files.
+ */
+export const CROSS_TENANT_PARTS = 16;
 
-/** Every part of the split cross-tenant suite (`testing/cross-tenant-suite.ts`), read from the files themselves. */
-export const CROSS_TENANT_TESTS: readonly string[] = [
-  ...new Bun.Glob('cross-tenant-*.integration.test.ts').scanSync(
-    join(import.meta.dir, '..', '..', HTTP_TESTS),
-  ),
-]
-  .sort()
-  .map((file) => `${HTTP_TESTS}/${file}`);
+export const CROSS_TENANT_TESTS: readonly string[] = Array.from(
+  { length: CROSS_TENANT_PARTS },
+  (_, index) => `apps/api/src/ingress/http/cross-tenant-${String(index + 1)}.integration.test.ts`,
+);
 
 export const OIDC_TESTS = 'apps/api/src/ingress/http/oidc-sign-in.integration.test.ts';
 
