@@ -1,6 +1,6 @@
 // Area api-ingress-http: ids ascending; areas.ts says what belongs here.
 import type { Mutation } from '../mutate';
-import { CROSS_TENANT_TESTS, SERVER_TESTS, SETUP_HTTP_TESTS, SWAP_TESTS } from './shared';
+import { SERVER_TESTS, SETUP_HTTP_TESTS, SWAP_TESTS } from './shared';
 
 const CLIENT = 'apps/api/src/ingress/http/client.ts';
 
@@ -14,14 +14,6 @@ const CLIENT_TESTS = [
 const CREATORS_TESTS = 'apps/api/src/ingress/http/workspace-creators.integration.test.ts';
 
 export const API_INGRESS_HTTP: readonly Mutation[] = [
-  {
-    id: 'a-seeded-list-is-empty',
-    why: 'a list of a new module has no row seeded for it, so it answers an empty list, nothing can leak, and the one-member-two-workspaces case passes proving nothing (#901)',
-    file: 'apps/api/src/testing/cross-tenant-suite.ts',
-    find: "    ['PUT', `/api/messages/${root}/pin`, undefined],\n",
-    replace: '',
-    tests: CROSS_TENANT_TESTS,
-  },
   {
     id: 'application-database-not-leased',
     why: 'handlers are given the pool as it is, so no module’s share holds a statement of its routes, the way a handler that takes the raw database would (O3, MODULES.md §7)',

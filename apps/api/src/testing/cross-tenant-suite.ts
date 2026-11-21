@@ -22,7 +22,7 @@
  * Which endpoints must appear here is not decided in this file
  * (`cross-tenant.test.ts`, D-63).
  */
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
@@ -474,17 +474,27 @@ export const crossTenantPartOf = (file: string): number => {
   return part;
 };
 
-/** Registers this file's share of the cases: every `CROSS_TENANT_PARTS`-th, counted across both describes. */
-export const crossTenantPart = (file: string): void => {
+/**
+ * This file's share of the cases, every `CROSS_TENANT_PARTS`-th: `crossings` registers the tenant crossings and `lists`
+ * the one-member-two-workspaces cases, each inside the file's own `describe('integration: …')`, which is what the
+ * integration run selects files by (`enforcement.test.ts`).
+ */
+export const crossTenantPart = (
+  file: string,
+): { readonly crossings: () => void; readonly lists: () => void } => {
   const part = crossTenantPartOf(file);
-  let index = 0;
-  const mine = (): boolean => index++ % CROSS_TENANT_PARTS === part - 1;
+  /** Each describe counts its own cases, so the order a part calls them in cannot move a case. */
+  const shareOfThisPart = (): (() => boolean) => {
+    let index = 0;
+    return () => index++ % CROSS_TENANT_PARTS === part - 1;
+  };
 
   afterAll(async () => {
     await closeIntegrationDatabase();
   });
 
-  describe('integration: cross-tenant isolation', () => {
+  const crossings = (): void => {
+    const mine = shareOfThisPart();
     for (const [key, crossing] of Object.entries(CROSS_TENANT)) {
       const [method = '', path = ''] = key.split(' ');
 
@@ -571,7 +581,7 @@ export const crossTenantPart = (file: string): void => {
         });
       }
     }
-  });
+  };
 
   /**
    * One person in two workspaces, with data in both: what the list of one holds of the other.
@@ -579,7 +589,8 @@ export const crossTenantPart = (file: string): void => {
    * The strangers above are refused before any query runs, so a list that forgot its `workspace_id`
    * filter would pass them all and show a member the rows of their other workspace.
    */
-  describe('integration: one member, two workspaces', () => {
+  const lists = (): void => {
+    const mine = shareOfThisPart();
     for (const [key, crossing] of listEndpoints()) {
       if (!mine()) continue;
       const [method = '', path = ''] = key.split(' ');
@@ -629,5 +640,7 @@ export const crossTenantPart = (file: string): void => {
         });
       });
     }
-  });
+  };
+
+  return { crossings, lists };
 };
