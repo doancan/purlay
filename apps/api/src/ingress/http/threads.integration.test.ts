@@ -4,7 +4,7 @@
  * The rules live in the module and are tested there; this file proves the doors:
  * what a request must look like, what status each refusal is, and that a body that
  * reaches the contract's schema is the contract's shape. The tenant and visibility
- * crossings of every endpoint here are in `cross-tenant.integration.test.ts` and
+ * crossings of every endpoint here are in `testing/cross-tenant-suite.ts` and
  * `channel-visibility.integration.test.ts`, which read the endpoint list from
  * `API.md`.
  *

@@ -2,7 +2,7 @@
  * The channel endpoints, driven through real requests.
  *
  * Their cross-tenant tests are not here: every workspace-scoped endpoint is
- * crossed in `cross-tenant.integration.test.ts`, from a list the build checks
+ * crossed in `testing/cross-tenant-suite.ts`, from a list the build checks
  * against `API.md` (D-21, D-63).
  */
 import { afterAll, describe, expect, test } from 'bun:test';

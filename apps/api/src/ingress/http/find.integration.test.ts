@@ -4,7 +4,7 @@
  * tested there; this file proves the door: the contract's shape, the refusals, the source of a module that is off answered
  * `off`, and that what the two sources find is the caller's to read in the caller's workspace. The fan-out itself, with a
  * third module's source, a slow one and one that throws, is `modules/find/find.integration.test.ts`; the crossing of workspaces
- * is in `cross-tenant.integration.test.ts`.
+ * is in `testing/cross-tenant-suite.ts`.
  *
  * @needs-modules chat, issues
  */

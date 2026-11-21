@@ -2,7 +2,7 @@
  * A workspace is granted the modules it may use, and the framework's guard is what asks (D-289).
  *
  * Every endpoint of a module a workspace can be granted is crossed on a third axis beside the tenant's and the channel's
- * (`cross-tenant.integration.test.ts`): a member of a workspace that is not granted the module is told what a process that
+ * (`testing/cross-tenant-suite.ts`): a member of a workspace that is not granted the module is told what a process that
  * does not run it tells, byte for byte, and nothing is written. A person who is not a member is told the workspace does not
  * exist whatever its grants are. The list is read from `CROSS_TENANT`, so a module's new endpoint is crossed without a test.
  *
