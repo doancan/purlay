@@ -1,10 +1,18 @@
 // Area api-root: ids ascending; areas.ts says what belongs here.
 import type { Mutation } from '../mutate';
-import { BOOT_TESTS, LIFECYCLE_TESTS } from './shared';
+import { BOOT_TESTS, CROSS_TENANT_TESTS, LIFECYCLE_TESTS } from './shared';
 
 const LIFECYCLE = 'apps/api/src/lifecycle.ts';
 
 export const API_ROOT: readonly Mutation[] = [
+  {
+    id: 'a-seeded-list-is-empty',
+    why: 'a list of a new module has no row seeded for it, so it answers an empty list, nothing can leak, and the one-member-two-workspaces case passes proving nothing (#901)',
+    file: 'apps/api/src/testing/cross-tenant-suite.ts',
+    find: "    ['PUT', `/api/messages/${root}/pin`, undefined],\n",
+    replace: '',
+    tests: CROSS_TENANT_TESTS,
+  },
   {
     id: 'attached-file-read-whether-or-not-its-module-runs',
     why: 'a file attached to a message is still read through the channel with chat not run, a door the module list says is shut (D-250)',
