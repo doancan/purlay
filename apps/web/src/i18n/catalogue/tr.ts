@@ -97,7 +97,8 @@ export const tr = {
   'access.edit': 'Düzenle',
   'access.search': 'Ada göre bul',
   'access.find': 'Ara',
-  'access.empty': 'Sonuç yok. Farklı bir arama dene veya ilk öğeyi oluştur.',
+  'access.empty':
+    'Henüz gösterilecek bir şey yok. Arama veya filtre kullandıysan başka terimler dene.',
   'access.more': 'Daha fazla göster',
   'access.retire': 'Kullanımdan kaldır',
   'access.retired': 'Kullanımdan kaldırıldı',
@@ -632,6 +633,7 @@ export const tr = {
 
   // ── Uygulama ────────────────────────────────────────────────────────────
   'app.skip': 'Konuşmaya atla',
+  'app.skipContent': 'İçeriğe atla',
   'app.placeholder.title': 'Bu ekran henüz yapılmadı',
   'app.placeholder.body':
     'Çevresindeki çerçeve son hâlinde; ekran kendi backend’iyle birlikte gelecek.',
@@ -3132,7 +3134,6 @@ export const tr = {
   'releaseNotes.title': 'Purlay {version} sürümündeki yenilikler',
   'releaseNotes.description': '{date} tarihinde yayımlandı.',
   'releaseNotes.close': 'Anladım',
-  'releaseNotes.github': 'GitHub’da görüntüle',
   'releaseNotes.category.Featured': 'Öne çıkanlar',
   'releaseNotes.category.Added': 'Yeni',
   'releaseNotes.category.Changed': 'İyileştirme',
@@ -3881,6 +3882,9 @@ export const tr = {
   'admin.empty': 'Eşleşen kayıt yok',
   'admin.details': 'Hesap ayrıntısı',
   'admin.grant': 'Yönetici yetkisi ver',
+  'admin.grant.blocked.suspended': 'Askıya alınmış hesaplar yönetici yapılamaz.',
+  'admin.grant.blocked.unverified': 'Hesabın e-posta adresi henüz doğrulanmadı.',
+  'admin.grant.blocked.unapproved': 'Hesap henüz onaylanmadı.',
   'admin.revoke': 'Yönetici yetkisini kaldır',
   'admin.endSessions': 'Tüm oturumları kapat',
   'admin.confirmTitle': 'Hesap değişikliğini onayla',

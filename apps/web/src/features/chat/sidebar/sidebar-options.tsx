@@ -53,7 +53,7 @@ export const SidebarOptions = (): React.JSX.Element => {
                 : t('sidebar.options')
             }
             glyph="preferences"
-            size="nav"
+            size="head"
             {...(changed ? { className: 'bg-nav-hover text-nav-ink' } : {})}
           />
         }

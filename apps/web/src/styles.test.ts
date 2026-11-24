@@ -57,7 +57,12 @@ describe('the edges (D-188)', () => {
   // line is the only cue for); hover changes the *fill*, never the line; selected is `accent`, a fault is
   // `danger`. A line that darkens on hover in one place and goes blue in another is the inconsistency this
   // refuses, so the few hover edges that exist are named, and a new one has to be added here on purpose.
-  const HOVER_EDGES = new Set(['hover:border-accent-hover', 'group-hover:border-nav-hover']);
+  const HOVER_EDGES = new Set([
+    'hover:border-accent-hover',
+    'group-hover:border-nav-hover',
+    // The composer's one fine line firms a hair under the pointer: the product's only box you type in.
+    'hover:border-composer-hover',
+  ]);
   /** An edge colour that depends on hover, on a group's or a peer's hover too, whichever sides it draws. */
   const hoverEdge = (name: string): boolean => /(^|[:-])hover:border-/.test(name);
   /**

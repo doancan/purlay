@@ -24,10 +24,14 @@ import {
   AlarmClock,
   ArrowLeft,
   AtSign,
+  BadgeCheck,
   Bell,
   Bookmark,
   BookmarkCheck,
   CircleDot,
+  Server,
+  Smartphone,
+  UserRoundCog,
   Star,
   Pin,
   PinOff,
@@ -251,6 +255,10 @@ const glyphs = {
   announcement: Megaphone,
   /** Another service connected to the workspace: GitHub (D-23). */
   integration: Plug,
+  authenticator: Smartphone,
+  badge: BadgeCheck,
+  server: Server,
+  'person-manage': UserRoundCog,
   /** GitHub itself: the sign-in button's mark. */
   github: GitHubMark,
   /** Google itself, in its own colours: the sign-in button's mark. */

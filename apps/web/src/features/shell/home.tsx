@@ -14,12 +14,12 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { LogoMark } from './notice';
 import { ScheduledDeletions } from './scheduled-deletions';
 import { useSession } from '../session/session';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';
 import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
+import { StandaloneScreen } from './standalone';
 
 export { SLUG, slugOf } from './workspace-slug';
 
@@ -47,7 +47,7 @@ export const Home = (): React.JSX.Element | null => {
 
   if (invited || asked || first !== undefined) return null;
   return (
-    <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+    <StandaloneScreen>
       <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
         <LogoMark />
         {/* An owner whose last workspace is being deleted can still keep it from here (D-242). */}
@@ -76,6 +76,6 @@ export const Home = (): React.JSX.Element | null => {
           </section>
         )}
       </div>
-    </Main>
+    </StandaloneScreen>
   );
 };

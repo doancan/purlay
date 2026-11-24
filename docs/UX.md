@@ -81,7 +81,7 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   you are, as a card; **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
   tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Set yourself as away** ("Uzakta görün"),
   which reads **Set yourself as active** ("Etkin görün") while it is on and keeps the person away on every device until they turn it
-  off — the card's own ring or dot follows it on every page of theirs (D-257); **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
+  off — the card's own ring or dot follows it on every page of theirs (D-257); **Theme ▸** and **Language ▸**, each a short list of radio choices with the one in use checked, applied as it is chosen and kept per device, as in Settings → Preferences (D-331); **Settings** (`Cmd/Ctrl+,`); the shortcut reference;
   and **Sign out**. Unread channels are bold, and one set to tell nothing carries a struck-through bell after its name, said as *muted* (D-107);
   unread **mentions** carry a count badge. Nothing else gets a badge; a channel with an incident open
   carries its severity after the name, **SEV1** to **SEV4** — a state, not a count — said with its status
@@ -1065,7 +1065,10 @@ is read.
 | `Shift+Esc` | Mark all channels read — every channel of the workspace the person is in, each to its newest message; an answer waiting in a thread still waits (D-147). Anywhere in the page, the composer included, but inside a dialog or a menu, whose Escape is its own; also **Mark all channels read** in the palette and the workspace menu (D-238) |
 
 Focus is **always visible** — a 2px ring, never `outline: none`. This is a keyboard-first
-product; an invisible focus ring is a broken product, not a style choice. (`PRD.md` §5)
+product; an invisible focus ring is a broken product, not a style choice. (`PRD.md` §5) The ring is the
+`focus-ring` colour from its first frame, in both themes: the colour is set on every element, so switching the
+ring on changes only its style and width and never fades it in from the text's own colour
+(`apps/web/e2e/focus.e2e.ts` holds it).
 
 ---
 

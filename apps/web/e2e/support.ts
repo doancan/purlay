@@ -298,6 +298,41 @@ const NARROW_BELOW_PX = 900;
 export const isNarrow = (page: Page): boolean =>
   (page.viewportSize()?.width ?? Number.POSITIVE_INFINITY) < NARROW_BELOW_PX;
 
+/** The widest a button with a short label is drawn, in a window wide enough for it to be a button and not a bar. */
+const STRETCHED_BUTTON_PX = 380;
+
+/**
+ * Buttons with a short label that are wider than a button is: a `flex-col` card stretches its children, so a
+ * button in one fills the card unless it is told (`self-start`) to keep its own width. Fields a button
+ * opens (selects, date pickers, menus) are meant to be wide and are not counted. Only meaningful on a window
+ * wide enough that nothing is full-width on purpose; on a narrow one it answers an empty list.
+ */
+export const stretchedButtons = async (page: Page): Promise<string[]> => {
+  if (isNarrow(page)) return [];
+  const { checked, wide } = await page.evaluate((limit) => {
+    const buttons = [...document.querySelectorAll<HTMLElement>('main button')];
+    const wide = buttons
+      .filter((button) => {
+        if (button.closest('[role="menu"], [role="listbox"], [role="dialog"], [role="tablist"]'))
+          return false;
+        if (button.hasAttribute('aria-haspopup') || button.getAttribute('role') === 'combobox')
+          return false;
+        const label = button.textContent.trim();
+        return (
+          label.length > 0 && label.length < 40 && button.getBoundingClientRect().width > limit
+        );
+      })
+      .map(
+        (button) =>
+          `${button.textContent.trim()} (${String(Math.round(button.getBoundingClientRect().width))}px)`,
+      );
+    return { checked: buttons.length, wide };
+  }, STRETCHED_BUTTON_PX);
+  // A page that drew no button measured nothing: an empty answer there is absence, not a pass (CONTRIBUTING §6.4).
+  if (checked === 0) throw new Error('stretchedButtons found no button on the page to measure');
+  return wide;
+};
+
 export type Engine = 'chromium' | 'firefox' | 'webkit';
 
 /**

@@ -76,7 +76,8 @@ const mounted = async (path: string, api?: Api): Promise<ReturnType<typeof rende
 describe('the frame', () => {
   test('has a skip link first, and one main that it points at', async () => {
     const { getByRole, container } = await mounted('/sign-in');
-    const skip = getByRole('link', { name: 'Skip to the conversation' });
+    // /sign-in holds no conversation, so the link says it skips to the content (a channel's says conversation).
+    const skip = getByRole('link', { name: 'Skip to the content' });
     expect(container.querySelector('a') === skip).toBe(true);
     const main = getByRole('main');
     expect(skip.getAttribute('href')).toBe(`#${main.id}`);

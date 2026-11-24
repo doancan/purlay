@@ -72,17 +72,19 @@ const whiles = async (view: View): Promise<void> => {
 const here = (view: View): string => view.world.history.stack.at(-1) ?? '';
 
 describe('the account menu', () => {
-  test('offers Deep Work for a while, away, Settings, the shortcuts and signing out — nothing that is a page of Settings', async () => {
+  test('offers Deep Work, away, the theme and the language, Settings, the shortcuts and signing out', async () => {
     const view = await open();
     await menu(view);
     expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Deep Work',
       'Set yourself as away',
+      'Theme',
+      'Language',
       expect.stringMatching(/^Settings/) as unknown as string,
       expect.stringMatching(/^Keyboard shortcuts/) as unknown as string,
       'Sign out',
     ]);
-    // The theme and the language are Preferences'; signing out everywhere and erasing, Sessions & account's.
+    // Signing out everywhere and erasing the account are Sessions & account's; the menu holds no radio until a submenu opens.
     expect(view.queryAllByRole('menuitemradio')).toEqual([]);
     await expectNoAxeViolations(view.getByRole('menu'));
     // Deep Work's four whiles are one item that opens them, not four that outnumber the rest.
@@ -94,6 +96,52 @@ describe('the account menu', () => {
         .getAllByRole('menuitem')
         .map((item) => item.textContent),
     ).toEqual(['For 30 minutes', 'For 1 hour', 'For 2 hours', 'Until tomorrow']);
+    view.unmount();
+  });
+
+  test('Theme and Language are radio choices, the one in use checked, and choosing applies at once', async () => {
+    const view = await open();
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Theme' }));
+    let submenu = view.getAllByRole('menu').at(-1);
+    if (submenu === undefined) throw new Error('no theme submenu');
+    expect(
+      within(submenu)
+        .getAllByRole('menuitemradio')
+        .map((item) => [item.textContent, item.getAttribute('aria-checked')]),
+    ).toEqual([
+      ['System', 'true'],
+      ['Light', 'false'],
+      ['Dark', 'false'],
+      ['Midnight', 'false'],
+    ]);
+    await person().click(within(submenu).getByRole('menuitemradio', { name: 'Dark' }));
+    // The choice is in force at once: reopened, Dark is the checked one.
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Theme' }));
+    expect(view.getByRole('menuitemradio', { name: 'Dark' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    await person().keyboard('{Escape}');
+    await person().keyboard('{Escape}');
+
+    await menu(view);
+    await person().click(view.getByRole('menuitem', { name: 'Language' }));
+    submenu = view.getAllByRole('menu').at(-1);
+    if (submenu === undefined) throw new Error('no language submenu');
+    expect(
+      within(submenu)
+        .getAllByRole('menuitemradio')
+        .map((item) => [item.textContent, item.getAttribute('aria-checked')]),
+    ).toEqual([
+      ['English', 'true'],
+      ['Türkçe', 'false'],
+    ]);
+    await person().click(within(submenu).getByRole('menuitemradio', { name: 'Türkçe' }));
+    await settle();
+    // The menu itself now speaks Turkish, so its door is found by who it shows.
+    await person().click(view.getByRole('button', { name: /Dogancan @/ }));
+    expect(view.getByRole('menuitem', { name: 'Tema' })).toBeDefined();
     view.unmount();
   });
 

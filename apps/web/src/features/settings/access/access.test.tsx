@@ -174,7 +174,7 @@ test('each access list renders pending, retryable error and empty states', async
       reject(new ApiError(403, 'FORBIDDEN', 'denied'));
     });
     await person().click(await view.findByRole('button', { name: 'Retry' }));
-    await view.findByText('No results. Try a different search or create the first item.');
+    await view.findByText('Nothing to show yet. If you searched or filtered, try different terms.');
     view.unmount();
     view.world.client.clear();
   }
@@ -836,7 +836,7 @@ test('role paging and search keep retired roles readable, and an editor can remo
   });
   await person().type(view.getByRole('searchbox', { name: 'Find by name' }), 'missing');
   await person().click(view.getByRole('button', { name: 'Search' }));
-  await view.findByText('No results. Try a different search or create the first item.');
+  await view.findByText('Nothing to show yet. If you searched or filtered, try different terms.');
   expect(reads).toContainEqual({ limit: 40, q: '', before: IDS.bob });
   expect(reads).toContainEqual({ limit: 40, q: 'missing' });
   expect(writes).toHaveLength(1);

@@ -867,11 +867,11 @@ const Inner = ({
             if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
           }}
           className={cn(
-            'relative flex flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
-            // Drawn inward, over the card's own edge: outside it, the gap reads as a second border.
-            // Its own edge, not the focus ring's: in the dark themes the ring's bright blue, held
-            // for as long as somebody types, is the brightest thing on the screen (D-207).
-            focused && 'outline-focus outline-composer-edge -outline-offset-focus',
+            'relative flex flex-col rounded-2xl border-hairline bg-surface-100 shadow-raised transition-colors duration-hover ease-standard',
+            // One line of one weight, at rest and focused: the focused edge is the same hairline in a firmer
+            // neutral grey, not a second, thicker ring (D-207). A blue held for as long as somebody types is the
+            // brightest thing on the screen; the caret says where the typing is.
+            focused ? 'border-composer-focus' : 'border-composer-rest hover:border-composer-hover',
           )}
         >
           {unknown !== null && (
@@ -959,7 +959,7 @@ const Inner = ({
               aria-activedescendant={activeDescendant}
               placeholder={fieldPlaceholder}
               hidden={!sourceMode}
-              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-muted max-narrow:text-title max-narrow:font-normal scrollbar-thin"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-subtle max-narrow:text-title max-narrow:font-normal scrollbar-thin"
               onChange={(event) => {
                 const { value, selectionStart, selectionEnd } = event.target;
                 madeEmoji.current = null;

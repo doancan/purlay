@@ -137,7 +137,7 @@ export const AccessListState = ({
   return (
     <>
       {(failed || paused) && (
-        <div className="flex flex-wrap items-center gap-3 p-4">
+        <div className="flex flex-wrap items-center gap-3 px-6 py-4 max-narrow:px-4">
           <p role="alert" className="min-w-0 flex-1 text-body text-danger-text">
             {t(paused ? 'access.offline' : 'access.loadFailed')}
           </p>
@@ -206,7 +206,7 @@ export const More = ({
 }): React.JSX.Element | null => {
   const { t } = useI18n();
   return more ? (
-    <div className="p-4">
+    <div className="px-6 py-4 max-narrow:px-4">
       <Button busy={busy} onClick={load}>
         {t('access.more')}
       </Button>

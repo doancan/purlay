@@ -32,7 +32,7 @@
   }
   .purlay-rich-editor[data-empty='true']::before {
     content: attr(data-placeholder);
-    @apply pointer-events-none float-left h-0 text-ink-muted;
+    @apply pointer-events-none float-left h-0 text-ink-subtle;
   }
   .purlay-rich-editor strong {
     @apply font-semibold;
@@ -100,17 +100,42 @@
     font-family: var(--font-sans);
   }
 
+  /*
+   * The ring's colour belongs to every element, not to the moment it is focused. An outline's colour starts
+   * as `currentcolor`, and `transition-colors` animates `outline-color`: a ring switched on by `:focus-visible`
+   * then faded from the text's own colour (near-black in the light theme, near-white in the dark) to the blue
+   * over the hover duration, so each Tab stop flashed the wrong colour first. With the colour already the
+   * ring's, only the style and the width change on focus, and neither animates.
+   */
+  *,
+  ::before,
+  ::after {
+    outline-color: var(--focus-ring);
+  }
+
   /* Keyboard focus is always visible and always the same (UX §8); a component never draws its own. */
   :focus-visible {
-    outline: var(--stroke-focus) solid var(--focus-ring);
+    outline-style: solid;
+    outline-width: var(--stroke-focus);
+    /* Again here: Tailwind's preflight gives Firefox's own focus ring `outline: auto`, which resets the colour and is as specific. */
+    outline-color: var(--focus-ring);
     outline-offset: var(--size-focus-offset);
+  }
+
+  /*
+   * In the navigation columns (the rail, the sidebar, the settings' and the console's lists) and in the composer's
+   * card, controls are packed edge to edge and beside each other: a ring drawn outside one lands on its neighbour.
+   * Inside them the ring is drawn inward, over the control's own edge, so it never spills.
+   */
+  :where(nav, aside, [data-composer-card]) :focus-visible {
+    outline-offset: calc(var(--stroke-focus) * -1);
   }
 
   /*
    * A control with a line of its own — an input, a select, a bordered button — takes the ring *in place of*
    * the line, as the composer's box does: drawn outside it with a gap there would be the line, the gap and
    * the ring, which reads as two borders. Inset by the ring's own width, the ring covers the line and is the
-   * one edge. (A control with no line keeps the gap, which is what shows a ring on a filled button.)
+   * one edge. (Every `Button` carries the hairline, filled ones too, so theirs is inset as well; only a bare row or glyph, with no line, keeps the gap.)
    */
   .border-hairline:focus-visible {
     outline-offset: calc(var(--size-focus-offset) * -1);
@@ -130,7 +155,8 @@
       [role='searchbox'],
       [role='combobox']
     ) {
-    outline: none;
+    /* The style alone: the `outline: none` shorthand would reset the colour to `currentcolor` as well. */
+    outline-style: none;
   }
 
   /*
@@ -304,15 +330,14 @@
  */
 @keyframes firework-rocket {
   from {
-    transform: scaleY(0);
+    stroke-dashoffset: 8;
     opacity: 1;
   }
-  35% {
-    transform: scaleY(1);
+  80% {
     opacity: 1;
   }
   to {
-    transform: scaleY(1);
+    stroke-dashoffset: -100;
     opacity: 0;
   }
 }
@@ -322,10 +347,13 @@
     opacity: 0;
     transform: scale(0.08);
   }
-  12% {
+  8% {
     opacity: 1;
   }
-  55% {
+  45% {
+    transform: scale(0.94);
+  }
+  62% {
     opacity: 1;
   }
   to {
@@ -345,16 +373,17 @@
 }
 
 @utility animate-firework-rocket {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
   opacity: 0;
-  animation: firework-rocket calc(var(--duration-celebrate) * 0.3) var(--easing-standard) both;
+  /* A comet: a short bright run of the line (its length is a share of the whole, `pathLength` 100) that travels up it. */
+  stroke-dasharray: 8 100;
+  stroke-linecap: round;
+  animation: firework-rocket calc(var(--duration-celebrate) * 0.22) var(--easing-standard) both;
 }
 
 @utility animate-firework-burst {
   transform-origin: 0 0;
   opacity: 0;
-  animation: firework-burst calc(var(--duration-celebrate) * 0.46) var(--easing-standard) both;
+  animation: firework-burst calc(var(--duration-celebrate) * 0.55) var(--easing-standard) both;
 }
 
 @utility animate-firework-fall {
@@ -430,6 +459,18 @@
   &[data-instant] {
     transition-property: none;
   }
+}
+
+@utility firework-spark-xs {
+  r: var(--size-spark-xs);
+}
+
+@utility firework-spark-sm {
+  r: var(--size-spark-sm);
+}
+
+@utility firework-spark-lg {
+  r: var(--size-spark-lg);
 }
 
 /* A firework's rays and sparks: a line of the marker's weight at any window size. */

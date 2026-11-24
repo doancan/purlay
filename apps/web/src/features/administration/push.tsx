@@ -57,6 +57,7 @@ export const ServerPushCard = (): React.JSX.Element => {
                 {t(data.keysCreated ? 'admin.browserPush.preserved' : 'admin.browserPush.generate')}
               </p>
               <Button
+                className="self-start"
                 busy={busy}
                 disabled={busy || query.isFetching || query.isError}
                 onClick={() => {

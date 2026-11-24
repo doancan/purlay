@@ -88,7 +88,7 @@ test.describe('every page of Settings', () => {
         await expect(page.getByRole('button', { name: 'Set up authenticator' })).toBeVisible();
       if (section === 'directory' || section === 'access-roles' || section === 'access-groups')
         await expect(
-          page.getByText('No results. Try a different search or create the first item.', {
+          page.getByText('Nothing to show yet. If you searched or filtered, try different terms.', {
             exact: true,
           }),
         ).toBeVisible();

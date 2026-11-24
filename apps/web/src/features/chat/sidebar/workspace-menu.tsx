@@ -84,16 +84,17 @@ export const WorkspaceMenu = (): React.JSX.Element => {
         side="bottom"
         trigger={
           // The workspace's mark, its name, and who you are in it, in the sidebar's top band: the one door to the
-          // workspace says which, at a glance. Hover tints the fill and open frames it in the accent: the edge's
-          // grammar (D-188) — hover changes the fill, never the line.
+          // workspace says which, at a glance. A white card with its line at rest; hover tints the fill and nothing else (D-188: hover
+          // changes the fill, never the line); open is where you are, so it takes the accent line. It is shorter than its
+          // band, so no state touches the band's edges.
           <button
             type="button"
-            className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg border-hairline border-transparent p-1 pr-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-selected data-[state=open]:border-accent data-[state=open]:bg-nav-selected max-narrow:min-h-touch"
+            className="group flex h-switcher min-w-0 flex-1 items-center gap-2 rounded-lg border-hairline border-transparent px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover data-[state=open]:bg-nav-selected max-narrow:h-touch"
           >
             {/* A picture of the workspace, as an avatar's initials are; the name beside it says it. */}
             <span
               aria-hidden="true"
-              className="inline-flex size-avatar shrink-0 items-center justify-center rounded-lg bg-accent text-caption font-semibold text-on-accent"
+              className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-lg bg-accent text-label font-semibold text-on-accent"
             >
               {initialsOf(workspace.name)}
             </span>

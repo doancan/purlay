@@ -50,7 +50,7 @@ export const AccessPeoplePage = (): React.JSX.Element => {
   return (
     <SettingsPage title={t('access.people.title')} description={t('access.people.description')}>
       <SettingsCard title={t('access.people.title')}>
-        <div className="flex items-end gap-3 p-4 max-narrow:flex-col max-narrow:items-stretch">
+        <div className="flex items-end gap-3 px-6 py-4 max-narrow:flex-col max-narrow:items-stretch max-narrow:px-4">
           <div className="min-w-0 flex-1">
             <AccessSearch
               value={search}

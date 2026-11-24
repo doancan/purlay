@@ -1,7 +1,9 @@
 import type { ServerOverview } from '@purlay/types';
 import { useQuery } from '@tanstack/react-query';
+import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
 import { Facts, QueryState } from './parts';
@@ -123,7 +125,15 @@ export const Operations = (): React.JSX.Element => {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-mono text-label text-ink break-all">{job.name}</h3>
-                  <span className="text-label text-ink">{t(`admin.job.${job.status}`)}</span>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-pill px-2 text-label',
+                      JOB_TONE[job.status],
+                    )}
+                  >
+                    <Icon name={job.status === 'ok' ? 'confirm' : 'warning'} size="sm" />
+                    {t(`admin.job.${job.status}`)}
+                  </span>
                 </div>
                 <p className="text-caption text-ink-muted">
                   {t('admin.lastSuccess')}:{' '}
@@ -143,6 +153,13 @@ export const Operations = (): React.JSX.Element => {
     </QueryState>
   );
 };
+
+/** A job's state as a tone and a mark as well as its words: a list of sixteen "never succeeded" must not read as calm. */
+const JOB_TONE = {
+  ok: 'bg-success-subtle text-success-text',
+  never: 'bg-warning-subtle text-warning-text',
+  overdue: 'bg-danger-subtle text-danger-text',
+} as const;
 
 export const DeploymentInventory = (): React.JSX.Element => {
   const client = useAdministrationClient();

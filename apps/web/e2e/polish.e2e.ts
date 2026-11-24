@@ -6,7 +6,7 @@
  */
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { openNavigation } from './support';
+import { isNarrow, openNavigation, stretchedButtons } from './support';
 
 const channelPath = (slug: string, id: string): string => `/w/${slug}/c/${id}`;
 
@@ -173,6 +173,26 @@ test.describe('readable, in whichever theme this project is', () => {
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
     await expectNoAxe(menu);
+  });
+});
+
+test.describe('a button keeps its own width', () => {
+  test('on the pages of settings, no short button fills its card', async ({
+    page,
+    signIn,
+    world,
+  }) => {
+    test.skip(isNarrow(page), 'on a narrow window a button fills its card on purpose');
+    await signIn();
+    const stretched: string[] = [];
+    // Pages whose cards hold a button under a field or a value: the ones a `flex-col` can stretch it on.
+    for (const section of ['general', 'company', 'security', 'invitations', 'members', 'data']) {
+      await page.goto(`/w/${world.workspace.slug}/settings/${section}`);
+      await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      stretched.push(...(await stretchedButtons(page)).map((button) => `${section}: ${button}`));
+    }
+    expect(stretched).toEqual([]);
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * The account menu, from the sidebar's foot: who you are, and what you reach for often (D-124,
- * D-146, D-207) — Deep Work, Settings, the shortcut reference, and signing out. Everything else that is the
- * person's — the theme, the language, this device's notifications, signing out everywhere and erasing
+ * D-146, D-207) — Deep Work, the theme and the language, Settings, the shortcut reference, and signing out.
+ * Everything else that is the person's — this device's notifications, signing out everywhere and erasing
  * the account — is a page of Settings, where it has room to say what it does.
  *
  * - **Deep Work** is started for a while chosen here — half an hour, one, two, or until tomorrow
@@ -23,11 +23,22 @@ import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
+import { LOCALES } from '../../i18n/types';
+import { THEME_CHOICES } from '../../theme/theme';
+import { useTheme } from '../../theme/theme-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Avatar } from '../../ui/avatar';
 import { useToast } from '../../ui/toast';
-import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from '../../ui/menu';
+import {
+  Menu,
+  MenuItem,
+  MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuSub,
+} from '../../ui/menu';
 import { usePresence } from '../../realtime/realtime-provider';
 import { useSession } from '../session/session';
 import { isMacPlatform, keyLabels } from '../shortcuts/platform';
@@ -72,6 +83,49 @@ const DeepWorkItems = (): React.JSX.Element | null => {
         </>
       )}
       <MenuSeparator />
+    </>
+  );
+};
+
+/**
+ * How Purlay looks and speaks on this device, two submenus of radio choices: the one in use says so with a check,
+ * and a choice applies as it is made. The same two settings as Settings → Preferences, kept per device (D-41, D-98).
+ */
+const AppearanceItems = (): React.JSX.Element => {
+  const { t, locale, setLocale } = useI18n();
+  const { choice, setChoice } = useTheme();
+  return (
+    <>
+      <MenuSub glyph={choice} label={t('theme.label')}>
+        <MenuRadioGroup
+          value={choice}
+          onValueChange={(value) => {
+            const chosen = THEME_CHOICES.find((option) => option === value);
+            if (chosen !== undefined) setChoice(chosen);
+          }}
+        >
+          {THEME_CHOICES.map((option) => (
+            <MenuRadioItem key={option} value={option} glyph={option}>
+              {t(`theme.${option}`)}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuSub>
+      <MenuSub glyph="language" label={t('language.label')}>
+        <MenuRadioGroup
+          value={locale}
+          onValueChange={(value) => {
+            const chosen = LOCALES.find((option) => option === value);
+            if (chosen !== undefined) setLocale(chosen);
+          }}
+        >
+          {LOCALES.map((option) => (
+            <MenuRadioItem key={option} value={option} glyph="language">
+              {t(`language.${option}`)}
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuSub>
     </>
   );
 };
@@ -173,6 +227,7 @@ export const AccountMenu = (): React.JSX.Element => {
       <MenuSeparator />
       <DeepWorkItems />
       <AwayItem chosen={awayChosen} />
+      <AppearanceItems />
       <MenuItem
         glyph="settings"
         shortcut={`${mod},`}

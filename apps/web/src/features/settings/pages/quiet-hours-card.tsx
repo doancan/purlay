@@ -14,7 +14,7 @@ import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Link } from '../../../router/router-provider';
-import { Button } from '../../../ui/button';
+import { Button, buttonStyle } from '../../../ui/button';
 import { Checkbox } from '../../../ui/checkbox';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useQuietHoursSetting } from '../../shell/quiet-hours';
@@ -98,7 +98,11 @@ export const QuietHoursCard = (): React.JSX.Element => {
     return (
       <SettingsCard title={t('quietHours.title')} description={t('quietHours.description')}>
         <SettingsRow label={t('quietHours.needsZone')}>
-          <Link to="settings" params={{ slug: workspace.slug, section: 'profile' }}>
+          <Link
+            to="settings"
+            params={{ slug: workspace.slug, section: 'profile' }}
+            className={buttonStyle('secondary')}
+          >
             {t('quietHours.setZone')}
           </Link>
         </SettingsRow>

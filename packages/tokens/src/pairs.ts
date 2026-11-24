@@ -120,6 +120,12 @@ export const PAIRS: readonly Pair[] = [
   ...cross(['border-strong'], READING, CONTROL_EDGE, 'the edge of a control'),
   ...cross(['focus-ring'], READING, BOUNDARY, 'the keyboard focus ring (UX §8)'),
   ...cross(['composer-edge'], SURFACES, BOUNDARY, 'the focused composer’s edge: where you type'),
+  ...cross(
+    ['composer-focus'],
+    SURFACES,
+    CONTROL_EDGE,
+    'the focused composer’s edge, a neutral grey a step firmer than its resting one; the caret is the other cue',
+  ),
 ];
 
 /**
@@ -147,6 +153,11 @@ export const EXEMPT: Readonly<Record<string, string>> = {
   accent: 'a fill; its legibility is `on-accent` on it, and its words are `accent-text`',
   'accent-hover': 'a fill; its legibility is `on-accent` on it',
   'border-subtle': 'decorative: a divider that carries no meaning, so it is allowed to be faint',
+  'composer-rest':
+    'decorative: the composer’s resting edge, one fine line; the box also has its fill, its words and its caret',
+  'composer-hover': 'decorative: the composer’s edge under the pointer, a hair firmer than at rest',
+  'border-default':
+    'decorative: the resting edge of a secondary button and the composer, a step firmer than a divider; the control also has its fill and its words (a field whose edge is the only cue uses `border-strong`)',
   'nav-rail': 'a background; it is the `background` of the pairs above',
   'nav-surface': 'a background; it is the `background` of the pairs above',
   'nav-hover': 'a background; it is the `background` of the pairs above',

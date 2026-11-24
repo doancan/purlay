@@ -4,10 +4,10 @@ import type { OwnAdmission } from '@purlay/types';
 import { useApi } from '../../data/api-provider';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { useRoute } from '../../router/router-provider';
 import { href } from '../../router/routes';
 import { LogoMark } from '../shell/notice';
+import { StandaloneScreen } from '../shell/standalone';
 
 export const useOwnAdmission = (enabled: boolean): ReturnType<typeof useQuery<OwnAdmission>> => {
   const api = useApi();
@@ -87,7 +87,7 @@ export const AdmissionScreen = ({
     }
   };
   return (
-    <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+    <StandaloneScreen>
       <section className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
         <LogoMark />
         <h1 className="text-display">{t(`admission.${state}.title`)}</h1>
@@ -113,6 +113,6 @@ export const AdmissionScreen = ({
           </Button>
         </div>
       </section>
-    </Main>
+    </StandaloneScreen>
   );
 };

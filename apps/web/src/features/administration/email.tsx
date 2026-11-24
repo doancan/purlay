@@ -42,6 +42,7 @@ export const SavedMailTest = ({
     <SettingsCard title={t('admin.mailTest')} description={t('admin.mailTest.body', { email })}>
       <Inset>
         <Button
+          className="self-start"
           disabled={!enabled || busy}
           busy={busy}
           onClick={() => {

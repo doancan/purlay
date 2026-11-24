@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SERVER_APPROVAL_BATCH_MAX, type ServerUser, type ServerUsersQuery } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
+import { VisuallyHidden } from '../../ui/visually-hidden';
 import { TextField } from '../../ui/text-field';
 import { Select } from '../../ui/select';
 import { Dialog } from '../../ui/dialog';
@@ -74,6 +75,43 @@ export const Users = (): React.JSX.Element => {
         </Button>
       </form>
       <UserList key={JSON.stringify(filter)} filter={filter} onBusy={setWorking} />
+    </>
+  );
+};
+
+/**
+ * Grant administrator access, or — when the account cannot be given it yet — the reason, said beside the disabled
+ * button as a tooltip and to a screen reader, so a dead button is never a mystery.
+ */
+const GrantButton = ({
+  user,
+  busy,
+  ask,
+}: {
+  readonly user: ServerUser;
+  readonly busy: boolean;
+  readonly ask: () => void;
+}): React.JSX.Element => {
+  const { t } = useI18n();
+  const reason =
+    user.suspendedAt !== null
+      ? t('admin.grant.blocked.suspended')
+      : !user.emailVerified
+        ? t('admin.grant.blocked.unverified')
+        : user.admissionState !== 'approved'
+          ? t('admin.grant.blocked.unapproved')
+          : null;
+  const reasonId = `grant-why-${user.id}`;
+  return (
+    <>
+      <Button
+        disabled={busy || reason !== null}
+        onClick={ask}
+        {...(reason === null ? {} : { title: reason, 'aria-describedby': reasonId })}
+      >
+        {t('admin.grant')}
+      </Button>
+      {reason === null ? null : <VisuallyHidden id={reasonId}>{reason}</VisuallyHidden>}
     </>
   );
 };
@@ -235,19 +273,13 @@ const UserList = ({
                             {t('admin.revoke')}
                           </Button>
                         ) : (
-                          <Button
-                            disabled={
-                              busy ||
-                              user.suspendedAt !== null ||
-                              !user.emailVerified ||
-                              user.admissionState !== 'approved'
-                            }
-                            onClick={() => {
+                          <GrantButton
+                            user={user}
+                            busy={busy}
+                            ask={() => {
                               setAsking({ user, action: 'grant' });
                             }}
-                          >
-                            {t('admin.grant')}
-                          </Button>
+                          />
                         )}
                         <Button
                           disabled={busy}

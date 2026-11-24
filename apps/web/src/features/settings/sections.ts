@@ -20,16 +20,16 @@ const CORE_SECTIONS = [
   { id: 'general', group: 'workspace', glyph: 'settings', for: 'admins' },
   { id: 'company', group: 'workspace', glyph: 'link', for: 'admins' },
   { id: 'security', group: 'workspace', glyph: 'shield', for: 'admins' },
-  { id: 'workspace-mfa', group: 'workspace', glyph: 'lock', for: 'everyone' },
+  { id: 'workspace-mfa', group: 'workspace', glyph: 'authenticator', for: 'everyone' },
   { id: 'directory', group: 'workspace', glyph: 'table', for: 'admins' },
-  { id: 'access-people', group: 'workspace', glyph: 'person', for: 'admins' },
-  { id: 'access-roles', group: 'workspace', glyph: 'preferences', for: 'admins' },
+  { id: 'access-people', group: 'workspace', glyph: 'person-manage', for: 'admins' },
+  { id: 'access-roles', group: 'workspace', glyph: 'badge', for: 'admins' },
   { id: 'access-groups', group: 'workspace', glyph: 'groups', for: 'admins' },
   { id: 'members', group: 'workspace', glyph: 'people', for: 'admins' },
   { id: 'invitations', group: 'workspace', glyph: 'invite', for: 'admins' },
   { id: 'audit', group: 'workspace', glyph: 'audit', for: 'admins' },
   { id: 'data', group: 'workspace', glyph: 'history', for: 'owners' },
-  { id: 'server', group: 'server', glyph: 'integration', for: 'serverAdmin' },
+  { id: 'server', group: 'server', glyph: 'server', for: 'serverAdmin' },
 ] as const satisfies readonly {
   readonly id: string;
   readonly group: SettingsGroup;

@@ -170,7 +170,7 @@ const PreferencesForm = ({
               {t('admin.saved')}
             </p>
           )}
-          <Button type="submit" variant="primary" busy={busy}>
+          <Button type="submit" variant="primary" busy={busy} className="self-start">
             {t('admin.savePreferences')}
           </Button>
         </form>

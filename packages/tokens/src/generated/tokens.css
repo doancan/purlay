@@ -124,6 +124,10 @@
   --avatar-5: #3a1c2f;
   --avatar-6: #302b17;
   --focus-ring: #6f8fe8;
+  --border-default: #2a2d37;
+  --composer-rest: #22252d;
+  --composer-hover: #30343f;
+  --composer-focus: #434856;
   --composer-edge: #4f6ac2;
   --danger: #f87171;
   --warning: #f59e0b;
@@ -183,8 +187,12 @@
   --avatar-4: #e0ecf8;
   --avatar-5: #f3e3ee;
   --avatar-6: #eeeadb;
-  --focus-ring: #4a74dc;
-  --composer-edge: #4a74dc;
+  --focus-ring: #5479dd;
+  --border-default: #dcdce3;
+  --composer-rest: #e4e4ea;
+  --composer-hover: #d3d3db;
+  --composer-focus: #b8b8c2;
+  --composer-edge: #5a80df;
   --danger: #ef4444;
   --warning: #d97706;
   --success: #16a34a;
@@ -244,6 +252,10 @@
   --avatar-5: #512a4c;
   --avatar-6: #3d3a24;
   --focus-ring: #c4c4d8;
+  --border-default: #3a3a60;
+  --composer-rest: #34345a;
+  --composer-hover: #42426e;
+  --composer-focus: #58588a;
   --composer-edge: #7378bd;
   --danger: #f87171;
   --warning: #f59e0b;
@@ -319,6 +331,10 @@
   --size-icon-sm: 12px;
   --size-icon-md: 16px;
   --size-icon-lg: 20px;
+  --size-switcher: 40px;
+  --size-spark-xs: 1px;
+  --size-spark-sm: 2px;
+  --size-spark-lg: 3px;
   --size-avatar: 28px;
   --size-avatar-sm: 20px;
   --size-avatar-lg: 36px;

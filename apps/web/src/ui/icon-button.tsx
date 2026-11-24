@@ -34,6 +34,8 @@ const sizeClasses = {
   rail: 'size-rail-item rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink max-narrow:h-touch max-narrow:w-touch',
   /** A control in the sidebar, on the navigation's tone (D-118). */
   nav: 'h-control max-narrow:h-touch aspect-square rounded-md text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
+  /** The sidebar's top band: as tall as the workspace's door beside it, so the two are one row of buttons. */
+  head: 'h-switcher max-narrow:h-touch aspect-square rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink data-[state=open]:bg-nav-selected data-[state=open]:text-nav-ink',
 } as const;
 
 export interface IconButtonProps extends Omit<
