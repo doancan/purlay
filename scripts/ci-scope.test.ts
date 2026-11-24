@@ -99,8 +99,17 @@ const reuses = (
   sleep: (seconds: number) => void = noSleep,
 ): boolean => askReuse(repository, commit, spawn, depth, sleep);
 
-const FULL =
-  'static\tsuccess\nschema\tsuccess\nbrowser\tsuccess\nmodule-suites\tsuccess\nverify\tsuccess';
+/** The jobs of a full run, named as GitHub names them: a matrix by its legs. */
+const FULL = [
+  'static\tsuccess',
+  'schema\tsuccess',
+  'browser (chromium-dark, suite)\tsuccess',
+  'browser (chromium-dark, measurements)\tsuccess',
+  'browser (chromium-light, suite)\tsuccess',
+  'module-suites (chat)\tsuccess',
+  'module-suites (none)\tsuccess',
+  'verify\tsuccess',
+].join('\n');
 const LIGHT =
   'static\tsuccess\nschema\tskipped\nlight-suite\tsuccess\nbrowser\tskipped\nverify\tsuccess';
 
@@ -127,13 +136,53 @@ describe('a commit on main whose content was verified before', () => {
 
   test('is not one a heavy job was skipped for, or one whose verify did not succeed', () => {
     expect(
-      reuses('o/r', 'C', github(world(FULL.replace('browser\tsuccess', 'browser\tskipped')))),
+      reuses(
+        'o/r',
+        'C',
+        github(
+          world(
+            FULL.replace(
+              'browser (chromium-light, suite)\tsuccess',
+              'browser (chromium-light, suite)\tskipped',
+            ),
+          ),
+        ),
+      ),
     ).toBe(false);
     expect(
       reuses('o/r', 'C', github(world(FULL.replace('verify\tsuccess', 'verify\tfailure')))),
     ).toBe(false);
     expect(
       reuses('o/r', 'C', github(world(FULL.replace('schema\tsuccess', 'schema\tfailure')))),
+    ).toBe(false);
+  });
+
+  test('is not one whose matrix has a leg that did not succeed, or has no leg at all', () => {
+    expect(
+      reuses(
+        'o/r',
+        'C',
+        github(
+          world(FULL.replace('module-suites (none)\tsuccess', 'module-suites (none)\tfailure')),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      reuses(
+        'o/r',
+        'C',
+        github(
+          world(
+            FULL.split('\n')
+              .filter((line) => !line.startsWith('browser'))
+              .join('\n'),
+          ),
+        ),
+      ),
+    ).toBe(false);
+    // A job that only begins with the name is not one of its legs.
+    expect(
+      reuses('o/r', 'C', github(world(FULL.replace('static\tsuccess', 'static-extra\tsuccess')))),
     ).toBe(false);
   });
 

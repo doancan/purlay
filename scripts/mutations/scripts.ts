@@ -203,11 +203,19 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/ci-scope.test.ts'],
   },
   {
+    id: 'ci-scope-reuses-a-matrix-with-a-failed-leg',
+    why: 'one browser leg red among green ones still counts as the browser having passed (D-332)',
+    file: 'scripts/ci-scope.ts',
+    find: "legs.every(([, conclusion]) => conclusion === 'success')",
+    replace: "legs.some(([, conclusion]) => conclusion === 'success')",
+    tests: ['scripts/ci-scope.test.ts'],
+  },
+  {
     id: 'ci-scope-reuses-a-run-that-skipped-a-heavy-job',
     why: 'a pull request that skipped the browser for its paths is taken as proof of a commit on main that always runs them (D-332)',
     file: 'scripts/ci-scope.ts',
-    find: "HEAVY.every((name) => jobs.get(name) === 'success')",
-    replace: "HEAVY.some((name) => jobs.get(name) === 'success')",
+    find: 'HEAVY.every((name) => ran(jobs, name))',
+    replace: 'HEAVY.some((name) => ran(jobs, name))',
     tests: ['scripts/ci-scope.test.ts'],
   },
   {
