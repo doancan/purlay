@@ -18,11 +18,15 @@ const workflow = Bun.YAML.parse(readFileSync('.github/workflows/ci.yml', 'utf8')
 };
 
 describe('the complete CI coverage suite', () => {
-  test('runs independently, without a job-level condition or prerequisite that could skip it', () => {
+  test('is skipped for exactly two reasons, and for no other: a light change, and content a pull request already ran it on (D-332)', () => {
     const schema = workflow.jobs['schema'];
     expect(schema).toBeDefined();
-    expect(schema?.if).toBeUndefined();
-    expect(schema?.needs).toBeUndefined();
+    // The only prerequisite is the job that says which of the two applies, and the only condition is those two.
+    // Any other `if` or `needs` — a path, a label, an actor — is a way for the whole suite not to run.
+    expect(schema?.needs).toBe('scope');
+    expect(schema?.if).toBe(
+      "needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'",
+    );
     expect(schema?.env?.['DATABASE_URL']).toBeTruthy();
     expect(schema?.env?.['REDIS_URL']).toBeTruthy();
   });
@@ -33,6 +37,42 @@ describe('the complete CI coverage suite', () => {
     expect(tests).toHaveLength(1);
     expect(tests[0]?.if).toBeUndefined();
     expect(tests[0]?.['continue-on-error']).not.toBe(true);
+  });
+});
+
+describe('the light suite (D-332)', () => {
+  const job = workflow.jobs['light-suite'];
+  const scripts = (
+    JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }
+  ).scripts;
+
+  test('runs for a light change and only then, and cannot skip a step or ignore a failure', () => {
+    expect(job?.needs).toBe('scope');
+    expect(job?.if).toBe("needs.scope.outputs.light == 'true'");
+    const runs = job?.steps.filter((step) => step.run === 'bun run test:light') ?? [];
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.if).toBeUndefined();
+    expect(runs[0]?.['continue-on-error']).not.toBe(true);
+  });
+
+  test('runs every test of every root that needs no database, so every test that can read a document or the version', () => {
+    const command = scripts['test:light'] ?? '';
+    for (const root of ['apps', 'packages', 'scripts']) expect(command).toContain(` ${root}`);
+    // What it leaves out is the integration tests and nothing else: no directory, no file, no name.
+    expect(command.match(/--path-ignore-patterns/g)).toHaveLength(1);
+    expect(command).toContain("--path-ignore-patterns '**/*.integration.test.ts'");
+  });
+
+  test('is one of the jobs the required check stands for', () => {
+    expect(workflow.jobs['verify']?.needs).toContain('light-suite');
+    expect(workflow.jobs['verify']?.needs).toContain('scope');
+  });
+});
+
+describe('the static checks', () => {
+  test('are skipped for one reason only: content a pull request already ran them on (D-332)', () => {
+    expect(workflow.jobs['static']?.needs).toBe('scope');
+    expect(workflow.jobs['static']?.if).toBe("needs.scope.outputs.reuse != 'true'");
   });
 });
 
@@ -60,8 +100,10 @@ describe('the suites-per-cell job', () => {
     (Job & { strategy?: { 'fail-fast'?: boolean; matrix?: { cell?: string[] } } }) | undefined;
 
   test('runs when the change can move an answer, with Redis, a leg for each cell, and cannot skip or ignore a failure', () => {
-    expect(job?.needs).toBe('changes');
-    expect(job?.if).toBe("needs.changes.outputs.modules == 'true'");
+    expect(job?.needs).toEqual(['changes', 'scope']);
+    expect(job?.if).toBe(
+      "needs.changes.outputs.modules == 'true' && needs.scope.outputs.reuse != 'true'",
+    );
     expect(job?.env?.['REDIS_URL']).toBeTruthy();
     expect(job?.strategy?.['fail-fast']).toBe(false);
     const runs = job?.steps.filter((step) => step.run?.startsWith('bun run modules:suites')) ?? [];

@@ -14,10 +14,14 @@ const results = (
   touched = 'true',
   touchedModules = 'true',
   touchedMutations = 'true',
+  scoped: { light: string; reuse: string } = { light: 'false', reuse: 'false' },
 ): string =>
   JSON.stringify({
+    scope: { result: over.scope ?? 'success', outputs: scoped },
     static: { result: over.static ?? 'success', outputs: {} },
     schema: { result: over.schema ?? 'success', outputs: {} },
+    // Run only for a light change: skipped is its ordinary state, and right while `scope` says the change was not.
+    'light-suite': { result: over['light-suite'] ?? 'skipped', outputs: {} },
     'api-measurements': { result: over['api-measurements'] ?? 'success', outputs: {} },
     changes: {
       result: over.changes ?? 'success',
@@ -127,13 +131,86 @@ describe('the gate', () => {
   const outcomes = ['failure', 'cancelled', 'skipped', ''] as const;
   for (const job of GATED) {
     for (const outcome of outcomes) {
+      // Skipped is how `light-suite` ordinarily ends, for a change that was not light.
+      if (job === 'light-suite' && outcome === 'skipped') continue;
       test(`refuses when ${job} ended ${outcome === '' ? 'with no result' : outcome}`, () => {
-        expect(judge(results({ [job]: outcome }))).toEqual([
-          `${job} ended ${outcome === '' ? 'with no result' : outcome}`,
-        ]);
+        const ended = `${job} ended ${outcome === '' ? 'with no result' : outcome}`;
+        // Without a `scope` that succeeded, the light suite's ordinary skip cannot be told from a missing one.
+        expect(judge(results({ [job]: outcome }))).toEqual(
+          job === 'scope' ? [ended, 'light-suite ended skipped'] : [ended],
+        );
       });
     }
   }
+
+  const light = { light: 'true', reuse: 'false' };
+  const reused = { light: 'false', reuse: 'true' };
+
+  test('passes a light change whose coverage run was skipped for the light suite, which succeeded', () => {
+    expect(
+      judge(
+        results({ schema: 'skipped', 'light-suite': 'success' }, 'false', 'false', 'false', light),
+      ),
+    ).toEqual([]);
+  });
+
+  test('refuses a light change whose light suite did not succeed, or was itself skipped', () => {
+    for (const outcome of ['failure', 'cancelled', 'skipped', '']) {
+      expect(
+        judge(
+          results({ schema: 'skipped', 'light-suite': outcome }, 'false', 'false', 'false', light),
+        ),
+      ).toEqual([`light-suite ended ${outcome === '' ? 'with no result' : outcome}`]);
+    }
+  });
+
+  test('refuses the coverage run skipped for a change that was not light and whose content was not verified', () => {
+    expect(judge(results({ schema: 'skipped', 'light-suite': 'success' }))).toEqual([
+      'schema ended skipped',
+    ]);
+  });
+
+  test('refuses the coverage run skipped when `scope` itself did not succeed, whatever it said', () => {
+    expect(
+      judge(
+        results(
+          { scope: 'failure', schema: 'skipped', 'light-suite': 'success' },
+          'false',
+          'false',
+          'false',
+          light,
+        ),
+      ),
+    ).toEqual(['scope ended failure', 'schema ended skipped']);
+  });
+
+  test('passes content already verified, whose static, coverage and per-cell suites were skipped for it', () => {
+    expect(
+      judge(
+        results(
+          { static: 'skipped', schema: 'skipped', 'module-suites': 'skipped' },
+          'true',
+          'true',
+          'true',
+          reused,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test('refuses what content already verified does not excuse: the browser jobs, the modules job, the measurements', () => {
+    for (const job of ['browser', 'modules', 'api-measurements', 'mutations-changed'] as const) {
+      expect(judge(results({ [job]: 'skipped' }, 'true', 'true', 'true', reused))).toEqual([
+        `${job} ended skipped`,
+      ]);
+    }
+  });
+
+  test('refuses the heavy jobs skipped on a commit whose content was not said to be verified', () => {
+    expect(
+      judge(results({ static: 'skipped', schema: 'skipped', 'module-suites': 'skipped' })),
+    ).toEqual(['static ended skipped', 'schema ended skipped', 'module-suites ended skipped']);
+  });
 
   test('names every job that did not succeed, not only the first', () => {
     expect(judge(results({ static: 'failure', schema: 'cancelled', browser: 'failure' }))).toEqual([

@@ -17,10 +17,44 @@ permissions:
   contents: read
 
 jobs:
+  # What this run has to prove (D-332, `scripts/ci-scope.ts`): whether the change is light — documents, or a version
+  # bump — and, on main, whether the commit's content was already verified by the pull request that brought it. It
+  # reads GitHub and installs nothing, so the heavy jobs wait on it for seconds, not minutes.
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      # The pull request's own run and its jobs: the proof a commit on main is judged against.
+      actions: read
+    outputs:
+      light: ${{ steps.scope.outputs.light }}
+      reuse: ${{ steps.scope.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: bun run ci:scope
+
   # Everything that needs no service: the types, the linters, the build and its budget, the guards. The
   # tests are not here — `schema` runs every one of them once, with coverage, and `verify` below is the
   # check that requires both (#791).
   static:
+    needs: scope
+    # Skipped only for content a pull request already ran this on, tree for tree (D-332).
+    if: needs.scope.outputs.reuse != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Reading the pull request and the issues it names; nothing is written.
@@ -201,8 +235,8 @@ jobs:
   # the longest cell (chat's, about the length of `schema`) and not the sum; the legs are
   # `bun run modules:cells`, made from the modules the build carries, and `module-suites.test.ts` holds the workflow to that.
   module-suites:
-    needs: changes
-    if: needs.changes.outputs.modules == 'true'
+    needs: [changes, scope]
+    if: needs.changes.outputs.modules == 'true' && needs.scope.outputs.reuse != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -307,7 +341,7 @@ jobs:
   # database and a browser, which `bun run verify` deliberately does not. It is not in the
   # repository's required checks until its first week of runs has been read.
   browser:
-    needs: changes
+    needs: [changes, scope]
     if: needs.changes.outputs.browser == 'true'
     # One job per project and part (playwright.config.ts): each has a runner to itself, so the suite fits
     # its time, and the measurements are taken on a machine nothing else is using (D-227) — beside the
@@ -341,7 +375,9 @@ jobs:
 
       # Everything but the files that write a measurement: those run in the other part, alone (D-227).
       - name: the browser tests
-        if: matrix.part == 'suite'
+        # The suite is not run again for content a pull request already ran it on; the measurements are,
+        # on every commit of main, as the baselines are made there (D-332).
+        if: matrix.part == 'suite' && needs.scope.outputs.reuse != 'true'
         run: bun run test:e2e
         env:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
@@ -350,7 +386,7 @@ jobs:
       # The frame on a server that runs no module (D-250): the same build and the same seeded world, served with
       # MODULES=none, in a real browser — no chat route asked for, no chat screen drawn, no console error.
       - name: the browser with no module
-        if: matrix.part == 'suite'
+        if: matrix.part == 'suite' && needs.scope.outputs.reuse != 'true'
         run: bun run test:modules-none
         env:
           PURLAY_E2E_PROJECT: ${{ matrix.project }}
@@ -410,8 +446,8 @@ jobs:
   # Reported, not required: it is not in `verify`'s `needs`, so a red run shows on the pull request
   # and blocks nothing. To promote it once it has been green for a while, see CONTRIBUTING.md §5.
   webkit:
-    needs: changes
-    if: needs.changes.outputs.browser == 'true'
+    needs: [changes, scope]
+    if: needs.changes.outputs.browser == 'true' && needs.scope.outputs.reuse != 'true'
     runs-on: ubuntu-latest
     # Main 2026-11-07: setup plus 271 passing tests exhausted 12 minutes (1.4 + 10.6).
     # Main 2026-11-24: 352 passing tests took 19.4 minutes and the job 20.2, so the run was cancelled with nothing
@@ -465,6 +501,9 @@ jobs:
   # installed. The database comes from docker-compose.yml so the image is
   # declared in exactly one place. (D-45)
   schema:
+    needs: scope
+    # A light change runs `light-suite` instead, and content a pull request already ran this on is not run again (D-332).
+    if: needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'
     runs-on: ubuntu-latest
     # Main 2026-11-12: 25,894 passing tests took 1,108 s; setup, schema and the real performance
     # measurements exhausted the old 20-minute job ceiling during latency trials. Leave headroom
@@ -506,6 +545,26 @@ jobs:
       # the same command `verify` runs. Refuses here if the database is missing.
       - name: every test, with coverage
         run: bun run test:all
+
+  # A light change — documents, or a version bump — has no code for a test to have a different answer about: every
+  # test that needs no database runs, which is every test that can read a document or the version, in place of the
+  # coverage run of all of them (D-332). `scripts/ci-scope.ts` says what is light, and `verify` requires this job
+  # for exactly those changes.
+  light-suite:
+    needs: scope
+    if: needs.scope.outputs.light == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - name: every test that needs no database
+        run: bun run test:light
 
   # Measure on a fresh runner and database, independently of the complete coverage suite.
   # These remain required by verify; a latency regression is visible without waiting for every test.
@@ -598,8 +657,10 @@ jobs:
   verify:
     needs:
       [
+        scope,
         static,
         schema,
+        light-suite,
         api-measurements,
         changes,
         browser,

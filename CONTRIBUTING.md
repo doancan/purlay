@@ -147,6 +147,8 @@ affected. `bun run test:storage` needs the compose Garage and is not part of thi
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
 | `bun run budget:browser -- --project <name>` | Cold load, keystroke to paint and the channel switch as the browser tests measured them for one project, each as its run's median (`PRD.md` §5, D-49), judged as `budget:latency` judges: `-- --keep <file>` fails on a jump past the file's numbers or on a number it has that this run did not measure, and keeps only a run that passed. A run that measured nothing is refused. `-- --remeasure` measures a regression again, the measuring tests alone on one worker, and fails only if it repeats; measuring again that fails is a failure (D-227). Runs in CI's browser jobs, after the measurements; on a developer's machine the tests hold the lines themselves |
 | `bun run ci:changes` | Whether a pull request can move what the browser tests see — the client, the API, a package, the dependencies, `ci.yml` or the browser container action — and so whether CI runs its four browser jobs; whether the API, a package, the dependencies or `ci.yml` changed decides the `modules` and `module-suites` jobs. On main they always run. CI only |
+| `bun run ci:scope` | What a run has to prove (D-332): whether a pull request is *light* — only documents, or `package.json` with its version line the only line that moved — and, on main, whether the commit's content was already verified by the pull request that brought it (the same tree, with `static`, `schema`, the browser and the suites per cell run and green; or a light change on a verified base, as a release is). In CI it writes `light=…` and `reuse=…`; it refuses to guess when GitHub cannot be read |
+| `bun run test:light` | Every test of every root that needs no database — which is every test that can read a document or the version — with no coverage run. What `light-suite` runs for a light change in place of `schema` (D-332); about three minutes |
 | `bun run module:new <id> [--requires a,b] [--optional c,d] [--dry-run]` | Makes a module: its folder, migration set, types, registry lines, the documents' rows, a decision skeleton and its starter mutations, from the templates in `apps/api/src/testing/module-new/`; a second run changes nothing, and a file it cannot edit stops it before anything is written. `docs/MODULE-GUIDE.md` says what to write next (D-294) |
 | `bun run modules:cells` | The `MODULES` values of CI's `module-suites` legs, as JSON, made from the modules the build carries, so the workflow lists no module |
 | `bun run modules:smoke` | A module's removal on a real process, for each cell of the module matrix (D-250): a database of its own migrated with `db:migrate` under the cell's `MODULES`, the API started with it, and every path every manifest claims asked for with every method, signed out. A module left out answers as an unknown path does, byte for byte; one that runs answers something else; the core is up. Needs `DATABASE_URL` (it makes and drops databases beside it). Runs in CI's `modules` job, beside the database job |
@@ -654,6 +656,13 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   missing result is a refusal (`bun run ci:gate`, D-203). The browser jobs may skip only where `changes`
   succeeded and said the change touches nothing they see (D-226). CI only: locally `bun run verify` is
   the same checks and tests in one run, and the browser suite is `bun run test:e2e`.
+- **A run proves only what it has not already been proved** (D-332). `scope` says first whether the change is
+  *light* (documents, or a version bump: `light-suite` runs every test that needs no database in place of
+  `schema`'s coverage run, which no code change could have moved) and, on main, whether the commit's content was
+  already verified (a pull request's `verify` succeeded on the same tree with every heavy job run: `static`,
+  `schema`, the browser suites and the suites per cell are not run again; the measurements and the cheap checks
+  are). A rebase that changed the tree, a skipped heavy job or an unreadable answer is "not verified", and gets the
+  whole run, as before. `verify` accepts each skip only when `scope` succeeded and said so.
 
 ---
 

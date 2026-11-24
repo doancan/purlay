@@ -12,13 +12,20 @@
  * value, and `module-suites`, the suites run once per cell, and `mutations-changed`, the mutations a pull request adds or changes: a change they cannot see skips them, and only then is their skip a pass — when `changes` succeeded
  * and said so. Anything else, a skip included, is a refusal.
  *
+ * A *light* change (documents, or a version bump) skips `schema`'s coverage run for `light-suite`, which runs every test
+ * that needs no database; and a commit on main whose content was *already verified* skips the heavy jobs (D-332). Each skip
+ * is a pass only when `scope` succeeded and said so, and `light-suite` is itself judged: it must have succeeded for
+ * the change it was run for, and may be skipped only when the change was not light.
+ *
  *   bun run ci:gate        in CI: reads `NEEDS`, the job's `toJSON(needs)`
  */
 
 /** The jobs `verify` stands for. `ci.yml`'s `needs:` for the job is bound to this list by a test. */
 export const GATED = [
+  'scope',
   'static',
   'schema',
+  'light-suite',
   'api-measurements',
   'changes',
   'browser',
@@ -28,29 +35,46 @@ export const GATED = [
   'mutations-changed',
 ] as const;
 
+/** One reason a skip is right: `job` succeeded and its output `output` is `value`. */
+interface Skip {
+  readonly job: string;
+  readonly output: string;
+  readonly value: 'true' | 'false';
+}
+
 /**
- * The jobs a change can rightly skip, each with the output of `changes` that says so: the browser jobs by `browser`, and the
- * two that start the API (the matrix on a started process, and the suites per cell) by `modules`, and the mutations a pull request
- * adds or changes by `mutations`.
+ * The jobs that can rightly be skipped, each with every output that says so: the browser jobs by `browser`, the two
+ * that start the API (the matrix on a started process, and the suites per cell) by `modules`, the mutations a pull
+ * request adds or changes by `mutations`; `schema` by a *light* change, or by content already verified, and `static`
+ * and `module-suites` by the latter; `light-suite` by a change that was not light.
  */
-const SKIPPABLE: Readonly<Record<string, string>> = {
-  browser: 'browser',
-  modules: 'modules',
-  'module-suites': 'modules',
-  'cohort-measurements': 'modules',
-  'mutations-changed': 'mutations',
+const SKIPPABLE: Readonly<Record<string, readonly Skip[]>> = {
+  browser: [{ job: 'changes', output: 'browser', value: 'false' }],
+  modules: [{ job: 'changes', output: 'modules', value: 'false' }],
+  'module-suites': [
+    { job: 'changes', output: 'modules', value: 'false' },
+    { job: 'scope', output: 'reuse', value: 'true' },
+  ],
+  'cohort-measurements': [{ job: 'changes', output: 'modules', value: 'false' }],
+  'mutations-changed': [{ job: 'changes', output: 'mutations', value: 'false' }],
+  static: [{ job: 'scope', output: 'reuse', value: 'true' }],
+  schema: [
+    { job: 'scope', output: 'light', value: 'true' },
+    { job: 'scope', output: 'reuse', value: 'true' },
+  ],
+  'light-suite': [{ job: 'scope', output: 'light', value: 'false' }],
 };
 
-/** Whether `changes` succeeded and said `output` is `false`: this change cannot move what that job sees. */
-const notNeeded = (jobs: Record<string, unknown>, output: string): boolean => {
-  const changes = jobs['changes'];
-  if (typeof changes !== 'object' || changes === null) return false;
-  const { result, outputs } = changes as { result?: unknown; outputs?: unknown };
+/** Whether `skip.job` succeeded and said its output is `skip.value`: this change cannot move what that job sees. */
+const said = (jobs: Record<string, unknown>, skip: Skip): boolean => {
+  const job = jobs[skip.job];
+  if (typeof job !== 'object' || job === null) return false;
+  const { result, outputs } = job as { result?: unknown; outputs?: unknown };
   return (
     result === 'success' &&
     typeof outputs === 'object' &&
     outputs !== null &&
-    (outputs as Record<string, unknown>)[output] === 'false'
+    (outputs as Record<string, unknown>)[skip.output] === skip.value
   );
 };
 
@@ -77,9 +101,8 @@ export const judge = (needs: string): string[] => {
       typeof job === 'object' && job !== null && 'result' in job && typeof job.result === 'string'
         ? job.result
         : '';
-    const skippable = SKIPPABLE[name];
     const skipIsRight =
-      skippable !== undefined && result === 'skipped' && notNeeded(jobs, skippable);
+      result === 'skipped' && (SKIPPABLE[name] ?? []).some((skip) => said(jobs, skip));
     if (result !== 'success' && !skipIsRight) {
       reasons.push(`${name} ended ${result === '' ? 'with no result' : result}`);
     }
