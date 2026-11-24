@@ -4,7 +4,7 @@
  * slowdown injected into every trial of the second.
  */
 import { describe, expect, test } from 'bun:test';
-import { RECORDED_LOADED_RUNS, RECORDED_RUNS } from './budget-latency-noise';
+import { RECORDED_LOADED_FLOORS, RECORDED_RUNS } from './budget-latency-noise';
 import { judge, summarizeTrials, type Latency } from './budget-latency';
 
 /** Pairs compared: enough that 1% is a hundred pairs, not one. */
@@ -69,54 +69,48 @@ describe('the latency gate, against the noise CI recorded', () => {
   });
 });
 
-describe('the rule for issues’ list with chat busy, against the noise a loaded laptop made', () => {
+describe('the rule for issues’ list with chat busy, against the noise CI’s runners made', () => {
   const chatTrials = (ms: number): readonly Latency[] =>
     Array.from({ length: 3 }, () => ({ ackP95Ms: ms, fanOutP95Ms: ms, messages: 60 }));
-  const summary = (
-    lowest: number,
-    highest: number,
-    slowBy: number,
-  ): ReturnType<typeof summarizeTrials> => ({
+  const summary = (floor: number): ReturnType<typeof summarizeTrials> => ({
     ...summarizeTrials(chatTrials(30)),
-    loaded: {
-      'issues/list': {
-        p95Ms: lowest + slowBy,
-        trials: [lowest + slowBy, highest + slowBy, highest + slowBy],
-      },
-    },
+    loaded: { 'issues/list': { p95Ms: floor, trials: [floor, floor, floor] } },
   });
-  /** Every ordered pair of different runs: the second, slowed by `slowBy`, judged against the first. */
-  const pairs = (slowBy: number): { readonly regressed: number; readonly total: number } => {
+  /** Every ordered pair of different measurements: the second, slowed as `slow`, judged against the first. */
+  const pairs = (
+    slow: (value: number) => number,
+  ): { readonly regressed: number; readonly total: number } => {
     let regressed = 0;
     let total = 0;
-    for (const [i, before] of RECORDED_LOADED_RUNS.entries()) {
-      for (const [j, now] of RECORDED_LOADED_RUNS.entries()) {
+    for (const [i, before] of RECORDED_LOADED_FLOORS.entries()) {
+      for (const [j, now] of RECORDED_LOADED_FLOORS.entries()) {
         if (i === j) continue;
         total += 1;
-        const verdict = judge(
-          summary(now.lowest, now.highest, slowBy),
-          summary(before.lowest, before.highest, 0),
-        );
-        if (verdict.regressed) regressed += 1;
+        if (judge(summary(slow(now)), summary(before)).regressed) regressed += 1;
       }
     }
     return { regressed, total };
   };
 
-  test('the runs are what they were taken for: a floor that moved from 9 to 22 ms with the load', () => {
-    expect(RECORDED_LOADED_RUNS).toHaveLength(11);
-    expect(Math.min(...RECORDED_LOADED_RUNS.map((run) => run.lowest))).toBeLessThan(10);
-    expect(Math.max(...RECORDED_LOADED_RUNS.map((run) => run.lowest))).toBeGreaterThan(22);
+  test('the measurements are what they were taken for: a floor that moved from 15 to 36 ms between runners', () => {
+    expect(RECORDED_LOADED_FLOORS).toHaveLength(36);
+    expect(Math.min(...RECORDED_LOADED_FLOORS)).toBeLessThan(16);
+    expect(Math.max(...RECORDED_LOADED_FLOORS)).toBeGreaterThan(35);
   });
 
-  test('identical code fails a single look in under 5% of pairs, even under that load (a regression must happen twice, D-227)', () => {
-    const { regressed, total } = pairs(0);
-    expect(total).toBe(110);
-    expect(regressed / total).toBeLessThan(0.05);
+  test('identical code fails a single look in under 1% of pairs, which D-227’s second look then has to repeat', () => {
+    const { regressed, total } = pairs((value) => value);
+    expect(total).toBe(1260);
+    expect(regressed / total).toBeLessThan(0.01);
   });
 
-  test('a slowdown of 25 ms in every trial fails in every pair', () => {
-    const { regressed, total } = pairs(25);
-    expect(regressed).toBe(total);
+  test('a slowdown of 40 ms in every trial fails in at least 99% of pairs', () => {
+    const { regressed, total } = pairs((value) => value + 40);
+    expect(regressed / total).toBeGreaterThan(0.99);
+  });
+
+  test('a tripling in every trial fails in at least 90% of pairs', () => {
+    const { regressed, total } = pairs((value) => value * 3);
+    expect(regressed / total).toBeGreaterThan(0.9);
   });
 });

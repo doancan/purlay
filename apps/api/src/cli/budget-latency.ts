@@ -59,6 +59,13 @@ const NOISE_FLOOR_MS = 20;
  * machine is. A jump must clear that spread with room, or one runner being quicker than the last one is a regression.
  */
 export const FLOOR_SPREAD_MS = 10;
+/**
+ * The same allowance for a hot path timed with the others busy (D-333). Measured: the lowest of three trials of
+ * issues' list with chat busy, in the 36 measurements CI's `api-latency` artifacts still kept (2026-11-20 to
+ * 2026-11-24, main's and each candidate's), ran from 15.1 to 35.8 ms, a spread of 20.7 ms, against 7.2 ms for chat's ACK.
+ * Judged with `FLOOR_SPREAD_MS`, identical code failed 15.2% of the ordered pairs of those 36; with this, 0.2%.
+ */
+export const LOADED_FLOOR_SPREAD_MS = 20;
 
 /**
  * Starvation, not slowness: with issues busy chat's p95 may be this many times the quiet p95 of the same run before
@@ -72,15 +79,19 @@ export const FLOOR_SPREAD_MS = 10;
 export const STARVATION_FACTOR = 8;
 
 /** What a number may be, given the one recorded before it: the most of the factor, the spread of the floor and the noise floor. */
-export const limitOf = (before: number, factor: number = REGRESSION_FACTOR): number =>
-  Math.max(before * factor, before + FLOOR_SPREAD_MS, NOISE_FLOOR_MS);
+export const limitOf = (
+  before: number,
+  factor: number = REGRESSION_FACTOR,
+  spread: number = FLOOR_SPREAD_MS,
+): number => Math.max(before * factor, before + spread, NOISE_FLOOR_MS);
 
 /** D-49's one rule for a noisy number: it regressed when it is past what `limitOf` allows. */
 export const jumped = (
   value: number,
   before: number | undefined,
   factor: number = REGRESSION_FACTOR,
-): boolean => before !== undefined && value > limitOf(before, factor);
+  spread: number = FLOOR_SPREAD_MS,
+): boolean => before !== undefined && value > limitOf(before, factor, spread);
 
 /**
  * What is measured with a module busy is connections held, not requests served: the people are closed-loop clients
@@ -197,12 +208,12 @@ export const judge = (
   });
   const loaded = Object.entries(now.loaded ?? {}).map(([name, path]) => {
     const before = baseline?.loaded?.[name]?.p95Ms;
-    const worse = jumped(path.p95Ms, before, factor);
+    const worse = jumped(path.p95Ms, before, factor, LOADED_FLOOR_SPREAD_MS);
     if (worse) regressed = true;
     const against =
       before === undefined
         ? ', no number recorded yet'
-        : `, was ${before.toFixed(1)} ms, limit ${limitOf(before, factor).toFixed(1)} ms`;
+        : `, was ${before.toFixed(1)} ms, limit ${limitOf(before, factor, LOADED_FLOOR_SPREAD_MS).toFixed(1)} ms`;
     return `${name} with the others busy p95: ${path.p95Ms.toFixed(1)} ms (${String(READS_PER_TRIAL)} reads${against})${worse ? ' — REGRESSED' : ''}`;
   });
   return { regressed, lines: [...chat, ...loaded] };

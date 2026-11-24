@@ -91,24 +91,13 @@ export const RECORDED_RUNS: readonly RecordedRun[] = [
 ];
 
 /**
- * What `budget:latency` recorded for issues' list with chat busy, on a laptop under heavy load (ten cores, load average
- * about 20, six more busy loops): eleven gate runs of three trials, as the lowest and the highest p95 of each run's
- * trials in milliseconds (the log keeps the range, not the middle trial). Local, not CI's: CI's `api-latency` artifacts
- * keep the trials of this metric from now on, and these are replaced by them once there are enough.
+ * What `budget:latency` recorded for issues' list with chat busy on CI's runners (D-333): the lowest p95 of the three
+ * trials of each measurement, in milliseconds, from every `api-latency` artifact still kept on 2026-11-24 that holds
+ * the number (the artifacts of 2026-11-20 to 2026-11-24; main's measurement and the candidate's of each run, 36 in all).
+ * Different pull requests, but code that did not touch the list or the pool: the noise a runner makes, as it made it.
  */
-export const RECORDED_LOADED_RUNS: readonly {
-  readonly lowest: number;
-  readonly highest: number;
-}[] = [
-  { lowest: 12.4, highest: 15.6 },
-  { lowest: 13.8, highest: 22.0 },
-  { lowest: 21.4, highest: 28.6 },
-  { lowest: 14.1, highest: 46.6 },
-  { lowest: 12.4, highest: 14.5 },
-  { lowest: 9.8, highest: 19.3 },
-  { lowest: 8.9, highest: 14.4 },
-  { lowest: 14.9, highest: 16.9 },
-  { lowest: 11.5, highest: 20.2 },
-  { lowest: 22.2, highest: 25.8 },
-  { lowest: 20.0, highest: 23.0 },
+export const RECORDED_LOADED_FLOORS: readonly number[] = [
+  28.3, 31.0, 24.2, 27.8, 15.5, 17.2, 18.3, 15.1, 22.9, 20.6, 20.2, 17.2, 27.2, 24.9, 28.7, 24.7,
+  34.0, 32.3, 32.4, 35.8, 27.8, 19.9, 33.4, 20.2, 16.2, 24.5, 15.2, 17.2, 33.6, 28.6, 16.1, 19.9,
+  20.4, 31.3, 18.9, 30.2,
 ];
