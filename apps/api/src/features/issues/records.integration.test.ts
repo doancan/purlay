@@ -13,9 +13,9 @@ import { compose, type BundledModule } from '../../composition';
 import { noSuspension, type Suspension } from '../../platform/suspended-modules';
 import type { ModuleRef, ResolvedRef } from '../../platform/ports/record-ref';
 import { NOW } from '../../testing/doubles';
-import { aRoom } from '../../testing/rooms';
 import { withinRequest } from '../../platform/logging';
 import { aGrant } from '../../testing/facts';
+import { aUniqueSlug, aUserRow } from '../../testing/users';
 import { requireWorkspaceMembership } from '../../platform/tenancy';
 import { issuesModule } from './module';
 
@@ -75,9 +75,19 @@ const resolved = async (
   return await composition.portsFor('linking', db).resolveRef(ref, context);
 };
 
+/** A workspace and its owner, from the core's tables alone: nothing of chat, so the issues-only cell runs this suite. */
 const aWorkspace = async (db: Executor): Promise<Asker> => {
-  const room = await aRoom(db, ['alice']);
-  return { workspaceId: room.workspaceId, userId: room.members['alice']?.userId ?? '' };
+  const alice = await aUserRow(db, 'alice');
+  const workspace = await db
+    .insertInto('workspaces')
+    .values({ name: 'Issues', slug: aUniqueSlug('issues') })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto('workspace_members')
+    .values({ workspace_id: workspace.id, user_id: alice.userId, role: 'owner' })
+    .execute();
+  return { workspaceId: workspace.id, userId: alice.userId };
 };
 
 describe('integration: an issue as the target of a link', () => {
