@@ -15,7 +15,8 @@ test.describe('the keyboard', () => {
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.keyboard.press('Tab');
-    expect(await focused(page)).toContain('Skip to the conversation');
+    // /sign-in holds no conversation: the link says it skips to the content (a channel's says conversation).
+    expect(await focused(page)).toContain('Skip to the content');
     await page.keyboard.press('Enter');
     await expect(page.locator('#main')).toBeFocused();
   });
