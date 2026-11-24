@@ -129,6 +129,15 @@ const pullsOf = (
 const treeOfCommit = (repository: string, commit: string, spawn: Run): string =>
   ask(spawn, [`repos/${repository}/git/commits/${commit}`, '--jq', '.tree.sha']);
 
+/**
+ * Whether a job *ran and succeeded*: a plain job by its name, a matrix by every one of its legs, which GitHub names
+ * `browser (chromium-dark, suite)`. A name with no job, and a matrix with one leg that did not succeed, did not run.
+ */
+const ran = (jobs: ReadonlyMap<string, string>, name: string): boolean => {
+  const legs = [...jobs].filter(([job]) => job === name || job.startsWith(`${name} (`));
+  return legs.length > 0 && legs.every(([, conclusion]) => conclusion === 'success');
+};
+
 /** What a pull request's own newest finished `ci` run proved about its head, or null when it proved nothing. */
 const evidenceOf = (
   repository: string,
@@ -154,7 +163,7 @@ const evidenceOf = (
       .map((line) => line.split('\t') as [string, string]),
   );
   if (jobs.get('verify') !== 'success') return null;
-  if (HEAVY.every((name) => jobs.get(name) === 'success')) return { kind: 'full', base };
+  if (HEAVY.every((name) => ran(jobs, name))) return { kind: 'full', base };
   if (jobs.get('light-suite') === 'success' && jobs.get('schema') === 'skipped') {
     return { kind: 'light', base };
   }
