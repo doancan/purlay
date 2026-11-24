@@ -208,6 +208,48 @@ describe('integration: pinning', () => {
   });
 });
 
+describe('integration: a workspace’s other channel', () => {
+  test('a pin in a channel of the same workspace, which the reader can also see, is not listed here', async () => {
+    await withRollback(async (db) => {
+      const here = await aRoom(db, ['alice']);
+      const other = await db
+        .insertInto('channels')
+        .values({ workspace_id: here.workspaceId, name: 'random', type: 'public' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('channel_members')
+        .values({
+          channel_id: other.id,
+          user_id: idOf(here, 'alice'),
+          joined_at: new Date('2026-01-01T00:00:00.000Z'),
+        })
+        .execute();
+      const elsewhere = anId();
+      await db
+        .insertInto('messages')
+        .values({
+          id: elsewhere,
+          workspace_id: here.workspaceId,
+          channel_id: other.id,
+          sender_id: idOf(here, 'alice'),
+          content: 'pinned in the other channel',
+        })
+        .execute();
+      await db
+        .insertInto('pinned_messages')
+        .values({
+          message_id: elsewhere,
+          channel_id: other.id,
+          workspace_id: here.workspaceId,
+          pinned_by: idOf(here, 'alice'),
+        })
+        .execute();
+      expect(await channelPins(db, contextOf(here, 'alice'))).toEqual([]);
+    });
+  });
+});
+
 describe('integration: at most PINS_MAX a channel', () => {
   const pinned = async (db: Executor, room: Room, count: number): Promise<string[]> => {
     const ids = Array.from({ length: count }, () => anId());
