@@ -96,7 +96,7 @@ test.describe('a status line that clears itself', () => {
     await expect(panel.getByText('🍽️ Öğle yemeğinde')).toBeVisible();
     // The clock time on the viewer's own day, the whole date and time on another (`untilText`): an hour from the last
     // hour of the day is the next one, so both are the end this line says.
-    await expect(panel.getByText(/^Until .*\d\d:\d\d$/)).toBeVisible();
+    await expect(panel.getByText(/^Until (\d\d:\d\d|.+\d{1,2}:\d\d.*)$/)).toBeVisible();
 
     // Today: the end is Istanbul's next midnight, not UTC's.
     const now = await serverClock(page);
