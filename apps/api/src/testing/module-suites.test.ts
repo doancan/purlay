@@ -13,7 +13,7 @@ import {
   type Say,
 } from './module-suites';
 import { matrixSettings } from './module-cells-matrix';
-import { needsReader } from './module-needs';
+import { declaredNeeds, needsReader } from './module-needs';
 
 const CARRIED = bundledModules.map((module) => module.manifest.id);
 
@@ -93,6 +93,21 @@ describe('the suites of the repository', () => {
       const { runs } = partition(suites, needsOf, cell.ids);
       for (const file of independent) expect(runs).toContain(file);
     }
+  });
+
+  // The same defect, as a rule: a suite that declares what it needs needs nothing more, so a fixture of another module
+  // cannot move a module's own suite out of its cell (it did for issues' search and records suites).
+  test('need nothing beyond what they declare, when they declare', () => {
+    const needsOf = needsReader(CARRIED);
+    const wider = suites.flatMap((file) => {
+      const declared = [...new Set(declaredNeeds(readFileSync(file, 'utf8')))].sort();
+      if (declared.length === 0) return [];
+      const needs = needsOf(file);
+      return needs.every((id) => declared.includes(id))
+        ? []
+        : [`${file} declares [${declared.join(',')}] and needs [${needs.join(',')}]`];
+    });
+    expect(wider).toEqual([]);
   });
 
   // A fixture that builds a channel makes a suite need chat (`module-needs.ts`), which once left issues' own search
