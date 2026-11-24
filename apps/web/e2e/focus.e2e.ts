@@ -24,10 +24,27 @@ const ringOfFocused = async (
       const style = getComputedStyle(node);
       return style.outlineStyle === 'none' ? 0 : Number.parseFloat(style.outlineWidth);
     };
+    // The composer's box draws its focus as its own edge turned a firmer grey, not as an outline: it counts as the
+    // indicator when the edge is the focused colour (`composer-focus`) and not the resting one.
+    const composerEdge = ((): number => {
+      const card = element.closest<HTMLElement>('[data-composer-card]');
+      if (card === null) return 0;
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--composer-focus)';
+      document.body.append(probe);
+      const focusedColour = getComputedStyle(probe).color;
+      probe.remove();
+      return getComputedStyle(card).borderTopColor === focusedColour
+        ? Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--stroke-focus'),
+          ) || 2
+        : 0;
+    })();
     const ring = Math.max(
       width(element),
       element.parentElement === null ? 0 : width(element.parentElement),
       element.parentElement?.parentElement == null ? 0 : width(element.parentElement.parentElement),
+      composerEdge,
     );
     const name = element.getAttribute('aria-label') ?? element.textContent.trim().slice(0, 40);
     // An element with a line of its own that keeps the ring outside it, a gap between: two lines, which
