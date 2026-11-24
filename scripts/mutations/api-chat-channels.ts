@@ -528,7 +528,10 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/channels/guard.ts',
     find: "  visibleChannels(executor, context.userId)\n    .where('channels.workspace_id', '=', context.workspaceId)\n    .select('channels.id');",
     replace: "  visibleChannels(executor, context.userId)\n    .select('channels.id');",
-    tests: ['apps/api/src/features/chat/messages/followed.integration.test.ts'],
+    tests: [
+      'apps/api/src/features/chat/messages/followed.integration.test.ts',
+      'apps/api/src/features/chat/channels/visible-channel-ids.integration.test.ts',
+    ],
   },
   {
     id: 'group-filled-in-again',
