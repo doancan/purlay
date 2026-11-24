@@ -19,6 +19,7 @@ import {
   lowestOf,
   REGRESSION_FACTOR,
   FLOOR_SPREAD_MS,
+  LOADED_FLOOR_SPREAD_MS,
   judge,
   limitOf,
   spreadOf,
@@ -590,15 +591,16 @@ describe('every module’s hot path, with the others busy (D-250 rule 6)', () =>
     expect(result.code).toBe(1);
     expect(asked).toHaveLength(6);
     expect(result.lines.join('\n')).toContain(
-      'issues/list with the others busy p95: 40.0 ms (60 reads, was 10.0 ms, limit 20.0 ms) — REGRESSED',
+      'issues/list with the others busy p95: 40.0 ms (60 reads, was 10.0 ms, limit 30.0 ms) — REGRESSED',
     );
     expect(await Bun.file(file).text()).toBe(original);
   });
 
-  test('the limit is the rule of D-267: the factor, the spread of the floor and the noise floor', async () => {
+  test('the limit is the rule of D-267 with the wider spread of D-333: the factor, the spread of the floor and the noise floor', async () => {
+    // At 10 ms the spread of a busy path's floor (D-333) allows 30; at 40 ms a half as much again is the larger.
     for (const [before, now, regressed] of [
-      [10, 20, false],
-      [10, 20.1, true],
+      [10, 10 + LOADED_FLOOR_SPREAD_MS, false],
+      [10, 10 + LOADED_FLOOR_SPREAD_MS + 0.1, true],
       [40, 60, false],
       [40, 60.1, true],
     ] as const) {

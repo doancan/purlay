@@ -581,7 +581,7 @@ In detail:
   people send messages one at a time with a pause between, more than chat's share of connections, while `messages` is locked in
   turns, so that chat holds all of its share throughout. It is judged as the quiet trials are (D-267): the lowest of three
   independent processes' p95 against the number recorded for it in the baseline file (`loaded`, `issues/list`), failing past
-  the factor of 1.5, 10 ms and 20 ms, measured again once (D-227); a baseline from before it existed is not compared and the
+  the factor of 1.5, 20 ms (the spread of this path's floor on CI's runners, D-333) and 20 ms, measured again once (D-227); a baseline from before it existed is not compared and the
   run records one. A module added
   without a line in the table fails `budget-latency.test.ts`, and one with no hot path is a line there with its reason
   (empty today), as for `module-budgets.test.ts`; the gate takes about fifteen seconds more. **Not measured:** the CPU and the
