@@ -37,7 +37,11 @@ export const needsModules = (event: string, files: readonly string[]): boolean =
 export const needsBrowser = (event: string, files: readonly string[]): boolean =>
   event !== 'pull_request' || files.some((file) => BROWSER.test(file));
 
-type Run = (command: readonly string[]) => { exitCode: number; stdout: string; stderr: string };
+export type Run = (command: readonly string[]) => {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
 
 export const run: Run = (command) => {
   const done = Bun.spawnSync([...command]);

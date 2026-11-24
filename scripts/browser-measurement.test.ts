@@ -98,7 +98,8 @@ describe('the browser job', () => {
 
   test('runs the suite without the measurements, and the measurements alone on one worker', () => {
     expect(suite).toBeGreaterThan(-1);
-    expect(steps[suite]?.if).toBe("matrix.part == 'suite'");
+    // The suite is not run again for content a pull request ran it on (D-332); the measurements always are.
+    expect(steps[suite]?.if).toBe("matrix.part == 'suite' && needs.scope.outputs.reuse != 'true'");
     expect(steps[suite]?.env?.['PURLAY_E2E_PERFORMANCE']).toBe('skip');
     expect(alone).toBeGreaterThan(-1);
     expect(steps[alone]?.if).toBe("matrix.part == 'measurements'");
