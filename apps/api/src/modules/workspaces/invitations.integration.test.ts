@@ -31,6 +31,7 @@ import {
   revokeInvitation as revokeIn,
 } from './invitations';
 import { changeRole, removeMember } from './members';
+import { requireInvitationManager } from './invitation-manager';
 import type { Clock } from '../../platform/clock';
 import type { CreatedInvitation } from '@purlay/types';
 import { requireChannelById } from '../../features/chat/channels/guard';
@@ -142,6 +143,19 @@ describe('integration: making and revoking a link', () => {
       expect(await refusal(revokeInvitation(db, clock, member, made.invitation.id))).toBe(
         'FORBIDDEN',
       );
+    });
+  });
+
+  test('the rule that only an owner or an admin manages them is asked of the role itself, apart from the capability check that repeats it', async () => {
+    await withRollback(async (db) => {
+      const room = await aRoom(db, ['in-owner3', 'in-member3']);
+      const [owner, member] = [await as(db, room, 'in-owner3'), await as(db, room, 'in-member3')];
+      expect(() => {
+        requireInvitationManager(member);
+      }).toThrow('Only an owner or an admin manages invitations.');
+      expect(() => {
+        requireInvitationManager(owner);
+      }).not.toThrow();
     });
   });
 
