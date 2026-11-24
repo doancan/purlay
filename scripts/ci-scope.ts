@@ -73,6 +73,19 @@ const ask = (spawn: Run, args: readonly string[]): string => {
   return done.stdout.trim();
 };
 
+/** A file as `gh` writes it: a field GitHub left out is `null`, where `ChangedFile` leaves it out. */
+interface RawChangedFile {
+  readonly filename: string;
+  readonly previous_filename: string | null;
+  readonly patch: string | null;
+}
+
+const changedFileOf = (raw: RawChangedFile): ChangedFile => ({
+  filename: raw.filename,
+  previous_filename: raw.previous_filename ?? undefined,
+  patch: raw.patch ?? undefined,
+});
+
 /** The files of a pull request, with their patches. */
 export const filesWithPatches = (
   repository: string,
@@ -88,7 +101,7 @@ export const filesWithPatches = (
   return listed
     .split('\n')
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as ChangedFile);
+    .map((line) => changedFileOf(JSON.parse(line) as RawChangedFile));
 };
 
 interface Evidence {
