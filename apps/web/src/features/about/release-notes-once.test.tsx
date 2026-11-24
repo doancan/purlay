@@ -88,8 +88,8 @@ describe('the release notes after an update', () => {
     const headings = within(dialog)
       .getAllByRole('heading', { level: 3 })
       .map((heading) => heading.textContent);
-    expect(headings).toEqual(['Featured', 'New2', 'Fixed1', 'Security1']);
-    // Every other category is a plain list under a quiet heading — a dot, a word, a count — never a pill that
+    expect(headings).toEqual(['Featured', 'New', 'Fixed', 'Security']);
+    // Every other category is a plain list under a quiet heading — a dot and a word — never a pill that
     // would read as a button: there is no button in the window but the ones that act.
     expect(
       within(dialog)
@@ -105,12 +105,9 @@ describe('the release notes after an update', () => {
     // The area is a small label above the words; a bullet with none is its words alone.
     expect(within(dialog).getByText('Messages').tagName).toBe('SPAN');
     expect(within(dialog).getByText('A bullet that names no area')).toBeDefined();
-    // It is a link out to the release, in a new tab, and says so.
-    const github = within(dialog).getByRole('link', { name: /View on GitHub/ });
-    expect(github.getAttribute('href')).toBe(
-      'https://github.com/doancan/purlay/releases/tag/v1.0.0',
-    );
-    expect(github.getAttribute('target')).toBe('_blank');
+    // The window offers Close and Got it only: no link out, and no count beside a category's word.
+    expect(within(dialog).queryByRole('link')).toBeNull();
+    expect(within(added).getByRole('heading', { level: 3 }).textContent).toBe('New');
     // Its scrollbar is drawn under the pointer only.
     expect(within(dialog).getByRole('region').className).toContain('scrollbar-hover');
     expect(within(dialog).getByText('day dividers').tagName).toBe('CODE');

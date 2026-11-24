@@ -33,10 +33,12 @@ const ringOfFocused = async (
     // An element with a line of its own that keeps the ring outside it, a gap between: two lines, which
     // reads as a mistake. The ring takes the line's place (the composer's way) — it is not offset outward.
     const own = getComputedStyle(element);
+    // A line drawn in the element's own fill (a filled button's) is not a second line: the ring beside it is the only edge.
     const hasLine = ['Top', 'Right', 'Bottom', 'Left'].some(
       (side) =>
         Number.parseFloat(own.getPropertyValue(`border-${side.toLowerCase()}-width`)) > 0 &&
-        own.getPropertyValue(`border-${side.toLowerCase()}-style`) !== 'none',
+        own.getPropertyValue(`border-${side.toLowerCase()}-style`) !== 'none' &&
+        own.getPropertyValue(`border-${side.toLowerCase()}-color`) !== own.backgroundColor,
     );
     const besideItsLine =
       hasLine && own.outlineStyle !== 'none' && Number.parseFloat(own.outlineOffset) > 0;
@@ -110,6 +112,68 @@ test.describe('focus', () => {
     expect(unringed).toEqual([]);
     // One line, not a line and a ring beside it.
     expect(doubled).toEqual([]);
+  });
+
+  test('every element already holds the ring colour, so a ring never fades in from the text colour', async ({
+    page,
+    signIn,
+    room,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    await signIn();
+    await page.goto(made.path);
+    await shellReady(page);
+    // An outline's colour starts as the text's own, and `transition-colors` animates `outline-color`: a ring switched
+    // on by `:focus-visible` faded from near-black (light) or near-white (dark) to the blue, flashing the wrong colour at
+    // every Tab stop. The browser tests run with reduced motion, so the fade itself cannot be seen here; what makes it
+    // possible can: an element whose colour is not the ring's *before* it is focused. Held for the elements that take
+    // focus, and again after a pointer press, which switches the ring off with a rule of its own.
+    const colours = async (): Promise<{ expected: string; stray: string[]; counted: number }> =>
+      await page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--focus-ring)';
+        document.body.append(probe);
+        const expected = getComputedStyle(probe).color;
+        probe.remove();
+        const stops = [
+          ...document.querySelectorAll<HTMLElement>(
+            'a[href], button, input, textarea, select, [tabindex]',
+          ),
+        ];
+        const stray = stops
+          .filter((element) => getComputedStyle(element).outlineColor !== expected)
+          .map(
+            (element) =>
+              `${element.tagName.toLowerCase()} ${getComputedStyle(element).outlineColor}`,
+          );
+        return { expected, stray: [...new Set(stray)], counted: stops.length };
+      });
+    const before = await colours();
+    expect(before.counted).toBeGreaterThan(10);
+    expect(before.stray).toEqual([]);
+
+    // A stop the keyboard reached, then a pointer press: the rule that withholds the ring from it must leave its colour.
+    await page.keyboard.press('Tab');
+    const reached = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (element === null || element === document.body) return null;
+      const style = getComputedStyle(element);
+      return { style: style.outlineStyle, colour: style.outlineColor };
+    });
+    // The Tab landed on a stop and drew its ring, in the ring's colour (Firefox's own focus ring resets it unless
+    // the rule says it again): what the pointer press then withholds was really there.
+    expect(reached).toEqual({ style: 'solid', colour: before.expected });
+    await page.evaluate(() => {
+      document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    await expect(page.locator('html')).toHaveAttribute('data-pointer', '');
+    const hidden = await page.evaluate(() => {
+      const element = document.activeElement;
+      return element === null ? null : getComputedStyle(element).outlineStyle;
+    });
+    expect(hidden).toBe('none');
+    const after = await colours();
+    expect(after.stray).toEqual([]);
   });
 
   test('the feed is one Tab stop: its row, then that row’s own controls, then the composer (D-168)', async ({

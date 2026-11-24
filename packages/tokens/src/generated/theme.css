@@ -39,6 +39,10 @@
   --color-avatar-5: var(--avatar-5);
   --color-avatar-6: var(--avatar-6);
   --color-focus-ring: var(--focus-ring);
+  --color-border-default: var(--border-default);
+  --color-composer-rest: var(--composer-rest);
+  --color-composer-hover: var(--composer-hover);
+  --color-composer-focus: var(--composer-focus);
   --color-composer-edge: var(--composer-edge);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
@@ -107,6 +111,7 @@
   --height-attachment-preview: var(--size-attachment-preview);
   --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
+  --height-switcher: var(--size-switcher);
   --height-row: var(--size-row);
   --breakpoint-narrow: 900px;
 
@@ -273,6 +278,26 @@
 @utility size-icon-lg {
   width: var(--size-icon-lg);
   height: var(--size-icon-lg);
+}
+
+@utility size-switcher {
+  width: var(--size-switcher);
+  height: var(--size-switcher);
+}
+
+@utility size-spark-xs {
+  width: var(--size-spark-xs);
+  height: var(--size-spark-xs);
+}
+
+@utility size-spark-sm {
+  width: var(--size-spark-sm);
+  height: var(--size-spark-sm);
+}
+
+@utility size-spark-lg {
+  width: var(--size-spark-lg);
+  height: var(--size-spark-lg);
 }
 
 @utility size-avatar {

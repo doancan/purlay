@@ -34,6 +34,10 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-attachment': ['--container-attachment', '--height-attachment'],
   // A control is a height, and a square for an icon-only one (the send button).
   'size-control': ['--height-control', '--size-control'],
+  'size-switcher': ['--height-switcher', '--size-switcher'],
+  'size-spark-xs': ['--size-spark-xs'],
+  'size-spark-sm': ['--size-spark-sm'],
+  'size-spark-lg': ['--size-spark-lg'],
   'size-header': '--height-header',
   // A touch target is a height and a minimum width: a row is as wide as its container, an icon button is a square.
   'size-touch': ['--height-touch', '--container-touch', '--size-touch'],

@@ -12,11 +12,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { TwoFactorCard } from '../settings/pages/two-factor-card';
 import { LogoMark } from '../shell/notice';
 import { useSignOut } from '../shell/sign-out';
 import { IndependentSignInNotice } from '../settings/pages/company-parts';
+import { StandaloneScreen } from '../shell/standalone';
 
 export const TwoFactorEnrolment = ({
   email,
@@ -30,7 +30,7 @@ export const TwoFactorEnrolment = ({
   const client = useQueryClient();
   const signOut = useSignOut();
   return (
-    <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+    <StandaloneScreen>
       <section
         aria-labelledby="two-factor-enrolment-title"
         className="flex w-full max-w-dialog flex-col gap-6"
@@ -66,6 +66,6 @@ export const TwoFactorEnrolment = ({
           </Button>
         </div>
       </section>
-    </Main>
+    </StandaloneScreen>
   );
 };

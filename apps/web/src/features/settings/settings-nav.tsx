@@ -10,6 +10,7 @@ import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link, useRoute } from '../../router/router-provider';
 import { cn } from '../../ui/cn';
+import { navRowAwayClasses, navRowClasses, navRowHereClasses } from '../../ui/nav-row';
 import { useWorkspace } from '../shell/workspace';
 import { FIRST_SECTION, sectionsFor, type SettingsSection } from './sections';
 import { useModules } from '../session/session';
@@ -19,9 +20,6 @@ import {
   useWorkspaceCapabilities,
   useWorkspaceChannelCapabilities,
 } from './role';
-
-const rowClasses =
-  'flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
 
 const Group = ({
   title,
@@ -43,12 +41,7 @@ const Group = ({
           const here = section.id === current;
           const props = {
             ...(here ? { 'aria-current': 'page' as const } : {}),
-            className: cn(
-              rowClasses,
-              here
-                ? 'bg-nav-selected font-semibold text-nav-ink [&>svg]:text-nav-ink'
-                : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
-            ),
+            className: cn(navRowClasses, here ? navRowHereClasses : navRowAwayClasses),
             children: (
               <>
                 <Icon name={section.glyph} />
@@ -105,7 +98,7 @@ export const SettingsNav = (): React.JSX.Element => {
         <Link
           to="workspace"
           params={{ slug: workspace.slug }}
-          className={cn(rowClasses, 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink')}
+          className={cn(navRowClasses, navRowAwayClasses)}
         >
           <Icon name="back" />
           <span className="min-w-0 flex-1 truncate">

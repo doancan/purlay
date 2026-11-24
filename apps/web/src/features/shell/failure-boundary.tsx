@@ -19,8 +19,8 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button, buttonStyle } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { Notice } from './notice';
+import { StandaloneCard, StandaloneScreen } from './standalone';
 
 export class RenderBoundary extends Component<
   { readonly fallback: React.ReactNode; readonly children: React.ReactNode },
@@ -86,9 +86,11 @@ export const AppBoundary = ({
 }): React.JSX.Element => (
   <RenderBoundary
     fallback={
-      <Main className="flex min-h-screen flex-col bg-surface-100 text-ink">
-        <Failed reach="app" />
-      </Main>
+      <StandaloneScreen>
+        <StandaloneCard>
+          <Failed reach="app" />
+        </StandaloneCard>
+      </StandaloneScreen>
     }
   >
     {children}

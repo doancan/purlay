@@ -64,7 +64,7 @@ const Row = ({
         search={new URLSearchParams(
           firstUnread == null ? { thread: root.id } : { message: firstUnread },
         ).toString()}
-        className={listButtonClasses('rounded-lg focus-visible:-outline-offset-2')}
+        className={listButtonClasses('rounded-lg')}
       >
         <Avatar name={author.displayName} username={author.username} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">

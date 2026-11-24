@@ -25,19 +25,19 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { useSession } from '../session/session';
 import { LogoMark, Notice } from '../shell/notice';
 import { useSignOut } from '../shell/sign-out';
 import { leave } from '../sign-in/leave';
 import { browserNativePorts, forgetNativeHandoff, pendingNativeHandoff } from './pending';
+import { StandaloneScreen } from '../shell/standalone';
 
 const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
-  <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+  <StandaloneScreen>
     <div className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 text-center shadow-card">
       {children}
     </div>
-  </Main>
+  </StandaloneScreen>
 );
 
 export const NativeSignInScreen = (): React.JSX.Element => {

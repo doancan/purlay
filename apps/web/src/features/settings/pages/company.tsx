@@ -325,6 +325,7 @@ const CompanyManagement = ({
         <div className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4">
           <CompanyCopyValue label={t('company.entry.title')} value={signInAddress.toString()} />
           <Button
+            className="self-start"
             disabled={busy !== null}
             onClick={() => {
               void refresh();

@@ -11,7 +11,6 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { LogoMark } from '../shell/notice';
 import { useEffect } from 'react';
@@ -19,6 +18,7 @@ import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
 import { GoogleButton } from './google-button';
 import { OidcButton } from './oidc-button';
+import { StandaloneScreen } from '../shell/standalone';
 
 export const SignUpScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -45,7 +45,7 @@ export const SignUpScreen = (): React.JSX.Element => {
   );
 
   return (
-    <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+    <StandaloneScreen>
       <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
         <LogoMark />
         <InstanceIdentity />
@@ -114,6 +114,6 @@ export const SignUpScreen = (): React.JSX.Element => {
           </>
         )}
       </section>
-    </Main>
+    </StandaloneScreen>
   );
 };

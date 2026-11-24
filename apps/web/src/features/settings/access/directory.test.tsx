@@ -114,7 +114,7 @@ test('directory reads handle loading, retryable failure and empty results', asyn
     reject(new ApiError(403, 'FORBIDDEN', 'denied'));
   });
   await person().click(await view.findByRole('button', { name: 'Retry' }));
-  await view.findByText('No results. Try a different search or create the first item.');
+  await view.findByText('Nothing to show yet. If you searched or filtered, try different terms.');
 });
 
 test('directory creation fixes a verified connection and exact immutable claim without email linking', async () => {

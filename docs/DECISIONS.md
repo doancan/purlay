@@ -16271,3 +16271,11 @@ shows the tick. *Computing the dependents in the browser from the manifests:* a 
 **The shell's bound moves from 259 to 260 KB.** The conversation's profile panel and heading are in the first page, and drawing the emoji, the words and *Until 13:00*, gone at the end, takes them from 258.99 KB (with D-329’s timed mute, whose sidebar part was moved into the deferred chunk to fit) to 259.26 KB, measured file by file. One KB is the margin for a feature or two, as D-306 and D-319 raised it; the 400 KB backstop and the module bounds stay. Nothing else of this change is in the first page: the settings and their presets are deferred.
 
 **Cost of reversing.** Two nullable columns and two optional fields: dropping them makes every line one kept for good, as it was.
+
+### D-331. The shell's bound moves from 260 to 261 KB — builds on D-330, D-306, D-319
+
+**Decided under the owner's standing instruction to decide and proceed**, from a polish pass over every screen: the account menu offers the theme and the language, the sign-in, invitation, setup and failure screens share one ground, and the release fireworks were redrawn. The first page measured 260.15 KB gzipped, 0.15 KB over D-330's bound.
+
+**The shell's bound moves from 260 to 261 KB.** The account menu's two choices (it is in the first page, the sidebar's foot) and the shared standalone ground take the shell from 259.26 KB (D-330) to 260.15 KB, measured file by file. One KB is the margin for a feature or two, as D-306, D-319 and D-330 raised it; the 400 KB backstop and the module bounds stay (D-196). Nothing was cut or deferred to fit.
+
+**Cost of reversing.** One constant, `SHELL_BYTES` in `scripts/budget-web.ts`; lowering it again fails the build until the weight is found.

@@ -14,18 +14,17 @@ import { VisuallyHidden } from '../../ui/visually-hidden';
 export const railItemClasses = (current: boolean): string =>
   cn(
     'relative inline-flex size-rail-item shrink-0 items-center justify-center rounded-lg transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:w-touch',
-    current
-      ? 'bg-nav-selected text-nav-ink'
-      : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
+    // The glyph is drawn in the full navigation ink at rest, as a rail is a row of marks with no words beside them:
+    // the muted ink read as faint at 20px. The current place takes the accent and the selected fill.
+    current ? 'bg-nav-selected text-accent-text' : 'text-nav-ink hover:bg-nav-hover',
   );
 
 interface RailItemContentProps {
   readonly glyph: GlyphName;
   readonly label: string;
   /**
-   * A count at the corner, or a dot that says it in words; never both. The count is neutral: the
-   * accent badge is for what needs *you* (`UX.md` §2), and a count of the team's open questions is
-   * information, not a summons. The dot is the inbox's — something there does need you.
+   * A count at the corner, or a dot that says it in words; never both. The dot is red, what needs you; the count is the
+   * accent blue, the number of what is open.
    */
   readonly signal?:
     | { readonly kind: 'count'; readonly text: string }
@@ -41,7 +40,7 @@ export const RailItemContent = ({
     <Icon name={glyph} size="lg" />
     <VisuallyHidden>{label}</VisuallyHidden>
     {signal?.kind === 'count' ? (
-      <span className="absolute top-0 right-0 inline-flex h-badge min-w-badge items-center justify-center rounded-pill border-marker border-nav-rail bg-nav-hover px-1 font-mono text-caption text-nav-ink">
+      <span className="absolute top-0 right-0 inline-flex h-badge min-w-badge items-center justify-center rounded-pill border-marker border-nav-rail bg-accent px-1 font-mono text-caption text-on-accent">
         {signal.text}
       </span>
     ) : null}
@@ -49,7 +48,7 @@ export const RailItemContent = ({
       <>
         <span
           aria-hidden="true"
-          className="absolute top-2 right-2 size-dot rounded-pill border-hairline border-nav-rail bg-accent"
+          className="absolute top-2 right-2 size-dot rounded-pill border-hairline border-nav-rail bg-danger"
         />
         <VisuallyHidden> {signal.words}</VisuallyHidden>
       </>

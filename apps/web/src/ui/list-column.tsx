@@ -50,10 +50,13 @@ export const ListCard = ({
 /** A row of a list card: divided from the one above it, never from the card's edge. */
 export const listRowClasses = 'not-first:border-t-hairline border-border-subtle';
 
-/** The button a row is: the whole row, padded, tinted under the pointer. */
+/**
+ * The button a row is: the whole row, padded, tinted under the pointer. Its ring is drawn inward: the card clips what
+ * overflows it, so an outward ring was cut off at the card's edges and landed on the neighbouring row inside.
+ */
 export const listButtonClasses = (extra?: string): string =>
   cn(
-    'flex w-full items-start gap-3 px-5 py-3 text-left transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:px-4',
+    'flex w-full items-start gap-3 px-5 py-3 text-left transition-colors duration-hover ease-standard hover:bg-surface-050 focus-visible:-outline-offset-focus max-narrow:px-4',
     extra,
   );
 
@@ -79,7 +82,7 @@ export const ListFilter = <V extends string>({
   <div
     role="group"
     aria-label={label}
-    className="flex self-start rounded-lg bg-surface-200 p-1 max-narrow:self-stretch"
+    className="flex max-w-full self-start overflow-x-auto rounded-lg bg-surface-200 p-1 scrollbar-thin max-narrow:self-stretch"
   >
     {choices.map((choice) => (
       <button
@@ -90,7 +93,7 @@ export const ListFilter = <V extends string>({
           onChange(choice.value);
         }}
         className={cn(
-          'inline-flex h-control items-center justify-center rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1',
+          'inline-flex h-control items-center justify-center whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1',
           value === choice.value
             ? 'bg-surface-100 text-ink shadow-card'
             : 'text-ink-muted hover:text-ink',

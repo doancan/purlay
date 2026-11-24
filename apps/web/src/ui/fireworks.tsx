@@ -1,6 +1,6 @@
 /**
- * The fireworks 🎉 sets off (D-247): rockets climb, then burst into rays and sparks that open slowly and drift down,
- * in the theme's own colours. There are five shows and one is picked each time, never the one just seen.
+ * The fireworks 🎉 sets off (D-247): rockets climb, then burst into rings of coloured sparks that open smoothly and drift down,
+ * two of the theme's own colours to a burst. There are five shows and one is picked each time, never the one just seen.
  *
  * Plain SVG and CSS keyframes (`index.css`), no library and no canvas: the shapes are drawn once, the
  * motion is the stylesheet's, and its length is the `duration-celebrate` token — 0ms under reduced
@@ -83,6 +83,20 @@ const SHOWS: readonly (readonly Burst[])[] = [
 
 const PALETTE = [ACCENT, WARM, GREEN, RED];
 
+/** The second colour of a burst, so no burst is one flat colour: it alternates with the first around the ring. */
+const PARTNER: Readonly<Record<string, string>> = {
+  [ACCENT]: WARM,
+  [WARM]: RED,
+  [GREEN]: ACCENT,
+  [RED]: WARM,
+};
+
+/** A burst is drawn smaller than the field it is placed in: a flourish at a corner of the eye, not a takeover. */
+const SIZE = 0.72;
+
+/** What a spark's token radius is shrunk by: 1px is 0.17 of the field's unit, 3px about half of one. */
+const SPARK = 0.17;
+
 /**
  * The extra bursts of a bigger moment on a wide screen (a release opening, D-261): two out to the left of the
  * middle field and two to the right, which the wider view makes room for. Their colours turn with the show, so
@@ -118,17 +132,27 @@ const Ring = ({
   readonly rays: number;
   readonly reach: number;
   readonly colour: string;
-}): React.JSX.Element => (
-  <>
-    {Array.from({ length: rays }, (_, index) => (
-      <g key={index} transform={`rotate(${String((360 / rays) * index)})`}>
-        <line y1={reach * 0.35} y2={reach} stroke={colour} className="firework-line" />
-        <line y1={reach * 1.12} y2={reach * 1.18} stroke={colour} className="firework-line" />
-        <line y1={reach * 1.3} y2={reach * 1.31} stroke={colour} className="firework-line" />
-      </g>
-    ))}
-  </>
-);
+}): React.JSX.Element => {
+  const other = PARTNER[colour] ?? colour;
+  return (
+    <>
+      {Array.from({ length: rays }, (_, index) => {
+        const tone = index % 2 === 0 ? colour : other;
+        return (
+          <g key={index} transform={`rotate(${String((360 / rays) * index)})`}>
+            {/* The sparks are whole-pixel radii (tokens), drawn in a layer shrunk to a field that is 100 across. */}
+            <g transform={`scale(${String(SPARK)})`}>
+              <circle cy={(reach * 0.45) / SPARK} fill={tone} className="firework-spark-xs" />
+              <circle cy={(reach * 0.75) / SPARK} fill={tone} className="firework-spark-sm" />
+              <circle cy={reach / SPARK} fill={colour} className="firework-spark-lg" />
+              <circle cy={(reach * 1.2) / SPARK} fill={other} className="firework-spark-xs" />
+            </g>
+          </g>
+        );
+      })}
+    </>
+  );
+};
 
 const BurstShape = ({ burst: b }: { readonly burst: Burst }): React.JSX.Element => (
   <g transform={`translate(${String(b.x)} ${String(b.y)})`}>
@@ -140,12 +164,16 @@ const BurstShape = ({ burst: b }: { readonly burst: Burst }): React.JSX.Element 
       }}
     >
       <g className="animate-firework-burst" style={{ animationDelay: fraction(b.at) }}>
-        <Ring rays={b.rays} reach={b.reach} colour={b.colour} />
+        <Ring rays={b.rays} reach={b.reach * SIZE} colour={b.colour} />
       </g>
       {b.ring === true && (
         <g className="animate-firework-burst" style={{ animationDelay: fraction(b.at + 0.06) }}>
           <g transform="rotate(10)">
-            <Ring rays={Math.round(b.rays / 2)} reach={b.reach * 0.55} colour={b.colour} />
+            <Ring
+              rays={Math.round(b.rays / 2)}
+              reach={b.reach * SIZE * 0.55}
+              colour={PARTNER[b.colour] ?? b.colour}
+            />
           </g>
         </g>
       )}
@@ -159,6 +187,7 @@ const RocketShape = ({ burst: b }: { readonly burst: Burst }): React.JSX.Element
     x2={b.x}
     y1="100"
     y2={b.y}
+    pathLength="100"
     stroke={b.colour}
     className="firework-line animate-firework-rocket"
     style={{ animationDelay: fraction(Math.max(0, b.at - CLIMB)) }}

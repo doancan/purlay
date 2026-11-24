@@ -322,9 +322,7 @@ const IndependentProfilePage = (): React.JSX.Element => {
             }}
             after={
               <Button
-                variant="ghost"
                 disabled={busy}
-                className="-ml-3"
                 onClick={() => {
                   edit('timeZone', deviceZone);
                 }}

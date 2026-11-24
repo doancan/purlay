@@ -79,7 +79,7 @@ test.describe('the release notes after an update', () => {
     await page.goto(`/w/${tenant.slug}`);
     const dialog = page.getByRole('dialog', { name: `What’s new in Purlay ${RUNNING_VERSION}` });
     await expect(dialog).toBeVisible();
-    // Every category has a quiet heading with its count. The suite runs with reduced motion, and a person who
+    // Every category has a quiet heading. The suite runs with reduced motion, and a person who
     // asked for less gets no fireworks (D-261): the window is the whole of the greeting.
     await expect(dialog.getByRole('heading', { level: 3 }).first()).toBeVisible();
     await expect(page.getByTestId('fireworks')).toHaveCount(0);

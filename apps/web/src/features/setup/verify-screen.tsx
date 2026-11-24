@@ -11,12 +11,12 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { buttonStyle } from '../../ui/button';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { browserInvitationPorts } from '../invitations/pending';
 import { LogoMark, Notice } from '../shell/notice';
 import { createSetupClient, isSetupFailure, type SetupClient } from './client';
 import { failureWords } from './errors';
+import { StandaloneScreen } from '../shell/standalone';
 
 const FRAGMENT = /^#([0-9a-f]{64})$/;
 
@@ -24,12 +24,12 @@ const FRAGMENT = /^#([0-9a-f]{64})$/;
 export const readVerifyLink = (hash: string): string | null => FRAGMENT.exec(hash)?.[1] ?? null;
 
 const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
-  <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+  <StandaloneScreen>
     <div className="flex w-full max-w-dialog flex-col items-center gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 text-center shadow-card">
       <LogoMark />
       {children}
     </div>
-  </Main>
+  </StandaloneScreen>
 );
 
 export const VerifyScreen = ({ client }: { readonly client?: SetupClient }): React.JSX.Element => {

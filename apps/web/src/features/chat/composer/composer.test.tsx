@@ -304,17 +304,21 @@ describe('what it shows', () => {
     ).not.toContain('text-caption');
   });
 
-  test('the card wears the focus ring while focus is inside it, since the textarea draws none of its own', async () => {
+  test('the card turns its hairline a firmer grey while focus is inside it, and draws no ring of its own', async () => {
     const { view, box, user } = await mount();
     const card = view.container.querySelector('[data-composer-card]');
-    expect(card?.className).not.toContain('outline-focus');
+    expect(card?.className).toContain('border-composer-rest');
     expect(box().className).toContain('outline-none');
     await user.click(box());
-    expect(card?.className).toContain('outline-focus');
+    // One line, one weight: the edge changes colour, and no 2px ring is laid over it.
+    expect(card?.className).toContain('border-composer-focus');
+    expect(card?.className).not.toContain('border-composer-rest');
+    expect(card?.className).not.toContain('outline-focus');
     act(() => {
       box().blur();
     });
-    expect(card?.className).not.toContain('outline-focus');
+    expect(card?.className).toContain('border-composer-rest');
+    expect(card?.className).not.toContain('border-composer-focus');
   });
 
   test('the send button says it is off while there is nothing to send, and on once there is', async () => {

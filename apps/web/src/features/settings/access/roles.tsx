@@ -56,7 +56,7 @@ export const AccessRolesPage = (): React.JSX.Element => {
       }
     >
       <SettingsCard description={t('access.roles.boundary')} title={t('access.roles.title')}>
-        <div className="p-4">
+        <div className="px-6 py-4 max-narrow:px-4">
           <AccessSearch value={search} change={setSearch} />
         </div>
         <AccessListState

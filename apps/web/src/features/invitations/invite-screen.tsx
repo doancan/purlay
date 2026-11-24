@@ -28,7 +28,6 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
-import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { SessionGate } from '../session/session';
 import { LogoMark, Notice } from '../shell/notice';
@@ -38,16 +37,17 @@ import { GoogleButton } from '../sign-in/google-button';
 import { OidcButton } from '../sign-in/oidc-button';
 import { browserInvitationPorts, forgetInvitation, pendingInvitation } from './pending';
 import { GuestInvitationSummary } from './guest-invitation-summary';
+import { StandaloneScreen } from '../shell/standalone';
 
 const doesNotOpen = (failure: unknown): boolean =>
   isApiError(failure) && failure.code === 'INVITATION_NOT_FOUND';
 
 const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
-  <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+  <StandaloneScreen>
     <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
       {children}
     </div>
-  </Main>
+  </StandaloneScreen>
 );
 
 const JoinInvitation = (): React.JSX.Element => {

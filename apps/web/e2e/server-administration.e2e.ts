@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import type { ServerOperations, ServerOverview, ServerUserPage } from '@purlay/types';
 import { letterWith, linkIn, portFor, startFresh, type FreshServer } from './fresh';
-import { skipReleaseNotes } from './support';
+import { skipReleaseNotes, stretchedButtons } from './support';
 let fresh: FreshServer | null = null;
 test.beforeAll(async ({}, info) => {
   test.skip(
@@ -77,6 +77,15 @@ test('administration is independent, responsive, keyboard accessible and backed 
     });
     await page.goto('/server/email');
     const push = page.getByRole('region', { name: 'Browser notifications' });
+    await expect(
+      push.getByText('Closed-tab notifications are disabled on the server.'),
+    ).toBeVisible();
+    // A button under a value keeps its own width: the card's column does not stretch it across the page.
+    expect(await stretchedButtons(page)).toEqual([]);
+    await page.goto('/server/security');
+    await expect(page.getByRole('button', { name: 'Save settings' })).toBeVisible();
+    expect(await stretchedButtons(page)).toEqual([]);
+    await page.goto('/server/email');
     await expect(
       push.getByText('Closed-tab notifications are disabled on the server.'),
     ).toBeVisible();

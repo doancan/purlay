@@ -20,7 +20,7 @@ const notesText = (version: string): string =>
     '',
     '### Security',
     '',
-    '- A bullet that names no area',
+    '- A bullet that names no area (D-321)',
     '',
   ].join('\n');
 

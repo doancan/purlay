@@ -27,7 +27,7 @@ import { AppSkeleton } from './skeleton';
 
 const Frame = (): React.JSX.Element => {
   const { t } = useI18n();
-  const { pathname } = useRoute();
+  const { pathname, match } = useRoute();
   // The address focus was last decided for. A navigation is the address differing from it — not
   // the effect running a second time, which React may do for one address (StrictMode runs every
   // effect, its cleanup, and the effect again).
@@ -47,7 +47,10 @@ const Frame = (): React.JSX.Element => {
 
   return (
     <>
-      <SkipLink target={MAIN_ID}>{t('app.skip')}</SkipLink>
+      {/* The conversation is what a channel's page holds; every other page holds its content. */}
+      <SkipLink target={MAIN_ID}>
+        {t(match.name === 'channel' ? 'app.skip' : 'app.skipContent')}
+      </SkipLink>
       <MainFocus.Provider value={focus}>
         <Outlet />
       </MainFocus.Provider>
