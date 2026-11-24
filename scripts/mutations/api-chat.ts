@@ -102,8 +102,6 @@ export const API_CHAT: readonly Mutation[] = [
     find: 'await visibleChannelIds(database, context), {',
     replace:
       "(await database.selectFrom('channels').select('id').where('workspace_id', '=', context.workspaceId).execute()).map((row) => row.id), {",
-    equivalent:
-      'searchIn applies withinMessageHistory to every candidate message, which requires its channel to be visible to the caller; the list given in place of the visible ids is only a narrowing of the scan',
     tests: [
       'apps/api/src/ingress/http/find.integration.test.ts',
       'apps/api/src/ingress/http/channel-visibility.integration.test.ts',
@@ -924,8 +922,6 @@ export const API_CHAT: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/saved/saved.ts',
     find: "    .where('saved_messages.channel_id', 'in', visible)\n",
     replace: '',
-    equivalent:
-      "withinMessageHistory in the same statement requires the message's channel to be visible to the reader (messageHistoryVisibleTo), and a save's channel is its message's; the id list only narrows the scan",
     tests: ['apps/api/src/ingress/http/channel-visibility.integration.test.ts'],
   },
   {
