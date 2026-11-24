@@ -134,8 +134,6 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: INBOX,
     find: "    .where('notifications.channel_id', 'in', visible)\n",
     replace: '',
-    equivalent:
-      "withinMessageHistory in the same statement requires the message's channel to be visible to the reader (messageHistoryVisibleTo), and a notification's channel is its message's; the id list only narrows the scan",
     tests: [...INBOX_TESTS, 'apps/api/src/ingress/http/channel-visibility.integration.test.ts'],
   },
   {
