@@ -357,7 +357,10 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/notifications/push-notices.ts',
     find: 'requireMessageById(executor, userId, messageId)',
     replace: "requireMessageById(executor, userId, messageId, { deleted: 'include' })",
-    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/sender.integration.test.ts',
+      'apps/api/src/features/chat/notifications/push-notices.integration.test.ts',
+    ],
   },
   {
     id: 'push-queued-chat-ignores-deleted-recipient',
@@ -365,7 +368,10 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/notifications/push-notices.ts',
     find: "          .where('person.deleted_at', 'is', null)\n",
     replace: '',
-    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/sender.integration.test.ts',
+      'apps/api/src/features/chat/notifications/push-notices.integration.test.ts',
+    ],
   },
   {
     id: 'push-queued-chat-ignores-hidden',
@@ -405,7 +411,10 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/notifications/push-notices.ts',
     find: "          .where('n.type', 'in', [...NEEDS_YOU, 'reminder'])\n",
     replace: '',
-    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/sender.integration.test.ts',
+      'apps/api/src/features/chat/notifications/push-notices.integration.test.ts',
+    ],
   },
   {
     id: 'push-queued-chat-ignores-suppressed',
@@ -413,7 +422,10 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/notifications/push-notices.ts',
     find: "          .where('n.suppressed_by_deep_work', '=', false)\n",
     replace: '',
-    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/sender.integration.test.ts',
+      'apps/api/src/features/chat/notifications/push-notices.integration.test.ts',
+    ],
   },
   {
     id: 'push-queued-chat-ignores-suspended-recipient',
@@ -421,7 +433,10 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     file: 'apps/api/src/features/chat/notifications/push-notices.ts',
     find: "          .where('person.suspended_at', 'is', null)\n",
     replace: '',
-    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/push/sender.integration.test.ts',
+      'apps/api/src/features/chat/notifications/push-notices.integration.test.ts',
+    ],
   },
   {
     id: 'push-queued-chat-reads-the-stored-level',
