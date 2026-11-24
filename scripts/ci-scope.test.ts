@@ -250,6 +250,24 @@ describe('the lines CI reads', () => {
     expect(lines).toBe('light=true\nreuse=false');
   });
 
+  test('read the files as GitHub sends them: a file that was not renamed has previous_filename null', () => {
+    const lines = main({ EVENT: 'pull_request', REPOSITORY: 'o/r', NUMBER: '5' }, () => ({
+      exitCode: 0,
+      stdout: '{"filename":"CONTRIBUTING.md","previous_filename":null,"patch":"@@ -1 +1 @@"}',
+      stderr: '',
+    }));
+    expect(lines).toBe('light=true\nreuse=false');
+  });
+
+  test('read a version bump when GitHub sends no patch for another file: not light, and no crash', () => {
+    const lines = main({ EVENT: 'pull_request', REPOSITORY: 'o/r', NUMBER: '5' }, () => ({
+      exitCode: 0,
+      stdout: '{"filename":"package.json","previous_filename":null,"patch":null}',
+      stderr: '',
+    }));
+    expect(lines).toBe('light=false\nreuse=false');
+  });
+
   test('say a push to main is never light, and ask whether its content was verified', () => {
     const lines = main(
       { EVENT: 'push', BRANCH: 'main', REPOSITORY: 'o/r', COMMIT: 'C' },

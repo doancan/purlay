@@ -203,6 +203,14 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/ci-scope.test.ts'],
   },
   {
+    id: 'ci-scope-reads-a-null-previous-filename-as-a-name',
+    why: 'GitHub sends previous_filename as null for a file that was not renamed, the null is tested as a file name, and no pull request is ever light (D-332)',
+    file: 'scripts/ci-scope.ts',
+    find: 'previous_filename: raw.previous_filename ?? undefined,',
+    replace: 'previous_filename: raw.previous_filename as string | undefined,',
+    tests: ['scripts/ci-scope.test.ts'],
+  },
+  {
     id: 'ci-scope-reuses-a-matrix-with-a-failed-leg',
     why: 'one browser leg red among green ones still counts as the browser having passed (D-332)',
     file: 'scripts/ci-scope.ts',
