@@ -170,9 +170,15 @@ not Nginx Proxy Manager's or Cloudflare's.
 
 **Updating to each release, by itself** (D-262). Every release's image is also named `:release` (and
 `:vX.Y.Z`) by the `release-image` workflow, and nothing else ever is. Set `PURLAY_IMAGE` to
-`ghcr.io/<owner>/<repo>-api:release`, redeploy, then turn on Dockhand's auto-update for the `api`, `scheduler`
-and `storage-init` containers with a short schedule (`*/15 * * * *`): Dockhand compares the digest and pulls
-only when a new release is out, so the server runs it within a quarter of an hour. A digest pinned instead
+`ghcr.io/<owner>/<repo>-api:release`, redeploy, then turn on Dockhand's auto-update for the `api` and `scheduler`
+containers with a short schedule (`*/15 * * * *`): Dockhand compares the digest and pulls
+only when a new release is out, so the server runs it within a quarter of an hour. **Leave `storage-init` out.**
+Dockhand updates one container at a time and does not apply compose's `service_completed_successfully`
+ordering, so a one-shot container it recreates stays in `created` and never runs (seen at v0.5.3, v0.5.4, v0.6.3
+and v0.6.7). Its work is idempotent and only matters while the object store lacks its layout, bucket or key, which a
+running store already has. When a release changes what it prepares, or the store is new, redeploy the stack from
+Dockhand (not a per-container update) and check that `storage-init` exited 0: `docker inspect -f '{{.State.ExitCode}}'
+<stack>-storage-init-1`. A digest pinned instead
 is never updated: set a newer one by hand.
 
 Dockhand does not do what `scripts/deploy.sh` does: there is **no backup taken at the switch and no automatic
