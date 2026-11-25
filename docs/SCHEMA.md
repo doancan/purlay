@@ -4280,6 +4280,34 @@ CREATE TABLE workspace_quotas (
 );
 ```
 
+### 9.15. `outbox_ledger`
+
+Which fact was delivered to which consumer, and when, kept after the outbox's own row is swept (#1305, D-335): one row for each
+`(fact, consumer)` delivered, in the core's own table. Written only where the operator turned it on (`OUTBOX_LEDGER_DAYS`), in the
+transaction that marks the outbox row delivered, so a delivery is never marked without its line and a line never stands without its
+delivery. Read by `bun run outbox:ledger`, swept by `sweep:outbox` past its retention.
+
+- **No payload.** Ids, the type, the producer and the time: a payload may name people, so the ledger has no erasure path of its own.
+- **One line for a pair.** The primary key is `(fact_id, consumer)` and the write is `ON CONFLICT DO NOTHING`: a fact requeued and
+  delivered once more is the same line. `skipped` and `dead` are not delivered and are not written.
+- **No key to `outbox`.** The row it records is gone by design. The key to the workspace is the table's own: a purged workspace keeps
+  its row as a tombstone and the cascade never fires, so the purge empties the table by name (`CORE_REMAINING_TABLES`). In no export.
+
+```sql
+CREATE TABLE outbox_ledger (
+    fact_id      UUID NOT NULL,
+    consumer     TEXT NOT NULL CHECK (char_length(consumer) BETWEEN 1 AND 48),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    type         TEXT NOT NULL CHECK (char_length(type) BETWEEN 1 AND 96),
+    producer     TEXT NOT NULL CHECK (char_length(producer) BETWEEN 1 AND 48),
+    delivered_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (fact_id, consumer)
+);
+
+CREATE INDEX idx_outbox_ledger_workspace ON outbox_ledger (workspace_id, delivered_at DESC);
+CREATE INDEX idx_outbox_ledger_delivered ON outbox_ledger (delivered_at);
+```
+
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
 **Generated** by `kysely-codegen` from a database with every migration applied, and committed so
@@ -4501,6 +4529,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0123_profile_status_end.sql  users.status_emoji, users.status_until: a status line that clears itself, with an emoji  (D-330)
 0124_workspace_quotas.sql    workspace_quotas: the operator's override of a limit for one workspace, by kind  (D-334)
 0125_outbox_workspace_recent.sql  idx_outbox_workspace_recent: the deliveries a workspace queued in the last minute, for the rate limit  (D-334)
+0126_outbox_ledger.sql       outbox_ledger: which fact was delivered to which consumer and when, for an operator to prove it  (D-335)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

@@ -281,9 +281,11 @@ export const deliver = async (
     readonly ports?: ModulePorts;
     readonly seams?: ModuleSeams;
     readonly effective?: EntitlementPolicy['effective'];
+    /** Whether a delivery is also written to the ledger, in the transaction that marks it (`OUTBOX_LEDGER_DAYS`, #1305). */
+    readonly ledger?: boolean;
   },
 ): Promise<Delivery> => {
-  const { clock, ports = noPorts, seams = noSeams, effective } = dependencies;
+  const { clock, ports = noPorts, seams = noSeams, effective, ledger = false } = dependencies;
   let told: readonly WrittenNotice[] = [];
   let log = dependencies.log;
   let forged: { readonly producer: string; readonly owner: string } | undefined;
@@ -310,11 +312,28 @@ export const deliver = async (
       state: 'delivered' | 'skipped' | 'dead',
       lastError: string | null,
     ): Promise<Delivery> => {
+      const finished = clock.now();
       await transaction
         .updateTable('outbox')
-        .set({ state, finished_at: clock.now(), last_error: lastError })
+        .set({ state, finished_at: finished, last_error: lastError })
         .where('id', '=', claimed.id)
         .execute();
+      // In the same transaction, so a delivery is never marked without its line, and never a line without the delivery: a fact
+      // requeued and delivered once more is the same line. Ids, the type and the time: never the payload (#1305).
+      if (ledger && state === 'delivered') {
+        await transaction
+          .insertInto('outbox_ledger')
+          .values({
+            fact_id: claimed.factId,
+            consumer: claimed.consumer,
+            workspace_id: row.workspace_id,
+            type: claimed.type,
+            producer: row.producer,
+            delivered_at: finished,
+          })
+          .onConflict((conflict) => conflict.columns(['fact_id', 'consumer']).doNothing())
+          .execute();
+      }
       return state;
     };
     // The publish side checks who may publish a type; a row written by any other path (SQL of a module's own, a restored backup)
@@ -455,6 +474,8 @@ const deliverWithin = async (
 export interface OutboxCounters {
   readonly delivered: Counter<'module' | 'fact'>;
   readonly failures: Counter<'module' | 'fact'>;
+  /** Whether each delivery is also recorded in the ledger (`OUTBOX_LEDGER_DAYS` is set): the one setting of the outbox's workers. */
+  readonly ledger?: boolean;
 }
 
 /** One drain: a claim and the delivery of what it took, in the order claimed. The work of a consumer's worker. */
@@ -513,6 +534,7 @@ export const drainOnce = async (
       ...(ports === undefined ? {} : { ports }),
       ...(seams === undefined ? {} : { seams }),
       ...(effective === undefined ? {} : { effective }),
+      ledger: counters?.ledger === true,
     });
     tally[outcome] += 1;
     const labels = { module: one.consumer, fact: one.type };

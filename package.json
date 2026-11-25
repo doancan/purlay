@@ -62,6 +62,7 @@
     "module:resume": "bun run apps/api/src/cli/module-suspension.ts resume",
     "outbox:requeue": "bun run apps/api/src/cli/outbox.ts requeue",
     "outbox:discard": "bun run apps/api/src/cli/outbox.ts discard",
+    "outbox:ledger": "bun run apps/api/src/cli/outbox-ledger.ts",
     "admin:reset-password": "bun run apps/api/src/cli/admin-reset-password.ts",
     "storage:quota": "bun run apps/api/src/cli/storage-quota.ts",
     "quota:show": "bun run apps/api/src/cli/quota.ts show",

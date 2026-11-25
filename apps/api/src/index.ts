@@ -479,7 +479,11 @@ if (!workerLifecycle.stopped) {
     }),
     entitledFor: modules.entitledFor,
     suspended: modules.suspension.fresh,
-    outbox: { delivered: metrics.outboxDelivered, failures: metrics.outboxFailures },
+    outbox: {
+      delivered: metrics.outboxDelivered,
+      failures: metrics.outboxFailures,
+      ledger: config.OUTBOX_LEDGER_DAYS !== undefined,
+    },
     push,
   });
 }

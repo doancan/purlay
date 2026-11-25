@@ -26,6 +26,7 @@
 import type { CoreJobName } from '../platform/module-kit/core-claims';
 import { sweepInbox } from '../modules/inbox/sweep';
 import { sweepOutbox } from '../platform/outbox-sweep';
+import { sweepLedger } from '../platform/outbox-ledger';
 import { sweepObjectDeletions } from '../modules/attachments/deletions';
 import { sweepExports } from '../modules/export/requests';
 import { compositionFor } from '../composition';
@@ -145,8 +146,10 @@ const coreJobs: Readonly<Record<CoreJobName, Work>> = {
       composition.workspacePurge,
     ),
   'sweep:inbox': async () => await sweepInbox({ database, clock }),
-  'sweep:outbox': async () =>
-    await sweepOutbox({ database, clock, deadKeptDays: config.OUTBOX_DEAD_KEPT_DAYS }),
+  'sweep:outbox': async () => ({
+    ...(await sweepOutbox({ database, clock, deadKeptDays: config.OUTBOX_DEAD_KEPT_DAYS })),
+    ledger: await sweepLedger({ database, clock, keptDays: config.OUTBOX_LEDGER_DAYS }),
+  }),
   'sweep:deletions': async () =>
     await sweepObjectDeletions({
       database,

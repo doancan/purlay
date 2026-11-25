@@ -70,6 +70,11 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
     { nobody: 'ids and a short label of what changed; no column names a person' },
     'swept',
   ),
+  // The ids of a delivery and its time, kept while the operator's retention says (`OUTBOX_LEDGER_DAYS`) and then swept; no payload (#1305).
+  outbox_ledger: decided(
+    { nobody: 'ids, a type and a time; no payload, and no column names a person' },
+    'swept',
+  ),
   personal_exports: decided('anonymised', {
     kept: 'the row, ids and times only, is the record that it was made',
   }),

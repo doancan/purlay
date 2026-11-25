@@ -208,6 +208,7 @@ export type CorePersonalExcluded =
   | 'job_runs'
   | 'object_deletions'
   | 'outbox'
+  | 'outbox_ledger'
   | 'workspace_exports'
   | 'personal_exports'
   | 'server_operational_status'
@@ -284,6 +285,8 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   job_runs: 'the scheduler’s own record',
   object_deletions: 'storage keys waiting to be deleted: keys never leave',
   outbox: 'facts in flight between modules, short-lived infrastructure (D-288)',
+  outbox_ledger:
+    'which fact was delivered to which module and when, for an operator to prove: ids and times, about no person (#1305)',
   workspace_exports: 'an owner’s export of a workspace: the workspace’s record',
   personal_exports:
     'the record of this very export and the ones before it: its archive is the export',
