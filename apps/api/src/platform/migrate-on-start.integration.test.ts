@@ -182,6 +182,89 @@ const until = async (port: number, path: string, status: number): Promise<number
   return last;
 };
 
+/** A node that has said it listens on `port`, and everything it has said since, read as it speaks. */
+interface Running {
+  readonly node: Bun.Subprocess<'ignore', 'pipe', 'pipe'>;
+  readonly port: number;
+  readonly said: () => string;
+  /** Stops the node, waits for its streams to end, and answers everything it said. */
+  readonly stop: () => Promise<string>;
+}
+
+/**
+ * What a failed start looks like from outside: the node's exit, if any, and the tail of what it said. The setup code is
+ * a credential and is dropped; nothing else a node prints is secret (`storage-init` and `index.ts` log fields, not values).
+ */
+const diagnosis = (running: Running): string => {
+  const tail = running
+    .said()
+    .split('\n')
+    .filter((line) => !line.includes('SETUP CODE'))
+    .join('\n')
+    .slice(-2_000);
+  return `port ${String(running.port)}, node ${running.node.exitCode === null ? 'still running' : `exited ${String(running.node.exitCode)}`}; it said:\n${tail}`;
+};
+
+/**
+ * Starts a node and returns once it has said it listens on its own port. `freePort` frees the port before the node takes it,
+ * so another test's process can win it between the two: the node then cannot bind and exits, and the start is made again on
+ * another port, instead of probing a port somebody else answers on (#1236). `ports` is where the candidates come from.
+ */
+const startedNode = async (
+  name: string,
+  key: string,
+  more: Record<string, string> = {},
+  without: readonly string[] = [],
+  ports: () => number = freePort,
+): Promise<Running> => {
+  const ATTEMPTS = 5;
+  for (let attempt = 1; ; attempt += 1) {
+    const port = ports();
+    const node = aNode(name, port, key, more, without);
+    let output = '';
+    const readers = [node.stdout, node.stderr].map(async (stream) => {
+      const decoder = new TextDecoder();
+      for await (const chunk of stream) output += decoder.decode(chunk, { stream: true });
+    });
+    const running: Running = {
+      node,
+      port,
+      said: () => output,
+      stop: async () => {
+        node.kill();
+        await node.exited;
+        await Promise.all(readers);
+        return output;
+      },
+    };
+    const listening = (): boolean =>
+      output
+        .split('\n')
+        .some(
+          (line) => line.includes('"msg":"listening"') && line.includes(`"port":${String(port)}`),
+        );
+    try {
+      await waitUntil(() => listening() || node.exitCode !== null, 'the node to say it listens');
+    } catch (error) {
+      const why = diagnosis(running);
+      await running.stop();
+      throw new Error(`the node never said it listens: ${why}`, { cause: error });
+    }
+    if (listening()) return running;
+    const why = diagnosis(running);
+    await running.stop();
+    if (attempt === ATTEMPTS)
+      throw new Error(`the node could not take a port ${String(ATTEMPTS)} times: ${why}`);
+  }
+};
+
+/** Waits until the node answers `/health/ready` with 200; when it does not, says what the node did instead of only `0`. */
+const ready = async (running: Running): Promise<void> => {
+  const status = await until(running.port, '/health/ready', 200);
+  if (status !== 200)
+    throw new Error(`/health/ready answered ${String(status)}, not 200: ${diagnosis(running)}`);
+};
+
 /** The settings row as stored, the GitHub secret opened with the key the nodes were given. */
 const storedSettings = async (
   db: Executor,
@@ -630,6 +713,45 @@ describe('integration: migrate on start', () => {
     60_000,
   );
 
+  test('a node whose port another process took is started again on another port, and the other process is never asked about readiness (#1236)', async () => {
+    const { name, db } = await freshDatabase('port-taken');
+    const key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64');
+    // Answers 200 to everything: probing its port would pass for a node that never started.
+    const squatter = Bun.serve({ port: 0, fetch: () => new Response('{}', { status: 200 }) });
+    const candidates = [squatter.port ?? 0, freePort()];
+    let running: Running | undefined;
+    try {
+      running = await startedNode(name, key, { MIGRATE_ON_START: 'true' }, [], () => {
+        const next = candidates.shift();
+        if (next === undefined) throw new Error('more ports were asked for than the test gave');
+        return next;
+      });
+      expect(running.port).not.toBe(squatter.port);
+      expect(candidates).toEqual([]);
+      await ready(running);
+    } finally {
+      await running?.stop();
+      void squatter.stop(true);
+      await db.destroy();
+    }
+  }, 60_000);
+
+  test('a node that never becomes ready is reported with its exit and what it said, without the setup code', async () => {
+    const { name, db } = await freshDatabase('never-ready');
+    // A key too short to be one: the node refuses its configuration and exits before it listens, five times over.
+    const running = await startedNode(name, 'not-a-key', { MIGRATE_ON_START: 'true' }).catch(
+      (error: unknown) => error,
+    );
+    try {
+      expect(running).toBeInstanceOf(Error);
+      const text = (running as Error).message;
+      expect(text).toContain('exited');
+      expect(text).not.toContain('SETUP CODE');
+    } finally {
+      await db.destroy();
+    }
+  }, 60_000);
+
   test('a node run with MODULES=none that does not migrate is ready on a database migrated core-alone', async () => {
     const { name, db } = await freshDatabase('wait-none');
     await migrateWith(name, []);
@@ -653,29 +775,22 @@ describe('integration: migrate on start', () => {
   test('a node that runs chat and does not migrate is not ready on that database until chat’s set is applied', async () => {
     const { name, db } = await freshDatabase('wait-chat');
     await migrateWith(name, []);
-    const port = freePort();
-    const node = aNode(
-      name,
-      port,
-      Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
-      { MODULES: 'chat' },
-    );
-    let said = '';
-    const reading = (async (): Promise<void> => {
-      const decoder = new TextDecoder();
-      for await (const chunk of node.stdout) said += decoder.decode(chunk, { stream: true });
-    })();
+    const key = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64');
+    const running = await startedNode(name, key, { MODULES: 'chat' });
     try {
-      await waitUntil(() => said.includes(WAITING), 'the node to say it waits for the migrations');
-      expect(said).toContain('chat/');
-      expect((await answer(port, '/health/ready'))[0]).toBe(503);
-      expect(node.exitCode).toBeNull();
+      await waitUntil(
+        () => running.said().includes(WAITING),
+        'the node to say it waits for the migrations',
+      );
+      expect(running.said()).toContain('chat/');
+      const [before] = await answer(running.port, '/health/ready');
+      if (before !== 503)
+        throw new Error(`/health/ready answered ${String(before)}, not 503: ${diagnosis(running)}`);
+      expect(running.node.exitCode).toBeNull();
       await migrateWith(name, PRODUCT_MIGRATION_SETS);
-      expect(await until(port, '/health/ready', 200)).toBe(200);
+      await ready(running);
     } finally {
-      node.kill();
-      await node.exited;
-      await reading;
+      await running.stop();
       await db.destroy();
     }
   }, 60_000);
@@ -1057,11 +1172,12 @@ describe('integration: migrate on start', () => {
     };
     try {
       // The first start seals the secret under the key it was given.
-      const firstPort = freePort();
-      const first = aNode(name, firstPort, before, environment);
-      expect(await until(firstPort, '/health/ready', 200)).toBe(200);
-      first.kill();
-      await first.exited;
+      const first = await startedNode(name, before, environment);
+      try {
+        await ready(first);
+      } finally {
+        await first.stop();
+      }
       const sealed = await db
         .selectFrom('server_settings')
         .select('github_client_secret_encrypted')
@@ -1069,11 +1185,11 @@ describe('integration: migrate on start', () => {
         .executeTakeFirstOrThrow();
 
       // Another key: the secret does not open. The server starts, and serves, with GitHub unset.
-      const restartedPort = freePort();
-      const restarted = aNode(name, restartedPort, after, environment);
+      const restarted = await startedNode(name, after, environment);
+      const restartedPort = restarted.port;
       let said = '';
       try {
-        expect(await until(restartedPort, '/health/ready', 200)).toBe(200);
+        await ready(restarted);
         expect(await bodyOf(restartedPort, '/api/auth/methods')).toEqual([
           200,
           {
@@ -1089,11 +1205,9 @@ describe('integration: migrate on start', () => {
           },
         ]);
         expect((await bodyOf(restartedPort, '/auth/github'))[0]).toBe(404);
-        expect(restarted.exitCode).toBeNull();
+        expect(restarted.node.exitCode).toBeNull();
       } finally {
-        restarted.kill();
-        await restarted.exited;
-        said = `${await new Response(restarted.stdout).text()}${await new Response(restarted.stderr).text()}`;
+        said = await restarted.stop();
       }
       const line = JSON.parse(
         said
@@ -1125,10 +1239,10 @@ describe('integration: migrate on start', () => {
         .set({ sign_up: 'open' })
         .where('id', '=', true)
         .execute();
-      const port = freePort();
-      const node = aNode(name, port, after, environment);
+      const node = await startedNode(name, after, environment);
+      const port = node.port;
       try {
-        expect(await until(port, '/health/ready', 200)).toBe(200);
+        await ready(node);
         const origin = `http://localhost:${String(port)}`;
         const button = await fetch(`${origin}/auth/github`, { redirect: 'manual' });
         const granted = await fetch(button.headers.get('location') ?? '', { redirect: 'manual' });
@@ -1143,8 +1257,7 @@ describe('integration: migrate on start', () => {
         expect(github.refusals).toEqual([]);
         expect(back.headers.get('location')).toBe(origin);
       } finally {
-        node.kill();
-        await node.exited;
+        await node.stop();
       }
     } finally {
       served.stop();
