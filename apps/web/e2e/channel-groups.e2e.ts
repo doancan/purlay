@@ -188,10 +188,15 @@ for (const theme of ['light', 'dark']) {
       await expect(group.getByRole('link', { name: made.name, exact: true })).toBeVisible();
       // Earlier cases leave real headings in this person's sidebar. Scroll the section into
       // view before checking its horizontal fit; a long list is allowed to scroll vertically.
-      await group.scrollIntoViewIfNeeded();
-      await expect(
-        group.getByRole('button', { name: `Options for ${name}`, exact: true }),
-      ).toBeInViewport();
+      // The list is drawn again as the workspace's data arrives and then starts from its top, so the
+      // scroll and the check are one step, repeated until the section is where it was scrolled to
+      // (the failing CI run's last frame shows the list at its top, this section below the fold).
+      await expect(async () => {
+        await group.scrollIntoViewIfNeeded();
+        await expect(
+          group.getByRole('button', { name: `Options for ${name}`, exact: true }),
+        ).toBeInViewport({ timeout: 1_000 });
+      }).toPass({ timeout: 10_000 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
