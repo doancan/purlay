@@ -1,7 +1,9 @@
 /**
  * The socket is a way in like any route (D-250, `MODULES.md` §3): a process that does not run chat answers chat's
  * operations as it answers an operation nobody has, writes nothing and tells nobody, and still answers the core's
- * (a ping). Over real sockets, with the same database behind a process that runs chat as the control.
+ * (a ping). So does a process that runs chat while the administrator has stopped it, whose handlers are all there: only
+ * the socket being told which operations are closed refuses them. Over real sockets, with the same database behind a
+ * process that runs chat as the control.
  *
  * @needs-modules chat
  */
@@ -14,9 +16,10 @@ import {
   DROP_HOOK_MS,
 } from '@purlay/db';
 import { messageId, type ServerFrame } from '@purlay/types';
-import { compose } from '../composition';
+import { compose, compositionFor } from '../composition';
 import { createApp, type HttpApplication } from '../ingress/http/app';
 import { fixedClock } from '../platform/clock';
+import { noSuspension } from '../platform/suspended-modules';
 import { testConfig, testDependencies } from '../testing/doubles';
 import { aSignedInUser } from '../testing/signed-in';
 import { aUniqueSlug } from '../testing/users';
@@ -28,7 +31,8 @@ let cloned: ClonedDatabase;
 let db: Executor;
 let running: HttpApplication;
 let notRunning: HttpApplication;
-const urls = { running: '', notRunning: '' };
+let stopped: HttpApplication;
+const urls = { running: '', notRunning: '', stopped: '' };
 
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
@@ -38,6 +42,18 @@ beforeAll(async () => {
   notRunning = createApp(
     testDependencies({ database: db, clock, config, composition: compose([]) }),
   );
+  stopped = createApp(
+    testDependencies({
+      database: db,
+      clock,
+      config,
+      composition: compositionFor(undefined, 'open', {
+        ...noSuspension,
+        current: () => new Set(['chat']),
+      }),
+    }),
+  );
+  urls.stopped = `ws://localhost:${String(stopped.listen(0))}/ws`;
   urls.running = `ws://localhost:${String(running.listen(0))}/ws`;
   urls.notRunning = `ws://localhost:${String(notRunning.listen(0))}/ws`;
 }, CLONE_HOOK_MS);
@@ -45,6 +61,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await running.stop(true);
   await notRunning.stop(true);
+  await stopped.stop(true);
   await cloned.drop();
 }, DROP_HOOK_MS);
 
@@ -130,6 +147,27 @@ describe('integration: the socket of a process that does not run chat', () => {
       });
     }
     expect(by(ping)?.event).toBe('PONG');
+    expect(await messagesIn(channelId)).toBe(0);
+  });
+
+  test('a process that runs chat but has it stopped answers its operations the same way, though its handlers are there', async () => {
+    const { cookie, channelId } = await room();
+    const send = messageId(NOW);
+    const replies = await answers(urls.stopped, cookie, [
+      {
+        id: send,
+        op: 'MESSAGE_SEND',
+        payload: { channelId, content: 'written with chat stopped' },
+      },
+    ]);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({
+      event: 'ERROR',
+      data: {
+        code: 'VALIDATION_FAILED',
+        details: { fields: { op: 'is not an operation this server accepts' } },
+      },
+    });
     expect(await messagesIn(channelId)).toBe(0);
   });
 

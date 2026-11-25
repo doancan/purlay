@@ -24,7 +24,7 @@ export const API_ISSUES: readonly Mutation[] = [
     why: 'issues reads a column that exists for chat, so it is no longer one module’s and nobody has said where it lives (D-275)',
     file: 'apps/api/src/features/issues/module.ts',
     find: '    deadline: { ms: 8_000 },\n',
-    replace: '    deadline: { ms: 8_000 },\n    quiet_from: 1,\n',
+    replace: '    deadline: { ms: 8_000 },\n    missed_mail_since: 1,\n',
     tests: ['apps/api/src/core-columns.test.ts'],
   },
   {

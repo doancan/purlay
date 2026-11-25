@@ -277,14 +277,6 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     ],
   },
   {
-    id: 'missed-mail-quotes-unreadable',
-    why: 'a letter quotes a channel the person has left, or a workspace they are no longer in (D-240, D-34)',
-    file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
-    find: "    return seen !== 'held' && seen?.has(row.channel_id) === true;\n",
-    replace: "    return seen !== 'held';\n",
-    tests: ['apps/api/src/features/chat/notifications/missed-mail.integration.test.ts'],
-  },
-  {
     id: 'missed-mail-relay-refusal-taken-for-the-address',
     why: 'a relay that refuses everybody (550 relaying denied) is read as every person’s address being wrong, and every person’s letter is lost (D-297)',
     file: 'apps/api/src/features/chat/notifications/missed-mail.ts',

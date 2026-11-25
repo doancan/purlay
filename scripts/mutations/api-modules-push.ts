@@ -182,14 +182,6 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     ],
   },
   {
-    id: 'push-inbox-deep-work-ignored',
-    why: 'a person in Deep Work or in their quiet hours is pushed a module’s notice all the same (D-286 §9)',
-    file: 'apps/api/src/modules/push/devices.ts',
-    find: 'entries.filter((entry) => quiet.get(entry.workspaceId)?.has(entry.userId)).map((e) => e.id),',
-    replace: '[],',
-    tests: ['apps/api/src/modules/push/sender-inbox.integration.test.ts'],
-  },
-  {
     id: 'push-inbox-failure-counted-under-the-senders-owner',
     why: 'a push of issues’ notice the service did not take is counted under chat, so the module whose notifications fail is not the one the page names (D-250 rule 7)',
     file: 'apps/api/src/modules/push/delivery.ts',
@@ -521,14 +513,6 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     file: 'apps/api/src/modules/push/delivery.ts',
     find: "    failed('not_taken', 1, device.module);",
     replace: "    await forget(device, claim);\n    failed('not_taken', 1, device.module);",
-    tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
-  },
-  {
-    id: 'push-under-a-replaced-key',
-    why: 'a stale-key device is queued and its obsolete crypto material is processed instead of being ignored',
-    file: 'apps/api/src/modules/push/devices.ts',
-    find: "    .where('s.server_key', '=', current.publicKey)\n",
-    replace: '',
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
   },
   {

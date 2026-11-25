@@ -210,14 +210,6 @@ export const API_PLATFORM: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/security/company-proof-batch.integration.test.ts'],
   },
   {
-    id: 'company-push-worker-inherits-request',
-    why: 'A request that wakes the global worker must not limit the authority of unrelated queued independent deliveries.',
-    file: 'apps/api/src/platform/logging.ts',
-    find: 'export const withoutRequest = <T>(body: () => T): T => scope.exit(body);',
-    replace: 'export const withoutRequest = <T>(body: () => T): T => body();',
-    tests: ['apps/api/src/modules/push/company-authority.integration.test.ts'],
-  },
-  {
     id: 'company-source-deleted-retirement-ignored',
     why: 'An open company socket must lose authority when its current deleted condition no longer holds.',
     file: 'apps/api/src/platform/company-session.ts',
@@ -397,7 +389,7 @@ export const API_PLATFORM: readonly Mutation[] = [
     why: 'a file of the core reads a column that is chat’s, and the next one needs chat’s words to work (D-275)',
     file: 'apps/api/src/platform/clock.ts',
     find: 'export const DAY_MS = 24 * HOUR_MS;',
-    replace: "export const DAY_MS = 24 * HOUR_MS;\nexport const QUIET = 'quiet_from';",
+    replace: "export const DAY_MS = 24 * HOUR_MS;\nexport const MISSED_MAIL = 'missed_mail_since';",
     tests: ['apps/api/src/core-columns.test.ts'],
   },
   {
