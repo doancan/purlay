@@ -334,6 +334,24 @@ export const edit: Port['edit'] = async (db) => {
     ).toEqual([{ site: 'typed.ts#edit', table: 'channel_members' }]);
   });
 
+  test('an erasure is seen when a template comes before the column in its object', () => {
+    // A `${…}` before `deleted_at` closes a `[^}]*` early: the write went unseen once (D-139 §5).
+    const write = (set: string): readonly { site: string; table: string }[] =>
+      visibilityWrites([
+        {
+          path: 'erase.ts',
+          text: `export const erase = async (db) => {
+  await db.updateTable('users').set({ ${set} }).where('id', '=', id).execute();
+};`,
+        },
+      ]);
+    expect(write('email: `erased-${id}@example.test`, deleted_at: now')).toEqual([
+      { site: 'erase.ts#erase', table: 'users' },
+    ]);
+    // The object ends at its own `})`: a column after it is another statement's, not this one's.
+    expect(write('display_name: name')).toEqual([]);
+  });
+
   test('each production write is in the table, and each row in the table is a write that exists', () => {
     const found = visibilityWrites(production()).map((s) => s.site);
     // The control: the scan sees the writes that are known to exist. Without it an
