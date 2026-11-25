@@ -90,3 +90,33 @@ export const APT_MIRRORS = [
 ].join('\n');
 
 export const APT_MIRRORS_FILE = '/etc/apt/apt-mirrors.txt';
+
+/** The mirrors' addresses, from the text apt is given. */
+export const APT_MIRROR_URLS: readonly string[] = APT_MIRRORS.split('\n')
+  .map((line) => line.split('\t')[0] ?? '')
+  .filter((url) => url !== '');
+
+/**
+ * What is asked of each mirror after a stall (#1375): the release file apt reads first, with a short limit, saying the status and how
+ * long the connection and the whole answer took. A stall is cut at three minutes and says only that it stalled; whether a mirror
+ * answers from this runner, and how slowly, is what the next occurrence needs to tell a mirror's fault from the runner's, and it is
+ * there only while the runner is. `codename` is the release (`resolute`): without one the probe has nothing to ask.
+ */
+export const mirrorProbes = (
+  codename: string | undefined,
+  urls: readonly string[] = APT_MIRROR_URLS,
+): readonly (readonly string[])[] =>
+  codename === undefined || !/^[a-z]+$/.test(codename)
+    ? []
+    : urls.map((url) => [
+        'curl',
+        '--silent',
+        '--show-error',
+        '--output',
+        '/dev/null',
+        '--max-time',
+        '10',
+        '--write-out',
+        `probe ${url}: status=%{http_code} connect=%{time_connect}s total=%{time_total}s\n`,
+        `${url}dists/${codename}-updates/InRelease`,
+      ]);

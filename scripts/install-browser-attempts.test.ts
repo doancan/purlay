@@ -8,6 +8,8 @@ import {
   browserOf,
   installCommand,
   installWithRetries,
+  APT_MIRROR_URLS,
+  mirrorProbes,
   TRIES,
   TRY_LIMIT_MS,
   type Outcome,
@@ -123,5 +125,33 @@ describe('installing a browser, with a stall cut and tried again', () => {
     ]);
     expect(APT_MIRRORS.endsWith('\n')).toBe(true);
     expect(APT_MIRRORS_FILE).toBe('/etc/apt/apt-mirrors.txt');
+  });
+});
+
+describe('what is asked of each mirror after a stall', () => {
+  test('the addresses are those apt is given, in its order', () => {
+    expect(APT_MIRROR_URLS).toEqual([
+      'http://archive.ubuntu.com/ubuntu/',
+      'http://azure.archive.ubuntu.com/ubuntu/',
+    ]);
+  });
+
+  test('is one short, bounded request for each mirror’s release file, saying the status and the times', () => {
+    const probes = mirrorProbes('resolute');
+    expect(probes).toHaveLength(APT_MIRROR_URLS.length);
+    for (const [index, probe] of probes.entries()) {
+      expect(probe[0]).toBe('curl');
+      expect(probe).toContain('--max-time');
+      expect(probe[probe.indexOf('--max-time') + 1]).toBe('10');
+      expect(probe.at(-1)).toBe(`${APT_MIRROR_URLS[index] ?? ''}dists/resolute-updates/InRelease`);
+      expect(probe[probe.indexOf('--write-out') + 1]).toContain('status=%{http_code}');
+      expect(probe[probe.indexOf('--write-out') + 1]).toContain('total=%{time_total}s');
+    }
+  });
+
+  test('asks nothing where the release is unknown or is not a word, so no text of a file reaches a command', () => {
+    expect(mirrorProbes(undefined)).toEqual([]);
+    expect(mirrorProbes('res olute; rm -rf /')).toEqual([]);
+    expect(mirrorProbes('')).toEqual([]);
   });
 });
