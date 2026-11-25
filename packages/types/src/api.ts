@@ -41,6 +41,7 @@ import {
   AttachmentIds,
   Message,
   MessageContent,
+  MessagePriority,
   SendContent,
   NotificationLevel,
   Reaction,
@@ -365,6 +366,11 @@ export const SendMessageRequest = FromClient({
    * one screen.
    */
   parentId: Type.Optional(Uuid),
+  /**
+   * How much it asks of the people it is for (#1381); absent is `normal`. Anything else is refused unless the channel is a
+   * direct message or the body names somebody who can see it: it cannot page a channel.
+   */
+  priority: Type.Optional(MessagePriority),
 });
 export type SendMessageRequest = Static<typeof SendMessageRequest>;
 

@@ -31,6 +31,8 @@ export interface StoredMessage {
   readonly createdAt: string;
   /** What it carries; absent in what an older page kept, which carried nothing. */
   readonly attachments?: readonly Attachment[];
+  /** Asked for beyond the usual (#1381); absent in what an older page kept, which asked for nothing. */
+  readonly priority?: 'important' | 'urgent';
 }
 
 export const pendingKey = (userId: string): string => `purlay.pending.${userId}`;
@@ -51,6 +53,7 @@ const isStored = (value: unknown): value is StoredMessage =>
   (!('attachments' in value) ||
     (Array.isArray(value.attachments) &&
       value.attachments.every((a: unknown) => Value.Check(Attachment, a)))) &&
+  (!('priority' in value) || value.priority === 'important' || value.priority === 'urgent') &&
   'createdAt' in value &&
   typeof value.createdAt === 'string' &&
   'parentId' in value &&

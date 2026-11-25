@@ -27,7 +27,10 @@
  * with that place's draft and the old one's is saved as it goes.
  */
 import { Value } from '@sinclair/typebox/value';
-import { MessageContent } from '@purlay/types';
+import { MessageContent, type MessagePriority } from '@purlay/types';
+import { useChannels } from '../../../data/queries';
+import { useWorkspace } from '../../shell/workspace';
+import { PriorityChoice } from '../messages/priority';
 import {
   lazy,
   Suspense,
@@ -156,6 +159,15 @@ const Inner = ({
   const card = useRef<HTMLDivElement>(null);
   const [text, setText] = useState(() => readDraft(ports.storage, key));
   const [error, setError] = useState<string | null>(null);
+  // How much the next message asks of its recipient (#1381); it goes back to the usual once sent.
+  const [chosenPriority, setChosenPriority] = useState<MessagePriority>('normal');
+  const { workspace } = useWorkspace();
+  const channels = useChannels(workspace.id);
+  // Offered where the server would accept it: a direct message, or words that name somebody.
+  const mayPrioritise =
+    channels.data?.find((channel) => channel.id === channelId)?.type === 'direct_message' ||
+    /(^|\s)@\w/.test(text);
+  const priority: MessagePriority = mayPrioritise ? chosenPriority : 'normal';
   // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
   const [focused, setFocused] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -546,6 +558,7 @@ const Inner = ({
         attachments: uploads.items.flatMap((item) =>
           item.status === 'ready' ? [item.attachment] : [],
         ),
+        ...(priority === 'normal' ? {} : { priority }),
       });
     } catch (failure) {
       if (!isApiError(failure) || failure.code !== 'UNAUTHENTICATED') throw failure;
@@ -554,6 +567,7 @@ const Inner = ({
       return;
     }
     if (hasPartyPopper(content)) celebrate();
+    setChosenPriority('normal');
     clearWritten();
     onSent?.(id);
   };
@@ -1107,6 +1121,7 @@ const Inner = ({
             {!compact && <TypingLine channelId={channelId} />}
             {counter}
             {canSchedule && <SendLater onSchedule={scheduleLater} />}
+            {mayPrioritise && <PriorityChoice value={priority} onChange={setChosenPriority} />}
             {sendButton}
           </div>
           {linkSelection !== null && (

@@ -108,6 +108,8 @@ export interface PendingMessage {
   readonly reason: FailureCode | null;
   /** The uploads it carries, drawn on its row before the server has it (D-109 §7). */
   readonly attachments: readonly Attachment[];
+  /** Asked for beyond the usual (#1381); absent is normal. */
+  readonly priority?: 'important' | 'urgent';
 }
 
 interface RealtimeState {
@@ -160,6 +162,7 @@ interface Outgoing {
   readonly content: string;
   readonly parentId?: string | undefined;
   readonly attachments?: readonly Attachment[] | undefined;
+  readonly priority?: 'important' | 'urgent' | undefined;
 }
 
 export interface EngineOptions {
@@ -290,13 +293,14 @@ export const createEngine = (options: EngineOptions): Engine => {
     if (storage !== null && !isClaimedBy(storage, options.userId)) return;
     const keep: StoredMessage[] = pending
       .filter((p) => p.delivery !== 'sent')
-      .map(({ id, channelId, parentId, content, createdAt, attachments }) => ({
+      .map(({ id, channelId, parentId, content, createdAt, attachments, priority }) => ({
         id,
         channelId,
         parentId,
         content,
         createdAt,
         attachments,
+        ...(priority === undefined ? {} : { priority }),
       }));
     saveStored(storage, options.userId, keep);
   };
@@ -441,10 +445,14 @@ export const createEngine = (options: EngineOptions): Engine => {
   };
 
   /** The ids a send names, on either door; none when it carries nothing. */
-  const carried = (pending: PendingMessage): { attachmentIds?: string[] } =>
-    pending.attachments.length === 0
+  const carried = (
+    pending: PendingMessage,
+  ): { attachmentIds?: string[]; priority?: 'important' | 'urgent' } => ({
+    ...(pending.attachments.length === 0
       ? {}
-      : { attachmentIds: pending.attachments.map((attachment) => attachment.id) };
+      : { attachmentIds: pending.attachments.map((attachment) => attachment.id) }),
+    ...(pending.priority === undefined ? {} : { priority: pending.priority }),
+  });
 
   /** Track access even before the first feed mounts, using its ordinary, empty Query identity. */
   const channelAccess = (channelId: string): (() => boolean) => {
@@ -1030,7 +1038,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         }
       }
     },
-    send: ({ channelId, content, parentId, attachments, foreground = true }): string => {
+    send: ({ channelId, content, parentId, attachments, priority, foreground = true }): string => {
       // What they were typing is on its way; the next keystroke is news again, as on the server.
       announced.delete(channelId);
       const id = messageId(serverClock.now());
@@ -1043,6 +1051,7 @@ export const createEngine = (options: EngineOptions): Engine => {
         delivery: 'sending',
         reason: null,
         attachments: attachments ?? [],
+        ...(priority === undefined ? {} : { priority }),
       };
       // Painted before anything leaves: the store is what the screen reads.
       if (!change((all) => [...all, pending])) throw accountChanged();

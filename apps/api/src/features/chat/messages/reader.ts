@@ -41,6 +41,7 @@ export const MESSAGE_COLUMNS = [
   'messages.message_type',
   'messages.metadata',
   'messages.parent_id',
+  'messages.priority',
   'messages.thread_reply_count',
   'messages.thread_last_reply_at',
   'messages.resolved_at',
@@ -61,6 +62,8 @@ export interface MessageRow {
   readonly sender_id: string | null;
   readonly message_type: 'text' | 'system_event';
   readonly metadata: unknown;
+  /** `normal`, `important` or `urgent`; the database holds no other (messages_priority_known). */
+  readonly priority: string;
   readonly parent_id: string | null;
   readonly thread_reply_count: number;
   readonly thread_last_reply_at: Date | string | null;
@@ -266,6 +269,10 @@ export const buildMessages = async (
         mentions: [...(knownMentions.get(row.id) ?? [])],
         // A tombstone hides what was shown with the words, as it hides the words (D-109 §6).
         attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],
+        // Said only when it is not the usual, and never of a tombstone (#1381).
+        ...(row.deleted_at === null && row.priority !== 'normal'
+          ? { priority: row.priority as 'important' | 'urgent' }
+          : {}),
       };
     }),
   );

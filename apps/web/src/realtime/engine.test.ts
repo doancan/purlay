@@ -402,6 +402,46 @@ describe('a send carrying attachments (D-109 §7)', () => {
     expect(sent).toEqual([{ channelId: CH, id, content: 'look', attachmentIds: [SHOT.id] }]);
   });
 
+  test('a priority it was sent with goes in its frame, over HTTP, and through a reload and Retry (#1381)', async () => {
+    const w = world();
+    w.engine.start();
+    w.open();
+    const id = w.engine.send({ channelId: CH, content: '@bo now', priority: 'urgent' });
+    expect(w.sentOps('MESSAGE_SEND')[0]?.payload).toEqual({
+      channelId: CH,
+      content: '@bo now',
+      priority: 'urgent',
+    });
+    const sent: unknown[] = [];
+    const http = world({
+      send: (channelId, input) => {
+        sent.push({ channelId, ...input });
+        return Promise.resolve(echo(input.id));
+      },
+    });
+    const httpId = http.engine.send({ channelId: CH, content: '@bo now', priority: 'important' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent).toEqual([
+      { channelId: CH, id: httpId, content: '@bo now', priority: 'important' },
+    ]);
+    expect(id).not.toBe(httpId);
+  });
+
+  test('a reload keeps a priority, and a stored one that is not one is not trusted', () => {
+    const storage = memoryStorage();
+    const first = world({}, { storage });
+    first.engine.start();
+    first.open();
+    const id = first.engine.send({ channelId: CH, content: '@bo now', priority: 'urgent' });
+    const second = world({}, { storage });
+    expect(second.pending()[0]).toMatchObject({ id, priority: 'urgent' });
+    second.engine.start();
+    second.open();
+    second.engine.retry(id);
+    expect(second.sentOps('MESSAGE_SEND')[0]?.payload).toMatchObject({ priority: 'urgent' });
+  });
+
   test('a reload keeps them, so Retry sends the same message with the same files', () => {
     const storage = memoryStorage();
     const first = world({}, { storage });

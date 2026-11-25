@@ -16,6 +16,7 @@ import {
   ChannelState,
   FromClient,
   Message,
+  MessagePriority,
   Reaction,
   SendContent,
   ThreadSummary,
@@ -56,6 +57,8 @@ export const MessageSendFrame = FromClient({
     /** Makes it a reply to this root, as in the HTTP request (I-1). */
     parentId: Type.Optional(Uuid),
     attachmentIds: Type.Optional(AttachmentIds),
+    /** As in the HTTP request (#1381): absent is normal. */
+    priority: Type.Optional(MessagePriority),
   }),
 });
 

@@ -56,6 +56,17 @@ export const UserRole = Type.Union([
 ]);
 export type UserRole = Static<typeof UserRole>;
 
+/**
+ * How much a message asks of the people it is for (#1381): the usual, one to look at soon, or one that cannot wait. Anything
+ * but `normal` is allowed only in a direct message or one that names somebody, so it can never page a whole channel.
+ */
+export const MessagePriority = Type.Union([
+  Type.Literal('normal'),
+  Type.Literal('important'),
+  Type.Literal('urgent'),
+]);
+export type MessagePriority = Static<typeof MessagePriority>;
+
 export const ChannelType = Type.Union([
   Type.Literal('public'),
   Type.Literal('private'),
@@ -659,5 +670,10 @@ export const Message = Type.Object({
   mentions: Type.Array(Uuid),
   /** What it carries, in upload order; none on a tombstone (D-109 §6). */
   attachments: Type.Array(Attachment, { maxItems: ATTACHMENTS_PER_MESSAGE_MAX }),
+  /**
+   * Set only when it is not `normal` (#1381), and never on a tombstone. Optional because it is an addition: a server before
+   * it never sends it, and a client before it draws the message as a normal one.
+   */
+  priority: Type.Optional(Type.Union([Type.Literal('important'), Type.Literal('urgent')])),
 });
 export type Message = Static<typeof Message>;

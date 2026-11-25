@@ -4,6 +4,9 @@ import { ANNOUNCEMENT_TESTS, MESSAGES_TESTS } from './shared';
 
 const MESSAGES = 'apps/api/src/features/chat/messages/messages.ts';
 
+const PRIORITY_TESTS = 'apps/api/src/features/chat/messages/priority.integration.test.ts';
+const READER = 'apps/api/src/features/chat/messages/reader.ts';
+
 const FOLLOW_TESTS = 'apps/api/src/ingress/http/thread-follow.integration.test.ts';
 
 export const API_CHAT_MESSAGES: readonly Mutation[] = [
@@ -892,6 +895,46 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     find: "    await executor.deleteFrom('pinned_messages').where('message_id', 'in', removed).execute();\n",
     replace: '',
     tests: ['apps/api/src/features/chat/messages/delete.integration.test.ts'],
+  },
+  {
+    id: 'priority-direct-message-refused',
+    why: 'a direct message is refused the priority it is allowed (D-336)',
+    file: MESSAGES,
+    find: "    context.channelType !== 'direct_message' &&\n",
+    replace: '',
+    tests: [PRIORITY_TESTS],
+  },
+  {
+    id: 'priority-normal-listed',
+    why: 'a normal message is drawn with a priority of its own, which a client then marks (D-336)',
+    file: READER,
+    find: "row.deleted_at === null && row.priority !== 'normal'",
+    replace: "row.deleted_at === null && row.priority !== ''",
+    tests: [PRIORITY_TESTS],
+  },
+  {
+    id: 'priority-not-stored',
+    why: 'a message is written normal whatever it asked for (D-336)',
+    file: MESSAGES,
+    find: "      priority: input.priority ?? 'normal',\n",
+    replace: "      priority: 'normal',\n",
+    tests: [PRIORITY_TESTS],
+  },
+  {
+    id: 'priority-on-tombstone',
+    why: 'a deleted message still says it was urgent, which a client draws over its tombstone (D-336)',
+    file: READER,
+    find: "row.deleted_at === null && row.priority !== 'normal'",
+    replace: "row.priority !== 'normal'",
+    tests: [PRIORITY_TESTS],
+  },
+  {
+    id: 'priority-pages-a-channel',
+    why: 'a channel message that names nobody may be urgent, which pages everyone who reads it (D-336)',
+    file: MESSAGES,
+    find: "    context.channelType !== 'direct_message' &&\n    mentioned.length === 0\n",
+    replace: "    context.channelType !== 'direct_message' &&\n    mentioned.length === -1\n",
+    tests: [PRIORITY_TESTS],
   },
   {
     id: 'replay-includes-deleted-messages',

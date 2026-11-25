@@ -482,6 +482,7 @@ export interface Messages {
   message_type: Generated<MessageType>;
   metadata: Generated<Json>;
   parent_id: string | null;
+  priority: Generated<string>;
   question_assignee_id: string | null;
   resolved_at: Timestamp | null;
   resolved_by: string | null;

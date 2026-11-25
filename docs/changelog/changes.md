@@ -29,6 +29,7 @@ have it.
 
 ### Added
 
+- **Messages** — a message in a direct message, or one that names somebody, can be sent as Important or Urgent, and says so under its words (D-336)
 - **Operations** — an operator can limit how many deliveries between modules one workspace may queue in a minute, and move its issues limit, with `bun run quota:set` (a reason is kept, `quota:show` and `quota:clear` read and undo it); a workspace over its limit is told to slow down (`429`), and each change is on the workspace's audit log (D-334)
 - **Operations** — an operator can keep a ledger of which fact was delivered to which module and when (`OUTBOX_LEDGER_DAYS`, off by default, ids and times only, never a payload) and read it with `bun run outbox:ledger`, to prove a delivery after the transient table has forgotten it (D-335)
 

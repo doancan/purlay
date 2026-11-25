@@ -27,6 +27,7 @@ import {
   PAGE_LIMIT,
   type Message,
   type MessagePage,
+  type MessagePriority,
   type MessageWindow,
   type ThreadSummary,
 } from '@purlay/types';
@@ -85,6 +86,8 @@ export interface OutgoingMessage {
   readonly parentId?: string | undefined;
   /** The sender's own unattached uploads, linked to it (D-109 §7). */
   readonly attachmentIds?: readonly string[] | undefined;
+  /** How much it asks of the people it is for (#1381); absent is normal. */
+  readonly priority?: MessagePriority | undefined;
 }
 
 /**
@@ -352,6 +355,7 @@ export const sendMessage = async (
       sender_id: context.userId,
       parent_id: input.parentId ?? null,
       content: input.content,
+      priority: input.priority ?? 'normal',
       metadata,
       created_at: clock.now(),
     })
@@ -417,6 +421,19 @@ export const sendMessage = async (
 
   // The mentions, the notifications and the counters: one place decides who is told (D-99 §1).
   const mentioned = await resolveMentions(executor, context, names, input.id);
+  // Asking more of somebody needs somebody: a direct message, or a body that names a person who can see the channel. Said
+  // here, in the send's own transaction, so a refusal rolls the row back and nobody was told (#1381).
+  if (
+    (input.priority ?? 'normal') !== 'normal' &&
+    context.channelType !== 'direct_message' &&
+    mentioned.length === 0
+  ) {
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'An important or urgent message needs a direct message, or somebody named in it.',
+      details: { fields: { priority: 'only in a direct message, or naming somebody' } },
+    });
+  }
   const { recipients, told } = await recordDelivery(executor, {
     context,
     messageId: input.id,
