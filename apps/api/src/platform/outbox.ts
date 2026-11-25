@@ -18,6 +18,7 @@ import { readGrants } from './grants';
 import { currentRequest } from './logging';
 import type { Counter } from './metrics';
 import { limitFor, passes } from './quotas';
+import { formatTraceparent } from './tracing';
 import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { ModuleManifest } from './module-kit/manifest';
 
@@ -354,6 +355,9 @@ export const publishFact = async <Fact extends FactDeclaration>(
         shape: fact.shape ?? FACT_SHAPE_FIRST,
         correlation_id: requestScope?.requestId.slice(0, CORRELATION_ID_MAX) ?? null,
         caused_by: causedBy ?? null,
+        // The trace of the request this is written in, where it is recorded: its delivery is a span of the same trace (D-336).
+        traceparent:
+          requestScope?.span === undefined ? null : formatTraceparent(requestScope.span.context),
       })),
     )
     .execute();
