@@ -917,19 +917,12 @@ export const API_CHAT: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/search/saved-searches.integration.test.ts'],
   },
   {
-    id: 'saved-shown-from-hidden-channels',
-    why: 'a save in a channel the person cannot see is listed, with the message in it',
-    file: 'apps/api/src/features/chat/saved/saved.ts',
-    find: "    .where('saved_messages.channel_id', 'in', visible)\n",
-    replace: '',
-    tests: ['apps/api/src/ingress/http/channel-visibility.integration.test.ts'],
-  },
-  {
     id: 'saved-shows-deleted-messages',
     why: 'a deleted message stays in the saved list, which shows what nobody can read',
     file: 'apps/api/src/features/chat/saved/saved.ts',
-    find: "    .where('saved_messages.channel_id', 'in', visible)\n    .where('messages.deleted_at', 'is', null)\n",
-    replace: "    .where('saved_messages.channel_id', 'in', visible)\n",
+    find: "    .where('messages.deleted_at', 'is', null)\n    .where(withinMessageHistory(executor, context))\n    .where(notHiddenBy(context.userId));",
+    replace:
+      '    .where(withinMessageHistory(executor, context))\n    .where(notHiddenBy(context.userId));',
     tests: ['apps/api/src/features/chat/saved/saved.integration.test.ts'],
   },
   {

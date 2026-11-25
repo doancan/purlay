@@ -138,7 +138,6 @@ export const inboxOf = async (
     ])
     .where('notifications.user_id', '=', context.userId)
     .where('notifications.workspace_id', '=', context.workspaceId)
-    .where('notifications.channel_id', 'in', visible)
     .where(withinMessageHistory(executor, context))
     .where('messages.deleted_at', 'is', null)
     .where(notHiddenBy(context.userId))

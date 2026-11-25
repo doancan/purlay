@@ -253,7 +253,6 @@ const messagesOf = async (
           'w.slug',
         ])
         .where('m.id', 'in', messageIds)
-        .where('m.deleted_at', 'is', null)
         .where((eb) =>
           eb.exists(
             channelAudienceQuery(

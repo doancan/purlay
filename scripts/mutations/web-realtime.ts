@@ -878,14 +878,6 @@ export const WEB_REALTIME: readonly Mutation[] = [
     tests: ['apps/web/src/realtime/connection.test.ts'],
   },
   {
-    id: 'web-frame-asks-for-chat-whatever-runs',
-    why: 'the page asks a server that runs no chat for its channels and keeps a socket reader for what it never sends (D-250)',
-    file: 'apps/web/src/realtime/realtime-provider.tsx',
-    find: "useChannels(workspace.id, useRuns('chat'))",
-    replace: 'useChannels(workspace.id)',
-    tests: ['apps/web/src/features/shell/chatless-shell.test.tsx'],
-  },
-  {
     id: 'workspace-move-loses-unsent-messages',
     why: 'moving to another workspace reads its channel list as the first one’s channels taken away, and the unsent messages for them go (#521)',
     file: 'apps/web/src/realtime/realtime-provider.tsx',

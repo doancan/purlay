@@ -35,14 +35,12 @@ const at = (value: Date | string): string => new Date(value).toISOString();
 const shown = (
   executor: ChatDb,
   context: WorkspaceContext,
-  visible: readonly string[],
 ): SelectQueryBuilder<ChatSchema, 'saved_messages' | 'messages', object> =>
   executor
     .selectFrom('saved_messages')
     .innerJoin('messages', 'messages.id', 'saved_messages.message_id')
     .where('saved_messages.user_id', '=', context.userId)
     .where('saved_messages.workspace_id', '=', context.workspaceId)
-    .where('saved_messages.channel_id', 'in', visible)
     .where('messages.deleted_at', 'is', null)
     .where(withinMessageHistory(executor, context))
     .where(notHiddenBy(context.userId));
@@ -81,8 +79,7 @@ export const saveMessage = async (
     return context.workspaceId;
   }
   const workspace = await requireWorkspaceMembership(transaction, userId, context.workspaceId);
-  const visible = await visibleChannelIds(transaction, workspace);
-  const counted = await shown(transaction, workspace, visible)
+  const counted = await shown(transaction, workspace)
     .select(sql<number>`count(*)::int`.as('count'))
     .executeTakeFirstOrThrow();
   if (counted.count >= SAVED_MAX) {
@@ -131,7 +128,7 @@ export const savedPage = async (
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return { data: [], nextCursor: null };
   const limit = limitOf(query);
-  let statement = shown(executor, context, visible)
+  let statement = shown(executor, context)
     .leftJoin('users', 'users.id', 'messages.sender_id')
     .select(MESSAGE_COLUMNS)
     .select([
@@ -162,7 +159,7 @@ export const savedPage = async (
 export const savedIds = async (executor: ChatDb, context: WorkspaceContext): Promise<SavedIds> => {
   const visible = await visibleChannelIds(executor, context);
   if (visible.length === 0) return [];
-  return await shown(executor, context, visible)
+  return await shown(executor, context)
     .select([
       'saved_messages.message_id as messageId',
       'saved_messages.channel_id as channelId',

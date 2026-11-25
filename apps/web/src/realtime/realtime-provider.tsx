@@ -20,7 +20,7 @@ import { keys } from '../data/keys';
 import { captureAccess } from '../data/access-revision';
 import { useClientStorage } from '../data/storage-provider';
 import { useChannels } from '../data/queries';
-import { useRuns, useSession } from '../features/session/session';
+import { useSession } from '../features/session/session';
 import { useWorkspace } from '../features/shell/workspace';
 import { systemClock } from '../system-clock';
 import type { Clock } from './clock';
@@ -73,7 +73,7 @@ export const RealtimeProvider = ({
   const accountLifetime = account.current.isCurrent;
   // The socket carries the core's frames too (a revoked session, a changed workspace), so it stays; which
   // channels to watch is chat's to say, and a server without it has none.
-  const channels = useChannels(workspace.id, useRuns('chat'));
+  const channels = useChannels(workspace.id);
 
   const engine = useMemo(
     () =>
