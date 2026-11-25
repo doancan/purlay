@@ -247,6 +247,8 @@ export interface ServerMetrics {
   readonly outboxFailures: Counter<'module' | 'fact'>;
   readonly outboxDropped: Counter<'module' | 'fact'>;
   readonly outboxRefused: Counter<'module' | 'fact'>;
+  /** What became of the spans of traces (`tracing.ts`, D-336), by outcome: exported, dropped (the queue was full) or failed (the collector). */
+  readonly traceSpans: Counter<'outcome'>;
   readonly searchSourceDuration: Histogram<'module' | 'source'>;
   readonly searchSourceSkipped: Counter<'module' | 'source' | 'reason'>;
 }
@@ -359,6 +361,11 @@ export const serverMetrics = (
     'Facts not published because the workspace already had the most a consumer may have waiting (`OUTBOX_PENDING_MAX`), by the consuming module and the fact type; the publisher’s transaction ended with the refusal. A rise is a consumer that is behind or a module publishing in a loop.',
     ['module', 'fact'],
   );
+  const traceSpans = registry.counter(
+    'purlay_trace_spans_total',
+    'Spans of traces by what became of them: `exported` to the collector, `dropped` because the queue was full, or `failed` because the collector refused or did not answer (`OTEL_EXPORTER_OTLP_ENDPOINT`). Nothing here means tracing is off.',
+    ['outcome'],
+  );
   const searchSourceDuration = registry.histogram(
     'purlay_search_source_duration_seconds',
     'How long each search source `find` asked took to answer or to be given up on, by the module it runs as and the source (both named by a manifest, never by a caller); a source past its deadline is observed at the deadline. _count is the number of times a source was asked.',
@@ -409,6 +416,7 @@ export const serverMetrics = (
     outboxFailures,
     outboxDropped,
     outboxRefused,
+    traceSpans,
     searchSourceDuration,
     searchSourceSkipped,
   };

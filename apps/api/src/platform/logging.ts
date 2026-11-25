@@ -24,6 +24,7 @@ import pino from 'pino';
 import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { Executor } from '@purlay/db';
 import type { WorkspaceContentFence } from './workspace-content-fence';
+import type { Span } from './tracing';
 
 /** Never written to a log, at any depth (`ARCHITECTURE.md` §10). */
 export const NEVER_LOGGED: ReadonlySet<string> = new Set([
@@ -157,6 +158,8 @@ export interface RequestScope {
   entitlements?: EntitlementPolicy;
   /** Aborts when the module's deadline for this request passes (`request-deadline.ts`): the work stops with the answer. */
   signal?: AbortSignal;
+  /** The span of this request (`tracing.ts`, D-336), where tracing is on and the trace is recorded: what a fact written in it carries on. */
+  span?: Span;
 }
 
 const scope = new AsyncLocalStorage<RequestScope>();

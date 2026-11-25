@@ -146,6 +146,13 @@ export const Environment = Type.Object({
   /** Where `error`-level lines are also reported, as a Sentry-compatible DSN. Unset
    *  means off and nothing leaves the process; there is no default (D-44, D-96). */
   ERROR_TRACKING_DSN: Type.Optional(Type.String({ minLength: 1 })),
+  /** Where traces go, as the address of an OTLP/HTTP collector (`https://collector:4318`; the path `/v1/traces` is added): D-336.
+   *  Unset, tracing is off: no span is made, nothing is stored or sent. */
+  OTEL_EXPORTER_OTLP_ENDPOINT: Type.Optional(Type.String({ minLength: 1 })),
+  /** What the collector asks of every export, `name=value` pairs separated by commas (OTLP's own setting): a credential, never logged. */
+  OTEL_EXPORTER_OTLP_HEADERS: Type.Optional(Type.String({ minLength: 1 })),
+  /** The share of new traces that are recorded, from 0 to 1: a trace that arrives with a decision keeps it. */
+  TRACE_SAMPLE_RATIO: Type.Number({ minimum: 0, maximum: 1, default: 0.1 }),
 
   /** A seed, read on the first start only, into the server's settings; ignored after (D-179 §6). Both or
    *  neither: neither is a server that waits in setup mode for the wizard to connect GitHub (R38). */
@@ -455,8 +462,52 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
     }
   }
 
+  problems.push(...tracingProblems(config));
+
   if (problems.length > 0) throw new ConfigurationError(problems);
   return config;
+};
+
+/** `OTEL_EXPORTER_OTLP_ENDPOINT` is an http(s) address with no credentials in it, and its headers are pairs: the reason, never the value. */
+const tracingProblems = (config: Config): string[] => {
+  const problems: string[] = [];
+  const endpoint = config.OTEL_EXPORTER_OTLP_ENDPOINT;
+  if (endpoint === undefined) {
+    return config.OTEL_EXPORTER_OTLP_HEADERS === undefined
+      ? []
+      : ['OTEL_EXPORTER_OTLP_HEADERS: needs OTEL_EXPORTER_OTLP_ENDPOINT'];
+  }
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      problems.push('OTEL_EXPORTER_OTLP_ENDPOINT: an http or https address');
+    if (url.username !== '' || url.password !== '')
+      problems.push(
+        'OTEL_EXPORTER_OTLP_ENDPOINT: no credentials in the address; OTEL_EXPORTER_OTLP_HEADERS carries them',
+      );
+  } catch {
+    problems.push('OTEL_EXPORTER_OTLP_ENDPOINT: not an address');
+  }
+  if (config.OTEL_EXPORTER_OTLP_HEADERS !== undefined && otlpHeaders(config) === undefined)
+    problems.push('OTEL_EXPORTER_OTLP_HEADERS: name=value pairs separated by commas');
+  return problems;
+};
+
+/** The headers a collector asks for, from `name=value,name=value`; `undefined` for text that is not that. */
+export const otlpHeaders = (
+  config: Pick<Config, 'OTEL_EXPORTER_OTLP_HEADERS'>,
+): Record<string, string> | undefined => {
+  const text = config.OTEL_EXPORTER_OTLP_HEADERS;
+  if (text === undefined) return {};
+  const headers: Record<string, string> = {};
+  for (const pair of text.split(',')) {
+    const at = pair.indexOf('=');
+    const name = pair.slice(0, at).trim();
+    const value = pair.slice(at + 1).trim();
+    if (at < 1 || !/^[A-Za-z0-9-]+$/.test(name) || value === '') return undefined;
+    headers[name.toLowerCase()] = value;
+  }
+  return headers;
 };
 
 /** `REDIS_URL` must be an address a client can open. The reason, never the value: it holds a password. */
