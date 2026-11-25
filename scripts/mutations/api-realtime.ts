@@ -902,7 +902,10 @@ export const API_REALTIME: readonly Mutation[] = [
     find: '              : new Date(row.expires_at).getTime() <= now ||\n                  lapsed(\n',
     replace:
       '              : new Date(row.expires_at).getTime() <= now ||\n                  false && lapsed(\n',
-    tests: ['apps/api/src/modules/auth/session-lifetime.integration.test.ts'],
+    tests: [
+      'apps/api/src/modules/auth/session-lifetime.integration.test.ts',
+      'apps/api/src/realtime/liveness.integration.test.ts',
+    ],
   },
   {
     id: 'typing-down-silences-the-room',
