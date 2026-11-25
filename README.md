@@ -142,7 +142,7 @@ documents.
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here: orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when, non-goals |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 337 decisions, each with its rejected alternatives |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | **Why** — 338 decisions, each with its rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/MODULES.md`](docs/MODULES.md) | How a module is declared, loaded, kept apart and removed |
 | [`docs/MODULE-GUIDE.md`](docs/MODULE-GUIDE.md) | What to run and write to add a module |
@@ -164,7 +164,7 @@ startable now. The honest gaps, kept current in [`docs/MODULES.md`](docs/MODULES
 - No module of the product publishes a fact yet; the outbox is built and proved with fake modules.
 - The web does not yet draw the search groups; the route answers them.
 - A new module's web feature is written by hand; `module:new` generates the server side only.
-- The tasks module, a desktop app and mobile are not started.
+- The tasks module is not started. Native clients: macOS is released, iOS is being built (D-338).
 
 ## Contributing
 
