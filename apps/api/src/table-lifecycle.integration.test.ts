@@ -40,6 +40,7 @@ import { sweepEmailSignIns } from './modules/jobs/jobs';
 import { sweepInbox } from './modules/inbox/sweep';
 import { maintainPushes } from './modules/push/maintenance';
 import { OUTBOX_DEAD_KEPT_DAYS, sweepOutbox } from './platform/outbox-sweep';
+import { sweepLedger } from './platform/outbox-ledger';
 import { eraseAccount } from './modules/users/erasure';
 import { issuePassport } from './modules/workspaces/invitation-passport';
 import { makeAndMailInvitation } from './modules/workspaces/invitation-mail';
@@ -1681,6 +1682,7 @@ const SWEEPS = {
   },
   'sweep:outbox': async (db: Transaction) => {
     await sweepOutbox({ database: db, clock, deadKeptDays: OUTBOX_DEAD_KEPT_DAYS });
+    await sweepLedger({ database: db, clock, keptDays: 30 });
   },
   'sweep:sessions': async (db: Transaction) => {
     await purgeDeadSessions(db, NOW, 1_000);
@@ -1885,6 +1887,24 @@ const RETENTION_PROBES: Readonly<Record<Table, RetentionProbe>> = {
         .execute();
     },
     rows: async (db, row) => await countWhere(db, 'outbox', 'id', row.id),
+  },
+  // Delivered long ago, past the days the ledger is kept (`OUTBOX_LEDGER_DAYS`), against one delivered an hour ago (`outbox-ledger.ts`).
+  outbox_ledger: {
+    job: 'sweep:outbox',
+    seed: async (db, world, row) => {
+      await db
+        .insertInto('outbox_ledger')
+        .values({
+          fact_id: row.id,
+          consumer: 'wiki',
+          workspace_id: world.workspaceId,
+          type: 'notes.created',
+          producer: 'notes',
+          delivered_at: row.at,
+        })
+        .execute();
+    },
+    rows: async (db, row) => await countWhere(db, 'outbox_ledger', 'fact_id', row.id),
   },
   // The setup's one address link: one row, which is why the kept row is seeded in a world of its own.
   admin_email_verification: marked(

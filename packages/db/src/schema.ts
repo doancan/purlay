@@ -587,6 +587,15 @@ export interface Outbox {
   workspace_id: string;
 }
 
+export interface OutboxLedger {
+  consumer: string;
+  delivered_at: Timestamp;
+  fact_id: string;
+  producer: string;
+  type: string;
+  workspace_id: string;
+}
+
 export interface OutgoingWebhooks {
   channel_id: string;
   created_at: Timestamp;
@@ -1520,6 +1529,7 @@ export interface DB {
   notifications: Notifications;
   object_deletions: ObjectDeletions;
   outbox: Outbox;
+  outbox_ledger: OutboxLedger;
   outgoing_webhooks: OutgoingWebhooks;
   personal_exports: PersonalExports;
   pinned_messages: PinnedMessages;

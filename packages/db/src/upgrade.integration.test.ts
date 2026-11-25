@@ -351,6 +351,7 @@ describe('integration: upgrading from the previous release', () => {
         '0123_profile_status_end',
         '0124_workspace_quotas',
         '0125_outbox_workspace_recent',
+        '0126_outbox_ledger',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
