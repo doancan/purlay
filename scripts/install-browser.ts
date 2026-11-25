@@ -3,6 +3,7 @@
  * a stalled try cut at three minutes and tried again, three times (#1141). The rule and its tests are
  * `scripts/install-browser-attempts.ts`; this only starts the process.
  */
+import { readFileSync } from 'node:fs';
 import {
   AFTER_STALL_COMMANDS,
   APT_MIRRORS,
@@ -12,8 +13,18 @@ import {
   browserOf,
   installCommand,
   installWithRetries,
+  mirrorProbes,
   type Outcome,
 } from './install-browser-attempts';
+
+/** The release this runner is (`resolute`), from the system's own file; `undefined` where it says none. */
+const releaseCodename = (): string | undefined => {
+  try {
+    return /^VERSION_CODENAME=(\w+)$/m.exec(readFileSync('/etc/os-release', 'utf8'))?.[1];
+  } catch {
+    return undefined;
+  }
+};
 
 const browser = browserOf(process.argv[2]);
 if (browser === undefined) {
@@ -56,6 +67,10 @@ process.exit(
     undefined,
     async () => {
       if (process.env['CI'] !== 'true') return;
+      // What each mirror answers from this runner, before the stalled try's apt is stopped: the evidence a stall leaves nowhere else.
+      for (const command of mirrorProbes(releaseCodename())) {
+        await Bun.spawn([...command], { stdout: 'inherit', stderr: 'inherit' }).exited;
+      }
       for (const command of AFTER_STALL_COMMANDS) {
         // A command that finds nothing to stop exits non-zero; that is the usual case, not a failure.
         await Bun.spawn([...command], { stdout: 'inherit', stderr: 'inherit' }).exited;

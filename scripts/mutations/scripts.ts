@@ -483,6 +483,22 @@ export const SCRIPTS: readonly Mutation[] = [
     tests: ['scripts/changelog.test.ts'],
   },
   {
+    id: 'install-probe-takes-any-codename',
+    why: 'text of a file on the runner reaches the probe’s command as the release it asks for (#1375)',
+    file: 'scripts/install-browser-attempts.ts',
+    find: 'codename === undefined || !/^[a-z]+$/.test(codename)',
+    replace: 'codename === undefined',
+    tests: ['scripts/install-browser-attempts.test.ts'],
+  },
+  {
+    id: 'install-probe-without-a-limit',
+    why: 'a mirror that stalls holds the probe too, and the evidence of a stall is another stall (#1375)',
+    file: 'scripts/install-browser-attempts.ts',
+    find: "        '--max-time',\n        '10',\n",
+    replace: '',
+    tests: ['scripts/install-browser-attempts.test.ts'],
+  },
+  {
     id: 'keyset-sweep-strips-everything',
     why: 'the keyset sweep reads empty files and passes for a reason that is not the code',
     file: 'scripts/enforcement.test.ts',
