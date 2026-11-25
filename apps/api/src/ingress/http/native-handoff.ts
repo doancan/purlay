@@ -63,10 +63,14 @@ export const authorizeNativeClient = async (
  * version — read from the header it says it in, and only if that is the shape — and the device's name,
  * trimmed. A header that is not the shape is "unknown", never copied.
  */
+const NATIVE_APPLICATIONS = { macos: 'Purlay for macOS', ios: 'Purlay for iOS' } as const;
+
 const sessionLabel = (clientHeader: string | null, deviceName: string): string => {
   const client = parseClientHeader(clientHeader);
-  const version = client?.platform === 'macos' ? client.version : 'unknown';
-  return `Purlay for macOS/${version} (${deviceName})`;
+  // A platform that is not one of ours is not copied: it is the macOS application with no version, as a missing header is.
+  const platform = client?.platform === 'ios' ? 'ios' : 'macos';
+  const version = client?.platform === platform ? client.version : 'unknown';
+  return `${NATIVE_APPLICATIONS[platform]}/${version} (${deviceName})`;
 };
 
 /**

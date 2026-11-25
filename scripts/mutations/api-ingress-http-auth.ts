@@ -214,7 +214,7 @@ export const API_INGRESS_HTTP_AUTH: readonly Mutation[] = [
     id: 'native-device-label-copies-header',
     why: "the session's label copies the client's header whole: whatever a client sends is written into what an operator reads",
     file: 'apps/api/src/ingress/http/native-handoff.ts',
-    find: "  const version = client?.platform === 'macos' ? client.version : 'unknown';\n",
+    find: "  const version = client?.platform === platform ? client.version : 'unknown';\n",
     replace: "  const version = clientHeader ?? 'unknown';\n",
     tests: ['apps/api/src/ingress/http/native-handoff.integration.test.ts'],
   },
@@ -240,6 +240,14 @@ export const API_INGRESS_HTTP_AUTH: readonly Mutation[] = [
     file: 'apps/api/src/ingress/http/native-handoff.ts',
     find: "        if (reason === 'wrong-verifier' || reason === 'burnt') dependencies.log.warn(line);\n",
     replace: '        if (reason === "never") dependencies.log.warn(line);\n',
+    tests: ['apps/api/src/ingress/http/native-handoff.integration.test.ts'],
+  },
+  {
+    id: 'native-ios-session-labelled-as-macos',
+    why: 'an iOS application’s session is listed as the Mac application, so an operator reading the sessions cannot tell the two apart',
+    file: 'apps/api/src/ingress/http/native-handoff.ts',
+    find: "  const platform = client?.platform === 'ios' ? 'ios' : 'macos';\n",
+    replace: "  const platform = 'macos';\n",
     tests: ['apps/api/src/ingress/http/native-handoff.integration.test.ts'],
   },
   {
