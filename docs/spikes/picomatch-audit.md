@@ -1,6 +1,6 @@
 # Picomatch audit allowance — 2026-11-18
 
-Owner: Görkem. Follow-up: [#1438](https://github.com/doancan/purlay/issues/1438).
+Owner: Görkem. Follow-up: [#1438](https://github.com/purlay/purlay/issues/1438).
 Policy: D-91. The current allowance and its expiry are owned by `scripts/audit-allowlist.json`.
 
 ## Finding and versions actually checked

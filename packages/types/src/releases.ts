@@ -6,7 +6,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 
 /** The repository Purlay is published from, as `owner/name`: the one place it is spelled. */
-export const RELEASE_REPOSITORY = 'doancan/purlay';
+export const RELEASE_REPOSITORY = 'purlay/purlay';
 
 /** Where a person goes to read the source and the releases. */
 export const REPOSITORY_URL = `https://github.com/${RELEASE_REPOSITORY}`;

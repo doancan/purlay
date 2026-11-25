@@ -12,7 +12,7 @@ set -euo pipefail
 
 pr="${1:?usage: wait-for-checks.sh <pr-number> [expected-count]}"
 expected="${2:-2}"
-repo="${REPO:-doancan/purlay}"
+repo="${REPO:-purlay/purlay}"
 
 # The checks must belong to the commit that was pushed. Without that, a rollup
 # left over from the previous commit satisfies every other condition and reports

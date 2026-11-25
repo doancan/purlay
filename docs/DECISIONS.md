@@ -1840,12 +1840,12 @@ is the envelope (a first version judged against the middle and still failed at 1
 fewer than three runs to see a spread in, the factor is 2. A regression is still never
 adopted, and the line itself is still held where it means something, by the tests on a developer's machine.
 
-*Amended 2026-10-28 (API latency trials):* [main run 40662081925](https://github.com/doancan/purlay/actions/runs/40662081925)
+*Amended 2026-10-28 (API latency trials):* [main run 40662081925](https://github.com/purlay/purlay/actions/runs/40662081925)
 reported ACK and fan-out p95 of 57.3 ms against a 14.8 ms baseline, after a CI-only change with no
 API or database runtime diff. Three unchanged local runs measured ACK p95 of 24.01, 23.56 and
 23.98 ms; they did **not** reproduce the hosted slowdown or prove its cause. The old log held only
 one p95 per metric, so it could not distinguish a single disturbed run from sustained slowness.
-[The next main run, 40666696134](https://github.com/doancan/purlay/actions/runs/40666696134), passed
+[The next main run, 40666696134](https://github.com/purlay/purlay/actions/runs/40666696134), passed
 at 14.4 ms ACK and 14.0 ms fan-out against the same 14.8 ms baseline, with no message-path change.
 That supports run-to-run variability rather than a persistent code regression; it does not identify
 the hosted disturbance's cause.
@@ -12163,12 +12163,12 @@ notes (`docs/changelog/v{x.y.z}.md`, D-185); neither reached a screen.
    address with the sign-in traffic (D-186), and the web app asked it on every load of the signed-in frame and on About: a
    shared address — an office, a proxy — spent the budget people sign in with, and the browser tests saw `429`. This route
    needs a session and is charged per person, to the costly reads. `GET /api/client` stays for the native applications,
-   which ask it once before anybody has signed in, and no code of the browser's names it (a test holds that). The server makes one anonymous `GET {GITHUB_API_URL}/repos/doancan/purlay/releases/latest`
+   which ask it once before anybody has signed in, and no code of the browser's names it (a test holds that). The server makes one anonymous `GET {GITHUB_API_URL}/repos/purlay/purlay/releases/latest`
    (`features/chat/integrations/latest-release.ts`), bounded as every call to GitHub is — a deadline, no redirect followed, the body
    checked against a schema, never throwing to the caller — and accepts only a tag of three numbers behind a `v` and a page on
    `https://github.com/`; a draft, a pre-release, a rate limit, a `5xx`, a redirect or anything else is `null` and one log line
    without the body. The page must be exactly this repository's page of that tag
-   (`https://github.com/doancan/purlay/releases/tag/<tag>`), so a link is built, not believed. A good answer is kept six
+   (`https://github.com/purlay/purlay/releases/tag/<tag>`), so a link is built, not believed. A good answer is kept six
    hours, in memory, and callers arriving together share one call. **A failure does not take back what was learned:** when
    the six hours lapse and GitHub does not answer, the last good answer is served on and GitHub is asked again after a
    failure window of ten minutes — or, for a limit that names its wait, that wait, at most an hour. Only a server that has

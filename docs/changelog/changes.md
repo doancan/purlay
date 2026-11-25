@@ -36,6 +36,7 @@ have it.
 
 ### Fixed
 
+- **Operations** — the update check finds the latest release again: Purlay now lives in the `purlay` organisation, and GitHub answers the old repository address with a redirect that the check, by design, does not follow
 - **Workspaces** — on the front door, *Keep* a workspace that is being deleted no longer misses its button when the creation form finishes loading under it
 
 ---

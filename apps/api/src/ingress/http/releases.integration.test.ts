@@ -18,7 +18,7 @@ const ORIGIN = 'https://purlay.test';
 
 const RELEASE = {
   tag_name: 'v1.4.0',
-  html_url: 'https://github.com/doancan/purlay/releases/tag/v1.4.0',
+  html_url: 'https://github.com/purlay/purlay/releases/tag/v1.4.0',
   published_at: '2026-10-30T08:00:00Z',
 };
 
@@ -67,11 +67,11 @@ describe('integration: the newest release', () => {
         current: SERVER_VERSION,
         latest: {
           version: '1.4.0',
-          url: 'https://github.com/doancan/purlay/releases/tag/v1.4.0',
+          url: 'https://github.com/purlay/purlay/releases/tag/v1.4.0',
           publishedAt: '2026-10-30T08:00:00.000Z',
         },
       });
-      expect(stand.urls).toEqual(['https://api.github.com/repos/doancan/purlay/releases/latest']);
+      expect(stand.urls).toEqual(['https://api.github.com/repos/purlay/purlay/releases/latest']);
     });
   });
 

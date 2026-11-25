@@ -13,7 +13,7 @@ const API = 'https://api.github.example';
 
 const GOOD = {
   tag_name: 'v1.2.3',
-  html_url: 'https://github.com/doancan/purlay/releases/tag/v1.2.3',
+  html_url: 'https://github.com/purlay/purlay/releases/tag/v1.2.3',
   published_at: '2026-10-30T08:00:00Z',
   draft: false,
   prerelease: false,
@@ -81,13 +81,13 @@ const tagged = (tag: string): Response =>
   json({
     ...GOOD,
     tag_name: tag,
-    html_url: `https://github.com/doancan/purlay/releases/tag/${tag}`,
+    html_url: `https://github.com/purlay/purlay/releases/tag/${tag}`,
   });
 
 const GOOD_ANSWER = {
   latest: {
     version: '1.2.3',
-    url: 'https://github.com/doancan/purlay/releases/tag/v1.2.3',
+    url: 'https://github.com/purlay/purlay/releases/tag/v1.2.3',
     publishedAt: '2026-10-30T08:00:00.000Z',
   },
 };
@@ -97,7 +97,7 @@ describe('the newest release', () => {
     const { check, calls } = world([(): Response => json(GOOD)]);
     expect(await check.latest()).toEqual(GOOD_ANSWER);
     expect(calls).toEqual([
-      { url: `${API}/repos/doancan/purlay/releases/latest`, redirect: 'manual', method: 'GET' },
+      { url: `${API}/repos/purlay/purlay/releases/latest`, redirect: 'manual', method: 'GET' },
     ]);
   });
 
@@ -112,7 +112,7 @@ describe('the newest release', () => {
     const newer = {
       ...GOOD,
       tag_name: 'v1.3.0',
-      html_url: 'https://github.com/doancan/purlay/releases/tag/v1.3.0',
+      html_url: 'https://github.com/purlay/purlay/releases/tag/v1.3.0',
     };
     const { check, calls, advance } = world([
       (): Response => json(GOOD),
@@ -183,7 +183,7 @@ describe('what GitHub can answer instead', () => {
     ],
     [
       'a page over plain http',
-      (): Response => json({ ...GOOD, html_url: 'http://github.com/doancan/purlay' }),
+      (): Response => json({ ...GOOD, html_url: 'http://github.com/purlay/purlay' }),
     ],
     ['a page that is a script', (): Response => json({ ...GOOD, html_url: 'javascript:alert(1)' })],
     ['a date that is not one', (): Response => json({ ...GOOD, published_at: 'yesterday' })],
@@ -197,11 +197,11 @@ describe('what GitHub can answer instead', () => {
     [
       'this repository’s page for another tag',
       (): Response =>
-        json({ ...GOOD, html_url: 'https://github.com/doancan/purlay/releases/tag/v1.2.4' }),
+        json({ ...GOOD, html_url: 'https://github.com/purlay/purlay/releases/tag/v1.2.4' }),
     ],
     [
       'a page that is this repository’s but not a tag’s',
-      (): Response => json({ ...GOOD, html_url: 'https://github.com/doancan/purlay' }),
+      (): Response => json({ ...GOOD, html_url: 'https://github.com/purlay/purlay' }),
     ],
     [
       'a page with something after it',
@@ -288,7 +288,7 @@ describe('what GitHub can answer instead', () => {
     const newer = {
       ...GOOD,
       tag_name: 'v1.3.0',
-      html_url: 'https://github.com/doancan/purlay/releases/tag/v1.3.0',
+      html_url: 'https://github.com/purlay/purlay/releases/tag/v1.3.0',
     };
     const { check, calls, advance, lines } = world([
       (): Response => json(GOOD),
