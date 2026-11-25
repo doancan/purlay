@@ -605,6 +605,38 @@ describe('integration: POST /api/native/token', () => {
     expect(row.user_agent).toBe('Purlay for macOS/unknown (Doğancan’s MacBook Pro)');
   });
 
+  test('names an iOS application as one, with its version', async () => {
+    const person = await aSignedInUser(db, clock, 'ios-label');
+    const { verifier, challenge, state } = aVerifier();
+    const { code } = await authorize(person, { challenge, state });
+    const response = await token(
+      { code, verifier, device: { name: 'iPhone' } },
+      { 'x-purlay-client': 'ios/0.1.0 contract/1' },
+    );
+    expect(response.status).toBe(204);
+    const row = await db
+      .selectFrom('sessions')
+      .select(['user_agent', 'device_name'])
+      .where('user_id', '=', person.userId)
+      .where('user_agent', 'like', 'Purlay for iOS%')
+      .executeTakeFirstOrThrow();
+    expect(row).toEqual({ user_agent: 'Purlay for iOS/0.1.0 (iPhone)', device_name: 'iPhone' });
+  });
+
+  test('never takes the name of a platform it does not know from the header', async () => {
+    const person = await aSignedInUser(db, clock, 'other-platform');
+    const { verifier, challenge, state } = aVerifier();
+    const { code } = await authorize(person, { challenge, state });
+    await token({ code, verifier }, { 'x-purlay-client': 'android/2.0.0 contract/1' });
+    const row = await db
+      .selectFrom('sessions')
+      .select('user_agent')
+      .where('user_id', '=', person.userId)
+      .where('user_agent', 'like', 'Purlay for %')
+      .executeTakeFirstOrThrow();
+    expect(row.user_agent).toBe('Purlay for macOS/unknown (Doğancan’s MacBook Pro)');
+  });
+
   test('five at once with one code: one session, four refusals', async () => {
     const person = await aSignedInUser(db, clock, 'race');
     const { verifier, challenge, state } = aVerifier();

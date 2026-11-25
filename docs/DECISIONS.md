@@ -9522,6 +9522,10 @@ three variables are removed and nothing else moves.
 
 ### D-191. The native application is handed a session of its own by a one-time code bound to a secret it keeps — builds on D-186, D-179
 
+**Amended 2026-11-25.** The session's label names the application by the platform `X-Purlay-Client` says: `ios` is
+`Purlay for iOS/<version> (<device>)`, `macos` and any header that is not the shape stay `Purlay for macOS/…`. Only a
+platform this server has a name for is read from the header; nothing else of it is copied (D-190).
+
 **Context.** A browser session is a cookie; an application is not a browser, and cannot take one. D-179 gave
 identity one owner — GitHub, an emailed link, a password, the setup — and a form of the application's own would be
 a second place for it to be decided, with its own throttles and its own mistakes. D-186 left *how the app signs
