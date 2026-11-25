@@ -309,6 +309,32 @@ describe('the audit log', () => {
     expect(lines(view)).toEqual(['The storage quota was changed from 5 GB to 10 GB']);
   });
 
+  test('an operator’s limit, set and cleared, is said with its kind and the default where there was or is none (#1306)', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(2, {
+              action: 'quota.changed',
+              actor: null,
+              targetType: 'workspace',
+              metadata: { kind: 'issues:rows', from: '50' },
+            }),
+            anEntry(1, {
+              action: 'quota.changed',
+              actor: null,
+              targetType: 'workspace',
+              metadata: { kind: 'issues:rows', to: '50' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      'The limit issues:rows was changed from 50 to the default',
+      'The limit issues:rows was changed from the default to 50',
+    ]);
+  });
+
   test('a window changed is said in the reader’s words, forever or in days (D-139 §4)', async () => {
     const view = await openPage({
       audit: () =>

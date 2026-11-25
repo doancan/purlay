@@ -226,6 +226,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     log,
     metrics,
     outboxPendingMax: dependencies.config.OUTBOX_PENDING_MAX,
+    deliveriesPerMinuteMax: dependencies.config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
     ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
   };
   const factContext = factContextOf(seamInputs);

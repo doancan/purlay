@@ -23,7 +23,7 @@ import type { AppErrorBody, ErrorResponse, HttpStatus } from '@purlay/types';
 import { statusFor } from '@purlay/types';
 import { DatabaseUnavailableError } from '@purlay/db';
 import { AppError } from '../../platform/errors';
-import { FactBacklogFull } from '../../platform/outbox';
+import { FactBacklogFull, FactRateExceeded } from '../../platform/outbox';
 
 /** What a validation failure looks like coming out of the framework. */
 interface FrameworkIssue {
@@ -170,6 +170,14 @@ export const refusalFor = (
     return respond({
       code: 'FACT_BACKLOG_FULL',
       message: 'This workspace has too much waiting to be handled. Try again shortly.',
+    });
+  }
+
+  // A workspace queueing facts faster than it may (#1306): told to slow down; the limit is for the log and the operator.
+  if (error instanceof FactRateExceeded) {
+    return respond({
+      code: 'RATE_LIMITED',
+      message: 'This workspace is doing that too fast. Try again shortly.',
     });
   }
 

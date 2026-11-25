@@ -107,6 +107,9 @@ export const Environment = Type.Object({
     maximum: 1_000_000,
     default: OUTBOX_PENDING_MAX_DEFAULT,
   }),
+  /** The deliveries one workspace may queue for the outbox in one minute (#1306): a publish that would pass it is refused with
+   *  `FactRateExceeded`, answered `429 RATE_LIMITED`. Absent, not limited; the operator's `quota:set` beats it per workspace. */
+  WORKSPACE_DELIVERIES_PER_MINUTE: Type.Optional(Type.Integer({ minimum: 1, maximum: 10_000_000 })),
   /** Days a dead or discarded fact is kept for an operator to look at, requeue or answer for (D-288 §12). */
   OUTBOX_DEAD_KEPT_DAYS: Type.Integer({
     minimum: 30,

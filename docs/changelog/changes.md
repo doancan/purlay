@@ -27,6 +27,10 @@ have it.
 
 ## Unreleased
 
+### Added
+
+- **Operations** — an operator can limit how many deliveries between modules one workspace may queue in a minute, and move its issues limit, with `bun run quota:set` (a reason is kept, `quota:show` and `quota:clear` read and undo it); a workspace over its limit is told to slow down (`429`), and each change is on the workspace's audit log (D-334)
+
 ### Fixed
 
 - **Workspaces** — on the front door, *Keep* a workspace that is being deleted no longer misses its button when the creation form finishes loading under it

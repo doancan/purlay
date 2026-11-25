@@ -1170,6 +1170,7 @@ export const en = {
   'audit.kind.workspace.exported': 'Workspace exported',
   'audit.kind.retention.purged': 'History cleared',
   'audit.kind.storage.quota_changed': 'Storage quota changed',
+  'audit.kind.quota.changed': 'Limit changed',
   'audit.kind.audit.exported': 'Audit log downloaded',
   'audit.kind.workspace.deletion_requested': 'Workspace deletion asked for',
   'audit.kind.workspace.deletion_cancelled': 'Workspace deletion taken back',
@@ -1309,6 +1310,8 @@ export const en = {
     other: 'You can export your data {count} times a day. Try again later.',
   },
   'audit.action.storage.quota_changed': 'The storage quota was changed from {from} to {to}',
+  'audit.action.quota.changed': 'The limit {kind} was changed from {from} to {to}',
+  'audit.quota.default': 'the default',
   'audit.action.retention.purged':
     'History older than {days} days was cleared: {messages} messages, {files} files',
   'github.entry': 'GitHub connection…',

@@ -9,7 +9,7 @@ import { issuesModule } from './features/issues/module';
 import { createMetricsRegistry } from './platform/metrics';
 import { type moduleSeams } from './platform/ports/module-seams';
 import { mintTurn } from './platform/workspace-turn';
-import { seamsOfModules } from './module-seams-wiring';
+import { factContextOf, seamsOfModules } from './module-seams-wiring';
 import { fixedClock } from './platform/clock';
 import type { EventBus } from './platform/events';
 import {
@@ -30,7 +30,7 @@ const counter = (name: string): ReturnType<typeof registry.counter<'module' | 'k
 const factCounter = (name: string): ReturnType<typeof registry.counter<'module' | 'fact'>> =>
   registry.counter(name, name, ['module', 'fact']);
 
-const seamsFor = seamsOfModules({
+const inputs = {
   composition: compose([issuesModule], [issuesModule]),
   clock: fixedClock(new Date('2026-01-01T00:00:00Z')),
   bus,
@@ -42,7 +42,9 @@ const seamsFor = seamsOfModules({
     inboxCollapsed: counter('wired_collapsed'),
   },
   outboxPendingMax: 100,
-});
+  deliveriesPerMinuteMax: null,
+} as const;
+const seamsFor = seamsOfModules(inputs);
 
 const failureOf = async (work: Promise<unknown>): Promise<string> =>
   await work.then(
@@ -75,5 +77,14 @@ describe('the seams of a module in the running build', () => {
     ).toMatch(/not in a transaction|not its publisher|publish/);
     await seams.announce([]);
     expect(bound().written()).toEqual([]);
+  });
+});
+
+describe('what the build hands the publisher of a fact', () => {
+  test('is the default rate of deliveries the process was given, not a number of the wiring’s own', () => {
+    expect(factContextOf({ ...inputs, deliveriesPerMinuteMax: 7 }).deliveriesPerMinuteMax).toBe(7);
+    expect(
+      factContextOf({ ...inputs, deliveriesPerMinuteMax: null }).deliveriesPerMinuteMax,
+    ).toBeNull();
   });
 });

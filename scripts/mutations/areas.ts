@@ -83,6 +83,7 @@ export const AREAS = [
   { name: 'api-modules-inbox', prefixes: ['apps/api/src/modules/inbox/'] },
   { name: 'api-modules-jobs', prefixes: ['apps/api/src/modules/jobs/'] },
   { name: 'api-modules-push', prefixes: ['apps/api/src/modules/push/'] },
+  { name: 'api-modules-quotas', prefixes: ['apps/api/src/modules/quotas/'] },
   { name: 'api-modules-setup', prefixes: ['apps/api/src/modules/setup/'] },
   { name: 'api-modules-setup-probes', prefixes: ['apps/api/src/modules/setup/probes.ts'] },
   {

@@ -349,6 +349,8 @@ describe('integration: upgrading from the previous release', () => {
         '0121_incoming_webhook_evidence',
         '0122_outbox_pending_age',
         '0123_profile_status_end',
+        '0124_workspace_quotas',
+        '0125_outbox_workspace_recent',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',

@@ -1173,6 +1173,7 @@ export const tr = {
   'audit.kind.workspace.exported': 'Çalışma alanı dışa aktarıldı',
   'audit.kind.retention.purged': 'Geçmiş temizlendi',
   'audit.kind.storage.quota_changed': 'Depolama kotası değişti',
+  'audit.kind.quota.changed': 'Sınır değişti',
   'audit.kind.audit.exported': 'Denetim kaydı indirildi',
   'audit.kind.workspace.deletion_requested': 'Çalışma alanının silinmesi istendi',
   'audit.kind.workspace.deletion_cancelled': 'Çalışma alanının silinmesi geri alındı',
@@ -1320,6 +1321,8 @@ export const tr = {
     other: 'Verilerini günde {count} kez dışa aktarabilirsin. Daha sonra tekrar dene.',
   },
   'audit.action.storage.quota_changed': 'Depolama kotası {from} yerine {to} yapıldı',
+  'audit.action.quota.changed': '{kind} sınırı {from} yerine {to} yapıldı',
+  'audit.quota.default': 'varsayılan',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',
   'github.entry': 'GitHub bağlantısı…',

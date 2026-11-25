@@ -195,6 +195,7 @@ export type CoreExcluded =
   | 'push_notice_budgets'
   | 'inbox_entries'
   | 'workspace_modules'
+  | 'workspace_quotas'
   | 'suspended_modules'
   | 'job_runs'
   | 'workspace_exports'
@@ -274,6 +275,8 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
     'what modules told one person: theirs alone and short-lived (read rows go after 30 days, all after 180), so it is in their own export and in no workspace’s (D-286)',
   workspace_modules:
     'which modules the operator granted the workspace, and until when: the server’s commercial record, not the workspace’s content (D-289)',
+  workspace_quotas:
+    'the limits the operator set for the workspace and why: the server’s own record of what it lets the workspace do, not the workspace’s content (#1306)',
   suspended_modules:
     'which modules the operator stopped for the whole server, and why: the server’s operational record, not a workspace’s (D-296)',
   job_runs: 'the scheduler’s own record',

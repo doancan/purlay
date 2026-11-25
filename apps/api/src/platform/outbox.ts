@@ -17,6 +17,7 @@ import { DAY_MS, type Clock } from './clock';
 import { readGrants } from './grants';
 import { currentRequest } from './logging';
 import type { Counter } from './metrics';
+import { limitFor, passes } from './quotas';
 import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { ModuleManifest } from './module-kit/manifest';
 
@@ -62,6 +63,11 @@ export interface FactPublishContext {
   readonly refused: Counter<'module' | 'fact'>;
   /** The most rows one workspace may have pending for one consumer (`OUTBOX_PENDING_MAX`): a publish that would pass it is refused. */
   readonly pendingMax: number;
+  /**
+   * What a workspace with no override of its own may queue for delivery in one minute (`WORKSPACE_DELIVERIES_PER_MINUTE`, #1306);
+   * `null` or absent, not limited. The operator's override of one workspace (`quota:set`) beats it either way.
+   */
+  readonly deliveriesPerMinuteMax?: number | null;
   /** The fact whose delivery is publishing this one, when one is: the chain from a fact to the facts it caused. */
   readonly causedBy?: string;
   /**
@@ -87,6 +93,34 @@ export class FactPublishError extends Error {
  */
 /** What a client is told to wait when a fact is refused for a full backlog: a few drains of the consumer (two seconds apart, D-288 §8). */
 export const FACT_BACKLOG_RETRY_AFTER_SECONDS = 30;
+
+/** What a client is told to wait when a fact is refused for the workspace's rate: the minute it is counted over, by when what it queued has aged out. */
+export const FACT_RATE_RETRY_AFTER_SECONDS = 60;
+
+/**
+ * A fact that was not published because the workspace has queued as many deliveries in the last minute as it may (#1306). Like
+ * `FactBacklogFull` it is not a defect of the publisher: a loop, or one workspace's flood, is told to slow down, and nothing was
+ * written. It is answered `429 RATE_LIMITED`, and names neither the workspace nor the limit to the client.
+ */
+export class FactRateExceeded extends Error {
+  readonly type: string;
+  readonly workspaceId: string;
+  readonly limit: number;
+
+  constructor(input: {
+    readonly type: string;
+    readonly workspaceId: string;
+    readonly limit: number;
+  }) {
+    super(
+      `The fact "${input.type}" was not published: workspace ${input.workspaceId} has queued ${String(input.limit)} deliveries in the last minute, the most it may.`,
+    );
+    this.name = 'FactRateExceeded';
+    this.type = input.type;
+    this.workspaceId = input.workspaceId;
+    this.limit = input.limit;
+  }
+}
 
 export class FactBacklogFull extends Error {
   readonly type: string;
@@ -159,6 +193,42 @@ const refuseWhenBacklogFull = async (
   if (first === undefined) return;
   for (const consumer of full) refused.inc({ module: consumer, fact: type });
   throw new FactBacklogFull({ type, workspaceId, consumer: first, ceiling: pendingMax });
+};
+
+/**
+ * Counts, up to the limit and no further, the deliveries the workspace queued in the last minute (`idx_outbox_workspace_recent`),
+ * and refuses the whole fact when the rows it would write pass the limit: the override of the workspace, else the default. A soft
+ * limit as the backlog's is: two publishes in flight at once may both pass, by the number in flight and no more.
+ */
+const refuseWhenRateExceeded = async (
+  transaction: Transaction,
+  input: {
+    readonly workspaceId: string;
+    readonly type: string;
+    readonly written: readonly string[];
+    readonly now: Date;
+    readonly fallback: number | null;
+    readonly refused: Counter<'module' | 'fact'>;
+  },
+): Promise<void> => {
+  const { workspaceId, type, written, now, fallback, refused } = input;
+  const limit = await limitFor(transaction, workspaceId, 'deliveries_per_minute', fallback);
+  if (limit === null) return;
+  const { count } = await transaction
+    .selectFrom(
+      transaction
+        .selectFrom('outbox')
+        .select(sql<number>`1`.as('one'))
+        .where('workspace_id', '=', workspaceId)
+        .where('created_at', '>', new Date(now.getTime() - 60_000))
+        .limit(limit + 1)
+        .as('recent'),
+    )
+    .select((eb) => eb.fn.countAll<string>().as('count'))
+    .executeTakeFirstOrThrow();
+  if (!passes(limit, Number(count), written.length)) return;
+  for (const consumer of written) refused.inc({ module: consumer, fact: type });
+  throw new FactRateExceeded({ type, workspaceId, limit });
 };
 
 /**
@@ -247,6 +317,19 @@ export const publishFact = async <Fact extends FactDeclaration>(
     dropped.inc({ module: consumer, fact: fact.type });
   }
   if (written.length === 0) return;
+  // The rate bounds what a client makes the workspace publish, in a request: what the system publishes in answer (a delivery's, a
+  // worker's) is bounded by the chain's depth and the backlog's ceiling, and a refusal there would give up on a fact whose cause
+  // was already answered, after the retries of the drain (#1306).
+  if (requestScope !== undefined && causedBy === undefined) {
+    await refuseWhenRateExceeded(transaction, {
+      workspaceId,
+      type: fact.type,
+      written,
+      now,
+      fallback: context.deliveriesPerMinuteMax ?? null,
+      refused,
+    });
+  }
   await refuseWhenBacklogFull(transaction, {
     workspaceId,
     type: fact.type,
