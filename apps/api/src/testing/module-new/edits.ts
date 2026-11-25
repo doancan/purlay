@@ -39,6 +39,19 @@ const ISSUES_MUTATIONS = "  'api-issues': API_ISSUES,";
 const CROSS_TENANT_INBOX = "  'GET /api/workspaces/:workspaceId/inbox': {";
 const ENDPOINTS_END = '] as const satisfies readonly EndpointSpec[];';
 
+const WEB_REGISTRY_IMPORT = "import { issues } from '../features/issues/manifest';\n";
+/** The end of the list of manifests, whatever the number of modules before it. */
+const WEB_REGISTRY_LIST = '] as const;\n\nexport type ModuleManifestOf';
+const WEB_API_IMPORT = "import { createIssuesApi, type IssuesApi } from './endpoints/issues';\n";
+const WEB_API_EXTENDS = '    IssuesApi,\n';
+const WEB_API_SPREAD = '  ...createIssuesApi(http),\n';
+const WEB_FAKE_API = "  deleteIssue: unexpected('deleteIssue'),\n";
+const WEB_KEY = "  issues: (workspaceId: string) => ['issues', workspaceId] as const,\n";
+const WEB_ACCESS = "  keys.issues('')[0],\n";
+const WEB_ROUTE_OWNER = "  issues: 'issues',\n";
+const WEB_WORDS_EN = "  'issues.more': 'Load more',\n";
+const WEB_WORDS_TR = "  'issues.more': 'Daha fazla yükle',\n";
+
 const EDITS: readonly Edit[] = [
   {
     file: 'apps/api/src/composition.ts',
@@ -155,6 +168,84 @@ ${ENDPOINTS_END}`,
 ${CROSS_TENANT_INBOX}`,
   },
   {
+    file: 'apps/web/src/modules/registry.ts',
+    anchor: WEB_REGISTRY_IMPORT,
+    text: `${WEB_REGISTRY_IMPORT}import { __CAMEL__ } from '../features/__ID__/manifest';\n`,
+  },
+  {
+    file: 'apps/web/src/modules/registry.ts',
+    anchor: WEB_REGISTRY_LIST,
+    // `[a, b] as const` on one line, or one to a line with a comma after the last once it is too long for one.
+    text: (before) =>
+      `${before.trimEnd().endsWith(',') ? '  __CAMEL__,\n' : ', __CAMEL__'}${WEB_REGISTRY_LIST}`,
+  },
+  {
+    file: 'apps/web/src/data/api.ts',
+    anchor: WEB_API_IMPORT,
+    text: `${WEB_API_IMPORT}import { create__PASCAL__Api, type __PASCAL__Api } from './endpoints/__ID__';\n`,
+  },
+  {
+    file: 'apps/web/src/data/api.ts',
+    anchor: WEB_API_EXTENDS,
+    text: `${WEB_API_EXTENDS}    __PASCAL__Api,\n`,
+  },
+  {
+    file: 'apps/web/src/data/api.ts',
+    anchor: WEB_API_SPREAD,
+    text: `${WEB_API_SPREAD}  ...create__PASCAL__Api(http),\n`,
+  },
+  {
+    file: 'apps/web/src/testing/fake-api.ts',
+    anchor: WEB_FAKE_API,
+    text: `${WEB_FAKE_API}  list__PASCAL__: unexpected('list__PASCAL__'),\n  create__PASCAL__Item: unexpected('create__PASCAL__Item'),\n`,
+  },
+  {
+    file: 'apps/web/src/data/keys.ts',
+    anchor: WEB_KEY,
+    text: `${WEB_KEY}  /** A workspace's __ID__ rows (the module's list). */\n  __CAMEL__: (workspaceId: string) => ['__ID__', workspaceId] as const,\n`,
+  },
+  {
+    // A workspace's content is forgotten when its access changes, and a module's rows are workspace content.
+    file: 'apps/web/src/data/access-change.ts',
+    anchor: WEB_ACCESS,
+    text: `${WEB_ACCESS}  keys.__CAMEL__('')[0],\n`,
+  },
+  {
+    file: 'apps/web/src/router/route-modules.test.ts',
+    anchor: WEB_ROUTE_OWNER,
+    text: `${WEB_ROUTE_OWNER}  __CAMEL__: '__ID__',\n`,
+  },
+  {
+    file: 'apps/web/src/i18n/catalogue/en.ts',
+    anchor: WEB_WORDS_EN,
+    text: `${WEB_WORDS_EN}  '__ID__.title': '__TITLE__',
+  '__ID__.loading': 'Loading __LOWER__',
+  '__ID__.error.title': '__TITLE__ could not be loaded',
+  '__ID__.error.body': 'The server did not answer. Nothing was lost.',
+  '__ID__.empty.title': 'Nothing here yet',
+  '__ID__.empty.body': 'Write a title above and press Add.',
+  '__ID__.new.title': 'New item',
+  '__ID__.new.placeholder': 'What is it called?',
+  '__ID__.new.add': 'Add',
+  '__ID__.new.failed': 'It was not added.',
+`,
+  },
+  {
+    file: 'apps/web/src/i18n/catalogue/tr.ts',
+    anchor: WEB_WORDS_TR,
+    text: `${WEB_WORDS_TR}  '__ID__.title': '__TITLE__', // <<FILL>> say the title in Turkish
+  '__ID__.loading': 'Yükleniyor: __LOWER__', // <<FILL>> say it in Turkish
+  '__ID__.error.title': '__TITLE__ yüklenemedi', // <<FILL>> say it in Turkish
+  '__ID__.error.body': 'Sunucu yanıt vermedi. Hiçbir şey kaybolmadı.',
+  '__ID__.empty.title': 'Henüz bir şey yok',
+  '__ID__.empty.body': 'Yukarıya bir başlık yazın ve Ekle’ye basın.',
+  '__ID__.new.title': 'Yeni öğe',
+  '__ID__.new.placeholder': 'Adı ne?',
+  '__ID__.new.add': 'Ekle',
+  '__ID__.new.failed': 'Eklenemedi.',
+`,
+  },
+  {
     file: 'docs/SCHEMA.md',
     anchor: SCHEMA_LAST_FILE,
     text: `${SCHEMA_LAST_FILE}__ID__/0001___ID__.sql             __SNAKE__: a workspace's rows, the __ID__ module's set  (D-__DECISION__)\n`,
@@ -238,7 +329,16 @@ The module is described in \`MODULES.md\` §11 and was made by \`bun run module:
 
 /** The edits of a module called `names`, in the order they are made. */
 export const editsFor = (names: Names, options: Options): Edit[] =>
-  EDITS.map((edit) => ({ ...edit, text: fill(edit.text, names, options) }));
+  EDITS.map((edit) => ({
+    ...edit,
+    text:
+      typeof edit.text === 'function'
+        ? (
+            (write: (before: string) => string) => (before: string) =>
+              fill(write(before), names, options)
+          )(edit.text)
+        : fill(edit.text, names, options),
+  }));
 
 /** The README says how many decisions there are, and `check:docs` holds it: the new skeleton is the last of them. */
 export const readmeCount = (readme: string, decision: number): Edit => {

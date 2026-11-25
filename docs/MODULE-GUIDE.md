@@ -34,19 +34,19 @@ needs to edit that has moved stops the run before anything is written.
 | `apps/api/src/features/acme/http/` | `routes.ts` (the plugin), `handlers.ts`, the pool-share test `budget.integration.test.ts` and the route test |
 | `packages/db/migrations/acme/0001_acme.sql` | the table: `workspace_id` with a cascade, bounds in `CHECK`s, the list's index |
 | `packages/types/src/acme.ts` | the wire types and `ACME_FACTS`, an empty list already joined to `FACTS` in `facts.ts`; the two endpoints are in `endpoints.ts`, the id in `modules.ts` |
-| the registries | `apps/api/src/composition.ts` (`bundledModules`), `packages/db/src/migrator.ts` (the set and its requirements), `packages/db/src/table-owners.ts`, `packages/db/src/table-lifecycle.ts`, `HOT_PATHS` in `apps/api/src/cli/budget-latency.ts` |
+| the registries, and the web half | `apps/web/src/features/acme/` (`manifest.ts` and `acme-screen.tsx`: the list in its four states and a form that adds a row, each with its test), its client `apps/web/src/data/endpoints/acme.ts`, and its lines in `apps/web/src/modules/registry.ts` (`MODULES`), `apps/web/src/data/` (the API, the cache keys, the content forgotten when access changes), the fake API of the tests and the catalogue words in `en.ts` and `tr.ts`; and `apps/api/src/composition.ts` (`bundledModules`), `packages/db/src/migrator.ts` (the set and its requirements), `packages/db/src/table-owners.ts`, `packages/db/src/table-lifecycle.ts`, `HOT_PATHS` in `apps/api/src/cli/budget-latency.ts` |
 | the documents | `MODULES.md` §11 (row and section), `SCHEMA.md` (the table and §12), `DATA.md`, `API.md`, `CONFIG.md`, `ARCHITECTURE.md`, a skeleton decision in `DECISIONS.md`, the decision count in `README.md` |
 
 **What you owe.** Every place the generator could not write for you is marked with a placeholder (`scaffold-leftovers.test.ts` lists
 them and fails until none is left): the decision (what the module is and is not, who may do what, what happens to its data when it
-is off, what reversing costs), the removal threshold of its section, and the sentence of each optional partner. Then replace what is
+is off, what reversing costs), the removal threshold of its section, and the sentence of each optional partner, and the Turkish words of the screen (`tr.ts`: the title and two sentences carry a placeholder, English until you say them). Then replace what is
 scaffold: the table and the routes are a title and a list; give the module its own shape, and its own web feature when it has a screen.
 The hot path is declared as having none, with a reason, until you give it a measured one (`HOT_PATHS`: copy issues').
 
 **What proves it.** `module-new.integration.test.ts` runs exactly this on a copy of the repository: the generator twice (a module and a
 second that consumes a fact of the first), the declarations an author writes (a fact, a kind of notice, a search source), the schema held
-to the migrations, the compilers, the guards of the seams (`MODULES.md` §8), the tests that list facts, kinds and sources, and the
-documents. A guard that starts to want a hand edit fails there first.
+to the migrations, the compilers, the guards of the seams (`MODULES.md` §8), the tests that list facts, kinds and sources, the screens'
+own tests with the registry, the catalogue and the class vocabulary of the web, and the documents. A guard that starts to want a hand edit fails there first.
 
 Then add the mutations for the rules only your tests guard (`CONTRIBUTING.md` §5), a changelog entry when a person can use the
 module, and run `bun run verify`.

@@ -708,6 +708,14 @@ export const API_ROOT: readonly Mutation[] = [
     tests: ['apps/api/src/testing/module-new.test.ts'],
   },
   {
+    id: 'module-new-keeps-rows-after-access-is-lost',
+    why: 'the generated module’s rows stay in the browser’s cache after the person loses the workspace, because its key is not among the workspace content that is forgotten',
+    file: 'apps/api/src/testing/module-new/edits.ts',
+    find: "    text: `${WEB_ACCESS}  keys.__CAMEL__('')[0],\\n`,",
+    replace: '    text: WEB_ACCESS,',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
     id: 'module-new-skips-the-docs-row',
     why: 'the generated module has no row in MODULES.md §11, so module-listing fails on the first thing the author sees',
     file: 'apps/api/src/testing/module-new/edits.ts',
@@ -721,6 +729,14 @@ export const API_ROOT: readonly Mutation[] = [
     file: 'apps/api/src/testing/module-new/templates/apps/api/src/features/__ID__/http/budget.integration.test.ts.tpl',
     find: ' * @needs-modules chat, __ID__\n',
     replace: ' * @needs-modules __ID__\n',
+    tests: ['apps/api/src/testing/module-new.test.ts'],
+  },
+  {
+    id: 'module-new-skips-the-web-registry',
+    why: 'the generated module is in the API and not in the web’s list of modules, so its screen is never drawn and nothing says so until a person looks (D-250)',
+    file: 'apps/api/src/testing/module-new/edits.ts',
+    find: "      `${before.trimEnd().endsWith(',') ? '  __CAMEL__,\\n' : ', __CAMEL__'}${WEB_REGISTRY_LIST}`,",
+    replace: '      WEB_REGISTRY_LIST,',
     tests: ['apps/api/src/testing/module-new.test.ts'],
   },
   {

@@ -19,6 +19,10 @@ export interface Names {
   readonly snake: string;
   /** `MY_TASKS`. */
   readonly upper: string;
+  /** `My tasks`: what a person is first shown, until the author says it better. */
+  readonly title: string;
+  /** `my tasks`: the title inside a sentence. */
+  readonly lower: string;
 }
 
 export interface Options {
@@ -37,6 +41,8 @@ export const namesOf = (id: string): Names => {
     camel: pascal.charAt(0).toLowerCase() + pascal.slice(1),
     snake: words.join('_'),
     upper: words.join('_').toUpperCase(),
+    title: `${words.join(' ').charAt(0).toUpperCase()}${words.join(' ').slice(1)}`,
+    lower: words.join(' '),
   };
 };
 
@@ -73,6 +79,8 @@ export const fill = (template: string, names: Names, options: Options): string =
     CAMEL: names.camel,
     SNAKE: names.snake,
     UPPER: names.upper,
+    TITLE: names.title,
+    LOWER: names.lower,
     REQUIRES_CELL: cell(options.requires),
     OPTIONAL_CELL: cell(options.optional),
     REQUIRES: sentence(options.requires),
@@ -120,17 +128,20 @@ export const templateFiles = (names: Names, options: Options): NewFile[] =>
 export interface Edit {
   readonly file: string;
   readonly anchor?: string;
-  readonly text: string;
+  /** What replaces the anchor; a function is given the text before it, for a list that may or may not end in a comma. */
+  readonly text: string | ((before: string) => string);
 }
 
 /** The file with the edit made; throws when the anchor is not found exactly once, so a moved line stops the run before it writes anything. */
 export const applyEdit = (content: string, edit: Edit): string => {
-  if (edit.anchor === undefined) return `${content.trimEnd()}\n${edit.text}`;
+  if (edit.anchor === undefined)
+    return `${content.trimEnd()}\n${typeof edit.text === 'function' ? edit.text(content) : edit.text}`;
   const parts = content.split(edit.anchor);
   if (parts.length !== 2) {
     throw new Error(
       `${edit.file}: the anchor ${JSON.stringify(edit.anchor.slice(0, 60))} is not there exactly once, so nothing was written`,
     );
   }
-  return `${parts[0] ?? ''}${edit.text}${parts[1] ?? ''}`;
+  const before = parts[0] ?? '';
+  return `${before}${typeof edit.text === 'function' ? edit.text(before) : edit.text}${parts[1] ?? ''}`;
 };
