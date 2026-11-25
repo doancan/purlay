@@ -3725,7 +3725,7 @@ CREATE INDEX idx_outbox_expires ON outbox (expires_at) WHERE state = 'pending';
 -- What an operator is told of: the dead rows of each consumer.
 CREATE INDEX idx_outbox_dead ON outbox (consumer) WHERE state = 'dead';
 -- The key's own check when a workspace's row goes.
-CREATE INDEX idx_outbox_workspace ON outbox (workspace_id);
+CREATE INDEX idx_outbox_workspace_recent ON outbox (workspace_id, created_at DESC);  -- replaced idx_outbox_workspace (0125): the deliveries of the last minute, and every lookup by workspace
 -- What a publish counts before it writes (the facts a workspace has waiting for a consumer, D-288 §10) and a claim walks, from one
 -- workspace to the next and down each one's due times (D-288 §11). (0093; 0091 made it as (workspace_id, consumer).)
 CREATE INDEX idx_outbox_pending_by_workspace ON outbox (consumer, workspace_id, next_attempt_at) WHERE state = 'pending';
@@ -4254,6 +4254,32 @@ CREATE INDEX idx_suspended_modules_suspended_by ON suspended_modules (suspended_
 
 ```
 
+### 9.14. `workspace_quotas`
+
+What the operator lets one workspace do beyond or short of what every workspace may (#1306, D-334): a limit's override, one row per
+workspace and kind, in the core's own table. Sparse: a workspace with no row for a kind takes the build's default for it
+(`platform/quotas.ts`: `limitFor`), and a kind with no default and no row is not limited. Only the operator's command writes it
+(`bun run quota:set`, `CONFIG.md`).
+
+- **No key to a module.** `kind` is text in the grammar `<name>` of the core or `<module>:<name>` of a module, checked and nothing
+  more: the build may not carry the module a kind names, and a core table never names a module's (D-250 rule 5).
+- **0 is a limit.** It refuses every new one. A limit below what a workspace already holds deletes nothing: only new ones are refused.
+- **The reason is the operator's sentence.** 1 to 500 characters, kept in the row and read by the next operator who looks (`quota:show`);
+  the trail carries which kind, from and to, never the words. It names no person.
+- **Purged with the workspace, in no export.** The purge empties the table by name (`CORE_REMAINING_TABLES`); it is the server's own
+  record of what it lets the workspace do, not the workspace's content.
+
+```sql
+CREATE TABLE workspace_quotas (
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL CHECK (kind ~ '^[a-z][a-z0-9_]*(:[a-z][a-z0-9_]*)?$' AND char_length(kind) <= 48),
+    limit_value  BIGINT NOT NULL CHECK (limit_value BETWEEN 0 AND 9007199254740991),
+    reason       TEXT NOT NULL CHECK (char_length(reason) BETWEEN 1 AND 500),
+    changed_at   TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (workspace_id, kind)
+);
+```
+
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
 **Generated** by `kysely-codegen` from a database with every migration applied, and committed so
@@ -4473,6 +4499,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0121_incoming_webhook_evidence.sql  incoming_webhooks last_request_at, last_status and last_error (D-312)
 0122_outbox_pending_age.sql  idx_outbox_pending_age: the oldest pending fact of a consumer without reading all of them  (#1303)
 0123_profile_status_end.sql  users.status_emoji, users.status_until: a status line that clears itself, with an emoji  (D-330)
+0124_workspace_quotas.sql    workspace_quotas: the operator's override of a limit for one workspace, by kind  (D-334)
+0125_outbox_workspace_recent.sql  idx_outbox_workspace_recent: the deliveries a workspace queued in the last minute, for the rate limit  (D-334)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

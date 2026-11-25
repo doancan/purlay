@@ -435,6 +435,22 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
   },
   {
+    id: 'fact-rate-answered-as-a-defect',
+    why: 'a workspace that queues too fast is answered 500, as a fault of the server, and nothing tells it to slow down (#1306)',
+    file: 'apps/api/src/ingress/http/errors.ts',
+    find: '  if (error instanceof FactRateExceeded) {',
+    replace: '  if (error instanceof FactRateExceeded && false) {',
+    tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
+  },
+  {
+    id: 'fact-rate-refusal-says-no-when-to-retry',
+    why: 'the refusal for a workspace that queues too fast carries no `Retry-After`, so a client retries at once and makes it worse (#1306)',
+    file: 'apps/api/src/ingress/http/error-hook.ts',
+    find: "      set.headers['retry-after'] = String(FACT_RATE_RETRY_AFTER_SECONDS);\n",
+    replace: '',
+    tests: ['apps/api/src/ingress/http/module-publish.integration.test.ts'],
+  },
+  {
     id: 'failed-request-line-forgets-the-module',
     why: 'a request that failed with a 500 is logged without the module that owns its route (D-250 rule 7)',
     file: 'apps/api/src/ingress/http/error-hook.ts',

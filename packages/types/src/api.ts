@@ -941,6 +941,8 @@ export const AUDIT_ACTIONS = [
   'workspace.exported',
   'retention.purged',
   'storage.quota_changed',
+  /** An operator's limit set or cleared for the workspace (`bun run quota:set`, #1306): which, from and to, never the words of its reason. */
+  'quota.changed',
   'audit.exported',
   'workspace.deletion_requested',
   'workspace.deletion_cancelled',
@@ -1012,6 +1014,8 @@ export const CORE_AUDIT_ACTIONS = [
   'workspace.export_requested',
   'workspace.exported',
   'storage.quota_changed',
+  /** An operator's limit set or cleared for the workspace (`bun run quota:set`, #1306): which, from and to, never the words of its reason. */
+  'quota.changed',
   'audit.exported',
   'workspace.deletion_requested',
   'workspace.deletion_cancelled',

@@ -78,6 +78,7 @@ const CORE_AREAS: readonly string[] = [
   'inbox',
   'jobs',
   'modules',
+  'quotas',
   'search',
   'suspension',
   'users',

@@ -83,6 +83,7 @@ const consumer: BundledModule = {
 const fixture = async (
   db: Executor,
   pendingMax?: number,
+  deliveriesPerMinute?: number,
 ): Promise<{ post: (path: string) => Promise<Response>; workspaceId: string }> => {
   const room = await aRoom(db, ['member']);
   const member = room.members['member'];
@@ -92,9 +93,16 @@ const fixture = async (
     testDependencies({
       database: db,
       clock,
-      ...(pendingMax === undefined
+      ...(pendingMax === undefined && deliveriesPerMinute === undefined
         ? {}
-        : { config: testConfig({ OUTBOX_PENDING_MAX: pendingMax }) }),
+        : {
+            config: testConfig({
+              ...(pendingMax === undefined ? {} : { OUTBOX_PENDING_MAX: pendingMax }),
+              ...(deliveriesPerMinute === undefined
+                ? {}
+                : { WORKSPACE_DELIVERIES_PER_MINUTE: deliveriesPerMinute }),
+            }),
+          }),
       composition: compose([consumer, publisher], [consumer, publisher], 'open', [
         ISSUE_TOLD,
         CHAT_TOLD,
@@ -160,6 +168,40 @@ describe('integration: a route whose fact finds the consumer’s backlog full', 
       expect(body).toContain('FACT_BACKLOG_FULL');
       expect(body).not.toContain(workspaceId);
       expect(await rowsOf(db, workspaceId)).toEqual(['issues>chat issues.told']);
+    });
+  });
+});
+
+describe('integration: a route whose fact passes the workspace’s rate (#1306)', () => {
+  test('is answered 429 RATE_LIMITED with Retry-After, naming neither the workspace nor the limit, and writes nothing of it', async () => {
+    await withRollback(async (db) => {
+      const { post, workspaceId } = await fixture(db, undefined, 1);
+      expect((await post('told')).status).toBe(200);
+      const refused = await post('told');
+      expect(refused.status).toBe(429);
+      expect(refused.headers.get('retry-after')).toBe('60');
+      const body = JSON.stringify(await refused.json());
+      expect(body).toContain('RATE_LIMITED');
+      expect(body).not.toContain(workspaceId);
+      expect(await rowsOf(db, workspaceId)).toEqual(['issues>chat issues.told']);
+    });
+  });
+
+  test('is the operator’s override of the workspace that decides, over the default the process was given', async () => {
+    await withRollback(async (db) => {
+      const { post, workspaceId } = await fixture(db, undefined, 1);
+      await db
+        .insertInto('workspace_quotas')
+        .values({
+          workspace_id: workspaceId,
+          kind: 'deliveries_per_minute',
+          limit_value: '3',
+          reason: 'a test',
+          changed_at: new Date(),
+        })
+        .execute();
+      for (let turn = 0; turn < 3; turn += 1) expect((await post('told')).status).toBe(200);
+      expect((await post('told')).status).toBe(429);
     });
   });
 });

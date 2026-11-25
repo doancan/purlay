@@ -39,6 +39,7 @@ validating a value nothing acts on tells an operator a setting works when it doe
 | `DATABASE_URL` | ✅ | — | `postgres://user:pass@host:5432/purlay` |
 | `DATABASE_POOL_MAX` | — | `10` | Connection pool ceiling. The issues module takes at most a third of it (rounded down, never more than the pool less one, at least one: `features/issues/budget.ts`); chat is not budgeted |
 | `OUTBOX_PENDING_MAX` | — | `5000` | The most facts one workspace may have waiting for one module's outbox worker (D-288 §10), from `1` to `1000000`. A publish that would pass it is refused with `FactBacklogFull`, nothing is written and the publisher's transaction ends, so one workspace in a flood cannot bury the others' facts; counted in `purlay_outbox_refused_total`. Per workspace and consumer, soft by the publishes in flight. Raise it only if `purlay_outbox_pending` shows a consumer that keeps up and a workspace that legitimately bursts (`DEPLOY.md`) |
+| `WORKSPACE_DELIVERIES_PER_MINUTE` | — | — | The most deliveries one workspace may queue for the outbox in one minute (D-334), from `1` to `10000000`; counted as the rows a fact would write. A publish a client makes in a request that would pass it is refused whole with `429 RATE_LIMITED` and `Retry-After: 60`, and nothing of it is written; what the system publishes in answer (a delivery's, a worker's) is bounded by the chain's depth and the backlog's ceiling, not by this. The operator's `bun run quota:set <slug> deliveries_per_minute <n> --reason "…"` beats it for one workspace, up or down |
 | `OUTBOX_DEAD_KEPT_DAYS` | — | `180` | How long a fact between modules that was given up on (dead after its tries, or discarded by the administrator) is kept before `sweep:outbox` takes it, from `30` to `3650` days (D-288 §12). A dead fact is a business fact that was not delivered, so it is not taken silently after a month: the operator has this long to inspect it, requeue it or answer for it. The job's hourly log line counts what it took (`dead`, `discarded`, `finished`, `expired`) |
 | `DATABASE_SSL` | — | `false` | Required by most managed PostgreSQL providers. Verifies the server's certificate. `bun run db:migrate` reads it too. **Production refuses `false`** unless `DATABASE_ALLOW_PLAINTEXT` is set (D-79) |
 | `DATABASE_ALLOW_PLAINTEXT` | — | `false` | Production only: acknowledges that the database link is not encrypted because the network is private (a compose network, a unix socket). Without it production will not start on `DATABASE_SSL=false`. It does not turn TLS off by itself |
@@ -438,6 +439,13 @@ asks its API about github.com links, which it does not have; run Enterprise Serv
 > and takes the workspace row's lock as an upload does. A quota below what is used deletes nothing;
 > uploads are refused until there is room. Owners see the same numbers on Settings → Data & retention,
 > and each change on the audit log as `storage.quota_changed`, from and to, by nobody in the workspace.
+>
+> **Other limits** (D-334): `bun run quota:show <slug>` lists what is in force for a workspace and why;
+> `bun run quota:set <slug> <kind> <limit> --reason "<why>"` sets one and `quota:clear <slug> <kind>` takes it back to the default. The
+> kinds are `deliveries_per_minute` (`WORKSPACE_DELIVERIES_PER_MINUTE` is the default; none where it is unset) and `issues:rows` (the
+> issues a workspace may hold, `10000` by default). The limit is a whole number from 0, and 0 refuses every new one; a limit below what
+> the workspace already holds deletes nothing. The reason is required and kept in the row. Each change is on the workspace's audit log
+> as `quota.changed`, which kind, from and to, by nobody in the workspace, and the same command again writes and records nothing.
 
 ---
 

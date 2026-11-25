@@ -1425,6 +1425,14 @@ export interface WorkspaceModules {
   workspace_id: string;
 }
 
+export interface WorkspaceQuotas {
+  changed_at: Timestamp;
+  kind: string;
+  limit_value: Int8;
+  reason: string;
+  workspace_id: string;
+}
+
 export interface Workspaces {
   access_policy_epoch: Generated<Int8>;
   avatar_url: string | null;
@@ -1573,6 +1581,7 @@ export interface DB {
   workspace_mfa_factors: WorkspaceMfaFactors;
   workspace_mfa_recovery_codes: WorkspaceMfaRecoveryCodes;
   workspace_modules: WorkspaceModules;
+  workspace_quotas: WorkspaceQuotas;
   workspace_session_assurances: WorkspaceSessionAssurances;
   workspaces: Workspaces;
 }

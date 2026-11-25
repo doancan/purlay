@@ -37,6 +37,7 @@ import { API_MODULES_IMAGES } from './api-modules-images';
 import { API_MODULES_INBOX } from './api-modules-inbox';
 import { API_MODULES_JOBS } from './api-modules-jobs';
 import { API_MODULES_PUSH } from './api-modules-push';
+import { API_MODULES_QUOTAS } from './api-modules-quotas';
 import { API_MODULES_SETUP } from './api-modules-setup';
 import { API_MODULES_SETUP_PROBES } from './api-modules-setup-probes';
 import { API_MODULES_SETUP_RUNTIME } from './api-modules-setup-runtime';
@@ -99,6 +100,7 @@ export const MUTATIONS_BY_AREA: Readonly<Record<AreaName, readonly Mutation[]>> 
   'api-modules-inbox': API_MODULES_INBOX,
   'api-modules-jobs': API_MODULES_JOBS,
   'api-modules-push': API_MODULES_PUSH,
+  'api-modules-quotas': API_MODULES_QUOTAS,
   'api-modules-setup': API_MODULES_SETUP,
   'api-modules-setup-probes': API_MODULES_SETUP_PROBES,
   'api-modules-setup-runtime': API_MODULES_SETUP_RUNTIME,

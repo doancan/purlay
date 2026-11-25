@@ -635,6 +635,65 @@ describe('integration: how many issues a workspace may hold', () => {
   });
 });
 
+describe('integration: the operator’s limit of issues for one workspace (#1306)', () => {
+  const setLimit = async (db: Executor, workspaceId: string, limit: number): Promise<void> => {
+    await db
+      .insertInto('workspace_quotas')
+      .values({
+        workspace_id: workspaceId,
+        kind: 'issues:rows',
+        limit_value: String(limit),
+        reason: 'a test',
+        changed_at: new Date(),
+      })
+      .execute();
+  };
+
+  test('a lowered limit refuses the one that would pass it with its own number, keeps what is there, and is not another workspace’s', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, { ada: 'owner' });
+      const other = await aWorkspace(db, { bob: 'owner' });
+      const ada = person(w, 'ada');
+      await setLimit(db, w.id, 2);
+      expect((await call('POST', w.path, ada, { title: 'one' })).status).toBe(201);
+      expect((await call('POST', w.path, ada, { title: 'two' })).status).toBe(201);
+      const refused = await call('POST', w.path, ada, { title: 'three' });
+      expect({ status: refused.status, code: code(refused) }).toEqual({
+        status: 409,
+        code: 'ISSUES_LIMIT',
+      });
+      expect(JSON.stringify(refused.body)).toContain('at most 2 issues');
+      // What is there stays, and can be listed and changed; the neighbour has the default.
+      expect(((await call('GET', w.path, ada)).body as IssuePage).data).toHaveLength(2);
+      // The neighbour has the default: three issues, one more than the limit that was set here, are all made.
+      for (const title of ['one', 'two', 'three']) {
+        expect((await call('POST', other.path, person(other, 'bob'), { title })).status).toBe(201);
+      }
+    });
+  });
+
+  test('a limit of 0 refuses every new issue, and a limit above the default is the workspace’s own', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const frozen = await aWorkspace(db, { ada: 'owner' });
+      await setLimit(db, frozen.id, 0);
+      expect((await call('POST', frozen.path, person(frozen, 'ada'), { title: 'x' })).status).toBe(
+        409,
+      );
+      const roomy = await aWorkspace(db, { bob: 'owner' });
+      await setLimit(db, roomy.id, ISSUES_PER_WORKSPACE_MAX * 2);
+      const bob = person(roomy, 'bob');
+      await sql`
+        insert into issues (id, workspace_id, title, created_by)
+        select ('0199155c-' || lpad(to_hex(n / 65536), 4, '0') || '-7b7f-8c11-' || lpad(to_hex(n % 65536), 12, '0'))::uuid,
+               ${roomy.id}, 'filler', ${bob.userId}
+        from generate_series(1, ${ISSUES_PER_WORKSPACE_MAX}) as n`.execute(db);
+      expect((await call('POST', roomy.path, bob, { title: 'past the default' })).status).toBe(201);
+    });
+  });
+});
+
 describe('integration: what issues does for the core’s open places', () => {
   test('an erased account is unassigned, and what it made stays under its anonymised row', async () => {
     await withRollback(async (db) => {

@@ -26,6 +26,8 @@ interface SeamInputs {
     'outboxDropped' | 'outboxRefused' | 'inboxEntries' | 'inboxCollapsed'
   >;
   readonly outboxPendingMax: number;
+  /** What a workspace with no override may queue for delivery in a minute; `null`, not limited (#1306). */
+  readonly deliveriesPerMinuteMax: number | null;
   readonly push?: PushSender;
 }
 
@@ -35,6 +37,7 @@ export const factContextOf = ({
   clock,
   metrics,
   outboxPendingMax,
+  deliveriesPerMinuteMax,
 }: SeamInputs): SharedFactContext => ({
   clock,
   routing: withoutStopped(
@@ -47,6 +50,7 @@ export const factContextOf = ({
   dropped: metrics.outboxDropped,
   refused: metrics.outboxRefused,
   pendingMax: outboxPendingMax,
+  deliveriesPerMinuteMax,
   effective: composition.effectiveModules,
 });
 

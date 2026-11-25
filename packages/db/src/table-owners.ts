@@ -79,6 +79,8 @@ export const TABLE_OWNERS = {
   workspace_directory_scim_group_members: 'core',
   // Which modules one workspace may use: the operator's grant, not the workspace's (D-289).
   workspace_modules: 'core',
+  // What the operator lets one workspace do beyond or short of the build's defaults: a limit's override (#1306).
+  workspace_quotas: 'core',
   workspaces: 'core',
 
   // Chat: channels and what is said in them, and the integrations that post into them.

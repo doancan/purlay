@@ -23,6 +23,7 @@ const BASE = [
   ['platform/module-kit/permissions'],
   ['platform/one-line'],
   ['platform/pagination'],
+  ['platform/quotas', ['limitFor', 'passes']],
   ['platform/ports/*'],
   ['platform/tenancy'],
   ['platform/transactions'],

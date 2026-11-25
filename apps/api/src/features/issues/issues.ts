@@ -28,6 +28,7 @@ import type { NotificationSink, WrittenNotice } from '../../platform/ports/notif
 import { AppError } from '../../platform/errors';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 import { limitOf } from '../../platform/pagination';
+import { limitFor, passes } from '../../platform/quotas';
 import type { WorkspaceContext } from '../../platform/tenancy';
 import type { IssuesDb, IssuesTx } from './schema';
 
@@ -157,10 +158,17 @@ const requireRoom = async (transaction: IssuesTx, context: WorkspaceContext): Pr
     .select((builder) => builder.fn.countAll<string>().as('count'))
     .where('workspace_id', '=', context.workspaceId)
     .executeTakeFirstOrThrow();
-  if (Number(held.count) >= ISSUES_PER_WORKSPACE_MAX) {
+  // The workspace's own limit when the operator set one (`quota:set`), else the same for every workspace.
+  const limit = await limitFor(
+    transaction,
+    context.workspaceId,
+    'issues:rows',
+    ISSUES_PER_WORKSPACE_MAX,
+  );
+  if (passes(limit, Number(held.count), 1)) {
     throw new AppError({
       code: 'ISSUES_LIMIT',
-      message: `A workspace holds at most ${String(ISSUES_PER_WORKSPACE_MAX)} issues; delete some first.`,
+      message: `A workspace holds at most ${String(limit)} issues; delete some first.`,
     });
   }
 };

@@ -391,6 +391,13 @@ export const AuditPage = (): React.JSX.Element => {
           from: format.bytes(Number(entry.metadata['from'] ?? '0')),
           to: format.bytes(Number(entry.metadata['to'] ?? '0')),
         });
+      // The operator's command, which is nobody in the workspace (#1306): a limit and its values, the default when there is none.
+      case 'quota.changed':
+        return t('audit.action.quota.changed', {
+          kind: entry.metadata['kind'] ?? '',
+          from: entry.metadata['from'] ?? t('audit.quota.default'),
+          to: entry.metadata['to'] ?? t('audit.quota.default'),
+        });
       // A download of this very log (D-222): who took it; the filter is in the downloaded file's name.
       case 'audit.exported':
         return t('audit.action.audit.exported', { actor });

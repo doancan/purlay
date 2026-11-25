@@ -474,6 +474,7 @@ if (!workerLifecycle.stopped) {
       log,
       metrics,
       outboxPendingMax: config.OUTBOX_PENDING_MAX,
+      deliveriesPerMinuteMax: config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
       push,
     }),
     entitledFor: modules.entitledFor,

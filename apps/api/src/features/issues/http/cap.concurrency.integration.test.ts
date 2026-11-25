@@ -75,4 +75,46 @@ describe('integration: making issues at the cap, together', () => {
       .execute();
     expect(held).toHaveLength(ISSUES_PER_WORKSPACE_MAX);
   }, 60_000);
+
+  test('under the operator’s limit of one for the workspace, one of two makes is made and the other is refused, and the limit is the one the refusal names', async () => {
+    const user = await aUserRow(cloned.db, 'cap-op');
+    const workspace = await cloned.db
+      .insertInto('workspaces')
+      .values({ name: 'W', slug: aUniqueSlug('capop') })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await cloned.db
+      .insertInto('workspace_members')
+      .values({ workspace_id: workspace.id, user_id: user.userId, role: 'owner' })
+      .execute();
+    await cloned.db
+      .insertInto('workspace_quotas')
+      .values({
+        workspace_id: workspace.id,
+        kind: 'issues:rows',
+        limit_value: '1',
+        reason: 'a test',
+        changed_at: NOW,
+      })
+      .execute();
+    const make = async (title: string): Promise<string> =>
+      await atomicallyOn(cloned.db)(async (transaction) => {
+        const context = await requireWorkspaceMembership(transaction, user.userId, workspace.id);
+        await createIssue(transaction, fixedClock(NOW), context, { title }, noInbox);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return 'made';
+      }).catch((error: unknown) =>
+        error instanceof AppError ? `${error.body.code}:${error.body.message}` : String(error),
+      );
+    const outcomes = await Promise.all([make('first'), make('second')]);
+    expect(outcomes.filter((outcome) => outcome === 'made')).toHaveLength(1);
+    expect(outcomes.filter((outcome) => outcome.startsWith('ISSUES_LIMIT:'))).toHaveLength(1);
+    expect(outcomes.join(' ')).toContain('at most 1 issues');
+    const held = await cloned.db
+      .selectFrom('issues')
+      .select('id')
+      .where('workspace_id', '=', workspace.id)
+      .execute();
+    expect(held).toHaveLength(1);
+  }, 60_000);
 });

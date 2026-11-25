@@ -66,6 +66,7 @@ export const CORE_REMAINING_TABLES = [
   'workspace_invitation_recipients',
   'workspace_invitations',
   'workspace_modules',
+  'workspace_quotas',
 ] as const;
 
 /** A table with a `workspace_id` to empty it by. */

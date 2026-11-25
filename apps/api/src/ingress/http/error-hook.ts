@@ -15,7 +15,12 @@ import { AppError } from '../../platform/errors';
 import { goneMessageReference } from '../../platform/gone-message';
 import type { Logger } from '../../platform/logging';
 import type { ServerMetrics } from '../../platform/metrics';
-import { FACT_BACKLOG_RETRY_AFTER_SECONDS, FactBacklogFull } from '../../platform/outbox';
+import {
+  FACT_BACKLOG_RETRY_AFTER_SECONDS,
+  FACT_RATE_RETRY_AFTER_SECONDS,
+  FactBacklogFull,
+  FactRateExceeded,
+} from '../../platform/outbox';
 import { abandonSignIn } from './auth';
 import type { LeasedDependencies } from './dependencies';
 import { refusalFor } from './errors';
@@ -75,6 +80,16 @@ export const errorHook = (input: {
         workspaceId: error.workspaceId,
         consumer: error.consumer,
         ceiling: error.ceiling,
+        ...moduleField(route),
+      });
+    }
+    if (error instanceof FactRateExceeded) {
+      set.headers['retry-after'] = String(FACT_RATE_RETRY_AFTER_SECONDS);
+      log.warn('a fact was refused: the workspace queued too many deliveries in the last minute', {
+        path: where,
+        fact: error.type,
+        workspaceId: error.workspaceId,
+        limit: error.limit,
         ...moduleField(route),
       });
     }
