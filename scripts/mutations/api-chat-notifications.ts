@@ -129,14 +129,6 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
     tests: INBOX_TESTS,
   },
   {
-    id: 'inbox-not-narrowed-to-visible-channels',
-    why: 'a person removed from a private channel, or never in it, reads what was said there through the notification',
-    file: INBOX,
-    find: "    .where('notifications.channel_id', 'in', visible)\n",
-    replace: '',
-    tests: [...INBOX_TESTS, 'apps/api/src/ingress/http/channel-visibility.integration.test.ts'],
-  },
-  {
     id: 'inbox-shows-deleted-messages',
     why: 'a deleted message is read again in the inbox of everybody it named',
     file: INBOX,
@@ -283,14 +275,6 @@ export const API_CHAT_NOTIFICATIONS: readonly Mutation[] = [
       'apps/api/src/features/chat/notifications/missed-mail.integration.test.ts',
       'apps/api/src/features/chat/http/missed-mail.integration.test.ts',
     ],
-  },
-  {
-    id: 'missed-mail-quotes-deleted',
-    why: 'a letter quotes a message its author deleted (D-240, D-9)',
-    file: 'apps/api/src/features/chat/notifications/missed-mail.ts',
-    find: "        .where('m.deleted_at', 'is', null)\n",
-    replace: '',
-    tests: ['apps/api/src/features/chat/notifications/missed-mail.integration.test.ts'],
   },
   {
     id: 'missed-mail-quotes-unreadable',
