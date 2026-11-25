@@ -202,6 +202,16 @@ const CHEAP_GUARDS = [
   'scripts/mutations.test.ts',
 ] as const;
 
+/** The web's suites a module's screen, its client or its words can break. */
+const WEB_SUITES = [
+  'apps/web/src/features/zz',
+  'apps/web/src/features/yy',
+  'apps/web/src/modules',
+  'apps/web/src/i18n',
+  'apps/web/src/data',
+  'apps/web/src/styles.test.ts',
+] as const;
+
 /** The suites that read the module lists or the lists of facts, kinds and sources, and used to need an edit for a module's first. */
 const LISTING_SUITES = [
   'apps/api/src/ingress/http/entitlement.integration.test.ts',
@@ -244,8 +254,26 @@ describe('integration: the paved road of a new module', () => {
         'apps/api/src/features/yy',
         'apps/api/src/testing',
         'packages/types/src',
+        'apps/web/src/features/zz',
+        'apps/web/src/features/yy',
+        'apps/web/src/data',
+        'apps/web/src/modules',
+        'apps/web/src/testing',
       ]);
       expect(lint.output).toBe('');
+
+      // The web half: each module's own screen test (loading, failed, empty, a list, a row made, a refusal, the module
+      // absent), the registry, the catalogue and the vocabulary of classes the screens are drawn from.
+      const web = run([
+        'bun',
+        '--no-env-file',
+        'test',
+        '--isolate',
+        '--timeout=120000',
+        ...WEB_SUITES,
+      ]);
+      expect(web.output).toContain(' 0 fail');
+      expect(web.code).toBe(0);
 
       const guards = run([
         'bun',

@@ -22,6 +22,8 @@ describe('the names of a module', () => {
       camel: 'myTasks',
       snake: 'my_tasks',
       upper: 'MY_TASKS',
+      title: 'My tasks',
+      lower: 'my tasks',
     });
   });
 
@@ -118,6 +120,45 @@ describe('against the repository as it is', () => {
     for (const edit of editsFor(names, OPTIONS)) {
       expect(() => applyEdit(readFileSync(join(ROOT, edit.file), 'utf8'), edit)).not.toThrow();
     }
+  });
+
+  test('the web half is wired where a screen is found, drawn and forgotten', () => {
+    const edits = editsFor(namesOf('zz'), OPTIONS);
+    const after = (file: string): string =>
+      edits
+        .filter((edit) => edit.file === file)
+        .reduce((text, edit) => applyEdit(text, edit), readFileSync(join(ROOT, file), 'utf8'));
+    const registry = after('apps/web/src/modules/registry.ts');
+    expect(registry).toContain("import { zz } from '../features/zz/manifest';");
+    expect(registry).toMatch(/export const MODULES = \[[^\]]*\bzz\b[^\]]*\] as const;/);
+    // A workspace's content is forgotten when the person's access to it changes: a module's rows are that content.
+    expect(after('apps/web/src/data/access-change.ts')).toContain("keys.zz('')[0],");
+    expect(after('apps/web/src/data/keys.ts')).toContain(
+      "zz: (workspaceId: string) => ['zz', workspaceId] as const,",
+    );
+    expect(after('apps/web/src/data/api.ts')).toContain('...createZzApi(http),');
+    expect(after('apps/web/src/router/route-modules.test.ts')).toContain("zz: 'zz',");
+    // The Turkish words are English until the author says them, and the generator says so where it is read (`scaffold-leftovers.test.ts`).
+    const owed = ['<<', 'FILL', '>>'].join('');
+    expect(
+      after('apps/web/src/i18n/catalogue/tr.ts')
+        .split('\n')
+        .filter((line) => line.includes(owed)),
+    ).toHaveLength(3);
+  });
+
+  test('the registry’s list takes a module whether it is on one line or one to a line once it is too long', () => {
+    const edit = editsFor(namesOf('zz'), OPTIONS).find(
+      (found) => found.file === 'apps/web/src/modules/registry.ts' && found.anchor?.startsWith(']'),
+    );
+    if (edit === undefined) throw new Error('the registry list has no edit');
+    const tail = '] as const;\n\nexport type ModuleManifestOf = 1;';
+    expect(applyEdit(`export const MODULES = [chat, issues${tail}`, edit)).toContain(
+      '[chat, issues, zz] as const',
+    );
+    expect(applyEdit(`export const MODULES = [\n  chat,\n  issues,\n${tail}`, edit)).toContain(
+      '  issues,\n  zz,\n] as const',
+    );
   });
 
   test('a second module finds every anchor the first one left, whatever the number of modules before it', () => {
