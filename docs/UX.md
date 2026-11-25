@@ -528,6 +528,8 @@ it. On a narrow window the navigation opens as the sidebar does.
   danger-toned bar: *<workspace> is being deleted: its content is erased after <when>.* with **Keep
   <workspace>**, which takes it back for everybody; a refusal (too late) is said in the bar. Its members see
   nothing: it has left their sidebar, and a tab open on it shows *not found*.
+  On the front door the card stands in the upper part of the page, not centred, so it does not move when its
+  creation form finishes loading, and **Keep** is where the pointer went.
 - **Members** — a table: person, role, and actions, with a search field and a role filter above it;
   the rules of *Members* below hold unchanged.
 - **Invitations** — the email invitation form and link creation, shared with **Invite people…**;

@@ -4,14 +4,27 @@
  * what the cards share (the canvas, the centring, the gutter) is said once, here, so none of them is a
  * different shade of the same page.
  */
+import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 
 export const StandaloneScreen = ({
   children,
+  placement = 'centre',
 }: {
   readonly children: React.ReactNode;
+  /**
+   * Where the card stands. `centre` is for a card whose height is settled when it is drawn. `top` is for one that grows
+   * once something loads (the front door's creation form): a centred card is centred again as it grows, and everything
+   * in it moves under a pointer that is on its way to it (#1475).
+   */
+  readonly placement?: 'centre' | 'top';
 }): React.JSX.Element => (
-  <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-4 text-ink">
+  <Main
+    className={cn(
+      'flex min-h-screen justify-center bg-surface-000 p-4 text-ink',
+      placement === 'top' ? 'items-start pt-16' : 'items-center',
+    )}
+  >
     {children}
   </Main>
 );
