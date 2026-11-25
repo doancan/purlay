@@ -3,6 +3,7 @@
  * that stopped running or keeps failing is visible; the orphan sweep takes only what nobody can
  * ever send; the storage count is put back to the bytes messages carry (I-7).
  */
+import { createTracer, useTracer, type EndedSpan, type Tracer } from '../../platform/tracing';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, sql, withRollback, type Executor } from '@purlay/db';
 import { messageId } from '@purlay/types';
@@ -48,6 +49,66 @@ const record = async (db: Executor, name: string): Promise<JobRow | undefined> =
     ])
     .where('job_name', '=', name)
     .executeTakeFirst();
+
+describe('integration: the span of a job’s run (#1307)', () => {
+  const sunk: EndedSpan[] = [];
+  const on = (): Tracer =>
+    useTracer(
+      createTracer({
+        sink: {
+          accept: (span): void => {
+            sunk.push(span);
+          },
+        },
+        clock,
+        sampleRatio: 1,
+      }),
+    );
+
+  test('is a trace of its own named by the job, ended with the run, and says nothing of what the job did', async () => {
+    sunk.length = 0;
+    const before = on();
+    try {
+      await withRollback(async (db) => {
+        await runJob({ database: db, clock, log: aRecordingLogger().log }, 'sweep:test', () =>
+          Promise.resolve({ done: 7, secret: 1 }),
+        );
+      });
+    } finally {
+      useTracer(before);
+    }
+    expect(sunk).toHaveLength(1);
+    expect(sunk[0]).toMatchObject({ name: 'job', kind: 'internal', error: false });
+    expect(sunk[0]?.parentSpanId).toBeUndefined();
+    expect([...(sunk[0]?.attributes ?? [])]).toEqual([['purlay.job', 'sweep:test']]);
+  });
+
+  test('is an error when the job throws, and is ended all the same', async () => {
+    sunk.length = 0;
+    const before = on();
+    try {
+      await withRollback(async (db) => {
+        await runJob({ database: db, clock, log: aRecordingLogger().log }, 'sweep:test', () =>
+          Promise.reject(new Error('the job broke')),
+        ).catch(() => undefined);
+      });
+    } finally {
+      useTracer(before);
+    }
+    expect(sunk).toHaveLength(1);
+    expect(sunk[0]?.error).toBe(true);
+  });
+
+  test('is nothing where tracing is off', async () => {
+    sunk.length = 0;
+    await withRollback(async (db) => {
+      await runJob({ database: db, clock, log: aRecordingLogger().log }, 'sweep:test', () =>
+        Promise.resolve({}),
+      );
+    });
+    expect(sunk).toEqual([]);
+  });
+});
 
 describe('integration: a job’s run is recorded', () => {
   test('a database that fails before the job could start is still said in the log, and thrown on', async () => {

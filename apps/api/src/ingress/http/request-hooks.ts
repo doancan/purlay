@@ -40,6 +40,7 @@ import {
 } from './edge';
 import { refusalFor } from './errors';
 import { EDGE_ROUTE } from './metrics';
+import { parseTraceparent, tracer, type Span } from '../../platform/tracing';
 import type { httpLimits } from './rate-limit';
 import type { RequestObservation } from './request-observation';
 import { workspaceHttpAccess } from './workspace-access';
@@ -108,6 +109,22 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
   /** What a request's own hooks know that the deadline, which wraps them all, needs to answer in their place. */
   const requestIds = new WeakMap<Request, string>();
   const requestScopes = new WeakMap<Request, RequestScope>();
+  const requestSpans = new WeakMap<Request, Span>();
+  /**
+   * Ends the request's span with what the metrics already say: the route's pattern, never the path with its ids, and the status. A
+   * server's fault (5xx) is an error of the span; a refusal of the person's own (4xx) is not.
+   */
+  const endSpan = (request: Request, route: string | undefined, status: number): void => {
+    const span = requestSpans.get(request);
+    if (span === undefined) return;
+    requestSpans.delete(request);
+    span.setAttribute('http.route', route ?? 'unmatched');
+    span.setAttribute('http.response.status_code', status);
+    const module = moduleOfRoute(route);
+    if (module !== CORE_OWNER && module !== NO_OWNER) span.setAttribute('purlay.module', module);
+    if (status >= 500) span.setError();
+    span.end();
+  };
   const deadlineSignals = new WeakMap<Request, AbortSignal>();
   /** The answer to a module's request that ran past its deadline: the envelope, with the headers the others carry. */
   const answerOverrun = (request: Request, module: string): Response => {
@@ -157,9 +174,20 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
   const onRequest = ({ request, set }: RequestContext): Response | undefined => {
     // An id from the edge is kept when well-formed, as a label only (#234).
     const requestId = inboundRequestId(request.headers);
+    // A trace arrives in `traceparent` (W3C Trace Context) and is joined, or a new one starts: the span is this request's, and a fact
+    // or a job it leads to is a child of it (D-336). Off: nothing is made, and nothing here costs more than the comparison.
+    const span = tracer().start('request', {
+      parent: parseTraceparent(request.headers.get('traceparent')),
+      kind: 'server',
+    });
+    if (span.recording) {
+      requestSpans.set(request, span);
+      span.setAttribute('http.request.method', request.method);
+    }
     const scope: RequestScope = {
       requestId,
       startedAt: performance.now(),
+      ...(span.recording ? { span } : {}),
       entitlements,
       workspaceAccess: workspaceHttpAccess(dependencies, request),
       ...(request.headers.has('x-purlay-active-workspace') ? { workspaceActivity: new Map() } : {}),
@@ -182,6 +210,7 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
     const turnedAway = (response: Response): Response => {
       const { pathname } = new URL(request.url);
       observe(request.method, EDGE_ROUTE, response.status);
+      endSpan(request, EDGE_ROUTE, response.status);
       log.info('request', {
         method: request.method,
         path: pathname.startsWith('/auth/') ? '/auth/*' : pathWithoutSecret(pathname),
@@ -252,6 +281,7 @@ export const requestHooks = (input: RequestHooksInput): RequestHooks => {
           ? StatusMap[set.status]
           : (set.status ?? 200);
     observe(request.method, route, status);
+    endSpan(request, route, status);
     write('request', {
       method: request.method,
       path: writtenPath(route, path),

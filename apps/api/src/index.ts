@@ -59,6 +59,7 @@ import {
   installShutdown,
 } from './lifecycle';
 import { migrateOnStart, untilMigrated } from './platform/migrate-on-start';
+import { startTracing } from './platform/tracing-start';
 import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
 import { inMemoryAttention } from './platform/attention';
@@ -149,6 +150,15 @@ log.info(
   config.METRICS_TOKEN === undefined
     ? 'metrics are off: METRICS_TOKEN is unset'
     : 'metrics are served at /metrics',
+);
+
+// Traces go to the collector the operator named; unset, nothing is made (`tracing.ts`, D-336).
+const tracing = startTracing(config, { clock: systemClock, metrics });
+log.info(
+  tracing === undefined
+    ? 'tracing is off: OTEL_EXPORTER_OTLP_ENDPOINT is unset'
+    : 'tracing is on: spans are sent to the collector',
+  tracing === undefined ? {} : { sampleRatio: config.TRACE_SAMPLE_RATIO },
 );
 
 // Who is in front of a workspace's page now: heard by the sockets, asked by the push sender (D-143).
@@ -359,6 +369,8 @@ installShutdown({
     suspension.stop();
     await workers.stop();
     await closeAfterDrain({ push, services, errorTracker, database, redis, moduleSet })();
+    // After the last request is answered: the spans of the shutdown itself are sent too.
+    await tracing?.stop();
   },
   log,
   process,

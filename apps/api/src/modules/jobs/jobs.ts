@@ -22,6 +22,7 @@ import type { SendMail } from '../../platform/mail';
 import type { ObjectStore } from '../../platform/storage';
 import type { WorkspaceAccessLifetime } from '../../platform/workspace-access-facts';
 import { atomicallyOn } from '../../platform/transactions';
+import { tracer } from '../../platform/tracing';
 import { drainObjectDeletions, enqueueObjectDeletions } from '../attachments/deletions';
 import { sweepAdminVerification } from '../setup/verification';
 
@@ -90,6 +91,9 @@ export const runJob = async (
 ): Promise<Outcome> => {
   const { database, clock, log } = dependencies;
   const started = clock.now();
+  // A job run is a trace of its own (D-336): its name and whether it failed, nothing of what it did.
+  const span = tracer().start('job', { kind: 'internal' });
+  span.setAttribute('purlay.job', name);
   try {
     await database
       .insertInto('job_runs')
@@ -117,6 +121,7 @@ export const runJob = async (
     const message = error instanceof Error ? error.message : String(error);
     // Said first: recording it needs the database, which may be what failed.
     log.error('a scheduled job failed', { job: name, error });
+    span.setError();
     await database
       .updateTable('job_runs')
       .set({
@@ -130,6 +135,8 @@ export const runJob = async (
         log.error('a failed job could not be recorded', { job: name, error: recording });
       });
     throw error;
+  } finally {
+    span.end();
   }
 };
 
