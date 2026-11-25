@@ -148,10 +148,10 @@ const github = Bun.serve({
     if (path === '/rate_limit' && request.headers.has('authorization')) {
       return Response.json({ resources: {} });
     }
-    if (path === '/repos/doancan/purlay/releases/latest') {
+    if (path === '/repos/purlay/purlay/releases/latest') {
       return Response.json({
         tag_name: 'v99.0.0',
-        html_url: 'https://github.com/doancan/purlay/releases/tag/v99.0.0',
+        html_url: 'https://github.com/purlay/purlay/releases/tag/v99.0.0',
         published_at: '2026-11-01T09:00:00Z',
         draft: false,
         prerelease: false,

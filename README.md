@@ -7,7 +7,7 @@ Purlay is open source (AGPL-3.0) and ships two ways: **run it yourself for free*
 for a flat price per workspace. Both are the same code, with no features held back from
 self-hosters. **Adding a teammate never costs more**, on either one.
 
-> **Status: pre-1.0.** See [releases](https://github.com/doancan/purlay/releases) for the current
+> **Status: pre-1.0.** See [releases](https://github.com/purlay/purlay/releases) for the current
 > version. The API and schema still change between releases; read
 > [What is not built yet](#status-and-what-is-not-built-yet) before depending on it.
 
@@ -152,7 +152,7 @@ documents.
 | [`docs/CONFIG.md`](docs/CONFIG.md) | Environment variables |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Installing and updating a server |
 | [`docs/DATA.md`](docs/DATA.md) | For an operator: personal data, retention and erasure |
-| [Issues and board](https://github.com/doancan/purlay/issues) | The ordered task list |
+| [Issues and board](https://github.com/purlay/purlay/issues) | The ordered task list |
 | [`docs/changelog/`](docs/changelog) | What each release changed |
 
 ## Status and what is not built yet

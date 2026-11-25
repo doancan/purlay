@@ -7,7 +7,9 @@
  */
 import type { BoardIssue, Stage } from './board-rules';
 
-const OWNER = 'doancan';
+// The repository belongs to the organisation; the board is still a user's project, so the two owners are two names.
+const REPO_OWNER = 'purlay';
+const PROJECT_OWNER = 'doancan';
 const REPO = 'purlay';
 const PROJECT = 1;
 
@@ -76,7 +78,7 @@ interface PullNode {
 /** Open pull requests, as: issue number → the pull requests that would close it. */
 const openClosers = (): Map<number, number[]> => {
   const pulls = connection<PullNode>(
-    `query($after:String){repository(owner:"${OWNER}",name:"${REPO}"){
+    `query($after:String){repository(owner:"${REPO_OWNER}",name:"${REPO}"){
       pullRequests(states:OPEN,first:${String(PAGE)},after:$after){pageInfo{hasNextPage endCursor}
       nodes{number closingIssuesReferences(first:20){nodes{number}}}}}}`,
     (data) =>
@@ -96,7 +98,7 @@ const openClosers = (): Map<number, number[]> => {
 export const fetchIssues = (): BoardIssue[] => {
   const closers = openClosers();
   const nodes = connection<IssueNode>(
-    `query($after:String){repository(owner:"${OWNER}",name:"${REPO}"){
+    `query($after:String){repository(owner:"${REPO_OWNER}",name:"${REPO}"){
       issues(first:${String(PAGE)},after:$after){pageInfo{hasNextPage endCursor}
       nodes{${ISSUE_FIELDS}}}}}`,
     (data) =>
@@ -112,7 +114,7 @@ export const fetchIssue = (number: number): BoardIssue => {
       'api',
       'graphql',
       '-f',
-      `query=query{repository(owner:"${OWNER}",name:"${REPO}"){issue(number:${String(number)}){${ISSUE_FIELDS}}}}`,
+      `query=query{repository(owner:"${REPO_OWNER}",name:"${REPO}"){issue(number:${String(number)}){${ISSUE_FIELDS}}}}`,
     ]),
   ) as { data: { repository: { issue: IssueNode | null } } };
   const node = data.data.repository.issue;
@@ -121,11 +123,11 @@ export const fetchIssue = (number: number): BoardIssue => {
 };
 
 export const assign = (number: number, user: string): void => {
-  gh(['issue', 'edit', String(number), '-R', `${OWNER}/${REPO}`, '--add-assignee', user]);
+  gh(['issue', 'edit', String(number), '-R', `${REPO_OWNER}/${REPO}`, '--add-assignee', user]);
 };
 
 export const unassign = (number: number, user: string): void => {
-  gh(['issue', 'edit', String(number), '-R', `${OWNER}/${REPO}`, '--remove-assignee', user]);
+  gh(['issue', 'edit', String(number), '-R', `${REPO_OWNER}/${REPO}`, '--remove-assignee', user]);
 };
 
 interface ItemNode {
@@ -140,7 +142,7 @@ interface StatusField {
   readonly options?: readonly { readonly id: string; readonly name: string }[];
 }
 
-const PROJECT_REF = `user(login:"${OWNER}"){projectV2(number:${String(PROJECT)})`;
+const PROJECT_REF = `user(login:"${PROJECT_OWNER}"){projectV2(number:${String(PROJECT)})`;
 
 /** The board's own copy of an issue the board does not have yet. Returns its item id. */
 const addToBoard = (projectId: string, number: number): string => {
@@ -149,7 +151,7 @@ const addToBoard = (projectId: string, number: number): string => {
       'api',
       'graphql',
       '-f',
-      `query=query{repository(owner:"${OWNER}",name:"${REPO}"){issue(number:${String(number)}){id}}}`,
+      `query=query{repository(owner:"${REPO_OWNER}",name:"${REPO}"){issue(number:${String(number)}){id}}}`,
     ]),
   ) as { data: { repository: { issue: { id: string } } } };
   const added = JSON.parse(

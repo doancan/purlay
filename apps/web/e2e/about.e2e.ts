@@ -25,13 +25,13 @@ test.describe('About', () => {
     await expect(versions.getByRole('status')).toHaveText('Version 99.0.0 is available.');
     await expect(versions.getByRole('link', { name: /View release on GitHub/ })).toHaveAttribute(
       'href',
-      'https://github.com/doancan/purlay/releases/tag/v99.0.0',
+      'https://github.com/purlay/purlay/releases/tag/v99.0.0',
     );
     const source = main.getByRole('region', { name: 'Open source' });
     await expect(source.getByText('AGPL-3.0-or-later')).toBeVisible();
-    await expect(source.getByRole('link', { name: 'github.com/doancan/purlay' })).toHaveAttribute(
+    await expect(source.getByRole('link', { name: 'github.com/purlay/purlay' })).toHaveAttribute(
       'href',
-      'https://github.com/doancan/purlay',
+      'https://github.com/purlay/purlay',
     );
     await expectNoAxe();
   });

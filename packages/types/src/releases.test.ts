@@ -18,7 +18,7 @@ describe('the answer about the newest release', () => {
   test('is a release, or null', () => {
     const release = {
       version: '1.2.3',
-      url: 'https://github.com/doancan/purlay/releases/tag/v1.2.3',
+      url: 'https://github.com/purlay/purlay/releases/tag/v1.2.3',
       publishedAt: '2026-11-01T10:00:00Z',
     };
     expect(Value.Check(LatestReleaseAnswer, { current: '1.2.0', latest: release })).toBe(true);
@@ -48,8 +48,8 @@ describe('the answer about the newest release', () => {
       });
     expect(at(releasePage('v1.2.3'))).toBe(true);
     expect(at('https://github.com/someone/else/releases/tag/v1.2.3')).toBe(false);
-    expect(at('https://github.com/doancan/purlay')).toBe(false);
-    expect(at('https://github.com.evil.test/doancan/purlay/releases/tag/v1.2.3')).toBe(false);
+    expect(at('https://github.com/purlay/purlay')).toBe(false);
+    expect(at('https://github.com.evil.test/purlay/purlay/releases/tag/v1.2.3')).toBe(false);
     expect(at(`${releasePage('v1.2.3')}?x=1`)).toBe(false);
   });
 
@@ -61,7 +61,7 @@ describe('the answer about the newest release', () => {
   });
 
   test('names the repository once, and a tag is three numbers behind a v', () => {
-    expect(REPOSITORY_URL).toBe('https://github.com/doancan/purlay');
+    expect(REPOSITORY_URL).toBe('https://github.com/purlay/purlay');
     expect(RELEASE_TAG.test('v1.0.0')).toBe(true);
     for (const tag of ['1.0.0', 'v1.0', 'v1.0.0-rc1', 'v1.0.0\n', 'xv1.0.0', 'v1.0.0.1']) {
       expect(RELEASE_TAG.test(tag)).toBe(false);

@@ -1331,7 +1331,7 @@ describe('the endpoints', () => {
   test('the version this server runs and the newest release it learned of (D-248)', async () => {
     const release = {
       version: '1.3.0',
-      url: 'https://github.com/doancan/purlay/releases/tag/v1.3.0',
+      url: 'https://github.com/purlay/purlay/releases/tag/v1.3.0',
       publishedAt: '2026-10-30T08:00:00.000Z',
     };
     const newest = harness({ current: '1.2.3', latest: release });

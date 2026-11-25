@@ -21,7 +21,7 @@ vulnerability.**
 
 Use GitHub's private vulnerability reporting: on the repository, open **Security**, then
 **Report a vulnerability**
-(`https://github.com/doancan/purlay/security/advisories/new`). That opens a private thread with the
+(`https://github.com/purlay/purlay/security/advisories/new`). That opens a private thread with the
 maintainer, lets us work on a fix in a private fork, and publishes an advisory with credit to you
 when it is fixed.
 
