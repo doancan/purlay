@@ -22,8 +22,16 @@
  * Which endpoints must appear here is not decided in this file
  * (`cross-tenant.test.ts`, D-63).
  */
-import { afterAll, expect, test } from 'bun:test';
-import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import { afterAll, beforeAll, expect, test } from 'bun:test';
+import {
+  CLONE_HOOK_MS,
+  cloneIntegrationDatabase,
+  DROP_HOOK_MS,
+  closeIntegrationDatabase,
+  withRollback,
+  type ClonedDatabase,
+  type Executor,
+} from '@purlay/db';
 import { messageId } from '@purlay/types';
 import { createApp } from '../ingress/http/app';
 import {
@@ -461,6 +469,56 @@ const NOT_A_UUID: Ids = {
   exportId: 'not-a-uuid',
 };
 
+/** What a tenant is seeded as: the two things that change the rows it needs. */
+interface Variant {
+  readonly guestMember: boolean;
+  readonly companyIdentity: boolean;
+}
+
+const variantKey = (variant: Variant): string =>
+  `${String(variant.guestMember)}/${String(variant.companyIdentity)}`;
+
+/** What a tenant crossing reads: the owner of a workspace, a stranger with a workspace of their own, and the owner's ids. */
+interface CrossingWorld {
+  readonly ownerUser: Awaited<ReturnType<typeof aSignedInUser>>;
+  readonly stranger: string;
+  readonly theirs: Ids & { readonly replyId: string };
+}
+
+/** What a list case reads: one member of two workspaces with data in both. */
+interface ListWorld {
+  readonly member: string;
+  readonly first: Ids & { readonly replyId: string };
+  readonly second: Ids & { readonly replyId: string };
+}
+
+const seedCrossing = async (db: Executor, variant: Variant): Promise<CrossingWorld> => {
+  const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
+  const stranger = await signedIn(db, 'xt-stranger');
+  const theirs = await aTenant(
+    db,
+    ownerUser.cookie,
+    'xt-theirs',
+    variant.guestMember,
+    variant.companyIdentity,
+  );
+  await aTenant(db, stranger, 'xt-own');
+  return { ownerUser, stranger, theirs };
+};
+
+const seedList = async (db: Executor, variant: Variant): Promise<ListWorld> => {
+  const member = await signedIn(db, 'xt-both');
+  const first = await aTenant(db, member, 'xt-first', variant.guestMember, variant.companyIdentity);
+  const second = await aTenant(
+    db,
+    member,
+    'xt-second',
+    variant.guestMember,
+    variant.companyIdentity,
+  );
+  return { member, first, second };
+};
+
 /** How many files the suite is split into. A part file takes its number from its own name. */
 export const CROSS_TENANT_PARTS = 16;
 
@@ -489,9 +547,37 @@ export const crossTenantPart = (
     return () => index++ % CROSS_TENANT_PARTS === part - 1;
   };
 
+  /**
+   * The worlds this file's cases cross, seeded once in a database of the file's own and committed there. A case then
+   * makes only its own handful of requests inside a transaction that is rolled back, where it used to seed two
+   * tenants of some sixty requests each: about a second of CPU a case, which a loaded machine stretched past the
+   * five seconds a test has (#1511). What a case does to the world (archive a channel, promote a member) is undone
+   * with its transaction, as before.
+   */
+  let cloned: ClonedDatabase | undefined;
+  const crossingWorlds = new Map<string, CrossingWorld>();
+  const listWorlds = new Map<string, ListWorld>();
+  const crossingKeysNeeded = new Map<string, Variant>();
+  const listKeysNeeded = new Map<string, Variant>();
+  const database = (): Executor => {
+    if (cloned === undefined) throw new Error('the cross-tenant world was not seeded');
+    return cloned.db;
+  };
+
+  beforeAll(async () => {
+    cloned = await cloneIntegrationDatabase();
+    for (const [key, variant] of crossingKeysNeeded) {
+      crossingWorlds.set(key, await seedCrossing(cloned.db, variant));
+    }
+    for (const [key, variant] of listKeysNeeded) {
+      listWorlds.set(key, await seedList(cloned.db, variant));
+    }
+  }, CLONE_HOOK_MS * 4);
+
   afterAll(async () => {
     await closeIntegrationDatabase();
-  });
+    await cloned?.drop();
+  }, DROP_HOOK_MS);
 
   const crossings = (): void => {
     const mine = shareOfThisPart();
@@ -504,19 +590,18 @@ export const crossTenantPart = (
 
       for (const [what, query] of queriesFor(crossing)) {
         if (!mine()) continue;
+        const variant: Variant = {
+          guestMember: crossing.guestMember === true,
+          companyIdentity: crossing.companyIdentity === true,
+        };
+        const worldKey = variantKey(variant);
+        crossingKeysNeeded.set(worldKey, variant);
         test(`${key}${what} answers 404 across a tenant boundary, as if it did not exist`, async () => {
+          const world = crossingWorlds.get(worldKey);
+          if (world === undefined) throw new Error('the cross-tenant world was not seeded');
           await withRollback(async (db) => {
-            const ownerUser = await aSignedInUser(db, clock, 'xt-owner');
+            const { ownerUser, stranger, theirs } = world;
             const owner = ownerUser.cookie;
-            const stranger = await signedIn(db, 'xt-stranger');
-            const theirs = await aTenant(
-              db,
-              owner,
-              'xt-theirs',
-              crossing.guestMember,
-              crossing.companyIdentity,
-            );
-            await aTenant(db, stranger, 'xt-own');
             if (crossing.archived === true) {
               const archived = await call(db, 'DELETE', `/api/channels/${theirs.channelId}`, owner);
               expect(archived.status).toBe(204);
@@ -577,7 +662,7 @@ export const crossTenantPart = (
               body,
             );
             expect({ status: own.status, ok: own.ok }).toEqual({ status: own.status, ok: true });
-          });
+          }, database());
         });
       }
     }
@@ -596,23 +681,17 @@ export const crossTenantPart = (
       const [method = '', path = ''] = key.split(' ');
       const [, query = ''] = queriesFor(crossing)[0] ?? [];
 
+      const variant: Variant = {
+        guestMember: crossing.guestMember === true,
+        companyIdentity: crossing.companyIdentity === true,
+      };
+      const worldKey = variantKey(variant);
+      listKeysNeeded.set(worldKey, variant);
       test(`${key} lists nothing of the member's other workspace`, async () => {
+        const world = listWorlds.get(worldKey);
+        if (world === undefined) throw new Error('the cross-tenant world was not seeded');
         await withRollback(async (db) => {
-          const member = await signedIn(db, 'xt-both');
-          const first = await aTenant(
-            db,
-            member,
-            'xt-first',
-            crossing.guestMember,
-            crossing.companyIdentity,
-          );
-          const second = await aTenant(
-            db,
-            member,
-            'xt-second',
-            crossing.guestMember,
-            crossing.companyIdentity,
-          );
+          const { member, first, second } = world;
 
           const directions: readonly (readonly [Ids, Ids])[] = [
             [first, second],
@@ -637,7 +716,7 @@ export const crossTenantPart = (
               });
             }
           }
-        });
+        }, database());
       });
     }
   };
