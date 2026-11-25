@@ -210,11 +210,18 @@ test.describe("a message's hover controls (#653, D-150)", () => {
     const measured: string[] = [];
     for (let i = Math.max(1, count - 8); i < count; i += 1) {
       const row = rows.nth(i);
-      await row.scrollIntoViewIfNeeded();
-      await row.hover();
       const controls = row.locator(':scope > [data-hover-controls]');
+      // A row with no bar (a tombstone, a hidden history) has nothing to measure.
       if ((await controls.count()) === 0) continue;
-      await expect(controls).toHaveCSS('opacity', '1');
+      // The feed can still move under a pointer that is not moving: late images, reactions and the stick to the
+      // bottom shift the rows, and the bar then belongs to the row that arrived under the pointer (it follows the
+      // pointer, and says so on the failing CI run's last frame). Hovering and the check are one step, repeated
+      // until the pointer and the row are the same, so what is measured below is this row's own bar.
+      await expect(async () => {
+        await row.scrollIntoViewIfNeeded();
+        await row.hover();
+        await expect(controls).toHaveCSS('opacity', '1', { timeout: 1_000 });
+      }).toPass({ timeout: 10_000 });
       // One bar on the page: the hovered row's (D-150).
       await expect(page.locator('[data-hover-controls]:not(.opacity-0)')).toHaveCount(1);
       const overlap = await row.evaluate((element) => {
