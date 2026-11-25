@@ -551,6 +551,42 @@ describe('integration: bounded expired guest cleanup', () => {
     ).toBeNull();
   });
 
+  // The same contract for the two children cleanup claims with `FOR UPDATE SKIP LOCKED`: a row somebody else holds is
+  // left for the next sweep, and the sweep does not wait for it.
+  test.each([
+    ['message_reminders', 'reminder'],
+    ['scheduled_messages', 'scheduled message'],
+  ] as const)(
+    'a %s row somebody else holds is skipped, not waited for, and taken by the next sweep',
+    async (table) => {
+      const value = await setupCommitted();
+      const column = 'user_id';
+      const locked = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+      const holding = cloned.db.transaction().execute(async (tx) => {
+        await tx
+          .selectFrom(table)
+          .select('id')
+          .where(column, '=', value.guestId)
+          .forUpdate()
+          .execute();
+        locked.resolve(undefined);
+        await release.promise;
+      });
+      await locked.promise;
+      const sweep = sweepExpiredGuests({ database: cloned.db });
+      const finished = await bounded(sweep);
+      release.resolve(undefined);
+      await holding;
+      await sweep;
+      expect(finished).toBe(true);
+      await sweepExpiredGuests({ database: cloned.db });
+      expect(
+        await cloned.db.selectFrom(table).select('id').where(column, '=', value.guestId).execute(),
+      ).toHaveLength(table === 'message_reminders' ? 0 : 1);
+    },
+  );
+
   test('a database failure rolls back the guest and a fresh worker connection resumes its durable rows', async () => {
     const value = await setupCommitted();
     await sql`create function guest_expiry_test_interrupt() returns trigger language plpgsql as $$
