@@ -949,6 +949,22 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     tests: [SWAP_TESTS],
   },
   {
+    id: 'trace-request-span-never-ends',
+    why: 'a request’s span is never ended, so nothing of any request reaches the collector (#1307)',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: "    endSpan(request, route, status);\n    write('request', {",
+    replace: "    write('request', {",
+    tests: ['apps/api/src/ingress/http/tracing.integration.test.ts'],
+  },
+  {
+    id: 'trace-route-says-the-path',
+    why: 'a request’s span names the path with its ids and not the route’s pattern, so a workspace’s id goes to a collector the workspace never agreed to (#1307)',
+    file: 'apps/api/src/ingress/http/request-hooks.ts',
+    find: "    span.setAttribute('http.route', route ?? 'unmatched');",
+    replace: "    span.setAttribute('http.route', new URL(request.url).pathname);",
+    tests: ['apps/api/src/ingress/http/tracing.integration.test.ts'],
+  },
+  {
     id: 'two-factor-hold-on-the-way-out',
     why: 'a held-back person cannot read who they are, so the client cannot show them how to turn it on (D-239)',
     file: 'apps/api/src/ingress/http/workspaces.ts',

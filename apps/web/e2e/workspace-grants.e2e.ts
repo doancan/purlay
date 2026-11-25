@@ -63,6 +63,9 @@ const setIssues = async (
   state: 'Granted' | 'Withheld' | 'The server’s default',
 ): Promise<void> => {
   await page.goto('/server/workspaces');
+  // Parallel specs can push this workspace off the first page between edits.
+  await page.getByRole('textbox', { name: 'Search by name or slug' }).fill(workspaceName);
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
   const card = page.getByRole('region', { name: workspaceName });
   await card.getByRole('button', { name: 'Modules' }).click();
   const dialog = page.getByRole('dialog', { name: 'Modules' });

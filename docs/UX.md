@@ -963,7 +963,7 @@ workspace switch within the same account still preserves waiting uploads and dra
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
 
-**Delivery** (D-336). Where the message may ask more of its recipient — in a direct message, or once the words name somebody — a native *Delivery* choice (*Standard*, *Important*, *Urgent*) appears beside Send; it goes back to *Standard* after each send and is not offered, nor sent, where the words no longer name anybody. An important or urgent message is drawn with its word and a bell glyph (never colour alone) on the line under its words; a deleted one is not. It waits in Deep Work like any message.
+**Delivery** (D-337). Where the message may ask more of its recipient — in a direct message, or once the words name somebody — a native *Delivery* choice (*Standard*, *Important*, *Urgent*) appears beside Send; it goes back to *Standard* after each send and is not offered, nor sent, where the words no longer name anybody. An important or urgent message is drawn with its word and a bell glyph (never colour alone) on the line under its words; a deleted one is not. It waits in Deep Work like any message.
 
 **Send later** (D-316). Beside Send, in a channel's box and in a thread's, an icon button opens a menu of times:
 *In 1 hour (14:00)* (the clock time said, D-319), *Tomorrow at 09:00*, *Monday at 09:00* — left out on a Sunday, when it is tomorrow, and on a Monday,

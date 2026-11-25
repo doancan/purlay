@@ -584,6 +584,7 @@ export interface Outbox {
   producer: string;
   shape: Generated<number>;
   state: Generated<string>;
+  traceparent: string | null;
   type: string;
   workspace_id: string;
 }

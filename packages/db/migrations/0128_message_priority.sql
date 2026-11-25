@@ -1,4 +1,4 @@
--- 0127_message_priority
+-- 0128_message_priority
 -- How much a message asks of its recipient: normal, important or urgent. Only a direct message, or one that names
 -- somebody, may be anything but normal; the service enforces that, since the column cannot see the channel's type.
 -- The default is a constant, so the column is added without rewriting the table, and every earlier message is normal.

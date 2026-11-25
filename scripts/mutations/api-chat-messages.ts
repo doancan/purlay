@@ -898,7 +898,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'priority-direct-message-refused',
-    why: 'a direct message is refused the priority it is allowed (D-336)',
+    why: 'a direct message is refused the priority it is allowed (D-337)',
     file: MESSAGES,
     find: "    context.channelType !== 'direct_message' &&\n",
     replace: '',
@@ -906,7 +906,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'priority-normal-listed',
-    why: 'a normal message is drawn with a priority of its own, which a client then marks (D-336)',
+    why: 'a normal message is drawn with a priority of its own, which a client then marks (D-337)',
     file: READER,
     find: "row.deleted_at === null && row.priority !== 'normal'",
     replace: "row.deleted_at === null && row.priority !== ''",
@@ -914,7 +914,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'priority-not-stored',
-    why: 'a message is written normal whatever it asked for (D-336)',
+    why: 'a message is written normal whatever it asked for (D-337)',
     file: MESSAGES,
     find: "      priority: input.priority ?? 'normal',\n",
     replace: "      priority: 'normal',\n",
@@ -922,7 +922,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'priority-on-tombstone',
-    why: 'a deleted message still says it was urgent, which a client draws over its tombstone (D-336)',
+    why: 'a deleted message still says it was urgent, which a client draws over its tombstone (D-337)',
     file: READER,
     find: "row.deleted_at === null && row.priority !== 'normal'",
     replace: "row.priority !== 'normal'",
@@ -930,7 +930,7 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
   },
   {
     id: 'priority-pages-a-channel',
-    why: 'a channel message that names nobody may be urgent, which pages everyone who reads it (D-336)',
+    why: 'a channel message that names nobody may be urgent, which pages everyone who reads it (D-337)',
     file: MESSAGES,
     find: "    context.channelType !== 'direct_message' &&\n    mentioned.length === 0\n",
     replace: "    context.channelType !== 'direct_message' &&\n    mentioned.length === -1\n",

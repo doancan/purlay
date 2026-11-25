@@ -1,5 +1,7 @@
 /**
  * A message's priority through the real door (#1381): what the contract refuses, what the send keeps. The rule itself is `features/chat/messages/priority.integration.test.ts`'s.
+ *
+ * @needs-modules chat
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';

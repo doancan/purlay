@@ -3689,6 +3689,7 @@ CREATE TABLE outbox (
     shape           INTEGER NOT NULL DEFAULT 1,
     correlation_id  TEXT,
     caused_by       UUID,
+    traceparent     TEXT,  -- the request's span as W3C Trace Context writes it, so the delivery is a span of the same trace (D-336)
 
     CONSTRAINT outbox_id_is_uuidv7
         CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
@@ -3716,7 +3717,9 @@ CREATE TABLE outbox (
     CONSTRAINT outbox_finished
         CHECK ((state = 'pending') = (finished_at IS NULL)),
     CONSTRAINT outbox_one_delivery_a_consumer
-        UNIQUE (fact_id, consumer)
+        UNIQUE (fact_id, consumer),
+    CONSTRAINT outbox_traceparent_shape
+        CHECK (traceparent IS NULL OR traceparent ~ '^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$')
 );
 
 -- Rows are updated twice in their short life (claimed, then finished): room on the page for the update to stay on it, and a vacuum that
@@ -4537,7 +4540,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0124_workspace_quotas.sql    workspace_quotas: the operator's override of a limit for one workspace, by kind  (D-334)
 0125_outbox_workspace_recent.sql  idx_outbox_workspace_recent: the deliveries a workspace queued in the last minute, for the rate limit  (D-334)
 0126_outbox_ledger.sql       outbox_ledger: which fact was delivered to which consumer and when, for an operator to prove it  (D-335)
-0127_message_priority.sql   messages.priority: how much a message asks of its recipient, a CHECK on the three values (D-336)
+0127_outbox_trace.sql        outbox.traceparent: the trace a fact was published in, so its delivery is a span of the same trace  (D-336)
+0128_message_priority.sql    messages.priority: how much a message asks of its recipient, a CHECK on the three values (D-337)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

@@ -20,6 +20,7 @@ import { FACT_SHAPE_FIRST, type FactDeclaration } from '@purlay/types';
 import type { Clock } from './clock';
 import type { FactConsumer } from './fact-consumers';
 import { currentRequest, withinRequest, type Logger } from './logging';
+import { parseTraceparent, tracer, type Span } from './tracing';
 import { readGrants } from './grants';
 import type { EntitlementPolicy } from './module-kit/entitlement';
 import type { Counter } from './metrics';
@@ -289,123 +290,150 @@ export const deliver = async (
   let told: readonly WrittenNotice[] = [];
   let log = dependencies.log;
   let forged: { readonly producer: string; readonly owner: string } | undefined;
-  const outcome = await atomicallyOn(database)(async (transaction): Promise<Delivery> => {
-    const row = await transaction
-      .selectFrom('outbox')
-      .select(['workspace_id', 'payload', 'attempts', 'shape', 'correlation_id', 'producer'])
-      .where('id', '=', claimed.id)
-      .where('state', '=', 'pending')
-      .forUpdate()
-      .skipLocked()
-      .executeTakeFirst();
-    if (row === undefined) return 'gone';
-    // The request that published it speaks on every line of its delivery, so a log follows the chain; none, a fresh id.
-    const correlationId =
-      row.correlation_id ?? currentRequest()?.requestId ?? `fact:${claimed.factId}`;
-    log = dependencies.log.child({
-      fact: claimed.type,
-      factId: claimed.factId,
-      consumer: claimed.consumer,
-      correlationId,
-    });
-    const finish = async (
-      state: 'delivered' | 'skipped' | 'dead',
-      lastError: string | null,
-    ): Promise<Delivery> => {
-      const finished = clock.now();
-      await transaction
-        .updateTable('outbox')
-        .set({ state, finished_at: finished, last_error: lastError })
+  // The delivery's span, a child of the span of the request that published the fact where it was recorded (D-336); made once the row
+  // is read, and ended with the outcome, whatever it is.
+  let span: Span | undefined;
+  let outcome: Delivery;
+  try {
+    outcome = await atomicallyOn(database)(async (transaction): Promise<Delivery> => {
+      const row = await transaction
+        .selectFrom('outbox')
+        .select([
+          'workspace_id',
+          'payload',
+          'attempts',
+          'shape',
+          'correlation_id',
+          'producer',
+          'traceparent',
+        ])
         .where('id', '=', claimed.id)
-        .execute();
-      // In the same transaction, so a delivery is never marked without its line, and never a line without the delivery: a fact
-      // requeued and delivered once more is the same line. Ids, the type and the time: never the payload (#1305).
-      if (ledger && state === 'delivered') {
-        await transaction
-          .insertInto('outbox_ledger')
-          .values({
-            fact_id: claimed.factId,
-            consumer: claimed.consumer,
-            workspace_id: row.workspace_id,
-            type: claimed.type,
-            producer: row.producer,
-            delivered_at: finished,
-          })
-          .onConflict((conflict) => conflict.columns(['fact_id', 'consumer']).doNothing())
-          .execute();
-      }
-      return state;
-    };
-    // The publish side checks who may publish a type; a row written by any other path (SQL of a module's own, a restored backup)
-    // is not taken on trust here either: only the type's owner produces it (red-team F9).
-    if (row.producer !== handling.declaration.owner) {
-      forged = { producer: row.producer, owner: handling.declaration.owner };
-      return await finish('dead', PRODUCER_REFUSED);
-    }
-    // Checked again here, against the shape the row was written in: a rolling deploy leaves a newer node rows an older one
-    // published, which only an earlier shape's schema fits. (A shape it does not know is not claimed, so it is not here.)
-    const read = readAsCurrentShape(handling.declaration, row.shape, row.payload);
-    if (read === undefined) return await finish('dead', 'PayloadRefused');
-    const modules =
-      effective === undefined
-        ? null
-        : effective(
-            (await readGrants(transaction, [row.workspace_id])).get(row.workspace_id) ?? [],
-            clock.now(),
-          );
-    const bound = seams.bind(
-      transaction,
-      mintTurn({ workspaceId: row.workspace_id, modules }),
-      claimed.factId,
-    );
-    await sql`savepoint fact_handler`.execute(transaction);
-    let result: Awaited<ReturnType<FactConsumer>>;
-    try {
-      const request = currentRequest();
-      result = await withinRequest(
-        {
-          startedAt: performance.now(),
-          ...request,
-          requestId: correlationId,
-          module: claimed.consumer,
-        },
-        async () =>
-          await handling.handle(
-            {
-              type: claimed.type,
-              factId: claimed.factId,
-              workspaceId: row.workspace_id,
-              modules,
-              correlationId,
-              payload: read.payload,
-            },
-            transaction,
-            ports,
-            bound.seam,
-          ),
-      );
-    } catch (error) {
-      await sql`rollback to savepoint fact_handler`.execute(transaction);
-      const failure = errorClass(error);
-      if (row.attempts < OUTBOX_ATTEMPTS_MAX) {
+        .where('state', '=', 'pending')
+        .forUpdate()
+        .skipLocked()
+        .executeTakeFirst();
+      if (row === undefined) return 'gone';
+      span = tracer().start('fact.deliver', {
+        parent: parseTraceparent(row.traceparent),
+        kind: 'consumer',
+      });
+      span.setAttribute('purlay.fact.type', claimed.type);
+      span.setAttribute('purlay.fact.consumer', claimed.consumer);
+      // The request that published it speaks on every line of its delivery, so a log follows the chain; none, a fresh id.
+      const correlationId =
+        row.correlation_id ?? currentRequest()?.requestId ?? `fact:${claimed.factId}`;
+      log = dependencies.log.child({
+        fact: claimed.type,
+        factId: claimed.factId,
+        consumer: claimed.consumer,
+        correlationId,
+      });
+      const finish = async (
+        state: 'delivered' | 'skipped' | 'dead',
+        lastError: string | null,
+      ): Promise<Delivery> => {
+        const finished = clock.now();
         await transaction
           .updateTable('outbox')
-          .set({ last_error: failure })
+          .set({ state, finished_at: finished, last_error: lastError })
           .where('id', '=', claimed.id)
           .execute();
-        log.warn('a fact was not delivered; it is tried again', {
-          attempts: row.attempts,
-          failure,
-        });
-        return 'failed';
+        // In the same transaction, so a delivery is never marked without its line, and never a line without the delivery: a fact
+        // requeued and delivered once more is the same line. Ids, the type and the time: never the payload (#1305).
+        if (ledger && state === 'delivered') {
+          await transaction
+            .insertInto('outbox_ledger')
+            .values({
+              fact_id: claimed.factId,
+              consumer: claimed.consumer,
+              workspace_id: row.workspace_id,
+              type: claimed.type,
+              producer: row.producer,
+              delivered_at: finished,
+            })
+            .onConflict((conflict) => conflict.columns(['fact_id', 'consumer']).doNothing())
+            .execute();
+        }
+        return state;
+      };
+      // The publish side checks who may publish a type; a row written by any other path (SQL of a module's own, a restored backup)
+      // is not taken on trust here either: only the type's owner produces it (red-team F9).
+      if (row.producer !== handling.declaration.owner) {
+        forged = { producer: row.producer, owner: handling.declaration.owner };
+        return await finish('dead', PRODUCER_REFUSED);
       }
-      return await finish('dead', failure);
-    }
-    // Outside the try: a failure of the mark is not the handler's, and ends the transaction with the effect in it.
-    await sql`release savepoint fact_handler`.execute(transaction);
-    told = bound.written();
-    return await finish(result === 'skipped' ? 'skipped' : 'delivered', null);
-  });
+      // Checked again here, against the shape the row was written in: a rolling deploy leaves a newer node rows an older one
+      // published, which only an earlier shape's schema fits. (A shape it does not know is not claimed, so it is not here.)
+      const read = readAsCurrentShape(handling.declaration, row.shape, row.payload);
+      if (read === undefined) return await finish('dead', 'PayloadRefused');
+      const modules =
+        effective === undefined
+          ? null
+          : effective(
+              (await readGrants(transaction, [row.workspace_id])).get(row.workspace_id) ?? [],
+              clock.now(),
+            );
+      const bound = seams.bind(
+        transaction,
+        mintTurn({ workspaceId: row.workspace_id, modules }),
+        claimed.factId,
+      );
+      await sql`savepoint fact_handler`.execute(transaction);
+      let result: Awaited<ReturnType<FactConsumer>>;
+      try {
+        const request = currentRequest();
+        result = await withinRequest(
+          {
+            startedAt: performance.now(),
+            ...request,
+            requestId: correlationId,
+            module: claimed.consumer,
+          },
+          async () =>
+            await handling.handle(
+              {
+                type: claimed.type,
+                factId: claimed.factId,
+                workspaceId: row.workspace_id,
+                modules,
+                correlationId,
+                payload: read.payload,
+              },
+              transaction,
+              ports,
+              bound.seam,
+            ),
+        );
+      } catch (error) {
+        await sql`rollback to savepoint fact_handler`.execute(transaction);
+        const failure = errorClass(error);
+        if (row.attempts < OUTBOX_ATTEMPTS_MAX) {
+          await transaction
+            .updateTable('outbox')
+            .set({ last_error: failure })
+            .where('id', '=', claimed.id)
+            .execute();
+          log.warn('a fact was not delivered; it is tried again', {
+            attempts: row.attempts,
+            failure,
+          });
+          return 'failed';
+        }
+        return await finish('dead', failure);
+      }
+      // Outside the try: a failure of the mark is not the handler's, and ends the transaction with the effect in it.
+      await sql`release savepoint fact_handler`.execute(transaction);
+      told = bound.written();
+      return await finish(result === 'skipped' ? 'skipped' : 'delivered', null);
+    });
+  } catch (error) {
+    span?.setError();
+    span?.end();
+    throw error;
+  }
+  span?.setAttribute('purlay.fact.outcome', outcome);
+  if (outcome === 'failed' || outcome === 'dead') span?.setError();
+  span?.end();
   // After the commit: a notice is told only if what it is about is, and a line about a death is not said for a transaction that then fails.
   if (outcome === 'delivered' || outcome === 'skipped') await seams.announce(told);
   if (forged !== undefined) {

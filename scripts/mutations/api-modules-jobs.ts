@@ -194,6 +194,22 @@ export const API_MODULES_JOBS: readonly Mutation[] = [
     tests: ['apps/api/src/table-lifecycle.integration.test.ts'],
   },
   {
+    id: 'trace-job-failure-not-an-error',
+    why: 'a job that threw is a span that says it went well (#1307)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: '    span.setError();\n',
+    replace: '',
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
+    id: 'trace-job-span-never-ends',
+    why: 'a job’s span is not ended when the job throws, so the failed runs are the ones missing from the trace (#1307)',
+    file: 'apps/api/src/modules/jobs/jobs.ts',
+    find: '  } finally {\n    span.end();\n  }\n',
+    replace: '  }\n',
+    tests: ['apps/api/src/modules/jobs/jobs.integration.test.ts'],
+  },
+  {
     id: 'workspace-security-sweep-keeps-proofs',
     why: 'Expired challenges and policy receipts must leave.',
     file: 'apps/api/src/modules/jobs/jobs.ts',
