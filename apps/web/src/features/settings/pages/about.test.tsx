@@ -43,7 +43,7 @@ const answer = (current: string, newest: string | null): LatestReleaseAnswer => 
       ? null
       : {
           version: newest,
-          url: `https://github.com/doancan/purlay/releases/tag/v${newest}`,
+          url: `https://github.com/purlay/purlay/releases/tag/v${newest}`,
           publishedAt: '2026-10-30T08:00:00.000Z',
         },
 });
@@ -86,7 +86,7 @@ describe('the About page', () => {
     expect(card.getAllByText('0.1.0')).toHaveLength(2);
     expect(card.getByText('Published Oct 30, 2026')).toBeDefined();
     const link = card.getByRole('link', { name: /View release on GitHub/ });
-    expect(link.getAttribute('href')).toBe('https://github.com/doancan/purlay/releases/tag/v0.1.0');
+    expect(link.getAttribute('href')).toBe('https://github.com/purlay/purlay/releases/tag/v0.1.0');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     expect(card.getByRole('status').textContent).toBe('You are up to date.');
     await expectNoAxeViolations(view.container);
@@ -174,11 +174,11 @@ describe('the About page', () => {
     const card = within(view.getByRole('region', { name: 'Open source' }));
     expect(card.getByText('AGPL-3.0-or-later')).toBeDefined();
     const repository = card.getByRole('link', {
-      name: (name) => name.includes('github.com/doancan/purlay'),
+      name: (name) => name.includes('github.com/purlay/purlay'),
     });
-    expect(repository.getAttribute('href')).toBe('https://github.com/doancan/purlay');
+    expect(repository.getAttribute('href')).toBe('https://github.com/purlay/purlay');
     expect(repository.getAttribute('target')).toBe('_blank');
-    expect(repository.textContent).toContain('github.com/doancan/purlay');
+    expect(repository.textContent).toContain('github.com/purlay/purlay');
     // Its name is what it shows (WCAG 2.5.3), and it says it opens a new tab.
     expect(repository.getAttribute('aria-label')).toBeNull();
     expect(repository.textContent).toContain('Opens in a new tab');
