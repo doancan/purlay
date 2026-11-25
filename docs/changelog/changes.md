@@ -36,6 +36,7 @@ have it.
 
 ### Fixed
 
+- **Sign-in** — a session made by the iOS application is listed as Purlay for iOS with its version, not as the Mac application (D-191)
 - **Workspaces** — on the front door, *Keep* a workspace that is being deleted no longer misses its button when the creation form finishes loading under it
 
 ---
