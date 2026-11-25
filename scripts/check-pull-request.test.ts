@@ -6,9 +6,6 @@ import {
   FAILURE_MODES,
   judge,
   linkedIssues,
-  OVERRIDE_LABEL,
-  PRODUCTION_LINE_BUDGET,
-  productionLines,
   type ChangedFile,
   type PullRequest,
   unansweredFailureModes,
@@ -58,36 +55,12 @@ describe('a pull request names its task', () => {
   });
 });
 
-describe('a pull request fits the budget', () => {
-  test('tests, documents and generated files are not counted', () => {
-    expect(
-      productionLines([
-        file('apps/api/src/x.ts', 10),
-        file('apps/api/src/x.test.ts', 500),
-        file('apps/api/src/x.integration.test.ts', 500),
-        file('docs/DECISIONS.md', 500),
-        file('bun.lock', 500),
-        file('packages/db/src/schema.ts', 500),
-        file('apps/api/package.json', 3),
-      ]),
-    ).toBe(10);
-  });
-
-  test('at the budget it passes; one line over it is refused', () => {
-    const at = aPull({ files: [file('apps/api/src/x.ts', PRODUCTION_LINE_BUDGET)] });
-    const over = aPull({ files: [file('apps/api/src/x.ts', PRODUCTION_LINE_BUDGET + 1)] });
-    expect(judge(at, labelled({ 1: ['api'] }))).toEqual([]);
-    expect(judge(over, labelled({ 1: ['api'] }))).toEqual([
-      expect.stringContaining(`the budget is ${String(PRODUCTION_LINE_BUDGET)}`) as string,
-    ]);
-  });
-
-  test('over budget passes with the override label, and only with it', () => {
-    const over = aPull({
-      files: [file('apps/api/src/x.ts', PRODUCTION_LINE_BUDGET + 1)],
-      labels: [OVERRIDE_LABEL],
+describe('a pull request is as large as its task', () => {
+  test('size is not a rule: a feature of thousands of lines passes where it names its task and touches its area', () => {
+    const large = aPull({
+      files: [file('apps/api/src/x.ts', 5_000), file('apps/api/src/y.ts', 5_000)],
     });
-    expect(judge(over, labelled({ 1: ['api'] }))).toEqual([]);
+    expect(judge(large, labelled({ 1: ['api'] }))).toEqual([]);
   });
 });
 

@@ -139,7 +139,7 @@ affected. `bun run test:storage` needs the compose Garage and is not part of thi
 |---|---|
 | `bun run queue` | What is startable now, what is under way and by whom, and what each blocked issue waits on; `--apply` writes the stages to the board |
 | `bun run claim <number>` | Take an issue (or `--release` it); refuses one that is held, blocked or would collide, and suggests the branch name (D-313) |
-| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, fits the line budget, touches only what its issues are about (D-74), and answers each failure mode of §6.9 (D-178) |
+| `bun run check:pr <number>` | What CI checks of a pull request: it names its task, touches only what its issues are about (D-74; its size is no rule), and answers each failure mode of §6.9 (D-178) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
 | `bun run db:up:tests` | Start PostgreSQL and Redis together and wait until both are healthy: every service the whole suite reads, as CI's `schema` job starts them |
 | `bun run db:up:redis` | Start Redis alone, for the tests of the cloud's shared bus, limiters and presence (D-201): put `REDIS_URL=redis://localhost:6379` in `.env.test`. Those files, `*.redis.integration.test.ts`, are the only tests that read it; without it `test:all` leaves them out behind a banner, and in CI it refuses. Nothing the application does without `REDIS_URL` reaches it |
