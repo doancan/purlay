@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Fixed
+
+- **Workspaces** — on the front door, *Keep* a workspace that is being deleted no longer misses its button when the creation form finishes loading under it
 
 ---
