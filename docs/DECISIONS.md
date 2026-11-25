@@ -2734,6 +2734,9 @@ issue, one pull request*; nothing checked it.
   Tests, documents and generated files are not counted — counting tests would charge a change for
   being well tested. Over budget passes only with the `large-change` label, so the size is a decision
   the reviewer can see rather than one they discover.
+  *(Removed 2026-11-25, at the owner's request: a feature is as large as it is, and a size rule that
+  every feature had to wave through taught nothing. The other two rules stand; the `large-change`
+  label is no longer read.)*
 - **It touches what its task is about.** The issues it names carry area labels, each allowing some
   paths; `infra`, `testing` and `security` are cross-cutting and restrict nothing. A file outside
   every allowed area fails, with no label to wave it through: split the change, or name the issue

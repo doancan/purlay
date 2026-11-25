@@ -1,23 +1,19 @@
 /**
- * A pull request is one task, of a reviewable size, touching what its task is
- * about (#126).
+ * A pull request is one task, touching what its task is about (#126).
  *
  * Scope creep inside a task is how debt arrives unreviewed: asked to fix X, the
  * change also reworks Y, and the review that would have caught Y is now too
  * large to do properly. Three rules, each a failing check rather than a
- * convention:
+ * convention. Size is not one of them: a feature is as large as it is, and the line budget
+ * that was here (D-74) was taken away at the owner's request:
  *
  * 1. **It names its task.** The body says `Closes #n` — or `Part of #n` for a
  *    task that takes several pull requests. No author is excused (D-219).
- * 2. **It fits the budget.** At most `PRODUCTION_LINE_BUDGET` changed lines of
- *    production code. Tests, documents and generated files are not counted —
- *    counting tests would charge a change for being well tested. Over budget
- *    passes only with the `large-change` label, visible to the reviewer (D-74).
- * 3. **It touches what its task is about.** The issues it names carry area
+ * 2. **It touches what its task is about.** The issues it names carry area
  *    labels, and each area allows some paths; a file outside all of them fails.
  *    There is no label for this one: split the change, or name the issue it
  *    also serves.
- * 4. **It says how it fails.** A change to the product — `apps/` or
+ * 3. **It says how it fails.** A change to the product — `apps/` or
  *    `packages/` — answers each category of `CONTRIBUTING.md` §6.9 under
  *    `## Failure modes`, one line each: the test that covers it, or why it cannot
  *    apply. Documents, tests, tooling and configuration owe none. Whether an answer is good is the reviewer's; that none is missing
@@ -26,12 +22,7 @@
  * Run in CI on every pull request; `bun run check:pr <number>` runs it locally.
  */
 
-/** Measured on the 32 pull requests merged before this existed: the largest focused one was 357. */
-export const PRODUCTION_LINE_BUDGET = 400;
-
-export const OVERRIDE_LABEL = 'large-change';
-
-/** Never counted against the budget, and allowed in every task. */
+/** Never about a task's area, and allowed in every task: tests, documents and generated files. */
 const UNMETERED = [
   /\.test\.tsx?$/,
   /^docs\//,
@@ -82,11 +73,6 @@ export const linkedIssues = (body: string): number[] => [
 
 const unmetered = (path: string): boolean => UNMETERED.some((pattern) => pattern.test(path));
 
-export const productionLines = (files: readonly ChangedFile[]): number =>
-  files
-    .filter((file) => !unmetered(file.path))
-    .reduce((sum, file) => sum + file.additions + file.deletions, 0);
-
 /** `CONTRIBUTING.md` §6.9's categories, in its order, as the pull request template names them. */
 export const FAILURE_MODES = [
   'Refused input',
@@ -134,13 +120,6 @@ export const judge = (
   if (issues.length === 0) {
     problems.push(
       'It names no issue. Say "Closes #n", or "Part of #n" for a task that takes several pull requests.',
-    );
-  }
-
-  const lines = productionLines(pull.files);
-  if (lines > PRODUCTION_LINE_BUDGET && !pull.labels.includes(OVERRIDE_LABEL)) {
-    problems.push(
-      `It changes ${String(lines)} lines of production code; the budget is ${String(PRODUCTION_LINE_BUDGET)}. Split it, or label it "${OVERRIDE_LABEL}" so its size is a decision the reviewer can see.`,
     );
   }
 
