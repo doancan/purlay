@@ -123,6 +123,11 @@ const exportTrail = async (
 ): ReturnType<typeof exportAs> =>
   await exportAs(executor, clock, log, context, query, composition.auditAccess);
 
+/** One turn of the event loop: whatever the stream was going to ask for on its own has been asked. */
+const turn = async (): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
 describe('integration: the trail narrowed (D-222)', () => {
   test('by who acted, by action, and by a window of instants — from inclusive, to exclusive', async () => {
     await withRollback(async (db) => {
@@ -390,7 +395,8 @@ describe('integration: the trail downloaded (D-222)', () => {
       const { executor, reads } = watched(db);
       const pinar = await contextOf(db, room, 'pinar');
       const { body } = await exportTrail(executor, clock, NO_LOG, pinar, { format: 'ndjson' });
-      // The first page only, before anybody reads.
+      // The first page only, before anybody reads, and still only that once the stream has had its turn to ask for more.
+      await turn();
       expect(reads()).toBe(1);
       const lines = ndjson(await new Response(body).text());
       // Its own entry and the rest: two full pages and a short one, which says it is the end.
@@ -485,6 +491,7 @@ describe('integration: the trail downloaded (D-222)', () => {
         await exportTrail(executor, clock, NO_LOG, umut, { format: 'csv' })
       ).body.getReader();
       await reader.read();
+      await turn();
       await reader.cancel();
       expect(reads()).toBe(1);
     });
