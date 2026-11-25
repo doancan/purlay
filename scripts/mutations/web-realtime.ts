@@ -14,8 +14,16 @@ export const WEB_REALTIME: readonly Mutation[] = [
     id: 'client-send-drops-its-attachments',
     why: 'a message the composer sent with files reaches the server without them, on either door',
     file: 'apps/web/src/realtime/engine.ts',
-    find: '    pending.attachments.length === 0\n      ? {}\n',
-    replace: '    pending.attachments.length >= 0\n      ? {}\n',
+    find: '    ...(pending.attachments.length === 0\n      ? {}\n',
+    replace: '    ...(pending.attachments.length >= 0\n      ? {}\n',
+    tests: ['apps/web/src/realtime/engine.test.ts'],
+  },
+  {
+    id: 'client-send-drops-its-priority',
+    why: 'a message sent as urgent reaches the server as a normal one, on either door (#1381)',
+    file: 'apps/web/src/realtime/engine.ts',
+    find: '    ...(pending.priority === undefined ? {} : { priority: pending.priority }),\n',
+    replace: '',
     tests: ['apps/web/src/realtime/engine.test.ts'],
   },
   {

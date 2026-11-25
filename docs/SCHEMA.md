@@ -2096,6 +2096,11 @@ CREATE TABLE messages (
     thread_reply_count   INTEGER NOT NULL DEFAULT 0,
     thread_last_reply_at TIMESTAMPTZ,
 
+    -- How much the message asks of its recipient (D-336, chat/0022): `normal`, `important` or `urgent`. Anything but
+    -- `normal` is allowed only in a direct message or one that names somebody; the service holds that, the column
+    -- cannot see the channel's type.
+    priority TEXT NOT NULL DEFAULT 'normal',
+
     -- Counts changes to the thread summary, the reaction set and the content (an edit, D-103),
     -- in the statement that makes them, so versions are in commit order; `THREAD_UPDATED` and
     -- `REACTIONS_UPDATED` carry it. Added by 0015. (D-99, amended)
@@ -2158,6 +2163,8 @@ CREATE TABLE messages (
         CHECK (parent_id IS NULL OR thread_reply_count = 0),
 
     CONSTRAINT thread_reply_count_non_negative CHECK (thread_reply_count >= 0),
+
+    CONSTRAINT messages_priority_known CHECK (priority IN ('normal', 'important', 'urgent')),
 
     -- The contract's MESSAGE_CONTENT_MAX, for every writer that is not one of the
     -- two doors, in UTF-16 code units as the contract counts them: characters, plus one more
@@ -4534,6 +4541,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0125_outbox_workspace_recent.sql  idx_outbox_workspace_recent: the deliveries a workspace queued in the last minute, for the rate limit  (D-334)
 0126_outbox_ledger.sql       outbox_ledger: which fact was delivered to which consumer and when, for an operator to prove it  (D-335)
 0127_outbox_trace.sql        outbox.traceparent: the trace a fact was published in, so its delivery is a span of the same trace  (D-336)
+0128_message_priority.sql    messages.priority: how much a message asks of its recipient, a CHECK on the three values (D-337)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

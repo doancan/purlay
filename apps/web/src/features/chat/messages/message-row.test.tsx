@@ -65,6 +65,32 @@ describe('message-bound public metadata', () => {
   );
 });
 
+describe('a message that asks more of its recipient (#1381)', () => {
+  test.each([
+    ['important', 'Important'],
+    ['urgent', 'Urgent'],
+  ] as const)('says %s in words under it', async (priority, words) => {
+    const view = await mount(props({ message: aMessage(1, { sender: ALICE, priority }) }));
+    expect(view.getByText(words)).toBeTruthy();
+  });
+
+  test('says nothing for a normal message, and nothing for a tombstone that was one', async () => {
+    const normal = await mount(props({ message: aMessage(1, { sender: ALICE }) }));
+    expect(normal.queryByText('Urgent')).toBeNull();
+    expect(normal.queryByText('Important')).toBeNull();
+    const gone = await mount(
+      props({
+        message: aMessage(2, {
+          sender: ALICE,
+          priority: 'urgent',
+          deletedAt: '2026-09-09T11:56:00.000Z',
+        }),
+      }),
+    );
+    expect(gone.queryByText('Urgent')).toBeNull();
+  });
+});
+
 describe("a resolved thread's root", () => {
   test('is quiet — its text in the muted ink — and is the same row otherwise', async () => {
     const view = await mount(props({ dimmed: true }));

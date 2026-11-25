@@ -110,6 +110,7 @@ const tables = [
       message_type: 'export',
       content: 'export',
       metadata: 'export',
+      priority: 'export',
       is_question: 'export',
       created_at: 'export',
       updated_at: 'export',

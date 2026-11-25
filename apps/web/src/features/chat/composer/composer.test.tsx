@@ -126,6 +126,7 @@ interface Mounted {
     content: unknown;
     parentId?: unknown;
     attachmentIds?: unknown;
+    priority?: unknown;
   }[];
   readonly user: ReturnType<typeof person>;
   readonly rerender: (
@@ -195,6 +196,7 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
     content: unknown;
     parentId?: unknown;
     attachmentIds?: unknown;
+    priority?: unknown;
   }[] =>
     view.world.sockets.sent('MESSAGE_SEND').map(
       (f) =>
@@ -203,6 +205,7 @@ const mount = async (options: Options = {}): Promise<Mounted> => {
           content: unknown;
           parentId?: unknown;
           attachmentIds?: unknown;
+          priority?: unknown;
         },
     );
   return {
@@ -430,6 +433,38 @@ describe('sending', () => {
     await settle();
     expect(asked).toHaveLength(1);
     expect(asked[0]).toMatchObject({ channelId: IDS.api, content: 'offline' });
+  });
+});
+
+describe('how much a message asks of its recipient (#1381)', () => {
+  const direct = (): Parameters<typeof aSignedInApi>[0] => ({
+    channels: () =>
+      Promise.resolve([aChannel(IDS.api, null, { type: 'direct_message', name: null })]),
+  });
+
+  test('is offered in a direct message, sent with the message, and back to standard after', async () => {
+    const { view, box, sent, user } = await mount({ api: aSignedInApi(direct()) });
+    await user.click(box());
+    await user.selectOptions(await view.findByRole('combobox', { name: 'Delivery' }), 'urgent');
+    await user.type(box(), 'the release is blocked on you');
+    await press(user, '{Enter}');
+    expect(sent()).toEqual([
+      { channelId: IDS.api, content: 'the release is blocked on you', priority: 'urgent' },
+    ]);
+    expect(view.getByRole('combobox', { name: 'Delivery' })).toHaveProperty('value', 'normal');
+  });
+
+  test('is not offered in a channel until the words name somebody, and a choice does not outlive that', async () => {
+    const { view, box, sent, user } = await mount();
+    await user.click(box());
+    await user.type(box(), 'hello');
+    expect(view.queryByRole('combobox', { name: 'Delivery' })).toBeNull();
+    await user.type(box(), ' @ali');
+    await user.selectOptions(view.getByRole('combobox', { name: 'Delivery' }), 'important');
+    await user.type(box(), '{Backspace}{Backspace}{Backspace}{Backspace}{Backspace}');
+    expect(view.queryByRole('combobox', { name: 'Delivery' })).toBeNull();
+    await press(user, '{Enter}');
+    expect(sent()).toEqual([{ channelId: IDS.api, content: 'hello' }]);
   });
 });
 
@@ -1416,9 +1451,14 @@ describe('@ offers people (UX §5)', () => {
     });
   const list = (view: Mounted['view']): HTMLElement | null =>
     view.queryByRole('listbox', { name: 'People to mention' });
+  /** The options of the mention list alone: the delivery choice's own options are not people (#1381). */
+  const peopleOptions = (view: Mounted['view']): HTMLElement[] => {
+    const shown = list(view);
+    return shown === null ? [] : within(shown).queryAllByRole('option');
+  };
   /** Each option as it reads: the name, a space, the handle — the avatar is decoration and hidden. */
   const options = (view: Mounted['view']): string[] =>
-    view.queryAllByRole('option').map((option) =>
+    peopleOptions(view).map((option) =>
       Array.from(option.children)
         .filter((child) => child.getAttribute('aria-hidden') !== 'true')
         .map((child) => child.textContent)

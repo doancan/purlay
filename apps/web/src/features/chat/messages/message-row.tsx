@@ -43,6 +43,7 @@ import { EditedMark } from './edit-history';
 import { ReactionBar } from './reactions';
 import { MessageEditor, useEditing } from './editing';
 import { PinnedMark } from '../pins/pin-toggle';
+import { PriorityMark } from './priority';
 import { ReminderMark } from '../reminders/reminder-menu';
 import { useActiveRow } from './active-row';
 import { MessageActions } from './message-actions';
@@ -258,6 +259,7 @@ const MessageRowView = ({
           )}
           {/* What is known about the message — edited, pinned — on one line under its words, apart. */}
           <div className="mt-1 flex items-center gap-3 empty:hidden">
+            {!deleted && <PriorityMark message={message} />}
             <EditedMark message={message} mine={own} />
             {!deleted && <PinnedMark message={message} />}
             {!deleted && <ReminderMark message={message} />}

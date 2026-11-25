@@ -111,6 +111,7 @@ const channelWrites: FrameHandlers<ChatFrameContext> = {
         content: frame.payload.content,
         parentId: frame.payload.parentId,
         attachmentIds: frame.payload.attachmentIds,
+        priority: frame.payload.priority,
       },
       // The identity was cached at the upgrade; the write re-proves it (D-85).
       identity.sessionId,

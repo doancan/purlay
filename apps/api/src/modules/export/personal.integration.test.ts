@@ -878,6 +878,7 @@ const FROZEN_SHAPE: Record<string, unknown> = {
         'message_type',
         'metadata',
         'parent_id',
+        'priority',
         'sender_id',
         'updated_at',
         'workspace_id',
