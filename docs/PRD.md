@@ -265,9 +265,9 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 progressive web application** — one client, not a second codebase (D-51), installable since D-230 · multi-node scale-out via a Redis-backed event
 bus (D-7, D-25) · **OIDC single sign-on, built** (D-31, D-200)
 
-> **Native Swift exists for macOS only** (D-186, which supersedes D-51 here). Mobile stays an
-> installable web application, Windows and Linux use the web client, and no native iOS client is
-> planned. The macOS client has its own track in its own repository and does not wait for this phase.
+> **Native Swift exists for macOS and iOS** (D-186, D-338, which supersede D-51 here). Each has its own repository and
+> its own track and does not wait for this phase; they share one Swift package. The installable web application stays
+> for everything else, and Windows and Linux use the web client.
 
 ---
 
