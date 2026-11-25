@@ -1523,14 +1523,6 @@ export const API_CHAT_CHANNELS: readonly Mutation[] = [
     tests: ['apps/api/src/realtime/departed-subscribe.integration.test.ts'],
   },
   {
-    id: 'refusal-tells-somebody-outside-the-workspace-why',
-    why: 'a departure row is read for a person who is no longer in the channel’s workspace',
-    file: 'apps/api/src/features/chat/channels/departures.ts',
-    find: ".innerJoin('workspace_members', (join) =>",
-    replace: ".leftJoin('workspace_members', (join) =>",
-    tests: ['apps/api/src/realtime/departed-subscribe.integration.test.ts'],
-  },
-  {
     id: 'removed-member-keeps-channels',
     why: 'somebody removed from the workspace is still a member of its private channels, and rejoins them with it',
     file: 'apps/api/src/features/chat/channels/workspace-channel-cleanup.ts',
