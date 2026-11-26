@@ -161,6 +161,7 @@ export const devicesFor = async (
               localeOf(row.locale),
               saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
               row.authorName,
+              row.priority,
             ),
             url: `/w/${row.slug}/c/${row.channelId}${row.threadId === null ? '' : `?thread=${encodeURIComponent(row.threadId)}`}`,
             tag: `channel:${row.channelId}`,
