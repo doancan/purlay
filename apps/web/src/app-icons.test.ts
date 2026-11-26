@@ -1,9 +1,8 @@
 /**
  * The installable application (D-230): the manifest, its pictures and the shell's links to them.
  *
- * Like the favicon, none of these can read a token — a launcher reads them outside the document — so
- * each colour is a literal bound here to the token it copies, and each picture is checked against the
- * favicon it is drawn from (`scripts/app-icons.ts`): a changed accent fails here until they are drawn again.
+ * The pictures share the favicon's source vector and token-derived backing. The installed
+ * app and Home Screen also need a full-bleed picture with the mark inside the crop-safe circle.
  */
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -44,6 +43,7 @@ interface Picture {
   readonly height: number;
   /** The colour at a point, as `#rrggbb`; `transparent` where nothing was painted. */
   readonly at: (x: number, y: number) => string;
+  readonly alphaAt: (x: number, y: number) => number;
 }
 
 /** An 8-bit, non-interlaced RGB or RGBA PNG — what the generator's screenshots are. */
@@ -92,12 +92,15 @@ const decodePng = (bytes: Buffer): Picture => {
       pixels[row * stride + column] = (value + predicted) & 0xff;
     }
   }
+  const alphaAt = (x: number, y: number): number =>
+    channels === 4 ? (pixels[y * stride + x * channels + 3] ?? 0) : 255;
   return {
     width,
     height,
+    alphaAt,
     at: (x, y): string => {
       const start = y * stride + x * channels;
-      if (channels === 4 && pixels[start + 3] === 0) return 'transparent';
+      if (alphaAt(x, y) === 0) return 'transparent';
       const hex = [0, 1, 2].map((part) =>
         (pixels[start + part] ?? 0).toString(16).padStart(2, '0'),
       );
@@ -142,33 +145,41 @@ describe('the manifest', () => {
   });
 });
 
-describe('the pictures are the favicon, drawn again', () => {
-  const accent = tokenIn('accent', 'dark');
-  const onAccent = tokenIn('on-accent', 'dark');
+describe('the generated app icons', () => {
+  const background = tokenIn('surface-100', 'dark');
 
   test.each(['/icon-192.png', '/icon-512.png'])('%s keeps its rounded corners', (src) => {
     const drawn = picture(src);
     expect(drawn.at(0, 0)).toBe('transparent');
-    expect(drawn.at(Math.floor(drawn.width / 10), Math.floor(drawn.height / 2))).toBe(accent);
+    expect(drawn.at(Math.floor(drawn.width / 2), Math.floor(drawn.height / 20))).toBe(background);
+    // Interior of the upper ribbon.
+    expect(drawn.at(Math.floor(drawn.width * 0.36), Math.floor(drawn.height * 0.24))).not.toBe(
+      background,
+    );
   });
 
   test.each(['/icon-maskable-512.png', '/apple-touch-icon.png'])(
-    '%s is full-bleed: the launcher cuts its own shape',
+    '%s is opaque and its mark fits within the maskable circle',
     (src) => {
       const drawn = picture(src);
-      expect(drawn.at(0, 0)).toBe(accent);
-      expect(drawn.at(drawn.width - 1, drawn.height - 1)).toBe(accent);
-    },
-  );
-
-  test.each(['/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png'])(
-    "%s draws the letter in on-accent, at the favicon's place",
-    (src) => {
-      const drawn = picture(src);
-      // The stem of the P: x 12 of the favicon's 32, a third of the way down.
-      expect(drawn.at(Math.round((drawn.width * 12) / 32), Math.round(drawn.height / 3))).toBe(
-        onAccent,
-      );
+      expect(drawn.at(0, 0)).toBe(background);
+      expect(drawn.at(drawn.width - 1, drawn.height - 1)).toBe(background);
+      let minimumAlpha = 255;
+      let markRadius = 0;
+      for (let y = 0; y < drawn.height; y++) {
+        for (let x = 0; x < drawn.width; x++) {
+          minimumAlpha = Math.min(minimumAlpha, drawn.alphaAt(x, y));
+          if (drawn.at(x, y) !== background) {
+            markRadius = Math.max(
+              markRadius,
+              Math.hypot(x + 0.5 - drawn.width / 2, y + 0.5 - drawn.height / 2),
+            );
+          }
+        }
+      }
+      expect(minimumAlpha).toBe(255);
+      expect(markRadius).toBeGreaterThan(drawn.width / 5);
+      expect(markRadius).toBeLessThanOrEqual(drawn.width * 0.4);
     },
   );
 });

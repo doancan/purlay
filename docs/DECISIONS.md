@@ -6966,8 +6966,8 @@ Slack's loop is a banner, a badge and a sound.
    disabled or unmounted test cannot report a late failure. This still does not certify OS banner
    display or its timing. Conversation notices retain their coalescing tags.
 5. **A dot on the favicon, and the app's badge.** While the title counts, the tab's icon is
-   `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`, bound to the
-   tokens by `favicon.test.ts` as the favicon is; and an installed app's icon carries the count
+   `favicon-waiting.svg`: the favicon with a dot in `danger`, ringed in `on-accent`. D-230 describes
+   the shared source and token tests. An installed app's icon carries the count
    (`navigator.setAppBadge`, optional by its type where Firefox lacks it). Zero, or Deep Work, puts
    both back.
 6. **Independent delivery preferences (amended 2026-11-09, #1348).** A focused page in a different
@@ -11295,11 +11295,13 @@ an iPhone could not install it and with Purlay closed heard nothing, whatever th
 - **`public/manifest.webmanifest`** opens the whole origin (`/`) as a standalone application. Its colours are the
   dark theme's `surface-100`, which the shell starts in; `index.html` also gives the browser's bar `surface-100`
   for each colour scheme.
-- **The pictures are the favicon, drawn again.** `bun run icons` (`apps/web/scripts/app-icons.ts`) renders
-  `favicon.svg` at 192 and 512 as it is, and full-bleed at 512 (maskable) and 180 (`apple-touch-icon`), where the
-  launcher cuts its own shape; the glyph already lies inside the maskable safe zone. `src/app-icons.test.ts`
-  decodes each PNG and holds its colours to the accent tokens and its sizes to the manifest, so a changed favicon
-  or accent fails until they are drawn again.
+- **One source for the web icons (#1570).** `bun run icons` in `apps/web` draws both favicons and all
+  four PNGs from the supplied vector in `apps/web/scripts/purlay.svg`. Its gradients replace the old white P
+  and blue tile. The dark `surface-100` backing keeps the light ribbon visible against any browser
+  chrome. The rounded pictures keep transparent corners. The 512 px maskable and 180 px Apple
+  touch pictures use full-bleed opaque backings and keep all the artwork inside a centred circle of
+  radius 40% of the canvas. Tests hold the vector to the source, the background and waiting dot to
+  their tokens, and the PNGs to their sizes, opacity and crop boundary.
 - **iOS's Safari outside the Home Screen says what to do.** Where the browser has no push and `navigator.standalone`
   is `false` (iOS's alone), the notifications page says to add Purlay to the Home Screen instead of "this browser
   cannot show notifications", which there is not the whole truth.

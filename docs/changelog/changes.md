@@ -36,6 +36,7 @@ have it.
 
 ### Fixed
 
+- **Appearance** — browser tabs, installed web apps and Home Screen shortcuts show the new Purlay mark (D-230)
 - **Operations** — the update check finds the latest release again: Purlay now lives in the `purlay` organisation, and GitHub answers the old repository address with a redirect that the check, by design, does not follow
 - **Sign-in** — a session made by the iOS application is listed as Purlay for iOS with its version, not as the Mac application (D-191)
 - **Workspaces** — on the front door, *Keep* a workspace that is being deleted no longer misses its button when the creation form finishes loading under it

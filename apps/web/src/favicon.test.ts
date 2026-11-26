@@ -1,9 +1,4 @@
-/**
- * The favicon is the one picture of the brand the page cannot paint with a token: a browser
- * reads it outside the document, where no custom property reaches. So it carries the colours
- * as literals, and this binds each to the token it copies (CONTRIBUTING §6.1) — a changed
- * accent fails here instead of leaving the tab a different blue from the product.
- */
+/** The browser reads these pictures outside the document, so the generator writes token colours as literals. */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
@@ -21,6 +16,8 @@ const tokens = (
 ).color.tokens;
 const favicon = readFileSync(new URL('../public/favicon.svg', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const mark = readFileSync(new URL('../scripts/purlay.svg', import.meta.url), 'utf8');
+const colours = (svg: string): string[] => svg.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
 
 /** The one value a token has in every theme; a token that differs by theme has no single favicon colour. */
 const single = (name: string): string => {
@@ -34,14 +31,15 @@ const single = (name: string): string => {
 };
 
 describe('the favicon', () => {
-  test('is filled with the accent and drawn in on-accent', () => {
-    expect(favicon).toContain(`fill="${single('accent')}"`);
-    expect(favicon).toContain(`stroke="${single('on-accent')}"`);
-  });
-
-  test('holds no colour that is not one of those two', () => {
-    const colours = new Set(favicon.match(/#[0-9a-f]{3,8}\b/gi) ?? []);
-    expect(colours).toEqual(new Set([single('accent'), single('on-accent')]));
+  test('draws every source path and gradient over the dark surface token', () => {
+    const artwork = mark
+      .trim()
+      .replace(/^<svg[^>]*>\n/, '')
+      .replace(/\n<\/svg>$/, '');
+    expect(favicon).toContain(artwork);
+    const background = dark('surface-100');
+    expect(favicon).toContain(`fill="${background}"`);
+    expect(new Set(colours(favicon))).toEqual(new Set([background, ...colours(mark)]));
   });
 
   test('is what the shell links, so no browser asks for a /favicon.ico that is not there', () => {
@@ -49,11 +47,10 @@ describe('the favicon', () => {
   });
 });
 
-/** Every value a token has, in any theme. */
-const anyOf = (name: string): string[] => {
+const dark = (name: string): string => {
   const token = tokens.find((candidate) => candidate.name === name);
   if (token === undefined) throw new Error(`no colour token named ${name}`);
-  return typeof token.value === 'string' ? [token.value] : Object.values(token.value);
+  return typeof token.value === 'string' ? token.value : (token.value['dark'] ?? '');
 };
 
 describe('the favicon while something needs the person (D-148)', () => {
@@ -64,15 +61,11 @@ describe('the favicon while something needs the person (D-148)', () => {
     expect(waiting.match(/<circle /g)).toHaveLength(2);
   });
 
-  test('the dot is danger, ringed in on-accent so it stands off the accent', () => {
+  test('uses the danger token and an on-accent ring', () => {
     const fills = [...waiting.matchAll(/<circle [^>]*fill="(#[0-9a-f]+)"/gi)].map((m) => m[1]);
-    expect(fills[0]).toBe(single('on-accent'));
-    expect(anyOf('danger')).toContain(fills[1] ?? '');
-  });
-
-  test('holds no colour that is not a token', () => {
-    const colours = new Set(waiting.match(/#[0-9a-f]{3,8}\b/gi) ?? []);
-    const allowed = new Set([single('accent'), single('on-accent'), ...anyOf('danger')]);
-    for (const colour of colours) expect(allowed).toContain(colour);
+    expect(fills).toEqual([single('on-accent'), dark('danger')]);
+    expect(new Set(colours(waiting))).toEqual(
+      new Set([...colours(favicon), single('on-accent'), dark('danger')]),
+    );
   });
 });
