@@ -103,12 +103,36 @@ describe('the consent', () => {
     hold();
     const view = await visit({}, { locale: 'tr' });
     expect(view.getByRole('heading', { name: 'Purlay for Mac açılsın mı?' })).toBeDefined();
-    expect(view.getByRole('button', { name: 'Purlay for Mac’i aç' })).toBeDefined();
+    expect(view.getByRole('button', { name: 'Purlay for Mac uygulamasını aç' })).toBeDefined();
     await expectNoAxeViolations(view.container);
   });
 });
 
 describe('saying yes', () => {
+  test('names iOS through consent and completion without sending the display hint to authorization', async () => {
+    window.sessionStorage.setItem(KEY, JSON.stringify({ ...PAIR, platform: 'ios', at: NOW() }));
+    const asked: NativeAuthorizeRequest[] = [];
+    const went = spyOn(leave, 'to').mockImplementation(() => undefined);
+    try {
+      const view = await visit(
+        {
+          authorizeNative: (input) => {
+            asked.push(input);
+            return Promise.resolve({ redirect: REDIRECT });
+          },
+        },
+        { locale: 'tr' },
+      );
+      expect(view.getByRole('heading', { name: 'Purlay for iOS açılsın mı?' })).toBeDefined();
+      await click(view, 'Purlay for iOS uygulamasını aç');
+      expect(asked).toEqual([PAIR]);
+      expect(went).toHaveBeenCalledWith(REDIRECT);
+      expect(view.getByRole('heading', { name: 'Purlay for iOS uygulamasına dön' })).toBeDefined();
+    } finally {
+      went.mockRestore();
+    }
+  });
+
   test('asks for the pair the tab holds, sends the browser to the address the server named, and forgets the pair', async () => {
     hold();
     const asked: NativeAuthorizeRequest[] = [];
@@ -269,11 +293,14 @@ describe('a person who is not signed in yet', () => {
 });
 
 describe('back from signing in', () => {
-  test('the front door takes a person with a pair waiting to the consent', async () => {
-    hold();
+  test.each([
+    [{}, 'Mac'],
+    [{ platform: 'ios' }, 'iOS'],
+  ])('the front door after a provider callback resumes consent for %j', async (metadata, app) => {
+    window.sessionStorage.setItem(KEY, JSON.stringify({ ...PAIR, ...metadata, at: NOW() }));
     const view = await visit({}, { path: '/' });
     expect(here(view)).toBe('/sign-in/native');
-    expect(view.getByRole('heading', { name: 'Open Purlay for Mac?' })).toBeDefined();
+    expect(view.getByRole('heading', { name: `Open Purlay for ${app}?` })).toBeDefined();
   });
 
   test('without a pair, takes them to their workspace as it always did', async () => {

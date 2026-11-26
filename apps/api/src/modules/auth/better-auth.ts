@@ -40,6 +40,8 @@ import {
   GOOGLE_ISSUER,
   NATIVE_CHALLENGE_PATTERN,
   NATIVE_STATE_PATTERN,
+  isNativeSignInPlatform,
+  type NativeSignInHandoff,
   normalisedMailbox,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -1116,21 +1118,20 @@ interface LinkLetter {
   readonly locale: SignInLocale;
   readonly invitation?: string;
   /** The native application's challenge and state, which ride in the link's fragment (D-191). */
-  readonly native?: { readonly challenge: string; readonly state: string };
+  readonly native?: NativeSignInHandoff;
 }
 
 /** The language and invitation a link's message was asked with, as the library hands them back. */
 const letterOf = (metadata: Readonly<Record<string, unknown>> | undefined): LinkLetter => {
   const invitation = metadata?.['invitation'];
   const native = metadata?.['native'];
-  const challenge =
+  const record =
     typeof native === 'object' && native !== null
-      ? (native as Readonly<Record<string, unknown>>)['challenge']
+      ? (native as Readonly<Record<string, unknown>>)
       : undefined;
-  const state =
-    typeof native === 'object' && native !== null
-      ? (native as Readonly<Record<string, unknown>>)['state']
-      : undefined;
+  const challenge = record?.['challenge'];
+  const state = record?.['state'];
+  const platform = record?.['platform'];
   return {
     locale: metadata?.['locale'] === 'tr' ? 'tr' : 'en',
     // Only a token's shape: nothing an asker wrote reaches the mail (D-138 §4).
@@ -1141,7 +1142,9 @@ const letterOf = (metadata: Readonly<Record<string, unknown>> | undefined): Link
     typeof state === 'string' &&
     new RegExp(NATIVE_CHALLENGE_PATTERN).test(challenge) &&
     new RegExp(NATIVE_STATE_PATTERN).test(state)
-      ? { native: { challenge, state } }
+      ? {
+          native: { challenge, state, ...(isNativeSignInPlatform(platform) ? { platform } : {}) },
+        }
       : {}),
   };
 };
@@ -1886,10 +1889,11 @@ export const createAuth = (deps: AuthDependencies): Auth => {
               generateToken: () => randomToken(),
               sendMagicLink: ({ email, token, metadata }) => {
                 const { locale, invitation, native } = letterOf(metadata);
-                // `<token>`, then `.<invitation>` if one rode along, then `~<challenge>~<state>` if the native
-                // application asked: none of it reaches a server's log (D-138 §4, D-191). `~` is in neither hex
-                // nor base64url, so the parts cannot be mistaken for one another.
-                const url = `${deps.baseUrl}${SIGN_IN_PATH}/email#${token}${invitation === undefined ? '' : `.${invitation}`}${native === undefined ? '' : `~${native.challenge}~${native.state}`}`;
+                // The display hint is public. Keep the fragment readable by older clients (D-191).
+                const platform =
+                  native?.platform === undefined ? '' : `?platform=${native.platform}`;
+                const handoff = native === undefined ? '' : `~${native.challenge}~${native.state}`;
+                const url = `${deps.baseUrl}${SIGN_IN_PATH}/email${platform}#${token}${invitation === undefined ? '' : `.${invitation}`}${handoff}`;
                 mailer.post(linkLetter(email, locale, url), 'sign-in');
                 return Promise.resolve();
               },

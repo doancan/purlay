@@ -2077,6 +2077,19 @@ export const NativeAuthorizeRequest = FromClient({
 });
 export type NativeAuthorizeRequest = Static<typeof NativeAuthorizeRequest>;
 
+/** Which application to name in the browser. This metadata grants no authority. */
+export const NativeSignInPlatform = Type.Union([Type.Literal('macos'), Type.Literal('ios')]);
+export type NativeSignInPlatform = Static<typeof NativeSignInPlatform>;
+
+export const isNativeSignInPlatform = (value: unknown): value is NativeSignInPlatform =>
+  value === 'macos' || value === 'ios';
+
+export const NativeSignInHandoff = FromClient({
+  ...NativeAuthorizeRequest.properties,
+  platform: Type.Optional(NativeSignInPlatform),
+});
+export type NativeSignInHandoff = Static<typeof NativeSignInHandoff>;
+
 /** Where to send the browser next: `purlay://auth?code=…&state=…`. */
 export const NativeAuthorizeResponse = Type.Object({ redirect: Type.String() });
 export type NativeAuthorizeResponse = Static<typeof NativeAuthorizeResponse>;
@@ -2098,8 +2111,8 @@ export const EmailSignInRequest = FromClient({
   email: Type.String({ format: 'email', maxLength: EMAIL_MAX }),
   locale: SignInLocale,
   invitation: Type.Optional(InvitationToken),
-  /** The native application's challenge and state, carried in the link's fragment (D-191). */
-  native: Type.Optional(NativeAuthorizeRequest),
+  /** The native application's question and optional display platform, carried in the link (D-191). */
+  native: Type.Optional(NativeSignInHandoff),
 });
 export type EmailSignInRequest = Static<typeof EmailSignInRequest>;
 

@@ -9567,6 +9567,12 @@ application a session of its own:
    operating system's registration of `purlay://` and not through the session that was waiting; the application
    accepts it only while an attempt is pending and only with that attempt's `state`.
 
+**Apple platforms (D-338).** The native opening URL may say `platform=macos` or `platform=ios`.
+The tab remembers it with the question for display. An emailed link carries this display hint in
+its query and preserves the fragment format so older web clients can still read it. Missing or
+unknown platform information uses the existing Mac wording. Authorization still uses the same
+challenge and state. The platform cannot prove which application opened the page.
+
 **Limits, stated** (found in a review of the change, written here so they are not discovered again):
 
 - A custom scheme cannot prove which application is asking. Any application on the Mac may register `purlay://`;
