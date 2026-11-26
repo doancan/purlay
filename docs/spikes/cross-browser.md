@@ -122,3 +122,19 @@ out. The session cookie is `Secure` and `__Host-`, and WebKit on Linux does not 
 trusts it with `ignoreHTTPSErrors`, and the test process's own requests trust that one certificate through
 `NODE_EXTRA_CA_CERTS`; certificate validation is never turned off. The API behind the front stays on http. The product
 is unchanged.
+
+### Diagnosing a document navigation that stalls
+
+The WebKit job retains `webkit-navigation.jsonl` with its failure report (#1368). Compare the pathname
+from a failed document request in the browser trace with the matching `pathHash` in that file. Hash
+the URL pathname as UTF-8 with SHA-256. The log excludes the raw pathname, query, cookies and headers.
+
+The front records when its HTTP handler received the request and when it returned a response with
+headers. Each receipt includes the request ID, wall-clock time in milliseconds and the client's
+loopback port if available. An `aborted` receipt means the client went away before the handler
+returned headers. A matching `responding` receipt shows that the handler produced headers, while
+the browser trace shows whether those headers reached WebKit. If there is no `received` receipt in
+the matching time window, the request did not reach the front's HTTP handler.
+
+To capture the same log locally, set `PURLAY_E2E_NAVIGATION_LOG` to an output path when running the
+WebKit project. Each front startup starts a fresh log.

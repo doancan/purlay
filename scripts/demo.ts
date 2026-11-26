@@ -17,11 +17,18 @@
  * production build, one origin, the socket's `Origin` equal to the page's — and for the
  * browser tests to run against exactly that (D-61).
  */
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { SQL } from 'bun';
-import { startFront } from './demo-server';
+import { startFront, type DocumentEvent } from './demo-server';
 
 const DEVELOPMENT_KEY = 'ZGV2ZWxvcG1lbnQtb25seS1rZXktMzItYnl0ZXMhISE=';
 const SAFE_DATABASE = /^purlay_(demo|e2e)[a-z0-9_]*$/;
@@ -208,11 +215,28 @@ const certificate = ((): { cert: string; key: string } | undefined => {
   if (certPath === undefined || keyPath === undefined) return undefined;
   return { cert: readFileSync(certPath, 'utf8'), key: readFileSync(keyPath, 'utf8') };
 })();
+const documentLog = ((): ((event: DocumentEvent) => void) | undefined => {
+  const path = process.env['PURLAY_E2E_NAVIGATION_LOG'];
+  if (!path) return undefined;
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, '');
+  let writable = true;
+  return (event) => {
+    if (!writable) return;
+    try {
+      appendFileSync(path, `${JSON.stringify(event)}\n`);
+    } catch {
+      writable = false;
+      process.stderr.write('demo proxy: could not write the navigation log\n');
+    }
+  };
+})();
 const front = startFront({
   api: `http://localhost:${String(apiPort)}`,
   sessions,
   port,
   ...(certificate === undefined ? {} : { tls: certificate }),
+  ...(documentLog === undefined ? {} : { documentLog }),
 });
 
 // Parsed by the browser tests' web-server wait; keep it one line.
