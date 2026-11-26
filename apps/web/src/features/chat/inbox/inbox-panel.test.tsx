@@ -12,6 +12,7 @@ import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import { ALICE, BOB, IDS, aMessage, aSignedInApi } from '../../../testing/fixtures';
+import { expectFocusOn } from '../../../testing/focus';
 import { renderApp } from '../../../testing/render';
 import { settle } from '../../../testing/channel-harness';
 import { person } from '../../../testing/user';
@@ -74,7 +75,7 @@ const openPanel = async (view: View): Promise<HTMLElement> => {
 };
 
 describe('the inbox panel', () => {
-  test('opens from the rail without leaving the channel, and asks for one page of ten', async () => {
+  test('opens from the rail, loads one page, and returns focus to the rail on Escape', async () => {
     const asked: Asked[] = [];
     const view = await visit({
       notifications: (_workspace, at = {}) => {
@@ -86,10 +87,15 @@ describe('the inbox panel', () => {
     expect(asked).toEqual([]);
     const panel = await openPanel(view);
     expect(asked).toEqual([{ limit: PANEL_LIMIT }]);
-    expect(within(panel).getByText('words 1')).toBeDefined();
+    const first = await within(panel).findByRole('button', { name: /words 1/ });
     expect(within(panel).getByText('words 2')).toBeDefined();
     expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
     await expectNoAxeViolations(panel);
+    first.focus();
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(view.queryByRole('dialog', { name: 'Inbox' })).toBeNull();
+    expectFocusOn(within(places(view)).getByRole('button', { name: /Inbox/ }));
     view.unmount();
   });
 
@@ -100,7 +106,7 @@ describe('the inbox panel', () => {
         Promise.resolve(page([{ ...urgent, message: { ...urgent.message, priority: 'urgent' } }])),
     });
     const panel = await openPanel(view);
-    expect(within(panel).getByRole('button', { name: /words 1 Urgent/ })).toBeDefined();
+    expect(await within(panel).findByRole('button', { name: /words 1 Urgent/ })).toBeDefined();
     view.unmount();
   });
 
