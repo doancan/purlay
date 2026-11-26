@@ -146,7 +146,7 @@ describe('integration: urgent chat delivery through APNs and Web Push', () => {
       }
       expect(posts.map(({ at: time }) => time)).toEqual([NOW, at(2), at(4)]);
       expect(new Set(posts.map(({ collapseId }) => collapseId)).size).toBe(3);
-      expect(posts[0]?.body).toContain('alice wrote to you');
+      expect(posts[0]?.body).toContain('Urgent · alice wrote to you');
       expect(posts[1]?.body).toContain('Urgent · alice wrote to you');
       expect(posts[2]?.body).toContain('Urgent · alice wrote to you');
       expect(posts.every(({ body }) => !body.includes(content))).toBe(true);
@@ -159,9 +159,9 @@ describe('integration: urgent chat delivery through APNs and Web Push', () => {
       expect(new Set(topics).size).toBe(3);
       const payloads = await Promise.all(webPosts.map(({ body }) => browser.read(body)));
       expect(payloads).toMatchObject(
-        ['alice wrote to you', ...Array<string>(3).fill('Urgent · alice wrote to you')].map(
-          (body) => ({ body, tag: `channel:${room.channelId}`, silent: false }),
-        ),
+        Array<string>(4)
+          .fill('Urgent · alice wrote to you')
+          .map((body) => ({ body, tag: `channel:${room.channelId}`, silent: false })),
       );
       expect(JSON.stringify(payloads)).not.toContain(content);
       expect(await receipts()).toEqual(original);
