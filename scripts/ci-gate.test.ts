@@ -2,6 +2,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { GATED, judge, main } from './ci-gate';
+import { AREAS, needsServices } from './test-area';
 
 type Job = (typeof GATED)[number];
 
@@ -20,6 +21,11 @@ const results = (
     scope: { result: over.scope ?? 'success', outputs: scoped },
     static: { result: over.static ?? 'success', outputs: {} },
     schema: { result: over.schema ?? 'success', outputs: {} },
+    // The areas of `schema` are skipped for the very reasons it is: they follow it there, and are their own result otherwise.
+    'schema-area': {
+      result: over['schema-area'] ?? (over.schema === 'skipped' ? 'skipped' : 'success'),
+      outputs: {},
+    },
     // Run only for a light change: skipped is its ordinary state, and right while `scope` says the change was not.
     'light-suite': { result: over['light-suite'] ?? 'skipped', outputs: {} },
     'api-measurements': { result: over['api-measurements'] ?? 'success', outputs: {} },
@@ -136,9 +142,14 @@ describe('the gate', () => {
       test(`refuses when ${job} ended ${outcome === '' ? 'with no result' : outcome}`, () => {
         const ended = `${job} ended ${outcome === '' ? 'with no result' : outcome}`;
         // Without a `scope` that succeeded, the light suite's ordinary skip cannot be told from a missing one.
-        expect(judge(results({ [job]: outcome }))).toEqual(
-          job === 'scope' ? [ended, 'light-suite ended skipped'] : [ended],
-        );
+        // A skipped `schema` takes its areas with it, which is the reason they are skipped too: both are refused.
+        const alongside =
+          job === 'scope'
+            ? ['light-suite ended skipped']
+            : job === 'schema' && outcome === 'skipped'
+              ? ['schema-area ended skipped']
+              : [];
+        expect(judge(results({ [job]: outcome }))).toEqual([ended, ...alongside]);
       });
     }
   }
@@ -167,6 +178,7 @@ describe('the gate', () => {
   test('refuses the coverage run skipped for a change that was not light and whose content was not verified', () => {
     expect(judge(results({ schema: 'skipped', 'light-suite': 'success' }))).toEqual([
       'schema ended skipped',
+      'schema-area ended skipped',
     ]);
   });
 
@@ -181,7 +193,7 @@ describe('the gate', () => {
           light,
         ),
       ),
-    ).toEqual(['scope ended failure', 'schema ended skipped']);
+    ).toEqual(['scope ended failure', 'schema ended skipped', 'schema-area ended skipped']);
   });
 
   test('passes content already verified, whose static, coverage and per-cell suites were skipped for it', () => {
@@ -209,7 +221,12 @@ describe('the gate', () => {
   test('refuses the heavy jobs skipped on a commit whose content was not said to be verified', () => {
     expect(
       judge(results({ static: 'skipped', schema: 'skipped', 'module-suites': 'skipped' })),
-    ).toEqual(['static ended skipped', 'schema ended skipped', 'module-suites ended skipped']);
+    ).toEqual([
+      'static ended skipped',
+      'schema ended skipped',
+      'schema-area ended skipped',
+      'module-suites ended skipped',
+    ]);
   });
 
   test('names every job that did not succeed, not only the first', () => {
@@ -218,6 +235,12 @@ describe('the gate', () => {
       'schema ended cancelled',
       'browser ended failure',
     ]);
+  });
+
+  test('refuses an area of the suite that failed or never ran, whatever `schema` said', () => {
+    expect(judge(results({ 'schema-area': 'failure' }))).toEqual(['schema-area ended failure']);
+    expect(judge(results({ 'schema-area': 'cancelled' }))).toEqual(['schema-area ended cancelled']);
+    expect(judge(results({ 'schema-area': 'skipped' }))).toEqual(['schema-area ended skipped']);
   });
 
   test('refuses when a job it stands for is missing from what it was handed', () => {
@@ -314,7 +337,7 @@ describe('the verify job in ci.yml', () => {
     for (const name of GATED) expect(workflow).toMatch(new RegExp(`^ {2}${name}:$`, 'm'));
   });
 
-  test('the whole suite runs in schema and nowhere else, once', () => {
+  test('the whole suite runs in the areas of schema-area and nowhere else, once', () => {
     expect(workflow.match(/run: bun run test:all$/gm)).toHaveLength(1);
     expect(workflow).not.toMatch(/run: bun run test$/m);
   });
@@ -332,6 +355,101 @@ describe('the verify job in ci.yml', () => {
         'm',
       ).exec(compose)?.[1];
       expect(block).toContain('healthcheck:');
+    }
+  });
+});
+
+/**
+ * The suite runs as areas, side by side, and `schema` puts them together (D-341). Branch protection requires `schema`
+ * and `verify` by name, so what they mean is held here: the areas are every area, `schema` fails unless every area
+ * passed, and both are skipped for exactly the reasons the whole suite was.
+ */
+describe('the suite in areas, in ci.yml', () => {
+  const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+  interface WorkflowJob {
+    needs?: unknown;
+    if?: string;
+    strategy?: { 'fail-fast'?: boolean; matrix?: { area?: string[] } };
+    env?: Record<string, string>;
+    steps?: {
+      name?: string;
+      if?: string;
+      run?: string;
+      uses?: string;
+      with?: Record<string, unknown>;
+      env?: Record<string, string>;
+    }[];
+  }
+  const jobs = (Bun.YAML.parse(workflow) as { jobs: Record<string, WorkflowJob> }).jobs;
+  const areas = jobs['schema-area'];
+  const schema = jobs['schema'];
+  const notSkipped = "needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'";
+
+  test('every area is skipped for the reasons the whole was, and for no other', () => {
+    expect(areas?.needs).toBe('scope');
+    expect(areas?.if).toBe(notSkipped);
+  });
+
+  test('there is one job per area the repository names, each told which it is, and a failed one does not hide the rest', () => {
+    expect(areas?.strategy?.matrix?.area).toEqual([...AREAS]);
+    expect(areas?.strategy?.['fail-fast']).toBe(false);
+    expect(areas?.env?.['PURLAY_TEST_AREA']).toBe('${{ matrix.area }}');
+  });
+
+  test('only the areas that need services start them, and the web area is given no database', () => {
+    const steps = areas?.steps ?? [];
+    for (const command of ['bun run db:up:tests', 'bun run db:check']) {
+      const step = steps.find((candidate) => candidate.run === command);
+      expect(step?.if).toBe("matrix.area != 'web'");
+    }
+    for (const variable of ['DATABASE_URL', 'REDIS_URL']) {
+      expect(areas?.env?.[variable]).toContain("matrix.area != 'web' && '");
+    }
+    expect(AREAS.filter((area) => !needsServices(area))).toEqual(['web']);
+  });
+
+  test('every area keeps its coverage whether it passed or not, under the name the check looks for', () => {
+    const keep = (areas?.steps ?? []).find((step) =>
+      step.uses?.startsWith('actions/upload-artifact@'),
+    );
+    expect(keep?.if).toBe('${{ !cancelled() }}');
+    expect(keep?.with?.['if-no-files-found']).toBe('error');
+    expect(keep?.with?.['name']).toBe('area-${{ matrix.area }}');
+    expect(keep?.with?.['path']).toBe('coverage/area-${{ matrix.area }}');
+  });
+
+  test('schema needs the areas and runs whatever became of them, so that a missing area is a failure it names', () => {
+    expect(schema?.needs).toEqual(['scope', 'schema-area']);
+    expect(schema?.if).toBe(`always() && ${notSkipped}`);
+  });
+
+  test('schema hands the check how the areas ended, and has no step of its own that a developer cannot run', () => {
+    const check = (schema?.steps ?? []).find((step) => step.run === 'bun run coverage:floor');
+    expect(check?.env?.['AREAS_RESULT']).toBe('${{ needs.schema-area.result }}');
+    expect(check?.if).toBeUndefined();
+    // Every `run:` is a package script (the local verify runs everything CI runs): no bare shell in this job.
+    for (const step of schema?.steps ?? []) {
+      if (step.run !== undefined) expect(step.run).toMatch(/^bun run [\w:-]+$/);
+    }
+  });
+
+  test('schema downloads every area as the directory the check reads, and runs the check', () => {
+    const steps = schema?.steps ?? [];
+    const download = steps.find((step) => step.uses?.startsWith('actions/download-artifact@'));
+    expect(download?.with?.['pattern']).toBe('area-*');
+    expect(download?.with?.['path']).toBe('coverage');
+    expect(download?.with?.['merge-multiple']).toBeUndefined();
+    expect(steps.some((step) => step.run === 'bun run coverage:floor')).toBe(true);
+  });
+
+  test('the areas and the whole carry no way to fail and still succeed', () => {
+    for (const name of ['schema-area', 'schema']) {
+      const block =
+        new RegExp(`^ {2}${name}:\\n([\\s\\S]*?)(?=^ {2}[\\w-]+:\\n|(?![\\s\\S]))`, 'm').exec(
+          workflow,
+        )?.[1] ?? '';
+      expect(block).not.toBe('');
+      expect(block).not.toContain('continue-on-error');
     }
   });
 });

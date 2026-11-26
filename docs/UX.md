@@ -1463,20 +1463,18 @@ with **Invite people** — the dialog of §2, where mail is connected adding an 
 link** and the link beside **Copy**. A send that is refused or fails says so, in words (§2, *By email*), and leaves the
 link to copy; nothing says *sent* or *delivered* that was not.
 
-**The native application's consent** is `/sign-in/native?challenge=…&state=…` (D-191). The application opens it
-in the system browser, and the page asks — it never decides. The two values leave the address as the page
-reads them and wait in the tab for ten minutes (`sessionStorage`), through GitHub's round trip, a password
-sign-in or an emailed link, as an invitation's token does (D-115); a tab whose storage cannot be reached keeps
-them in the address. Somebody not signed in is sent to sign-in, which says *Sign in to continue to Purlay for
-Mac*, and the front door brings them back here (an invitation in hand comes first). Signed in, the card is
-*Open Purlay for Mac?* — naming the person, their address and this server — with **Open Purlay for Mac** (focused),
-**Cancel**, and *Sign out of this browser and use another account*, which signs this browser out and keeps the
-question. Only the button asks the server for a code; the answer is `purlay://…`, opened by a full navigation,
-and the card says *Back to Purlay for Mac — you can close this tab once the app has opened*, with **Open Purlay
-for Mac again**, which opens the same code and makes no other. A page with no question — never asked, or ten
-minutes old — says *This sign-in has expired* and offers *Go to Purlay*. The emailed link may open in another
-browser, in which case the pair rides in the link's fragment after the token (`#<token>[.<invitation>]~<challenge>~<state>`)
-and the sign-in keeps it for that tab.
+**Native application consent** begins at `/sign-in/native?challenge=…&state=…&platform=…` (D-191).
+The browser keeps the question and its display platform in the tab for ten minutes through GitHub,
+OIDC and password sign-in. The sign-in page names *Purlay for Mac* or *Purlay for iOS*. A link without
+a recognized platform uses the Mac wording that older clients expect. The consent card names the
+application, the signed-in account and the server. Its focused button asks the server for a code,
+opens the fixed `purlay://…` callback and shows how to reopen the same code. **Cancel** returns to
+Purlay, and **Sign out of this browser and use another account** keeps the question for the next
+sign-in. An expired or missing question offers **Go to Purlay**.
+
+An emailed link can open in another browser. It carries the challenge and state with the token in
+the fragment, and the display platform in the query. The browser keeps all three together for
+consent, using the consent URL if tab storage is blocked.
 
 **Workspace security** (D-310) uses the existing settings cards, controls and keyboard behavior.
 Owners can preview a proposed sign-in, authenticator and session policy, prepare offline recovery,

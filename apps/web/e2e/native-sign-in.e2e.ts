@@ -82,7 +82,7 @@ test.describe('the page that authorises the native application', () => {
     await expect(
       page.getByRole('heading', { level: 1, name: 'This sign-in has expired' }),
     ).toBeVisible();
-    await expect(page.getByText('Start again from Purlay for Mac.')).toBeVisible();
+    await expect(page.getByText('Start again from the Purlay app.')).toBeVisible();
     await expectNoAxe();
     await page.getByRole('button', { name: 'Go to Purlay' }).click();
     await expect(page).not.toHaveURL(/\/sign-in\/native/);

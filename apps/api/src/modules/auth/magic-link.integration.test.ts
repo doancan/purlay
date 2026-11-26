@@ -10,6 +10,7 @@
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
+import type { NativeSignInHandoff } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { tokenDigest } from '../../platform/tokens';
 import { aRecordingLogger, aRecordingOutbox, NOW } from '../../testing/doubles';
@@ -85,7 +86,7 @@ describe('integration: a link asked for by the native application (D-191)', () =
   /** The one letter a request makes, once what was left for after the answer has run. */
   const letterFor = async (
     db: Executor,
-    request: { readonly native?: { readonly challenge: string; readonly state: string } },
+    request: { readonly native?: NativeSignInHandoff },
   ): Promise<string> => {
     await anAccount(db, 'native@example.test', true);
     const outbox = aRecordingOutbox();
@@ -114,12 +115,21 @@ describe('integration: a link asked for by the native application (D-191)', () =
   };
 
   const link = (letter: string): string =>
-    /https:\/\/purlay\.test\/sign-in\/email#[0-9a-zA-Z._~-]+/.exec(letter)?.[0] ?? '';
+    /https:\/\/purlay\.test\/sign-in\/email(?:\?platform=(?:ios|macos))?#[0-9a-zA-Z._~-]+/.exec(
+      letter,
+    )?.[0] ?? '';
 
   test('carries the challenge and the state in the link’s fragment, after the token, so no server log sees them', async () => {
     await withRollback(async (db) => {
       const url = link(await letterFor(db, { native: { challenge, state } }));
       expect(url).toMatch(new RegExp(`#[0-9a-f]{64}~${challenge}~${state}$`));
+    });
+  });
+
+  test('carries the iOS display hint without changing the fragment format', async () => {
+    await withRollback(async (db) => {
+      const url = link(await letterFor(db, { native: { challenge, state, platform: 'ios' } }));
+      expect(url).toMatch(new RegExp(`platform=ios#[0-9a-f]{64}~${challenge}~${state}$`));
     });
   });
 
