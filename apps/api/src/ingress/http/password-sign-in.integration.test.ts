@@ -520,23 +520,33 @@ describe('integration: the throttle counts a network, not a host (D-179 §4)', (
 
   test('hosts inside one /64 share the client’s budget across addresses: the twenty-first is refused', async () => {
     const server = aServer();
-    const statuses: number[] = [];
-    for (let host = 1; host <= 25; host += 1) {
-      statuses.push(
-        (
-          await signIn(
-            server,
-            `someone-${String(host)}@example.com`,
-            'a wrong password',
-            `2001:db8:9:9:${host.toString(16)}::1`,
-          )
-        ).status,
+    const statusAt = async (host: number): Promise<number> =>
+      (
+        await signIn(
+          server,
+          `someone-${String(host)}@example.com`,
+          'a wrong password',
+          `2001:db8:9:9:${host.toString(16)}::1`,
+        )
+      ).status;
+    // Let the real unknown-address hashes overlap, with at most one request per clone connection.
+    // Drain the batch before asserting so a failure cannot leave requests writing across tests.
+    const allowedAttempts = 20;
+    const batchSize = 4;
+    for (let first = 1; first <= allowedAttempts; first += batchSize) {
+      const size = Math.min(batchSize, allowedAttempts - first + 1);
+      const answers = await Promise.allSettled(
+        Array.from({ length: size }, (_, offset) => statusAt(first + offset)),
       );
+      for (const answer of answers) {
+        if (answer.status === 'rejected') throw answer.reason;
+        expect(answer.value).toBe(401);
+      }
     }
-    expect(statuses.filter((status) => status === 401)).toHaveLength(PASSWORD_FAILURES_PER_CLIENT);
-    expect(statuses.slice(PASSWORD_FAILURES_PER_CLIENT)).toEqual(
-      Array<number>(25 - PASSWORD_FAILURES_PER_CLIENT).fill(429),
-    );
+    // Each later host is checked after every admitted request has completed.
+    for (let host = allowedAttempts + 1; host <= 25; host += 1) {
+      expect(await statusAt(host)).toBe(429);
+    }
   });
 
   test('IPv4 hosts are their own networks, and an IPv4-mapped address is the IPv4 one', async () => {
