@@ -11298,6 +11298,50 @@ no parallel runner yet; Bun 1.4.4 has one, `--parallel=N`, which runs files in w
 per-file floor needs the merged report, and merging coverage across jobs is machinery this does not need while one
 runner's cores are idle. *Running the integration files apart from the unit files*: the same merge problem.
 
+**Revisited 2026-11-26 (#1576).** Four jobs can split test files by duration. The function coverage
+check still needs each function's identity and whether any shard hit it. Bun 1.4.4 carries function
+ranges and hit flags to the coordinator in `--parallel` mode. Its LCOV reporter writes function
+totals `FNF` and `FNH` alongside line hits. The totals lose the overlap between shards.
+[Bun 1.4.4 worker merge](https://github.com/oven-sh/bun/blob/bun-v1.4.4/src/sourcemap_jsc/CodeCoverage.rs#L245-L322) ·
+[LCOV reporter](https://github.com/oven-sh/bun/blob/bun-v1.4.4/src/sourcemap_jsc/CodeCoverage.rs#L499-L526)
+
+Measured with Bun 1.4.4 on macOS arm64. In a scratch directory, place both functions on one line
+in `subject.ts` so the line hits cannot distinguish them.
+
+```text
+export function left() { return 1; } export function right() { return 1; }
+```
+
+`a.test.ts` imports and asserts `left() === 1`. `b.test.ts` asserts the same return value from
+`left()` when `COVER_RIGHT=0` and from `right()` when `COVER_RIGHT=1`. Give both files one test.
+Set `coverageThreshold = { lines = 0.96, functions = 0.95 }` under `[test]` in `bunfig.toml`, and put
+only `[test]` in a separate `shard.bunfig.toml` so the shard can emit its report before the floor is judged.
+
+```sh
+for cover_right in 0 1; do
+  for shard in 1 2; do
+    COVER_RIGHT=$cover_right bun --config="$PWD/shard.bunfig.toml" test --isolate --parallel=2 \
+      --shard="$shard/2" --coverage-reporter=lcov --coverage-dir="out-$cover_right-$shard"
+  done
+  COVER_RIGHT=$cover_right bun test --isolate --parallel=2 --coverage
+done
+cmp out-0-1/lcov.info out-1-1/lcov.info
+cmp out-0-2/lcov.info out-1-2/lcov.info
+```
+
+Both comparisons succeeded. All four reports had `FNF:2`, `FNH:1` and `DA:1,1`. The complete runs
+had 100% line coverage in both cases. When both tests called `left()`, Bun reported 50% function
+coverage and exited 1. When they called different functions, it reported 100% and exited 0.
+Consequently, any gate that uses only these reports must give the same verdict to a passing and a
+failing run.
+
+The inspector's `Profiler.takePreciseCoverage` did distinguish the two executed ranges in an
+isolated worker. It also returned a top-level range for `subject.ts`, giving three entries where
+the native gate counted two functions. An export of Bun's own merged function ranges would carry
+the identity the current gate uses. An inspector-based export needs to establish parity with
+Bun's source-map mapping and executable-function selection first. The existing `schema` job
+continues to enforce both coverage floors until the sharded report can reproduce its verdict.
+
 **Cost of reversing.** Drop `--parallel=…` and `WORKERS` from `scripts/test-all.ts` and their test; the test fixes
 stay, being right either way.
 
