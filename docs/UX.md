@@ -632,7 +632,8 @@ page of the same name.
   point: an `@mention`, the profile's handle line, and beside the name where people are picked.
 - **The header line** is over a group's first message: the name, then the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
-  their time shows on hover, in the avatar's column.
+  their send time (`HH:mm`) shows on hover or keyboard focus, in the avatar's column. Hovering
+  over the time shows the full date and time.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
 - **Hover controls** are one floating bar — hairline edge, the float shadow — on the row's own top
   edge, in its right corner (D-150, amending D-119 §6; D-187 puts every message on the left, so the
