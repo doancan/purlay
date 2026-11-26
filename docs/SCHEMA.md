@@ -4543,7 +4543,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0126_outbox_ledger.sql       outbox_ledger: which fact was delivered to which consumer and when, for an operator to prove it  (D-335)
 0127_outbox_trace.sql        outbox.traceparent: the trace a fact was published in, so its delivery is a span of the same trace  (D-336)
 0128_message_priority.sql    messages.priority: how much a message asks of its recipient, a CHECK on the three values (D-337)
-0129_workspace_urgent_messages.sql  workspaces.urgent_messages_enabled: whether the workspace allows new Urgent sends (D-337)
+0133_workspace_urgent_messages.sql  workspaces.urgent_messages_enabled: whether the workspace allows new Urgent sends (D-337)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

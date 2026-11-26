@@ -354,7 +354,7 @@ describe('integration: upgrading from the previous release', () => {
         '0126_outbox_ledger',
         '0127_outbox_trace',
         '0128_message_priority',
-        '0129_workspace_urgent_messages',
+        '0133_workspace_urgent_messages',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
