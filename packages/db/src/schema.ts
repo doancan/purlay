@@ -67,6 +67,13 @@ export interface AdminEmailVerification {
   user_id: string;
 }
 
+export interface ApnsSubscriptions {
+  device_token: string;
+  generation: Generated<string>;
+  registered_at: Timestamp;
+  session_id: string;
+}
+
 export interface Attachments {
   claimed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
@@ -1484,6 +1491,7 @@ export interface WorkspaceSessionAssurances {
 export interface DB {
   accounts: Accounts;
   admin_email_verification: AdminEmailVerification;
+  apns_subscriptions: ApnsSubscriptions;
   attachments: Attachments;
   audit_log: AuditLog;
   channel_access_controls: ChannelAccessControls;

@@ -783,6 +783,23 @@ incrementing, including for a large restored value, and success clears it only f
 session. Definitive expiry (404/410), an invalid endpoint, sign-out and the existing device bound still
 remove the row (D-299). D-307 separately persists delivery attempts: retaining a device alone is not a retry.
 
+**APNs registrations (D-342).** `apns_subscriptions` holds one token per session. A
+foreign key cascades when the session is deleted. The globally unique token is normalized to
+bounded lowercase hexadecimal. Each registration writes its timestamp and a new generation.
+
+```sql
+CREATE TABLE apns_subscriptions (
+    session_id UUID PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    device_token TEXT NOT NULL UNIQUE CHECK (
+        length(device_token) BETWEEN 2 AND 512
+        AND length(device_token) % 2 = 0
+        AND device_token COLLATE "C" !~ '[^0-9a-f]'
+    ),
+    registered_at TIMESTAMPTZ NOT NULL,
+    generation UUID NOT NULL DEFAULT gen_random_uuid()
+);
+```
+
 #### 3.3.1. `push_intents`, `push_deliveries`, `push_notice_budgets`
 
 Core operational state added by 0102/0103, with state-led indexing in 0104 (D-307), captured inside the source owner's transaction:
@@ -4542,6 +4559,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0126_outbox_ledger.sql       outbox_ledger: which fact was delivered to which consumer and when, for an operator to prove it  (D-335)
 0127_outbox_trace.sql        outbox.traceparent: the trace a fact was published in, so its delivery is a span of the same trace  (D-336)
 0128_message_priority.sql    messages.priority: how much a message asks of its recipient, a CHECK on the three values (D-337)
+0129_apns_subscriptions.sql   session-owned device tokens and registration generations (D-342)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

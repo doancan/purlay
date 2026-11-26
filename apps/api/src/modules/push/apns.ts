@@ -36,6 +36,10 @@ type ApnsOutcome =
 
 type ApnsFetch = (url: URL, options: BunFetchRequestInit) => Promise<Response>;
 
+/** Opaque, variable-length bytes represented as a single hexadecimal URL segment. */
+export const normalizeApnsToken = (token: string): string | undefined =>
+  /^(?:[0-9a-fA-F]{2}){1,256}$/.test(token) ? token.toLowerCase() : undefined;
+
 /** APNs timestamps invalidations so an old response need not retire a newer registration. */
 const invalidatedAt = async (body: ReadableStream<Uint8Array>): Promise<number | undefined> => {
   const bytes = new Uint8Array(RESPONSE_MAX_BYTES);
@@ -99,9 +103,8 @@ export const createApnsProvider = async (
     const now = Math.floor(clock.now().getTime() / 1_000);
     const expires = Math.floor(expiresAt.getTime() / 1_000);
     if (!Number.isFinite(expires) || expires <= now) return { kind: 'canceled' };
-    // Device tokens are opaque, variable-length bytes. The hexadecimal form stays in one URL segment.
-    if (!/^(?:[0-9a-fA-F]{2}){1,256}$/.test(deviceToken) || !/^[!-~]{1,64}$/.test(collapseId))
-      return { kind: 'refused' };
+    const token = normalizeApnsToken(deviceToken);
+    if (token === undefined || !/^[!-~]{1,64}$/.test(collapseId)) return { kind: 'refused' };
     const body = JSON.stringify({
       aps: {
         alert: { title: payload.title, body: payload.body },
@@ -114,7 +117,7 @@ export const createApnsProvider = async (
 
     const authorization = await bearerAt(now);
     try {
-      const response = await post(new URL(`/3/device/${deviceToken.toLowerCase()}`, origin), {
+      const response = await post(new URL(`/3/device/${token}`, origin), {
         method: 'POST',
         protocol: 'http2',
         redirect: 'manual',
