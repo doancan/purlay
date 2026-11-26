@@ -4601,6 +4601,13 @@ header; they ask the person (D-126). The list is whole in `edge.ts` and in its t
 allowed later is a decision; a browser test fails if Chromium objects to an entry or the clipboard stops
 working. Rejected: the same header on API responses, which load nothing for it to govern.
 
+*Amended 2026-11-26: `browsing-topics` is no longer in the list.* Chromium deprecated the Topics API in
+144 and removes it in 150 together with its `browsing-topics` policy feature, so the Chromium that
+Playwright 1.65.1 ships reports the entry as "Unrecognized feature", which is the very objection the
+browser test exists to catch. The entry opted the page out of an API that is going away; the page loads no
+third-party code (`script-src 'self'`), so nothing in it could have called the API either. The test was not
+loosened: the header lost the entry and the whole-list assertion in `serving-the-client.test.ts` says so.
+
 ---
 
 ### D-103. Editing and deleting a message — closes O-1
