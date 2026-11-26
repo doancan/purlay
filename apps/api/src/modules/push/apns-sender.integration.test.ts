@@ -133,7 +133,7 @@ describe('integration: the shared push queue delivers to APNs', () => {
     });
   });
 
-  test('a delayed invalidation preserves a renewed token, and a current invalidation retires it', async () => {
+  test('only a current registration and timestamp allow Apple to retire a token', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
       const { sessionId } = await aSession(db, world.clock, world.ada);
@@ -144,7 +144,10 @@ describe('integration: the shared push queue delivers to APNs', () => {
         posts++;
         if (posts === 1) await registerApnsDevice(db, world.clock, owner, deviceToken, scope);
         return Response.json(
-          { reason: 'Unregistered', timestamp: world.clock.now().getTime() },
+          {
+            reason: 'Unregistered',
+            timestamp: world.clock.now().getTime() - (posts === 2 ? 10_000 : 0),
+          },
           { status: 410 },
         );
       });
@@ -163,9 +166,55 @@ describe('integration: the shared push queue delivers to APNs', () => {
       expect(await registration()).toBe(deviceToken);
 
       await queueInbox(db, world, sender);
-      await sender.flush(10_000);
+      await sender.releaseHeld();
       expect(posts).toBe(2);
+      expect(await registration()).toBe(deviceToken);
+
+      await queueInbox(db, world, sender);
+      await sender.flush(10_000);
+      expect(posts).toBe(3);
       expect(await registration()).toBeUndefined();
+    });
+  });
+
+  test('a notice read after the alert was prepared never reaches Apple', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const { sessionId } = await aSession(db, world.clock, world.ada);
+      await registerApnsDevice(
+        db,
+        world.clock,
+        { userId: world.ada, sessionId },
+        deviceToken,
+        scope,
+      );
+      let posted = false;
+      const transport = await createApnsProvider(credentials, world.clock, () => {
+        posted = true;
+        return Promise.resolve(new Response(null, { status: 200 }));
+      });
+      const send: typeof transport = async (push) => {
+        await db
+          .updateTable('inbox_entries')
+          .set({ read_at: world.clock.now() })
+          .where('id', '=', (eb) =>
+            eb.selectFrom('push_intents').select('record_id').where('id', '=', push.collapseId),
+          )
+          .execute();
+        return await transport(push);
+      };
+      const sender = await createPushSender({ ...base(db, world), apns: { scope, send } });
+      const recordId = await queueInbox(db, world, sender);
+      await sender.flush(10_000);
+      expect(posted).toBe(false);
+      expect(
+        await db
+          .selectFrom('push_deliveries as d')
+          .innerJoin('push_intents as p', 'p.id', 'd.intent_id')
+          .select(['d.attempts', 'd.state'])
+          .where('p.record_id', '=', recordId)
+          .executeTakeFirst(),
+      ).toEqual({ attempts: 0, state: 'canceled' });
     });
   });
 
