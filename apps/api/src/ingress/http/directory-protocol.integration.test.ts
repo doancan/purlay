@@ -7,6 +7,7 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   type ClonedDatabase,
+  type UserRole,
 } from '@purlay/db';
 import { WorkspaceDirectory, IssuedDirectoryCredential } from '@purlay/types/workspace-directory';
 import { compose } from '../../composition';
@@ -25,14 +26,45 @@ afterAll(async () => {
   await clone.drop();
   await closeIntegrationDatabase();
 }, DROP_HOOK_MS);
-const idOf = async (response: Response): Promise<string> => {
-  const body: unknown = await response.json();
+const idOf = (body: unknown): string => {
   if (typeof body !== 'object' || body === null || !('id' in body) || typeof body.id !== 'string')
     throw new Error('Missing SCIM resource ID.');
   return body.id;
 };
+const scim = '/auth/scim/v2';
+const listSchema = 'urn:ietf:params:scim:api:messages:2.0:ListResponse';
+const withFilter = (
+  resource: 'Users' | 'Groups',
+  filter: string,
+  excludedAttributes?: string,
+): string => {
+  const query = new URLSearchParams({
+    filter,
+    ...(excludedAttributes === undefined ? {} : { excludedAttributes }),
+  });
+  return `${scim}/${resource}?${query.toString()}`;
+};
+
+const scimList = async (response: Response): Promise<unknown> => {
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-type')).toContain('application/scim+json');
+  const body: unknown = await response.json();
+  return body;
+};
+
+const resourcesOf = (list: unknown): readonly unknown[] => {
+  if (
+    list === null ||
+    typeof list !== 'object' ||
+    !('Resources' in list) ||
+    !Array.isArray(list.Resources)
+  )
+    throw new Error('Invalid SCIM resource list.');
+  return list.Resources;
+};
+
 describe('integration: mounted native directory protocol', () => {
-  test('native owner configures a core-only directory and its real bearer supports SCIM create/PUT/PATCH/DELETE and structured404 without opening other auth verbs', async () => {
+  test('a core-only directory supports provider connection tests, filtered reads and provisioning through its issued bearer', async () => {
     const owner = await aUserRow(clone.db, 'directory-http-owner');
     const workspace = await clone.db
       .insertInto('workspaces')
@@ -53,23 +85,6 @@ describe('integration: mounted native directory protocol', () => {
         challenge_issued_at: now,
         challenge_expires_at: new Date(now.getTime() + 86_400_000),
         verified_at: now,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    const revision = crypto.randomUUID();
-    const connection = await clone.db
-      .insertInto('workspace_identity_connections')
-      .values({
-        workspace_id: workspace.id,
-        domain_id: domain.id,
-        name: 'Directory fixture',
-        issuer: 'https://directory.example',
-        client_id: 'fixture',
-        client_secret_encrypted: Buffer.alloc(32, 1),
-        enabled: true,
-        authentication_revision: revision,
-        tested_authentication_revision: revision,
-        tested_at: now,
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -96,9 +111,8 @@ describe('integration: mounted native directory protocol', () => {
         new Request(`https://purlay.test${path}`, {
           method,
           headers: {
-            origin: 'https://purlay.test',
             ...(bearer === undefined
-              ? { cookie: `${SESSION_COOKIE}=${session.token}` }
+              ? { origin: 'https://purlay.test', cookie: `${SESSION_COOKIE}=${session.token}` }
               : { authorization: `Bearer ${bearer}` }),
             ...(body === undefined ? {} : { 'content-type': media }),
           },
@@ -106,33 +120,75 @@ describe('integration: mounted native directory protocol', () => {
         }),
       );
     const root = `/api/workspaces/${workspace.id}/directories`;
-    const created = await call('POST', root, {
-      name: 'Corporate directory',
-      connectionId: connection.id,
-      claim: 'sub',
-      allowCreate: true,
-    });
-    expect(created.status).toBe(201);
-    const directory: unknown = await created.json();
-    if (!Value.Check(WorkspaceDirectory, directory)) throw new Error('Invalid directory contract.');
-    const enabled = await call('PATCH', `${root}/${directory.id}`, {
-      revision: directory.revision,
-      enabled: true,
-    });
-    expect(enabled.status).toBe(200);
-    const current: unknown = await enabled.json();
-    if (!Value.Check(WorkspaceDirectory, current))
-      throw new Error('Invalid enabled directory contract.');
-    const issued = await call('POST', `${root}/${directory.id}/credentials`, {
-      revision: current.revision,
-      expiresInDays: 1,
-      overlapMinutes: 0,
-    });
-    expect(issued.status).toBe(201);
-    expect(issued.headers.get('cache-control')).toBe('no-store');
-    const credential: unknown = await issued.json();
-    if (!Value.Check(IssuedDirectoryCredential, credential))
-      throw new Error('Invalid issued credential contract.');
+    const directoryCredential = async (name: string): Promise<IssuedDirectoryCredential> => {
+      const revision = crypto.randomUUID();
+      const connection = await clone.db
+        .insertInto('workspace_identity_connections')
+        .values({
+          workspace_id: workspace.id,
+          domain_id: domain.id,
+          name,
+          issuer: 'https://directory.example',
+          client_id: 'fixture',
+          client_secret_encrypted: Buffer.alloc(32, 1),
+          enabled: true,
+          authentication_revision: revision,
+          tested_authentication_revision: revision,
+          tested_at: now,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const created = await call('POST', root, {
+        name,
+        connectionId: connection.id,
+        claim: 'sub',
+        allowCreate: true,
+      });
+      expect(created.status).toBe(201);
+      const directory: unknown = await created.json();
+      if (!Value.Check(WorkspaceDirectory, directory))
+        throw new Error('Invalid directory contract.');
+      const enabled = await call('PATCH', `${root}/${directory.id}`, {
+        revision: directory.revision,
+        enabled: true,
+      });
+      expect(enabled.status).toBe(200);
+      const current: unknown = await enabled.json();
+      if (!Value.Check(WorkspaceDirectory, current))
+        throw new Error('Invalid enabled directory contract.');
+      const issued = await call('POST', `${root}/${directory.id}/credentials`, {
+        revision: current.revision,
+        expiresInDays: 1,
+        overlapMinutes: 0,
+      });
+      expect(issued.status).toBe(201);
+      expect(issued.headers.get('cache-control')).toBe('no-store');
+      const credential: unknown = await issued.json();
+      if (!Value.Check(IssuedDirectoryCredential, credential))
+        throw new Error('Invalid issued credential contract.');
+      return credential;
+    };
+    const credential = await directoryCredential('Corporate directory');
+    const discovery = await scimList(
+      await call('GET', `${scim}/Schemas`, undefined, credential.token),
+    );
+    expect(discovery).toMatchObject({ schemas: [listSchema] });
+    const schemaIds = resourcesOf(discovery).map(idOf);
+    expect(schemaIds).toContain('urn:ietf:params:scim:schemas:core:2.0:User');
+    expect(schemaIds).toContain('urn:ietf:params:scim:schemas:core:2.0:Group');
+
+    // Entra tests the connection by looking up a non-existent user using a bare random GUID.
+    expect(
+      await scimList(
+        await call(
+          'GET',
+          withFilter('Users', `userName eq "${crypto.randomUUID()}"`),
+          undefined,
+          credential.token,
+        ),
+      ),
+    ).toMatchObject({ schemas: [listSchema], totalResults: 0, Resources: [] });
+
     const external = crypto.randomUUID();
     const body = {
       schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
@@ -141,7 +197,6 @@ describe('integration: mounted native directory protocol', () => {
       displayName: 'Employee',
       active: true,
     };
-    const scim = '/auth/scim/v2';
     const post = await call(
       'POST',
       `${scim}/Users`,
@@ -151,7 +206,15 @@ describe('integration: mounted native directory protocol', () => {
     );
     expect(post.status).toBe(201);
     expect(post.headers.get('content-type')).toContain('application/scim+json');
-    const id = await idOf(post);
+    const id = idOf(await post.json());
+    const userLookup = withFilter('Users', `userName eq "${body.userName}"`);
+    expect(
+      await scimList(await call('GET', userLookup, undefined, credential.token)),
+    ).toMatchObject({
+      schemas: [listSchema],
+      totalResults: 1,
+      Resources: [{ id, userName: body.userName, active: true }],
+    });
     expect(
       (
         await call(
@@ -177,6 +240,38 @@ describe('integration: mounted native directory protocol', () => {
         )
       ).status,
     ).toBe(200);
+    const employee = await clone.db
+      .selectFrom('workspace_directory_scim_users')
+      .select('user_id')
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+    const membershipRole = async (): Promise<UserRole | undefined> =>
+      (
+        await clone.db
+          .selectFrom('workspace_members')
+          .select('role')
+          .where('workspace_id', '=', workspace.id)
+          .where('user_id', '=', employee.user_id)
+          .executeTakeFirst()
+      )?.role;
+    expect(await membershipRole()).toBe('member');
+    for (const active of [false, true]) {
+      const patched = await call(
+        'PATCH',
+        `${scim}/Users/${id}`,
+        {
+          schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+          Operations: [{ op: 'Replace', path: 'active', value: active }],
+        },
+        credential.token,
+        'application/scim+json',
+      );
+      expect(patched.status).toBe(200);
+      expect(
+        await scimList(await call('GET', userLookup, undefined, credential.token)),
+      ).toMatchObject({ totalResults: 1, Resources: [{ id, active }] });
+      expect(await membershipRole()).toBe(active ? 'member' : undefined);
+    }
     const groupResponse = await call(
       'POST',
       `${scim}/Groups`,
@@ -189,7 +284,27 @@ describe('integration: mounted native directory protocol', () => {
       'application/scim+json',
     );
     expect(groupResponse.status).toBe(201);
-    const groupId = await idOf(groupResponse);
+    const groupId = idOf(await groupResponse.json());
+    const groupLookup = withFilter('Groups', 'displayName eq "Finance"', 'members');
+    const groups = await scimList(await call('GET', groupLookup, undefined, credential.token));
+    expect(groups).toMatchObject({
+      schemas: [listSchema],
+      totalResults: 1,
+      Resources: [{ id: groupId, displayName: 'Finance' }],
+    });
+    expect(resourcesOf(groups)[0]).not.toHaveProperty('members');
+    const other = await directoryCredential('Other company directory');
+    for (const lookup of [userLookup, groupLookup]) {
+      expect(await scimList(await call('GET', lookup, undefined, other.token))).toMatchObject({
+        schemas: [listSchema],
+        totalResults: 0,
+        Resources: [],
+      });
+    }
+    expect((await call('GET', `${scim}/Users/${id}`, undefined, other.token)).status).toBe(404);
+    expect((await call('GET', `${scim}/Groups/${groupId}`, undefined, other.token)).status).toBe(
+      404,
+    );
     expect(
       (
         await call(
