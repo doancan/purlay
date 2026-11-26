@@ -15,6 +15,9 @@
 # (D-86); the owner moves it (D-219). The tag is kept
 # beside the digest so a reader can see what it is, and its version
 # is `packageManager`'s in package.json — scripts/environment.test.ts holds them equal.
+# Held at 1.4.4 on purpose: 1.4.5 raises the runtime's own resident memory by about 9 MiB (an empty `bun -e`
+# goes from 13.9 to 22.7 MiB; the API's idle RSS from 120 to 126-128 MiB against a 120 MiB budget), whatever
+# our dependencies do. Move it when a later Bun measures back under the budget (D-49, amended 2026-11-26).
 
 FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS dependencies
 WORKDIR /app

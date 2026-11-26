@@ -9,15 +9,20 @@ import { fixedClock } from '../../platform/clock';
 import { NO_LOG } from '../../platform/events';
 import { serverMetrics } from '../../platform/metrics';
 import type { ModuleNotice } from '../../platform/ports/notification-sink';
-import { NOW } from '../../testing/doubles';
+import { NOW, passingAsItsClass } from '../../testing/doubles';
 import { notificationSink } from './sink';
 
 /** A transaction that fails on any use: a refused notice reads nothing and writes nothing. */
-const untouched = new Proxy({} as Transaction, {
-  get: (_target, name): never => {
-    throw new Error(`the refused notice used the transaction: ${String(name)}`);
-  },
-});
+const untouched: Transaction = passingAsItsClass(
+  new Proxy(
+    {},
+    {
+      get: (_target, name): never => {
+        throw new Error(`the refused notice used the transaction: ${String(name)}`);
+      },
+    },
+  ),
+);
 /** The refusal comes before the context is read; a context cannot be made without a database, so none is given. */
 const noContext = undefined as never;
 

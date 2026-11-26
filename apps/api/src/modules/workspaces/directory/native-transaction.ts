@@ -14,9 +14,13 @@ import type { VerifiedDirectoryCredential } from './credentials';
 
 type NativeAuth = ReturnType<typeof betterAuth>;
 type NativeContext = Awaited<NativeAuth['$context']>;
+/** A queued after-commit hook as Better Auth keeps it; taken from its own type so a change there stops the build. */
+type PendingHook = NonNullable<
+  ReturnType<Awaited<ReturnType<typeof getCurrentDBAdapterAsyncLocalStorage>>['getStore']>
+>['pendingHooks'][number];
 interface AdapterFrame {
   adapter: Awaited<ReturnType<typeof getCurrentAdapter>>;
-  pendingHooks: (() => Promise<void>)[];
+  pendingHooks: PendingHook[];
   isTransactionActive: boolean;
 }
 interface ParentTicket {
@@ -46,7 +50,7 @@ interface Operation {
   callbackOnly: boolean;
   callbackActive: boolean;
   current: ActiveDirectoryTransaction | undefined;
-  hooks: (() => Promise<void>)[];
+  hooks: PendingHook[];
   ticket: ParentTicket | undefined;
   admission: { readonly email: string; consumed: boolean } | undefined;
   running:
@@ -341,7 +345,7 @@ export const nativeDirectoryTransactions = (
     afterCommit: (effect): void => {
       const parent = active();
       if (parent.callbackOnly) throw lost();
-      parent.hooks.push(effect);
+      parent.hooks.push({ run: effect, handled: false });
     },
     denyGlobalProfileWrite: (): void => {
       if (operations.getStore() !== undefined)
