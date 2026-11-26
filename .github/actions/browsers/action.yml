@@ -12,7 +12,7 @@ runs:
       shell: bash
       env:
         # D-304: match apps/web's client; the digest also pins system libraries and fonts.
-        CI_BROWSER_IMAGE: mcr.microsoft.com/playwright:v1.64.1-resolute@sha256:f76885029244e5a384243a930ff283cef67d90653978ee27a77dd4cff8882fb4
+        CI_BROWSER_IMAGE: mcr.microsoft.com/playwright:v1.65.1-resolute@sha256:dcf385f7a31aa1cbb0a7a0c97a539142bf70480b661f89f26a774ec1fe2edd1d
       run: |
         set -euo pipefail
         client=$(bun --no-env-file -e 'console.log((await Bun.file("apps/web/package.json").json()).devDependencies["@playwright/test"])')

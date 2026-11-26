@@ -366,7 +366,7 @@ the free path gets harder because the cloud exists. (D-1, D-44)
 | `MAIL_FROM` | — | — | The address sign-in links come from; set with `SMTP_URL`, or neither (D-138) |
 | `SMTP_ALLOW_PLAINTEXT` | — | `false` | Says that the link to a relay past this machine is private, so `smtp://` need not upgrade to TLS — as `DATABASE_ALLOW_PLAINTEXT` does for the database (D-138 §6). A relay whose certificate no public authority signed is refused, the wizard's try included (`tls-failed`); nothing turns the check off. Give the server the authority instead: `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` in its environment, read by the runtime at start (measured with Bun and nodemailer, `probes.integration.test.ts`) — or use a relay with a public certificate (D-179 §4.4) |
 
-## Native clients (D-186, D-339)
+## Native clients (D-186, D-340)
 
 Native apps update on their own schedule. Each platform has an independent contract floor, version floor
 and update address. Every setting is optional. The server answers a client below either floor with

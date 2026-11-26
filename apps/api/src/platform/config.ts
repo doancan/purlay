@@ -279,7 +279,7 @@ export const Environment = Type.Object({
   ),
   /** Where a person is sent for a newer macOS client: shown by the app, so `https://` and nothing else. */
   MACOS_DOWNLOAD_URL: Type.Optional(Type.String({ format: 'uri' })),
-  /** The independent iOS limits and update address (D-339). */
+  /** The independent iOS limits and update address (D-340). */
   MIN_CLIENT_IOS_CONTRACT: Type.Optional(Type.Integer({ minimum: 1 })),
   MIN_CLIENT_IOS_VERSION: Type.Optional(
     Type.String({
@@ -533,7 +533,7 @@ const redisProblems = (config: Config): string[] => {
 };
 
 /**
- * Validate each native client's contract floor and update address at boot (D-186, D-339).
+ * Validate each native client's contract floor and update address at boot (D-186, D-340).
  * The floor must leave clients supported by this server, and the address must use HTTPS.
  */
 const nativeClientProblems = (config: Config): string[] => {

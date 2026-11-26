@@ -29,17 +29,6 @@ have it.
 
 ### Added
 
-- **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-339)
-
-- **Messages** — a message in a direct message, or one that names somebody, can be sent as Important or Urgent, and says so under its words (D-337)
-- **Operations** — an operator can limit how many deliveries between modules one workspace may queue in a minute, and move its issues limit, with `bun run quota:set` (a reason is kept, `quota:show` and `quota:clear` read and undo it); a workspace over its limit is told to slow down (`429`), and each change is on the workspace's audit log (D-334)
-- **Operations** — an operator can keep a ledger of which fact was delivered to which module and when (`OUTBOX_LEDGER_DAYS`, off by default, ids and times only, never a payload) and read it with `bun run outbox:ledger`, to prove a delivery after the transient table has forgotten it (D-335)
-- **Operations** — an operator can send traces of requests, scheduled jobs and the delivery of facts between modules to an OTLP collector (`OTEL_EXPORTER_OTLP_ENDPOINT`, off by default, a share of new traces recorded, never a path with its ids, a query, a body, a payload, a person or a workspace), so a request and what it set going are one picture; the trace of an incoming `traceparent` is joined (D-336)
-
-### Fixed
-
-- **Operations** — the update check finds the latest release again: Purlay now lives in the `purlay` organisation, and GitHub answers the old repository address with a redirect that the check, by design, does not follow
-- **Sign-in** — a session made by the iOS application is listed as Purlay for iOS with its version, not as the Mac application (D-191)
-- **Workspaces** — on the front door, *Keep* a workspace that is being deleted no longer misses its button when the creation form finishes loading under it
+- **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
 
 ---

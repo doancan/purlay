@@ -228,7 +228,7 @@ services:
       start_period: 10m
 
   postgres:
-    image: postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+    image: postgres:18-alpine@sha256:0115267ab5a509022df9319c77be365cef335adb71556c75f60f5360ee247e71
     restart: unless-stopped
     logging: *logging
     # Measured bounds, not a guess (docs/spikes/resources.md, #639): a runaway takes this
@@ -273,7 +273,7 @@ services:
   # has no shell, so the layout, bucket and key are prepared by the `storage-init`
   # service on every `up` (D-144).
   garage:
-    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    image: dxflrs/garage:v2.6.0@sha256:4b5a318fc9fe2fbec5d3af590eeafe05d83492e6411266fa0b9e215c20264013
     restart: unless-stopped
     logging: *logging
     # Measured bounds, not a guess (docs/spikes/resources.md, #639): a runaway takes this
@@ -297,7 +297,7 @@ services:
   # `reverse_proxy` unchanged. The site address is `APP_URL` itself, so the origin
   # the proxy answers for and the one the API checks sockets against cannot differ.
   proxy:
-    image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
     restart: unless-stopped
     logging: *logging
     # Measured bounds, not a guess (docs/spikes/resources.md, #639): a runaway takes this

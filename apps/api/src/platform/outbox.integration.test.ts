@@ -12,12 +12,14 @@ import {
   isTransaction,
   withRollback,
   type ClonedDatabase,
+  type DatabasePool,
   type Executor,
   type Outbox,
   type Selectable,
+  type Transaction,
 } from '@purlay/db';
 import { messageId, messageIdTime } from '@purlay/types';
-import { aMovableClock, NOW } from '../testing/doubles';
+import { aMovableClock, NOW, passingAsItsClass } from '../testing/doubles';
 import {
   anOutboxRow,
   aGrant,
@@ -202,9 +204,11 @@ describe('integration: publishing a fact', () => {
     const workspaceId = await aWorkspaceRow(cloned.db);
     const { context } = aPublishWorld(workspaceId, clock);
     expect(isTransaction(cloned.db)).toBe(false);
+    // A pool offered where a transaction is wanted does not compile; the double below only gets it past the compiler to the runtime refusal.
+    const poolIsNoTransaction: DatabasePool extends Transaction ? never : true = true;
+    expect(poolIsNoTransaction).toBe(true);
     const refused = await refusalOf(
-      // @ts-expect-error a pool is not a transaction: this must not compile
-      publishFact(cloned.db, context, NOTE_CREATED, { noteId: 'n', title: 't' }),
+      publishFact(passingAsItsClass(cloned.db), context, NOTE_CREATED, { noteId: 'n', title: 't' }),
     );
     expect(refused).toBeInstanceOf(FactPublishError);
     expect(await rowsOf(cloned.db, workspaceId)).toEqual([]);
