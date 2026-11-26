@@ -975,8 +975,8 @@ export const API_MODULES_AUTH_BETTER_AUTH: readonly Mutation[] = [
     id: 'sign-in-link-token-in-the-query',
     why: 'a sign-in token travels in the query, where every request line and mail scanner sees it (D-138 §4)',
     file: 'apps/api/src/modules/auth/better-auth.ts',
-    find: '${SIGN_IN_PATH}/email#${token}',
-    replace: '${SIGN_IN_PATH}/email?token=${token}',
+    find: '${SIGN_IN_PATH}/email${platform}#${token}',
+    replace: "${SIGN_IN_PATH}/email${platform}${platform === '' ? '?' : '&'}token=${token}",
     tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
   },
   {

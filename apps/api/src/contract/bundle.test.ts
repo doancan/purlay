@@ -113,6 +113,17 @@ describe('the contract', () => {
     expect(contract.format).toBe(CONTRACT_BUNDLE_FORMAT);
   });
 
+  test('exports an optional iOS minimum beside the existing macOS minimum', () => {
+    expect(contract.schemas['ClientInfo']).toMatchObject({
+      properties: {
+        minClient: {
+          properties: { macos: { $ref: 'ClientMinimum' }, ios: contract.schemas['ClientMinimum'] },
+          required: ['macos'],
+        },
+      },
+    });
+  });
+
   test('is closed: every reference resolves to a schema of the contract', () => {
     const names = new Set(Object.keys(contract.schemas));
     const dangling = [...refsIn(contract)].filter((name) => !names.has(name));
