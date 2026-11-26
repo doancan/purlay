@@ -30,6 +30,7 @@ const ENVIRONMENT: Record<string, string> = {
 
 type Service = Record<string, unknown> & {
   image?: string;
+  labels?: Record<string, string>;
   ports?: unknown[];
   volumes?: { type: string; source?: string; target?: string }[];
   configs?: { source: string; target: string }[];
@@ -158,13 +159,18 @@ describe('integration: the Dockhand compose file', () => {
     expect(dockhand.services['api']?.environment?.['TRUST_PROXY']).toBe('true');
   });
 
-  test('the scheduler and the store’s preparation are the production ones exactly', () => {
-    for (const name of ['scheduler', 'storage-init']) {
-      expect({ name, service: without(dockhand.services[name], 'networks') }).toEqual({
-        name,
-        service: without(production.services[name], 'networks'),
-      });
-    }
+  test('uses production’s scheduler and lets only a stack deployment update its initializer', () => {
+    expect(without(dockhand.services['scheduler'], 'networks')).toEqual(
+      without(production.services['scheduler'], 'networks'),
+    );
+    const initializer = dockhand.services['storage-init'];
+    expect(without(initializer, 'networks', 'labels')).toEqual(
+      without(production.services['storage-init'], 'networks', 'labels'),
+    );
+    expect(initializer?.labels).toEqual({
+      ...production.services['storage-init']?.labels,
+      'dockhand.update': 'false',
+    });
   });
 
   test('PostgreSQL is production’s, without the WAL archiving that needs a mounted script', () => {

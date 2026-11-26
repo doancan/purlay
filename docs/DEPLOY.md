@@ -172,14 +172,31 @@ not Nginx Proxy Manager's or Cloudflare's.
 `:vX.Y.Z`) by the `release-image` workflow, and nothing else ever is. Set `PURLAY_IMAGE` to
 `ghcr.io/<owner>/<repo>-api:release`, redeploy, then turn on Dockhand's auto-update for the `api` and `scheduler`
 containers with a short schedule (`*/15 * * * *`): Dockhand compares the digest and pulls
-only when a new release is out, so the server runs it within a quarter of an hour. **Leave `storage-init` out.**
-Dockhand updates one container at a time and does not apply compose's `service_completed_successfully`
-ordering, so a one-shot container it recreates stays in `created` and never runs (seen at v0.5.3, v0.5.4, v0.6.3
-and v0.6.7). Its work is idempotent and only matters while the object store lacks its layout, bucket or key, which a
-running store already has. When a release changes what it prepares, or the store is new, redeploy the stack from
-Dockhand (not a per-container update) and check that `storage-init` exited 0: `docker inspect -f '{{.State.ExitCode}}'
-<stack>-storage-init-1`. A digest pinned instead
-is never updated: set a newer one by hand.
+only when a new release is out, so the server runs it within a quarter of an hour. Leave `storage-init`
+out of per-container schedules. From Dockhand 1.0.27, the `dockhand.update=false` label excludes it
+even when environment-wide updates are enabled. Per-container updates left this one-shot in
+`created` on several releases. Docker can report exit code 0 in that state before the job has run.
+[Dockhand container labels](https://dockhand.pro/manual/#container-labels)
+
+For a fresh object store or a release that changes its preparation, redeploy the stack from Dockhand
+so Compose applies `service_completed_successfully` before starting the API. The stack-level
+**Redeploy** action operates on the Compose stack. Leave **Force recreate** off for an ordinary
+redeploy. Keep the protected backup from before the change and use the tested release digest when
+redeploying by hand. [Dockhand stack controls](https://dockhand.pro/manual/#stacks-redeploy-options)
+[Compose dependency ordering](https://docs.docker.com/compose/how-tos/startup-order/)
+
+Check the selected Compose project on the Docker host after the redeploy. Pass the exact digest from
+the tested release.
+
+```bash
+scripts/check-storage-init.sh <compose-project> 'ghcr.io/<owner>/<repo>-api@sha256:<tested-digest>'
+```
+
+The command reads the matching container's labels, image ID, command and completion state from
+Docker. It requires an exited initializer with recorded start and finish times and exit code 0.
+A failure means the preparation is still unverified. Check the initializer in Dockhand and confirm
+API and scheduler readiness at the target revision before declaring the release deployed. A digest
+pin is updated by setting a newer digest by hand.
 
 Dockhand does not do what `scripts/deploy.sh` does: there is **no backup taken at the switch and no automatic
 way back**, and the database migrates as the new API starts. The stack's `backup` service is the answer: it
