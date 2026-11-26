@@ -16549,6 +16549,7 @@ and the column that carries a trace to a fact's row.
 3. **Urgent respects Deep Work** (decided by the owner, 2026-11-25): it waits as any message does, and is not pushed through it. Whether it should pass, as a workspace setting, is a later decision.
 4. **First slice only:** the field, the rule, the composer's *Delivery* choice (offered only where the rule would accept it) and the marker under the message. Not in it: the server-scheduled re-alert (every 2 minutes for 20 minutes until read, stopped by a read on any device), the workspace setting that turns urgent off, the inbox and notification marker, and a client's persistent banner.
 5. **Workspace control.** A workspace owner or admin can turn off new Urgent sends in General settings. The setting defaults to enabled for existing and new workspaces. Every member gets the setting in their membership. The server applies it to HTTP and socket sends, and a change tells members to refresh. An urgent send committed before the change keeps its priority, including when retried. Standard and Important remain available under the delivery rules above.
+6. **Device re-alerts.** D-343 defines the durable schedule and delivery checks.
 
 **Rejected.** *Priority on any channel message:* it pages everybody, which is what a mention is for and a channel is not. *A new notification reason (`urgent`):* the reason says why you were told; how much it asks is a property of the message, which a later schedule can read. *Passing Deep Work by default:* the product's promise is that Deep Work is quiet (D-106); a sender's choice must not be able to break it.
 
@@ -16745,3 +16746,15 @@ deliveries of the same occurrence continue.
 
 **Cost of reversing.** Dropping these registrations asks iOS devices to register again. Each device's
 Web Push subscription has its own store and keys.
+
+### D-343. An unread Urgent notification can re-alert through the device queue (#1381)
+
+The original send writes one repeat cursor for each new unread direct-message or mention notification. It anchors to the original notification's time and follows the same account-wide read receipt. An edit or a replay of the send leaves the original cursor unchanged.
+
+A chat worker advances the cursor every two minutes within a twenty-minute window, starting at minute two. It picks the current slot after a delay, and the delivery expires at the next boundary. The cursor move and device capture commit together. The occurrence identifies one slot across retries. The original notification identifies the recipient and the current source for authorization.
+
+A repeat needs current access to the message, a direct-message recipient or a current personal mention, and a workspace that allows Urgent. The original unread receipt must still be open. Deep Work, quiet hours, notification preferences and current device registration apply at delivery. A newly eligible slot can alert after Deep Work ends. The provider receives the reason and navigation target already used for a message notice. The same inbox entry and unread counts describe the message throughout the window.
+
+**Rejected.** Creating a fresh inbox entry for every repeat would multiply unread counts. Capturing every future device delivery during the original send would reserve work even for messages read in the first interval.
+
+**Cost of reversing.** The worker can be removed independently of the original send. Its cursors follow notification deletion and queued occurrences expire within their slots. Older delivery workers do not claim the repeat kind.

@@ -31,6 +31,7 @@ have it.
 
 - **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
 - **Messages** — workspace owners and admins can turn off Urgent delivery in General settings (D-337)
+- **Notifications** — unread Urgent direct messages and mentions can re-alert devices at two-minute intervals for up to twenty minutes (D-343)
 
 ### Fixed
 

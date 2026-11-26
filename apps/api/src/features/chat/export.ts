@@ -350,6 +350,7 @@ type ChatExcluded =
   | 'channel_departures'
   | 'hidden_messages'
   | 'message_reminders'
+  | 'urgent_message_repeats'
   | 'scheduled_messages'
   | 'scheduled_message_attachments'
   | 'github_integrations'
@@ -394,6 +395,7 @@ const CHAT_EXCLUDED: Readonly<Record<ChatExcluded, string>> = {
     'how each person left a channel, kept only to tell their own socket why it is gone (D-264): their own state',
   hidden_messages: 'messages each person deleted for themselves alone: their own state',
   message_reminders: 'each person’s private reminders: their own state',
+  urgent_message_repeats: 'the transient device schedule for a notification',
   scheduled_messages: 'each person’s private messages not yet sent: theirs until they are sent',
   scheduled_message_attachments:
     'which unsent scheduled message holds a file: a person’s private draft, as the draft is',

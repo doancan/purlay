@@ -14,7 +14,7 @@ import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { credentialCipher } from '../../platform/crypto';
 import { nobodyActive } from '../../platform/attention';
 import { NO_LOG } from '../../platform/events';
-import { enqueuePush } from '../../platform/push-work';
+import { enqueuePush, URGENT_REPEAT_KIND, type PushWork } from '../../platform/push-work';
 import { atomicallyOn } from '../../platform/transactions';
 import { testConfig } from '../../testing/doubles';
 import { PUSH_QUIET_BUS } from '../../testing/pending-push';
@@ -24,7 +24,7 @@ import { aWorld, subscribe, words, type World } from '../../testing/push-world';
 import { aRoom } from '../../testing/rooms';
 import { aSession, aSignedInUser, aTestAuth } from '../../testing/signed-in';
 import { requireServerAdmin } from '../setup/setup';
-import { noPushNotices } from './notices';
+import { noPushNotices, type PushNotices } from './notices';
 import { createApnsProvider } from './apns';
 import { registerApnsDevice } from './apns-subscriptions';
 import { beginPushAttempt, claimPush } from './queue';
@@ -77,6 +77,71 @@ const queueInbox = async (db: Transaction, world: World, sender: PushSender): Pr
   return notice.entryId;
 };
 
+const repeatFixture = async (
+  db: Transaction,
+): Promise<{
+  world: World;
+  notices: PushNotices;
+  slot: () => PushWork;
+  read: () => void;
+}> => {
+  const world = await aWorld(db);
+  const { sessionId } = await aSession(db, world.clock, world.ada);
+  await registerApnsDevice(db, world.clock, { userId: world.ada, sessionId }, deviceToken, scope);
+  const notificationId = crypto.randomUUID();
+  const messageId = crypto.randomUUID();
+  const channelId = crypto.randomUUID();
+  let unread = true;
+  return {
+    world,
+    slot: () => ({
+      source: 'message',
+      sourceId: crypto.randomUUID(),
+      recordId: messageId,
+      workspaceId: world.workspaceId,
+      userId: world.ada,
+      module: 'chat',
+      kind: URGENT_REPEAT_KIND,
+      createdAt: world.clock.now(),
+      repeat: { notificationId, expiresAt: new Date(world.clock.now().getTime() + 120_000) },
+    }),
+    read: (): void => {
+      unread = false;
+    },
+    notices: {
+      of: (_database, message, users, original, repeat) =>
+        Promise.resolve(
+          message === messageId &&
+            users[0] === world.ada &&
+            original === notificationId &&
+            repeat === true
+            ? [
+                {
+                  userId: world.ada,
+                  type: 'mention',
+                  channelId,
+                  workspaceId: world.workspaceId,
+                  channelName: 'ops',
+                  authorName: 'Bob',
+                  rootSenderId: null,
+                  threadId: null,
+                  groupNames: null,
+                },
+              ]
+            : [],
+        ),
+      canDeliver: (_database, message, user, _now, original, repeat) =>
+        Promise.resolve(
+          unread &&
+            message === messageId &&
+            user === world.ada &&
+            original === notificationId &&
+            repeat === true,
+        ),
+    },
+  };
+};
+
 describe('integration: the shared push queue delivers to APNs', () => {
   test('an urgent chat mention adds its localized marker without including the message text', async () => {
     await withRollback(async (db) => {
@@ -122,6 +187,96 @@ describe('integration: the shared push queue delivers to APNs', () => {
       expect(JSON.stringify(alerts)).not.toContain('private message');
     });
   });
+
+  test('two urgent slots have distinct collapse IDs, and replay and retry retain one slot identity', async () => {
+    await withRollback(async (db) => {
+      const { world, notices, slot } = await repeatFixture(db);
+      const first = slot();
+      if (first.repeat === undefined) throw new Error('Missing urgent repeat fixture');
+      const posts: { collapseId: string | null; body: string }[] = [];
+      const send = await createApnsProvider(credentials, world.clock, (_url, options) => {
+        if (typeof options.body !== 'string') throw new Error('Missing APNs JSON body');
+        posts.push({
+          collapseId: new Headers(options.headers).get('apns-collapse-id'),
+          body: options.body,
+        });
+        return Promise.resolve(new Response(null, { status: posts.length === 1 ? 503 : 200 }));
+      });
+      const dependencies = { ...base(db, world), notices, apns: { scope, send } };
+      const future = { ...slot(), createdAt: new Date(first.createdAt.getTime() + 1) };
+      const ended: PushWork = {
+        ...slot(),
+        createdAt: new Date(first.createdAt.getTime() - 1),
+        repeat: { notificationId: crypto.randomUUID(), expiresAt: first.createdAt },
+      };
+      await enqueuePush(db, world.clock.now(), [first, future, ended], undefined, scope);
+      await enqueuePush(db, world.clock.now(), [first], undefined, scope);
+      expect(
+        await db
+          .selectFrom('push_intents')
+          .select(['source_id', 'repeat_notification_id', 'expires_at'])
+          .where('record_id', '=', first.recordId)
+          .execute(),
+      ).toEqual([
+        {
+          source_id: first.sourceId,
+          repeat_notification_id: first.repeat.notificationId,
+          expires_at: first.repeat.expiresAt,
+        },
+      ]);
+
+      await (await createPushSender(dependencies)).flush(10_000);
+      world.clock.to(new Date(first.createdAt.getTime() + 5_000));
+      await (await createPushSender(dependencies)).flush(10_000);
+      world.clock.to(new Date(first.createdAt.getTime() + 120_000));
+      const second = slot();
+      await enqueuePush(db, world.clock.now(), [second], undefined, scope);
+      await (await createPushSender(dependencies)).flush(10_000);
+
+      expect(posts).toHaveLength(3);
+      expect(posts[0]?.collapseId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(posts[1]?.collapseId).toBe(posts[0]?.collapseId);
+      expect(posts[2]?.collapseId).not.toBe(posts[0]?.collapseId);
+      expect(posts.every(({ body }) => body.includes('Urgent · Bob mentioned you'))).toBe(true);
+    });
+  });
+
+  test.each(['read', 'expired'] as const)(
+    'an urgent repeat %s after preparation never reaches Apple',
+    async (change) => {
+      await withRollback(async (db) => {
+        const { world, notices, slot, read } = await repeatFixture(db);
+        const work = slot();
+        let posts = 0;
+        let prepared = false;
+        const transport = await createApnsProvider(credentials, world.clock, () => {
+          posts += 1;
+          return Promise.resolve(new Response(null, { status: 200 }));
+        });
+        const send: typeof transport = async (push) => {
+          prepared = true;
+          return await transport({
+            ...push,
+            beforePost: async () => {
+              if (change === 'read') read();
+              const decision = await push.beforePost?.();
+              if (change === 'expired') world.clock.to(push.expiresAt);
+              return decision;
+            },
+          });
+        };
+        await enqueuePush(db, world.clock.now(), [work], undefined, scope);
+        const sender = await createPushSender({
+          ...base(db, world),
+          notices,
+          apns: { scope, send },
+        });
+        await sender.flush(10_000);
+        expect(prepared).toBe(true);
+        expect(posts).toBe(0);
+      });
+    },
+  );
 
   test('a native-only notice waits through Deep Work and quiet hours, then posts once', async () => {
     await withRollback(async (db) => {

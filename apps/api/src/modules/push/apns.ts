@@ -124,6 +124,7 @@ export const createApnsProvider = async (
     const authorization = await bearerAt(now);
     const blocked = await beforePost?.();
     if (blocked !== undefined) return blocked;
+    if (expires <= Math.floor(clock.now().getTime() / 1_000)) return { kind: 'canceled' };
     try {
       const response = await post(new URL(`/3/device/${token}`, origin), {
         method: 'POST',

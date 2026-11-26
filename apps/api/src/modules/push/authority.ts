@@ -101,7 +101,8 @@ export const currentPushSource = async (
             claim.recordId,
             claim.userId,
             clock.now(),
-            claim.sourceId,
+            claim.repeatNotificationId ?? claim.sourceId,
+            claim.repeatNotificationId !== undefined,
           );
         } catch (error) {
           if (error instanceof AppError && error.body.code === 'WORKSPACE_ACCESS_REQUIRED')

@@ -10,16 +10,17 @@ import {
   PUSH_PERSON_LOCK,
   PUSH_POSTS_PER_PERSON,
 } from '../../platform/push-policy';
-import type { PushWork } from '../../platform/push-work';
+import { URGENT_REPEAT_KIND, type PushWork } from '../../platform/push-work';
 import { companySessionAllowsWorkspace } from '../../platform/company-session';
 
-export interface PushClaim extends PushWork {
+export interface PushClaim extends Omit<PushWork, 'repeat'> {
   readonly intentId: string;
   readonly subscriptionId: string;
   readonly generation: string;
   readonly sessionId: string;
   readonly leaseId: string;
   readonly expiresAt: Date;
+  readonly repeatNotificationId?: string;
   readonly attempts: number;
   readonly apnsScope?: string;
 }
@@ -128,7 +129,7 @@ export const claimPush = async (queue: PushQueue): Promise<PushClaim | undefined
         sql<boolean>`(p.source_kind = 'inbox' and p.kind = ${kind} and p.module = ${module})`,
     );
     const known = sql<boolean>`(p.source_kind = 'message' and p.module = ${queue.owner}
-      and p.kind in (${sql.join([...NEEDS_YOU, 'reminder'])}))`;
+      and p.kind in (${sql.join([...NEEDS_YOU, 'reminder', URGENT_REPEAT_KIND])}))`;
     const candidates = await tx
       .selectFrom('push_intents as p')
       .select(['p.id', 'p.user_id'])
@@ -243,6 +244,9 @@ export const claimPush = async (queue: PushQueue): Promise<PushClaim | undefined
         sessionId: target.session_id,
         leaseId,
         expiresAt: intent.expires_at,
+        ...(intent.repeat_notification_id === null
+          ? {}
+          : { repeatNotificationId: intent.repeat_notification_id }),
         attempts: target.attempts,
         ...(target.apns_session_id !== null && queue.apnsScope !== undefined
           ? { apnsScope: queue.apnsScope }

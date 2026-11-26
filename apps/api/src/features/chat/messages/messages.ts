@@ -458,6 +458,7 @@ export const sendMessage = async (
       context,
       messageId: input.id,
       mentioned,
+      repeatUrgent: input.priority === 'urgent',
       thread:
         input.parentId === undefined || root === undefined
           ? null

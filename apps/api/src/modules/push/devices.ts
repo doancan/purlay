@@ -176,9 +176,10 @@ export const devicesFor = async (
   messageId: string,
   userIds: readonly string[],
   notificationId?: string,
+  repeat = false,
 ): Promise<Device[]> => {
   const { database, attention, log, notices } = dependencies;
-  const told = await notices.of(database, messageId, userIds, notificationId);
+  const told = await notices.of(database, messageId, userIds, notificationId, repeat);
   if (told.length === 0) return [];
   const subscriptions = await subscriptionsOf(dependencies, [
     ...new Set(told.map((notice) => notice.userId)),
@@ -226,7 +227,7 @@ export const devicesFor = async (
               localeOf(row.locale),
               saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
               row.authorName,
-              row.priority,
+              repeat ? 'urgent' : row.priority,
             ),
             url: `/w/${row.slug}/c/${row.channelId}${row.threadId === null ? '' : `?thread=${encodeURIComponent(row.threadId)}`}`,
             tag: `channel:${row.channelId}`,

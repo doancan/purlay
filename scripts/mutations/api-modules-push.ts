@@ -397,6 +397,14 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     tests: ['apps/api/src/modules/push/sender.integration.test.ts'],
   },
   {
+    id: 'push-repeat-treats-slot-as-notification',
+    why: 'A repeat must authorize the original receipt rather than treating a slot identity as a notification.',
+    file: 'apps/api/src/modules/push/authority.ts',
+    find: '            claim.repeatNotificationId ?? claim.sourceId,\n',
+    replace: '            claim.sourceId,\n',
+    tests: ['apps/api/src/modules/push/apns-sender.integration.test.ts'],
+  },
+  {
     id: 'push-retry-backoff-skipped',
     why: 'Temporary provider failures must wait before a fresh worker can retry.',
     file: 'apps/api/src/modules/push/queue-result.ts',
@@ -504,7 +512,7 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     id: 'push-source-occurrence-substituted',
     why: 'An unread later occurrence must not revive the read occurrence captured by this intent.',
     file: 'apps/api/src/modules/push/authority.ts',
-    find: '            clock.now(),\n            claim.sourceId,\n',
+    find: '            clock.now(),\n            claim.repeatNotificationId ?? claim.sourceId,\n            claim.repeatNotificationId !== undefined,\n',
     replace: '            clock.now(),\n',
     tests: ['apps/api/src/modules/push/authority-recovery.integration.test.ts'],
   },

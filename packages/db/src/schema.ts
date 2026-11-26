@@ -667,6 +667,7 @@ export interface PushIntents {
   module: string;
   next_check_at: Timestamp;
   record_id: string;
+  repeat_notification_id: string | null;
   reported_at: Timestamp | null;
   source_id: string;
   source_kind: string;
@@ -913,6 +914,11 @@ export interface TwoFactors {
   secret: string;
   user_id: string;
   verified: Generated<boolean>;
+}
+
+export interface UrgentMessageRepeats {
+  next_at: Timestamp;
+  notification_id: string;
 }
 
 export interface Users {
@@ -1569,6 +1575,7 @@ export interface DB {
   thread_follows: ThreadFollows;
   thread_reads: ThreadReads;
   two_factors: TwoFactors;
+  urgent_message_repeats: UrgentMessageRepeats;
   users: Users;
   verifications: Verifications;
   webhook_deliveries: WebhookDeliveries;

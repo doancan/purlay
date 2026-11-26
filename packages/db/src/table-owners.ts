@@ -118,6 +118,7 @@ export const TABLE_OWNERS = {
   // Written only by messages (a mention, a reply) and pointing at channels and messages: chat's own inbox. A
   // generic core inbox waits for a second module that writes to it.
   notifications: 'chat',
+  urgent_message_repeats: 'chat',
   message_versions: 'chat',
   // Which message a file was sent with: made in chat's own migration set, with keys to the core's `attachments` and
   // to chat's `messages`, so no key runs from the core to chat (`MODULES.md` §10, step 8).

@@ -25,6 +25,7 @@ import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
 import { enqueuePush, type PushCapture } from '../../../modules/push/notices';
+import { armUrgentRepeats } from '../notifications/urgent-repeats';
 import { channelAudienceQuery, type ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
@@ -108,6 +109,8 @@ export interface Delivery {
   readonly messageId: string;
   /** Who the message names, already resolved. */
   readonly mentioned: readonly string[];
+  /** An urgent message being sent for the first time may re-alert its intended recipients. */
+  readonly repeatUrgent?: boolean;
   /** The root a reply answers, and who wrote it; null for a root. */
   /** The root's author is null for an event's thread: nobody is told for it (D-134 §6). */
   readonly thread: { readonly rootId: string; readonly rootAuthorId: string | null } | null;
@@ -130,7 +133,7 @@ type Reasons = ReadonlyMap<string, Reason>;
 export const notify = async (
   executor: ChatDb,
   context: ChannelContext,
-  message: { readonly id: string; readonly reply: boolean },
+  message: { readonly id: string; readonly reply: boolean; readonly repeatUrgent?: boolean },
   reasons: Reasons,
   now: Date,
   writtenAt?: Date,
@@ -221,6 +224,17 @@ export const notify = async (
     .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
     .returning(['id', 'user_id', 'type', 'read_at', 'suppressed_by_deep_work'])
     .execute();
+  if (message.repeatUrgent === true)
+    await armUrgentRepeats(
+      executor,
+      now,
+      inserted
+        .filter(
+          (row) =>
+            row.read_at === null && (row.type === 'direct_message' || row.type === 'mention'),
+        )
+        .map((row) => row.id),
+    );
   await capture(
     executor,
     now,
@@ -352,7 +366,7 @@ export const recordDelivery = async (
   const notified = await notify(
     executor,
     context,
-    { id: messageId, reply },
+    { id: messageId, reply, repeatUrgent: delivery.repeatUrgent === true },
     reasons,
     now,
     undefined,

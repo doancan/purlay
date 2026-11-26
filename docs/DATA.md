@@ -132,6 +132,7 @@ code as a known gap any longer. What an append-only trail keeps of a person's ow
 | `channel_level_timers` | Until when a person's notification level in a channel lasts, and the level it gives way to | A channel muted for a while (D-329); own export only | With the membership; on account erasure; replaced or removed when the person chooses a level again |
 | `thread_follows` | Which threads a person chose to follow, or let go | Following a thread (D-161) | Until chosen again; on erasure; with the root |
 | `notifications` | What a person was told of, whether they read it, and when a letter mailed it (D-240) | The inbox (D-12), and email about what was missed | With its message; on erasure |
+| `urgent_message_repeats` | Original notification ID and next slot | Device re-alert scheduling (D-343) | Twenty-minute window, or cascades with the notification. Operational state excluded from exports |
 | `incidents` | Who declared and resolved an incident; its runbook and postmortem | Incident channels (D-137) | For the life of the channel; not touched by content erasure (D-139 §7) |
 | `incident_updates` | Who changed an incident, and what | The incident's timeline (D-137) | With the incident |
 | `incident_responders` | Who responded, and who added them | The incident's responders (D-137 §3) | With the incident |
