@@ -783,14 +783,37 @@ incrementing, including for a large restored value, and success clears it only f
 session. Definitive expiry (404/410), an invalid endpoint, sign-out and the existing device bound still
 remove the row (D-299). D-307 separately persists delivery attempts: retaining a device alone is not a retry.
 
+**APNs registrations (D-342).** `apns_subscriptions` holds one token per session. A
+foreign key cascades when the session is deleted. The globally unique token is normalized to
+bounded lowercase hexadecimal. Each registration writes its timestamp and a new generation.
+`provider_scope` identifies the APNs team, topic and environment independently of the signing key ID.
+A registration with no scope remains dormant until the device registers again.
+
+```sql
+CREATE TABLE apns_subscriptions (
+    session_id UUID PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    device_token TEXT COLLATE "C" NOT NULL UNIQUE CHECK (
+        length(device_token) BETWEEN 2 AND 512
+        AND length(device_token) % 2 = 0
+        AND device_token !~ '[^0-9a-f]'
+    ),
+    registered_at TIMESTAMPTZ NOT NULL,
+    generation UUID NOT NULL DEFAULT gen_random_uuid(),
+    provider_scope TEXT
+);
+```
+
 #### 3.3.1. `push_intents`, `push_deliveries`, `push_notice_budgets`
 
-Core operational state added by 0102/0103, with state-led indexing in 0104 (D-307), captured inside the source owner's transaction:
+Core operational state was added by 0102/0103, with state-led indexing in 0104 (D-307).
+Migrations 0130–0132 add APNs to the same queue and retain the Web Push insertion shape (D-342).
+Delivery state is captured inside the source owner's transaction.
+The Web subscription reference is maintained by a write trigger. Existing rows are filled in committed batches while the original Web foreign key remains in force. The two replacement keys are validated before the original key is dropped.
 
 | Table | Identity and contents | Bound and lifecycle |
 | --- | --- | --- |
-| `push_intents` | UUID; unique `(source_kind, source_id)` exact occurrence, record/workspace/recipient/module/kind, original creation/expiry, next check, admission/result and diagnostic receipt | 1,000 active occurrences per recipient; expires within one day of source creation. Older overflow and other terminal receipts remain only until that expiry; indexed batches remove them. Workspace/user deletion cascades; account erasure explicitly deletes them |
-| `push_deliveries` | `(intent_id, subscription_id, generation)`; captured session UUID, state, attempts, next attempt, current lease UUID and bounded status/category | At most the registered devices captured at commit, never later devices. Eight eligible attempts; 60-second claim, original expiry. Intent/subscription deletion cascades. Session is a snapshot, not a second FK: session → subscription → delivery already cascades, and a late session FK reverses account erasure's lock order |
+| `push_intents` | UUID; unique `(source_kind, source_id)` exact occurrence, record/workspace/recipient/module/kind, original creation/expiry, next check, admission/result, diagnostic receipt and cancellation of queued Web Push | 1,000 active occurrences per recipient; expires within one day of source creation. Older overflow and other terminal receipts remain only until that expiry; indexed batches remove them. Workspace/user deletion cascades; account erasure explicitly deletes them |
+| `push_deliveries` | `(intent_id, subscription_id, generation)`; captured session UUID, provider-specific subscription reference, state, attempts, next attempt, current lease UUID and bounded status/category | At most the registered devices captured at commit, never later devices. Eight eligible attempts; 60-second claim, original expiry. Intent or subscription deletion cascades. The snapshot `session_id` has no direct foreign key. Session deletion already cascades through the corresponding Web Push or APNs subscription. An APNs delivery uses its session UUID as its subscription UUID |
 | `push_notice_budgets` | `(user_id, module, kind)`; persistent GCRA next-admission/updated times | Three occurrences at once, then one a minute; retries/devices share admission. Stale rows with no live work are swept after one day; account erasure deletes them |
 
 ```sql
@@ -809,6 +832,7 @@ CREATE TABLE push_intents (
     state TEXT NOT NULL DEFAULT 'pending'
         CHECK (state IN ('pending', 'admitted', 'completed', 'throttled', 'canceled', 'overflow')),
     reported_at TIMESTAMPTZ,
+    web_canceled BOOLEAN NOT NULL DEFAULT false,
     UNIQUE (source_kind, source_id),
     CONSTRAINT push_intents_lifetime CHECK (
         isfinite(created_at) AND isfinite(expires_at)
@@ -825,7 +849,7 @@ CREATE INDEX idx_push_intents_state ON push_intents (state, id);
 
 CREATE TABLE push_deliveries (
     intent_id UUID NOT NULL REFERENCES push_intents(id) ON DELETE CASCADE,
-    subscription_id UUID NOT NULL REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+    subscription_id UUID NOT NULL,
     generation UUID NOT NULL,
     session_id UUID NOT NULL,
     state TEXT NOT NULL DEFAULT 'pending'
@@ -835,6 +859,17 @@ CREATE TABLE push_deliveries (
     lease_id UUID,
     last_status INTEGER CHECK (last_status BETWEEN 100 AND 599),
     last_failure TEXT CHECK (length(last_failure) <= 64),
+    apns_session_id UUID,
+    web_subscription_id UUID,
+    CONSTRAINT push_deliveries_apns_session_id_fkey
+        FOREIGN KEY (apns_session_id) REFERENCES apns_subscriptions(session_id) ON DELETE CASCADE,
+    CONSTRAINT push_deliveries_web_subscription_id_fkey
+        FOREIGN KEY (web_subscription_id) REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+    CONSTRAINT push_deliveries_apns_identity CHECK (
+        CASE WHEN apns_session_id IS NULL THEN web_subscription_id IS NOT DISTINCT FROM subscription_id
+             ELSE web_subscription_id IS NULL AND apns_session_id = subscription_id AND apns_session_id = session_id
+        END
+    ),
     PRIMARY KEY (intent_id, subscription_id, generation)
 );
 
@@ -842,6 +877,22 @@ CREATE INDEX idx_push_deliveries_due ON push_deliveries (next_attempt_at, intent
     WHERE state = 'pending';
 CREATE INDEX idx_push_deliveries_subscription ON push_deliveries (subscription_id);
 CREATE INDEX idx_push_deliveries_session ON push_deliveries (session_id);
+CREATE INDEX idx_push_deliveries_apns_session ON push_deliveries (apns_session_id)
+    WHERE apns_session_id IS NOT NULL;
+CREATE INDEX idx_push_deliveries_web_subscription ON push_deliveries (web_subscription_id)
+    WHERE web_subscription_id IS NOT NULL;
+
+CREATE FUNCTION set_push_delivery_web_subscription() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog AS $$
+BEGIN
+    NEW.web_subscription_id := CASE WHEN NEW.apns_session_id IS NULL THEN NEW.subscription_id END;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER push_deliveries_set_web_subscription
+    BEFORE INSERT OR UPDATE ON push_deliveries
+    FOR EACH ROW EXECUTE FUNCTION set_push_delivery_web_subscription();
 
 -- Admission is once per occurrence, not once per device or retry. One token a minute, burst three.
 CREATE TABLE push_notice_budgets (
@@ -4542,6 +4593,10 @@ file that leaves its transaction runs statement by statement and must be safe to
 0126_outbox_ledger.sql       outbox_ledger: which fact was delivered to which consumer and when, for an operator to prove it  (D-335)
 0127_outbox_trace.sql        outbox.traceparent: the trace a fact was published in, so its delivery is a span of the same trace  (D-336)
 0128_message_priority.sql    messages.priority: how much a message asks of its recipient, a CHECK on the three values (D-337)
+0129_apns_subscriptions.sql   session-owned device tokens and registration generations (D-342)
+0130_apns_push_deliveries.sql  APNs provider scope, Web Push cancellation, and provider references with a Web write trigger (D-342)
+0131_backfill_push_delivery_subscriptions.sql  backfill the Web references in batches, build provider indexes concurrently, and validate the identity check (D-342)
+0132_push_delivery_provider_foreign_keys.sql  install and validate the provider foreign keys, then drop the original Web-only key (D-342)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

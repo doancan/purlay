@@ -10,7 +10,10 @@ import { inMemoryAttention, nobodyActive, type Attention } from '../../platform/
 import { aRecordingLogger } from '../../testing/doubles';
 import { aWorld, subscribe, words } from '../../testing/push-world';
 import { aBrowser, KEYS } from '../../testing/push-service';
+import { aSession } from '../../testing/signed-in';
 import { routeInbox, type DeviceFinder } from './devices';
+import { currentPushDevice } from './authority';
+import type { PushClaim } from './queue';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -68,6 +71,89 @@ describe('integration: the devices a notice of the inbox is for', () => {
       expect(routed.devices).toEqual([]);
       // Held for later is Deep Work's: looking at the page is not that, and nothing waits.
       expect(routed.waiting.size).toBe(0);
+    });
+  });
+
+  test('routes a held inbox notice to the current APNs registration in its language, with no browser key', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const { sessionId } = await aSession(db, world.clock, world.ada);
+      const scope = 'purlay-ios-sandbox';
+      const deviceToken = '12'.repeat(32);
+      const registeredAt = world.clock.now();
+      const { generation } = await db
+        .insertInto('apns_subscriptions')
+        .values({
+          session_id: sessionId,
+          device_token: deviceToken,
+          registered_at: registeredAt,
+          provider_scope: scope,
+        })
+        .returning('generation')
+        .executeTakeFirstOrThrow();
+      await db.updateTable('users').set({ locale: 'tr' }).where('id', '=', world.ada).execute();
+      const deepWorkEnds = new Date(world.clock.now().getTime() + 60_000);
+      await db
+        .updateTable('workspace_members')
+        .set({ is_deep_work_active: true, deep_work_until: deepWorkEnds })
+        .where('user_id', '=', world.ada)
+        .execute();
+      const notice = await world.write(world.ada);
+      const finder: DeviceFinder = {
+        ...finderOn(world, db, nobodyActive),
+        keys: () => Promise.resolve(undefined),
+        apnsScope: scope,
+      };
+      expect(await routeInbox(finder, [notice.entryId])).toEqual({
+        devices: [],
+        waiting: new Set([notice.entryId]),
+      });
+      world.clock.to(deepWorkEnds);
+      expect(
+        (await routeInbox({ ...finder, apnsScope: 'different-scope' }, [notice.entryId])).devices,
+      ).toEqual([]);
+      const routed = await routeInbox(finder, [notice.entryId]);
+      expect(routed.devices).toHaveLength(1);
+      expect(routed.devices[0]).toMatchObject({
+        provider: 'apns',
+        id: sessionId,
+        sessionId,
+        generation,
+        apnsScope: scope,
+        deviceToken,
+        registeredAt,
+        payload: { body: 'bob sana bir şey atadı' },
+      });
+
+      const claim: PushClaim = {
+        source: 'inbox',
+        sourceId: notice.entryId,
+        recordId: notice.entryId,
+        workspaceId: world.workspaceId,
+        userId: world.ada,
+        module: notice.module,
+        kind: notice.kind,
+        createdAt: world.clock.now(),
+        expiresAt: new Date(world.clock.now().getTime() + 60_000),
+        intentId: crypto.randomUUID(),
+        leaseId: crypto.randomUUID(),
+        attempts: 0,
+        subscriptionId: sessionId,
+        sessionId,
+        generation,
+        apnsScope: scope,
+      };
+      expect(await currentPushDevice(finder, claim)).toEqual({ sound: true });
+      expect(
+        await currentPushDevice(finder, { ...claim, apnsScope: 'different-scope' }),
+      ).toBeUndefined();
+      expect(await currentPushDevice(finder, { ...claim, userId: world.bob })).toBeUndefined();
+      await db
+        .updateTable('apns_subscriptions')
+        .set({ generation: crypto.randomUUID() })
+        .where('session_id', '=', sessionId)
+        .execute();
+      expect(await currentPushDevice(finder, claim)).toBeUndefined();
     });
   });
 });

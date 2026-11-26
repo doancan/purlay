@@ -45,12 +45,13 @@ describe('integration: response race concurrency', () => {
         [world.reader],
         world.notification,
       );
+      if (device?.provider !== 'web') throw new Error('Missing browser device');
       const deliver = await createDelivery(dependencies, {
         failed: createFailureCount(dependencies),
       });
       let completed = false;
       const deliveryFinished = (): boolean => completed;
-      result = deliver(device!, claim).finally(() => {
+      result = deliver(device, claim).finally(() => {
         completed = true;
       });
       const blockerPid = await held.promise;

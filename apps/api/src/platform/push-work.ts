@@ -16,17 +16,20 @@ export interface PushWork {
   readonly createdAt: Date;
 }
 
+export type PushCapture = (tx: Executor, now: Date, work: readonly PushWork[]) => Promise<void>;
+
 export const enqueuePush = async (
   transaction: Executor,
   now: Date,
   work: readonly PushWork[],
   perPersonMax = PUSH_PENDING_PER_PERSON,
+  apnsScope?: string,
 ): Promise<void> => {
   if (work.length === 0) return;
   if (!isTransaction(transaction)) throw new Error('Push work must commit with its source');
   if (!Number.isInteger(perPersonMax) || perPersonMax < 1 || perPersonMax > PUSH_PENDING_PER_PERSON)
     throw new Error('Invalid pending push bound');
-  // Disable serializes with this read and cancels all prior work in the same settings transaction.
+  // Web Push settings serialize with this read. The same row carries the session policy.
   const setting = await transaction
     .selectFrom('server_settings')
     .select([
@@ -38,7 +41,8 @@ export const enqueuePush = async (
     .where('id', '=', true)
     .forShare()
     .executeTakeFirst();
-  if (setting?.push_enabled !== true || setting.push_public_key === null) return;
+  const webKey = setting?.push_enabled ? setting.push_public_key : null;
+  if (webKey === null && apnsScope === undefined) return;
   const people = [...new Set(work.map((item) => item.userId))].sort();
   // Same order across overlapping recipient sets; a worker tries this lock without waiting.
   for (const person of people)
@@ -55,27 +59,54 @@ export const enqueuePush = async (
     .execute();
   if (sessions.length === 0) return;
   // A session snapshot, not a late session lock: erasure owns sessions before the source's workspace.
-  // Subscription deletion serializes here; generation/session/owner are checked again at each handoff.
-  const candidates = await transaction
-    .selectFrom('push_subscriptions')
-    .select(['id', 'user_id', 'session_id', 'generation'])
-    .where('user_id', 'in', people)
-    .where(
-      'session_id',
-      'in',
-      sessions.map((row) => row.id),
-    )
-    .where('server_key', '=', setting.push_public_key)
-    .orderBy('id')
-    .forKeyShare()
-    .execute();
+  // Subscription deletion serializes here. Lock Web Push first, then APNs, in key order.
+  const sessionIds = sessions.map((row) => row.id);
+  const web =
+    webKey === null
+      ? []
+      : await transaction
+          .selectFrom('push_subscriptions')
+          .select(['id', 'user_id', 'session_id', 'generation'])
+          .where('user_id', 'in', people)
+          .where('session_id', 'in', sessionIds)
+          .where('server_key', '=', webKey)
+          .orderBy('id')
+          .forKeyShare()
+          .execute();
+  const apns =
+    apnsScope === undefined
+      ? []
+      : await transaction
+          .selectFrom('apns_subscriptions')
+          .select(['session_id', 'generation'])
+          .where('session_id', 'in', sessionIds)
+          .where('provider_scope', '=', apnsScope)
+          .orderBy('session_id')
+          .forKeyShare()
+          .execute();
   const sessionOwners = new Map(sessions.map((row) => [row.id, row]));
-  const devices = candidates.flatMap((row) => {
-    const session = sessionOwners.get(row.session_id);
-    return session?.user_id === row.user_id
-      ? [{ ...row, companyWorkspaceId: session.company_workspace_id }]
-      : [];
-  });
+  const devices = [
+    ...web.flatMap((row) => {
+      const session = sessionOwners.get(row.session_id);
+      return session?.user_id === row.user_id
+        ? [{ ...row, apnsSessionId: null, companyWorkspaceId: session.company_workspace_id }]
+        : [];
+    }),
+    ...apns.flatMap((row) => {
+      const session = sessionOwners.get(row.session_id);
+      return session === undefined
+        ? []
+        : [
+            {
+              ...row,
+              id: row.session_id,
+              user_id: session.user_id,
+              apnsSessionId: row.session_id,
+              companyWorkspaceId: session.company_workspace_id,
+            },
+          ];
+    }),
+  ];
   const workspaces = await transaction
     .selectFrom('workspaces')
     .select(['id', 'access_policy_epoch'])
@@ -96,8 +127,8 @@ export const enqueuePush = async (
           .map((device) => device.session_id),
         now,
         lifetime: {
-          sessionIdleTimeoutHours: setting.session_idle_timeout_hours,
-          sessionMaxAgeDays: setting.session_max_age_days,
+          sessionIdleTimeoutHours: setting?.session_idle_timeout_hours ?? null,
+          sessionMaxAgeDays: setting?.session_max_age_days ?? null,
         },
       });
       eligible.set(
@@ -174,6 +205,7 @@ export const enqueuePush = async (
         subscription_id: device.id,
         generation: device.generation,
         session_id: device.session_id,
+        apns_session_id: device.apnsSessionId,
         next_attempt_at: now,
       })),
   );

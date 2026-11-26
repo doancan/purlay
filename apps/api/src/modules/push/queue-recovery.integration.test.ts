@@ -308,15 +308,16 @@ describe('integration: durable push recovery', () => {
           [world.reader],
           world.notification,
         );
+        if (device?.provider !== 'web') throw new Error('Missing browser device');
         const deliver = await createDelivery(dependencies, {
           failed: createFailureCount(dependencies),
         });
-        const previous = deliver(device!, first);
+        const previous = deliver(device, first);
         try {
           await started.promise;
           world.clock.to(new Date(NOW.getTime() + PUSH_LEASE_MS));
           const next = (await claimPush(dependencies))!;
-          await settlePush(db, next, await deliver(device!, next), world.clock);
+          await settlePush(db, next, await deliver(device, next), world.clock);
           release.resolve(undefined);
           await settlePush(db, first, await previous, world.clock);
           expect(

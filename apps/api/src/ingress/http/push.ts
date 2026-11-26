@@ -1,17 +1,19 @@
 /**
- * Web Push's doors (#78, D-126): the server's key, a device subscribing and leaving, and the
+ * Push routes (#78, D-126, D-342): the server's key, a device subscribing and leaving, and the
  * language a person is told in. Each is the caller's own — no workspace is named, and nothing about
  * anybody else is read or answered.
  */
 import type { Auth } from '../../modules/auth/better-auth';
 import type { Executor } from '@purlay/db';
 import {
+  ApnsDeviceRequest,
   PushSubscribeRequest,
   PushUnsubscribeRequest,
   SetLocaleRequest,
   type PushKeyResponse,
 } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
+import { registerApnsDevice, removeApnsDevice } from '../../modules/push/apns-subscriptions';
 import type { PushConfiguration } from '../../modules/push/settings';
 import {
   pushUnavailable,
@@ -30,6 +32,37 @@ export interface PushDependencies {
   readonly clock: Clock;
   readonly pushConfiguration: Pick<PushConfiguration, 'keys'>;
 }
+
+type ApnsDependencies = Pick<PushDependencies, 'auth' | 'database' | 'clock'> & {
+  readonly apnsScope: string | undefined;
+};
+
+/** `POST /api/push/apns/subscriptions` — register a token in the caller's live session. */
+export const subscribeApnsDevice = async (
+  { auth, database, clock, apnsScope }: ApnsDependencies,
+  request: Request,
+  body: unknown,
+): Promise<void> => {
+  const subscriber = await requireSession(auth, request);
+  if (apnsScope === undefined) throw pushUnavailable();
+  const { deviceToken } = validated(ApnsDeviceRequest, body);
+  await atomicallyOn(database)((transaction) =>
+    registerApnsDevice(transaction, clock, subscriber, deviceToken, apnsScope),
+  );
+};
+
+/** `POST /api/push/apns/subscriptions/remove` — stop telling this device in the caller's session. */
+export const unsubscribeApnsDevice = async (
+  { auth, database, clock }: Pick<PushDependencies, 'auth' | 'database' | 'clock'>,
+  request: Request,
+  body: unknown,
+): Promise<void> => {
+  const subscriber = await requireSession(auth, request);
+  const { deviceToken } = validated(ApnsDeviceRequest, body);
+  await atomicallyOn(database)((transaction) =>
+    removeApnsDevice(transaction, clock, subscriber, deviceToken),
+  );
+};
 
 /** `GET /api/push/key` — what a browser subscribes with. */
 export const readPushKey = async (

@@ -18,15 +18,25 @@ export const applyPushResponse = async (
       tx,
     );
     // Never wait on a subscription while holding a queue row: logout cascades in the opposite direction.
-    const subscription = await tx
-      .selectFrom('push_subscriptions')
-      .select('id')
-      .where('id', '=', device.id)
-      .where('user_id', '=', device.userId)
-      .where('session_id', '=', device.sessionId)
-      .where('generation', '=', device.generation)
-      .forUpdate()
-      .executeTakeFirst();
+    const subscription =
+      device.provider === 'web'
+        ? await tx
+            .selectFrom('push_subscriptions')
+            .select('id')
+            .where('id', '=', device.id)
+            .where('user_id', '=', device.userId)
+            .where('session_id', '=', device.sessionId)
+            .where('generation', '=', device.generation)
+            .forUpdate()
+            .executeTakeFirst()
+        : await tx
+            .selectFrom('apns_subscriptions')
+            .select('session_id')
+            .where('session_id', '=', device.sessionId)
+            .where('generation', '=', device.generation)
+            .where('provider_scope', '=', device.apnsScope)
+            .forUpdate()
+            .executeTakeFirst();
     if (subscription === undefined) return false;
     const target = await tx
       .selectFrom('push_deliveries')
@@ -38,7 +48,8 @@ export const applyPushResponse = async (
       .where('state', '=', 'pending')
       .forUpdate()
       .executeTakeFirst();
-    if (target === undefined || !(await ownsPushClaim(tx, claim, clock.now(), device.serverKey)))
+    const serverKey = device.provider === 'web' ? device.serverKey : undefined;
+    if (target === undefined || !(await ownsPushClaim(tx, claim, clock.now(), serverKey)))
       return false;
     await change(tx);
     return true;

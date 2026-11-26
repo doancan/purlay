@@ -33,6 +33,8 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/me/sign-in',
   '/api/native/authorize',
   '/api/native/token',
+  '/api/push/apns/subscriptions',
+  '/api/push/apns/subscriptions/remove',
   '/api/push/key',
   '/api/push/subscriptions',
   '/api/push/subscriptions/remove',

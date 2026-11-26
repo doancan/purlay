@@ -1054,7 +1054,7 @@ describe('integration: workspace delivery provenance', () => {
         expect(devices).toHaveLength(1);
         const claim = await claimPush(dependencies);
         const device = devices[0];
-        if (claim === undefined || device === undefined)
+        if (claim === undefined || device?.provider !== 'web')
           throw new Error('Missing actual durable push');
         expect(claim.sessionId).toBe(f.source.sessionId);
         let keysRead = 0;
