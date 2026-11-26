@@ -93,6 +93,17 @@ describe('the inbox panel', () => {
     view.unmount();
   });
 
+  test('includes the urgent marker in the inbox panel row', async () => {
+    const urgent = told(1, 'direct_message');
+    const view = await visit({
+      notifications: () =>
+        Promise.resolve(page([{ ...urgent, message: { ...urgent.message, priority: 'urgent' } }])),
+    });
+    const panel = await openPanel(view);
+    expect(within(panel).getByRole('button', { name: /words 1 Urgent/ })).toBeDefined();
+    view.unmount();
+  });
+
   test('a category is a server query, and See all lands on the inbox in the same category', async () => {
     const asked: Asked[] = [];
     const view = await visit({
