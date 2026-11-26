@@ -30,7 +30,22 @@ export interface FrontOptions {
    * A test of the front gives a short one.
    */
   readonly upstreamMs?: number;
+  /** Records document handling in the WebKit harness. */
+  readonly documentLog?: (event: DocumentEvent) => void;
 }
+
+interface DocumentReceipt {
+  readonly id: number;
+  readonly pathHash: string;
+  readonly port: number | null;
+  readonly at: number;
+}
+
+export type DocumentEvent = DocumentReceipt &
+  (
+    | { readonly stage: 'received' | 'aborted' }
+    | { readonly stage: 'responding'; readonly status: number }
+  );
 
 /**
  * Every page and file comes through the front, so a request the API takes and never answers would leave a browser
@@ -138,6 +153,8 @@ export const forwardableCode = (code: number): number =>
 /** Starts the front server. The returned handle's `stop` closes it. */
 export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<SocketData>> => {
   const wsApi = options.api.replace(/^http/, 'ws');
+  const documentLog = options.documentLog;
+  let documentId = 0;
   return Bun.serve<SocketData>({
     // `/__demo/login` hands a signed-in session to whoever asks. Bun's default is every
     // interface, which on a café network is everybody; loopback is the whole audience (H-API 9).
@@ -160,8 +177,37 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
         }
         case 'login':
           return login(url, options.sessions);
-        case 'api':
-          return await proxy(request, url, options.api, options.upstreamMs ?? UPSTREAM_MS);
+        case 'api': {
+          const upstreamMs = options.upstreamMs ?? UPSTREAM_MS;
+          if (documentLog === undefined || request.headers.get('sec-fetch-dest') !== 'document') {
+            return await proxy(request, url, options.api, upstreamMs);
+          }
+          const receipt = {
+            id: ++documentId,
+            // Paths can carry invitation and recovery tokens. Compare the trace's pathname by hash.
+            pathHash: new Bun.CryptoHasher('sha256').update(url.pathname).digest('hex'),
+            port: server.requestIP(request)?.port ?? null,
+          };
+          const aborted = (): void => {
+            documentLog({ ...receipt, stage: 'aborted', at: Date.now() });
+          };
+          const signal = request.signal;
+          documentLog({ ...receipt, stage: 'received', at: Date.now() });
+          if (signal.aborted) aborted();
+          else signal.addEventListener('abort', aborted, { once: true });
+          try {
+            const response = await proxy(request, url, options.api, upstreamMs);
+            documentLog({
+              ...receipt,
+              stage: 'responding',
+              at: Date.now(),
+              status: response.status,
+            });
+            return response;
+          } finally {
+            signal.removeEventListener('abort', aborted);
+          }
+        }
       }
     },
     websocket: {
