@@ -5,7 +5,7 @@
  *
  * The dot is a second picture beside the favicon, not one drawn on a canvas: the page's security
  * policy loads images from its own origin only (D-39), and a drawn picture is a `data:` address.
- * `favicon.test.ts` holds both pictures to the tokens.
+ * `favicon.test.ts` holds both pictures to the brand file and the tokens.
  */
 
 /** The favicon with its dot, served beside it. */

@@ -41,6 +41,7 @@ beforeAll(async () => {
       config: testConfig({
         APP_URL: origin,
         MIN_CLIENT_MACOS_CONTRACT: 1,
+        MIN_CLIENT_IOS_CONTRACT: 1,
         MACOS_DOWNLOAD_URL: 'https://example.test/purlay',
       }),
     }),
@@ -129,10 +130,13 @@ describe('integration: the socket upgrade, for a client that is not a browser', 
     }
   });
 
-  test('is told 426 at the upgrade when it is too old — a status it can act on, not a socket that closes', async () => {
-    const answer = await upgrade({ cookie, origin, 'x-purlay-client': 'macos/0.0.1 contract/0' });
-    expect(answer.status).toBe(426);
-    expect(answer.headers.get('upgrade')).toBe('purlay-client');
+  test.each(['macos', 'ios'])('tells an old %s client 426 at the upgrade', async (platform) => {
+    const anchor = { cookie, origin };
+    const old = await upgrade({ ...anchor, 'x-purlay-client': `${platform}/0.0.1 contract/0` });
+    expect(old.status).toBe(426);
+    expect(old.headers.get('upgrade')).toBe('purlay-client');
+    const current = await upgrade({ ...anchor, 'x-purlay-client': `${platform}/1.0.0 contract/1` });
+    expect(current.status).toBe(101);
   });
 
   test('is told 426 before its session is looked at: a client with no session at all learns it too', async () => {

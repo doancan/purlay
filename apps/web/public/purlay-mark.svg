@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="stem" gradientUnits="userSpaceOnUse" x1="330" y1="550" x2="330" y2="876">
+      <stop stop-color="#0759EB"/><stop offset="1" stop-color="#0EA5EE"/>
+    </linearGradient>
+    <linearGradient id="fold" gradientUnits="userSpaceOnUse" x1="250" y1="500" x2="610" y2="500">
+      <stop stop-color="#15B8EE"/><stop offset=".52" stop-color="#0869DF"/><stop offset="1" stop-color="#09358F"/>
+    </linearGradient>
+    <linearGradient id="ribbon" gradientUnits="userSpaceOnUse" x1="270" y1="730" x2="690" y2="210">
+      <stop stop-color="#249FEC"/><stop offset=".52" stop-color="#78BDF2"/><stop offset="1" stop-color="#A8D4F7"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <path fill="url(#stem)" d="M248 544 C248 487 294 441 351 441 H420 V745 C420 793 381 832 333 832 C286 832 248 794 248 746 Z"/>
+    <path fill="url(#fold)" d="M248 544 C248 487 294 441 351 441 H585 C600 441 612 453 612 468 V522 H510 C398 522 301 583 248 667 Z"/>
+    <path fill="url(#ribbon)" d="M324 192 H574 C686 192 776 283 776 395 C776 507 686 598 574 598 H438 C361 598 290 648 248 723 V613 C301 536 399 464 510 464 H574 C612 464 644 433 644 395 C644 357 612 326 574 326 H324 C282 326 248 296 248 259 C248 222 282 192 324 192 Z"/>
+  </g>
+</svg>

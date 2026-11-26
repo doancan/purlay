@@ -1010,6 +1010,33 @@ describe('the minimum native client', () => {
     expect(config.MACOS_DOWNLOAD_URL).toBe('https://example.test/purlay');
   });
 
+  test('reads the iOS limits independently from macOS', () => {
+    const config = loadConfig({
+      ...valid,
+      MIN_CLIENT_IOS_CONTRACT: String(CONTRACT_VERSION),
+      MIN_CLIENT_IOS_VERSION: '1.0.0-rc.1',
+      IOS_DOWNLOAD_URL: 'https://example.test/ios',
+    });
+    expect(config.MIN_CLIENT_IOS_CONTRACT).toBe(CONTRACT_VERSION);
+    expect(config.MIN_CLIENT_IOS_VERSION).toBe('1.0.0-rc.1');
+    expect(config.IOS_DOWNLOAD_URL).toBe('https://example.test/ios');
+    expect(config.MIN_CLIENT_MACOS_CONTRACT).toBeUndefined();
+    expect(config.MIN_CLIENT_MACOS_VERSION).toBeUndefined();
+    expect(config.MACOS_DOWNLOAD_URL).toBeUndefined();
+  });
+
+  test('refuses an unsupported iOS floor, malformed version or insecure update address', () => {
+    expect(refusal({ ...valid, MIN_CLIENT_IOS_CONTRACT: String(CONTRACT_VERSION + 1) })).toContain(
+      'MIN_CLIENT_IOS_CONTRACT',
+    );
+    expect(refusal({ ...valid, MIN_CLIENT_IOS_VERSION: '1.0.0-rc..1' })).toContain(
+      'MIN_CLIENT_IOS_VERSION',
+    );
+    expect(refusal({ ...valid, IOS_DOWNLOAD_URL: 'http://example.test/ios' })).toContain(
+      'IOS_DOWNLOAD_URL',
+    );
+  });
+
   test('may be any one of the three', () => {
     expect(
       loadConfig({ ...valid, MIN_CLIENT_MACOS_VERSION: '1.0.0' }).MIN_CLIENT_MACOS_VERSION,

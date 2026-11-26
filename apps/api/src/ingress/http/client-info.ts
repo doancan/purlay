@@ -20,6 +20,11 @@ export const clientPolicyOf = (config: Config): ClientPolicy => ({
     version: config.MIN_CLIENT_MACOS_VERSION ?? null,
     downloadUrl: config.MACOS_DOWNLOAD_URL ?? null,
   },
+  ios: {
+    contract: config.MIN_CLIENT_IOS_CONTRACT ?? null,
+    version: config.MIN_CLIENT_IOS_VERSION ?? null,
+    downloadUrl: config.IOS_DOWNLOAD_URL ?? null,
+  },
 });
 
 export const clientInfo = (
@@ -27,7 +32,7 @@ export const clientInfo = (
   auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'google' | 'signUp' | 'signInPolicy'>,
   modules: readonly string[],
 ): ClientInfo => {
-  const { macos } = clientPolicyOf(config);
+  const { macos, ios } = clientPolicyOf(config);
   return {
     // Scheduling, reminders and deleting a message for oneself are chat's: offered where chat runs (D-250).
     capabilities: {
@@ -44,6 +49,11 @@ export const clientInfo = (
         contractVersion: macos.contract,
         appVersion: macos.version,
         downloadUrl: macos.downloadUrl,
+      },
+      ios: {
+        contractVersion: ios.contract,
+        appVersion: ios.version,
+        downloadUrl: ios.downloadUrl,
       },
     },
     auth: authMethods(auth),
