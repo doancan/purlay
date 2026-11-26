@@ -296,8 +296,8 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'config-contract-ceiling-gone',
     why: 'a minimum above the contract this server speaks is accepted: every client is refused and the first person to sign in finds out',
     file: 'apps/api/src/platform/config.ts',
-    find: '    config.MIN_CLIENT_MACOS_CONTRACT > CONTRACT_VERSION\n',
-    replace: '    config.MIN_CLIENT_MACOS_CONTRACT > CONTRACT_VERSION + 1000\n',
+    find: '    if (contract !== undefined && contract > CONTRACT_VERSION) {',
+    replace: '    if (contract !== undefined && contract > CONTRACT_VERSION + 1000) {',
     tests: ['apps/api/src/platform/config.test.ts'],
   },
   {

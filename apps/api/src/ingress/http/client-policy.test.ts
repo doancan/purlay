@@ -9,6 +9,7 @@ import {
 
 const policy = (overrides: Partial<ClientPolicy['macos']> = {}): ClientPolicy => ({
   macos: { contract: null, version: null, downloadUrl: null, ...overrides },
+  ios: { contract: null, version: null, downloadUrl: null },
 });
 
 describe('the client header', () => {

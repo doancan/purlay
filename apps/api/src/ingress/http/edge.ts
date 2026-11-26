@@ -252,7 +252,6 @@ const DOCUMENT_PERMISSIONS = [
   'hid=()',
   'midi=()',
   'display-capture=()',
-  'browsing-topics=()',
   'clipboard-write=(self)',
   'fullscreen=(self)',
 ].join(', ');
