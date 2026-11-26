@@ -102,12 +102,12 @@ declares:
   at the limit and says `more`, and an answer missing a `slow` or `error` source is `partial` (D-328); chat's own search
   stays as it is.
 
-That is the whole manifest today (`module-kit/manifest.ts`): a field is added in the step that reads it. **Built in step 14b
-(D-283 §3), with nothing yet publishing, consuming or using:** `publishes` (the fact types the module owns, each named
-`<id>.<what>` and declared in `@purlay/types`), `consumes` (the fact types it handles, a publisher in the build or the core
+The communication fields were built in step 14b (D-283 §3). The manifest declares `publishes` (the fact types the module owns,
+each named `<id>.<what>` and declared in `@purlay/types`), `consumes` (the fact types it handles, a publisher in the build or the core
 for each, and a handler in the slot's `factConsumers`) and `uses` (the capabilities it asks, each provided by a module in its
-`requires` or `optional`; the slot's `ports` is what a module implements of its `provides`). What a module
-contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `jobWork`, the work of
+`requires` or `optional`; the slot's `ports` is what a module implements of its `provides`). Issues provides
+`issues.records` (D-291). The record integration test declares a consumer with `uses` and reads the port through its workspace scope.
+What a module contributes besides is a slot of `BundledModule` in `composition.ts`, which the composition reads: `jobWork`, the work of
 each job its manifest names under `jobs` or `retention` and of no other (a build where the names and the work differ does
 not start; `bun run job` takes the work from the composition and names no module, D-260),
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
@@ -267,9 +267,10 @@ test and not by a consumer in the product. Each row below is a step of §10 step
 - *The contract surface* — **built** (14b) as far as the names go: `FactDeclaration`, `defineFact` and the lists `CORE_FACTS` and
   `FACTS` in `@purlay/types` (a module's `<ID>_FACTS` joins `FACTS` when it has a fact), `platform/ports/` with `Port<T>`,
   `platform/fact-consumers.ts`, the manifest's `publishes`, `consumes` and `uses`, the slot's `factConsumers` and `ports`, and the
-  refusals of §8. Nothing publishes, consumes or provides: the two real modules declare none of it. **Not built** of it: a scan
-  holding a module to the ports its `uses` names, which comes with the first module that reads one. The shape of a
-  delivery (a consumer is given the fact and the transaction it is delivered in, and says `done` or `skipped`) and the release
+  refusals of §8. Issues provides `issues.records`. Its integration test verifies that a consumer with `uses` gets the port for
+  a workspace where Issues is granted. The outbox integration test uses a stand-in publisher and consumer. A static scan of
+  port usage is deferred until a product module uses a partner's capability. The shape of a delivery (a consumer is given
+  the fact and the transaction it is delivered in, and says `done` or `skipped`) and the release
   snapshot's hold on `publishes` and `consumes`, with the three fields in the contract bundle's module structure, are **built** in
   14c (D-288); what runs a delivery is 14d.
 - *The outbox* (14c to 14e): **built** (14c, D-288): the table `outbox`, `publishFact` in the publisher's transaction and the `absent`
@@ -1252,9 +1253,9 @@ table, so that §11's listing test reads only the modules.
 - **Port** — an interface the core defines and a module implements, handed to the module that `uses` it as `Port<T>`, the
   implementation or `undefined` where the provider is not run or the workspace is not granted it (`platform/ports/`,
   `Composition.portsFor`, step 14b; `issues.records` is the first). Built before it: `WorkspaceChannels`, `PushNotices`, `SearchSource` (D-285), `NotificationSink` (D-286).
-- **Capability** — a name a module lists under `provides`: held to no repeat by the registry and to the last release's by
-  `module-compat.test.ts`. A module that `uses` one is handed its implementation or `undefined` (`Composition.ports`, built, with no
-  module yet using one), and there is no `capabilities.has` (§4, D-283 §3).
+- **Capability** — a name a module lists under `provides`, held to no repeat by the registry and to the last release's by
+  `module-compat.test.ts`. A module that `uses` one receives the implementation when the provider is available in its workspace.
+  The scoped port lookup returns `undefined` when the provider is unavailable (§4, D-283 §3).
 - **Grant** — a row of `workspace_modules` (D-289): the operator's word that one workspace may, or may not, use one module. With no row a
   workspace has what `WORKSPACE_MODULES` says (`open` is the module, `managed` is none that is a grant). Not a permission: a member's
   rights are the role's.
