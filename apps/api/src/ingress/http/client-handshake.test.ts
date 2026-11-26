@@ -115,6 +115,18 @@ describe('GET /api/client', () => {
     });
   });
 
+  test('adds iOS minimums without requiring them in handshakes from older servers', async () => {
+    const body = (await (await server()('/api/client')).json()) as ClientInfo;
+    expect(body.minClient.ios).toEqual({
+      contractVersion: null,
+      appVersion: null,
+      downloadUrl: null,
+    });
+    expect(Value.Check(ClientInfo, { ...body, minClient: { macos: body.minClient.macos } })).toBe(
+      true,
+    );
+  });
+
   test('says the minimum the operator set', async () => {
     const body = (await (
       await server({
@@ -167,6 +179,47 @@ describe('a client that is too old', () => {
         },
       },
     });
+  });
+
+  test('advertises and enforces the independent iOS floor before authentication', async () => {
+    const request = server({
+      MIN_CLIENT_MACOS_VERSION: '1.0.0',
+      MIN_CLIENT_IOS_CONTRACT: 1,
+      MIN_CLIENT_IOS_VERSION: '2.0.0',
+      IOS_DOWNLOAD_URL: 'https://example.test/ios',
+    });
+    const old = withClient('ios/1.9.9 contract/1');
+    const info = await request('/api/client', old);
+    expect(info.status).toBe(200);
+    expect(await info.json()).toMatchObject({
+      minClient: {
+        macos: { contractVersion: null, appVersion: '1.0.0', downloadUrl: null },
+        ios: { contractVersion: 1, appVersion: '2.0.0', downloadUrl: 'https://example.test/ios' },
+      },
+    });
+    for (const header of [old, withClient('ios/2.0.0 contract/0')]) {
+      const response = await request('/api/me', header);
+      expect(response.status).toBe(426);
+      expect(response.headers.get('upgrade')).toBe('purlay-client');
+      expect(await response.json()).toMatchObject({
+        error: {
+          code: 'CLIENT_TOO_OLD',
+          details: {
+            minContractVersion: 1,
+            minAppVersion: '2.0.0',
+            downloadUrl: 'https://example.test/ios',
+          },
+        },
+      });
+    }
+    for (const header of [
+      withClient('ios/2.0.0 contract/1'),
+      withClient('macos/1.0.0 contract/1'),
+      withClient('android/0.1.0 contract/0'),
+      undefined,
+    ]) {
+      expect((await request('/api/me', header)).status).toBe(401);
+    }
   });
 
   test('is told, as 426 must, what to upgrade to', async () => {
