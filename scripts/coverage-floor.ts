@@ -1,5 +1,5 @@
 /**
- * The areas of a run by area put together, and every file held to the floor in the process of its own area (D-340).
+ * The areas of a run by area put together, and every file held to the floor in the process of its own area (D-341).
  *
  * CI runs the suite as three areas (`PURLAY_TEST_AREA`, `scripts/test-all.ts`), each in one process on a runner of
  * its own, under a configuration with the floor at zero. Each writes lcov and a `summary.json` to
@@ -256,4 +256,13 @@ export const main = (directory: string, root = '.'): number => {
   return failed ? 1 : 0;
 };
 
-if (import.meta.main) process.exit(main(process.argv[2] ?? 'coverage'));
+if (import.meta.main) {
+  const result = process.env['PURLAY_SCHEMA_AREA_RESULT'];
+  if ((result !== undefined || process.env['CI'] === 'true') && result !== 'success') {
+    console.error(
+      `coverage:floor — schema-area ended ${result ?? 'without a result'}: the suite is not whole`,
+    );
+    process.exit(1);
+  }
+  process.exit(main(process.argv[2] ?? 'coverage'));
+}

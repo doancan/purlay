@@ -360,7 +360,7 @@ describe('the verify job in ci.yml', () => {
 });
 
 /**
- * The suite runs as areas, side by side, and `schema` puts them together (D-340). Branch protection requires `schema`
+ * The suite runs as areas, side by side, and `schema` puts them together (D-341). Branch protection requires `schema`
  * and `verify` by name, so what they mean is held here: the areas are every area, `schema` fails unless every area
  * passed, and both are skipped for exactly the reasons the whole suite was.
  */
@@ -421,14 +421,15 @@ describe('the suite in areas, in ci.yml', () => {
   test('schema needs the areas and runs whatever became of them, so that a missing area is a failure it names', () => {
     expect(schema?.needs).toEqual(['scope', 'schema-area']);
     expect(schema?.if).toBe(`always() && ${notSkipped}`);
-    const first = schema?.steps?.[0];
-    expect(first?.if).toBe("needs.schema-area.result != 'success'");
-    expect(first?.run).toContain('exit 1');
+    const floor = schema?.steps?.find((step) => step.run === 'bun run coverage:floor');
+    expect(floor?.if).toBeUndefined();
+    expect(floor?.env?.['PURLAY_SCHEMA_AREA_RESULT']).toBe('${{ needs.schema-area.result }}');
   });
 
   test('schema downloads every area as the directory the check reads, and runs the check', () => {
     const steps = schema?.steps ?? [];
     const download = steps.find((step) => step.uses?.startsWith('actions/download-artifact@'));
+    expect(download?.if).toBe("needs.schema-area.result == 'success'");
     expect(download?.with?.['pattern']).toBe('area-*');
     expect(download?.with?.['path']).toBe('coverage');
     expect(download?.with?.['merge-multiple']).toBeUndefined();

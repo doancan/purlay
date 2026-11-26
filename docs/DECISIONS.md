@@ -11303,9 +11303,9 @@ runner's cores are idle. *Running the integration files apart from the unit file
 **Cost of reversing.** Drop `--parallel=…` and `WORKERS` from `scripts/test-all.ts` and their test; the test fixes
 stay, being right either way.
 
-**Amended 2026-11-26 (D-340): the one run of every test is no longer one job, and sharding by file is still rejected.**
+**Amended 2026-11-26 (D-341): the one run of every test is no longer one job, and sharding by file is still rejected.**
 `schema` is the long pole again, at 1,425 s for 30,222 tests on 2026-11-26 where this decision measured 460 s, and the
-cores are not what it waits on. D-340 divides the run, but by area and not by file, for the reason given here and one
+cores are not what it waits on. D-341 divides the run, but by area and not by file, for the reason given here and one
 more that D-228 did not know: lcov from different processes cannot be added up, so a file is held to the floor in the
 one process that ran its own area's tests. The two workers a process runs, and everything else here, stand.
 
@@ -16530,9 +16530,9 @@ AppKit in them, and a second Apple client would otherwise copy them. An Android 
 **Not decided here.** *How the iOS application is distributed:* D-186 left the App Store because its terms and the
 AGPL do not sit together, and iOS has no other channel for an ordinary person. The owner has to settle the licensing
 basis before a build is released; until then the application is built and tested, not published. *Push to the
-device* (APNs; the server speaks Web Push only, D-126), *a minimum-client gate for `ios`* (`minClient` names `macos`
-only), and *the sign-in page's wording*, which says "Purlay for Mac" whatever application asked, each need their own
-decision before the iOS application is released.
+device* (APNs; the server speaks Web Push only, D-126) and *the sign-in page's wording*, which says "Purlay for Mac"
+for every application, each need a decision before the iOS application is released. D-340 decides the iOS
+minimum-client gate.
 
 **Rejected.** *The installable web application alone (D-51):* the owner chose native for the platform's own feel and
 performance, as for macOS. *Copying the macOS packages:* sign-in and realtime would drift. *A separate contract
@@ -16586,7 +16586,19 @@ identity and carry no product mark; adding one is a design choice, not a replace
 
 **Cost of reversing.** Low: one file, one script and the pictures it writes; the tests move with them.
 
-### D-340. The suite runs as three areas, side by side, and each file is held to the floor in the process of its own area — amends D-228
+### D-340. The iOS client has an independent minimum version and contract (#1560)
+
+**Decided.** Apply D-186's existing admission check to `ios` with independent settings for its application
+version, wire contract and HTTPS update address. An unset limit admits the platform as before. The public
+handshake advertises `minClient.ios`, and its schema leaves that property optional so an older server's
+handshake remains valid. The contract version stays the same under D-58.
+
+**Rejected.** A shared version floor for macOS and iOS would tie together releases with separate version
+numbers and could refuse a current release on one platform when the other raises its minimum.
+
+**Cost of reversing.** Clear the iOS settings to admit clients of any version.
+
+### D-341. The suite runs as three areas, side by side, and each file is held to the floor in the process of its own area — amends D-228
 
 **Decided (the owner, 2026-11-26).** `schema` was the long pole of every pull request again: 1,425 s for 30,222 tests in
 1,081 files on 2026-11-26, in a run that took 17 minutes from the push, with 15 s of setup and 2–12 s of queue around

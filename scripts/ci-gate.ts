@@ -3,7 +3,7 @@
  *
  * The static checks and the whole test suite are separate jobs, so the unit tests run once — in the areas of
  * `schema-area`, with the integration tests and coverage, which `schema` puts together and holds to the floor
- * (D-340) — instead of once there and once more alone.
+ * (D-341) — instead of once there and once more alone.
  * Branch protection still requires `verify`, and `verify` means all of them: this passes only when every
  * job it judges *succeeded*. A failure, a cancellation, a skip, a missing result or a missing job is a
  * refusal, because a skipped required check counts as passed and a gate that reads "nothing failed"
@@ -64,7 +64,7 @@ const SKIPPABLE: Readonly<Record<string, readonly Skip[]>> = {
     { job: 'scope', output: 'light', value: 'true' },
     { job: 'scope', output: 'reuse', value: 'true' },
   ],
-  // The areas `schema` puts together (D-340) are skipped for exactly the reasons the whole was.
+  // The areas `schema` puts together (D-341) are skipped for exactly the reasons the whole was.
   'schema-area': [
     { job: 'scope', output: 'light', value: 'true' },
     { job: 'scope', output: 'reuse', value: 'true' },

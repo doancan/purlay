@@ -18,7 +18,7 @@ const workflow = Bun.YAML.parse(readFileSync('.github/workflows/ci.yml', 'utf8')
 };
 
 describe('the complete CI coverage suite', () => {
-  // The suite runs as areas side by side, `schema-area`, and `schema` puts them together (D-340). What was true of the
+  // The suite runs as areas side by side, `schema-area`, and `schema` puts them together (D-341). What was true of the
   // one job is true of each area, and of the whole: the same two reasons to skip, and no other.
   const SKIPPED_FOR_TWO_REASONS =
     "needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'";

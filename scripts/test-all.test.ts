@@ -44,7 +44,7 @@ describe('test:all in CI', () => {
   });
 });
 
-describe('test:all as one area of the suite (D-340)', () => {
+describe('test:all as one area of the suite (D-341)', () => {
   test.each(['Web', 'packages', 'api ', 'all', '1/4'])(
     'refuses PURLAY_TEST_AREA=%s before starting a test',
     (area) => {

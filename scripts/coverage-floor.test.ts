@@ -235,6 +235,19 @@ describe('the command, which is what CI runs', () => {
     expect(run(checkout(whole()))).toBe(0);
   });
 
+  test.each(['failure', 'cancelled', 'skipped', ''])(
+    'CI refuses a matrix result of %j even with three complete reports',
+    (result) => {
+      const root = checkout(whole());
+      const command = Bun.spawnSync(
+        [process.execPath, 'run', join(import.meta.dir, 'coverage-floor.ts')],
+        { cwd: root, env: { CI: 'true', PURLAY_SCHEMA_AREA_RESULT: result } },
+      );
+      expect(command.exitCode).toBe(1);
+      expect(command.stderr.toString()).toContain('the suite is not whole');
+    },
+  );
+
   test('passes a file the web tests load and the api tests, which own it, cover', () => {
     const areas = whole();
     areas.web = good(

@@ -581,13 +581,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: every area of the suite passed
-        if: needs.schema-area.result != 'success'
-        env:
-          RESULT: ${{ needs.schema-area.result }}
-        run: |
-          echo "schema-area ended $RESULT: the suite is not whole" >&2
-          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -595,6 +588,7 @@ jobs:
         with:
           bun-version-file: package.json
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.schema-area.result == 'success'
         with:
           # One directory per artifact, named as it was uploaded: `coverage/area-<name>/`, where the check looks.
           pattern: area-*
@@ -602,6 +596,8 @@ jobs:
       # Nothing to install: the check imports nothing. It checks that the areas ran every test file, each its own, and
       # holds every file to the floor in bunfig.toml in the process of the area that owns it.
       - name: the areas ran every file, and every file is held to the floor
+        env:
+          PURLAY_SCHEMA_AREA_RESULT: ${{ needs.schema-area.result }}
         run: bun run coverage:floor
 
   # A light change — documents, or a version bump — has no code for a test to have a different answer about: every

@@ -10,7 +10,7 @@
  * shape — and a browser sends none — is no client at all, and is let through.
  */
 
-/** What `X-Purlay-Client` says: `macos/<semver> contract/<n>`. */
+/** What `X-Purlay-Client` says: `<platform>/<semver> contract/<n>`. */
 export interface ClientIdentity {
   readonly platform: string;
   readonly version: string;
@@ -29,6 +29,7 @@ interface PlatformPolicy {
 
 export interface ClientPolicy {
   readonly macos: PlatformPolicy;
+  readonly ios: PlatformPolicy;
 }
 
 /** What a refused client is told. */
@@ -106,8 +107,8 @@ export const clientRefusal = (
   policy: ClientPolicy,
 ): ClientRefusal | null => {
   const client = parseClientHeader(header);
-  if (client?.platform !== 'macos') return null;
-  const { contract, version, downloadUrl } = policy.macos;
+  if (client === null || (client.platform !== 'macos' && client.platform !== 'ios')) return null;
+  const { contract, version, downloadUrl } = policy[client.platform];
   const tooOldByContract = contract !== null && client.contract < contract;
   const tooOldByVersion = version !== null && compareVersions(client.version, version) < 0;
   if (!tooOldByContract && !tooOldByVersion) return null;

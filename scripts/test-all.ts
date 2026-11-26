@@ -13,7 +13,7 @@
  *
  * The coverage floor lives in `bunfig.toml`, where `bun test --coverage` reads it.
  *
- * **One area of it, when `PURLAY_TEST_AREA=web|scripts|api` is set** (D-340): CI runs the suite as three areas
+ * **One area of it, when `PURLAY_TEST_AREA=web|scripts|api` is set** (D-341): CI runs the suite as three areas
  * side by side, each on a runner of its own, and this runs the test files of one (`scripts/test-area.ts` says which
  * are whose) in one process. That process loads files of other areas too, which their own area's tests answer for,
  * so it runs under a copy of `bunfig.toml` with the floor at zero, writes its coverage as lcov to

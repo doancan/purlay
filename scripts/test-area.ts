@@ -1,5 +1,5 @@
 /**
- * What `scripts/test-all.ts` and `scripts/coverage-floor.ts` share about running the suite by area (D-340): which
+ * What `scripts/test-all.ts` and `scripts/coverage-floor.ts` share about running the suite by area (D-341): which
  * area a test file and a source file belong to, which area a run is, and the coverage floor `bunfig.toml` holds.
  *
  * CI runs the suite as three areas side by side, each in one `bun test` process: `web` (`apps/web`), `scripts`

@@ -292,7 +292,7 @@ export const REPO: readonly Mutation[] = [
   },
   {
     id: 'schema-job-skipped-when-an-area-fails',
-    why: 'without always() the job that puts the areas together is skipped when an area fails, and branch protection counts a skipped required check as passed (D-340)',
+    why: 'without always() the job that puts the areas together is skipped when an area fails, and branch protection counts a skipped required check as passed (D-341)',
     file: '.github/workflows/ci.yml',
     find: "    if: always() && needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'\n",
     replace: "    if: needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'\n",
@@ -300,10 +300,10 @@ export const REPO: readonly Mutation[] = [
   },
   {
     id: 'schema-job-stops-refusing-a-missing-area',
-    why: 'the job that puts the areas together stops saying that an area failed or never ran, and holds the floor on whatever coverage is left (D-340)',
+    why: 'the job that puts the areas together stops saying that an area failed or never ran, and holds the floor on whatever coverage is left (D-341)',
     file: '.github/workflows/ci.yml',
-    find: "        if: needs.schema-area.result != 'success'\n",
-    replace: '        if: false\n',
+    find: '          PURLAY_SCHEMA_AREA_RESULT: ${{ needs.schema-area.result }}\n',
+    replace: '          PURLAY_SCHEMA_AREA_RESULT: success\n',
     tests: ['scripts/ci-gate.test.ts'],
   },
   {
@@ -325,7 +325,7 @@ export const REPO: readonly Mutation[] = [
   },
   {
     id: 'verify-job-stops-needing-the-areas',
-    why: 'the required check stops waiting for the areas the suite runs in, so a pull request whose tests fail in one of them merges with its job red (D-340)',
+    why: 'the required check stops waiting for the areas the suite runs in, so a pull request whose tests fail in one of them merges with its job red (D-341)',
     file: '.github/workflows/ci.yml',
     find: '        schema-area,\n',
     replace: '',

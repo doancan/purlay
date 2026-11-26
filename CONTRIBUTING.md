@@ -125,8 +125,8 @@ affected. `bun run test:storage` needs the compose Garage and is not part of thi
 | Command | Needs | Runs |
 |---|---|---|
 | `bun run verify` | a database, to be complete | Typecheck (both compilers), lint, format, **every test** through `test:all`, the enforcement demonstration, the document consistency check, and that `.env.example` still matches the loader. Without a reachable database the integration tests are not run, and it says so in a banner: that is a unit-only result, not the gate CI runs |
-| `bun run test:all` | a database, to be complete | Unit and integration tests together, held to the coverage floor in `bunfig.toml`. In CI a missing database is a failure, never a skip (#202). With `PURLAY_TEST_AREA=web`, `scripts` or `api` it runs the tests of one area in one process (what each of CI's `schema-area` jobs does, D-340): `web` needs no database, the others refuse to run without one, and the floor is left to `coverage:floor` |
-| `bun run coverage:floor` | the areas' `coverage/area-*` | Holds every file to the floor in `bunfig.toml` in the process of the area that owns it, and checks that the areas ran every test file between them, each its own, and that no file was loaded only by another area's tests (D-340). What CI's `schema` job runs after downloading the areas |
+| `bun run test:all` | a database, to be complete | Unit and integration tests together, held to the coverage floor in `bunfig.toml`. In CI a missing database is a failure, never a skip (#202). With `PURLAY_TEST_AREA=web`, `scripts` or `api` it runs the tests of one area in one process (what each of CI's `schema-area` jobs does, D-341): `web` needs no database, the others refuse to run without one, and the floor is left to `coverage:floor` |
+| `bun run coverage:floor` | the areas' `coverage/area-*` | Holds every file to the floor in `bunfig.toml` in the process of the area that owns it, and checks that the areas ran every test file between them, each its own, and that no file was loaded only by another area's tests (D-341). What CI's `schema` job runs after downloading the areas |
 | `bun run test` | nothing | The unit tests alone — the fast loop |
 | `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
 | `bun run test:storage` | `bun run db:up` | The attachment store's S3 adapter against Garage, as the deployment runs it. Not in CI, which runs PostgreSQL alone; it refuses without `S3_ENDPOINT` (D-109) |
@@ -654,7 +654,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   protection, which a human changes.
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
   no service and `schema-area` runs every test once, as three areas side by side (`apps/web`; `scripts`;
-  `apps/api` with `packages`), each on a runner of its own (D-340); `schema` holds every file to the coverage
+  `apps/api` with `packages`), each on a runner of its own (D-341); `schema` holds every file to the coverage
   floor in the process of its own area. `verify` needs all of them and the browser jobs, runs whatever they did,
   and passes only when each succeeded — a failure, a cancellation, a skip or a
   missing result is a refusal (`bun run ci:gate`, D-203). The browser jobs may skip only where `changes`
