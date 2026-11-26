@@ -34,7 +34,7 @@
     "prosemirror-schema-list": "1.6.1",
     "prosemirror-state": "1.4.4",
     "prosemirror-tables": "1.8.5",
-    "prosemirror-view": "1.44.0",
+    "prosemirror-view": "1.43.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "shiki": "4.6.0",
