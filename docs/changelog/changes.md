@@ -34,5 +34,6 @@ have it.
 ### Fixed
 
 - **Sign-in** — native sign-in in the browser names Purlay for Mac or Purlay for iOS (D-191)
+- **Notifications** — the device switch becomes available again when you restore browser permission and return to Purlay (D-126)
 
 ---
