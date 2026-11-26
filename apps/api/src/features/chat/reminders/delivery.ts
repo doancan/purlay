@@ -113,7 +113,7 @@ export const deliverReminders = async ({
                 .returning(['id', 'suppressed_by_deep_work'])
                 .executeTakeFirstOrThrow();
               if (!notice.suppressed_by_deep_work)
-                await enqueuePush(tx, createdAt, [
+                await (push?.capture ?? enqueuePush)(tx, createdAt, [
                   {
                     source: 'message',
                     sourceId: notice.id,

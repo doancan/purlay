@@ -2,9 +2,10 @@
 import { sql, type Transaction } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { AppError } from '../../platform/errors';
+import { PUSH_PERSON_LOCK } from '../../platform/push-policy';
 import { requireLiveSession } from '../auth/sessions';
 import { normalizeApnsToken } from './apns';
-import type { Subscriber } from './subscriptions';
+import { PUSH_SUBSCRIPTIONS_MAX, type Subscriber } from './subscriptions';
 
 const tokenForSession = async (
   transaction: Transaction,
@@ -30,8 +31,13 @@ export const registerApnsDevice = async (
   clock: Clock,
   subscriber: Subscriber,
   deviceToken: string,
+  providerScope: string,
 ): Promise<void> => {
   const token = await tokenForSession(transaction, clock, subscriber, deviceToken);
+  // As with capture and provider settlement, serialize the recipient before touching device rows.
+  await sql`select pg_advisory_xact_lock(hashtextextended(${subscriber.userId}, ${PUSH_PERSON_LOCK}))`.execute(
+    transaction,
+  );
   const registeredAt = clock.now();
   try {
     await transaction
@@ -39,11 +45,13 @@ export const registerApnsDevice = async (
       .values({
         session_id: subscriber.sessionId,
         device_token: token,
+        provider_scope: providerScope,
         registered_at: registeredAt,
       })
       .onConflict((conflict) =>
         conflict.column('session_id').doUpdateSet({
           device_token: token,
+          provider_scope: providerScope,
           registered_at: registeredAt,
           generation: sql`gen_random_uuid()`,
         }),
@@ -66,6 +74,19 @@ export const registerApnsDevice = async (
     }
     throw error;
   }
+  const count = await transaction
+    .selectFrom('apns_subscriptions as s')
+    .innerJoin('sessions as live', 'live.id', 's.session_id')
+    .select((eb) => eb.fn.countAll<string>().as('n'))
+    .where('live.user_id', '=', subscriber.userId)
+    .where('live.expires_at', '>', registeredAt)
+    .executeTakeFirstOrThrow();
+  if (Number(count.n) > PUSH_SUBSCRIPTIONS_MAX)
+    throw new AppError({
+      code: 'VALIDATION_FAILED',
+      message: 'Remove an existing iOS device before registering another one.',
+      details: { fields: { deviceToken: 'device limit reached' } },
+    });
 };
 
 export const removeApnsDevice = async (

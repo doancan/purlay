@@ -55,7 +55,7 @@ describe('integration: APNs device routes', () => {
 
   test('validate, renew and remove only the current session’s device', async () => {
     const dependencies = testDependencies({ database: cloned.db, clock });
-    const app = createApp({ ...dependencies, apnsDeliveryConfigured: true });
+    const app = createApp({ ...dependencies, apnsScope: 'sandbox:TESTTEAM00:com.purlay.ios' });
     const off = createApp(dependencies);
     const owner = await aSignedInUser(cloned.db, clock, 'apns-http-owner');
     const other = await aSignedInUser(cloned.db, clock, 'apns-http-other');

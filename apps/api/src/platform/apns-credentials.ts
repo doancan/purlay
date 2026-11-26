@@ -11,6 +11,10 @@ export interface ApnsCredentials {
   readonly signingKey: string;
 }
 
+/** APNs tokens belong to one team, app and environment. A key rotation preserves that scope. */
+export const apnsScopeOf = ({ environment, teamId, topic }: ApnsCredentials): string =>
+  `${environment}:${teamId}:${topic}`;
+
 /** Check the unencrypted PKCS#8 P-256 key Apple supplies, accepting escaped line breaks. */
 export const apnsSigningKey = (value: string): string | undefined => {
   const pem = value.replaceAll('\\n', '\n').trim();

@@ -1,5 +1,5 @@
 /** Current authority, not the snapshot which originally admitted a durable notification (#1405, #1312). */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import type { Clock } from '../../platform/clock';
 import { readGrants } from '../../platform/grants';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
@@ -28,24 +28,34 @@ export const currentPushDevice = async (
   }: Pick<PushAuthority, 'database' | 'clock' | 'sessionLifetime'>,
   claim: PushClaim,
 ): Promise<{ sound: boolean } | undefined> => {
-  const device = await database
-    .selectFrom('push_subscriptions as s')
-    .innerJoin('sessions as live', 'live.id', 's.session_id')
-    .innerJoin('users as person', 'person.id', 's.user_id')
+  const liveSession = database
+    .selectFrom('sessions as live')
+    .innerJoin('users as person', 'person.id', 'live.user_id')
     .innerJoin('workspaces as workspace', (join) => join.on('workspace.id', '=', claim.workspaceId))
-    .select(['s.sound', 'workspace.access_policy_epoch'])
-    .where('s.id', '=', claim.subscriptionId)
-    .where('workspace.id', '=', claim.workspaceId)
-    .where('s.user_id', '=', claim.userId)
-    .where('s.session_id', '=', claim.sessionId)
-    .where('s.generation', '=', claim.generation)
-    .whereRef('live.user_id', '=', 's.user_id')
+    .select('workspace.access_policy_epoch')
+    .where('live.id', '=', claim.sessionId)
+    .where('live.user_id', '=', claim.userId)
     .where('live.expires_at', '>', clock.now())
     .where(companySessionAllowsWorkspace('live', claim.workspaceId))
     .where('person.deleted_at', 'is', null)
     .where('person.suspended_at', 'is', null)
-    .where('workspace.deleted_at', 'is', null)
-    .executeTakeFirst();
+    .where('workspace.deleted_at', 'is', null);
+  const device =
+    claim.apnsScope === undefined
+      ? await liveSession
+          .innerJoin('push_subscriptions as s', 's.session_id', 'live.id')
+          .select('s.sound')
+          .whereRef('s.user_id', '=', 'live.user_id')
+          .where('s.id', '=', claim.subscriptionId)
+          .where('s.generation', '=', claim.generation)
+          .executeTakeFirst()
+      : await liveSession
+          .innerJoin('apns_subscriptions as s', 's.session_id', 'live.id')
+          .select(sql<boolean>`true`.as('sound'))
+          .where('s.session_id', '=', claim.subscriptionId)
+          .where('s.generation', '=', claim.generation)
+          .where('s.provider_scope', '=', claim.apnsScope)
+          .executeTakeFirst();
   if (device === undefined) return undefined;
   if (device.access_policy_epoch !== '0') {
     if (sessionLifetime === undefined) return undefined;

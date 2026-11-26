@@ -352,8 +352,11 @@ with the recipient's chosen channel level and Deep Work taken into account; insp
 | `APNS_PRIVATE_KEY` | with APNs | — | **Secret.** The unencrypted P-256 PKCS#8 PEM from Apple's `.p8` file. In an environment file, write each line break as `\n` |
 
 Leave all five unset to keep APNs off. A complete set identifies one app in one Apple environment
-per deployment. Use separate sandbox and production settings that match their devices. The server
-checks the set locally at startup. Apple checks the app, team and key association on delivery.
+per deployment. Use separate sandbox and production settings that match their devices. Update all
+API and scheduler processes to a version that supports APNs before supplying the credentials, and
+set the same APNs environment, team and topic on each. Changing one of those three requires devices
+to register in the new scope. Rotating the signing key preserves registrations in the same scope.
+The server checks the set locally at startup. Apple checks the app, team and key association on delivery.
 Keep the key in the deployment's secrets. [Apple's APNs token authentication documentation](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns).
 
 ## Interface

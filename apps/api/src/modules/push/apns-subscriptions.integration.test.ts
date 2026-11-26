@@ -9,10 +9,10 @@ import {
 } from '@purlay/db';
 import { fixedClock } from '../../platform/clock';
 import { NOW } from '../../testing/doubles';
-import { aSignedInUser } from '../../testing/signed-in';
+import { aSession, aSignedInUser } from '../../testing/signed-in';
 import { revokeSession } from '../auth/sessions';
 import { registerApnsDevice, removeApnsDevice } from './apns-subscriptions';
-import type { Subscriber } from './subscriptions';
+import { PUSH_SUBSCRIPTIONS_MAX, type Subscriber } from './subscriptions';
 
 const clock = fixedClock(NOW);
 let cloned: ClonedDatabase;
@@ -28,7 +28,15 @@ afterAll(async () => {
 const register = (subscriber: Subscriber, token: string): Promise<void> =>
   cloned.db
     .transaction()
-    .execute((transaction) => registerApnsDevice(transaction, clock, subscriber, token));
+    .execute((transaction) =>
+      registerApnsDevice(
+        transaction,
+        clock,
+        subscriber,
+        token,
+        'sandbox:TESTTEAM00:com.purlay.ios',
+      ),
+    );
 
 const remove = (subscriber: Subscriber, token: string): Promise<void> =>
   cloned.db
@@ -107,5 +115,28 @@ describe('integration: APNs registration storage', () => {
       body: { code: 'VALIDATION_FAILED' },
     });
     expect((await registration(owner.sessionId))?.device_token).toBe(longestToken);
+  });
+
+  test('bounds live devices per person without evicting an existing registration', async () => {
+    const owner = await aSignedInUser(cloned.db, clock, 'apns-device-cap');
+    await register(owner, 'ab0000');
+    for (let i = 1; i < PUSH_SUBSCRIPTIONS_MAX; i++) {
+      const { sessionId } = await aSession(cloned.db, clock, owner.userId);
+      await register({ userId: owner.userId, sessionId }, `ab00${i.toString(16).padStart(2, '0')}`);
+    }
+    await register(owner, 'ac0000');
+    const { sessionId } = await aSession(cloned.db, clock, owner.userId);
+    const next = { userId: owner.userId, sessionId };
+    expect(await register(next, 'ad0000').catch((error: unknown) => error)).toMatchObject({
+      body: {
+        code: 'VALIDATION_FAILED',
+        details: { fields: { deviceToken: 'device limit reached' } },
+      },
+    });
+    expect(await registration(sessionId)).toBeUndefined();
+    expect((await registration(owner.sessionId))?.device_token).toBe('ac0000');
+    await revokeSession(cloned.db, owner.sessionId);
+    await register(next, 'ad0000');
+    expect((await registration(sessionId))?.device_token).toBe('ad0000');
   });
 });

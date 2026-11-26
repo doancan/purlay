@@ -16733,5 +16733,14 @@ or rotation records a new timestamp and generation. This gives the provider's de
 specific registration to act on. Removal matches both the owning session and the token, so a request
 for an old token leaves its replacement alone.
 
+Registrations are scoped to the Apple team, topic and environment. Rotating the signing key keeps
+registrations in that scope. Each person can register up to 20 live APNs devices. At the limit,
+an existing device can renew and adding a device requires freeing a slot. The same occurrence
+and per-person budgets cover both providers.
+The worker checks the currently configured scope and registration generation before offering an
+APNs delivery. An invalidation applies only to the leased generation and only when Apple's
+invalidation timestamp is at or after registration. Web Push can be disabled while the APNs
+deliveries of the same occurrence continue.
+
 **Cost of reversing.** Dropping these registrations asks iOS devices to register again. Each device's
 Web Push subscription has its own store and keys.

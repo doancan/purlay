@@ -27,7 +27,7 @@ export const meRoutes = (
   context: RouteContext,
   own: {
     readonly browserPush: ReturnType<typeof pushConfiguration>;
-    readonly apnsDeliveryConfigured: boolean;
+    readonly apnsScope: string | undefined;
     readonly releases: Parameters<typeof readLatestRelease>[0]['releases'];
     readonly erasureServices: EraseDependencies['erasureServices'];
   },
@@ -37,7 +37,7 @@ export const meRoutes = (
   const creating = creatingOf(context);
   const sending = sendingOf(context);
   const pushDependencies = { ...dependencies, pushConfiguration: own.browserPush };
-  const apnsDependencies = { ...dependencies, apnsDeliveryConfigured: own.apnsDeliveryConfigured };
+  const apnsDependencies = { ...dependencies, apnsScope: own.apnsScope };
 
   return (
     new Elysia()

@@ -37,6 +37,7 @@ import { sharedLinksOf } from '@purlay/markdown';
 import { replaceSharedLinks } from '../shared/projection';
 import { readBuilt } from './reader';
 import type { PushSender } from '../../../modules/push/sender';
+import type { PushCapture } from '../../../modules/push/notices';
 import { keepVersion } from './versions';
 
 export interface Revised {
@@ -76,6 +77,7 @@ export const reviseMessage = async (
   messageId: string,
   content: string,
   engine?: Engine,
+  capture?: PushCapture,
 ): Promise<Revised> => {
   const { context, parentId } = await requireMessageById(executor, userId, messageId);
   // A reply's notification is read in its thread, not by the feed (D-147).
@@ -198,6 +200,7 @@ export const reviseMessage = async (
     ),
     clock.now(),
     new Date(row.created_at),
+    capture,
   );
   const recipients =
     told.length === 0
@@ -327,7 +330,15 @@ export const edit = async (
   const revised = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     await requireLiveSession(transaction, clock, caller.sessionId);
-    return await reviseMessage(transaction, clock, caller.userId, messageId, content, engine);
+    return await reviseMessage(
+      transaction,
+      clock,
+      caller.userId,
+      messageId,
+      content,
+      engine,
+      push?.capture,
+    );
   });
   if (revised.unformatted === 'engine') {
     log.error('markdown engine failed inside its bounds', {

@@ -26,11 +26,17 @@ interface ApnsPush {
   readonly expiresAt: Date;
   /** A durable delivery identifier shared by its retries, at most 64 ASCII bytes. */
   readonly collapseId: string;
+  /** The worker rechecks delivery authority after preparing the signed request. */
+  readonly beforePost?: () => Promise<
+    { readonly kind: 'canceled' } | { readonly kind: 'held' } | undefined
+  >;
 }
 
 type ApnsOutcome =
-  | Exclude<PushOutcome, { readonly kind: 'held' }>
+  | PushOutcome
   | { readonly kind: 'unregistered'; readonly status: 410; readonly invalidatedAt?: number };
+
+export type ApnsProvider = (push: ApnsPush) => Promise<ApnsOutcome>;
 
 type ApnsFetch = (url: URL, options: BunFetchRequestInit) => Promise<Response>;
 
@@ -68,7 +74,7 @@ export const createApnsProvider = async (
   credentials: ApnsCredentials,
   clock: Clock,
   post: ApnsFetch = fetch,
-): Promise<(push: ApnsPush) => Promise<ApnsOutcome>> => {
+): Promise<ApnsProvider> => {
   const { environment, topic, teamId, keyId } = credentials;
   if (!APNS_IDENTIFIER.test(teamId) || !APNS_IDENTIFIER.test(keyId))
     throw new Error('APNs requires a ten-character team ID and key ID');
@@ -99,7 +105,7 @@ export const createApnsProvider = async (
     }
   };
 
-  return async ({ deviceToken, payload, expiresAt, collapseId }) => {
+  return async ({ deviceToken, payload, expiresAt, collapseId, beforePost }) => {
     const now = Math.floor(clock.now().getTime() / 1_000);
     const expires = Math.floor(expiresAt.getTime() / 1_000);
     if (!Number.isFinite(expires) || expires <= now) return { kind: 'canceled' };
@@ -116,6 +122,8 @@ export const createApnsProvider = async (
     if (Buffer.byteLength(body) > PAYLOAD_MAX_BYTES) return { kind: 'refused' };
 
     const authorization = await bearerAt(now);
+    const blocked = await beforePost?.();
+    if (blocked !== undefined) return blocked;
     try {
       const response = await post(new URL(`/3/device/${token}`, origin), {
         method: 'POST',

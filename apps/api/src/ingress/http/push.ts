@@ -34,20 +34,20 @@ export interface PushDependencies {
 }
 
 type ApnsDependencies = Pick<PushDependencies, 'auth' | 'database' | 'clock'> & {
-  readonly apnsDeliveryConfigured: boolean;
+  readonly apnsScope: string | undefined;
 };
 
 /** `POST /api/push/apns/subscriptions` — register a token in the caller's live session. */
 export const subscribeApnsDevice = async (
-  { auth, database, clock, apnsDeliveryConfigured }: ApnsDependencies,
+  { auth, database, clock, apnsScope }: ApnsDependencies,
   request: Request,
   body: unknown,
 ): Promise<void> => {
   const subscriber = await requireSession(auth, request);
-  if (!apnsDeliveryConfigured) throw pushUnavailable();
+  if (apnsScope === undefined) throw pushUnavailable();
   const { deviceToken } = validated(ApnsDeviceRequest, body);
   await atomicallyOn(database)((transaction) =>
-    registerApnsDevice(transaction, clock, subscriber, deviceToken),
+    registerApnsDevice(transaction, clock, subscriber, deviceToken, apnsScope),
   );
 };
 
