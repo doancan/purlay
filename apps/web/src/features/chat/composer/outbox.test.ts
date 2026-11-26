@@ -16,16 +16,18 @@ test('a refused offscreen enqueue preserves ready files and the draft and requir
     height: null,
   };
   let allowed = false;
+  let urgent = true;
   let attempts = 0;
   const refusals: string[] = [];
-  const accepted: string[] = [];
+  const accepted: { content: string; priority: string | undefined }[] = [];
   const outbox = createOutbox({
     upload: () => Promise.resolve(attachment),
     refusal: () => ({ reason: 'NETWORK', remainingBytes: null }),
+    allowUrgent: (workspaceId) => workspaceId !== 'workspace' || urgent,
     send: (message) => {
       attempts += 1;
       if (!allowed) throw accountChanged();
-      accepted.push(message.content);
+      accepted.push({ content: message.content, priority: message.priority });
     },
     refused: (_channel, reason) => {
       refusals.push(reason);
@@ -42,6 +44,8 @@ test('a refused offscreen enqueue preserves ready files and the draft and requir
     },
   ]);
   const waiting = {
+    workspaceId: 'workspace',
+    priority: 'urgent' as const,
     channelId: 'channel',
     parentId: undefined,
     channelName: 'Private place',
@@ -62,10 +66,19 @@ test('a refused offscreen enqueue preserves ready files and the draft and requir
   release('Unrequested retry');
   expect(attempts).toBe(1);
   allowed = true;
+  urgent = false;
   const leaveAgain = outbox.hold('draft');
   outbox.wait('draft', waiting);
   leaveAgain(waiting.content);
-  expect(accepted).toEqual(['Keep these words']);
+  expect(refusals).toEqual(['account', 'urgent']);
+  expect(attempts).toBe(1);
+  expect(outbox.read('draft').items).toHaveLength(1);
+  expect(storage.getItem('draft')).toBe('Keep these words');
+  urgent = true;
+  const leaveWithUrgent = outbox.hold('draft');
+  outbox.wait('draft', waiting);
+  leaveWithUrgent(waiting.content);
+  expect(accepted).toEqual([{ content: 'Keep these words', priority: 'urgent' }]);
   expect(attempts).toBe(2);
   expect(storage.getItem('draft') === null).toBe(true);
   expect(outbox.read('draft').items).toHaveLength(0);

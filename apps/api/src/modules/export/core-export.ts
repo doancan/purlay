@@ -26,6 +26,8 @@ const head = [
       retention_days: 'export',
       storage_quota_bytes: 'export',
       storage_used_bytes: 'export',
+      // Workspace policy for future delivery, managed in settings.
+      urgent_messages_enabled: 'omit',
       // The deletion's job (D-242): null in every workspace that can still be exported.
       access_policy_epoch: 'omit',
       purge_started_at: 'omit',

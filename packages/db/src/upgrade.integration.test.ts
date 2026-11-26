@@ -354,6 +354,7 @@ describe('integration: upgrading from the previous release', () => {
         '0126_outbox_ledger',
         '0127_outbox_trace',
         '0128_message_priority',
+        '0133_workspace_urgent_messages',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -378,6 +379,9 @@ describe('integration: upgrading from the previous release', () => {
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
+      const urgent = await sql<{ urgent_messages_enabled: boolean }>`
+        select urgent_messages_enabled from workspaces where id = ${workspace}`.execute(db);
+      expect(urgent.rows).toEqual([{ urgent_messages_enabled: true }]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
       expect(await columnsOfAttachments(db)).not.toContain('channel_id');
       expect(await namesOfAttachmentsKeys(db)).toEqual([]);

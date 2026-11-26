@@ -63,6 +63,7 @@ const head = [
       retention_days: 'omit',
       storage_quota_bytes: 'omit',
       storage_used_bytes: 'omit',
+      urgent_messages_enabled: 'omit',
       access_policy_epoch: 'omit',
       purge_started_at: 'omit',
       purged_at: 'omit',
