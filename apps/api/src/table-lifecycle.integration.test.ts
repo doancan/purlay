@@ -900,6 +900,21 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  apns_subscriptions: by(
+    'apns_subscriptions',
+    'session_id',
+    (world) => world.sessionId,
+    async (db, world) => {
+      await db
+        .insertInto('apns_subscriptions')
+        .values({
+          session_id: world.sessionId,
+          device_token: world.sessionId.replaceAll('-', ''),
+          registered_at: NOW,
+        })
+        .execute();
+    },
+  ),
   invitation_passports: {
     seed: async (db, world) => {
       const owner = await db

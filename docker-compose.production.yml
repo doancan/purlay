@@ -128,6 +128,12 @@ x-environment: &environment
   VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
   VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
   VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+  # APNs for native iOS (#1559). Set all five together.
+  APNS_ENVIRONMENT: ${APNS_ENVIRONMENT:-}
+  APNS_TOPIC: ${APNS_TOPIC:-}
+  APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+  APNS_KEY_ID: ${APNS_KEY_ID:-}
+  APNS_PRIVATE_KEY: ${APNS_PRIVATE_KEY:-}
   # Email sign-in (D-138): both or neither, and empty is neither — GitHub sign-in only.
   SMTP_URL: ${SMTP_URL:-}
   MAIL_FROM: ${MAIL_FROM:-}

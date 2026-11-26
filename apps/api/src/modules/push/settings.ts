@@ -1,5 +1,5 @@
 /** Server-owned Web Push (#1325): one-time env seed, immutable sealed pair, audited live enable/disable. */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import type { ServerPushSettings } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import type { Config } from '../../platform/config';
@@ -131,12 +131,18 @@ export const pushConfiguration = (
             })
             .where('id', '=', true)
             .execute();
-          // Retire authority without cascading into subscription-owned rows. A 410/logout may
-          // already own another delivery of that device; expiry reclaims these receipts safely.
+          // Retire Web authority on the parent without locking device-owned children. APNs keeps
+          // the same intent and admission if it still has a pending delivery.
           if (!enabled)
             await tx
-              .updateTable('push_intents')
-              .set({ state: 'canceled' })
+              .updateTable('push_intents as p')
+              .set({
+                web_canceled: true,
+                state: sql<string>`case when exists (
+                  select 1 from push_deliveries d where d.intent_id = p.id
+                    and d.apns_session_id is not null and d.state = 'pending'
+                ) then p.state else 'canceled' end`,
+              })
               .where('state', 'in', ['pending', 'admitted'])
               .execute();
           await recordServerAudit(tx, clock, {

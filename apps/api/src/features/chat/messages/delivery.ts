@@ -24,7 +24,7 @@ import { memberReadScope } from '../channels/read-scope';
 import { sql } from '@purlay/db';
 import type { ChatDb } from '../schema';
 import { NEEDS_YOU, type ChannelState } from '@purlay/types';
-import { enqueuePush } from '../../../modules/push/notices';
+import { enqueuePush, type PushCapture } from '../../../modules/push/notices';
 import { channelAudienceQuery, type ChannelContext } from '../channels/guard';
 import { inDeepWork } from '../../../modules/workspaces/deep-work';
 import { threadChoices, type ThreadChoices } from './follow';
@@ -134,6 +134,7 @@ export const notify = async (
   reasons: Reasons,
   now: Date,
   writtenAt?: Date,
+  capture: PushCapture = enqueuePush,
 ): Promise<readonly string[]> => {
   const messageId = message.id;
   const proposed = [...reasons.keys()].filter((userId) => userId !== context.userId);
@@ -220,7 +221,7 @@ export const notify = async (
     .onConflict((conflict) => conflict.columns(['user_id', 'message_id', 'type']).doNothing())
     .returning(['id', 'user_id', 'type', 'read_at', 'suppressed_by_deep_work'])
     .execute();
-  await enqueuePush(
+  await capture(
     executor,
     now,
     inserted
@@ -254,7 +255,11 @@ export interface Recorded {
 /**
  * Writes the mentions and notifications for a new message and moves the counters.
  */
-export const recordDelivery = async (executor: ChatDb, delivery: Delivery): Promise<Recorded> => {
+export const recordDelivery = async (
+  executor: ChatDb,
+  delivery: Delivery,
+  capture?: PushCapture,
+): Promise<Recorded> => {
   const { context, messageId, mentioned, thread, now } = delivery;
   const sender = context.userId;
 
@@ -344,7 +349,15 @@ export const recordDelivery = async (executor: ChatDb, delivery: Delivery): Prom
   }
 
   const reply = thread !== null;
-  const notified = await notify(executor, context, { id: messageId, reply }, reasons, now);
+  const notified = await notify(
+    executor,
+    context,
+    { id: messageId, reply },
+    reasons,
+    now,
+    undefined,
+    capture,
+  );
 
   return {
     recipients: await countArrival(
