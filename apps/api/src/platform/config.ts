@@ -279,6 +279,15 @@ export const Environment = Type.Object({
   ),
   /** Where a person is sent for a newer macOS client: shown by the app, so `https://` and nothing else. */
   MACOS_DOWNLOAD_URL: Type.Optional(Type.String({ format: 'uri' })),
+  /** The independent iOS limits and update address (D-339). */
+  MIN_CLIENT_IOS_CONTRACT: Type.Optional(Type.Integer({ minimum: 1 })),
+  MIN_CLIENT_IOS_VERSION: Type.Optional(
+    Type.String({
+      pattern:
+        '^\\d{1,6}\\.\\d{1,6}\\.\\d{1,6}(?:-(?=[0-9A-Za-z.-]{1,32}$)[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$',
+    }),
+  ),
+  IOS_DOWNLOAD_URL: Type.Optional(Type.String({ format: 'uri' })),
 });
 
 /**
@@ -524,29 +533,31 @@ const redisProblems = (config: Config): string[] => {
 };
 
 /**
- * The macOS minimum (D-186). A contract above the one this server speaks refuses every client there
- * is, and is found by the first person who tries to sign in; a download address that is not `https://`
- * sends a person somewhere a network can rewrite. Both are refused at boot, never quoting the value.
+ * Validate each native client's contract floor and update address at boot (D-186, D-339).
+ * The floor must leave clients supported by this server, and the address must use HTTPS.
  */
 const nativeClientProblems = (config: Config): string[] => {
   const problems: string[] = [];
-  if (
-    config.MIN_CLIENT_MACOS_CONTRACT !== undefined &&
-    config.MIN_CLIENT_MACOS_CONTRACT > CONTRACT_VERSION
-  ) {
-    problems.push(
-      `MIN_CLIENT_MACOS_CONTRACT: this server speaks contract ${String(CONTRACT_VERSION)}; a higher minimum would refuse every client`,
-    );
-  }
-  if (config.MACOS_DOWNLOAD_URL !== undefined) {
+  for (const [contractKey, downloadKey] of [
+    ['MIN_CLIENT_MACOS_CONTRACT', 'MACOS_DOWNLOAD_URL'],
+    ['MIN_CLIENT_IOS_CONTRACT', 'IOS_DOWNLOAD_URL'],
+  ] as const) {
+    const contract = config[contractKey];
+    if (contract !== undefined && contract > CONTRACT_VERSION) {
+      problems.push(
+        `${contractKey}: this server speaks contract ${String(CONTRACT_VERSION)}; a higher minimum would refuse every client`,
+      );
+    }
+    const download = config[downloadKey];
+    if (download === undefined) continue;
     let url: URL | undefined;
     try {
-      url = new URL(config.MACOS_DOWNLOAD_URL);
+      url = new URL(download);
     } catch {
       url = undefined;
     }
     if (url?.protocol !== 'https:') {
-      problems.push('MACOS_DOWNLOAD_URL: must be an https:// address');
+      problems.push(`${downloadKey}: must be an https:// address`);
     }
   }
   return problems;

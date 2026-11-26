@@ -16472,9 +16472,9 @@ AppKit in them, and a second Apple client would otherwise copy them. An Android 
 **Not decided here.** *How the iOS application is distributed:* D-186 left the App Store because its terms and the
 AGPL do not sit together, and iOS has no other channel for an ordinary person. The owner has to settle the licensing
 basis before a build is released; until then the application is built and tested, not published. *Push to the
-device* (APNs; the server speaks Web Push only, D-126), *a minimum-client gate for `ios`* (`minClient` names `macos`
-only), and *the sign-in page's wording*, which says "Purlay for Mac" whatever application asked, each need their own
-decision before the iOS application is released.
+device* (APNs; the server speaks Web Push only, D-126) and *the sign-in page's wording*, which says "Purlay for Mac"
+for every application, each need a decision before the iOS application is released. D-339 decides the iOS
+minimum-client gate.
 
 **Rejected.** *The installable web application alone (D-51):* the owner chose native for the platform's own feel and
 performance, as for macOS. *Copying the macOS packages:* sign-in and realtime would drift. *A separate contract
@@ -16484,3 +16484,16 @@ trades native feel for a shared runtime, and the Swift already exists.
 **Cost of reversing.** Low: a repository and a pinned package. Withdrawing the client takes the `ios` platform name with
 it and nothing else.
 
+
+
+### D-339. The iOS client has an independent minimum version and contract (#1560)
+
+**Decided.** Apply D-186's existing admission check to `ios` with independent settings for its application
+version, wire contract and HTTPS update address. An unset limit admits the platform as before. The public
+handshake advertises `minClient.ios`, and its schema leaves that property optional so an older server's
+handshake remains valid. The contract version stays the same under D-58.
+
+**Rejected.** A shared version floor for macOS and iOS would tie together releases with separate version
+numbers and could refuse a current release on one platform when the other raises its minimum.
+
+**Cost of reversing.** Clear the iOS settings to admit clients of any version.
