@@ -17,7 +17,7 @@
  * overlay is one layer too many: there the rail's Inbox is the link to the page it always was.
  */
 import * as Popover from '@radix-ui/react-popover';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { PANEL_LIMIT, useChannels, useNotificationsPanel } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Link, useRoute } from '../../../router/router-provider';
@@ -39,7 +39,6 @@ import {
 import { LazyUpdates, LazyUpdatesReadAll } from './updates-lazy';
 import { noticesOf } from '../../../modules/registry';
 import { groupInbox, type InboxRow } from './group';
-import { InboxRowItem } from './inbox-row';
 import { useInboxReads } from './read';
 import { targetOf } from '../../../lib/notification-why';
 
@@ -49,6 +48,23 @@ interface InboxPanelProps {
   /** The trigger's name, for its tip. */
   readonly label: string;
 }
+
+/** Opening the panel shows its controls while the first rows load. */
+const InboxRowItem = lazy(async () => ({ default: (await import('./inbox-row')).InboxRowItem }));
+
+const LoadingRows = (): React.JSX.Element => {
+  const { t } = useI18n();
+  return (
+    <LoadingStatus label={t('state.inbox.loading')} className="flex flex-col gap-3 px-4 py-3">
+      {[0, 1, 2].map((row) => (
+        <div key={row} className="flex flex-col gap-2">
+          <Skeleton className="w-members" />
+          <Skeleton />
+        </div>
+      ))}
+    </LoadingStatus>
+  );
+};
 
 const Body = ({
   category,
@@ -85,18 +101,7 @@ const Body = ({
     navigate(targetOf(workspace.slug, row.newest));
   };
 
-  if (query.isPending) {
-    return (
-      <LoadingStatus label={t('state.inbox.loading')} className="flex flex-col gap-3 px-4 py-3">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton />
-          </div>
-        ))}
-      </LoadingStatus>
-    );
-  }
+  if (query.isPending) return <LoadingRows />;
   if (query.isError && query.data === undefined) {
     return (
       <div className="px-4 py-3">
@@ -126,23 +131,25 @@ const Body = ({
     );
   }
   return (
-    <ul
-      aria-label={t(`inbox.category.${category}`)}
-      className="max-h-inbox-panel-list overflow-y-auto"
-    >
-      {rows.map((row) => (
-        <InboxRowItem
-          key={row.key}
-          density="panel"
-          row={row}
-          channel={byId.get(row.newest.channelId)}
-          me={me.id}
-          now={now}
-          onOpen={open}
-          onRead={readRow}
-        />
-      ))}
-    </ul>
+    <Suspense fallback={<LoadingRows />}>
+      <ul
+        aria-label={t(`inbox.category.${category}`)}
+        className="max-h-inbox-panel-list overflow-y-auto"
+      >
+        {rows.map((row) => (
+          <InboxRowItem
+            key={row.key}
+            density="panel"
+            row={row}
+            channel={byId.get(row.newest.channelId)}
+            me={me.id}
+            now={now}
+            onOpen={open}
+            onRead={readRow}
+          />
+        ))}
+      </ul>
+    </Suspense>
   );
 };
 
