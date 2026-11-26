@@ -1320,6 +1320,10 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'subscribes the caller’s own device and names no workspace (D-126)',
   'POST /api/push/subscriptions/remove':
     'removes only the caller’s own device; another person’s endpoint is the same 204 and stays (D-126)',
+  'POST /api/push/apns/subscriptions':
+    'registers a token in the caller’s live session and refuses a token held by another session (D-342)',
+  'POST /api/push/apns/subscriptions/remove':
+    'removes a matching token from the caller’s live session, answering the same 204 when absent (D-342)',
   'GET /api/workspaces': 'lists the caller’s own memberships and names no workspace',
   'POST /api/workspaces': 'creates a workspace; there is nothing yet to be outside of',
   'GET /api/images':

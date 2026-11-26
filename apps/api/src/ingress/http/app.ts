@@ -67,6 +67,8 @@ import { errorHook } from './error-hook';
 export interface Dependencies extends HandlerDependencies {
   /** GitHub's API for unfurling (#66); absent, the real one. A test stands its own server in. */
   readonly githubApi?: GitHubApi;
+  /** Open APNs registration when this deployment has an APNs delivery worker. */
+  readonly apnsDeliveryConfigured?: boolean;
 }
 
 /**
@@ -312,6 +314,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     serverRoutes(context, setup, administration),
     meRoutes(context, {
       browserPush,
+      apnsDeliveryConfigured: given.apnsDeliveryConfigured ?? false,
       releases,
       // What an account's erasure also takes with it: the GitHub App's installation and the credentials sealed for it.
       erasureServices: () => ({

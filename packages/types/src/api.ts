@@ -1416,6 +1416,11 @@ export const PushUnsubscribeRequest = /* @__PURE__ */ FromClient({
 });
 export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
 
+/** APNs registration and removal take the device's token as hexadecimal bytes (D-342). */
+export const ApnsDeviceRequest = /* @__PURE__ */ FromClient({
+  deviceToken: /* @__PURE__ */ Type.String({ minLength: 2, maxLength: 512 }),
+});
+
 /**
  * A path of this site. `//host`, `/\\host` and a slash after a tab or a newline are other sites'
  * addresses spelled like one, so a second slash or a backslash after the first, any backslash, and
