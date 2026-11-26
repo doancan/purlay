@@ -43,12 +43,12 @@ const directories: string[] = [];
 const databases: string[] = [];
 
 /** A connection to the server's database of this name. */
-const open = (name: string): Kysely<unknown> => {
+const open = (name: string, options?: string): Kysely<unknown> => {
   const url = new URL(process.env['DATABASE_URL'] ?? '');
   url.pathname = `/${name}`;
   return new Kysely<unknown>({
     dialect: new PostgresDialect({
-      pool: new pg.Pool({ connectionString: url.toString(), max: 1 }),
+      pool: new pg.Pool({ connectionString: url.toString(), max: 1, options }),
     }),
   });
 };
@@ -736,7 +736,9 @@ describe('integration: the matrix of sets around the contract', () => {
   });
 
   test('a fresh database with every set has no key from the core to chat', async () => {
-    const db = open(await emptyDatabase());
+    // The constraint checks need committed migrations. Their scratch database need not
+    // wait for a WAL flush per migration.
+    const db = open(await emptyDatabase(), '-c synchronous_commit=off');
     try {
       const fresh = await migrateToLatest(db, undefined, { modules: PRODUCT_MIGRATION_SETS });
       expect(fresh.error).toBeUndefined();
