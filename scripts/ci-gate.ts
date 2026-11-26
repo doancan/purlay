@@ -1,8 +1,9 @@
 /**
  * The required `verify` check, as one verdict over the jobs it stands for (#791).
  *
- * The static checks and the whole test suite are separate jobs, so the unit tests run once — in
- * `schema`, with the integration tests and coverage — instead of once there and once more alone.
+ * The static checks and the whole test suite are separate jobs, so the unit tests run once — in the areas of
+ * `schema-area`, with the integration tests and coverage, which `schema` puts together and holds to the floor
+ * (D-340) — instead of once there and once more alone.
  * Branch protection still requires `verify`, and `verify` means all of them: this passes only when every
  * job it judges *succeeded*. A failure, a cancellation, a skip, a missing result or a missing job is a
  * refusal, because a skipped required check counts as passed and a gate that reads "nothing failed"
@@ -25,6 +26,7 @@ export const GATED = [
   'scope',
   'static',
   'schema',
+  'schema-area',
   'light-suite',
   'api-measurements',
   'changes',
@@ -45,7 +47,7 @@ interface Skip {
 /**
  * The jobs that can rightly be skipped, each with every output that says so: the browser jobs by `browser`, the two
  * that start the API (the matrix on a started process, and the suites per cell) by `modules`, the mutations a pull
- * request adds or changes by `mutations`; `schema` by a *light* change, or by content already verified, and `static`
+ * request adds or changes by `mutations`; `schema` and its areas `schema-area` by a *light* change, or by content already verified, and `static`
  * and `module-suites` by the latter; `light-suite` by a change that was not light.
  */
 const SKIPPABLE: Readonly<Record<string, readonly Skip[]>> = {
@@ -59,6 +61,11 @@ const SKIPPABLE: Readonly<Record<string, readonly Skip[]>> = {
   'mutations-changed': [{ job: 'changes', output: 'mutations', value: 'false' }],
   static: [{ job: 'scope', output: 'reuse', value: 'true' }],
   schema: [
+    { job: 'scope', output: 'light', value: 'true' },
+    { job: 'scope', output: 'reuse', value: 'true' },
+  ],
+  // The areas `schema` puts together (D-340) are skipped for exactly the reasons the whole was.
+  'schema-area': [
     { job: 'scope', output: 'light', value: 'true' },
     { job: 'scope', output: 'reuse', value: 'true' },
   ],

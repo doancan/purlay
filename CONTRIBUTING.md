@@ -125,7 +125,8 @@ affected. `bun run test:storage` needs the compose Garage and is not part of thi
 | Command | Needs | Runs |
 |---|---|---|
 | `bun run verify` | a database, to be complete | Typecheck (both compilers), lint, format, **every test** through `test:all`, the enforcement demonstration, the document consistency check, and that `.env.example` still matches the loader. Without a reachable database the integration tests are not run, and it says so in a banner: that is a unit-only result, not the gate CI runs |
-| `bun run test:all` | a database, to be complete | Unit and integration tests together, held to the coverage floor in `bunfig.toml`. In CI a missing database is a failure, never a skip (#202) |
+| `bun run test:all` | a database, to be complete | Unit and integration tests together, held to the coverage floor in `bunfig.toml`. In CI a missing database is a failure, never a skip (#202). With `PURLAY_TEST_AREA=web`, `scripts` or `api` it runs the tests of one area in one process (what each of CI's `schema-area` jobs does, D-340): `web` needs no database, the others refuse to run without one, and the floor is left to `coverage:floor` |
+| `bun run coverage:floor` | the areas' `coverage/area-*` | Holds every file to the floor in `bunfig.toml` in the process of the area that owns it, and checks that the areas ran every test file between them, each its own, and that no file was loaded only by another area's tests (D-340). What CI's `schema` job runs after downloading the areas |
 | `bun run test` | nothing | The unit tests alone — the fast loop |
 | `bun run db:check` | a database | The committed database types are exactly what the migrations produce (D-45) |
 | `bun run test:storage` | `bun run db:up` | The attachment store's S3 adapter against Garage, as the deployment runs it. Not in CI, which runs PostgreSQL alone; it refuses without `S3_ENDPOINT` (D-109) |
@@ -141,7 +142,7 @@ affected. `bun run test:storage` needs the compose Garage and is not part of thi
 | `bun run claim <number>` | Take an issue (or `--release` it); refuses one that is held, blocked or would collide, and suggests the branch name (D-313) |
 | `bun run check:pr <number>` | What CI checks of a pull request: it names its task, touches only what its issues are about (D-74; its size is no rule), and answers each failure mode of §6.9 (D-178) |
 | `bun run db:up` · `db:down` · `db:logs` | Start, stop and follow the local environment |
-| `bun run db:up:tests` | Start PostgreSQL and Redis together and wait until both are healthy: every service the whole suite reads, as CI's `schema` job starts them |
+| `bun run db:up:tests` | Start PostgreSQL and Redis together and wait until both are healthy: every service the whole suite reads, as CI's `schema-area` jobs that need them start them |
 | `bun run db:up:redis` | Start Redis alone, for the tests of the cloud's shared bus, limiters and presence (D-201): put `REDIS_URL=redis://localhost:6379` in `.env.test`. Those files, `*.redis.integration.test.ts`, are the only tests that read it; without it `test:all` leaves them out behind a banner, and in CI it refuses. Nothing the application does without `REDIS_URL` reaches it |
 | `bun run db:reset` | Throw the data away and start again |
 | `bun run budget:api` | The API's idle memory: starts it against the database, waits until it is ready and settled, and fails at 120 MiB or more (`PRD.md` §5, D-49). Runs in `verify` and in CI's database job |
@@ -652,8 +653,10 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   the gate reads to accept a skip; update `scripts/ci-gate.test.ts`; and only then add the check to branch
   protection, which a human changes.
 - **The required `verify` check is a verdict, not a job of steps.** `static` runs the checks that need
-  no service and `schema` runs every test once, with coverage; `verify` needs both and the browser jobs,
-  runs whatever they did, and passes only when each succeeded — a failure, a cancellation, a skip or a
+  no service and `schema-area` runs every test once, as three areas side by side (`apps/web`; `scripts`;
+  `apps/api` with `packages`), each on a runner of its own (D-340); `schema` holds every file to the coverage
+  floor in the process of its own area. `verify` needs all of them and the browser jobs, runs whatever they did,
+  and passes only when each succeeded — a failure, a cancellation, a skip or a
   missing result is a refusal (`bun run ci:gate`, D-203). The browser jobs may skip only where `changes`
   succeeded and said the change touches nothing they see (D-226). CI only: locally `bun run verify` is
   the same checks and tests in one run, and the browser suite is `bun run test:e2e`.
@@ -661,7 +664,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
   *light* (documents, or a version bump: `light-suite` runs every test that needs no database in place of
   `schema`'s coverage run, which no code change could have moved) and, on main, whether the commit's content was
   already verified (a pull request's `verify` succeeded on the same tree with every heavy job run: `static`,
-  `schema`, the browser suites and the suites per cell are not run again; the measurements and the cheap checks
+  `schema` and its areas, the browser suites and the suites per cell are not run again; the measurements and the cheap checks
   are). A rebase that changed the tree, a skipped heavy job or an unreadable answer is "not verified", and gets the
   whole run, as before. `verify` accepts each skip only when `scope` succeeded and said so.
 

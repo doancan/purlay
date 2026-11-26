@@ -500,23 +500,34 @@ jobs:
   # `bun run verify` — that stays the subset a developer can run with nothing
   # installed. The database comes from docker-compose.yml so the image is
   # declared in exactly one place. (D-45)
-  schema:
+  #
+  # The suite runs as three areas, side by side, each in one process on a runner of its own (D-340): the whole of it
+  # on one runner took sixteen minutes, almost all of them tests, and coverage cannot be added up across
+  # processes, so it is divided by area and not by file. Each area's tests are those of `apps/web`, of `scripts`, or
+  # of `apps/api` and `packages` (`scripts/test-area.ts`); `web` needs no service, so its job starts none. An area
+  # writes its coverage, and `schema` below holds every file to the floor in the process of the area that owns it.
+  schema-area:
     needs: scope
     # A light change runs `light-suite` instead, and content a pull request already ran this on is not run again (D-332).
     if: needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'
     runs-on: ubuntu-latest
-    # Main 2026-11-12: 25,894 passing tests took 1,108 s; setup, schema and the real performance
-    # measurements exhausted the old 20-minute job ceiling during latency trials. Leave headroom
-    # for the complete gate; test timeouts, coverage and performance budgets remain unchanged.
+    # The whole suite took 1,425 s on one runner (2026-11-26, 30,222 tests); the largest area is about half of it,
+    # with the same setup. Test timeouts, coverage and performance budgets remain unchanged.
     timeout-minutes: 30
+    strategy:
+      # Every area says what it found: a failed area must not hide the failures of the others.
+      fail-fast: false
+      matrix:
+        area: [web, scripts, api]
     # Declared once for the job. The development credentials are the compose
     # file's; a test fails if this, the schema check's default and the compose
-    # file stop agreeing.
+    # file stop agreeing. The `web` area has no database and is given none.
     env:
-      DATABASE_URL: postgres://purlay:purlay@localhost:5432/purlay
-      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: ${{ matrix.area != 'web' && 'postgres://purlay:purlay@localhost:5432/purlay' || '' }}
+      REDIS_URL: ${{ matrix.area != 'web' && 'redis://localhost:6379' || '' }}
       # The job's own database, which exists for nothing else: db:check may migrate it.
       PURLAY_ALLOW_DB_CHECK_ON: purlay
+      PURLAY_TEST_AREA: ${{ matrix.area }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -536,15 +547,62 @@ jobs:
       # place. No object storage: nothing the integration tests reach reads it yet, so starting it would
       # cost a pull and a bootstrap for a service no test uses. The first test that reads attachments adds it (#53).
       - name: start the database and redis
+        if: matrix.area != 'web'
         run: bun run db:up:tests
 
       - name: the committed types are exactly what the migrations produce
+        if: matrix.area != 'web'
         run: bun run db:check
 
-      # Every test with a database, held to the coverage floor in bunfig.toml —
-      # the same command `verify` runs. Refuses here if the database is missing.
-      - name: every test, with coverage
+      # The area's tests with a database where it needs one, under the floor at zero: the area's process also loads
+      # files of other areas, which their own area answers for, so the floor is applied to each file by `schema`.
+      # Refuses here if the database is missing.
+      - name: this area's tests, with coverage
         run: bun run test:all
+
+      - name: keep this area's coverage for the floor
+        # Kept after a failed area too: `schema` says it was not whole instead of saying nothing. Not after a cancel,
+        # which has nothing to say.
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: area-${{ matrix.area }}
+          path: coverage/area-${{ matrix.area }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # The areas put together (D-340), under the name branch protection requires and has always meant "the whole
+  # suite, with coverage, passed". It runs whether the areas passed or not, so that an area that failed or never
+  # ran is a failure that says so here, and it is skipped for exactly the reasons the whole was: a light change,
+  # or content already verified (D-332).
+  schema:
+    needs: [scope, schema-area]
+    if: always() && needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: every area of the suite passed
+        if: needs.schema-area.result != 'success'
+        env:
+          RESULT: ${{ needs.schema-area.result }}
+        run: |
+          echo "schema-area ended $RESULT: the suite is not whole" >&2
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          # One directory per artifact, named as it was uploaded: `coverage/area-<name>/`, where the check looks.
+          pattern: area-*
+          path: coverage
+      # Nothing to install: the check imports nothing. It checks that the areas ran every test file, each its own, and
+      # holds every file to the floor in bunfig.toml in the process of the area that owns it.
+      - name: the areas ran every file, and every file is held to the floor
+        run: bun run coverage:floor
 
   # A light change — documents, or a version bump — has no code for a test to have a different answer about: every
   # test that needs no database runs, which is every test that can read a document or the version, in place of the
@@ -660,6 +718,7 @@ jobs:
         scope,
         static,
         schema,
+        schema-area,
         light-suite,
         api-measurements,
         changes,
