@@ -2,7 +2,7 @@
  * The per-user write limit and the session's recorded address, against a real
  * database. The unauthenticated half is `rate-limit.test.ts`.
  */
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, onTestFinished, test } from 'bun:test';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
@@ -392,20 +392,45 @@ describe('integration: the address a session records', () => {
         auth: aGitHubAuth(cloned.db, github.fetch, { baseUrl: ORIGIN }),
       }),
     );
-    const port = String(app.listen(0));
+    const base = `http://127.0.0.1:${String(app.listen(0))}`;
+    const requests = new AbortController();
+    let phase: string | undefined = 'requesting the GitHub redirect';
+    let stopping: Promise<unknown> | undefined;
+    const closeListener = (): Promise<unknown> => (stopping ??= app.stop(true));
+    // A test deadline can expire while fetch still owns a socket. Abort it and finish
+    // stopping the listener before the suite drops the database.
+    onTestFinished(async () => {
+      if (phase === undefined) return;
+      process.stderr.write(`Real-socket session test did not finish while ${phase}.\n`);
+      requests.abort();
+      await closeListener();
+    });
+
     try {
-      const base = `http://127.0.0.1:${port}`;
-      const started = await fetch(`${base}/auth/github`, { redirect: 'manual' });
+      const started = await fetch(`${base}/auth/github`, {
+        redirect: 'manual',
+        signal: requests.signal,
+      });
       const { code, state } = github.authorize(started.headers.get('location') ?? '');
+      phase = 'requesting the GitHub callback';
       const callback = await fetch(`${base}${SIGN_IN_CALLBACK}?code=${code}&state=${state}`, {
         redirect: 'manual',
         headers: { cookie: cookiesFrom(started), 'x-forwarded-for': '198.51.100.9' },
+        signal: requests.signal,
       });
       expect(callback.status).toBe(302);
       expect(callback.headers.get('location')).toBe(ORIGIN);
+      phase = 'reading the recorded session address';
       expect(await addressOf(person.email)).toBe('127.0.0.1');
+    } catch (error) {
+      if (!requests.signal.aborted || error !== requests.signal.reason) throw error;
+      return;
     } finally {
-      await app.stop(true);
+      const previousPhase = phase;
+      phase = 'stopping the listener';
+      await closeListener();
+      phase = previousPhase;
     }
+    phase = undefined;
   });
 });
