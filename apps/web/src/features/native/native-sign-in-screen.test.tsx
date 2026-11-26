@@ -22,6 +22,12 @@ import { HANDOFF_TTL_MS } from './pending';
 
 installDom();
 
+// The consent is a lazy chunk (`load.tsx`), and these tests are about the consent, not about the chunk arriving: it
+// is in before the first of them starts. `settle` waits four timer turns, and a cold `import()` on a slow runner
+// outlasts them, so the first tests of the file saw the loading skeleton and the later ones did not (D-49 keeps
+// the chunk lazy; the door is what a test of the door is for).
+await import('./native-sign-in-screen');
+
 const KEY = 'purlay.native';
 const PAIR = { challenge: 'a'.repeat(43), state: 'b'.repeat(22) };
 const REDIRECT = `purlay://auth?code=${'c'.repeat(64)}&state=${PAIR.state}`;
