@@ -8,7 +8,14 @@ import { readLatestRelease } from '../releases';
 import { readMySignIn, eraseMyAccount, type EraseDependencies } from '../auth';
 import { endMySession, readMySessions } from '../devices';
 import { readMe } from '../workspaces';
-import { readPushKey, setMyLocale, subscribeDevice, unsubscribeDevice } from '../push';
+import {
+  readPushKey,
+  setMyLocale,
+  subscribeApnsDevice,
+  subscribeDevice,
+  unsubscribeApnsDevice,
+  unsubscribeDevice,
+} from '../push';
 import { updateMyProfile } from '../profile';
 import { readMyQuietHours, setMyQuietHours } from '../quiet-hours';
 import { setMyAway } from '../away';
@@ -20,6 +27,7 @@ export const meRoutes = (
   context: RouteContext,
   own: {
     readonly browserPush: ReturnType<typeof pushConfiguration>;
+    readonly apnsScope: string | undefined;
     readonly releases: Parameters<typeof readLatestRelease>[0]['releases'];
     readonly erasureServices: EraseDependencies['erasureServices'];
   },
@@ -29,6 +37,7 @@ export const meRoutes = (
   const creating = creatingOf(context);
   const sending = sendingOf(context);
   const pushDependencies = { ...dependencies, pushConfiguration: own.browserPush };
+  const apnsDependencies = { ...dependencies, apnsScope: own.apnsScope };
 
   return (
     new Elysia()
@@ -107,6 +116,16 @@ export const meRoutes = (
       })
       .post('/api/push/subscriptions/remove', async ({ request, body, set }) => {
         await unsubscribeDevice(pushDependencies, request, body);
+        set.status = 204;
+        return null;
+      })
+      .post('/api/push/apns/subscriptions', async ({ request, body, set }) => {
+        await subscribeApnsDevice(apnsDependencies, request, body);
+        set.status = 204;
+        return null;
+      })
+      .post('/api/push/apns/subscriptions/remove', async ({ request, body, set }) => {
+        await unsubscribeApnsDevice(dependencies, request, body);
         set.status = 204;
         return null;
       })

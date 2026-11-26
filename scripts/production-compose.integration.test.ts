@@ -39,6 +39,14 @@ const ENVIRONMENT: Record<string, string> = {
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 };
 
+const APNS_SETTINGS = {
+  APNS_ENVIRONMENT: 'sandbox',
+  APNS_TOPIC: 'example.test.app',
+  APNS_TEAM_ID: 'EXAMPLETEA',
+  APNS_KEY_ID: 'EXAMPLEKEY',
+  APNS_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nfixture\\n-----END PRIVATE KEY-----',
+};
+
 interface Resolved {
   services: Record<
     string,
@@ -70,11 +78,14 @@ interface Resolved {
  * outranks the env file, so one a developer has exported would hide a missing one.
  */
 const inherited = Object.fromEntries(
-  Object.entries(process.env).filter(([key]) => !(key in ENVIRONMENT)),
+  Object.entries(process.env).filter(
+    ([key]) => !(key in ENVIRONMENT) && !(key in APNS_SETTINGS) && key !== 'PURLAY_HTTP_PORT',
+  ),
 );
 
 const resolve = (
   environment: Record<string, string>,
+  compose = COMPOSE,
 ): { code: number; stdout: string; stderr: string } => {
   const directory = mkdtempSync(join(tmpdir(), 'compose-'));
   try {
@@ -86,7 +97,7 @@ const resolve = (
         .join('\n'),
     );
     const run = Bun.spawnSync(
-      ['docker', 'compose', '-f', COMPOSE, '--env-file', file, 'config', '--format', 'json'],
+      ['docker', 'compose', '-f', compose, '--env-file', file, 'config', '--format', 'json'],
       { stdout: 'pipe', stderr: 'pipe', env: inherited },
     );
     return { code: run.exitCode, stdout: run.stdout.toString(), stderr: run.stderr.toString() };
@@ -511,6 +522,35 @@ describe('integration: the production compose file', () => {
           name,
           value,
         });
+      }
+    }
+  });
+
+  test.each([
+    ['production', COMPOSE],
+    ['Dockhand', join(repo, 'docker-compose.dockhand.yml')],
+  ])('%s passes optional APNs settings to the API and the scheduler', (_name, compose) => {
+    const env = { ...ENVIRONMENT, PURLAY_HTTP_PORT: '8190' };
+    const unset = Object.fromEntries(Object.keys(APNS_SETTINGS).map((name) => [name, '']));
+    const configured = {
+      ...APNS_SETTINGS,
+      APNS_PRIVATE_KEY: `'${APNS_SETTINGS.APNS_PRIVATE_KEY}'`,
+    };
+    for (const [input, expected] of [
+      [env, unset],
+      [{ ...env, ...configured }, APNS_SETTINGS],
+    ] as const) {
+      const result = resolve(input, compose);
+      expect(result.code).toBe(0);
+      const { services } = JSON.parse(result.stdout) as Resolved;
+      for (const service of ['api', 'scheduler']) {
+        expect(services[service]?.environment).toMatchObject(expected);
+      }
+      for (const [service, definition] of Object.entries(services)) {
+        if (service === 'api' || service === 'scheduler') continue;
+        expect(
+          Object.keys(definition.environment ?? {}).filter((name) => name in APNS_SETTINGS),
+        ).toEqual([]);
       }
     }
   });

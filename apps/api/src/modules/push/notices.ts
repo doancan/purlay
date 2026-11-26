@@ -8,7 +8,7 @@ import type { Executor } from '@purlay/db';
 import type { Message, PushLocale } from '@purlay/types';
 
 /** Core admission port: the source owner captures its recipients in the same transaction as its notice. */
-export { enqueuePush } from '../../platform/push-work';
+export { enqueuePush, type PushCapture } from '../../platform/push-work';
 
 /** One notification still to be pushed: the person told, why, and the channel it happened in. */
 interface PushNotice {
