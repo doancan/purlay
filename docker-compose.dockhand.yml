@@ -184,6 +184,9 @@ services:
   storage-init:
     <<: *application
     command: ['apps/api/src/cli/storage-init.ts']
+    # The initializer belongs to a Compose deployment, including with environment-wide updates enabled.
+    labels:
+      dockhand.update: 'false'
     # Measured bounds, not a guess (docs/spikes/resources.md, #639): a runaway takes this
     # container down, not the host. Raised with STORAGE_INIT_MEMORY_LIMIT on a larger server.
     mem_limit: ${STORAGE_INIT_MEMORY_LIMIT:-256m}
