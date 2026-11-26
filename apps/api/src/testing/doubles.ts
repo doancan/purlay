@@ -44,6 +44,16 @@ export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown
 };
 
 /**
+ * The one place a value is made to pass for an instance of a class.
+ *
+ * `no-unsafe-class-instance-assignment` refuses a value that was not made by a class's constructor where
+ * that class is expected, and is right for production code. A double that throws on any use cannot be built
+ * by the constructor (a pool would need a connection), so the claim is made here, once, not at each use.
+ * It returns `never`, which takes the type of wherever it is put.
+ */
+export const passingAsItsClass = (double: object): never => double as never;
+
+/**
  * A database handle that fails loudly if anything touches it.
  *
  * This is how `/health` proves it is liveness rather than readiness wearing its
@@ -51,20 +61,22 @@ export const aRecordingLogger = (): { log: Logger; lines: Record<string, unknown
  * The assertion lives in the double, so it holds for every test that uses it.
  */
 export const aDatabaseThatMustNotBeTouched = (failure?: Error): DatabasePool => {
-  const untouched = new Proxy(
-    {},
-    {
-      get(_target, property): never {
-        // A test of how a failure is reported hands the failure it wants reported.
-        throw (
-          failure ??
-          new Error(
-            `the database was reached (\`${String(property)}\`) by something that must not touch it`,
-          )
-        );
+  const untouched: DatabasePool = passingAsItsClass(
+    new Proxy(
+      {},
+      {
+        get(_target, property): never {
+          // A test of how a failure is reported hands the failure it wants reported.
+          throw (
+            failure ??
+            new Error(
+              `the database was reached (\`${String(property)}\`) by something that must not touch it`,
+            )
+          );
+        },
       },
-    },
-  ) as DatabasePool;
+    ),
+  );
   // Leasable, as the application leases the database it is given: a lease that took a connection fails as touching it does.
   return leasableStandIn(
     untouched,
@@ -77,7 +89,7 @@ export const aDatabaseThatMustNotBeTouched = (failure?: Error): DatabasePool => 
  * that stands in for the boundary needs one; it throws on any use all the same.
  */
 export const aTransactionThatMustNotBeTouched = (): Transaction =>
-  aDatabaseThatMustNotBeTouched() as Transaction;
+  passingAsItsClass(aDatabaseThatMustNotBeTouched());
 
 /** The same, for the sessions seam: an instance any use of throws, naming what was reached. */
 export const anAuthThatMustNotBeTouched = (failure?: Error): Auth =>

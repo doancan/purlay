@@ -75,7 +75,7 @@ describe('the shell', () => {
     // a feature allowed later is a decision.
     expect(response.headers.get('permissions-policy')).toBe(
       'camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), ' +
-        'display-capture=(), browsing-topics=(), clipboard-write=(self), fullscreen=(self)',
+        'display-capture=(), clipboard-write=(self), fullscreen=(self)',
     );
   });
 

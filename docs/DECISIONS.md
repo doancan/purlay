@@ -1867,6 +1867,25 @@ The repeated-trial design follows [pyperf's guidance on independent processes an
 the trial count and all raw p95s remain visible. A runner consistently slower than the baseline will
 still fail; investigating its environment remains necessary if that occurs.
 
+*Amended 2026-11-26: the Bun runtime stays on 1.4.4.* The idle-memory budget (120 MiB, `bun run budget:api`) failed
+on the update of every dependency at 124.3 MiB, where `main` read 113.8–115.4 MiB in CI. Seven runs per variant,
+the median of the API's idle RSS, on Linux (containers from this repository's own `oven/bun` bases, arm64, so
+every figure is about 4 MiB above CI's x64) and on macOS:
+
+| Runtime | Dependencies | Linux | macOS |
+|---|---|---|---|
+| 1.4.4 | before | 120.3 | 152.7 |
+| 1.4.4 | updated | 120.1 | 152.0 |
+| 1.4.5 | updated | 126.2 | 157.4 |
+| 1.4.5 | before | 128.1 | 154.5 |
+
+The dependencies cost nothing; the runtime costs 6–8 MiB. An empty `bun -e` process goes from 13.9 to 22.7 MiB
+between the two with the JavaScript heap unchanged (1.7 MiB), so it is the runtime's own native baseline and not
+something this code can give back. **Rejected:** raising the budget, and starting the API with `--smol` or another
+flag only to read lower, which changes what runs and what is measured in order to pass. Bun stays at 1.4.4 (`packageManager`,
+`@types/bun`, the three `FROM`s in the `Dockerfile`) until a later release measures back under the budget; each
+release is measured with `bun run budget:api` before it is taken.
+
 ---
 
 ### D-50. The client stays a single-page application, with a prerendered shell
@@ -1990,6 +2009,15 @@ variant nobody consolidated.
 **Testing shape:** `bun test` with `happy-dom` and Testing Library for component logic and
 accessibility; Playwright for keyboard paths, visual snapshots and the cold-load measurement
 D-49 needs. Two tools with two jobs, not two tools doing one job.
+
+**Amended 2026-11-26 (#1568): `prosemirror-view` is held at 1.43.0.** From 1.43.1 on (1.44.0 is the latest),
+the cursor moves across node boundaries by a different rule, and under `bun test --coverage` with
+`happy-dom` the editor adapter's block-command test recurses until the stack is gone (`Selection.collapse`
+dispatches an event, ProseMirror sets the selection again, and so on) and times out. Real browsers are not
+affected; the Playwright suite passed on 1.44.0. That is the limit of the `happy-dom` half of this decision
+showing: it emulates a selection, it is not one. The pin moves when a later release passes
+`rich-editor.test.tsx` under coverage, either because `happy-dom` stops recursing or the test no longer
+triggers it. The test was not changed.
 
 **Rejected — a component library with opinions** (a full design system package). It brings a visual
 identity that is not ours and a bundle we do not control, and the interface is the product's face.
@@ -4600,6 +4628,13 @@ none, so anything that ever runs in it cannot either. Two stay the origin's own:
 header; they ask the person (D-126). The list is whole in `edge.ts` and in its test, so a feature
 allowed later is a decision; a browser test fails if Chromium objects to an entry or the clipboard stops
 working. Rejected: the same header on API responses, which load nothing for it to govern.
+
+*Amended 2026-11-26: `browsing-topics` is no longer in the list.* Chromium deprecated the Topics API in
+144 and removes it in 150 together with its `browsing-topics` policy feature, so the Chromium that
+Playwright 1.65.1 ships reports the entry as "Unrecognized feature", which is the very objection the
+browser test exists to catch. The entry opted the page out of an API that is going away; the page loads no
+third-party code (`script-src 'self'`), so nothing in it could have called the API either. The test was not
+loosened: the header lost the entry and the whole-list assertion in `serving-the-client.test.ts` says so.
 
 ---
 
@@ -9056,6 +9091,13 @@ opens, and another send makes it right. The same change makes the wizard say a s
 tables and the column; `sessions` keeps its shape throughout), the wizard and `/setup`, and the
 `server_settings` import. A reversal returns to the code D-11, D-38 and D-138 describe; the
 `workspaces` module was never touched, which is what makes it possible.
+
+**Amended 2026-11-26 (Better Auth 1.7.28).** The bullet above that says a failure of the library's read of
+the rows it is about to delete "is swallowed while the delete goes ahead" describes 1.7.14 and no longer
+holds. From 1.7.28 that failure stops the request before anything is deleted: the route answers 500, no
+session is ended and no socket is closed. The whole-watch of the five session-ending routes stays, because
+the hooks still see at most a hundred rows. `sockets.integration.test.ts` states the new contract: a socket closes if and only if its session
+ended.
 
 ### D-180. Navigation follows the theme: a light neutral in the light theme, the dark navy in the dark — changes D-118
 

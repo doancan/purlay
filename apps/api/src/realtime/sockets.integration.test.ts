@@ -1425,11 +1425,12 @@ describe('integration: two real sockets', () => {
 });
 
 /**
- * The library reads what it is about to delete so it can tell its hooks, and swallows a failure of
- * that read: the rows are deleted and nothing is announced. The read is made to fail here; the
- * sockets must close all the same.
+ * The library reads what it is about to delete so it can tell its hooks. Up to 1.7.14 it swallowed a failure of
+ * that read and deleted the rows regardless (the watch in D-179 exists for that); from 1.7.28 the failure stops
+ * the request before anything is deleted. Either way a socket closes if and only if its session ended, so the
+ * read is made to fail here and the person's sessions and sockets must both be left whole.
  */
-describe('integration: sessions the library ended without telling its hooks', () => {
+describe('integration: a failure of the library’s read before it ends sessions', () => {
   const failing = { on: false, hits: 0 };
   /** The library's read of a user's sessions before it deletes them, and only that one, fails. */
   const failingRead = (): Parameters<Executor['withPlugin']>[0] => ({
@@ -1452,7 +1453,7 @@ describe('integration: sessions the library ended without telling its hooks', ()
     transformResult: async (args) => await Promise.resolve(args.result),
   });
 
-  test('signing out everywhere still closes every socket of the person', async () => {
+  test('signing out everywhere fails whole: no session is ended and no socket is closed', async () => {
     const database = db.withPlugin(failingRead());
     const shaky = createApp(
       testDependencies({ database, clock, config: testConfig({ APP_URL: origin }) }),
@@ -1461,6 +1462,11 @@ describe('integration: sessions the library ended without telling its hooks', ()
     try {
       const alice = await aSignedInUser(db, clock, 'shaky');
       const other = await aSession(db, clock, alice.userId, 30);
+      const sessionsOf = async (): Promise<number> =>
+        (await db.selectFrom('sessions').select('id').where('user_id', '=', alice.userId).execute())
+          .length;
+      const before = await sessionsOf();
+      expect(before).toBeGreaterThan(1);
       const socket = await connect(`${SESSION_COOKIE}=${other.token}`, at);
       failing.on = true;
       const out = await shaky.handle(
@@ -1471,11 +1477,13 @@ describe('integration: sessions the library ended without telling its hooks', ()
         }),
       );
       failing.on = false;
-      expect(out.status).toBe(200);
-      // The library's read did fail, and it deleted the rows regardless.
+      // The library's read did fail, and the request failed with it: nothing was deleted.
       expect(failing.hits).toBeGreaterThan(0);
-      const code = await Promise.race([socket.ended, Bun.sleep(5_000).then(() => 'still open')]);
-      expect(code).toBe(CLOSE_CODES.SESSION_ENDED);
+      expect(out.status).toBe(500);
+      expect(await sessionsOf()).toBe(before);
+      // A session that still exists keeps its socket.
+      const code = await Promise.race([socket.ended, Bun.sleep(1_000).then(() => 'still open')]);
+      expect(code).toBe('still open');
     } finally {
       failing.on = false;
       await shaky.stop(true);
