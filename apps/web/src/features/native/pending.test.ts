@@ -63,6 +63,29 @@ describe('the native application’s challenge and state, as the page is opened 
     expect(pendingNativeHandoff(p, { search: '' })).toBeNull();
   });
 
+  test('keeps a recognized platform with the pair across a return to this tab', () => {
+    const p = ports();
+    captureNativeHandoff(at(`?challenge=${CHALLENGE}&state=${STATE}&platform=ios`), p);
+    expect(p.urls).toEqual(['/sign-in/native']);
+    expect(pendingNativeHandoff(p, { search: '' })).toEqual({
+      challenge: CHALLENGE,
+      state: STATE,
+      platform: 'ios',
+    });
+  });
+
+  test.each(['platform=android', 'platform=ios&platform=macos'])(
+    'keeps a legacy pair when the platform is unrecognized or ambiguous (%s)',
+    (platform) => {
+      const p = ports();
+      captureNativeHandoff(at(`?challenge=${CHALLENGE}&state=${STATE}&${platform}`), p);
+      expect(pendingNativeHandoff(p, { search: '' })).toEqual({
+        challenge: CHALLENGE,
+        state: STATE,
+      });
+    },
+  );
+
   test('are kept as the page was given them and nothing else: an extra parameter is dropped', () => {
     const p = ports();
     captureNativeHandoff(

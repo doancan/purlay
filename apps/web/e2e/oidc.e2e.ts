@@ -123,13 +123,13 @@ test('the administrator connects the provider, and a newcomer signs in through i
   await skipReleaseNotes(app);
   const native = await app.newPage();
   await native.goto(
-    `/sign-in/native?challenge=${challenge}&state=${randomBytes(16).toString('base64url')}`,
+    `/sign-in/native?challenge=${challenge}&state=${randomBytes(16).toString('base64url')}&platform=ios`,
   );
   await expect(native).toHaveURL(/\/sign-in$/);
-  await expect(native.getByText('Sign in to continue to Purlay for Mac.')).toBeVisible();
+  await expect(native.getByText('Sign in to continue to Purlay for iOS.')).toBeVisible();
   await native.getByRole('link', { name: 'Continue with Acme SSO' }).click();
   await expect(
-    native.getByRole('heading', { level: 1, name: 'Open Purlay for Mac?' }),
+    native.getByRole('heading', { level: 1, name: 'Open Purlay for iOS?' }),
   ).toBeVisible();
   await app.close();
 

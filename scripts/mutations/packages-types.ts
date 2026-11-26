@@ -450,9 +450,8 @@ export const PACKAGES_TYPES: readonly Mutation[] = [
     id: 'sign-in-invitation-any-text',
     why: 'anybody puts words of their own into a mail Purlay sends to an address of their choosing',
     file: 'packages/types/src/api.ts',
-    find: "  invitation: Type.Optional(InvitationToken),\n  /** The native application's challenge and state, carried in the link's fragment (D-191). */\n",
-    replace:
-      "  invitation: Type.Optional(Type.String()),\n  /** The native application's challenge and state, carried in the link's fragment (D-191). */\n",
+    find: '  locale: SignInLocale,\n  invitation: Type.Optional(InvitationToken),\n',
+    replace: '  locale: SignInLocale,\n  invitation: Type.Optional(Type.String()),\n',
     tests: ['apps/api/src/ingress/http/magic-link.integration.test.ts'],
   },
   {
