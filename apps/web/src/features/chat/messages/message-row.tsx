@@ -174,7 +174,9 @@ const MessageRowView = ({
       title={absolute}
       className={cn('font-mono text-caption text-ink-subtle', grouped && !on && 'opacity-0')}
     >
-      {format.time(message.createdAt, new Date(nowMinute))}
+      {grouped
+        ? format.clock(message.createdAt)
+        : format.time(message.createdAt, new Date(nowMinute))}
     </time>
   );
   const sending = delivery === 'sending' && (
