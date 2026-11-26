@@ -18,25 +18,42 @@ const workflow = Bun.YAML.parse(readFileSync('.github/workflows/ci.yml', 'utf8')
 };
 
 describe('the complete CI coverage suite', () => {
-  test('is skipped for exactly two reasons, and for no other: a light change, and content a pull request already ran it on (D-332)', () => {
-    const schema = workflow.jobs['schema'];
-    expect(schema).toBeDefined();
+  // The suite runs as areas side by side, `schema-area`, and `schema` puts them together (D-341). What was true of the
+  // one job is true of each area, and of the whole: the same two reasons to skip, and no other.
+  const SKIPPED_FOR_TWO_REASONS =
+    "needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'";
+
+  test('its areas are skipped for exactly two reasons, and for no other: a light change, and content a pull request already ran it on (D-332)', () => {
+    const areas = workflow.jobs['schema-area'];
+    expect(areas).toBeDefined();
     // The only prerequisite is the job that says which of the two applies, and the only condition is those two.
     // Any other `if` or `needs` — a path, a label, an actor — is a way for the whole suite not to run.
-    expect(schema?.needs).toBe('scope');
-    expect(schema?.if).toBe(
-      "needs.scope.outputs.light != 'true' && needs.scope.outputs.reuse != 'true'",
-    );
-    expect(schema?.env?.['DATABASE_URL']).toBeTruthy();
-    expect(schema?.env?.['REDIS_URL']).toBeTruthy();
+    expect(areas?.needs).toBe('scope');
+    expect(areas?.if).toBe(SKIPPED_FOR_TWO_REASONS);
+    // The services' addresses are declared once for the job, for the areas that have services.
+    expect(areas?.env?.['DATABASE_URL']).toBeTruthy();
+    expect(areas?.env?.['REDIS_URL']).toBeTruthy();
+  });
+
+  test('the whole, `schema`, is skipped for exactly the same two reasons, and runs whatever became of its areas', () => {
+    const schema = workflow.jobs['schema'];
+    expect(schema).toBeDefined();
+    // `always()` is what lets it say that an area failed or never ran; the two reasons are still the only way to skip.
+    expect(schema?.needs).toEqual(['scope', 'schema-area']);
+    expect(schema?.if).toBe(`always() && ${SKIPPED_FOR_TWO_REASONS}`);
   });
 
   test('cannot conditionally skip the complete suite or ignore its failure', () => {
     const tests =
-      workflow.jobs['schema']?.steps.filter((step) => step.run === 'bun run test:all') ?? [];
+      workflow.jobs['schema-area']?.steps.filter((step) => step.run === 'bun run test:all') ?? [];
     expect(tests).toHaveLength(1);
     expect(tests[0]?.if).toBeUndefined();
     expect(tests[0]?.['continue-on-error']).not.toBe(true);
+    const floor =
+      workflow.jobs['schema']?.steps.filter((step) => step.run === 'bun run coverage:floor') ?? [];
+    expect(floor).toHaveLength(1);
+    expect(floor[0]?.if).toBeUndefined();
+    expect(floor[0]?.['continue-on-error']).not.toBe(true);
   });
 });
 

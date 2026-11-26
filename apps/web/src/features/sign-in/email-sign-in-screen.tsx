@@ -10,7 +10,11 @@
  * forgotten as on sign-out. Each card that replaces another puts focus on its button (`UX.md` §7).
  */
 import { useQuery } from '@tanstack/react-query';
-import { NATIVE_CHALLENGE_PATTERN, NATIVE_STATE_PATTERN } from '@purlay/types';
+import {
+  NATIVE_CHALLENGE_PATTERN,
+  NATIVE_STATE_PATTERN,
+  type NativeSignInHandoff,
+} from '@purlay/types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useActions } from '../../data/actions-provider';
 import { useApi } from '../../data/api-provider';
@@ -25,7 +29,7 @@ import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { LogoMark, Notice } from '../shell/notice';
 import { browserInvitationPorts, keepInvitation } from '../invitations/pending';
-import { browserNativePorts, keepNativeHandoff, type NativeHandoff } from '../native/pending';
+import { browserNativePorts, keepNativeHandoff, nativePlatformIn } from '../native/pending';
 import { StandaloneScreen } from '../shell/standalone';
 
 // `<token>`, then `.<invitation>` if one rode along, then `~<challenge>~<state>` if the native application
@@ -40,18 +44,23 @@ const FRAGMENT = new RegExp(
  */
 export const readSignInLink = (
   hash: string,
+  search = '',
 ): {
   readonly token: string;
   readonly invitation: string | null;
-  readonly native: NativeHandoff | null;
+  readonly native: NativeSignInHandoff | null;
 } | null => {
   const match = FRAGMENT.exec(hash);
   if (match?.[1] === undefined) return null;
   const [, token, invitation, challenge, state] = match;
+  const platform = nativePlatformIn(new URLSearchParams(search));
   return {
     token,
     invitation: invitation ?? null,
-    native: challenge !== undefined && state !== undefined ? { challenge, state } : null,
+    native:
+      challenge !== undefined && state !== undefined
+        ? { challenge, state, ...(platform === undefined ? {} : { platform }) }
+        : null,
   };
 };
 
@@ -73,7 +82,7 @@ export const EmailSignInScreen = (): React.JSX.Element => {
   const me = useMe();
   const { navigate } = useRoute();
   const describe = useDescribeFailure();
-  const [link] = useState(() => readSignInLink(window.location.hash));
+  const [link] = useState(() => readSignInLink(window.location.hash, window.location.search));
   const [signingIn, setSigningIn] = useState(false);
   const [failed, setFailed] = useState<unknown>(null);
   const ports = useMemo(browserInvitationPorts, []);
@@ -184,6 +193,7 @@ export const EmailSignInScreen = (): React.JSX.Element => {
         const query = new URLSearchParams({
           challenge: link.native.challenge,
           state: link.native.state,
+          ...(link.native.platform === undefined ? {} : { platform: link.native.platform }),
         });
         navigate(`${href('signInNative')}?${query.toString()}`, { replace: true });
         return;

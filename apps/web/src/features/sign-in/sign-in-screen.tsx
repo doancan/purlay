@@ -30,7 +30,7 @@ import { Link, useRoute } from '../../router/router-provider';
 import { Button, buttonStyle } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { browserNativePorts, pendingNativeHandoff } from '../native/pending';
+import { browserNativePorts, nativeAppName, pendingNativeHandoff } from '../native/pending';
 import { LogoMark } from '../shell/notice';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
@@ -106,9 +106,7 @@ export const SignInScreen = (): React.JSX.Element => {
   const google = methods.data?.google === true;
   const oidc = methods.data?.oidc ?? null;
   // The native application sent the person here and is waiting for their answer (D-191): say so.
-  const [forNative] = useState(
-    () => pendingNativeHandoff(browserNativePorts(), window.location) !== null,
-  );
+  const [native] = useState(() => pendingNativeHandoff(browserNativePorts(), window.location));
   const failure = signInFailureIn(search);
   const reason = new URLSearchParams(search).get('reason');
   const note =
@@ -143,8 +141,10 @@ export const SignInScreen = (): React.JSX.Element => {
               {note}
             </p>
           )}
-          {forNative && (
-            <p className="text-balance text-label text-ink-muted">{t('signIn.native')}</p>
+          {native !== null && (
+            <p className="text-balance text-label text-ink-muted">
+              {t('signIn.native', { app: nativeAppName(native.platform) })}
+            </p>
           )}
         </div>
         {methods.data === undefined && !methods.isError ? (

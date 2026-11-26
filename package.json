@@ -85,6 +85,7 @@
     "modules:suites": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/module-suites.ts",
     "modules:upgrade": "bun --no-env-file --env-file=.env.test run apps/api/src/testing/module-upgrade.ts",
     "test:all": "bun --no-env-file --env-file=.env.test run scripts/test-all.ts",
+    "coverage:floor": "bun run scripts/coverage-floor.ts",
     "test:e2e": "bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
     "test:modules-none": "PURLAY_E2E_MODULES=none bun --no-env-file --env-file=.env.test run --filter @purlay/web e2e",
     "test:e2e:install": "bun run scripts/install-browser.ts chromium",
