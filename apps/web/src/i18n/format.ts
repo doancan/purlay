@@ -20,6 +20,8 @@ import type { Locale } from './types';
 export interface Formatters {
   /** The short timestamp a message row shows. */
   readonly time: (value: Date | string, now: Date) => string;
+  /** A local 24-hour clock time, for the gutter of grouped messages. */
+  readonly clock: (value: Date | string) => string;
   /** A calendar day in words, without a time: "Oct 30, 2026". */
   readonly date: (value: Date | string) => string;
   /** The full time, for hover and for assistive technology. */
@@ -189,6 +191,7 @@ export const createFormatters = (locale: Locale, timeZone?: string): Formatters 
       if (sameDay(date, now)) return clock.format(date);
       return (sameYear(date, now) ? monthDay : monthDayYear).format(date);
     },
+    clock: (value) => clock.format(asDate(value)),
     date: (value) => dateOnly.format(asDate(value)),
     absolute: (value) => full.format(asDate(value)),
     day: (value, now, words): string => {
