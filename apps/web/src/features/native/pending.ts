@@ -17,7 +17,13 @@
  * Neither value is a secret: the challenge is a hash of one, and the state is the application's own word.
  * That is why they may be in a query at all, where an invitation's token must be in a fragment.
  */
-import { NATIVE_CHALLENGE_PATTERN, NATIVE_STATE_PATTERN } from '@purlay/types';
+import {
+  NATIVE_CHALLENGE_PATTERN,
+  NATIVE_STATE_PATTERN,
+  isNativeSignInPlatform,
+  type NativeSignInHandoff,
+  type NativeSignInPlatform,
+} from '@purlay/types';
 import { systemClock } from '../../system-clock';
 
 const KEY = 'purlay.native';
@@ -29,10 +35,8 @@ export const HANDOFF_TTL_MS = 10 * 60 * 1000;
 const CHALLENGE = new RegExp(NATIVE_CHALLENGE_PATTERN);
 const STATE = new RegExp(NATIVE_STATE_PATTERN);
 
-export interface NativeHandoff {
-  readonly challenge: string;
-  readonly state: string;
-}
+export const nativeAppName = (platform: NativeSignInPlatform | undefined): string =>
+  platform === 'ios' ? 'Purlay for iOS' : 'Purlay for Mac';
 
 /** What this needs of the browser; the caller hands in the real ones, a test its own. */
 export interface NativePorts {
@@ -42,19 +46,30 @@ export interface NativePorts {
   readonly now: () => number;
 }
 
-const shaped = (pair: { challenge: unknown; state: unknown }): pair is NativeHandoff =>
+const shaped = (pair: { challenge: unknown; state: unknown }): pair is NativeSignInHandoff =>
   typeof pair.challenge === 'string' &&
   typeof pair.state === 'string' &&
   CHALLENGE.test(pair.challenge) &&
   STATE.test(pair.state);
 
+/** A URL may name one supported platform. Unknown and repeated values use the old wording. */
+export const nativePlatformIn = (params: URLSearchParams): NativeSignInPlatform | undefined => {
+  const [platform, ...extra] = params.getAll('platform');
+  return extra.length === 0 && isNativeSignInPlatform(platform) ? platform : undefined;
+};
+
 /** The pair an address carries: each name once, each the shape, and nothing else read. */
-const fromSearch = (search: string): NativeHandoff | null => {
+const fromSearch = (search: string): NativeSignInHandoff | null => {
   const params = new URLSearchParams(search);
   const challenge = params.getAll('challenge');
   const state = params.getAll('state');
   if (challenge.length !== 1 || state.length !== 1) return null;
-  const pair = { challenge: challenge[0], state: state[0] };
+  const platform = nativePlatformIn(params);
+  const pair = {
+    challenge: challenge[0],
+    state: state[0],
+    ...(platform === undefined ? {} : { platform }),
+  };
   return shaped(pair) ? pair : null;
 };
 
@@ -68,35 +83,25 @@ export const captureNativeHandoff = (
 ): void => {
   if (location.pathname !== PATH) return;
   const pair = fromSearch(location.search);
-  if (pair === null) return;
-  // No storage to keep it in: it stays in the address, which is then the only place the screen can read it from.
-  if (ports.storage === null) return;
-  try {
-    ports.storage.setItem(
-      KEY,
-      JSON.stringify({ challenge: pair.challenge, state: pair.state, at: ports.now() }),
-    );
-  } catch {
-    // A tab that cannot keep it still has it in the address: left there, the screen can read it.
-    return;
-  }
-  ports.replace(PATH);
+  if (pair !== null && keepNativeHandoff(pair, ports)) ports.replace(PATH);
 };
 
-/**
- * A pair that arrived another way — in a sign-in link's fragment, which opened in this tab — kept as one
- * the page was opened with would be. One that is not the shape is not kept. Whether it was kept is answered.
- */
-export const keepNativeHandoff = (pair: NativeHandoff, ports: NativePorts): boolean => {
+/** Keep a valid question that arrived in a sign-in link or in the application's opening URL. */
+export const keepNativeHandoff = (pair: NativeSignInHandoff, ports: NativePorts): boolean => {
   if (!shaped(pair) || ports.storage === null) return false;
+  const { challenge, state, platform } = pair;
   try {
     ports.storage.setItem(
       KEY,
-      JSON.stringify({ challenge: pair.challenge, state: pair.state, at: ports.now() }),
+      JSON.stringify({
+        challenge,
+        state,
+        ...(isNativeSignInPlatform(platform) ? { platform } : {}),
+        at: ports.now(),
+      }),
     );
     return true;
   } catch {
-    // Unkept: the caller says so to the person, or carries the pair in the address instead.
     return false;
   }
 };
@@ -117,7 +122,7 @@ export const forgetNativeHandoff = (ports: NativePorts): void => {
 export const pendingNativeHandoff = (
   ports: NativePorts,
   location: Pick<Location, 'search'>,
-): NativeHandoff | null => {
+): NativeSignInHandoff | null => {
   let kept: string | null;
   try {
     if (ports.storage === null) return fromSearch(location.search);
@@ -144,7 +149,12 @@ export const pendingNativeHandoff = (
     forgetNativeHandoff(ports);
     return null;
   }
-  const pair = { challenge: record['challenge'], state: record['state'] };
+  const platform = record['platform'];
+  const pair = {
+    challenge: record['challenge'],
+    state: record['state'],
+    ...(isNativeSignInPlatform(platform) ? { platform } : {}),
+  };
   return shaped(pair) ? pair : null;
 };
 

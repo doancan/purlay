@@ -143,10 +143,10 @@ describe('the email form on the sign-in card', () => {
     expect(view.getByRole('status').textContent).toContain('bağlantı yolda');
   });
 
-  test('carries the native application’s pair this tab holds, since the mail may open in another browser', async () => {
+  test('carries the native question and platform this tab holds, since the mail may open in another browser', async () => {
     window.sessionStorage.setItem(
       NATIVE_KEY,
-      JSON.stringify({ ...PAIR, at: systemClock.now().getTime() }),
+      JSON.stringify({ ...PAIR, platform: 'ios', at: systemClock.now().getTime() }),
     );
     const asked: EmailSignInRequest[] = [];
     const view = await visit(
@@ -162,7 +162,9 @@ describe('the email form on the sign-in card', () => {
     await user.type(view.getByRole('textbox', { name: 'Email address' }), 'ada@example.test');
     await user.click(view.getByRole('button', { name: 'Email me a sign-in link instead' }));
     await settle();
-    expect(asked).toEqual([{ email: 'ada@example.test', locale: 'en', native: PAIR }]);
+    expect(asked).toEqual([
+      { email: 'ada@example.test', locale: 'en', native: { ...PAIR, platform: 'ios' } },
+    ]);
   });
 
   test('does not carry one that has gone stale, nor ask the person to think of it', async () => {
@@ -246,8 +248,9 @@ describe('a sign-in link, opened', () => {
     fragment: string,
     api: Partial<Api>,
     locale: 'en' | 'tr' = 'en',
+    search = '',
   ): Promise<Awaited<ReturnType<typeof renderApp>>> => {
-    window.history.replaceState(null, '', `/sign-in/email${fragment}`);
+    window.history.replaceState(null, '', `/sign-in/email${search}${fragment}`);
     return await visit('/sign-in/email', signedOut(api), locale);
   };
 
@@ -320,10 +323,15 @@ describe('a sign-in link, opened', () => {
   });
 
   test('a link that carried the native application’s pair keeps it for this tab, and home goes on to the consent', async () => {
-    const view = await open(`#${TOKEN}~${CHALLENGE}~${STATE}`, {
-      previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
-      consumeEmailSignIn: () => Promise.resolve(),
-    });
+    const view = await open(
+      `#${TOKEN}~${CHALLENGE}~${STATE}`,
+      {
+        previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
+        consumeEmailSignIn: () => Promise.resolve(),
+      },
+      'en',
+      '?platform=ios',
+    );
     act(() => {
       fireEvent.click(view.getByRole('button', { name: 'Sign in' }));
     });
@@ -332,7 +340,7 @@ describe('a sign-in link, opened', () => {
       string,
       unknown
     >;
-    expect({ challenge: kept['challenge'], state: kept['state'] }).toEqual(PAIR);
+    expect(kept).toMatchObject({ ...PAIR, platform: 'ios' });
     expect(here(view)).toBe('/sign-in/native');
   });
 
@@ -346,15 +354,22 @@ describe('a sign-in link, opened', () => {
       },
     });
     try {
-      const view = await open(`#${TOKEN}~${CHALLENGE}~${STATE}`, {
-        previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
-        consumeEmailSignIn: () => Promise.resolve(),
-      });
+      const view = await open(
+        `#${TOKEN}~${CHALLENGE}~${STATE}`,
+        {
+          previewEmailSignIn: () => Promise.resolve({ email: 'ada@example.test' }),
+          consumeEmailSignIn: () => Promise.resolve(),
+        },
+        'en',
+        '?platform=ios',
+      );
       act(() => {
         fireEvent.click(view.getByRole('button', { name: 'Sign in' }));
       });
       await settle();
-      expect(here(view)).toBe(`/sign-in/native?challenge=${PAIR.challenge}&state=${PAIR.state}`);
+      expect(here(view)).toBe(
+        `/sign-in/native?challenge=${PAIR.challenge}&state=${PAIR.state}&platform=ios`,
+      );
     } finally {
       if (original !== undefined) Object.defineProperty(window, 'sessionStorage', original);
     }

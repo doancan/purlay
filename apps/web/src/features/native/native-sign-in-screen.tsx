@@ -29,7 +29,12 @@ import { useSession } from '../session/session';
 import { LogoMark, Notice } from '../shell/notice';
 import { useSignOut } from '../shell/sign-out';
 import { leave } from '../sign-in/leave';
-import { browserNativePorts, forgetNativeHandoff, pendingNativeHandoff } from './pending';
+import {
+  browserNativePorts,
+  forgetNativeHandoff,
+  nativeAppName,
+  pendingNativeHandoff,
+} from './pending';
 import { StandaloneScreen } from '../shell/standalone';
 
 const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
@@ -51,6 +56,7 @@ export const NativeSignInScreen = (): React.JSX.Element => {
   const ports = useMemo(browserNativePorts, []);
   // Read once, as the page opens: what the tab was asked, by whom it was asked, and not again.
   const [pair] = useState(() => pendingNativeHandoff(ports, window.location));
+  const app = nativeAppName(pair?.platform);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<unknown>(null);
   const [redirect, setRedirect] = useState<string | null>(null);
@@ -89,7 +95,7 @@ export const NativeSignInScreen = (): React.JSX.Element => {
         <Notice
           as="h1"
           glyph="resolved"
-          title={t('native.done.title')}
+          title={t('native.done.title', { app })}
           body={t('native.done.body')}
           action={
             <Button
@@ -98,7 +104,7 @@ export const NativeSignInScreen = (): React.JSX.Element => {
                 leave.to(redirect ?? '');
               }}
             >
-              {t('native.done.again')}
+              {t('native.done.again', { app })}
             </Button>
           }
         />
@@ -112,7 +118,7 @@ export const NativeSignInScreen = (): React.JSX.Element => {
     setBusy(true);
     setFailed(null);
     try {
-      const answer = await api.authorizeNative(pair);
+      const answer = await api.authorizeNative({ challenge: pair.challenge, state: pair.state });
       // Spent: asking again would make a second code for a question that has been answered.
       forgetNativeHandoff(ports);
       setRedirect(answer.redirect);
@@ -133,9 +139,10 @@ export const NativeSignInScreen = (): React.JSX.Element => {
     <Card>
       <LogoMark />
       <div className="flex flex-col items-center gap-2">
-        <h1 className="text-display">{t('native.title')}</h1>
+        <h1 className="text-display">{t('native.title', { app })}</h1>
         <p className="text-body text-ink-muted">
           {t('native.body', {
+            app,
             name: user.displayName,
             email: user.email,
             host: window.location.host,
@@ -145,7 +152,7 @@ export const NativeSignInScreen = (): React.JSX.Element => {
       </div>
       {failed !== null && (
         <p role="alert" className="text-label text-danger-text">
-          {`${t('native.failed')} ${describe(failed)}`}
+          {`${t('native.failed', { app })} ${describe(failed)}`}
         </p>
       )}
       <div className="flex w-full flex-col gap-2">
@@ -158,7 +165,7 @@ export const NativeSignInScreen = (): React.JSX.Element => {
             void authorize();
           }}
         >
-          {failed === null ? t('native.authorize') : t('common.retry')}
+          {failed === null ? t('native.authorize', { app }) : t('common.retry')}
         </Button>
         <Button
           className="w-full"
