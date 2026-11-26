@@ -206,8 +206,8 @@ export const REPO: readonly Mutation[] = [
     id: 'image-bun-drifts-from-package-manager',
     why: 'the image runs a Bun other than the one the tests and the pipeline ran, and nothing says so',
     file: 'Dockerfile',
-    find: 'FROM oven/bun:1.4.5-distroless@',
-    replace: 'FROM oven/bun:1.4.4-distroless@',
+    find: 'FROM oven/bun:1.4.4-distroless@',
+    replace: 'FROM oven/bun:1.4.3-distroless@',
     tests: ['scripts/environment.test.ts'],
   },
   {

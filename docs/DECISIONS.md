@@ -1867,6 +1867,25 @@ The repeated-trial design follows [pyperf's guidance on independent processes an
 the trial count and all raw p95s remain visible. A runner consistently slower than the baseline will
 still fail; investigating its environment remains necessary if that occurs.
 
+*Amended 2026-11-26: the Bun runtime stays on 1.4.4.* The idle-memory budget (120 MiB, `bun run budget:api`) failed
+on the update of every dependency at 124.3 MiB, where `main` read 113.8–115.4 MiB in CI. Seven runs per variant,
+the median of the API's idle RSS, on Linux (containers from this repository's own `oven/bun` bases, arm64, so
+every figure is about 4 MiB above CI's x64) and on macOS:
+
+| Runtime | Dependencies | Linux | macOS |
+|---|---|---|---|
+| 1.4.4 | before | 120.3 | 152.7 |
+| 1.4.4 | updated | 120.1 | 152.0 |
+| 1.4.5 | updated | 126.2 | 157.4 |
+| 1.4.5 | before | 128.1 | 154.5 |
+
+The dependencies cost nothing; the runtime costs 6–8 MiB. An empty `bun -e` process goes from 13.9 to 22.7 MiB
+between the two with the JavaScript heap unchanged (1.7 MiB), so it is the runtime's own native baseline and not
+something this code can give back. **Rejected:** raising the budget, and starting the API with `--smol` or another
+flag only to read lower, which changes what runs and what is measured in order to pass. Bun stays at 1.4.4 (`packageManager`,
+`@types/bun`, the three `FROM`s in the `Dockerfile`) until a later release measures back under the budget; each
+release is measured with `bun run budget:api` before it is taken.
+
 ---
 
 ### D-50. The client stays a single-page application, with a prerendered shell
