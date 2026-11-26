@@ -82,9 +82,13 @@ interface NativeEvidenceCapture {
   ) => Promise<void>;
 }
 
+/** A queued after-commit hook as Better Auth keeps it; taken from its own type so a change there stops the build. */
+type PendingHook = NonNullable<
+  ReturnType<Awaited<ReturnType<typeof getCurrentDBAdapterAsyncLocalStorage>>['getStore']>
+>['pendingHooks'][number];
 interface NativeAdapterFrame {
   adapter: Awaited<ReturnType<typeof getCurrentAdapter>>;
-  pendingHooks: (() => Promise<void>)[];
+  pendingHooks: PendingHook[];
   isTransactionActive: boolean;
 }
 
@@ -112,7 +116,7 @@ export const nativeAuthenticationEvidence = (
   interface ActiveNativeTransaction {
     readonly executor: Executor;
     readonly adapter: Awaited<ReturnType<typeof getCurrentAdapter>>;
-    readonly pendingHooks: (() => Promise<void>)[];
+    readonly pendingHooks: PendingHook[];
     readonly frames: Map<NativeAdapterFrame, NativeAdapterFrame>;
     active: boolean;
   }

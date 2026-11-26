@@ -499,8 +499,15 @@ describe('the sign-in screen', () => {
       .closest('section');
     expect(card?.className).toContain('rounded-2xl');
     expect(card?.className).toContain('shadow-card');
+    // The mark (D-339): decoration, so hidden from a screen reader, drawn from the brand file's picture
+    // with no words of its own, and above the title it stands for.
     const mark = card?.querySelector('[aria-hidden="true"]');
-    expect(mark?.textContent).toBe('P');
+    const picture = mark?.querySelector('img');
+    expect(picture?.getAttribute('src')).toBe('/purlay-mark.svg');
+    expect(picture?.getAttribute('alt')).toBe('');
+    expect(mark?.textContent).toBe('');
+    const title = view.getByRole('heading', { level: 1, name: 'Sign in to Purlay' });
+    expect(mark?.compareDocumentPosition(title)).toBe(4);
     expect(view.getByRole('link', { name: 'Continue with GitHub' }).className).toContain('w-full');
   });
 

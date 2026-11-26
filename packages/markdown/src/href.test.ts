@@ -34,8 +34,10 @@ describe('SafeHref.of', () => {
 
 describe('nothing else makes one', () => {
   test('an object with an href, a string, or the constructor do not compile as an address', () => {
-    // @ts-expect-error an object literal is not a SafeHref: it has no private field
-    const literal: SafeHref = { href: 'javascript:alert(1)' };
+    // An object with an href is not a SafeHref: it has no private field. Stated on the types, because
+    // `no-unsafe-class-instance-assignment` refuses the assignment this used to try.
+    const literalIsNoAddress: { readonly href: string } extends SafeHref ? never : true = true;
+    const literal = { href: 'javascript:alert(1)' };
     // @ts-expect-error a link's url is never a string
     const link: Inline = { type: 'link', url: 'javascript:alert(1)', children: [] };
     const construct = (): unknown =>
@@ -43,6 +45,7 @@ describe('nothing else makes one', () => {
       new SafeHref('javascript:alert(1)');
     // Nor at run time: neither value carries the private field. (A spread of a real one is
     // refused by lint, `no-misused-spread`, before the type system is asked.)
+    expect(literalIsNoAddress).toBe(true);
     expect(literal instanceof SafeHref).toBe(false);
     expect('url' in link && link.url instanceof SafeHref).toBe(false);
     expect(typeof construct).toBe('function');
