@@ -1178,6 +1178,11 @@ Decided here so Phase 0 does not invent one at random.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
   and an overlay. The interface is flat: regions are told apart by tone, and only what sits above
   something — an overlay, the hover controls, the composer, a card inside a message — has a shadow.
+- **The mark:** the owner's artwork, light blue gradients, on a white tile, the same picture in the tab's
+  icon, the installed application's and the Home Screen's, and on the sign-in, setup and invitation
+  screens through the one component, `LogoMark`. The tile is the `on-accent` token, so it is a clear shape
+  on the light neutral and on the dark navy alike; the mark's own colours are the brand's and the only
+  colours in the product that no token names (D-339).
 
 ---
 
