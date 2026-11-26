@@ -14,6 +14,7 @@ import { IconButton } from '../../../ui/icon-button';
 import { listButtonClasses, listRowClasses } from '../../../ui/list-column';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useChannelTitle } from '../channel/channel-header';
+import { PriorityMark } from '../messages/priority';
 import { useMessageText } from '../../content/github-event';
 import { authorOf } from '../../../lib/author';
 import { repliersOf, type InboxRow } from './group';
@@ -166,6 +167,7 @@ export const InboxRowItem = ({
           >
             {textOf(message)}
           </span>
+          <PriorityMark message={message} />
         </span>
       </button>
       {unread && panel && (
