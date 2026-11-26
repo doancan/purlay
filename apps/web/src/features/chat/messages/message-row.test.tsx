@@ -270,8 +270,10 @@ describe('what a row shows', () => {
     expect(article.getAttribute('data-message-id')).toBe(aMessage(1).id);
   });
 
-  test('a grouped row has no name, and its time is in the gutter, hidden until the row is hovered or focused', async () => {
-    const view = await mount(props({ grouped: true }));
+  test('a grouped row shows the exact time of an older message in the gutter on hover or focus', async () => {
+    const view = await mount(
+      props({ grouped: true, message: aMessage(1, { createdAt: '2025-09-08T08:42:00.000Z' }) }),
+    );
     expect(view.queryByText('alice')).toBeNull();
     const time = view.container.querySelector('time');
     expect(time?.className).toContain('opacity-0');
@@ -280,6 +282,8 @@ describe('what a row shows', () => {
       fireEvent.pointerOver(row);
     });
     expect(time?.className ?? '').not.toContain('opacity-0');
+    expect(time?.textContent).toBe('08:42');
+    expect(time?.getAttribute('title')).toContain('2025');
     act(() => {
       fireEvent.pointerLeave(row);
     });
