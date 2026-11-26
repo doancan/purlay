@@ -324,9 +324,9 @@ const workers: Workers = {
 };
 
 const app = createApp({
-  ...(apns === undefined ? {} : { apnsScope: apns.scope }),
   composition: modules,
   moduleShares,
+  ...(apns === undefined ? {} : { apnsScope: apns.scope }),
   ...(redis === undefined
     ? {}
     : {
