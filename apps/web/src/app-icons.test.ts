@@ -3,7 +3,8 @@
  *
  * Like the favicon, none of these can read a token — a launcher reads them outside the document — so
  * each colour is a literal bound here to the token it copies, and each picture is checked against the
- * favicon it is drawn from (`scripts/app-icons.ts`): a changed accent fails here until they are drawn again.
+ * mark it is drawn from (`scripts/app-icons.ts`, D-339): a changed mark or tile fails here until they are
+ * drawn again.
  */
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -42,6 +43,8 @@ const tokenIn = (name: string, theme: string): string => {
 interface Picture {
   readonly width: number;
   readonly height: number;
+  /** Whether every pixel is fully opaque: a launcher paints behind anything that is not. */
+  readonly opaque: boolean;
   /** The colour at a point, as `#rrggbb`; `transparent` where nothing was painted. */
   readonly at: (x: number, y: number) => string;
 }
@@ -92,9 +95,19 @@ const decodePng = (bytes: Buffer): Picture => {
       pixels[row * stride + column] = (value + predicted) & 0xff;
     }
   }
+  let opaque = true;
+  if (channels === 4) {
+    for (let start = 3; start < pixels.length; start += 4) {
+      if (pixels[start] !== 255) {
+        opaque = false;
+        break;
+      }
+    }
+  }
   return {
     width,
     height,
+    opaque,
     at: (x, y): string => {
       const start = y * stride + x * channels;
       if (channels === 4 && pixels[start + 3] === 0) return 'transparent';
@@ -142,33 +155,86 @@ describe('the manifest', () => {
   });
 });
 
-describe('the pictures are the favicon, drawn again', () => {
-  const accent = tokenIn('accent', 'dark');
-  const onAccent = tokenIn('on-accent', 'dark');
+/** The brand file's gradient for the stem, to say what colour the mark has at a point of it. */
+const brand = readFileSync(new URL('purlay-mark.svg', PUBLIC), 'utf8');
+/** How far the favicon draws the mark up from the brand file: `scale(…)` in the picture itself. */
+const MARK_SCALE = Number(
+  /scale\(([\d.]+)\)/.exec(readFileSync(new URL('favicon.svg', PUBLIC), 'utf8'))?.[1],
+);
+const stem = ((): { readonly at: (y: number) => number[] } => {
+  const gradient =
+    /<linearGradient id="stem"[^>]*y1="([\d.]+)"[^>]*y2="([\d.]+)"[^>]*>([\s\S]*?)<\/linearGradient>/.exec(
+      brand,
+    );
+  const [, y1, y2, body] = gradient ?? [];
+  const stops = [...(body ?? '').matchAll(/stop-color="#([0-9a-f]{6})"/gi)].map((m) => m[1] ?? '');
+  if (y1 === undefined || y2 === undefined || stops.length !== 2)
+    throw new Error('the stem gradient moved');
+  const channel = (hex: string, at: number): number => parseInt(hex.slice(at, at + 2), 16);
+  return {
+    /** The colour of the stem at height `y` of the brand file's 1024 box, as the three channels. */
+    at: (y: number): number[] => {
+      const t = (y - Number(y1)) / (Number(y2) - Number(y1));
+      return [0, 2, 4].map((offset) =>
+        Math.round(channel(stops[0] ?? '', offset) * (1 - t) + channel(stops[1] ?? '', offset) * t),
+      );
+    },
+  };
+})();
+
+const channelsOf = (colour: string): number[] =>
+  [1, 3, 5].map((offset) => parseInt(colour.slice(offset, offset + 2), 16));
+
+const ALL = ['/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png'];
+
+describe('the pictures are the mark on its tile, drawn again', () => {
+  const tile = tokenIn('on-accent', 'dark');
 
   test.each(['/icon-192.png', '/icon-512.png'])('%s keeps its rounded corners', (src) => {
     const drawn = picture(src);
     expect(drawn.at(0, 0)).toBe('transparent');
-    expect(drawn.at(Math.floor(drawn.width / 10), Math.floor(drawn.height / 2))).toBe(accent);
+    expect(drawn.at(Math.floor(drawn.width / 10), Math.floor(drawn.height / 2))).toBe(tile);
   });
 
   test.each(['/icon-maskable-512.png', '/apple-touch-icon.png'])(
-    '%s is full-bleed: the launcher cuts its own shape',
+    '%s is full-bleed and opaque: the launcher cuts its own shape and paints nothing behind',
     (src) => {
       const drawn = picture(src);
-      expect(drawn.at(0, 0)).toBe(accent);
-      expect(drawn.at(drawn.width - 1, drawn.height - 1)).toBe(accent);
+      expect(drawn.opaque).toBe(true);
+      expect(drawn.at(0, 0)).toBe(tile);
+      expect(drawn.at(drawn.width - 1, drawn.height - 1)).toBe(tile);
     },
   );
 
-  test.each(['/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png'])(
-    "%s draws the letter in on-accent, at the favicon's place",
+  test.each(ALL)(
+    "%s draws the mark, in the brand file's colours, at the favicon's place",
     (src) => {
       const drawn = picture(src);
-      // The stem of the P: x 12 of the favicon's 32, a third of the way down.
-      expect(drawn.at(Math.round((drawn.width * 12) / 32), Math.round(drawn.height / 3))).toBe(
-        onAccent,
-      );
+      // A point inside the stem of the P, low in it, where nothing else is drawn over the stem.
+      const at = (source: number): number =>
+        Math.round((drawn.width * (512 + (source - 512) * MARK_SCALE)) / 1024);
+      const colour = drawn.at(at(333), at(790));
+      expect(colour).not.toBe(tile);
+      const got = channelsOf(colour);
+      const want = stem.at(790);
+      for (const [index, value] of want.entries())
+        expect(Math.abs((got[index] ?? 0) - value)).toBeLessThanOrEqual(4);
+    },
+  );
+
+  test.each(['/icon-maskable-512.png', '/apple-touch-icon.png'])(
+    '%s keeps the whole mark inside the maskable safe zone, a circle of 80 percent',
+    (src) => {
+      const drawn = picture(src);
+      const centre = (drawn.width - 1) / 2;
+      const reach = 0.4 * drawn.width;
+      let outside = 0;
+      for (let y = 0; y < drawn.height; y += 1) {
+        for (let x = 0; x < drawn.width; x += 1) {
+          if (drawn.at(x, y) !== tile && Math.hypot(x - centre, y - centre) > reach) outside += 1;
+        }
+      }
+      expect(outside).toBe(0);
     },
   );
 });

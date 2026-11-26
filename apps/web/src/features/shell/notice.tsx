@@ -4,10 +4,11 @@
  * where there is one, the next action. It is the shape `UX.md` §8 asks of an empty state — an
  * invitation to act — drawn so none of them reads as a page that forgot its content.
  *
- * `LogoMark` is the product's one drawn object: a tile of the accent with the letter that
- * starts its name. It is built from the tokens, so it is right in both themes, and it is the
- * same tile on the sign-in card and in the empty states that belong to the product rather than
- * to a missing channel.
+ * `LogoMark` is the product's one drawn object: the Purlay mark on a white tile (D-339), the same
+ * picture as the tab's icon and the installed application's. The mark is the owner's artwork, served
+ * as it is (`/purlay-mark.svg`); the tile is the `on-accent` token with a hairline, so it stays a shape on
+ * the white card of the light theme as on the dark one. It stands beside a visible title or name on every screen that has
+ * it, so it is decoration and says nothing to a screen reader.
  */
 import { Icon, type GlyphName } from '../../components/icon';
 
@@ -16,9 +17,9 @@ type Heading = 'h1' | 'h2';
 export const LogoMark = (): React.JSX.Element => (
   <span
     aria-hidden="true"
-    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md bg-accent text-title text-on-accent"
+    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md border-hairline border-border-subtle bg-on-accent"
   >
-    P
+    <img src="/purlay-mark.svg" alt="" className="size-full" />
   </span>
 );
 

@@ -2031,7 +2031,7 @@ export const ClientInfo = Type.Object({
   server: Type.Object({ version: Type.String() }),
   contractVersion: Type.Integer({ minimum: 1 }),
   appUrl: Type.String(),
-  minClient: Type.Object({ macos: ClientMinimum }),
+  minClient: Type.Object({ macos: ClientMinimum, ios: Type.Optional(ClientMinimum) }),
   auth: AuthMethods,
 });
 export type ClientInfo = Static<typeof ClientInfo>;
