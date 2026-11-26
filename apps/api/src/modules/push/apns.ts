@@ -2,6 +2,12 @@
 import { importPKCS8, SignJWT } from 'jose';
 import type { PushPayload } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
+import {
+  APNS_IDENTIFIER,
+  APNS_TOPIC,
+  apnsSigningKey,
+  type ApnsCredentials,
+} from '../../platform/apns-credentials';
 import type { PushOutcome } from './queue-result';
 
 const ORIGINS = {
@@ -13,14 +19,6 @@ const TOKEN_AGE_SECONDS = 45 * 60;
 const TIMEOUT_MS = 5_000;
 const PAYLOAD_MAX_BYTES = 4_096;
 const RESPONSE_MAX_BYTES = 1_024;
-
-interface ApnsCredentials {
-  readonly environment: keyof typeof ORIGINS;
-  readonly topic: string;
-  readonly teamId: string;
-  readonly keyId: string;
-  readonly signingKey: string;
-}
 
 interface ApnsPush {
   readonly deviceToken: string;
@@ -72,11 +70,13 @@ export const createApnsProvider = async (
   post: ApnsFetch = fetch,
 ): Promise<(push: ApnsPush) => Promise<ApnsOutcome>> => {
   const { environment, topic, teamId, keyId } = credentials;
-  if (!/^[A-Z0-9]{10}$/.test(teamId) || !/^[A-Z0-9]{10}$/.test(keyId))
+  if (!APNS_IDENTIFIER.test(teamId) || !APNS_IDENTIFIER.test(keyId))
     throw new Error('APNs requires a ten-character team ID and key ID');
-  if (!/^[A-Za-z0-9.-]{1,255}$/.test(topic)) throw new Error('APNs requires a valid app topic');
+  if (!APNS_TOPIC.test(topic)) throw new Error('APNs requires a valid app topic');
   const origin = ORIGINS[environment];
-  const signingKey = await importPKCS8(credentials.signingKey, 'ES256');
+  const pem = apnsSigningKey(credentials.signingKey);
+  if (pem === undefined) throw new Error('APNs requires an unencrypted P-256 PKCS#8 PEM key');
+  const signingKey = await importPKCS8(pem, 'ES256');
   let cached: { readonly issuedAt: number; readonly bearer: Promise<string> } | undefined;
 
   const bearerAt = async (issuedAt: number): Promise<string> => {

@@ -790,10 +790,10 @@ bounded lowercase hexadecimal. Each registration writes its timestamp and a new 
 ```sql
 CREATE TABLE apns_subscriptions (
     session_id UUID PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
-    device_token TEXT NOT NULL UNIQUE CHECK (
+    device_token TEXT COLLATE "C" NOT NULL UNIQUE CHECK (
         length(device_token) BETWEEN 2 AND 512
         AND length(device_token) % 2 = 0
-        AND device_token COLLATE "C" !~ '[^0-9a-f]'
+        AND device_token !~ '[^0-9a-f]'
     ),
     registered_at TIMESTAMPTZ NOT NULL,
     generation UUID NOT NULL DEFAULT gen_random_uuid()

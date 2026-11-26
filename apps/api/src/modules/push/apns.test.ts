@@ -55,7 +55,11 @@ describe('Apple push provider', () => {
       },
     });
     try {
-      const push = await createApnsProvider(credentials, fixedClock(time), async (url, options) => {
+      const escaped = {
+        ...credentials,
+        signingKey: credentials.signingKey.replaceAll('\n', '\\n'),
+      };
+      const push = await createApnsProvider(escaped, fixedClock(time), async (url, options) => {
         expect(url.origin).toBe('https://api.sandbox.push.apple.com');
         expect(options.redirect).toBe('manual');
         expect(options.proxy).toBe(false);
