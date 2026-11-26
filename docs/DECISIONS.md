@@ -2010,14 +2010,12 @@ variant nobody consolidated.
 accessibility; Playwright for keyboard paths, visual snapshots and the cold-load measurement
 D-49 needs. Two tools with two jobs, not two tools doing one job.
 
-**Amended 2026-11-26 (#1568): `prosemirror-view` is held at 1.43.0.** From 1.43.1 on (1.44.0 is the latest),
-the cursor moves across node boundaries by a different rule, and under `bun test --coverage` with
-`happy-dom` the editor adapter's block-command test recurses until the stack is gone (`Selection.collapse`
-dispatches an event, ProseMirror sets the selection again, and so on) and times out. Real browsers are not
-affected; the Playwright suite passed on 1.44.0. That is the limit of the `happy-dom` half of this decision
-showing: it emulates a selection, it is not one. The pin moves when a later release passes
-`rich-editor.test.tsx` under coverage, either because `happy-dom` stops recursing or the test no longer
-triggers it. The test was not changed.
+**Amended 2026-11-26 (#1568): `prosemirror-view` is pinned to 1.44.0.** The dependency update
+initially held 1.43.0 because Happy DOM dispatches `selectionchange` inside `Selection.collapse()`.
+That event can make ProseMirror synchronize the selection again before the first update finishes.
+The fixture in `rich-editor.test.tsx` queues one event per document, matching the
+[Selection API](https://w3c.github.io/selection-api/#selectionchange-event). The editor tests run
+with coverage on 1.44.0.
 
 **Rejected — a component library with opinions** (a full design system package). It brings a visual
 identity that is not ours and a bundle we do not control, and the interface is the product's face.

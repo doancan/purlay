@@ -1,39 +1,41 @@
 /** Catch up without silently reading messages outside the page the person saw (D-216). */
-import { messageId, type MessagePage } from '@purlay/types';
-import { expect, test } from './fixtures';
+import { messageId, type Channel, type MessagePage } from '@purlay/types';
+import { expect, test, workspaceFor } from './fixtures';
 
 test('a never-read channel starts at its first unread and advances only through the displayed page', async ({
-  page,
-  signIn,
-  room,
-  tenant,
-  api,
+  newcomer,
 }) => {
-  const made = await room({ members: ['dogancan', 'alice'] });
-  const viewer = api('dogancan');
-  const writer = api('alice');
-  for (let index = 1; index <= 25; index += 1) {
-    await writer.say(made.id, `catchup ${String(index).padStart(2, '0')}`);
-  }
-  expect(await viewer.channelState(made.id)).toMatchObject({
-    lastReadMessageId: null,
-    unreadCount: 25,
+  // Other tests use the demo workspace at the same time. Their unread cards can move this
+  // channel between pointer positioning and the click, especially in WebKit.
+  const viewer = await newcomer('catchup-viewer');
+  const writer = await newcomer('catchup-writer');
+  const workspace = await workspaceFor(viewer, writer);
+  const made = await viewer.api.post<Channel>(`/api/workspaces/${workspace.id}/channels`, {
+    name: 'catchup',
   });
-  await signIn();
-  await page.goto(`/w/${tenant.slug}/unreads`);
-  const channel = page
-    .locator('section')
-    .filter({ has: page.getByRole('link', { name: made.name, exact: true }) });
+  await writer.api.join(made.id);
+  const state = async (): Promise<Channel['state'] | undefined> =>
+    (await viewer.api.get<Channel[]>(`/api/workspaces/${workspace.id}/channels`)).find(
+      (channel) => channel.id === made.id,
+    )?.state;
+  for (let index = 1; index <= 25; index += 1) {
+    await writer.api.say(made.id, `catchup ${String(index).padStart(2, '0')}`);
+  }
+  expect(await state()).toMatchObject({ lastReadMessageId: null, unreadCount: 25 });
+  const page = await viewer.page();
+  await page.goto(`/w/${workspace.slug}/unreads`);
+  const channel = page.getByRole('region', { name: 'catchup', exact: true });
+  const markRead = channel.getByRole('button', { name: 'Mark read', exact: true });
   await expect(channel.getByText('catchup 01', { exact: true })).toBeVisible();
   await expect(channel.getByText('catchup 20', { exact: true })).toBeVisible();
   await expect(channel.getByText('catchup 21', { exact: true })).toHaveCount(0);
-  expect((await viewer.channelState(made.id))?.unreadCount).toBe(25);
-  await channel.getByRole('button', { name: 'Mark read', exact: true }).click();
-  await expect.poll(async () => (await viewer.channelState(made.id))?.unreadCount).toBe(5);
+  expect((await state())?.unreadCount).toBe(25);
+  await markRead.click();
+  await expect.poll(async () => (await state())?.unreadCount).toBe(5);
   await expect(channel.getByText('catchup 21', { exact: true })).toBeVisible();
   await expect(channel.getByText('catchup 25', { exact: true })).toBeVisible();
-  await channel.getByRole('button', { name: 'Mark read', exact: true }).click();
-  await expect.poll(async () => (await viewer.channelState(made.id))?.unreadCount).toBe(0);
+  await markRead.click();
+  await expect.poll(async () => (await state())?.unreadCount).toBe(0);
   await expect(channel).toHaveCount(0);
 });
 

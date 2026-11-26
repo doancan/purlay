@@ -153,12 +153,13 @@ test.describe('the sign-in screen', () => {
     page,
     expectNoAxe,
   }) => {
-    await page.goto('/sign-in?error=email-taken');
+    // The status text is the readiness check. Ancillary assets can still be loading.
+    await page.goto('/sign-in?error=email-taken', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
       'An account with that email exists, but its address is not verified yet, so GitHub cannot sign in to it. It is a password account made when this server was set up: sign in with its password. This server sends no email, so the address stays unverified and GitHub will not sign in to it.',
     );
     await expectNoAxe();
-    await page.goto('/sign-in?error=signup-closed');
+    await page.goto('/sign-in?error=signup-closed', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('main').locator('p[role="status"]')).toHaveText(
       'This Purlay server makes accounts by invitation only — ask someone on it for an invitation link.',
     );
