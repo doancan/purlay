@@ -31,4 +31,8 @@ have it.
 
 - **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
 
+### Fixed
+
+- **Sign-in** — native sign-in in the browser names Purlay for Mac or Purlay for iOS (D-191)
+
 ---

@@ -493,7 +493,9 @@ describe('signing in for the native application (D-191)', () => {
     hold();
     try {
       const view = await visit('tr');
-      expect(view.getByText('Purlay for Mac’e devam etmek için giriş yap.')).toBeDefined();
+      expect(
+        view.getByText('Purlay for Mac uygulamasına devam etmek için giriş yap.'),
+      ).toBeDefined();
     } finally {
       window.sessionStorage.clear();
     }
