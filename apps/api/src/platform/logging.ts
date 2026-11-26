@@ -55,6 +55,10 @@ export const NEVER_LOGGED: ReadonlySet<string> = new Set([
   'endpoint',
   'p256dh',
   'auth',
+  'deviceToken',
+  'device_token',
+  'signingKey',
+  'APNS_PRIVATE_KEY',
   // A person's status line: free words, as a message's are (D-131).
   'status_text',
   // A mail and what a relay says of it — the recipient and the sign-in link it carries (D-138 §8).

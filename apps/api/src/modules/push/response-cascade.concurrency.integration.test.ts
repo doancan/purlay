@@ -113,10 +113,11 @@ describe('integration: response cascade concurrency', () => {
           [world.reader],
           world.notification,
         );
+        if (device?.provider !== 'web') throw new Error('Missing browser device');
         const deliver = await createDelivery(dependencies, {
           failed: createFailureCount(dependencies),
         });
-        delivering = deliver(device!, claim);
+        delivering = deliver(device, claim);
         void delivering.catch(() => undefined);
         const blocker = await held.promise;
         let waiting = false;

@@ -341,6 +341,24 @@ not the server-to-push-service path. Verify closed-tab delivery separately from 
 with the recipient's chosen channel level and Deep Work taken into account; inspect the API's
 `push refused` or `push not taken` logs if a subscribed device hears nothing.
 
+## Apple Push Notification service
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `APNS_ENVIRONMENT` | with APNs | — | `sandbox` or `production`. Match the app's APNs environment |
+| `APNS_TOPIC` | with APNs | — | The iOS app's bundle identifier |
+| `APNS_TEAM_ID` | with APNs | — | The ten-character Apple Developer Team ID |
+| `APNS_KEY_ID` | with APNs | — | The ten-character identifier of the Apple APNs signing key |
+| `APNS_PRIVATE_KEY` | with APNs | — | **Secret.** The unencrypted P-256 PKCS#8 PEM from Apple's `.p8` file. In an environment file, write each line break as `\n` |
+
+Leave all five unset to keep APNs off. A complete set identifies one app in one Apple environment
+per deployment. Use separate sandbox and production settings that match their devices. Update all
+API and scheduler processes to a version that supports APNs before supplying the credentials, and
+set the same APNs environment, team and topic on each. Changing one of those three requires devices
+to register in the new scope. Rotating the signing key preserves registrations in the same scope.
+The server checks the set locally at startup. Apple checks the app, team and key association on delivery.
+Keep the key in the deployment's secrets. [Apple's APNs token authentication documentation](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns).
+
 ## Interface
 
 | Variable | Required | Default | Notes |
@@ -520,7 +538,7 @@ stack's private network and nothing else joins it; `DATABASE_SSL_CA_FILE` is the
 `ENCRYPTION_KEY` (**32 random bytes in base64**:
 `openssl rand -base64 32`; production refuses the development key and a repeated value),
 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (required) and `LOG_LEVEL`, `ERROR_TRACKING_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `TRACE_SAMPLE_RATIO`, `DATABASE_POOL_MAX`, `OUTBOX_PENDING_MAX`,
-`SOCKET_MAX_CONNECTIONS`, `SOCKET_REPLAY_CONCURRENCY`, `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (one-time Web Push seed) and
+`SOCKET_MAX_CONNECTIONS`, `SOCKET_REPLAY_CONCURRENCY`, `SESSION_TTL_DAYS`, `WORKSPACE_CREATORS`, `S3_REGION`, `S3_BUCKET`, the three `VAPID_*` (one-time Web Push seed), the five `APNS_*` and
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (both or neither; empty is neither, and the server waits in setup mode), `SMTP_URL`, `MAIL_FROM`, `SMTP_ALLOW_PLAINTEXT` (email sign-in, off while empty), `GITHUB_URL`, `GITHUB_API_URL` (github.com while empty), `UPDATE_CHECK` (on unless `false`), and to the API alone `METRICS_TOKEN` (metrics, off while empty), all optional. `docker compose`
 refuses to start with a required one missing, and names it. `--env-file` only fills the compose file's
 placeholders: a variable it does not name never reaches the container, so the test that holds the stack

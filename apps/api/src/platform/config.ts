@@ -30,6 +30,12 @@ import {
   OIDC_NAME_MAX,
 } from '@purlay/types';
 import { githubAppKeyProblem } from './github-app-key';
+import {
+  APNS_IDENTIFIER,
+  APNS_TOPIC,
+  apnsSigningKey,
+  type ApnsCredentials,
+} from './apns-credentials';
 import { oidcIssuerProblem, oidcNameProblem } from './oidc-address';
 import { REDIS_NAMESPACE_PATTERN } from './redis-names';
 import { smtpUrlProblem } from './smtp-address';
@@ -243,6 +249,15 @@ export const Environment = Type.Object({
     Type.String({ pattern: '^(mailto:[^\\s@]+@[^\\s@]+|https://\\S+)$' }),
   ),
 
+  /** One Apple app and APNs environment per deployment. Set all five, or none. */
+  APNS_ENVIRONMENT: Type.Optional(
+    Type.Union([Type.Literal('sandbox'), Type.Literal('production')]),
+  ),
+  APNS_TOPIC: Type.Optional(Type.String({ pattern: APNS_TOPIC.source })),
+  APNS_TEAM_ID: Type.Optional(Type.String({ pattern: APNS_IDENTIFIER.source })),
+  APNS_KEY_ID: Type.Optional(Type.String({ pattern: APNS_IDENTIFIER.source })),
+  APNS_PRIVATE_KEY: Type.Optional(Type.String({ minLength: 1, maxLength: 2048 })),
+
   /** Where sign-in links are sent from (D-138): an SMTP server, `smtp://` or `smtps://`, with its
    *  credentials, and the address they come from. Both or neither: neither is email sign-in off — the
    *  API says so, and GitHub sign-in is all there is. */
@@ -315,6 +330,7 @@ const SECRETS: ReadonlySet<string> = new Set([
   'ENCRYPTION_KEY',
   'S3_SECRET_ACCESS_KEY',
   'VAPID_PRIVATE_KEY',
+  'APNS_PRIVATE_KEY',
   'SMTP_URL',
   'REDIS_URL',
   'METRICS_TOKEN',
@@ -454,6 +470,7 @@ export const loadConfig = (environment: Record<string, string | undefined>): Con
   } else if (config.VAPID_PUBLIC_KEY !== undefined && config.VAPID_PRIVATE_KEY !== undefined) {
     problems.push(...vapidProblems(config.VAPID_PUBLIC_KEY, config.VAPID_PRIVATE_KEY));
   }
+  problems.push(...apnsProblems(config));
   problems.push(...mailProblems(config));
   problems.push(...redisProblems(config));
   problems.push(...githubAppProblems(config));
@@ -561,6 +578,41 @@ const nativeClientProblems = (config: Config): string[] => {
     }
   }
   return problems;
+};
+
+export const apnsCredentialsFor = (config: Config): ApnsCredentials | undefined => {
+  const {
+    APNS_ENVIRONMENT: environment,
+    APNS_TOPIC: topic,
+    APNS_TEAM_ID: teamId,
+    APNS_KEY_ID: keyId,
+    APNS_PRIVATE_KEY: signingKey,
+  } = config;
+  if (
+    environment === undefined ||
+    topic === undefined ||
+    teamId === undefined ||
+    keyId === undefined ||
+    signingKey === undefined
+  )
+    return undefined;
+  return { environment, topic, teamId, keyId, signingKey };
+};
+
+const apnsProblems = (config: Config): string[] => {
+  const names = [
+    'APNS_ENVIRONMENT',
+    'APNS_TOPIC',
+    'APNS_TEAM_ID',
+    'APNS_KEY_ID',
+    'APNS_PRIVATE_KEY',
+  ] as const;
+  if (names.every((name) => config[name] === undefined)) return [];
+  const credentials = apnsCredentialsFor(config);
+  if (credentials === undefined) return [`${names.join(', ')}: set all five, or none`];
+  return apnsSigningKey(credentials.signingKey) === undefined
+    ? ['APNS_PRIVATE_KEY: expected an unencrypted P-256 PKCS#8 PEM key (value withheld)']
+    : [];
 };
 
 /** A host that is this machine, spelled as a URL's hostname spells it. */

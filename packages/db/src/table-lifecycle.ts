@@ -53,6 +53,7 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   // Core.
   accounts: decided('deleted', 'until-removed'),
   admin_email_verification: decided('deleted', 'swept'),
+  apns_subscriptions: decided('deleted', 'with-parent'),
   attachments: decided('anonymised', 'window'),
   audit_log: decided('anonymised', { kept: 'the workspace’s trail of who changed what' }),
   // The person's own rows go with them (`eraseAccount`); `actor_id` of another's keeps naming the anonymised account (D-256).

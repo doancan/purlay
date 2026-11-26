@@ -17,6 +17,7 @@ export const TABLE_OWNERS = {
   // Identity, tenancy, and what the core keeps for every module.
   accounts: 'core',
   admin_email_verification: 'core',
+  apns_subscriptions: 'core',
   attachments: 'core',
   audit_log: 'core',
   // The notices of any module for one person, written through the `NotificationSink` port (D-286).

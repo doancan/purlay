@@ -192,6 +192,7 @@ export type CorePersonalExcluded =
   | 'two_factors'
   | 'sessions'
   | 'push_subscriptions'
+  | 'apns_subscriptions'
   | 'push_intents'
   | 'push_deliveries'
   | 'push_notice_budgets'
@@ -266,6 +267,7 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   two_factors: 'an authenticator’s sealed key and the backup codes: a credential (D-236)',
   sessions: 'a credential; where they are signed in is listed in Sessions & account (D-193)',
   push_subscriptions: 'a device’s keys: a credential of the browser’s',
+  apns_subscriptions: 'a session-owned device token used for notification delivery (D-342)',
   push_intents: 'transient delivery state; the source notification is exported by its owner',
   push_deliveries: 'transient device/session delivery state, not conversation content',
   push_notice_budgets: 'transient interruption admission, not conversation content',

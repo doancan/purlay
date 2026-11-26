@@ -15,6 +15,7 @@ import { aSession } from './signed-in';
 import { aUniqueSlug, aUserRow } from './users';
 import { notificationSink } from '../modules/inbox/sink';
 import type { NoticeWords } from '../modules/push/notices';
+import type { PushCapture } from '../platform/push-work';
 
 export const KIND = 'thing_assigned';
 /** The words of a module of the test's own: its title is in the params, and must never reach a device. */
@@ -52,7 +53,7 @@ export interface World {
   readonly write: (recipient: string, title?: string) => Promise<WrittenNotice>;
 }
 
-export const aWorld = async (db: Transaction): Promise<World> => {
+export const aWorld = async (db: Transaction, capture?: PushCapture): Promise<World> => {
   const clock = movable(NOW);
   await enableTestPush(db, clock);
   const workspaceId = (
@@ -83,6 +84,7 @@ export const aWorld = async (db: Transaction): Promise<World> => {
     collapsed: serverMetrics(undefined, ['things'], [], [{ module: 'things', kind: KIND }])
       .inboxCollapsed,
     pushedKinds: new Set([KIND]),
+    ...(capture === undefined ? {} : { push: { capture, toldInbox: (): void => undefined } }),
   });
   const context = await requireWorkspaceMembership(db, bob, workspaceId);
   return {

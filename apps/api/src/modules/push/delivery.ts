@@ -14,7 +14,7 @@ import type { Logger } from '../../platform/logging';
 import type { Posted } from '../images/fetch-external';
 import { externalImageAddress } from '../images/proxy';
 import { inDeepWork } from '../workspaces/deep-work';
-import type { Device, PushKeys } from './devices';
+import type { PushKeys, WebDevice } from './devices';
 import { encryptPush, freshParts } from './encrypt';
 import type { FailureCount } from './failures';
 import type { PushNotices } from './notices';
@@ -55,14 +55,14 @@ interface DeliveryOptions {
 export const createDelivery = async (
   dependencies: DeliveryDependencies,
   { failed }: DeliveryOptions,
-): Promise<(device: Device, claim: PushClaim) => Promise<PushOutcome>> => {
+): Promise<(device: WebDevice, claim: PushClaim) => Promise<PushOutcome>> => {
   const { database, clock, log, keys, post } = dependencies;
   // Imported once, here, so a key that cannot sign stops the start rather than the first push.
   let cached: { readonly publicKey: string; readonly signing: CryptoKey } | undefined;
   if (typeof keys !== 'function')
     cached = { publicKey: keys.publicKey, signing: await vapidSigningKey(keys) };
 
-  const forget = async (device: Device, claim: PushClaim): Promise<boolean> =>
+  const forget = async (device: WebDevice, claim: PushClaim): Promise<boolean> =>
     await applyPushResponse(database, clock, claim, device, async (tx) => {
       await tx
         .deleteFrom('push_subscriptions')
@@ -74,7 +74,7 @@ export const createDelivery = async (
     });
 
   const counted = async (
-    device: Device,
+    device: WebDevice,
     url: URL,
     posted: Posted,
     claim: PushClaim,
@@ -105,7 +105,7 @@ export const createDelivery = async (
     return true;
   };
 
-  const quiet = async (device: Device): Promise<boolean> =>
+  const quiet = async (device: WebDevice): Promise<boolean> =>
     (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(
       device.userId,
     );

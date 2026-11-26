@@ -15,6 +15,7 @@ import {
   type ScheduledRow,
 } from './scheduled';
 import type { PushSender } from '../../../modules/push/sender';
+import type { PushCapture } from '../../../modules/push/notices';
 import { requireLiveSession } from '../../../modules/auth/sessions';
 import { withinDeferredSource, type WorkspaceAccessLifetime } from '../../../platform/tenancy';
 
@@ -54,17 +55,25 @@ const deliverRow = async (
   transaction: ChatTx,
   clock: Clock,
   row: ScheduledRow,
+  capture?: PushCapture,
 ): Promise<Delivered> => {
   try {
     const context = await requireChannelById(transaction, row.user_id, row.channel_id);
     // Let go and sent in one transaction: the send claims each file again as it links it.
     const files = await releaseReservations(transaction, row.id);
-    const sent = await sendMessage(transaction, clock, context, {
-      id: messageId(clock.now()),
-      content: row.content,
-      ...(row.parent_id === null ? {} : { parentId: row.parent_id }),
-      ...(files.length === 0 ? {} : { attachmentIds: [...files] }),
-    });
+    const sent = await sendMessage(
+      transaction,
+      clock,
+      context,
+      {
+        id: messageId(clock.now()),
+        content: row.content,
+        ...(row.parent_id === null ? {} : { parentId: row.parent_id }),
+        ...(files.length === 0 ? {} : { attachmentIds: [...files] }),
+      },
+      undefined,
+      capture,
+    );
     await transaction
       .updateTable('scheduled_messages')
       // A failed row sent now forgets why it failed: the table holds a reason on failed rows alone.
@@ -152,7 +161,7 @@ export const deliverScheduled = async (dependencies: Dependencies): Promise<numb
                 .skipLocked()
                 .executeTakeFirst();
               if (row === undefined) return { skipped: candidate.id };
-              return await deliverRow(transaction, clock, row);
+              return await deliverRow(transaction, clock, row, dependencies.push?.capture);
             },
           );
         } catch (error) {
@@ -212,7 +221,7 @@ export const sendScheduledNow = async (
         .executeTakeFirst();
       if (row?.user_id !== userId || row.channel_id !== channelId) throw scheduledNotFound();
       if (row.state === 'sent') throw alreadySent();
-      return await deliverRow(transaction, clock, row);
+      return await deliverRow(transaction, clock, row, dependencies.push?.capture);
     });
   } catch (error) {
     if (!(error instanceof RefusedDelivery)) throw error;

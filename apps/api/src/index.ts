@@ -15,7 +15,7 @@ import { ModuleConfigError } from './platform/module-kit/registry';
 import { checkRelay } from './platform/mail';
 import { createDatabase, leasingExecutor } from '@purlay/db';
 import { databaseConnection } from './platform/database';
-import { loadConfig } from './platform/config';
+import { apnsCredentialsFor, loadConfig } from './platform/config';
 import { workspacePolicyReadersReady } from './platform/workspace-policy-readiness';
 import { systemClock } from './platform/clock';
 import { deriveAuthSecret } from './modules/auth/better-auth';
@@ -64,6 +64,8 @@ import { openClient } from './ingress/http/client';
 import { storeFor } from './platform/storage';
 import { inMemoryAttention } from './platform/attention';
 import { PUSH_TIMEOUT_MS, createPushSender } from './modules/push/sender';
+import { createApnsProvider } from './modules/push/apns';
+import { apnsScopeOf } from './platform/apns-credentials';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
 import { seamsOfModules } from './module-seams-wiring';
@@ -172,6 +174,14 @@ const browserPush = pushConfiguration(
   config,
 );
 let pushAvailable = false;
+const apnsCredentials = apnsCredentialsFor(config);
+const apns =
+  apnsCredentials === undefined
+    ? undefined
+    : {
+        scope: apnsScopeOf(apnsCredentials),
+        send: await createApnsProvider(apnsCredentials, systemClock),
+      };
 const push = await createPushSender({
   available: () => pushAvailable,
   database,
@@ -192,6 +202,7 @@ const push = await createPushSender({
       timeoutMs: PUSH_TIMEOUT_MS,
     }),
   keys: browserPush.keys,
+  ...(apns === undefined ? {} : { apns }),
 });
 log.info('web push is managed in server settings');
 
@@ -315,6 +326,7 @@ const workers: Workers = {
 const app = createApp({
   composition: modules,
   moduleShares,
+  ...(apns === undefined ? {} : { apnsScope: apns.scope }),
   ...(redis === undefined
     ? {}
     : {

@@ -78,6 +78,7 @@ import {
   type MessageRow,
 } from './reader';
 import type { PushSender } from '../../../modules/push/sender';
+import type { PushCapture } from '../../../modules/push/notices';
 
 export interface OutgoingMessage {
   readonly id: string;
@@ -259,6 +260,7 @@ export const sendMessage = async (
   context: ChannelContext,
   input: OutgoingMessage,
   engine?: Engine,
+  capture?: PushCapture,
 ): Promise<Sent> => {
   const again = async (existing: MessageRow): Promise<Sent> => {
     // Ownership identifies a retry; it cannot grant access to history after guest re-admission.
@@ -434,16 +436,20 @@ export const sendMessage = async (
       details: { fields: { priority: 'only in a direct message, or naming somebody' } },
     });
   }
-  const { recipients, told } = await recordDelivery(executor, {
-    context,
-    messageId: input.id,
-    mentioned,
-    thread:
-      input.parentId === undefined || root === undefined
-        ? null
-        : { rootId: input.parentId, rootAuthorId: root.authorId },
-    now: clock.now(),
-  });
+  const { recipients, told } = await recordDelivery(
+    executor,
+    {
+      context,
+      messageId: input.id,
+      mentioned,
+      thread:
+        input.parentId === undefined || root === undefined
+          ? null
+          : { rootId: input.parentId, rootAuthorId: root.authorId },
+      now: clock.now(),
+    },
+    capture,
+  );
 
   const written = await readBuilt(executor, input.id, undefined, {
     id: input.id,
@@ -785,7 +791,7 @@ export const send = async (
   const sent = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
-    return await sendMessage(transaction, clock, context, input, engine);
+    return await sendMessage(transaction, clock, context, input, engine, push?.capture);
   });
   if (sent.unformatted === 'engine') {
     // Inside the bounds the engine should never fail (D-101): a gap in them to close, not a broken
