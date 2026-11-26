@@ -9057,6 +9057,13 @@ tables and the column; `sessions` keeps its shape throughout), the wizard and `/
 `server_settings` import. A reversal returns to the code D-11, D-38 and D-138 describe; the
 `workspaces` module was never touched, which is what makes it possible.
 
+**Amended 2026-11-26 (Better Auth 1.7.28).** The bullet above that says a failure of the library's read of
+the rows it is about to delete "is swallowed while the delete goes ahead" describes 1.7.14 and no longer
+holds. From 1.7.28 that failure stops the request before anything is deleted: the route answers 500, no
+session is ended and no socket is closed. The whole-watch of the five session-ending routes stays, because
+the hooks still see at most a hundred rows. `sockets.integration.test.ts` states the new contract: a socket closes if and only if its session
+ended.
+
 ### D-180. Navigation follows the theme: a light neutral in the light theme, the dark navy in the dark — changes D-118
 
 **Decided (the owner, 2026-10-23).** D-118 drew the rail and the sidebar in dark navy in *both* themes. The
