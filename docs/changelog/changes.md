@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Added
+
+- **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
 
 ---
