@@ -889,27 +889,28 @@ test.describe('writing tools', () => {
     await page.goto(made.path);
     const box = boxOf(page, made.name);
     const card = page.locator('[data-composer-card]');
+    const height = async (): Promise<number> =>
+      await box.evaluate((element) => element.getBoundingClientRect().height);
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await box.fill('');
-      const emptyHeight = await box.evaluate((element) => element.getBoundingClientRect().height);
+      const twoLines = await box.evaluate(
+        (element) => 2 * parseFloat(getComputedStyle(element).lineHeight),
+      );
+      // Resizing to the narrow layout changes the line height before the textarea refits.
+      await expect.poll(height).toBeCloseTo(twoLines, 0);
+      const emptyHeight = await height();
       await box.fill(
         'A clear update for the team, including İstanbul and the next release. '.repeat(30),
       );
-      await expect
-        .poll(async () => await box.evaluate((element) => element.getBoundingClientRect().height))
-        .toBeGreaterThan(emptyHeight);
-      expect(
-        await box.evaluate((element) => element.getBoundingClientRect().height),
-      ).toBeLessThanOrEqual(900 * 0.4);
+      await expect.poll(height).toBeGreaterThan(emptyHeight);
+      expect(await height()).toBeLessThanOrEqual(900 * 0.4);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
       );
       await expectNoAxe(card);
       await box.fill('');
-      await expect
-        .poll(async () => await box.evaluate((element) => element.getBoundingClientRect().height))
-        .toBe(emptyHeight);
+      await expect.poll(height).toBe(emptyHeight);
     }
   });
 
