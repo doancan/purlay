@@ -34,6 +34,10 @@ have it.
 - **Operations** — an operator can keep a ledger of which fact was delivered to which module and when (`OUTBOX_LEDGER_DAYS`, off by default, ids and times only, never a payload) and read it with `bun run outbox:ledger`, to prove a delivery after the transient table has forgotten it (D-335)
 - **Operations** — an operator can send traces of requests, scheduled jobs and the delivery of facts between modules to an OTLP collector (`OTEL_EXPORTER_OTLP_ENDPOINT`, off by default, a share of new traces recorded, never a path with its ids, a query, a body, a payload, a person or a workspace), so a request and what it set going are one picture; the trace of an incoming `traceparent` is joined (D-336)
 
+### Changed
+
+- **Interface** — the new Purlay mark is on the sign-in, sign-up, invitation and setup screens, in the browser tab and on the Home Screen, in place of the white P on blue (D-339)
+
 ### Fixed
 
 - **Operations** — the update check finds the latest release again: Purlay now lives in the `purlay` organisation, and GitHub answers the old repository address with a redirect that the check, by design, does not follow
