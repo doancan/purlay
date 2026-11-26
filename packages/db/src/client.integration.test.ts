@@ -11,11 +11,19 @@ import { Kysely, PostgresDialect, sql } from 'kysely';
 import pg from 'pg';
 import { createDatabase, DatabaseUnavailableError } from './client';
 import { migrateToLatest } from './migrator';
-import { closeIntegrationDatabase, dropDatabases, integrationDatabase } from './testing';
+import {
+  DROP_HOOK_MS,
+  closeIntegrationDatabase,
+  dropDatabases,
+  integrationDatabase,
+} from './testing';
+
+const freshDatabases: string[] = [];
 
 afterAll(async () => {
+  await dropDatabases(freshDatabases);
   await closeIntegrationDatabase();
-});
+}, DROP_HOOK_MS);
 
 const url = (): string => process.env['DATABASE_URL'] ?? '';
 
@@ -40,9 +48,16 @@ describe('integration: the database client and the migrations', () => {
     const shared = integrationDatabase();
     const name = `purlay_fresh_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`;
     await sql`create database ${sql.id(name)}`.execute(shared);
+    freshDatabases.push(name);
     const fresh = new Kysely<unknown>({
       dialect: new PostgresDialect({
-        pool: new pg.Pool({ connectionString: onDatabase(name), max: 1 }),
+        // The scratch database checks migration order and replay, so its test connection
+        // can proceed after commit without waiting for each WAL flush.
+        pool: new pg.Pool({
+          connectionString: onDatabase(name),
+          max: 1,
+          options: '-c synchronous_commit=off',
+        }),
       }),
     });
     try {
@@ -56,9 +71,6 @@ describe('integration: the database client and the migrations', () => {
       expect(again.results).toEqual([]);
     } finally {
       await fresh.destroy();
-      // Not a drop by hand: the pool says it has ended before its socket has, and `with (force)` on a connection
-      // halfway through hanging up reaches the client as an unhandled "terminating connection" (57P01).
-      await dropDatabases([name]);
     }
   });
 
