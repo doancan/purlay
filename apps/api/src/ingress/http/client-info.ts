@@ -31,12 +31,14 @@ export const clientInfo = (
   config: Config,
   auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'google' | 'signUp' | 'signInPolicy'>,
   modules: readonly string[],
+  hasApns: boolean,
 ): ClientInfo => {
   const { macos, ios } = clientPolicyOf(config);
   return {
     // Scheduling, reminders and deleting a message for oneself are chat's: offered where chat runs (D-250).
     capabilities: {
       notificationTypeFilters: true,
+      ...(hasApns ? { apnsNotifications: true } : {}),
       scheduledMessages: modules.includes('chat'),
       messageReminders: modules.includes('chat'),
       personalMessageDeletion: modules.includes('chat'),

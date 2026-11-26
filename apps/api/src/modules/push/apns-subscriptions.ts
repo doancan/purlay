@@ -7,15 +7,17 @@ import { requireLiveSession } from '../auth/sessions';
 import { normalizeApnsToken } from './apns';
 import { PUSH_SUBSCRIPTIONS_MAX, type Subscriber } from './subscriptions';
 
-const tokenForSession = async (
+const requireSubscriber = async (
   transaction: Transaction,
   clock: Clock,
   subscriber: Subscriber,
-  deviceToken: string,
-): Promise<string> => {
+): Promise<void> => {
   const authority = await requireLiveSession(transaction, clock, subscriber.sessionId);
   if (authority.userId !== subscriber.userId)
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+};
+
+const validToken = (deviceToken: string): string => {
   const token = normalizeApnsToken(deviceToken);
   if (token === undefined)
     throw new AppError({
@@ -33,7 +35,8 @@ export const registerApnsDevice = async (
   deviceToken: string,
   providerScope: string,
 ): Promise<void> => {
-  const token = await tokenForSession(transaction, clock, subscriber, deviceToken);
+  await requireSubscriber(transaction, clock, subscriber);
+  const token = validToken(deviceToken);
   // As with capture and provider settlement, serialize the recipient before touching device rows.
   await sql`select pg_advisory_xact_lock(hashtextextended(${subscriber.userId}, ${PUSH_PERSON_LOCK}))`.execute(
     transaction,
@@ -93,12 +96,15 @@ export const removeApnsDevice = async (
   transaction: Transaction,
   clock: Clock,
   subscriber: Subscriber,
-  deviceToken: string,
+  deviceToken?: string,
 ): Promise<void> => {
-  const token = await tokenForSession(transaction, clock, subscriber, deviceToken);
-  await transaction
+  await requireSubscriber(transaction, clock, subscriber);
+  const token = deviceToken === undefined ? undefined : validToken(deviceToken);
+  await sql`select pg_advisory_xact_lock(hashtextextended(${subscriber.userId}, ${PUSH_PERSON_LOCK}))`.execute(
+    transaction,
+  );
+  const own = transaction
     .deleteFrom('apns_subscriptions')
-    .where('session_id', '=', subscriber.sessionId)
-    .where('device_token', '=', token)
-    .execute();
+    .where('session_id', '=', subscriber.sessionId);
+  await (token === undefined ? own : own.where('device_token', '=', token)).execute();
 };
