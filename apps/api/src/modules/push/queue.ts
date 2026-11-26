@@ -1,5 +1,5 @@
 /** Short PostgreSQL claims; provider I/O never holds a transaction or an advisory lock (#1405). */
-import { sql, type Executor } from '@purlay/db';
+import { sql, type Executor, type RawBuilder } from '@purlay/db';
 import { NEEDS_YOU } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { atomicallyOn } from '../../platform/transactions';
@@ -21,6 +21,7 @@ export interface PushClaim extends PushWork {
   readonly leaseId: string;
   readonly expiresAt: Date;
   readonly attempts: number;
+  readonly apnsScope?: string;
 }
 
 export interface PushQueue {
@@ -29,15 +30,42 @@ export interface PushQueue {
   readonly owner: string;
   /** Only pushed kinds declared by modules this process actually runs. */
   readonly inboxKinds: ReadonlyMap<string, string>;
+  readonly apnsScope?: string;
 }
+
+/** A worker always handles Web Push and handles only its configured APNs app and environment. */
+const supportedTarget = (
+  apnsScope: string | undefined,
+  webAllowed: RawBuilder<boolean>,
+): RawBuilder<boolean> =>
+  apnsScope === undefined
+    ? sql<boolean>`(${webAllowed} and d.apns_session_id is null)`
+    : sql<boolean>`((${webAllowed} and d.apns_session_id is null) or exists (
+        select 1 from apns_subscriptions native
+        where native.session_id = d.apns_session_id and native.provider_scope = ${apnsScope}
+      ))`;
+
+const currentProvider = (claim: PushClaim, serverKey: string | undefined): RawBuilder<boolean> =>
+  claim.apnsScope === undefined
+    ? sql<boolean>`d.apns_session_id is null and exists (
+        select 1 from server_settings
+        where id and push_enabled and push_public_key = ${serverKey ?? null}
+      )`
+    : sql<boolean>`exists (
+        select 1 from apns_subscriptions native
+        where native.session_id = d.apns_session_id
+          and native.generation = d.generation and native.provider_scope = ${claim.apnsScope}
+      )`;
 
 /** Parent before children, shared by claim and acknowledgement: no child/parent lock inversion. */
 export const reschedulePush = async (tx: Executor, intentId: string, now: Date): Promise<void> => {
   const next = await tx
-    .selectFrom('push_deliveries')
-    .select((eb) => eb.fn.min<Date | null>('next_attempt_at').as('due'))
-    .where('intent_id', '=', intentId)
-    .where('state', '=', 'pending')
+    .selectFrom('push_deliveries as d')
+    .innerJoin('push_intents as p', 'p.id', 'd.intent_id')
+    .select((eb) => eb.fn.min<Date | null>('d.next_attempt_at').as('due'))
+    .where('d.intent_id', '=', intentId)
+    .where('d.state', '=', 'pending')
+    .where(sql<boolean>`(not p.web_canceled or d.apns_session_id is not null)`)
     .executeTakeFirstOrThrow();
   await tx
     .updateTable('push_intents')
@@ -108,12 +136,26 @@ export const claimPush = async (queue: PushQueue): Promise<PushClaim | undefined
       .where('p.expires_at', '>', now)
       .where('p.next_check_at', '<=', now)
       .where(sql<boolean>`(${sql.join([known, ...knownInbox], sql` or `)})`)
+      // Provider-specific work cannot hide other due intents from this worker's bounded sample.
+      .where(
+        sql<boolean>`(
+        exists (
+          select 1 from push_deliveries d where d.intent_id = p.id and d.state = 'pending'
+            and d.next_attempt_at <= ${now} and ${supportedTarget(queue.apnsScope, sql<boolean>`not p.web_canceled`)}
+        ) or not exists (
+          select 1 from push_deliveries d where d.intent_id = p.id and d.state = 'pending'
+            and d.next_attempt_at <= ${now}
+            and (not p.web_canceled or d.apns_session_id is not null)
+        )
+      )`,
+      )
       // A saturated person's backlog cannot hide another person's due work behind the look-ahead.
       .where(
         sql<boolean>`(
         select count(*) from push_deliveries d join push_intents live on live.id = d.intent_id
         where live.user_id = p.user_id and live.state = 'admitted' and live.expires_at > ${now}
           and d.state = 'pending' and d.lease_id is not null and d.next_attempt_at > ${now}
+          and (not live.web_canceled or d.apns_session_id is not null)
       ) < ${PUSH_POSTS_PER_PERSON}`,
       )
       .orderBy('p.next_check_at')
@@ -146,24 +188,23 @@ export const claimPush = async (queue: PushQueue): Promise<PushClaim | undefined
         .where('d.state', '=', 'pending')
         .where('d.lease_id', 'is not', null)
         .where('d.next_attempt_at', '>', now)
+        .where(sql<boolean>`(not p.web_canceled or d.apns_session_id is not null)`)
         .executeTakeFirstOrThrow();
       if (Number(active.n) >= PUSH_POSTS_PER_PERSON) continue;
       if (!(await admit(tx, intent, now))) continue;
       const target = await tx
-        .selectFrom('push_deliveries')
-        .innerJoin(
-          'push_subscriptions as subscription',
-          'subscription.id',
-          'push_deliveries.subscription_id',
-        )
-        .selectAll('push_deliveries')
-        .where('intent_id', '=', intent.id)
-        .where('state', '=', 'pending')
-        .where('next_attempt_at', '<=', now)
-        .orderBy('next_attempt_at')
-        .orderBy('subscription.created_at')
-        .orderBy('subscription_id')
-        .forUpdate(['push_deliveries'])
+        .selectFrom('push_deliveries as d')
+        .leftJoin('push_subscriptions as web', 'web.id', 'd.web_subscription_id')
+        .leftJoin('apns_subscriptions as native', 'native.session_id', 'd.apns_session_id')
+        .selectAll('d')
+        .where('d.intent_id', '=', intent.id)
+        .where('d.state', '=', 'pending')
+        .where('d.next_attempt_at', '<=', now)
+        .where(supportedTarget(queue.apnsScope, sql<boolean>`${!intent.web_canceled}`))
+        .orderBy('d.next_attempt_at')
+        .orderBy(sql`coalesce(web.created_at, native.registered_at)`)
+        .orderBy('d.subscription_id')
+        .forUpdate(['d'])
         .skipLocked()
         .executeTakeFirst();
       if (target === undefined) {
@@ -203,6 +244,9 @@ export const claimPush = async (queue: PushQueue): Promise<PushClaim | undefined
         leaseId,
         expiresAt: intent.expires_at,
         attempts: target.attempts,
+        ...(target.apns_session_id !== null && queue.apnsScope !== undefined
+          ? { apnsScope: queue.apnsScope }
+          : {}),
         source: intent.source_kind === 'message' ? 'message' : 'inbox',
         sourceId: intent.source_id,
         recordId: intent.record_id,
@@ -221,7 +265,7 @@ export const beginPushAttempt = async (
   database: Executor,
   claim: PushClaim,
   now: Date,
-  serverKey: string,
+  serverKey?: string,
 ): Promise<boolean> => {
   const result = await database
     .updateTable('push_deliveries as d')
@@ -240,19 +284,11 @@ export const beginPushAttempt = async (
           .select('p.id')
           .whereRef('p.id', '=', 'd.intent_id')
           .where('p.state', '=', 'admitted')
+          .where(sql<boolean>`(not p.web_canceled or d.apns_session_id is not null)`)
           .where('p.expires_at', '>', now),
       ),
     )
-    .where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom('server_settings')
-          .select('id')
-          .where('id', '=', true)
-          .where('push_enabled', '=', true)
-          .where('push_public_key', '=', serverKey),
-      ),
-    )
+    .where(currentProvider(claim, serverKey))
     .executeTakeFirst();
   return result.numUpdatedRows === 1n;
 };
@@ -261,19 +297,13 @@ export const ownsPushClaim = async (
   database: Executor,
   claim: PushClaim,
   now: Date,
-  serverKey: string,
+  serverKey?: string,
 ): Promise<boolean> =>
   (await database
     .selectFrom('push_deliveries as d')
     .innerJoin('push_intents as p', 'p.id', 'd.intent_id')
     .innerJoin('sessions as live', (join) =>
       join.onRef('live.id', '=', 'd.session_id').onRef('live.user_id', '=', 'p.user_id'),
-    )
-    .innerJoin('server_settings as settings', (join) =>
-      join
-        .on('settings.id', '=', true)
-        .on('settings.push_enabled', '=', true)
-        .on('settings.push_public_key', '=', serverKey),
     )
     .select('d.intent_id')
     .where('d.intent_id', '=', claim.intentId)
@@ -282,8 +312,10 @@ export const ownsPushClaim = async (
     .where('d.lease_id', '=', claim.leaseId)
     .where('d.state', '=', 'pending')
     .where('p.state', '=', 'admitted')
+    .where(sql<boolean>`(not p.web_canceled or d.apns_session_id is not null)`)
     .where('p.expires_at', '>', now)
     .where('live.expires_at', '>', now)
     .where(companySessionAllowsWorkspace('live', sql<string>`p.workspace_id`))
     .where('d.next_attempt_at', '>', now)
+    .where(currentProvider(claim, serverKey))
     .executeTakeFirst()) !== undefined;

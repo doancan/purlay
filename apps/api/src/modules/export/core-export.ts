@@ -192,6 +192,7 @@ export type CoreExcluded =
   | 'rate_limits'
   | 'sessions'
   | 'push_subscriptions'
+  | 'apns_subscriptions'
   | 'push_intents'
   | 'push_deliveries'
   | 'push_notice_budgets'
@@ -271,6 +272,7 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
     'sign-in and invitation-mail counters by client address, address digest or id, nobody’s record (D-179)',
   sessions: 'a credential, the person’s own',
   push_subscriptions: 'a device’s keys, the person’s own',
+  apns_subscriptions: 'a session-owned device token used for notification delivery (D-342)',
   push_intents: 'transient delivery state; the source notification is exported by its owner',
   push_deliveries: 'transient device/session delivery state, not conversation content',
   push_notice_budgets: 'transient interruption admission, not conversation content',

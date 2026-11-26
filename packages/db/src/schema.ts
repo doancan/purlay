@@ -67,6 +67,14 @@ export interface AdminEmailVerification {
   user_id: string;
 }
 
+export interface ApnsSubscriptions {
+  device_token: string;
+  generation: Generated<string>;
+  provider_scope: string | null;
+  registered_at: Timestamp;
+  session_id: string;
+}
+
 export interface Attachments {
   claimed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
@@ -637,6 +645,7 @@ export interface PinnedMessages {
 }
 
 export interface PushDeliveries {
+  apns_session_id: string | null;
   attempts: Generated<number>;
   generation: string;
   intent_id: string;
@@ -647,6 +656,7 @@ export interface PushDeliveries {
   session_id: string;
   state: Generated<string>;
   subscription_id: string;
+  web_subscription_id: string | null;
 }
 
 export interface PushIntents {
@@ -662,6 +672,7 @@ export interface PushIntents {
   source_kind: string;
   state: Generated<string>;
   user_id: string;
+  web_canceled: Generated<boolean>;
   workspace_id: string;
 }
 
@@ -1485,6 +1496,7 @@ export interface WorkspaceSessionAssurances {
 export interface DB {
   accounts: Accounts;
   admin_email_verification: AdminEmailVerification;
+  apns_subscriptions: ApnsSubscriptions;
   attachments: Attachments;
   audit_log: AuditLog;
   channel_access_controls: ChannelAccessControls;

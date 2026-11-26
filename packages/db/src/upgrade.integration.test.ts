@@ -354,6 +354,10 @@ describe('integration: upgrading from the previous release', () => {
         '0126_outbox_ledger',
         '0127_outbox_trace',
         '0128_message_priority',
+        '0129_apns_subscriptions',
+        '0130_apns_push_deliveries',
+        '0131_backfill_push_delivery_subscriptions',
+        '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
@@ -748,6 +752,182 @@ describe('integration: the matrix of sets around the contract', () => {
       expect(fresh.error).toBeUndefined();
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
       expect(await namesOfAttachmentsKeys(db)).toEqual([]);
+    } finally {
+      await db.destroy();
+    }
+  });
+});
+
+describe('integration: APNs joins the durable push queue', () => {
+  test('preserves queued Web Push and cascades each delivery through its own subscription', async () => {
+    const db = open(await emptyDatabase(), '-c synchronous_commit=off');
+    try {
+      const previous = copiedBelow(MIGRATIONS_DIRECTORY, '0130_apns_push_deliveries.sql');
+      expect((await migrateToLatest(db, previous)).error).toBeUndefined();
+      const {
+        rows: [fixture],
+      } = await sql<{
+        intent_id: string;
+        subscription_id: string;
+        browser_session_id: string;
+        ios_session_id: string;
+        ios_generation: string;
+      }>`
+        with person as (
+          insert into users (email, username, display_name)
+          values ('push-test@example.test', 'push-test', 'Push test') returning id
+        ), workspace as (
+          insert into workspaces (name, slug) values ('Push test', 'push-test') returning id
+        ), browser as (
+          insert into sessions (user_id, token_hash, expires_at)
+          select id, 'browser', now() + interval '1 day' from person returning id
+        ), ios as (
+          insert into sessions (user_id, token_hash, expires_at)
+          select id, 'ios', now() + interval '1 day' from person returning id
+        ), web_device as (
+          insert into push_subscriptions (user_id, session_id, endpoint, p256dh, auth, server_key)
+          select person.id, browser.id, 'https://push.example.test/device', 'p', 'a', 's'
+          from person, browser returning id, generation
+        ), ios_device as (
+          insert into apns_subscriptions (session_id, device_token, registered_at)
+          select id, 'abcd', now() from ios returning generation
+        ), intent as (
+          insert into push_intents (source_kind, source_id, record_id, workspace_id, user_id, module, kind,
+                                    created_at, expires_at, next_check_at)
+          select 'inbox', gen_random_uuid(), gen_random_uuid(), workspace.id, person.id,
+                 'issues', 'assigned', now(), now() + interval '1 hour', now()
+          from workspace, person returning id
+        ), delivery as (
+          insert into push_deliveries (intent_id, subscription_id, generation, session_id, next_attempt_at)
+          select intent.id, web_device.id, web_device.generation, browser.id, now()
+          from intent, web_device, browser returning intent_id, subscription_id
+        )
+        select delivery.intent_id, delivery.subscription_id, browser.id as browser_session_id,
+               ios.id as ios_session_id, ios_device.generation as ios_generation
+        from delivery, browser, ios, ios_device`.execute(db);
+      if (fixture === undefined) throw new Error('Missing queued push fixture');
+
+      // Cross a backfill commit boundary and retain the same heap through all three stages.
+      await sql`
+        insert into push_deliveries (intent_id, subscription_id, generation, session_id, next_attempt_at)
+        select ${fixture.intent_id}, ${fixture.subscription_id}, gen_random_uuid(),
+               ${fixture.browser_session_id}, now() from generate_series(1, 1001)`.execute(db);
+      const heap = async (): Promise<string | undefined> =>
+        (
+          await sql<{ rel: string }>`
+          select pg_relation_filenode('push_deliveries'::regclass)::text as rel`.execute(db)
+        ).rows[0]?.rel;
+      const originalHeap = await heap();
+      expect(originalHeap).toBeDefined();
+
+      const expanded = copiedBelow(
+        MIGRATIONS_DIRECTORY,
+        '0131_backfill_push_delivery_subscriptions.sql',
+      );
+      const expandResult = await migrateToLatest(db, expanded);
+      expect(expandResult.error).toBeUndefined();
+      expect(expandResult.results?.map(({ migrationName }) => migrationName)).toEqual([
+        '0130_apns_push_deliveries',
+      ]);
+      expect(await heap()).toBe(originalHeap);
+
+      const unfilled = async (): Promise<number | undefined> =>
+        (
+          await sql<{ count: number }>`
+          select count(*)::int as count from push_deliveries where web_subscription_id is null`.execute(
+            db,
+          )
+        ).rows[0]?.count;
+      expect(await unfilled()).toBe(1002);
+      // The prior release can continue to insert without supplying a Web reference.
+      await sql`
+        insert into push_deliveries (intent_id, subscription_id, generation, session_id, next_attempt_at)
+        values (${fixture.intent_id}, ${fixture.subscription_id}, gen_random_uuid(),
+                ${fixture.browser_session_id}, now())`.execute(db);
+      expect(await unfilled()).toBe(1002);
+
+      // A process can exit after a stage has run but before its migration record is committed.
+      const replay = async (file: string): Promise<void> => {
+        for (const statement of splitStatements(
+          readFileSync(join(MIGRATIONS_DIRECTORY, file), 'utf8'),
+        )) {
+          await sql.raw(statement).execute(db);
+        }
+      };
+      const backfillFile = '0131_backfill_push_delivery_subscriptions.sql';
+      const foreignKeysFile = '0132_push_delivery_provider_foreign_keys.sql';
+      await replay(backfillFile);
+      expect(await unfilled()).toBe(0);
+      const throughBackfill = copiedBelow(MIGRATIONS_DIRECTORY, foreignKeysFile);
+      const backfilled = await migrateToLatest(db, throughBackfill);
+      expect(backfilled.error).toBeUndefined();
+      expect(backfilled.results?.map(({ migrationName }) => migrationName)).toEqual([
+        '0131_backfill_push_delivery_subscriptions',
+      ]);
+      await replay(foreignKeysFile);
+      const upgraded = await migrateToLatest(db);
+      expect(upgraded.error).toBeUndefined();
+      expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
+        '0132_push_delivery_provider_foreign_keys',
+        '0133_workspace_urgent_messages',
+      ]);
+      expect(await heap()).toBe(originalHeap);
+      const deliveries = async (): Promise<
+        { apns_session_id: string | null; web_subscription_id: string | null }[]
+      > =>
+        (
+          await sql<{ apns_session_id: string | null; web_subscription_id: string | null }>`
+          select apns_session_id, web_subscription_id from push_deliveries
+          where intent_id = ${fixture.intent_id} order by apns_session_id nulls first`.execute(db)
+        ).rows;
+
+      const webDelivery = { apns_session_id: null, web_subscription_id: fixture.subscription_id };
+      const apnsDelivery = { apns_session_id: fixture.ios_session_id, web_subscription_id: null };
+      expect(await deliveries()).toEqual(Array.from({ length: 1003 }, () => webDelivery));
+      expect(
+        (
+          await sql<{ web_canceled: boolean }>`
+          select web_canceled from push_intents where id = ${fixture.intent_id}`.execute(db)
+        ).rows,
+      ).toEqual([{ web_canceled: false }]);
+      expect(
+        (
+          await sql<{ provider_scope: string | null }>`
+          select provider_scope from apns_subscriptions where session_id = ${fixture.ios_session_id}
+        `.execute(db)
+        ).rows,
+      ).toEqual([{ provider_scope: null }]);
+
+      // A Web Push writer still submits the columns it did before migration 0130.
+      await sql`
+        insert into push_deliveries (intent_id, subscription_id, generation, session_id, next_attempt_at)
+        values (${fixture.intent_id}, ${fixture.subscription_id}, gen_random_uuid(),
+                ${fixture.browser_session_id}, now())`.execute(db);
+      const [invalidDelivery] = await Promise.allSettled([
+        sql`
+          insert into push_deliveries
+            (intent_id, subscription_id, generation, session_id, apns_session_id, next_attempt_at)
+          values (${fixture.intent_id}, ${fixture.subscription_id}, ${fixture.ios_generation},
+                  ${fixture.ios_session_id}, ${fixture.ios_session_id}, now())`.execute(db),
+      ]);
+      expect(invalidDelivery).toMatchObject({
+        status: 'rejected',
+        reason: { code: '23514', constraint: 'push_deliveries_apns_identity' },
+      });
+      await sql`
+        insert into push_deliveries
+          (intent_id, subscription_id, generation, session_id, apns_session_id, next_attempt_at)
+        values (${fixture.intent_id}, ${fixture.ios_session_id}, ${fixture.ios_generation},
+                ${fixture.ios_session_id}, ${fixture.ios_session_id}, now())`.execute(db);
+      expect(await deliveries()).toEqual([
+        ...Array.from({ length: 1004 }, () => webDelivery),
+        apnsDelivery,
+      ]);
+
+      await sql`delete from push_subscriptions where id = ${fixture.subscription_id}`.execute(db);
+      expect(await deliveries()).toEqual([apnsDelivery]);
+      await sql`delete from sessions where id = ${fixture.ios_session_id}`.execute(db);
+      expect(await deliveries()).toEqual([]);
     } finally {
       await db.destroy();
     }

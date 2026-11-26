@@ -1082,9 +1082,9 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'send-announces-before-the-commit',
     why: 'subscribers receive a message that then rolls back, and nothing can retract the frame',
     file: MESSAGES,
-    find: `    return await sendMessage(transaction, clock, context, input, engine);
+    find: `    return await sendMessage(transaction, clock, context, input, engine, push?.capture);
   });`,
-    replace: `    const early = await sendMessage(transaction, clock, context, input, engine);
+    replace: `    const early = await sendMessage(transaction, clock, context, input, engine, push?.capture);
     await bus.publish(channelTopic(context.channelId), {
       event: 'MESSAGE_CREATED',
       data: early.message,

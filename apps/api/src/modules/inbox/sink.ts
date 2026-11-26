@@ -156,8 +156,8 @@ export const notificationSink = (dependencies: {
   readonly collapsed: Counter<'module' | 'kind'>;
   /** The kinds the manifests declare `pushed`: the others are only listed. */
   readonly pushedKinds: ReadonlySet<string>;
-  /** Tells the devices of a pushed kind; absent where web push is off. */
-  readonly push?: Pick<PushSender, 'toldInbox'>;
+  /** Captures and tells the devices of a pushed kind. */
+  readonly push?: Pick<PushSender, 'capture' | 'toldInbox'>;
   /** Whether the administrator has stopped the module at run time (D-296): its notices are not written. Absent, never. */
   readonly suspended?: () => boolean;
 }): NotificationSink => {
@@ -268,7 +268,7 @@ export const notificationSink = (dependencies: {
       counted.add(answer.recipientId);
       return { ...answer, collapsed: collapsed.get(answer.recipientId) ?? 0 };
     });
-    await enqueuePush(
+    await (dependencies.push?.capture ?? enqueuePush)(
       transaction,
       now,
       withCollapsed
