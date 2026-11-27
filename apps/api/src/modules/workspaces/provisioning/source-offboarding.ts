@@ -237,13 +237,7 @@ export const addManualWorkspaceAccess = async (
               .returning('id')
               .executeTakeFirstOrThrow();
       noteWorkspaceAccessChange(transaction, scope, [userId]);
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        [userId],
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, [userId]);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,
@@ -315,13 +309,7 @@ export const revokeWorkspaceAccessSource = async (
       if (source.kind === 'manual')
         await revokeManualCompanyProofs(transaction, dependencies.clock, scope, userId);
       noteWorkspaceAccessChange(transaction, scope, [userId]);
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        [userId],
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, [userId]);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,
@@ -408,13 +396,7 @@ export const offboardWorkspaceMember = async (
       if (role === 'owner') await requireAnotherOwner(transaction, scope, userId);
       await blockWorkspaceAdmission(transaction, dependencies.clock, scope, userId);
       await revokeManualCompanyProofs(transaction, dependencies.clock, scope, userId);
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        [userId],
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, [userId]);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,
@@ -467,13 +449,7 @@ export const readmitWorkspaceMember = async (
         .execute();
       noteWorkspaceAccessChange(transaction, scope, [userId]);
       if (control.last_access_kind !== 'guest')
-        await projectWorkspaceAccess(
-          transaction,
-          dependencies.clock,
-          scope,
-          [userId],
-          dependencies.channels,
-        );
+        await projectWorkspaceAccess(transaction, dependencies, scope, [userId]);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,

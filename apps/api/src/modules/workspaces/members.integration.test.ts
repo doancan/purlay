@@ -22,6 +22,7 @@ import { aRoom, type Room } from '../../testing/rooms';
 import { fixedClock } from '../../platform/clock';
 import { changeRole, removeMember } from './members';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import { noDepartures } from '../../testing/departures';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
@@ -103,7 +104,9 @@ describe('integration: changing a role', () => {
         'FORBIDDEN',
       );
       expect(
-        await refusalOf(removeMember(db, clock, bob, idOf(room, 'alice'), chatWorkspaceChannels)),
+        await refusalOf(
+          removeMember(db, clock, bob, idOf(room, 'alice'), chatWorkspaceChannels, noDepartures),
+        ),
       ).toBe('FORBIDDEN');
     });
   });
@@ -119,7 +122,9 @@ describe('integration: changing a role', () => {
         'FORBIDDEN',
       );
       expect(
-        await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels)),
+        await refusalOf(
+          removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels, noDepartures),
+        ),
       ).toBe('FORBIDDEN');
     });
   });
@@ -132,7 +137,9 @@ describe('integration: changing a role', () => {
         'LAST_OWNER',
       );
       expect(
-        await refusalOf(removeMember(db, clock, alice, idOf(room, 'alice'), chatWorkspaceChannels)),
+        await refusalOf(
+          removeMember(db, clock, alice, idOf(room, 'alice'), chatWorkspaceChannels, noDepartures),
+        ),
       ).toBe('LAST_OWNER');
       await changeRole(db, clock, alice, idOf(room, 'bob'), 'owner');
       await changeRole(db, clock, alice, idOf(room, 'alice'), 'member');
@@ -152,7 +159,9 @@ describe('integration: changing a role', () => {
         'USER_NOT_FOUND',
       );
       expect(
-        await refusalOf(removeMember(db, clock, alice, 'not-a-uuid', chatWorkspaceChannels)),
+        await refusalOf(
+          removeMember(db, clock, alice, 'not-a-uuid', chatWorkspaceChannels, noDepartures),
+        ),
       ).toBe('USER_NOT_FOUND');
     });
   });
@@ -250,6 +259,7 @@ describe('integration: removing a member', () => {
         await as(db, room, 'alice'),
         idOf(room, 'bob'),
         chatWorkspaceChannels,
+        noDepartures,
       );
       // What they could see: the public channels, joined or not, and the private ones they were in.
       expect([...removed.channelIds].sort()).toEqual(
@@ -272,9 +282,11 @@ describe('integration: removing a member', () => {
       const room = await aRoom(db, ['alice', 'bob', 'carol']);
       await setRole(db, room, 'bob', 'admin');
       const bob = await as(db, room, 'bob');
-      await removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels);
+      await removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels, noDepartures);
       expect(
-        await refusalOf(removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels)),
+        await refusalOf(
+          removeMember(db, clock, bob, idOf(room, 'carol'), chatWorkspaceChannels, noDepartures),
+        ),
       ).toBe('USER_NOT_FOUND');
     });
   });

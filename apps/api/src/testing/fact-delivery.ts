@@ -21,6 +21,48 @@ import { atomicallyOn } from '../platform/transactions';
 import { OUTBOX_PENDING_MAX_DEFAULT } from '../platform/config';
 import { aRecordingLogger } from './doubles';
 
+/** What a test's publish and delivery are handed: an in-process bus, a registry of its own and the outbox's default limits. */
+const seamInputsOf = (
+  composition: Composition,
+  clock: Clock,
+  log: Logger,
+): Parameters<typeof seamsOfModules>[0] => ({
+  composition,
+  clock,
+  bus: inProcessEventBus(() => undefined, NO_LOG),
+  log,
+  metrics: serverMetrics(),
+  outboxPendingMax: OUTBOX_PENDING_MAX_DEFAULT,
+  deliveriesPerMinuteMax: null,
+});
+
+/**
+ * Runs one iteration of the `outbox:consume` worker of every module the composition runs, as a process's scheduler would: for a test
+ * whose fact was published by the real path (a route, the core) rather than by `publishAndDeliver`.
+ */
+export const deliverPending = async (
+  database: Executor,
+  composition: Composition,
+  input: { readonly clock?: Clock; readonly log?: Logger } = {},
+): Promise<void> => {
+  const { clock = systemClock, log = aRecordingLogger().log } = input;
+  const inputs = seamInputsOf(composition, clock, log);
+  const seamsOf = seamsOfModules(inputs);
+  for (const worker of composition.workers.filter(({ name }) => name === OUTBOX_CONSUME_WORKER)) {
+    const seams = seamsOf(worker.module);
+    await worker.work({
+      database,
+      clock,
+      log,
+      bus: inputs.bus,
+      ports: composition.portsFor(worker.module, database),
+      seams,
+      inWorkspace: async (turn, work) => await inWorkspace(seams, database, turn, work),
+      entitled: composition.entitledFor(worker.module, database),
+    });
+  }
+};
+
 /** What became of each consumer's delivery of the fact: `pending` (failed, or not run here), `delivered`, `skipped` or `dead`. */
 export type DeliveredTo = Readonly<Record<string, string>>;
 
@@ -42,16 +84,7 @@ export const publishAndDeliver = async <Fact extends FactDeclaration>(
   },
 ): Promise<DeliveredTo> => {
   const { workspaceId, fact, payload, clock = systemClock, log = aRecordingLogger().log } = input;
-  const bus = inProcessEventBus(() => undefined, NO_LOG);
-  const inputs = {
-    composition,
-    clock,
-    bus,
-    log,
-    metrics: serverMetrics(),
-    outboxPendingMax: OUTBOX_PENDING_MAX_DEFAULT,
-    deliveriesPerMinuteMax: null,
-  };
+  const inputs = seamInputsOf(composition, clock, log);
   const before = new Set(
     (
       await database
@@ -70,20 +103,7 @@ export const publishAndDeliver = async <Fact extends FactDeclaration>(
       payload,
     );
   });
-  const seamsOf = seamsOfModules(inputs);
-  for (const worker of composition.workers.filter(({ name }) => name === OUTBOX_CONSUME_WORKER)) {
-    const seams = seamsOf(worker.module);
-    await worker.work({
-      database,
-      clock,
-      log,
-      bus,
-      ports: composition.portsFor(worker.module, database),
-      seams,
-      inWorkspace: async (turn, work) => await inWorkspace(seams, database, turn, work),
-      entitled: composition.entitledFor(worker.module, database),
-    });
-  }
+  await deliverPending(database, composition, { clock, log });
   const rows = await database
     .selectFrom('outbox')
     .select(['id', 'consumer', 'state'])

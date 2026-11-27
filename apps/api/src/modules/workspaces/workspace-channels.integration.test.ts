@@ -23,6 +23,7 @@ import { noWorkspaceChannels } from './channels-port';
 import { askToDelete } from './deletion';
 import { removeMember } from './members';
 import { readRetention, setRetention } from './retention';
+import { noDepartures } from '../../testing/departures';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
 
@@ -51,7 +52,14 @@ describe('integration: a workspace and its channels, asked through the port', ()
     );
     const { channelIds } = await atomicallyOn(cloned.db)(
       async (transaction) =>
-        await removeMember(transaction, clock, alice, idOf(room, 'bob'), chatWorkspaceChannels),
+        await removeMember(
+          transaction,
+          clock,
+          alice,
+          idOf(room, 'bob'),
+          chatWorkspaceChannels,
+          noDepartures,
+        ),
     );
     expect(channelIds).toEqual([room.channelId]);
     const left = await cloned.db
@@ -71,7 +79,14 @@ describe('integration: a workspace and its channels, asked through the port', ()
     );
     const { channelIds } = await atomicallyOn(cloned.db)(
       async (transaction) =>
-        await removeMember(transaction, clock, alice, idOf(room, 'bob'), noWorkspaceChannels),
+        await removeMember(
+          transaction,
+          clock,
+          alice,
+          idOf(room, 'bob'),
+          noWorkspaceChannels,
+          noDepartures,
+        ),
     );
     expect(channelIds).toEqual([]);
     const stillMember = await cloned.db

@@ -38,7 +38,10 @@ export const factContextOf = ({
   metrics,
   outboxPendingMax,
   deliveriesPerMinuteMax,
-}: SeamInputs): SharedFactContext => ({
+}: Pick<
+  SeamInputs,
+  'composition' | 'clock' | 'metrics' | 'outboxPendingMax' | 'deliveriesPerMinuteMax'
+>): SharedFactContext => ({
   clock,
   routing: withoutStopped(
     factRoutingOf(

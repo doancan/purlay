@@ -55,6 +55,8 @@ import {
   deleteWorkspaceDirectory,
 } from './service';
 import type { WorkspaceDirectoryDependencies } from './authority';
+import { noDepartures, recordedDepartures } from '../../../testing/departures';
+import type { MemberDepartures } from '../member-departures';
 
 let clone: ClonedDatabase;
 beforeAll(async () => {
@@ -67,6 +69,7 @@ afterAll(async () => {
 const setup = async (
   channels: WorkspaceChannels = noWorkspaceChannels,
   claim: 'sub' | 'oid' = 'sub',
+  departures: MemberDepartures = noDepartures,
 ): Promise<{
   readonly configured: Awaited<ReturnType<typeof setupCompanyNative>>;
   readonly dependencies: WorkspaceDirectoryDependencies;
@@ -79,13 +82,14 @@ const setup = async (
     ...original.fixture.dependencies,
     baseUrl: 'https://purlay.test',
     channels,
+    departures,
     bus,
     readersReady: () => Promise.resolve(true),
   };
   const auth = aTestAuth(clone.db, {
     clock: systemClock,
     companyIdentity: { cipher: original.fixture.dependencies.cipher, fetch: original.idp.fetch },
-    directory: { channels, readersReady: dependencies.readersReady },
+    directory: { channels, departures, readersReady: dependencies.readersReady },
   });
   const configured = { ...original, auth };
   await enableCompanyNative(configured);
@@ -141,6 +145,55 @@ const resourceId = async (response: Response): Promise<string> => {
 };
 
 describe('integration: native directory provisioning', () => {
+  test('a SCIM delete, and a directory turned off, each end a membership and tell the modules once, as provisioning (D-355)', async () => {
+    const recorded = recordedDepartures();
+    const f = await setup(noWorkspaceChannels, 'sub', recorded.departures);
+    const { workspaceId } = f.configured.fixture.actor.context;
+    const memberOf = async (resource: string): Promise<string> => {
+      const created = await call(f, 'POST', 'Users', user(resource));
+      expect(created.status).toBe(201);
+      return (
+        await clone.db
+          .selectFrom('users')
+          .select('id')
+          .where('email', '=', `${resource}@company.example`)
+          .executeTakeFirstOrThrow()
+      ).id;
+    };
+    const isMember = async (userId: string): Promise<boolean> =>
+      (await clone.db
+        .selectFrom('workspace_members')
+        .select('id')
+        .where('workspace_id', '=', workspaceId)
+        .where('user_id', '=', userId)
+        .executeTakeFirst()) !== undefined;
+    const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
+    const firstId = await memberOf(first);
+    const secondId = await memberOf(second);
+    expect([await isMember(firstId), await isMember(secondId)]).toEqual([true, true]);
+    expect(recorded.told).toEqual([]);
+    const firstResource = await clone.db
+      .selectFrom('workspace_access_sources')
+      .select('directory_link_reference')
+      .where('directory_id', '=', f.directory.id)
+      .where('user_id', '=', firstId)
+      .executeTakeFirstOrThrow();
+    expect(
+      (await call(f, 'DELETE', `Users/${String(firstResource.directory_link_reference)}`)).status,
+    ).toBe(204);
+    expect(await isMember(firstId)).toBe(false);
+    expect(recorded.told).toEqual([{ workspaceId, userId: firstId, reason: 'provisioning' }]);
+    await updateWorkspaceDirectory(f.dependencies, f.configured.fixture.actor, f.directory.id, {
+      revision: f.directory.revision,
+      enabled: false,
+    });
+    expect(await isMember(secondId)).toBe(false);
+    expect(recorded.told).toEqual([
+      { workspaceId, userId: firstId, reason: 'provisioning' },
+      { workspaceId, userId: secondId, reason: 'provisioning' },
+    ]);
+  });
+
   test('preview keeps actual manual, directory and mixed sources live', async () => {
     const f = await setup();
     const external = crypto.randomUUID();
@@ -253,10 +306,9 @@ describe('integration: native directory provisioning', () => {
         .execute();
       await projectWorkspaceAccess(
         transaction,
-        systemClock,
+        { clock: systemClock, channels: noWorkspaceChannels, departures: noDepartures },
         scope,
         [person.id],
-        noWorkspaceChannels,
       );
     });
     const inactive = await call(f, 'PATCH', `Users/${resource}`, {
@@ -661,7 +713,12 @@ describe('integration: native directory provisioning', () => {
           admitted_at: systemClock.now(),
         })
         .execute();
-      await projectWorkspaceAccess(tx, systemClock, scope, [person.id], noWorkspaceChannels);
+      await projectWorkspaceAccess(
+        tx,
+        { clock: systemClock, channels: noWorkspaceChannels, departures: noDepartures },
+        scope,
+        [person.id],
+      );
     });
     expect(
       (
@@ -1180,7 +1237,11 @@ describe('integration: native directory provisioning', () => {
       JSON.stringify(await listWorkspaceDirectories(f.dependencies, f.configured.fixture.actor)),
     ).not.toContain(rotated.token);
     const unready = aTestAuth(clone.db, {
-      directory: { channels: noWorkspaceChannels, readersReady: () => Promise.resolve(false) },
+      directory: {
+        channels: noWorkspaceChannels,
+        departures: noDepartures,
+        readersReady: () => Promise.resolve(false),
+      },
     });
     expect(
       (

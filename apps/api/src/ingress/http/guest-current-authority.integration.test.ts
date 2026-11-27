@@ -34,6 +34,7 @@ import {
 } from '../../modules/workspaces/invitation-mail';
 import { finishInvitationAttempt } from '../../modules/workspaces/invitation-delivery';
 import { createApp } from './app';
+import { noDepartures } from '../../testing/departures';
 
 afterAll(closeIntegrationDatabase);
 
@@ -99,6 +100,7 @@ const readmission = async (db: Transaction, age: number): Promise<Readmission> =
     owner,
     target.userId,
     chatWorkspaceChannels,
+    noDepartures,
   );
   await db
     .updateTable('messages')
@@ -212,7 +214,14 @@ describe('integration: guest boundaries use current authority', () => {
         expect(replay?.data.map((m) => m.id)).toEqual([newId]);
         expect(replay?.nextCursor).toBeNull();
       }
-      await removeMember(db, f.clock, f.owner, f.target.userId, chatWorkspaceChannels);
+      await removeMember(
+        db,
+        f.clock,
+        f.owner,
+        f.target.userId,
+        chatWorkspaceChannels,
+        noDepartures,
+      );
       expect((await searchIn(db, f.workspace, [f.room.channelId], { q: 'supplier' })).data).toEqual(
         [],
       );

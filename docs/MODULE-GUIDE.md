@@ -109,6 +109,8 @@ export const acmeFactConsumers: FactConsumers = {
 };
 ```
 
+A real one is issues' handler of the core's `core.member-left` (`apps/api/src/features/issues/facts.ts`, D-355): it reads the person's membership as it is now, skips one who came back, and takes whoever did not off the workspace's open issues, writing `fact.deliveredAt` as the time, since a handler is handed no clock. A fact of the core needs no partner under `requires` or `optional`.
+
 The handler's database effects commit with the delivery's mark, so only an effect outside the database (a mail, a call) can happen twice: key it on `fact.factId`. A later fact may arrive first, so compare a version or read the state, never the sequence. A throw is tried again (from five seconds to an hour) and is dead at the eighth try; `'skipped'` ends it. `ports.of(fact)` (the third argument) has the ports the manifest `uses` for that workspace.
 **Prove it** in the module's integration test: `publishAndDeliver(database, compose([issues, acme], [issues, acme]), { workspaceId, fact, payload })` (`apps/api/src/testing/fact-delivery.ts`) publishes the fact as its owner, runs every `outbox:consume` worker once and answers what became of it for each consumer: `{ acme: 'delivered' }`, `'skipped'`, `'pending'` after a throw, nothing where the workspace is not granted it.
 

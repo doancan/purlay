@@ -46,6 +46,7 @@ import { moduleConnections } from '../../platform/module-budget';
 import { deadlinesOf } from '../../platform/request-deadline';
 import { runningModuleIds } from '../../composition';
 import { factContextOf, sinkOfModule } from '../../module-seams-wiring';
+import { memberDeparturesOf } from '../../modules/workspaces/member-departures';
 import { factPublisherOf } from '../../platform/ports/fact-publisher';
 import type { HandlerDependencies, LeasedDependencies } from './dependencies';
 import { requestObservation } from './request-observation';
@@ -108,6 +109,16 @@ export interface HttpApplication {
 export const createApp = (given: Dependencies): HttpApplication => {
   // The modules this process runs (`composition.ts`).
   const modules = given.composition;
+  const metrics = given.metrics ?? serverMetrics();
+  // Who consumes which fact over the whole build, what this process runs, and the outbox's limits: one context for every
+  // publish this application makes, a module route's and the core's (D-288, D-355).
+  const factContext = factContextOf({
+    composition: modules,
+    clock: given.clock,
+    metrics,
+    outboxPendingMax: given.config.OUTBOX_PENDING_MAX,
+    deliveriesPerMinuteMax: given.config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
+  });
   const dependencies = {
     ...given,
     // The one database a handler can reach, leased by the module the request belongs to: the module's share of the
@@ -123,12 +134,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    memberDepartures: memberDeparturesOf(factContext),
     auditAccess: modules.auditAccess,
     userErased: given.userErased ?? modules.userErased,
     collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   } satisfies LeasedDependencies;
   const { log } = dependencies;
-  const metrics = dependencies.metrics ?? serverMetrics();
   /** How a request reads its workspace's grants (D-289): the composition's set, and the count of a request turned away for one. */
   const entitlements: EntitlementPolicy = {
     effective: modules.effectiveModules,
@@ -243,7 +254,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
     deliveriesPerMinuteMax: dependencies.config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
     ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
   };
-  const factContext = factContextOf(seamInputs);
   // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
   // manifest, as the rest of the surface is (D-255 §2).
   const moduleRoutes = modules.bundled.flatMap((module) =>

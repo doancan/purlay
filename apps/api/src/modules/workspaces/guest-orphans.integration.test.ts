@@ -17,6 +17,7 @@ import { noWorkspaceChannels } from './channels-port';
 import { createGuestInvitation } from './guest-invitations';
 import { createInvitation, acceptInvitation } from './invitations';
 import { removeMember } from './members';
+import { noDepartures } from '../../testing/departures';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -139,7 +140,14 @@ describe('integration: workspace removal and orphaned conversation grants', () =
       await withRollback(async (db) => {
         const { owner, target, publicId, privateId, historyId, otherId, otherHistoryId } =
           await setup(db, kind);
-        await removeMember(db, fixedClock(new Date()), owner, target.userId, noWorkspaceChannels);
+        await removeMember(
+          db,
+          fixedClock(new Date()),
+          owner,
+          target.userId,
+          noWorkspaceChannels,
+          noDepartures,
+        );
         const grants = await db
           .selectFrom('channel_members')
           .innerJoin('channels', 'channels.id', 'channel_members.channel_id')
@@ -196,7 +204,7 @@ describe('integration: workspace removal and orphaned conversation grants', () =
     await withRollback(async (db) => {
       const { owner, target, publicId, privateId, otherId } = await setup(db, 'guest');
       const clock = fixedClock(new Date(Date.now() - 1_000));
-      await removeMember(db, clock, owner, target.userId, noWorkspaceChannels);
+      await removeMember(db, clock, owner, target.userId, noWorkspaceChannels, noDepartures);
       // A restore/older runtime can have left this valid legacy row without a workspace membership.
       await db
         .insertInto('channel_members')

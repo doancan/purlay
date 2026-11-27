@@ -28,6 +28,11 @@ export interface DeliveredFact<Payload = unknown> {
   readonly correlationId: string;
   /** In the declaration's current shape, whatever shape the row was written in (D-288 §5). */
   readonly payload: Payload;
+  /**
+   * When this delivery runs, by the drain's clock: what a consumer writes as now (an audit entry, a time on its row), since a handler is
+   * handed no clock and reads none itself (D-46, D-355).
+   */
+  readonly deliveredAt: Date;
 }
 
 /**
