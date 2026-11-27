@@ -377,6 +377,45 @@ test.describe('a tab in the background', () => {
     await expect(page.getByText(/^Test notification requested\./)).toBeHidden();
   });
 
+  test('returning with browser permission offers the device switch without switching it on', async ({
+    newcomer,
+  }) => {
+    const viewer = await newcomer('permission-viewer');
+    const workspace = await workspaceFor(viewer);
+    const page = await viewer.page();
+    // Headless Chromium cannot grant notifications. Change the capability the page reads,
+    // and record any attempt to invoke the browser prompt.
+    await page.addInitScript(() => {
+      Object.defineProperty(Notification, 'permission', {
+        configurable: true,
+        get: () => sessionStorage.getItem('notification-permission') ?? 'denied',
+      });
+      Object.defineProperty(Notification, 'requestPermission', {
+        value: (): Promise<NotificationPermission> => {
+          sessionStorage.setItem('notification-prompted', 'yes');
+          return Promise.resolve('granted');
+        },
+      });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/w/${workspace.slug}/settings/notifications`, {
+      waitUntil: 'domcontentloaded',
+    });
+    const device = page.getByRole('region', { name: 'Notifications on this device' });
+    await expect(device.getByRole('button', { name: 'Blocked in the browser' })).toBeDisabled();
+    await page.evaluate(() => {
+      sessionStorage.setItem('notification-permission', 'granted');
+      window.dispatchEvent(new Event('focus'));
+    });
+    await expect(device.getByRole('button', { name: 'Turn on', exact: true })).toBeEnabled();
+    expect(
+      await page.evaluate(() => [
+        localStorage.getItem('purlay.push.owner'),
+        sessionStorage.getItem('notification-prompted'),
+      ]),
+    ).toEqual([null, null]);
+  });
+
   test('every ordinary DM requests an alert while away, including the first message from a person', async ({
     newcomer,
   }) => {
