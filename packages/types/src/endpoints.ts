@@ -409,6 +409,13 @@ export const ENDPOINTS = [
     auth: 'session',
     responses: { 200: 'binary' },
   }),
+  read({
+    id: 'claimMyExportDownload',
+    method: 'POST',
+    path: '/api/me/exports/:exportId/download',
+    auth: 'session',
+    responses: { 200: 'binary' },
+  }),
 
   // ── Channels and conversations
   read({
