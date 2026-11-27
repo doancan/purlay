@@ -193,6 +193,11 @@ Run from a shell without conflicting exported Compose or stack settings. The com
 shared by the operators of this project. Keep the saved Dockhand image pin in sync with the successful
 release before any later manual Dockhand redeploy.
 
+After a repository transfer, check the image references of the running API and scheduler in Dockhand.
+The containers keep the old registry path until the stack configuration is updated. Confirm the host
+can pull the tested digest from the new registry path, then use it for the staged release. Save that
+same digest in Dockhand after verifying both readers. Keep the existing project and volumes.
+
 Supply a recent protected custom PostgreSQL dump from this stack, copied out of the rolling backup
 directory. Keep the attachment volume's separate backup. The command checks the dump's archive listing
 and records its SHA-256. The operator is responsible for the source, freshness and restore verification

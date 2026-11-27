@@ -101,7 +101,7 @@ case "$1 $2" in
           "$TEST_PROJECT" "$label" "$image_id" "$code" "$stamp" "$stamp" "$entrypoint"
         ;;
       *)
-        selected='ghcr.io/purlay/purlay-api:old'
+        selected='ghcr.io/doancan/purlay-api:release'
         actual='sha256:old'
         if [[ "$TEST_MODE" = scheduled-* ]]; then
           selected="$TEST_REGISTRY@sha256:$TEST_OLD_DIGEST"
