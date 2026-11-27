@@ -37,6 +37,7 @@ have it.
 - **Interface** — every grey, in the light and dark themes, is one neutral family on even steps, so the navigation, the page and a segmented control read apart (D-343)
 - **Interface** — keyboard shortcuts are shown as keys the way the keyboard prints them: ⌘ ⇧ ⌥ on a Mac, Ctrl, Shift and Alt elsewhere (D-344)
 - **Documentation** — the decision record is one file per decision, indexed by category, with `bun run decision:new` to start the next one (D-345)
+- **Operations** — a fact held on purpose between modules is counted apart and no longer pages, and one that expired undelivered is counted and alerts (D-353)
 
 ### Fixed
 

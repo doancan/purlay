@@ -309,11 +309,16 @@ answers differently by node. A migration that a new module brings applies when t
 **Facts between modules (the outbox, D-288).** A module that tells another something writes a row of `outbox` in its own transaction; the
 consuming module's worker (`outbox:consume`, every two seconds, in that module's share of the pool) delivers it. Nothing in the product publishes yet,
 so the numbers below are zero until a module does. `/metrics` carries, for each module that consumes a fact: `purlay_outbox_pending` (rows waiting),
-`purlay_outbox_oldest_age_seconds` (how long the oldest has waited) and `purlay_outbox_dead` (rows given up on after 8 tries, kept 180 days),
-all read from the table, so every node of a cluster reports the same value (alert on `max`); and `purlay_outbox_delivered_total`,
-`purlay_outbox_failures_total` and `purlay_outbox_dropped_total` by module and fact type, counted in the process. The server's overview lists a
-module with dead rows, or a fact that has waited more than 15 minutes. A fact whose consumer is off waits for it as its declaration says (a day, or the
-days it holds) and is then swept by `sweep:outbox`, hourly. The table is meant for facts of human scale, an assignment or a link, and never one for each
+`purlay_outbox_oldest_age_seconds` (how long the oldest that this node would deliver has waited), `purlay_outbox_held{reason}` (rows waiting on purpose:
+`not_granted`, the workspace is not granted the module; `not_run`, this node does not run it or it is stopped; `newer_shape`, written by a newer release)
+and `purlay_outbox_dead` (rows given up on after 8 tries, kept 180 days), all read from the table, so alert on `max`: the depth and the dead are the same on
+every node, and the age and the held rows are as each node can deliver, so the `max` of the age is the node that runs the module (D-353). A held row is not
+late and pages nobody; it waits for a grant, a node that runs the module or the upgrade, and expires as its declaration says. `purlay_outbox_expired_total`
+(by module and fact type) counts what `sweep:outbox`, hourly, gave up on at its expiry: it is kept in a table (`outbox_expired`), because the sweep runs in the
+scheduler's process, so it too is the same on every node. `purlay_outbox_delivered_total`, `purlay_outbox_failures_total` and
+`purlay_outbox_dropped_total` by module and fact type are counted in the process. The server's overview lists a module with dead rows, or a fact that has waited more than 15 minutes
+for a node that would deliver it. A fact whose consumer is off waits for it as its declaration says (a day, or the days it holds) and is then
+swept and counted. The table is meant for facts of human scale, an assignment or a link, and never one for each
 message. **When to look again:** more than a million rows a day, or vacuum that falls behind on `outbox` (`pg_stat_user_tables.n_dead_tup`), is the point at
 which to partition it by day; below that it is not worth the complexity, and nothing in this change measures it yet.
 
@@ -356,6 +361,7 @@ workspace find's sources (group `purlay-find`): `purlay_search_source_duration_s
 | `PurlayOutboxDeadFacts` | `purlay_outbox_dead` above 0 for 15 min | warning | A fact is dead |
 | `PurlayOutboxOldestPendingStale` | oldest waiting fact over 900 s (the overview's figure) for 5 min | warning | The backlog is growing |
 | `PurlayOutboxOldestPendingPage` | oldest waiting fact over 3600 s for 5 min | page | The backlog is growing |
+| `PurlayOutboxFactsExpired` | any fact of a module expired undelivered in the last hour | warning | A fact expired undelivered |
 | `PurlayOutboxDepthGrowing` | more than 500 waiting and still rising over 30 min | warning | The backlog is growing |
 | `PurlayOutboxDeliveryFailing` | over 20% of deliveries to a module fail, for 15 min | warning | A consumer is slow or failing |
 | `PurlayOutboxConsumerWorkerFailing` | the `outbox:consume` worker failed 3 times in 15 min | warning | A consumer is slow or failing |
@@ -372,7 +378,8 @@ workspace find's sources (group `purlay-find`): `purlay_search_source_duration_s
 A fact is dead after eight tries, or at once when its payload no longer fits. It is kept for `OUTBOX_DEAD_KEPT_DAYS`, and nothing is lost until then.
 
 1. **List** them: `curl $C "$APP_URL/api/server/outbox?state=dead"` (filters `consumer`, `type`, `workspaceId`; page with `after=<last id>`). The list is metadata: the fact's type, workspace,
-   consumer, tries and the class of the last error, never the payload. `state=stuck` lists facts that have waited over 15 minutes.
+   consumer, tries and the class of the last error, never the payload. `state=stuck` lists facts that have waited over 15 minutes for a delivery that could
+   happen: a fact held for a workspace not granted its module, or past its expiry, is not stuck (D-353).
 2. **Inspect** one: `curl $C "$APP_URL/api/server/outbox/<id>"` shows the payload. That read is on the server's trail (`server.fact_inspected`, with your id and the fact's), so open only what you need.
    Also look at the module's log for `a fact is dead and will not be delivered` (module, type and fact id, never the payload).
 3. **Fix the consumer.** The error class says where to look; a class such as `PayloadRefused` is a fact that no longer fits its declaration and will not get better by waiting (poison): go to step 5.
@@ -406,6 +413,18 @@ left empty as `module:suspend` leaves it. The ids are the deliveries' (`outbox.i
 1. Read the module's log around the failures: each failed delivery names the module, the fact type and the error class, never the payload, and carries the correlation id of the request that published it.
 2. A slow handler holds the rest of its batch (they run one after another under the worker's deadline): `purlay_worker_failures_total` rising with no `purlay_outbox_failures_total` is a deadline, not a throw.
 3. If it needs a release to fix, stop the consumer's module (*A module misbehaves: stop it*, above) so its facts wait instead of burning tries, deploy, resume it, and requeue what died meanwhile as in *A fact is dead*.
+
+### A fact expired undelivered
+
+`PurlayOutboxFactsExpired`. `sweep:outbox` deleted facts of a type for a module because nobody delivered them before their expiry (a day for a fact its declaration
+drops, the days it holds otherwise), and added them to `purlay_outbox_expired_total{module,fact}` (D-353). They are gone; what the module was to do about them was not done.
+
+1. Was the module run? `purlay_modules_info{module="<id>"}` and `purlay_module_suspended`: a module off or stopped for longer than the hold loses what was held for it. If that is
+   on purpose (the module is not offered on this server), the count is the cost of that choice and needs no action.
+2. Was it behind? `purlay_outbox_oldest_age_seconds` and `purlay_outbox_failures_total` of the module before the expiry: a consumer that failed or fell behind for a day is *The
+   outbox backlog is growing* or *A consumer is slow or failing*, and the expired facts are what it cost.
+3. Were they held? `purlay_outbox_held{module="<id>"}` before the expiry: `not_granted` is a grant taken away after the facts were published, `newer_shape` a newer release that never
+   finished its rollout. Nothing is to be requeued: an expired fact is not kept.
 
 ### A search source keeps being skipped
 
@@ -566,8 +585,10 @@ start with it, `MODULES=none` (or the list without it) is the way back; if it is
 | `purlay_job_last_success_timestamp_seconds` | gauge | `job`, `module` | When each scheduled job last succeeded, in seconds since the epoch; absent for one that never has. |
 | `purlay_job_consecutive_failures` | gauge | `job`, `module` | How many times each scheduled job has failed since it last succeeded. |
 | `purlay_outbox_pending` | gauge | `module` | Facts waiting to be delivered to a module, by the module that consumes them; the same on every node of a cluster. |
-| `purlay_outbox_oldest_age_seconds` | gauge | `module` | Seconds the oldest fact waiting for a module has waited, 0 where none waits. |
+| `purlay_outbox_oldest_age_seconds` | gauge | `module` | Seconds the oldest fact this node would deliver to a module has waited, 0 where none waits; a fact held on purpose is not counted. |
+| `purlay_outbox_held` | gauge | `module`, `reason` | Facts waiting on purpose for a module, as this node sees them: the workspace is not granted it, this node does not run it, or the fact is of a newer shape. |
 | `purlay_outbox_dead` | gauge | `module` | Facts given up on after their tries, kept 180 days to be looked at, by the module that was to consume them. |
+| `purlay_outbox_expired_total` | counter | `module`, `fact` | Facts given up on because nobody delivered them before their expiry, by the module that was to consume them and the fact type; read from the table the sweep counts in, the same on every node. |
 <!-- /generated:metrics -->
 
 ## Sizing an upgrade that backfills

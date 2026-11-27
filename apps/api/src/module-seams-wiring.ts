@@ -51,7 +51,7 @@ export const factContextOf = ({
   refused: metrics.outboxRefused,
   pendingMax: outboxPendingMax,
   deliveriesPerMinuteMax,
-  effective: composition.effectiveModules,
+  granted: composition.grantedModules,
 });
 
 /** The core's sink as the module `module` is handed it: every notice it writes is that module's. */

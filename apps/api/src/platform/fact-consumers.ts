@@ -5,12 +5,15 @@
  * What delivers a fact (D-288, step 14d): a handler runs in the consumer's own transaction, which the delivery's mark is
  * committed with, under the module's share and its `workerDeadline`.
  */
+import type { Static } from '@sinclair/typebox';
+import { Value } from '@sinclair/typebox/value';
 import type { Transaction } from '@purlay/db';
+import type { FactDeclaration } from '@purlay/types';
 import type { ModulePorts } from './ports/module-ports';
 import type { WorkspaceSeam } from './ports/module-seams';
 
 /** A fact as the consumer is given it: whose it is, which delivery it is, and the payload, checked against its declaration. */
-interface DeliveredFact {
+export interface DeliveredFact<Payload = unknown> {
   readonly type: string;
   /** The same on every consumer's delivery of one fact: the consumer's idempotency key for an effect outside the database. */
   readonly factId: string;
@@ -23,7 +26,8 @@ interface DeliveredFact {
   readonly modules: ReadonlySet<string> | null;
   /** The request that published the fact (or a stand-in): the id its delivery's log lines carry, and what a fact it publishes carries on. */
   readonly correlationId: string;
-  readonly payload: unknown;
+  /** In the declaration's current shape, whatever shape the row was written in (D-288 §5). */
+  readonly payload: Payload;
 }
 
 /**
@@ -47,3 +51,30 @@ export type FactConsumer = (
 ) => Promise<'done' | 'skipped'>;
 
 export type FactConsumers = Readonly<Record<string, FactConsumer>>;
+
+/** A handler of one declared fact, whose payload is typed by the declaration's schema. */
+export type FactHandler<Fact extends FactDeclaration> = (
+  fact: DeliveredFact<Static<Fact['schema']>>,
+  transaction: Transaction,
+  ports: ModulePorts,
+  seam: WorkspaceSeam,
+) => Promise<'done' | 'skipped'>;
+
+/**
+ * The handler of `fact`, keyed by its type, for a slot's `factConsumers` (`{ ...consumerOf(A, onA), ...consumerOf(B, onB) }`): the
+ * handler is given the payload typed by the declaration, so a module's code needs no cast. The delivery has already checked the payload
+ * against that schema; it is asked again here, as a type guard, and a payload that fails is a throw (tried again, then dead), never a
+ * value of the wrong type in the handler.
+ */
+export const consumerOf = <Fact extends FactDeclaration>(
+  fact: Fact,
+  handle: FactHandler<Fact>,
+): FactConsumers => ({
+  [fact.type]: async (delivered, transaction, ports, seam): ReturnType<FactConsumer> => {
+    const { payload } = delivered;
+    if (!Value.Check(fact.schema, payload)) {
+      throw new TypeError(`the payload of "${fact.type}" does not fit its declaration`);
+    }
+    return await handle({ ...delivered, payload }, transaction, ports, seam);
+  },
+});

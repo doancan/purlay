@@ -30,6 +30,7 @@ import { sessionAuthOf } from '../../modules/auth/sessions';
 import { httpLimits, WRITE_BUDGET } from './rate-limit';
 import { inProcessLimiters } from '../../realtime/rate-limiter';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
+import type { OutboxView } from '../../platform/outbox-report';
 import { responseHeaders } from './edge';
 import { type SetupDependencies } from './setup';
 import { githubAppApi, githubAppCaller, platformAppFetch } from '../../platform/github-app-api';
@@ -166,10 +167,19 @@ export const createApp = (given: Dependencies): HttpApplication => {
     WEBSOCKET_CONNECTIONS.help,
     () => sockets.held().connections,
   );
-  // The modules the build carries that consume a fact, whether this process runs them or not: the rows wait for any node that does.
-  const outboxConsumers = modules.bundled
-    .filter((module) => (module.manifest.consumes ?? []).length > 0)
-    .map((module) => module.manifest.id);
+  // What the outbox is read by (D-353): the modules the build carries that consume a fact, whether this process runs them or not (the
+  // rows wait for any node that does), and what this node can deliver of them.
+  const outbox: OutboxView = {
+    consumers: modules.bundled
+      .filter((module) => (module.manifest.consumes ?? []).length > 0)
+      .map((module) => module.manifest.id),
+    consumed: modules.bundled.flatMap(({ manifest }) =>
+      (manifest.consumes ?? []).map((type) => ({ consumer: manifest.id, type })),
+    ),
+    handles: modules.outboxHandles,
+    effective: modules.effectiveModules,
+    granted: modules.grantedModules,
+  };
   // The inbox lists the notices of the modules this process runs and no others (D-286). Made here, beside the
   // composition it is read from, since the guard on it (`scripts/mutations/api-ingress-http.ts`) names this line.
   const inbox = {
@@ -184,7 +194,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     inbox,
     metrics,
   };
-  const probes = probeRoutes(context, { metrics, outboxConsumers });
+  const probes = probeRoutes(context, { metrics, outbox });
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const browserPush = pushConfiguration(
@@ -296,7 +306,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     peersBehind: dependencies.peersBehind,
     suspensionPeersBehind: dependencies.suspensionPeersBehind,
     suspension: modules.suspension,
-    outboxConsumers,
+    outbox,
     jobs: [
       ...CORE_JOBS,
       ...Object.keys(modules.jobWork).filter((name) => !modules.closedJob(name)),

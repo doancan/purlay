@@ -206,6 +206,7 @@ export type CoreExcluded =
   | 'object_deletions'
   | 'outbox'
   | 'outbox_ledger'
+  | 'outbox_expired'
   | 'server_operational_status'
   | 'server_settings'
   | 'server_audit_log'
@@ -294,6 +295,8 @@ export const CORE_EXCLUDED: Readonly<Record<CoreExcluded, string>> = {
     'facts in flight between modules, gone within days of being delivered: infrastructure, not a record of the workspace (D-288)',
   outbox_ledger:
     'which fact was delivered to which module and when, for an operator to prove: ids and times, never a payload, the server’s record and not the workspace’s content (#1305)',
+  outbox_expired:
+    'how many facts between modules expired undelivered, by module and type: the server’s count, about no workspace (D-353)',
   server_operational_status: 'the operator’s bounded checks, not personal or workspace data',
   server_settings:
     'the operator’s settings for the whole server, not a workspace’s; the GitHub secret and the relay’s address are credentials, which never leave (D-179)',

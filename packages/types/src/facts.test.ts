@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
 import {
   FACT_HOLD_DAYS_MAX,
+  FACT_STRING_LENGTH_MAX,
   defineFact,
   readsEarlierShape,
   type FactDeclaration,
@@ -74,7 +75,10 @@ describe('what becomes of a fact when its consumer is not run', () => {
   });
 
   test('reads only shapes earlier than its own, and a reader refuses a payload its shape does not fit', () => {
-    const reader = readsEarlierShape(Type.Object({ id: Type.String() }), (note) => note);
+    const reader = readsEarlierShape(
+      Type.Object({ id: Type.String({ maxLength: 36 }) }),
+      (note) => note,
+    );
     const reading = (shape: number, earlier: number): ReturnType<typeof defineFact> =>
       defineFact({ ...fact('notes.a', 'notes'), shape, reads: { [earlier]: reader } });
     expect(factOwnerProblems([reading(3, 1), reading(3, 2)], ['notes'])).toEqual([
@@ -99,5 +103,78 @@ describe('what becomes of a fact when its consumer is not run', () => {
         `the fact "notes.a" is held ${String(days)} days when its consumer is off: a whole number from 1 to ${String(FACT_HOLD_DAYS_MAX)}`,
       ]);
     }
+  });
+});
+
+describe('what a fact carries', () => {
+  const carrying = (
+    schema: Parameters<typeof defineFact>[0]['schema'],
+  ): ReturnType<typeof defineFact> =>
+    defineFact({ type: 'notes.a', owner: 'notes', absent: 'drop', schema });
+  const tooLong = (at: string, which = ''): string =>
+    `the fact "notes.a"${which} has a string at ${at} that may be longer than ${String(FACT_STRING_LENGTH_MAX)} characters: a fact carries ids and a short label, so give it a maxLength`;
+
+  test('is ids and labels of at most 200 characters, wherever in the payload a string is', () => {
+    expect(
+      factOwnerProblems(
+        [
+          carrying(
+            Type.Object({
+              noteId: Type.String({ format: 'uuid' }),
+              at: Type.String({ format: 'date-time' }),
+              title: Type.String({ maxLength: FACT_STRING_LENGTH_MAX }),
+              kind: Type.Union([Type.Literal('a'), Type.Literal('b')]),
+              tags: Type.Array(Type.String({ maxLength: 32 })),
+              count: Type.Integer(),
+            }),
+          ),
+        ],
+        ['notes'],
+      ),
+    ).toEqual([]);
+  });
+
+  test('is never a string with no bound, or one longer than a label, in an object, an array, a union or a record', () => {
+    expect(
+      factOwnerProblems(
+        [
+          carrying(
+            Type.Object({
+              body: Type.String(),
+              title: Type.String({ maxLength: FACT_STRING_LENGTH_MAX + 1 }),
+              lines: Type.Array(Type.String()),
+              either: Type.Union([Type.String({ maxLength: 10 }), Type.String()]),
+              byName: Type.Record(Type.String(), Type.String({ maxLength: 9000 })),
+              nested: Type.Object({ text: Type.String({ format: 'email' }) }),
+            }),
+          ),
+        ],
+        ['notes'],
+      ),
+    ).toEqual([
+      tooLong('/body'),
+      tooLong('/title'),
+      tooLong('/lines/items'),
+      tooLong('/either/anyOf/1'),
+      tooLong('/byName/^(.*)$'),
+      tooLong('/nested/text'),
+    ]);
+    expect(factOwnerProblems([carrying(Type.String())], ['notes'])).toEqual([tooLong('/')]);
+  });
+
+  test('is held in the shapes it still reads as well as in its own', () => {
+    const reader = readsEarlierShape(Type.Object({ body: Type.String() }), (note) => note);
+    expect(
+      factOwnerProblems(
+        [
+          defineFact({
+            ...carrying(Type.Object({ body: Type.String({ maxLength: 80 }) })),
+            shape: 2,
+            reads: { 1: reader },
+          }),
+        ],
+        ['notes'],
+      ),
+    ).toEqual([tooLong('/body', ' (shape 1)')]);
   });
 });

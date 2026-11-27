@@ -72,10 +72,11 @@ export interface FactPublishContext {
   /** The fact whose delivery is publishing this one, when one is: the chain from a fact to the facts it caused. */
   readonly causedBy?: string;
   /**
-   * The composition's function of workspace grants (D-289): a consumer the workspace is not granted gets no row, since nobody
-   * would deliver it and a grant given later is not a reason to act on what was said before it.
+   * The workspace's grants judged over every module the build carries, run here or not (`Composition.grantedModules`, D-289): a
+   * consumer the workspace is not granted gets no row, since a grant given later is not a reason to act on what was said before it.
+   * It is the same answer on every node, whatever each runs, so where a fact is published does not change what becomes of it (D-353).
    */
-  readonly effective?: EntitlementPolicy['effective'];
+  readonly granted?: EntitlementPolicy['effective'];
 }
 
 /** A fact that could not be published: a programming error, which ends the publisher's transaction and so leaves nothing of the fact. */
@@ -258,8 +259,9 @@ const chainDepth = async (transaction: Transaction, causedBy: string): Promise<n
  * Writes the fact for each module that consumes it, in the caller's transaction, which a pool is not: `Transaction` is the type
  * of one, so a publish with nothing to roll back with does not compile.
  *
- * A consumer that is not run by this process is a row all the same when the fact says `holdDays`, for any node that runs it
- * to deliver, and no row when it says `drop`, with a count that says so. A fact nobody consumes writes nothing.
+ * A consumer the workspace is not granted gets no row. One that is granted and not run by this process is a row all the same when
+ * the fact says `holdDays`, for any node that runs it to deliver, and no row when it says `drop`, with a count that says so. A fact
+ * nobody consumes writes nothing.
  */
 export const publishFact = async <Fact extends FactDeclaration>(
   transaction: Transaction,
@@ -276,7 +278,7 @@ export const publishFact = async <Fact extends FactDeclaration>(
     refused,
     pendingMax,
     causedBy,
-    effective,
+    granted: grantedOf,
   } = context;
   // The type says it, and a cast could unsay it: a fact written with nothing to roll back with outlives the thing it reports.
   if (!isTransaction(transaction))
@@ -306,13 +308,14 @@ export const publishFact = async <Fact extends FactDeclaration>(
   const holdDays = typeof fact.absent === 'object' ? fact.absent.holdDays : undefined;
   const expiresAt = new Date(now.getTime() + (holdDays ?? DROPPING_FACT_PENDING_DAYS) * DAY_MS);
   const granted =
-    effective === undefined
+    grantedOf === undefined
       ? undefined
-      : effective((await readGrants(transaction, [workspaceId])).get(workspaceId) ?? [], now);
-  const consumers = routing.consumersOf(fact.type).filter(
-    // A consumer this process does not run is judged where it is run, at its delivery: the set holds the modules run here.
-    (consumer) => granted === undefined || !routing.runs(consumer) || granted.has(consumer),
-  );
+      : grantedOf((await readGrants(transaction, [workspaceId])).get(workspaceId) ?? [], now);
+  // A consumer the workspace is not granted now gets no row, whether this process runs it or not: no count, since nothing was
+  // owed to it (D-353).
+  const consumers = routing
+    .consumersOf(fact.type)
+    .filter((consumer) => granted === undefined || granted.has(consumer));
   const written = consumers.filter((consumer) => routing.runs(consumer) || holdDays !== undefined);
   for (const consumer of consumers.filter((one) => !written.includes(one))) {
     dropped.inc({ module: consumer, fact: fact.type });
