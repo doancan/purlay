@@ -36,11 +36,19 @@ export const API_ISSUES: readonly Mutation[] = [
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
+    id: 'issues-assigned-to-a-guest-it-does-not-reach',
+    why: 'an issue is given to a guest let into chat alone, or whose access ended, who is told of it in the inbox and cannot open it (D-300)',
+    file: 'apps/api/src/features/issues/issues.ts',
+    find: '    .where(membershipReachesModule(ISSUES_MODULE))\n',
+    replace: '',
+    tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
+  },
+  {
     id: 'issues-assigned-to-a-stranger',
     why: 'an issue is given to somebody who is not in the workspace, who then holds a title and a body of a team that is not theirs (D-254)',
     file: 'apps/api/src/features/issues/issues.ts',
-    find: "    .where('workspace_members.user_id', '=', assigneeId)\n",
-    replace: "    .where('workspace_members.user_id', '<>', assigneeId)\n",
+    find: "    .where('workspace_members.user_id', '=', userId)\n",
+    replace: "    .where('workspace_members.user_id', '<>', userId)\n",
     tests: ['apps/api/src/features/issues/http/issues.integration.test.ts'],
   },
   {
