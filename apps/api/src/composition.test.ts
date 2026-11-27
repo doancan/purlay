@@ -576,7 +576,7 @@ describe('the workers of the modules a process runs', () => {
   const namesOf = (running: readonly BundledModule[]): string[] =>
     compose(running, carried).workers.map(({ module, name }) => `${module}/${name}`);
 
-  test('are chat’s Shared index and delivery loops where chat runs, and nothing where it is carried and off or not carried at all', () => {
+  test('are chat’s Shared index and delivery loops where chat runs, issues’ delivery of the facts it consumes where it runs (D-355), and nothing where a module is carried and off or not carried at all', () => {
     expect(namesOf([chatModule])).toEqual([
       'chat/index:shared-links',
       'chat/deliver:scheduled',
@@ -586,8 +586,9 @@ describe('the workers of the modules a process runs', () => {
       'chat/index:shared-links',
       'chat/deliver:scheduled',
       'chat/deliver:reminders',
+      'issues/outbox:consume',
     ]);
-    expect(namesOf([issuesModule])).toEqual([]);
+    expect(namesOf([issuesModule])).toEqual(['issues/outbox:consume']);
     expect(namesOf([])).toEqual([]);
     expect(compose([], []).workers).toEqual([]);
   });

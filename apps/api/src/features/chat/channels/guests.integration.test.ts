@@ -39,6 +39,7 @@ import {
   requireMessageById,
   visibleChannelIds,
 } from './guard';
+import { noDepartures } from '../../../testing/departures';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -180,6 +181,7 @@ describe('integration: restricted workspace guests', () => {
         owner,
         userId,
         chatWorkspaceChannels,
+        noDepartures,
       );
       expect(removed.channelIds).toEqual([room.channelId]);
       expect(

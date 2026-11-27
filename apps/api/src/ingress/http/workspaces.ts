@@ -64,6 +64,7 @@ import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { exportTrail } from '../../modules/audit/audit-export';
 import { readRetention, setRetention } from '../../modules/workspaces/retention';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
+import type { MemberDepartures } from '../../modules/workspaces/member-departures';
 import { readStorage } from '../../modules/attachments/quota';
 import {
   NO_LOG,
@@ -238,6 +239,8 @@ export const setMyDeepWork = async (
 
 export interface MemberWriteDependencies extends WorkspaceDependencies {
   readonly bus: EventBus;
+  /** Tells the modules of a person who left or was removed, in that transaction (D-355). */
+  readonly memberDepartures: MemberDepartures;
   readonly log?: Logger;
   /** Explicit deployment attestation; never inferred from this API alone. */
   readonly guestAccessReady?: boolean;
@@ -354,6 +357,7 @@ export const removeWorkspaceMember = async (
         locked.context,
         userId,
         dependencies.workspaceChannels,
+        dependencies.memberDepartures,
       );
     },
   );
@@ -394,7 +398,13 @@ export const leaveWorkspaceMembership = async (
         { clock, lifetime: () => dependencies.auth.sessionLifetime },
         { context, sessionId: caller.sessionId },
       );
-      return await leaveWorkspace(transaction, clock, context, dependencies.workspaceChannels);
+      return await leaveWorkspace(
+        transaction,
+        clock,
+        context,
+        dependencies.workspaceChannels,
+        dependencies.memberDepartures,
+      );
     },
   );
   await publishAfterCommit(log, [

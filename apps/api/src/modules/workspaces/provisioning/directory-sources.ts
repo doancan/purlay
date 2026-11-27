@@ -18,7 +18,7 @@ interface DirectorySourceInput {
 /** Input IDs come from the verified principal/exact plugin link, never a guessed email or body user ID. */
 export const reconcileDirectoryWorkspaceSource = async (
   transaction: Transaction,
-  dependencies: Pick<WorkspaceProvisioningDependencies, 'clock' | 'channels'>,
+  dependencies: Pick<WorkspaceProvisioningDependencies, 'clock' | 'channels' | 'departures'>,
   scope: WorkspaceProjectionScope,
   input: DirectorySourceInput,
 ): Promise<{
@@ -138,14 +138,7 @@ export const reconcileDirectoryWorkspaceSource = async (
     changed = true;
   }
   if (source === undefined) throw new Error('A reconciled directory source disappeared.');
-  if (changed)
-    await projectWorkspaceAccess(
-      transaction,
-      dependencies.clock,
-      scope,
-      [input.userId],
-      dependencies.channels,
-    );
+  if (changed) await projectWorkspaceAccess(transaction, dependencies, scope, [input.userId]);
   const current = await transaction
     .selectFrom('workspace_admission_controls')
     .select('revision')
@@ -163,7 +156,7 @@ export const reconcileDirectoryWorkspaceSource = async (
 /** DELETE retires the exact old resource; a delayed old delete cannot revoke its replacement. */
 export const retireDirectoryWorkspaceSource = async (
   transaction: Transaction,
-  dependencies: Pick<WorkspaceProvisioningDependencies, 'clock' | 'channels'>,
+  dependencies: Pick<WorkspaceProvisioningDependencies, 'clock' | 'channels' | 'departures'>,
   scope: WorkspaceProjectionScope,
   input: {
     readonly directoryId: string;
@@ -206,19 +199,13 @@ export const retireDirectoryWorkspaceSource = async (
     .where('workspace_id', '=', scope.workspaceId)
     .where('source_id', '=', source.id)
     .execute();
-  await projectWorkspaceAccess(
-    transaction,
-    dependencies.clock,
-    scope,
-    [input.userId],
-    dependencies.channels,
-  );
+  await projectWorkspaceAccess(transaction, dependencies, scope, [input.userId]);
 };
 
 /** Directory decommission is set-wise and never locks or deletes the target's native sessions. */
 export const deactivateDirectorySources = async (
   transaction: Transaction,
-  dependencies: Pick<WorkspaceProvisioningDependencies, 'clock' | 'channels'>,
+  dependencies: Pick<WorkspaceProvisioningDependencies, 'clock' | 'channels' | 'departures'>,
   scope: WorkspaceProjectionScope,
   directoryId: string,
 ): Promise<readonly string[]> => {
@@ -232,12 +219,6 @@ export const deactivateDirectorySources = async (
     returning user_id
   `.execute(transaction);
   const userIds = [...new Set(changed.rows.map((row) => row.user_id))].sort();
-  await projectWorkspaceAccess(
-    transaction,
-    dependencies.clock,
-    scope,
-    userIds,
-    dependencies.channels,
-  );
+  await projectWorkspaceAccess(transaction, dependencies, scope, userIds);
   return userIds;
 };

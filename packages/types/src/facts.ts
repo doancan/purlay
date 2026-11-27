@@ -7,16 +7,38 @@
  * id of the module that publishes it, and a module's own are listed as `<ID>_FACTS` in its `<id>.ts`, declared with `defineFact` from
  * `fact-declaration.ts` (a file of its own, so that `<id>.ts` and this file, which joins its list, do not import one another).
  */
-import type { TSchema } from '@sinclair/typebox';
+import { Type, type TSchema } from '@sinclair/typebox';
 import {
   FACT_HOLD_DAYS_MAX,
   FACT_SHAPE_FIRST,
   FACT_STRING_LENGTH_MAX,
+  defineFact,
   type FactDeclaration,
 } from './fact-declaration';
+import { Uuid } from './models';
 
-/** The facts the core publishes. None yet: nothing in the core has a fact a module consumes. */
-export const CORE_FACTS: readonly FactDeclaration[] = [];
+/** Why a person stopped being a member: they left, an owner or an admin removed them, or their provisioned access ended. */
+export const MEMBER_LEFT_REASONS = ['left', 'removed', 'provisioning'] as const;
+
+/**
+ * A person stopped being a member of the fact's workspace (D-355): published in the transaction that deleted their membership, on
+ * every path that does. The person's id and why, never who they were: whoever consumes it reads what it needs. Held the longest a
+ * fact may be for a consumer no node runs, since what a consumer undoes (an assignment nobody can reach) is no less wrong late.
+ */
+export const CORE_MEMBER_LEFT = defineFact({
+  type: 'core.member-left',
+  owner: 'core',
+  absent: { holdDays: FACT_HOLD_DAYS_MAX },
+  schema: Type.Object({
+    userId: Uuid,
+    reason: Type.Union(MEMBER_LEFT_REASONS.map((reason) => Type.Literal(reason))),
+  }),
+});
+
+export type MemberLeftReason = (typeof MEMBER_LEFT_REASONS)[number];
+
+/** The facts the core publishes. */
+export const CORE_FACTS: readonly FactDeclaration[] = [CORE_MEMBER_LEFT];
 
 /** Every fact type of the build: the core's and, as a module gets some, each module's `<ID>_FACTS`. */
 export const FACTS: readonly FactDeclaration[] = [...CORE_FACTS];

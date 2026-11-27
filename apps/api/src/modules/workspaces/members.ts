@@ -11,13 +11,15 @@
  *   owner, or that it is the last.
  * - **A removed member loses the workspace's channels**: their memberships go, and the channels
  *   they could see are answered, for the caller to tell their sockets after the commit (D-85).
+ * - **The modules are told** `core.member-left` in the same transaction, by leaving or by removal (D-355).
  * - **Anybody may leave** (D-152): the same going as being removed, chosen by the person — except the
  *   last owner, who hands the workspace on first (I-2).
  */
-import { sql, type Executor } from '@purlay/db';
+import { sql, type Executor, type Transaction } from '@purlay/db';
 import { Value } from '@sinclair/typebox/value';
-import { Uuid, type UserRole, type WorkspaceMember } from '@purlay/types';
+import { Uuid, type MemberLeftReason, type UserRole, type WorkspaceMember } from '@purlay/types';
 import type { WorkspaceChannels } from './channels-port';
+import type { MemberDepartures } from './member-departures';
 import type { Clock } from '../../platform/clock';
 import { recordAudit } from '../audit/audit';
 import { AppError } from '../../platform/errors';
@@ -155,27 +157,37 @@ export const changeRole = async (
  * see — read by the one visibility rule before it stops being theirs.
  */
 const takeOut = async (
-  executor: Executor,
-  channels: WorkspaceChannels,
+  transaction: Transaction,
+  ports: { readonly channels: WorkspaceChannels; readonly departures: MemberDepartures },
   workspaceId: string,
   userId: string,
+  reason: MemberLeftReason,
 ): Promise<readonly string[]> => {
-  const channelIds = await channels.leaveAll(executor, workspaceId, userId);
-  await executor
+  const channelIds = await ports.channels.leaveAll(transaction, workspaceId, userId);
+  const gone = await transaction
     .deleteFrom('workspace_members')
     .where('workspace_id', '=', workspaceId)
     .where('user_id', '=', userId)
+    .returning('user_id')
     .execute();
+  // The modules are told in this transaction (D-355): of the row this delete took, and of none it did not find.
+  await ports.departures(
+    transaction,
+    workspaceId,
+    gone.map((row) => row.user_id),
+    reason,
+  );
   return channelIds;
 };
 
 /** Inside the caller's transaction. Answers the channels the removed member could see. */
 export const removeMember = async (
-  executor: Executor,
+  executor: Transaction,
   clock: Clock,
   context: WorkspaceContext,
   userId: string,
   channels: WorkspaceChannels,
+  departures: MemberDepartures,
 ): Promise<{
   readonly channelIds: readonly string[];
   readonly notifyUserIds?: readonly string[];
@@ -191,7 +203,13 @@ export const removeMember = async (
     context.workspaceId,
     userId,
   );
-  const channelIds = await takeOut(executor, channels, context.workspaceId, userId);
+  const channelIds = await takeOut(
+    executor,
+    { channels, departures },
+    context.workspaceId,
+    userId,
+    'removed',
+  );
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
     actorUserId: context.userId,
@@ -215,10 +233,11 @@ export const removeMember = async (
  * Answers the channels they could see, for their own sockets to be told after the commit.
  */
 export const leaveWorkspace = async (
-  executor: Executor,
+  executor: Transaction,
   clock: Clock,
   context: WorkspaceContext,
   channels: WorkspaceChannels,
+  departures: MemberDepartures,
 ): Promise<{
   readonly channelIds: readonly string[];
   readonly notifyUserIds?: readonly string[];
@@ -238,7 +257,13 @@ export const leaveWorkspace = async (
     context.workspaceId,
     context.userId,
   );
-  const channelIds = await takeOut(executor, channels, context.workspaceId, context.userId);
+  const channelIds = await takeOut(
+    executor,
+    { channels, departures },
+    context.workspaceId,
+    context.userId,
+    'left',
+  );
   await recordAudit(executor, clock, {
     workspaceId: context.workspaceId,
     actorUserId: context.userId,

@@ -237,8 +237,8 @@ In this order:
 
 1. **Events.** A hint, which may be lost, is a frame on the socket `EventBus`, which reaches every node through the
    backplane; nobody listening is not an error. There is no in-process bus between modules: one was built, never used and
-   removed (D-352). A fact that must not be lost is an outbox delivery, decided and **built** without a production
-   publisher, below (D-283 §1, §2).
+   removed (D-352). A fact that must not be lost is an outbox delivery, decided and **built**, below (D-283 §1, §2); the first
+   in the product is the core's `core.member-left`, which issues consumes (D-355).
 2. **A port the core defines**, only where two modules use it or a test needs the boundary. Built: `WorkspaceChannels` and
    `PushNotices`, each with a null object where the module is absent, `PresenceAnnouncer` and `FrameProjection`, which the
    socket is handed through the composition and which are `undefined` where no module provides them (D-352), and the slots
@@ -261,9 +261,10 @@ In this order:
 | An asynchronous effect on a receiver that may be absent or slow | a transactional outbox, one row for each (fact, consumer), for facts of human scale; never a fact for each message | 14c to 14e | the table and `publishFact` (14c), the claim, the delivery and the worker (14d), the sweep, the metrics and the overview line (14e) built (D-288) |
 | A hint: a cache nudge, presence, "read again" | the socket's `EventBus` | — | built; presence is the one hint, chat's, told through the `announcePresence` slot (D-352) |
 
-**What each step built (D-283, steps 14b to 14l).** The outbox is built ahead of a production consumer on the owner's decision: its first real
-publisher is a product feature that is not decided (issues' link to a channel, D-254 §1), so it ships proven by a fake third module's
-test and not by a consumer in the product. Each row below is a step of §10 step 14, and each is built (14b to 14l); what is not built is in the table at the end of §10, which is the one list of it.
+**What each step built (D-283, steps 14b to 14l).** The outbox was built ahead of a production consumer on the owner's decision and
+proven by a fake third module's test. Its first fact in the product is the core's: `core.member-left` (`CORE_FACTS`), published in the
+transaction that deletes a membership (leaving, a removal, a projection of provisioned access that ends somebody's), and consumed by
+issues, which takes the person off the workspace's open issues (D-355). Each row below is a step of §10 step 14, and each is built (14b to 14l); what is not built is in the table at the end of §10, which is the one list of it.
 
 - *The contract surface* — **built** (14b) as far as the names go: `FactDeclaration`, `defineFact` and the lists `CORE_FACTS` and
   `FACTS` in `@purlay/types` (a module's `<ID>_FACTS` joins `FACTS` when it has a fact), `platform/ports/` with `Port<T>`,
@@ -1087,14 +1088,15 @@ of each module's section (§9).
 
 **What is not built of how modules talk and are entitled, and what would start each (D-295).** Audited 2026-11-08 against the code
 (`git grep` for each claim, a throwaway pair of modules made with `bun run module:new` on a copy, `docs/DECISIONS.md` D-295). Built,
-and proved by the tests named in §8 and by fake modules, with **no production publisher, consumer or port in the product**: the
+and proved by the tests named in §8 and by fake modules, with **no production publisher, consumer or port in the product** at the time
+(the core's `core.member-left` and issues' consumer of it are the first since, D-355): the
 contract (`publishes`, `consumes`, `uses`, `degrades`), the outbox with its claim, worker, sweep and metrics, the core's inbox with
 its sink, routes, push and Updates section, the workspace find, the per-workspace grant with its guard, administrator route, edition
 file and cluster check, and the scaffold. Not built:
 
 | Not built | What would start it | What watches for it today |
 |---|---|---|
-| A fact published by a module of the product | the first feature that must tell a module that may be absent (issues' link to a channel, D-254 §1) | nothing: a route has `publishFact` (`ModuleRouteDependencies`, `platform/ports/fact-publisher.ts`, `ingress/http/module-publish.integration.test.ts`), bound to its module, so the first publisher only declares its fact |
+| A fact published by a module of the product (the core publishes one, `core.member-left`, D-355) | the first feature that must tell a module that may be absent (issues' link to a channel, D-254 §1) | nothing: a route has `publishFact` (`ModuleRouteDependencies`, `platform/ports/fact-publisher.ts`, `ingress/http/module-publish.integration.test.ts`), bound to its module, so the first publisher only declares its fact |
 | The web's search groups and the skipped line (14m) | the product wants the find drawn; the route answers them today | none |
 | Tracing across modules (OpenTelemetry) | a latency question that the per-module histograms, `purlay_worker_failures_total` and the request id in the logs cannot answer | none |
 | Per-tenant quotas of a module's work (requests, notices) | one workspace measured filling a share | the share of the pool and the rate limits are per module and per connection, not per tenant; facts have a ceiling per workspace and consumer (D-288 §10); D-283 §10 names `pg_stat_user_tables.n_dead_tup` of `outbox` and `purlay_outbox_pending` as the watchers of partitioning (`DEPLOY.md`) |
@@ -1162,6 +1164,9 @@ it. **Requires** nothing, **optional** nothing, **provides** nothing: it uses no
   person is in Deep Work or their quiet hours; words in `notice-words.ts`, never the title) and `needsYou` (the inbox's dot counts
   it; §10, 14j). A retitle, a status change, an
   unassignment, an assignment to oneself and an issue with nobody tell nobody.
+- **Facts.** Issues consumes the core's `core.member-left` (`facts.ts`, D-355): a person who stops being a member is taken off the
+  workspace's open issues, each on the trail as `issue.assigned` with no actor, unless they may be given an issue again by the time
+  it is delivered; a finished issue keeps its assignee. Its `outbox:consume` worker delivers it.
 - **Search.** One source, `issues`, for the workspace-wide find (D-285): a title or a body that holds the words, in two queries on
   the two trigram indexes of `migrations/issues/0002_issues_search.sql`. Any member reads any issue, so the workspace is the only
   narrowing. A process without issues answers the source `off`.

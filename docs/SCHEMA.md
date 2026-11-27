@@ -3058,8 +3058,8 @@ CREATE INDEX idx_hidden_messages_changes   ON hidden_messages (user_id, channel_
 
 A workspace's issue (the issues module's set, `issues/0001`): a title, a markdown body, open or done, who it is
 assigned to and who made it. Both people outlive their rows as `NULL`, as a channel's creator does. That the
-assignee is a member of the workspace is the service's check and not a key, so a member who leaves does not
-rewrite their issues. The keys run to the core only (D-250): the table exists where the module's set was applied, and
+assignee is a member of the workspace is the service's check and not a key; a member who leaves is taken off
+the open issues by the module, told through the outbox (D-355). The keys run to the core only (D-250): the table exists where the module's set was applied, and
 a database that never ran it has none.
 
 ```sql

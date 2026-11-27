@@ -29,6 +29,7 @@ import { reconcileDirectoryAccessGroup, retireDirectoryAccessGroup } from './dir
 import { initializeWorkspaceAdmission } from './native-state';
 import { projectWorkspaceAccess } from './projection';
 import { lockWorkspaceProjectionScope, type WorkspaceProjectionScope } from './scope';
+import { noDepartures } from '../../../testing/departures';
 
 afterAll(closeIntegrationDatabase, DROP_HOOK_MS);
 const now = new Date('2026-11-12T18:00:00Z');
@@ -70,6 +71,7 @@ const fixture = async (
     clock,
     lifetime: () => ({ sessionIdleTimeoutHours: null, sessionMaxAgeDays: null }),
     channels: noWorkspaceChannels,
+    departures: noDepartures,
     bus: {
       publish: () => Promise.reject(new Error('A rolled-back native transaction must not publish')),
       subscribe: () => false,
@@ -233,7 +235,12 @@ describe('integration: source-aware access groups', () => {
           created_at: now,
         })
         .execute();
-      await projectWorkspaceAccess(db, clock, f.scope, [person.userId], noWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: noWorkspaceChannels, departures: noDepartures },
+        f.scope,
+        [person.userId],
+      );
       const context = await requireWorkspaceMembership(db, person.userId, f.workspaceId);
       await requireWorkspaceCapabilityNow(db, context, 'audit.read');
       const remaining = await updateWorkspaceAccessGroupMembers(f.dependencies, f.actor, group.id, {
@@ -291,7 +298,12 @@ describe('integration: source-aware access groups', () => {
         })
         .returning('id')
         .executeTakeFirstOrThrow();
-      await projectWorkspaceAccess(db, clock, f.scope, [person.userId], noWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: noWorkspaceChannels, departures: noDepartures },
+        f.scope,
+        [person.userId],
+      );
       const reference = crypto.randomUUID();
       const input = {
         directoryId: directory,

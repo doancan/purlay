@@ -16,6 +16,7 @@ import { WORKSPACE_ACCESS_SOURCES_MAX } from '@purlay/types/workspace-provisioni
 import { initializeWorkspaceAdmission, requireManualWorkspaceSource } from './native-state';
 import { projectWorkspaceAccess } from './projection';
 import { lockWorkspaceProjectionScope, type WorkspaceProjectionScope } from './scope';
+import { noDepartures, recordedDepartures } from '../../../testing/departures';
 
 const now = new Date('2026-11-12T18:00:00Z');
 const clock = fixedClock(now);
@@ -109,11 +110,67 @@ const disable = async (db: Transaction, sourceId: string): Promise<void> => {
 describe.skipIf(process.env['DATABASE_URL'] === undefined)(
   'integration: native source projection',
   () => {
+    test('a projection that ends several memberships at once tells the modules of each it deleted, once, and of nobody else (D-355)', async () => {
+      await withRollback(async (db) => {
+        const f = await fixture(db);
+        const recorded = recordedDepartures();
+        const dependencies = {
+          clock,
+          channels: noWorkspaceChannels,
+          departures: recorded.departures,
+        };
+        const second = crypto.randomUUID();
+        const never = crypto.randomUUID();
+        await db
+          .insertInto('users')
+          .values(
+            [second, never].map((id) => ({
+              id,
+              email: `${id}@test.invalid`,
+              username: id,
+              display_name: id,
+            })),
+          )
+          .execute();
+        const sources = [
+          await directorySource(db, f.scope, f.personId),
+          await directorySource(db, f.scope, second),
+        ];
+        await projectWorkspaceAccess(db, dependencies, f.scope, [f.personId, second]);
+        expect(recorded.told).toEqual([]);
+        for (const sourceId of sources) await disable(db, sourceId);
+        await initializeWorkspaceAdmission(db, clock, f.scope, never);
+        await projectWorkspaceAccess(db, dependencies, f.scope, [f.personId, second, never]);
+        expect(
+          await db
+            .selectFrom('workspace_members')
+            .select('user_id')
+            .where('workspace_id', '=', f.workspaceId)
+            .where('user_id', 'in', [f.personId, second, never])
+            .execute(),
+        ).toEqual([]);
+        const expected = [f.personId, second].sort().map((userId) => ({
+          workspaceId: f.workspaceId,
+          userId,
+          reason: 'provisioning' as const,
+        }));
+        expect(recorded.told).toEqual(expected);
+        // Projected again, nobody is deleted and nobody is told twice.
+        await projectWorkspaceAccess(db, dependencies, f.scope, [f.personId, second]);
+        expect(recorded.told).toEqual(expected);
+      });
+    });
+
     test('faithful initialization runs once; a projected native row never becomes manual admission', async () => {
       await withRollback(async (db) => {
         const f = await fixture(db);
         const sourceId = await directorySource(db, f.scope, f.personId);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         const first = await initializeWorkspaceAdmission(db, clock, f.scope, f.personId);
         const again = await initializeWorkspaceAdmission(db, clock, f.scope, f.personId);
         expect(again.revision).toBe(first.revision);
@@ -130,7 +187,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
           await rejected(requireManualWorkspaceSource(db, clock, f.scope, f.personId)),
         ).toMatchObject({ body: { code: 'WORKSPACE_MEMBERSHIP_MANAGED' } });
         await disable(db, sourceId);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await db
             .selectFrom('workspace_members')
@@ -145,7 +207,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
           .values({ workspace_id: f.workspaceId, user_id: f.personId })
           .execute();
         await initializeWorkspaceAdmission(db, clock, f.scope, f.personId);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await db
             .selectFrom('workspace_members')
@@ -173,7 +240,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
           await directorySource(db, f.scope, f.personId),
           await directorySource(db, f.scope, f.personId),
         ];
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         const native = await db
           .selectFrom('workspace_members')
           .select(['id', 'joined_at'])
@@ -181,7 +253,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
           .where('user_id', '=', f.personId)
           .executeTakeFirstOrThrow();
         await disable(db, a);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await db
             .selectFrom('workspace_members')
@@ -191,7 +268,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
             .executeTakeFirstOrThrow(),
         ).toEqual(native);
         await disable(db, b);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await db
             .selectFrom('workspace_members')
@@ -235,7 +317,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
           .execute();
         const sourceId = await directorySource(db, f.scope, f.personId);
         await disable(db, sourceId);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await db
             .selectFrom('workspace_members')
@@ -297,7 +384,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
             { workspace_id: f.workspaceId, role_id: role.id, group_id: group.id, created_at: now },
           ])
           .execute();
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         const context = await requireWorkspaceMembership(db, f.personId, f.workspaceId);
         await requireWorkspaceCapabilityNow(db, context, 'members.invite');
         expect(
@@ -319,14 +411,24 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
             .execute(),
         ).toEqual([{ capability: 'members.invite' }]);
         await disable(db, a);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         await requireWorkspaceCapabilityNow(db, context, 'members.invite');
         await db
           .deleteFrom('workspace_access_group_members')
           .where('workspace_id', '=', f.workspaceId)
           .where('group_id', '=', group.id)
           .execute();
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await rejected(requireWorkspaceCapabilityNow(db, context, 'members.invite')),
         ).toMatchObject({ body: { code: 'FORBIDDEN' } });
@@ -346,7 +448,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
       await withRollback(async (db) => {
         const f = await fixture(db);
         const sourceId = await directorySource(db, f.scope, f.personId);
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         const original = await initializeWorkspaceAdmission(db, clock, f.scope, f.personId);
         await db
           .updateTable('workspace_admission_controls')
@@ -364,7 +471,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
           })
           .where('id', '=', sourceId)
           .execute();
-        await projectWorkspaceAccess(db, clock, f.scope, [f.personId], noWorkspaceChannels);
+        await projectWorkspaceAccess(
+          db,
+          { clock, channels: noWorkspaceChannels, departures: noDepartures },
+          f.scope,
+          [f.personId],
+        );
         expect(
           await db
             .selectFrom('workspace_members')
@@ -390,7 +502,12 @@ describe.skipIf(process.env['DATABASE_URL'] === undefined)(
         await disable(db, source.id);
         expect(
           await rejected(
-            projectWorkspaceAccess(db, clock, f.scope, [f.ownerId], noWorkspaceChannels),
+            projectWorkspaceAccess(
+              db,
+              { clock, channels: noWorkspaceChannels, departures: noDepartures },
+              f.scope,
+              [f.ownerId],
+            ),
           ),
         ).toMatchObject({ body: { code: 'LAST_OWNER' } });
         await sql`rollback to savepoint last_owner_change`.execute(db);
@@ -417,7 +534,7 @@ describe('integration: exact directory projection boundaries', () => {
   test('directory callbacks reject conflicting exact links, invalid labels, guest promotion and an unbounded source set', async () => {
     await withRollback(async (db) => {
       const f = await fixture(db);
-      const dependencies = { clock, channels: noWorkspaceChannels };
+      const dependencies = { clock, channels: noWorkspaceChannels, departures: noDepartures };
       const input = {
         directoryId: crypto.randomUUID(),
         directoryLinkReference: crypto.randomUUID(),

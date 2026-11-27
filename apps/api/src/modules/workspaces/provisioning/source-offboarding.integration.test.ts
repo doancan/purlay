@@ -38,6 +38,7 @@ import {
   readmitWorkspaceMember,
   revokeWorkspaceAccessSource,
 } from './source-offboarding';
+import { noDepartures } from '../../../testing/departures';
 
 afterAll(closeIntegrationDatabase);
 const now = new Date('2026-11-12T18:00:00Z');
@@ -87,6 +88,7 @@ const fixture = async (
       clock,
       lifetime: () => ({ sessionIdleTimeoutHours: null, sessionMaxAgeDays: null }),
       channels: noWorkspaceChannels,
+      departures: noDepartures,
       readersReady: () => Promise.resolve(true),
       afterCommit: (): void => undefined,
       bus: {
@@ -231,7 +233,12 @@ describe('integration: retained source offboarding lifecycle', () => {
         ),
       ).toBe('WORKSPACE_MEMBERSHIP_MANAGED');
       const scope = await lockWorkspaceProjectionScope(db, workspaceId);
-      await projectWorkspaceAccess(db, clock, scope, [f.userId], noWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: noWorkspaceChannels, departures: noDepartures },
+        scope,
+        [f.userId],
+      );
       expect(
         await db
           .selectFrom('workspace_members')

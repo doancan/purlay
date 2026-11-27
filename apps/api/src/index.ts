@@ -68,7 +68,8 @@ import { createApnsProvider } from './modules/push/apns';
 import { apnsScopeOf } from './platform/apns-credentials';
 import { checkingLookup, postExternal, systemResolver } from './modules/images/fetch-external';
 import { serverMetrics } from './platform/metrics';
-import { seamsOfModules } from './module-seams-wiring';
+import { factContextOf, seamsOfModules } from './module-seams-wiring';
+import { memberDeparturesOf } from './modules/workspaces/member-departures';
 import { moduleConnections } from './platform/module-budget';
 import { startWorkers, type Workers } from './modules/workers/module-workers';
 import { readSuspended, suspensionCache } from './platform/suspended-modules';
@@ -278,6 +279,15 @@ const moduleSet = {
 const runtimeBase: RuntimeBase = {
   directory: {
     channels: modules.workspaceChannels,
+    departures: memberDeparturesOf(
+      factContextOf({
+        composition: modules,
+        clock: systemClock,
+        metrics,
+        outboxPendingMax: config.OUTBOX_PENDING_MAX,
+        deliveriesPerMinuteMax: config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
+      }),
+    ),
     readersReady: async (): Promise<boolean> =>
       await workspacePolicyReadersReady({
         attested: config.WORKSPACE_PROVISIONING_READY,

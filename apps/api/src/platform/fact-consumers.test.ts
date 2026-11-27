@@ -17,6 +17,7 @@ const delivery = (payload: unknown): DeliveredFact => ({
   modules: null,
   correlationId: 'fact:test',
   payload,
+  deliveredAt: new Date(0),
 });
 /** The handlers below never touch the transaction. */
 const NO_TRANSACTION: Transaction = passingAsItsClass({});

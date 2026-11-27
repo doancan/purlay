@@ -5,8 +5,8 @@
  * - **Any member** makes an issue and changes any of them: title, body, status, assignee. The last write wins; there
  *   is no version to conflict on, because nothing here is long enough to lose.
  * - **The assignee is a current member** of the workspace, or a guest whose live access lets them into issues, checked
- *   under the membership row's share lock so a member removed at that moment is not assigned. One who leaves later stays
- *   on the issue, as a name the client can no longer find.
+ *   under the membership row's share lock so a member removed at that moment is not assigned. One who leaves later is
+ *   taken off the open issues when the core's fact of it is delivered (`facts.ts`, D-355).
  * - **An assignee is told** in the core's inbox, in the same transaction as the assignment (D-286): the notice is committed with
  *   the assignment or not at all, and the caller announces what was written once it has committed.
  * - **Only its creator, or an owner or admin, deletes it.** Deleting is for real: nothing hangs off an issue.
@@ -117,7 +117,7 @@ const ISSUES_MODULE = 'issues';
  * live and lets them into issues — whoever the guard would let open it (`membershipReachesModule`), so nobody is told of an issue they
  * cannot see (D-300). Under the membership row's share lock, so a member removed at that moment is not assigned.
  */
-const isAssignable = async (
+export const isAssignable = async (
   transaction: IssuesTx,
   workspaceId: string,
   userId: string,
