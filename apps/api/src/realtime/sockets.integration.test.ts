@@ -558,7 +558,8 @@ describe('integration: two real sockets', () => {
     try {
       const nextCursor = await subscribe(bob, room.channelId, seen);
       const firstPage = [seen, ...missed].slice(0, 100);
-      expect(nextCursor).toBe(firstPage.at(-1));
+      expect(firstPage).toHaveLength(100);
+      expect(nextCursor).toBe(firstPage.at(-1) ?? null);
       await bob.until((frames) => createdIds(frames).includes(nextCursor ?? ''), 'the first page');
       const recovered = [...createdIds(bob.frames)];
       expect(recovered).toEqual(firstPage);
