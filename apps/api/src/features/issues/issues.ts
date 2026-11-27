@@ -4,9 +4,9 @@
  *
  * - **Any member** makes an issue and changes any of them: title, body, status, assignee. The last write wins; there
  *   is no version to conflict on, because nothing here is long enough to lose.
- * - **The assignee is a current member** of the workspace, checked under the membership row's share lock so a member
- *   removed at that moment is not assigned. One who leaves later stays on the issue, as a name the client can no
- *   longer find.
+ * - **The assignee is a current member** of the workspace, or a guest whose live access lets them into issues, checked
+ *   under the membership row's share lock so a member removed at that moment is not assigned. One who leaves later stays
+ *   on the issue, as a name the client can no longer find.
  * - **An assignee is told** in the core's inbox, in the same transaction as the assignment (D-286): the notice is committed with
  *   the assignment or not at all, and the caller announces what was written once it has committed.
  * - **Only its creator, or an owner or admin, deletes it.** Deleting is for real: nothing hangs off an issue.
@@ -29,7 +29,7 @@ import { AppError } from '../../platform/errors';
 import type { PermissionTable } from '../../platform/module-kit/permissions';
 import { limitOf } from '../../platform/pagination';
 import { limitFor, passes } from '../../platform/quotas';
-import type { WorkspaceContext } from '../../platform/tenancy';
+import { membershipReachesModule, type WorkspaceContext } from '../../platform/tenancy';
 import type { IssuesDb, IssuesTx } from './schema';
 
 const issueNotFound = (): AppError =>
@@ -109,21 +109,38 @@ const tellAssignee = async (
 /** A title's edges are trimmed; the contract has already refused one with nothing visible in it (the `name` format). */
 const titleOf = (title: string): string => title.trim();
 
+/** This module's id, as a guest's access names the modules it lets them into. */
+const ISSUES_MODULE = 'issues';
+
+/**
+ * Whether the person may be given an issue of the workspace now: a member whose account is not erased, or a guest whose access is
+ * live and lets them into issues — whoever the guard would let open it (`membershipReachesModule`), so nobody is told of an issue they
+ * cannot see (D-300). Under the membership row's share lock, so a member removed at that moment is not assigned.
+ */
+const isAssignable = async (
+  transaction: IssuesTx,
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> => {
+  const member = await transaction
+    .selectFrom('workspace_members')
+    .innerJoin('users', 'users.id', 'workspace_members.user_id')
+    .select('workspace_members.user_id')
+    .where('workspace_members.workspace_id', '=', workspaceId)
+    .where('workspace_members.user_id', '=', userId)
+    .where('users.deleted_at', 'is', null)
+    .where(membershipReachesModule(ISSUES_MODULE))
+    .forKeyShare()
+    .executeTakeFirst();
+  return member !== undefined;
+};
+
 const requireAssignable = async (
   transaction: IssuesTx,
   context: WorkspaceContext,
   assigneeId: string,
 ): Promise<void> => {
-  const member = await transaction
-    .selectFrom('workspace_members')
-    .innerJoin('users', 'users.id', 'workspace_members.user_id')
-    .select('workspace_members.user_id')
-    .where('workspace_members.workspace_id', '=', context.workspaceId)
-    .where('workspace_members.user_id', '=', assigneeId)
-    .where('users.deleted_at', 'is', null)
-    .forKeyShare()
-    .executeTakeFirst();
-  if (member === undefined)
+  if (!(await isAssignable(transaction, context.workspaceId, assigneeId)))
     throw invalid('assigneeId', 'Choose a current member of this workspace.');
 };
 
