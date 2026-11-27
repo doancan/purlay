@@ -33,14 +33,6 @@ const COMPOSITION_ROOTS: readonly string[] = [join('ingress', 'http', 'app.ts')]
 const ALLOWED: Readonly<
   Record<string, { readonly features: readonly string[]; readonly why: string }>
 > = {
-  [join('ingress', 'http', 'releases.ts')]: {
-    features: ['chat'],
-    why: 'the release route takes the type of chat’s release check',
-  },
-  [join('ingress', 'ws', 'socket.ts')]: {
-    features: ['chat'],
-    why: 'the socket announces presence through chat’s presence service',
-  },
   [join('cli', 'erase-content.ts')]: {
     features: ['chat'],
     why: '`bun run erase:content` empties chat’s messages; a command of a module has no manifest field yet',
@@ -52,7 +44,7 @@ const ALLOWED: Readonly<
  * go through. Each list only shrinks, but "an entry still imports its feature" cannot see one being added; these can. A
  * door joins a list only with its cap raised in the same change, a line a reviewer reads and has to accept.
  */
-const MAX_ALLOWED = 3;
+const MAX_ALLOWED = 1;
 const MAX_ALLOWED_IN_CLI = 1;
 
 /** The folders whose files are the doors: where a request, a command or a frame arrives and is routed. */
@@ -144,13 +136,7 @@ describe('the doors name no module’s files outside its routes and the composit
   test('a module’s route handler is not a door: chat’s missed-mail routes are in its folder, and no ingress file is listed for it', () => {
     expect(existsSync(join(SOURCE_ROOT, 'ingress', 'http', 'missed-mail.ts'))).toBe(false);
     expect(existsSync(join(FEATURES, 'chat', 'http', 'missed-mail.ts'))).toBe(true);
-    expect(Object.keys(ALLOWED).sort()).toEqual(
-      [
-        join('cli', 'erase-content.ts'),
-        join('ingress', 'http', 'releases.ts'),
-        join('ingress', 'ws', 'socket.ts'),
-      ].sort(),
-    );
+    expect(Object.keys(ALLOWED)).toEqual([join('cli', 'erase-content.ts')]);
   });
 
   test('the command that runs the scheduled jobs names no module’s file', () => {

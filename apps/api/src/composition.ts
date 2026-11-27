@@ -38,6 +38,8 @@ import type { KindOwners } from './modules/inbox/sink';
 import type { FactConsumers } from './platform/fact-consumers';
 import { outboxConsumerWorkers } from './modules/workers/outbox-consumer';
 import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
+import type { PresenceAnnouncer } from './platform/ports/presence';
+import type { FrameProjection } from './platform/ports/channel-delivery';
 import { modulePorts, type PortsFor } from './platform/ports/module-ports';
 import {
   entitledWorkspaces,
@@ -97,6 +99,13 @@ export interface BundledModule {
   readonly userErased?: (...args: Parameters<UserErased['run']>) => Promise<void>;
   /** Answers for the channels of a workspace; at most one module does. */
   readonly workspaceChannels?: WorkspaceChannels;
+  /**
+   * What checks each live frame of the module's content before a socket writes it; at most one module does. Applies whether or
+   * not the module runs, as the answers for the channels do: a socket is checked the same on every node (D-352).
+   */
+  readonly frameProjection?: FrameProjection;
+  /** How a change of who is online is told, by the module whose news presence is: asked only while it runs (D-352). */
+  readonly announcePresence?: PresenceAnnouncer;
   readonly workspacePurge?: WorkspacePurge;
   readonly export?: ExportContribution;
   readonly personalExport?: PersonalContribution;
@@ -317,6 +326,10 @@ export interface Composition {
   readonly workspaceCreated: WorkspaceCreated;
   readonly userErased: UserErased;
   readonly workspaceChannels: WorkspaceChannels;
+  /** What the socket checks a module's live frames by; `undefined` where no module the build carries has content to check. */
+  readonly frameProjection: FrameProjection | undefined;
+  /** How the socket tells who is online; `undefined` where no module that tells it runs, and the process counts nobody. */
+  readonly announcePresence: PresenceAnnouncer | undefined;
   readonly workspacePurge: WorkspacePurge;
   readonly exportCatalogue: ReturnType<typeof assembleCatalogue>;
   readonly personalExportCatalogue: ReturnType<typeof assemblePersonalCatalogue>;
@@ -410,6 +423,12 @@ export const compose = (
   if (answering.length > 1) {
     throw new Error(
       `more than one module answers for a workspace's channels: ${answering.map((module) => module.manifest.id).join(', ')}`,
+    );
+  }
+  const projecting = holding.filter((module) => module.frameProjection !== undefined);
+  if (projecting.length > 1) {
+    throw new Error(
+      `more than one module checks the socket's frames: ${projecting.map((module) => module.manifest.id).join(', ')}`,
     );
   }
   for (const module of holding) {
@@ -563,6 +582,9 @@ export const compose = (
     workspaceCreated,
     userErased,
     workspaceChannels: answering[0]?.workspaceChannels ?? noWorkspaceChannels,
+    frameProjection: projecting[0]?.frameProjection,
+    announcePresence: modules.find((module) => module.announcePresence !== undefined)
+      ?.announcePresence,
     workspacePurge: {
       before: holding.flatMap((module) => module.workspacePurge?.before ?? []),
       after: holding.flatMap((module) => module.workspacePurge?.after ?? []),

@@ -1,5 +1,7 @@
 # D-283. Modules tell one another things through three mechanisms, one for each kind of interaction, over a contract the core holds — builds on D-35, D-250, D-254, D-255, D-265, D-272, D-273, D-281; amends D-250 §1 and rule 4, D-254 §1, D-255 §8 and D-272; `MODULES.md` §1, §2, §4, §7, §8, §10 and §12
 
+*Amended by D-352: §1's hint uses the socket `EventBus` alone; the in-process `DomainBus` is removed.*
+
 **Context.** Two modules run and neither can say anything to the other or to a person's inbox except through the core's
 slots. `MODULES.md` §4 kept the means D-250 rule 4 promised (a fact with a durable row, ports for notifications and search,
 a question whether a capability exists) as design intent, because nothing needed them (D-272). Issues now does: an

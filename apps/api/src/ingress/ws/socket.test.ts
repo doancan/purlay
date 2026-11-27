@@ -22,6 +22,7 @@ import {
 } from '../../testing/doubles';
 import { inProcessRateLimiter, SOCKET_FRAME_BUDGET } from '../../realtime/rate-limiter';
 import { offlinePresence } from '../../realtime/online';
+import type { PresenceAnnouncer } from '../../platform/ports/presence';
 import { createSocketLifecycle, type SocketDependencies } from './socket';
 
 const clock = fixedClock(new Date('2026-09-09T12:00:00.000Z'));
@@ -154,8 +155,10 @@ describe('a socket that closes', () => {
 });
 
 describe('who is online, in a process that does not run chat', () => {
+  const announcePresence: PresenceAnnouncer = () => Promise.resolve();
   const lifecycleWith = (
     closedEvent?: (event: string) => boolean,
+    announced = true,
   ): ReturnType<typeof createSocketLifecycle> => {
     const { log } = aRecordingLogger();
     const dependencies: SocketDependencies = {
@@ -167,9 +170,14 @@ describe('who is online, in a process that does not run chat', () => {
       userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
       attention: nobodyActive,
       ...(closedEvent === undefined ? {} : { closedEvent }),
+      ...(announced ? { announcePresence } : {}),
     };
     return createSocketLifecycle(dependencies);
   };
+
+  test('is nobody, where no module announces presence: the node counts none and tells none', () => {
+    expect(lifecycleWith(undefined, false).online).toBe(offlinePresence);
+  });
 
   test('is nobody, when the news of presence is closed: the node counts none and tells none', () => {
     const lifecycle = lifecycleWith((event) => event === 'PRESENCE');

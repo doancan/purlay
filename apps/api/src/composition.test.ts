@@ -30,6 +30,7 @@ import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from 
 import { inStartOrder, moduleCells } from './testing/module-cells';
 import { concretePath } from './testing/module-smoke';
 import { noSuspension, type Suspension } from './platform/suspended-modules';
+import { NO_SESSION_LIFETIME } from './modules/auth/session-lifetime';
 
 const bundle: readonly BundledModule[] = bundledModules;
 
@@ -155,6 +156,40 @@ describe('the application as its modules make it', () => {
     expect(() => compose([chatModule, another, second])).toThrow(
       "more than one module answers for a workspace's channels: chat, other, second",
     );
+  });
+
+  describe('what the socket is handed (D-352)', () => {
+    test('tells who is online through chat while it runs, and counts nobody where chat is carried and off', () => {
+      expect(composition.announcePresence).toBe(chatModule.announcePresence);
+      expect(compose([]).announcePresence).toBeUndefined();
+      expect(compose([], []).announcePresence).toBeUndefined();
+    });
+
+    test('checks live frames by chat’s projection whether or not chat runs, and by none in a build without chat', () => {
+      expect(composition.frameProjection).toBe(chatModule.frameProjection);
+      expect(compose([]).frameProjection).toBe(chatModule.frameProjection);
+      expect(compose([], []).frameProjection).toBeUndefined();
+    });
+
+    test('refuses two modules that both check the socket’s frames', () => {
+      const second: BundledModule = {
+        manifest: { ...another.manifest, id: 'second' },
+        frameProjection: chatModule.frameProjection,
+      };
+      expect(() => compose([chatModule, second])).toThrow(
+        "more than one module checks the socket's frames: chat, second",
+      );
+    });
+
+    test('chat’s projection makes a company and a workspace projector without reading anything yet', () => {
+      const projectors = chatModule.frameProjection({
+        database: aDatabaseThatMustNotBeTouched(),
+        clock: { now: () => new Date(0) },
+        lifetime: () => NO_SESSION_LIFETIME,
+      });
+      expect(typeof projectors.companyFrame).toBe('function');
+      expect(typeof projectors.workspaceFrame).toBe('function');
+    });
   });
 
   describe('who may read an attachment', () => {
