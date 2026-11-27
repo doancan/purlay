@@ -7,7 +7,7 @@ import { Button } from '../../ui/button';
 import { useRoute } from '../../router/router-provider';
 import { href } from '../../router/routes';
 import { LogoMark } from '../shell/notice';
-import { StandaloneScreen } from '../shell/standalone';
+import { DoorCard } from '../sign-in/door-card';
 
 export const useOwnAdmission = (enabled: boolean): ReturnType<typeof useQuery<OwnAdmission>> => {
   const api = useApi();
@@ -87,32 +87,32 @@ export const AdmissionScreen = ({
     }
   };
   return (
-    <StandaloneScreen>
-      <section className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
-        <LogoMark />
-        <h1 className="text-display">{t(`admission.${state}.title`)}</h1>
-        <p className="text-body text-ink-muted">{t(`admission.${state}.body`)}</p>
-        <InstanceIdentity />
-        {failed && (
-          <p role="alert" className="text-body text-danger-text">
-            {t('admission.signOutFailed')}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button busy={refreshing} disabled={busy} onClick={refresh}>
-            {t('admin.refresh')}
-          </Button>
-          <Button
-            busy={busy}
-            disabled={refreshing}
-            onClick={() => {
-              void leave();
-            }}
-          >
-            {t('user.signOut')}
-          </Button>
-        </div>
-      </section>
-    </StandaloneScreen>
+    <DoorCard>
+      <LogoMark />
+      <div className="flex flex-col items-center gap-2">
+        <h1 className="text-balance text-display">{t(`admission.${state}.title`)}</h1>
+        <p className="text-balance text-body text-ink-muted">{t(`admission.${state}.body`)}</p>
+      </div>
+      <InstanceIdentity />
+      {failed && (
+        <p role="alert" className="text-balance text-label text-danger-text">
+          {t('admission.signOutFailed')}
+        </p>
+      )}
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button busy={refreshing} disabled={busy} onClick={refresh}>
+          {t('admin.refresh')}
+        </Button>
+        <Button
+          busy={busy}
+          disabled={refreshing}
+          onClick={() => {
+            void leave();
+          }}
+        >
+          {t('user.signOut')}
+        </Button>
+      </div>
+    </DoorCard>
   );
 };

@@ -7,7 +7,7 @@
  * room's name so another spec's message is never the one found.
  */
 import { expect, test } from './fixtures';
-import { chooseInSubmenu, isNarrow, openNav, railLink, shellReady } from './support';
+import { chooseInSubmenu, railLink, shellReady } from './support';
 
 interface Reminders {
   readonly message: { readonly id: string };
@@ -96,17 +96,8 @@ test.describe('message reminders', () => {
     await signIn();
     await page.goto(`/w/${tenant.slug}/questions`);
     await shellReady(page);
-    if (isNarrow(page)) {
-      await (await railLink(page, 'Inbox')).click();
-      await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
-    } else {
-      await openNav(page);
-      await page
-        .getByRole('navigation', { name: 'Places' })
-        .getByRole('button', { name: /^Inbox/ })
-        .click();
-      await expect(page.getByRole('dialog', { name: 'Inbox' })).toBeVisible();
-    }
+    await (await railLink(page, 'Inbox')).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
     const item = page.getByRole('button', { name: new RegExp(made.name) });
     await expect(item).toContainText('Your message reminder is due', { timeout: DUE_WITHIN_MS });
     // The reminded message is quoted, and the reminder is spent.

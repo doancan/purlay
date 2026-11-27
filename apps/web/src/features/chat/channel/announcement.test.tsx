@@ -122,7 +122,7 @@ describe('the composer of an announcement channel', () => {
     const view = await mountAs('member', { locale: 'tr' });
     expect(
       view.getByText(
-        'Bu kanala yalnızca sahipler ve yöneticiler yazar. Yine de bir thread’e yanıt yazabilirsin.',
+        'Bu kanala yalnızca sahipler ve yöneticiler yazar. Yine de bir thread’e yanıt yazabilirsiniz.',
       ),
     ).toBeDefined();
     view.unmountAll();

@@ -76,6 +76,9 @@ describe('server audit browsing', () => {
           : undefined,
     );
     expect(await view.findByText('Email connection tested')).toBeDefined();
+    // Labelled above as the other filters are; the button shows the choice and is named with its label.
+    expect(view.getByText('Person')).toBeDefined();
+    expect(view.getByRole('button', { name: 'Person: Anyone' }).textContent).toBe('Anyone');
     await person().click(view.getByRole('button', { name: 'Person: Anyone' }));
     const dialog = within(await view.findByRole('dialog', { name: 'Choose a person' }));
     await person().type(dialog.getByLabelText('Search by name, username or email'), 'ada');

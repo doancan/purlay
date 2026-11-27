@@ -28,6 +28,7 @@ import { keys } from '../../../data/keys';
 import { useActions } from '../../../data/actions-provider';
 import { useI18n } from '../../../i18n/i18n-provider';
 import type { MessageKey } from '../../../i18n/types';
+import { useArrivals, type ArrivalProps } from '../../../ui/arrival';
 import { IconButton } from '../../../ui/icon-button';
 import { Menu, MenuTile, MenuTiles } from '../../../ui/menu';
 import { useToast } from '../../../ui/toast';
@@ -117,17 +118,21 @@ const Chip = ({
   mine,
   who,
   onToggle,
+  arrival,
 }: {
   readonly reaction: Reaction;
   readonly mine: boolean;
   readonly who: string;
   readonly onToggle: () => void;
+  /** Drawn arriving once when the emoji was just added; the reactions there when the row was drawn do not arrive. */
+  readonly arrival: ArrivalProps;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
   return (
     <Tooltip content={who}>
       <button
         type="button"
+        {...arrival}
         aria-pressed={mine}
         aria-label={t('message.reactionOf', {
           emoji: reaction.emoji,
@@ -137,9 +142,10 @@ const Chip = ({
         // A soft pill, as Slack's, Discord's and Linear's are (D-209): no frame at rest, the accent's
         // tint under the pointer — what a click would make it — and yours in it, and in the heavier weight.
         className={cn(
-          'inline-flex h-6 items-center gap-1 rounded-pill px-2 text-caption font-medium transition-colors duration-hover ease-standard',
+          'inline-flex h-6 items-center gap-1 rounded-pill px-2 text-caption font-medium transition-colors duration-hover ease-standard data-arrived:animate-arrive',
           mine
-            ? 'bg-accent-subtle font-semibold text-ink'
+            ? // Yours answers the pointer too, in the accent's ink, so a click to take it back is invited.
+              'bg-accent-subtle font-semibold text-ink hover:text-accent-text'
             : 'bg-surface-200 text-ink-muted hover:bg-accent-subtle hover:text-accent-text',
         )}
       >
@@ -165,12 +171,14 @@ export const ReactionBar = ({
 }): React.JSX.Element | null => {
   const toggle = useToggle(message, meId);
   const who = useWho(meId, members);
+  const arrival = useArrivals(message.reactions.map((reaction) => reaction.emoji));
   if (message.reactions.length === 0) return null;
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       {message.reactions.map((reaction) => (
         <Chip
           key={reaction.emoji}
+          arrival={arrival(reaction.emoji)}
           reaction={reaction}
           mine={reaction.userIds.includes(meId)}
           who={who(reaction)}

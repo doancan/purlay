@@ -103,7 +103,7 @@ export const AddressChips = ({
                   setFull(false);
                   onChange(addresses.filter((_, at) => at !== index));
                 }}
-                className="inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-pill hover:bg-surface-200"
+                className="inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-pill transition-colors duration-hover ease-standard enabled:hover:bg-surface-200 disabled:cursor-not-allowed"
               >
                 <Icon name="close" size="sm" />
               </button>

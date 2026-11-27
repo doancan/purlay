@@ -246,7 +246,11 @@ describe('the Issues screen', () => {
     const title = view.getByRole('textbox', { name: 'Title' });
     await person().clear(title);
     await person().type(title, 'Renamed');
-    await person().type(view.getByRole('textbox', { name: 'Details' }), ' more');
+    const details = view.getByRole('textbox', { name: 'Details' });
+    // Details are shown as plain text, so the hint promises a length and not Markdown.
+    const hintId = details.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(hintId)?.textContent).toBe('Up to 10,000 characters');
+    await person().type(details, ' more');
     await person().selectOptions(view.getByRole('combobox', { name: 'Assignee' }), IDS.bob);
     await person().click(view.getByRole('button', { name: 'Save' }));
     await settle();

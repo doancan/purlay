@@ -57,6 +57,7 @@ describe('the rail', () => {
       rail.getAllByRole('link').map((link) => link.textContent.trim().replace(/\d+$/, '')),
     ).toEqual([
       'Channels',
+      'Inbox',
       'Open questions',
       'Search',
       'Shared',
@@ -64,10 +65,8 @@ describe('the rail', () => {
       'Drafts and sent',
       'Settings',
     ]);
-    // The inbox opens its panel (D-208): a button, between Channels and Open questions.
-    expect(rail.getAllByRole('button').map((button) => button.textContent.trim())).toEqual([
-      'Inbox',
-    ]);
+    // The inbox is the link to its page on every width (D-208, amended): no place in the rail is a button.
+    expect(rail.queryAllByRole('button')).toEqual([]);
     // A link to a page, not a menu of its own.
     expect(rail.queryByRole('button', { name: 'Settings' })).toBeNull();
   });
@@ -121,7 +120,7 @@ describe('the rail', () => {
       aSignedInApi({ saved: () => Promise.resolve({ data: [], nextCursor: null }) }),
       path,
     );
-    // Links and the inbox's button alike: whichever says where the person is.
+    // Whichever place says where the person is.
     const marked = [...places(view).querySelectorAll('[aria-current]')].map((link) =>
       link.textContent.trim().replace(/\d+$/, ''),
     );
@@ -248,7 +247,7 @@ describe('the inbox', () => {
         channels: () => Promise.resolve([{ ...first, state: waiting }, ...rest]),
       }),
     );
-    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent).toContain(
+    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent).toContain(
       'unread',
     );
   });
@@ -269,7 +268,7 @@ describe('the inbox', () => {
       }),
     );
     // The same channels, out of Deep Work, carry the dot: the test above.
-    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent.trim()).toBe(
+    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
       'Inbox',
     );
   });
@@ -285,7 +284,7 @@ describe('the inbox', () => {
           ]),
       }),
     );
-    expect(within(places(view)).getByRole('button', { name: /Inbox/ }).textContent.trim()).toBe(
+    expect(within(places(view)).getByRole('link', { name: /Inbox/ }).textContent.trim()).toBe(
       'Inbox',
     );
   });

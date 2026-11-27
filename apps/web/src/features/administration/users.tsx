@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SERVER_APPROVAL_BATCH_MAX, type ServerUser, type ServerUsersQuery } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
-import { VisuallyHidden } from '../../ui/visually-hidden';
 import { TextField } from '../../ui/text-field';
 import { Select } from '../../ui/select';
 import { Dialog } from '../../ui/dialog';
@@ -79,40 +78,174 @@ export const Users = (): React.JSX.Element => {
   );
 };
 
+/** Why an account cannot be made an administrator yet, or null when it can. */
+const grantBlocked = (
+  user: ServerUser,
+):
+  | 'admin.grant.blocked.suspended'
+  | 'admin.grant.blocked.unverified'
+  | 'admin.grant.blocked.unapproved'
+  | null =>
+  user.suspendedAt !== null
+    ? 'admin.grant.blocked.suspended'
+    : !user.emailVerified
+      ? 'admin.grant.blocked.unverified'
+      : user.admissionState !== 'approved'
+        ? 'admin.grant.blocked.unapproved'
+        : null;
+
 /**
- * Grant administrator access, or — when the account cannot be given it yet — the reason, said beside the disabled
- * button as a tooltip and to a screen reader, so a dead button is never a mystery.
+ * One account: a checkbox for a pending one in its own leading column, who it is, then what can be done to it,
+ * the state's own decision (approve, deny) first. A grant the account cannot take yet is disabled, and the reason
+ * is said under the buttons and tied to the button — a pointer that never hovers, a finger, never sees a tip —
+ * on a line of its own, so it does not sit between two buttons as if it were one.
  */
-const GrantButton = ({
+const AccountRow = ({
   user,
   busy,
-  ask,
+  self,
+  selection,
+  selectColumn,
+  onDetails,
+  onAsk,
+  onRestore,
 }: {
   readonly user: ServerUser;
   readonly busy: boolean;
-  readonly ask: () => void;
+  readonly self: boolean;
+  readonly selection: {
+    readonly checked: boolean;
+    readonly disabled: boolean;
+    readonly onChange: (checked: boolean) => void;
+  } | null;
+  /** Some row in the list can be selected: one that cannot keeps the column empty, so every name starts on one edge. */
+  readonly selectColumn: boolean;
+  readonly onDetails: () => void;
+  readonly onAsk: (action: AccountAction) => void;
+  readonly onRestore: () => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const reason =
-    user.suspendedAt !== null
-      ? t('admin.grant.blocked.suspended')
-      : !user.emailVerified
-        ? t('admin.grant.blocked.unverified')
-        : user.admissionState !== 'approved'
-          ? t('admin.grant.blocked.unapproved')
-          : null;
+  const blocked = grantBlocked(user);
+  const describedBy = `account-${user.id}`;
   const reasonId = `grant-why-${user.id}`;
+  const status =
+    user.admissionState !== 'approved'
+      ? t(`admin.${user.admissionState}`)
+      : user.isServerAdmin
+        ? t('settings.server.accounts.admin')
+        : user.suspendedAt === null
+          ? t('admin.active')
+          : t('admin.suspended');
   return (
-    <>
-      <Button
-        disabled={busy || reason !== null}
-        onClick={ask}
-        {...(reason === null ? {} : { title: reason, 'aria-describedby': reasonId })}
-      >
-        {t('admin.grant')}
-      </Button>
-      {reason === null ? null : <VisuallyHidden id={reasonId}>{reason}</VisuallyHidden>}
-    </>
+    <li className="flex items-start gap-3 not-last:border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4">
+      {selection !== null && (
+        // The box's hit area is a control's height and centred on the name's line, so it is easy to hit and in line.
+        <label className="-m-2 flex shrink-0 cursor-pointer p-2">
+          <Checkbox
+            aria-label={t('admin.bulk.select', { name: user.displayName })}
+            aria-describedby={describedBy}
+            checked={selection.checked}
+            disabled={selection.disabled}
+            onChange={(event) => {
+              selection.onChange(event.target.checked);
+            }}
+          />
+        </label>
+      )}
+      {selection === null && selectColumn && (
+        <span aria-hidden="true" className="size-icon-md shrink-0" />
+      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 flex-col">
+          <h3 className="text-label text-ink break-words">{user.displayName}</h3>
+          <p id={describedBy} className="text-caption text-ink-muted break-all">
+            @{user.username} · {user.email}
+          </p>
+          <p className="text-caption text-ink-muted">
+            {status} · {t(user.emailVerified ? 'admin.verified' : 'admin.unverified')}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            {user.admissionState !== 'approved' && (
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  onAsk('approve');
+                }}
+              >
+                {t('admin.approve')}
+              </Button>
+            )}
+            <Button disabled={busy} onClick={onDetails}>
+              {t('admin.details')}
+            </Button>
+            {user.isServerAdmin ? (
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  onAsk('revoke');
+                }}
+              >
+                {t('admin.revoke')}
+              </Button>
+            ) : (
+              <Button
+                disabled={busy || blocked !== null}
+                onClick={() => {
+                  onAsk('grant');
+                }}
+                {...(blocked === null ? {} : { 'aria-describedby': reasonId })}
+              >
+                {t('admin.grant')}
+              </Button>
+            )}
+            <Button
+              disabled={busy}
+              onClick={() => {
+                onAsk('endSessions');
+              }}
+            >
+              {t('admin.endSessions')}
+            </Button>
+            {user.admissionState === 'approved' &&
+              !user.isServerAdmin &&
+              !self &&
+              (user.suspendedAt === null ? (
+                <Button
+                  variant="dangerQuiet"
+                  disabled={busy}
+                  onClick={() => {
+                    onAsk('suspend');
+                  }}
+                >
+                  {t('settings.server.accounts.suspend')}
+                </Button>
+              ) : (
+                <Button disabled={busy} onClick={onRestore}>
+                  {t('settings.server.accounts.lift')}
+                </Button>
+              ))}
+            {user.admissionState === 'pending' && (
+              <Button
+                variant="dangerQuiet"
+                disabled={busy}
+                onClick={() => {
+                  onAsk('deny');
+                }}
+              >
+                {t('admin.deny')}
+              </Button>
+            )}
+          </div>
+          {blocked !== null && !user.isServerAdmin && (
+            <p id={reasonId} className="text-caption text-ink-muted">
+              {t(blocked)}
+            </p>
+          )}
+        </div>
+      </div>
+    </li>
   );
 };
 
@@ -206,137 +339,44 @@ const UserList = ({
               ) : (
                 <ul>
                   {data.data.map((user) => (
-                    <li
+                    <AccountRow
                       key={user.id}
-                      className="flex flex-wrap items-start gap-4 not-last:border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-label text-ink break-words">{user.displayName}</h2>
-                        <p
-                          id={`account-${user.id}`}
-                          className="text-caption text-ink-muted break-all"
-                        >
-                          @{user.username} · {user.email}
-                        </p>
-                        <p className="text-caption text-ink-muted">
-                          {user.admissionState !== 'approved'
-                            ? t(`admin.${user.admissionState}`)
-                            : user.isServerAdmin
-                              ? t('settings.server.accounts.admin')
-                              : user.suspendedAt === null
-                                ? t('admin.active')
-                                : t('admin.suspended')}{' '}
-                          · {t(user.emailVerified ? 'admin.verified' : 'admin.unverified')}
-                        </p>
-                      </div>
-                      <div className="flex w-full flex-wrap gap-2">
-                        {user.admissionState === 'pending' && (
-                          <label className="flex min-h-touch cursor-pointer items-center gap-2 py-2 text-label text-ink">
-                            <Checkbox
-                              aria-label={t('admin.bulk.select', { name: user.displayName })}
-                              aria-describedby={`account-${user.id}`}
-                              checked={approvals.has(user.id)}
-                              disabled={
+                      user={user}
+                      busy={busy}
+                      self={user.id === session.user.id}
+                      selectColumn={data.data.some(
+                        (account) => account.admissionState === 'pending',
+                      )}
+                      selection={
+                        user.admissionState === 'pending'
+                          ? {
+                              checked: approvals.has(user.id),
+                              disabled:
                                 busy ||
                                 query.isFetching ||
                                 (approvals.size >= SERVER_APPROVAL_BATCH_MAX &&
-                                  !approvals.has(user.id))
-                              }
-                              onChange={(event) => {
-                                const checked = event.target.checked;
+                                  !approvals.has(user.id)),
+                              onChange: (checked): void => {
                                 setApprovals((held) => {
                                   const next = new Map(held);
                                   if (checked) next.set(user.id, user);
                                   else next.delete(user.id);
                                   return next;
                                 });
-                              }}
-                            />
-                            <span>{t('admin.bulk.selectAccount')}</span>
-                          </label>
-                        )}
-                        <Button
-                          disabled={busy}
-                          onClick={() => {
-                            setSelected(user);
-                          }}
-                        >
-                          {t('admin.details')}
-                        </Button>
-                        {user.isServerAdmin ? (
-                          <Button
-                            disabled={busy}
-                            onClick={() => {
-                              setAsking({ user, action: 'revoke' });
-                            }}
-                          >
-                            {t('admin.revoke')}
-                          </Button>
-                        ) : (
-                          <GrantButton
-                            user={user}
-                            busy={busy}
-                            ask={() => {
-                              setAsking({ user, action: 'grant' });
-                            }}
-                          />
-                        )}
-                        <Button
-                          disabled={busy}
-                          onClick={() => {
-                            setAsking({ user, action: 'endSessions' });
-                          }}
-                        >
-                          {t('admin.endSessions')}
-                        </Button>
-                        {user.admissionState !== 'approved' && (
-                          <>
-                            <Button
-                              disabled={busy}
-                              onClick={() => {
-                                setAsking({ user, action: 'approve' });
-                              }}
-                            >
-                              {t('admin.approve')}
-                            </Button>
-                            {user.admissionState === 'pending' && (
-                              <Button
-                                variant="dangerQuiet"
-                                disabled={busy}
-                                onClick={() => {
-                                  setAsking({ user, action: 'deny' });
-                                }}
-                              >
-                                {t('admin.deny')}
-                              </Button>
-                            )}
-                          </>
-                        )}
-                        {user.admissionState === 'approved' &&
-                          !user.isServerAdmin &&
-                          user.id !== session.user.id &&
-                          (user.suspendedAt === null ? (
-                            <Button
-                              variant="dangerQuiet"
-                              disabled={busy}
-                              onClick={() => {
-                                setAsking({ user, action: 'suspend' });
-                              }}
-                            >
-                              {t('settings.server.accounts.suspend')}
-                            </Button>
-                          ) : (
-                            <Button
-                              disabled={busy}
-                              onClick={() => {
-                                void change(user, 'restore');
-                              }}
-                            >
-                              {t('settings.server.accounts.lift')}
-                            </Button>
-                          ))}
-                      </div>
-                    </li>
+                              },
+                            }
+                          : null
+                      }
+                      onDetails={() => {
+                        setSelected(user);
+                      }}
+                      onAsk={(action) => {
+                        setAsking({ user, action });
+                      }}
+                      onRestore={() => {
+                        void change(user, 'restore');
+                      }}
+                    />
                   ))}
                 </ul>
               )}
@@ -442,8 +482,14 @@ const UserDetail = ({
       <QueryState query={query}>
         {(data) => (
           <>
-            <h2 className="text-heading text-ink break-words">{data.user.displayName}</h2>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-heading text-ink break-words">{data.user.displayName}</h3>
+              <p className="text-caption text-ink-muted break-all">
+                @{data.user.username} · {data.user.email}
+              </p>
+            </div>
             <Facts
+              flush
               items={[
                 [t('admin.created'), format.absolute(data.user.createdAt)],
                 [
@@ -455,18 +501,31 @@ const UserDetail = ({
                 [t('admin.sessions'), data.activeSessions],
               ]}
             />
-            <h3 className="text-heading text-ink">{t('admin.memberships')}</h3>
-            {data.memberships.length === 0 ? (
-              <Empty />
-            ) : (
-              <ul>
-                {data.memberships.map((m) => (
-                  <li key={m.workspaceId} className="py-2 text-body text-ink break-words">
-                    {m.workspaceName} · {t(`members.role.${m.role}`)}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <section className="flex flex-col gap-1">
+              <h3 className="text-label text-ink-muted">{t('admin.memberships')}</h3>
+              {data.memberships.length === 0 ? (
+                // A line, not the page's empty state: in a dialog's section a framed glyph outweighs the facts above it.
+                <p role="status" className="py-2 text-body text-ink-muted">
+                  {t('admin.empty')}
+                </p>
+              ) : (
+                <ul className="divide-y-hairline divide-border-subtle">
+                  {data.memberships.map((m) => (
+                    <li
+                      key={m.workspaceId}
+                      className="flex items-baseline justify-between gap-4 py-2"
+                    >
+                      <span className="min-w-0 text-body text-ink break-words">
+                        {m.workspaceName}
+                      </span>
+                      <span className="shrink-0 text-caption text-ink-muted">
+                        {t(`members.role.${m.role}`)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
             <Pagination pages={pages} nextCursor={data.nextCursor} busy={query.isFetching} />
           </>
         )}

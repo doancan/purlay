@@ -77,8 +77,13 @@ test.describe('every page of Settings', () => {
         expect(await refused.json()).toMatchObject({
           error: { code: 'WORKSPACE_PROVISIONING_NOT_READY' },
         });
-        await expect(page.getByRole('alert')).toContainText('Couldn’t refresh access.');
-        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+        // A server with the feature off is said as such, calmly: nothing to retry until an operator turns it on.
+        await expect(
+          page.getByRole('status', {
+            name: 'Access management is not turned on on this server yet',
+          }),
+        ).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
       }
       if (section === 'company')
         await expect(page.getByLabel('Domain', { exact: true })).toBeVisible();

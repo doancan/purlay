@@ -15,13 +15,13 @@ import { Icon } from '../../components/icon';
 import { useMe, useSetupStatus } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
-import { buttonStyle } from '../../ui/button';
+import { Button, buttonStyle } from '../../ui/button';
 import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { VisuallyHidden } from '../../ui/visually-hidden';
-import { ErrorState } from '../../ui/states';
-import { LogoMark, Notice } from '../shell/notice';
+import { LogoMark } from '../shell/notice';
+import { DoorNotice } from '../sign-in/door-card';
 import { createSetupClient, isSetupFailure, type SetupClient } from './client';
 import { SETUP_STATE_KEY, SetupProvider } from './context';
 import { movementClass, useReducedMotion } from './motion';
@@ -110,7 +110,7 @@ const Shell = ({
   readonly stepper?: React.ReactNode;
 }): React.JSX.Element => (
   <Main className="flex min-h-screen items-center justify-center bg-surface-000 p-6 text-ink max-narrow:p-0">
-    <div className="flex w-full max-w-settings self-center overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-raised max-narrow:min-h-screen max-narrow:flex-col max-narrow:rounded-none max-narrow:border-transparent">
+    <div className="flex w-full max-w-settings self-center overflow-hidden rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-card max-narrow:min-h-screen max-narrow:flex-col max-narrow:rounded-none max-narrow:border-transparent">
       {stepper}
       {children}
     </div>
@@ -127,13 +127,12 @@ const ClosedNotice = (): React.JSX.Element => {
   const me = useMe();
   const signedIn = me.data !== undefined;
   return (
-    <Notice
-      as="h1"
+    <DoorNotice
       glyph="resolved"
       title={t('setup.closed.title')}
       body={signedIn ? t('setup.closed.bodySignedIn') : t('setup.closed.body')}
       action={
-        <a href={href(signedIn ? 'home' : 'signIn')} className={buttonStyle('primary', 'lg')}>
+        <a href={href(signedIn ? 'home' : 'signIn')} className={buttonStyle('primary')}>
           {signedIn ? t('setup.closed.open') : t('setup.closed.action')}
         </a>
       }
@@ -215,39 +214,43 @@ export const SetupScreen = ({ client }: { readonly client?: SetupClient }): Reac
       </Shell>
     );
   }
+  // Not the wizard: a sentence and the way on, in the card every other door's notice stands in (`sign-in/door-card`),
+  // not a wizard-wide frame with nothing beside it.
   if (status.isError) {
     return (
-      <Shell>
-        <ErrorState
-          title={t('setup.status.error.title')}
-          body={t('setup.status.error.body')}
-          retryLabel={t('common.retry')}
-          onRetry={() => {
-            void status.refetch();
-          }}
-        />
-      </Shell>
+      <DoorNotice
+        glyph="failed"
+        title={t('setup.status.error.title')}
+        body={t('setup.status.error.body')}
+        action={
+          <Button
+            onClick={() => {
+              void status.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </Button>
+        }
+      />
     );
   }
-  if (!open) {
-    return (
-      <Shell>
-        <ClosedNotice />
-      </Shell>
-    );
-  }
+  if (!open) return <ClosedNotice />;
   if (state.isError && !unheld) {
     return (
-      <Shell>
-        <ErrorState
-          title={t('setup.state.error.title')}
-          body={t('setup.state.error.body')}
-          retryLabel={t('common.retry')}
-          onRetry={() => {
-            void state.refetch();
-          }}
-        />
-      </Shell>
+      <DoorNotice
+        glyph="failed"
+        title={t('setup.state.error.title')}
+        body={t('setup.state.error.body')}
+        action={
+          <Button
+            onClick={() => {
+              void state.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </Button>
+        }
+      />
     );
   }
 

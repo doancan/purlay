@@ -29,7 +29,7 @@ export const Workspaces = ({
           setFilter({ q: q.trim(), ...(status === undefined ? {} : { status }) });
         }}
       >
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 max-narrow:basis-full">
           <TextField
             label={t('admin.workspaceSearch')}
             value={q}
@@ -86,7 +86,12 @@ const WorkspaceList = ({
     <QueryState query={query}>
       {(data) => (
         <>
-          {data.data.length === 0 && <Empty />}
+          {/* In a card, as the other lists' empty states are: a bare one floats on the page's ground. */}
+          {data.data.length === 0 && (
+            <SettingsCard>
+              <Empty />
+            </SettingsCard>
+          )}
           {data.data.map((workspace) => (
             <SettingsCard
               key={workspace.id}

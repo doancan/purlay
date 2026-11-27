@@ -69,22 +69,28 @@ export const Sidebar = ({ overlay = false }: SidebarProps): React.JSX.Element =>
           </WhenRun>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-4">
             <WhenRun module="chat">
-              <div className="pt-1 pb-3">
-                <UnreadsRow />
-                <FollowedRow />
+              {/* One rhythm down the column: rows 4px apart inside a group, 12px between groups, so a section's
+                  name sits nearer its own rows than the rows above it. */}
+              <div className="flex flex-col gap-3 pt-1 pb-3">
+                <div className="flex flex-col gap-1">
+                  <UnreadsRow />
+                  <FollowedRow />
+                </div>
                 <ChannelSections />
               </div>
-              <div className="border-t-hairline border-nav-border py-3">
+              {/* A section switched off draws nothing, and its divider goes with it rather than doubling the next. */}
+              <div className="border-t-hairline border-nav-border py-3 empty:hidden">
                 <ConversationList />
               </div>
             </WhenRun>
-            <div className="border-t-hairline border-nav-border py-3">
+            <div className="border-t-hairline border-nav-border py-3 empty:hidden">
               <PeopleList />
             </div>
           </div>
         </SidebarPreferencesProvider>
       )}
-      <footer className="shrink-0 border-t-hairline border-nav-border p-1">
+      {/* Inset as the rows above it are, so the avatar stands in the column of their glyphs. */}
+      <footer className="shrink-0 border-t-hairline border-nav-border p-2">
         <AccountMenu />
       </footer>
     </aside>

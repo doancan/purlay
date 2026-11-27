@@ -1,5 +1,5 @@
 /**
- * One row of the inbox (D-106, D-162), drawn the same in the inbox's page and in its panel (D-208):
+ * One row of the inbox's page (D-106, D-162):
  * who, why, where and when on one line; the thread it is in; the message itself. A row is a button
  * that opens the message, and — while anything in it waits — Mark read beside it, its own control.
  */
@@ -10,7 +10,6 @@ import type { Translate } from '../../../i18n/types';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
-import { IconButton } from '../../../ui/icon-button';
 import { listButtonClasses, listRowClasses } from '../../../ui/list-column';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useChannelTitle } from '../channel/channel-header';
@@ -24,8 +23,9 @@ const glyphOf = (type: Notification['type']): GlyphName => {
   switch (type) {
     case 'reminder':
       return 'notifications';
+    // The Mentions tab's own mark, so a row and the category it is filed under agree.
     case 'mention':
-      return 'notifications';
+      return 'mention';
     case 'direct_message':
       return 'person';
     case 'thread_reply':
@@ -56,12 +56,6 @@ const threadLineOf = (t: Translate, row: InboxRow, unread: boolean): string | nu
   return t(unread ? 'inbox.thread.new' : 'inbox.thread.seen', { count, excerpt });
 };
 
-/**
- * How much room a row takes: the inbox page's, or the panel's (D-208) — one line of the message,
- * tighter, and Mark read as an icon, since the panel is a glance and the page is the reading.
- */
-export type RowDensity = 'page' | 'panel';
-
 export const InboxRowItem = ({
   row,
   channel,
@@ -69,9 +63,7 @@ export const InboxRowItem = ({
   now,
   onOpen,
   onRead,
-  density = 'page',
 }: {
-  readonly density?: RowDensity;
   readonly row: InboxRow;
   readonly channel: Channel | undefined;
   readonly me: string;
@@ -92,7 +84,6 @@ export const InboxRowItem = ({
     ...(repliers.more > 0 ? [t('inbox.others', { count: repliers.more })] : []),
   ]);
   const threadLine = threadLineOf(t, row, unread);
-  const panel = density === 'panel';
   const withOne =
     channel?.type === 'direct_message' && channel.peer !== null && channel.peers.length < 2;
   return (
@@ -102,23 +93,18 @@ export const InboxRowItem = ({
         onClick={() => {
           onOpen(row);
         }}
-        className={listButtonClasses(panel ? 'gap-2.5 px-4 py-2.5 max-narrow:px-4' : undefined)}
+        className={listButtonClasses()}
       >
         {/* Unread is a dot at the row's edge as well as full ink, never colour alone (#58). */}
         <span
           aria-hidden="true"
           className={cn(
-            panel
-              ? 'absolute top-4 left-1 size-dot rounded-pill'
-              : 'absolute top-5 left-2 size-dot rounded-pill',
+            // A phone's row is narrower at its edge: the dot moves with it, to keep its gap to the avatar.
+            'absolute top-5 left-2 size-dot rounded-pill max-narrow:left-1',
             unread ? 'bg-accent' : 'bg-transparent',
           )}
         />
-        <Avatar
-          name={author.displayName}
-          username={author.username}
-          {...(panel ? { size: 'sm' as const } : {})}
-        />
+        <Avatar name={author.displayName} username={author.username} />
         <span className="min-w-0 flex-1">
           {/* One line at any width: the reason gives way before the channel, the time never breaks (#679). */}
           <span className="flex items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
@@ -161,7 +147,7 @@ export const InboxRowItem = ({
           <span
             className={cn(
               'mt-1 text-body',
-              gathered || panel ? 'line-clamp-1' : 'line-clamp-2',
+              gathered ? 'line-clamp-1' : 'line-clamp-2',
               unread && !gathered ? 'text-ink' : 'text-ink-muted',
             )}
           >
@@ -170,20 +156,7 @@ export const InboxRowItem = ({
           <PriorityMark message={message} />
         </span>
       </button>
-      {unread && panel && (
-        // In the panel, the same control as an icon: the row is a line, and a labelled button covers it.
-        <span className="absolute top-1 right-2 opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100">
-          <IconButton
-            glyph="confirm"
-            label={t('inbox.markRead')}
-            className="bg-surface-100"
-            onClick={() => {
-              onRead(row);
-            }}
-          />
-        </span>
-      )}
-      {unread && !panel && (
+      {unread && (
         // Read without opening: beside the row, not inside its button, so each is its own control.
         <span className="absolute top-2 right-2 opacity-0 transition-opacity duration-hover ease-standard group-hover:opacity-100 focus-within:opacity-100 max-narrow:hidden">
           <Button

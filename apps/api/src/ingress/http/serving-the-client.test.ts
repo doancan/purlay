@@ -186,6 +186,75 @@ describe('a file gone between being found and being sent', () => {
   });
 });
 
+describe('a build being replaced in place', () => {
+  // A rebuild empties `dist` before it writes the new one: for that moment there is no shell. A
+  // navigation then must still be a page a browser shows and retries, never the JSON error envelope.
+  const replacing = (): { readonly root: string; readonly application: typeof served } => {
+    const root = mkdtempSync(join(tmpdir(), 'replacing-'));
+    writeFileSync(join(root, 'index.html'), '<!doctype html><div id="root"></div>');
+    const application = createApp(testDependencies({ client: openClient(root) }));
+    rmSync(join(root, 'index.html'));
+    return { root, application };
+  };
+
+  const expectUpdatingPage = async (response: Response): Promise<void> => {
+    expect(response.status).toBe(503);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('retry-after')).toBe('2');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    // A document still: the document's policy, and a refresh that needs no script under it.
+    expect(response.headers.get('content-security-policy')).toContain("script-src 'self'");
+    const body = await response.text();
+    expect(body).toStartWith('<!doctype html>');
+    expect(body).toContain('<meta http-equiv="refresh" content="2">');
+  };
+
+  test('a navigation while the shell is missing is a page that reloads itself', async () => {
+    const { root, application } = replacing();
+    try {
+      await expectUpdatingPage(
+        await send('/w/acme-eng/settings/workspace-mfa', 'GET', application),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a shell gone between being found and being sent is the same page', async () => {
+    const own = mkdtempSync(join(tmpdir(), 'vanishing-shell-'));
+    writeFileSync(join(own, 'index.html'), '<!doctype html>');
+    const application = createApp(testDependencies({ client: openClient(own) }));
+    const original = Bun.file;
+    let removed = false;
+    Bun.file = ((path: string) => {
+      if (!removed && path.endsWith('index.html')) {
+        rmSync(path);
+        removed = true;
+      }
+      return original(path);
+    }) as typeof Bun.file;
+    try {
+      const response = await send('/w/acme', 'GET', application);
+      expect(removed).toBe(true);
+      await expectUpdatingPage(response);
+    } finally {
+      Bun.file = original;
+      rmSync(own, { recursive: true, force: true });
+    }
+  });
+
+  test('an asset missing meanwhile is still the not-found envelope, not a page', async () => {
+    const { root, application } = replacing();
+    try {
+      const response = await send('/assets/app-abc123.js', 'GET', application);
+      expect(response.status).toBe(404);
+      expect(response.headers.get('content-type')).toContain('application/json');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('what is never the shell', () => {
   test.each(['/assets/gone.js', '/favicon.ico', climb, '/assets/..%2f..%2fx', '/assets'])(
     '%s is the not-found envelope',

@@ -509,8 +509,9 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
     id: 'thread-composer-without-buttons',
     why: 'a reply in a thread can no longer attach a file or format with the buttons the channel’s box has (D-164)',
     file: 'apps/web/src/features/chat/composer/composer.tsx',
-    find: '            <span className="flex items-center gap-1">\n',
-    replace: '            <span hidden={compact} className="flex items-center gap-1">\n',
+    find: '            <span className="flex items-center gap-1 max-narrow:gap-0">\n',
+    replace:
+      '            <span hidden={compact} className="flex items-center gap-1 max-narrow:gap-0">\n',
     tests: ['apps/web/src/features/chat/threads/thread.test.tsx'],
   },
   {

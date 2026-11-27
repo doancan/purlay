@@ -273,6 +273,38 @@
 }
 
 /*
+ * Something the person just added arrives in its place: it rises the length of a toast's rise into the row
+ * it will keep, and the accent's quiet fill under it fades, so the eye finds what changed without a toast
+ * saying so. Two animations, because they are two lengths: the movement is `duration-arrive` (within
+ * UX §9's cap), the fill a colour fading over four of it. Both are 0ms under reduced motion, with the token.
+ * Never a message: at conversational speed an entering message reads as lag (UX §9).
+ */
+@keyframes arrive-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-1));
+  }
+}
+
+@keyframes arrive-glow {
+  from,
+  40% {
+    background-color: var(--accent-arrive);
+  }
+}
+
+@utility animate-arrive {
+  animation:
+    arrive-rise var(--duration-arrive) var(--easing-standard),
+    arrive-glow calc(var(--duration-arrive) * 4) var(--easing-standard);
+}
+
+/* A mark that just became true — saved, starred, pinned — settles into place, as a finished step's does. */
+@utility animate-settle {
+  animation: mark-settle var(--duration-arrive) var(--easing-standard);
+}
+
+/*
  * The setup wizard's three movements (UX §11): a step enters from the right, a finished step's mark
  * settles, a refused field nudges once. Lengths are tokens (0ms under reduced motion); none loops.
  */

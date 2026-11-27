@@ -45,7 +45,7 @@ export const StorageCard = (): React.JSX.Element => {
     }
     if (storage.data === undefined) {
       return (
-        <LoadingStatus label={t('common.loading')} className="px-6 py-5">
+        <LoadingStatus label={t('common.loading')} className="px-6 py-5 max-narrow:px-4">
           <Skeleton />
         </LoadingStatus>
       );

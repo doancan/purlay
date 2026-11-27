@@ -1188,7 +1188,7 @@ test('one-time recovery remains manually usable when copying fails', async () =>
       name: 'Copy',
     }),
   );
-  await view.findByText("Couldn't copy. Select the text and copy it yourself.");
+  await view.findByText('Couldn’t copy. Select the text and copy it yourself.');
   expect(view.getByText(IDS.bob + '.' + 'r'.repeat(43))).toBeDefined();
 });
 

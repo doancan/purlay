@@ -2,15 +2,17 @@
  * "Remind me…" in a message's More menu, and the mark a message with a reminder carries in the feed.
  *
  * Without a reminder the item opens the presets (`presets.ts`) and "Pick date and time…"; with one it
- * says when — "Reminder: Nov 19, 2026, 09:00" — and offers Change… and Remove reminder. A reminder is
+ * says when — "Reminder: Tomorrow at 09:00", on the 24-hour clock the presets use — and offers Change… and
+ * Remove reminder; the full time is the mark's tip. A reminder is
  * the caller's own and works on any message they can read: a channel's, a thread's reply, a
  * conversation's.
  */
 import type { Message } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
-import { MenuItem, MenuSub } from '../../../ui/menu';
+import { MenuItem, MenuSeparator, MenuSub } from '../../../ui/menu';
 import { useFeedPorts } from '../channel/feed-ports';
+import { describeWhen } from '../scheduled/presets';
 import { reminderPresets } from './presets';
 import { useReminderActions, useReminderOf } from './use-reminders';
 
@@ -43,7 +45,9 @@ export const ReminderMenuItem = ({
     return (
       <MenuSub
         glyph="reminder"
-        label={t('reminders.current', { when: format.absolute(reminder.remindAt) })}
+        label={t('reminders.current', {
+          when: describeWhen(new Date(reminder.remindAt), clock.now(), format, t),
+        })}
       >
         <MenuItem glyph="edit" onSelect={onPick}>
           {t('reminders.change')}
@@ -72,9 +76,9 @@ export const ReminderMenuItem = ({
             : t(SPAN_LABELS[id], { time: format.inputValue(at).slice(-5) })}
         </MenuItem>
       ))}
-      <MenuItem glyph="calendar" onSelect={onPick}>
-        {t('reminders.pick')}
-      </MenuItem>
+      {/* Apart from the presets, and without a glyph as they are, so every label starts in one column. */}
+      <MenuSeparator />
+      <MenuItem onSelect={onPick}>{t('reminders.pick')}</MenuItem>
     </MenuSub>
   );
 };
@@ -86,13 +90,16 @@ export const ReminderMark = ({
   readonly message: Message;
 }): React.JSX.Element | null => {
   const { t, format } = useI18n();
+  const clock = useFeedPorts().clock;
   const reminder = useReminderOf(message);
   if (reminder === undefined) return null;
-  const text = t('reminders.current', { when: format.absolute(reminder.remindAt) });
+  const text = t('reminders.current', {
+    when: describeWhen(new Date(reminder.remindAt), clock.now(), format, t),
+  });
   return (
     <span
       data-reminder-mark=""
-      title={text}
+      title={t('reminders.current', { when: format.absolute(reminder.remindAt) })}
       className="inline-flex items-center gap-1 text-caption text-ink-subtle"
     >
       <Icon name="reminder" size="sm" />

@@ -18,6 +18,10 @@
  * (`border-border-subtle`), so a disabled control is still a control and still
  * readable (`ink-muted` on `surface-200` is in the contrast table).
  *
+ * Pressed (`active:`) is one step firmer than hover, inside the palette: a neutral fill goes from
+ * `surface-200` to `border-subtle` (darker in the light theme, lighter in the dark ones), and a coloured
+ * fill darkens a step more. A press that looked like a hover gave no answer under a finger.
+ *
  * `busy` is a pending request: it disables the button and says so to assistive
  * technology, and the label does not change — a button that rewrites itself to
  * "Sending…" moves everything beside it.
@@ -37,13 +41,15 @@ const baseClasses =
 const variantClasses = {
   // A filled button's ring is drawn outside it, with its gap: inset, a blue ring on a blue fill was 1.3:1 and unseen.
   primary:
-    'border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover focus-visible:outline-offset-focus',
-  secondary: 'border-border-default bg-surface-100 text-ink shadow-card hover:bg-surface-200',
-  ghost: 'border-transparent text-ink-muted hover:bg-surface-200 hover:text-ink',
+    'border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover active:bg-accent-hover active:brightness-90 focus-visible:outline-offset-focus',
+  secondary:
+    'border-border-default bg-surface-100 text-ink shadow-card hover:bg-surface-200 active:bg-border-subtle active:shadow-none',
+  ghost:
+    'border-transparent text-ink-muted hover:bg-surface-200 hover:text-ink active:bg-border-subtle active:text-ink',
   danger:
-    'border-danger bg-danger text-on-status hover:brightness-90 focus-visible:outline-offset-focus',
+    'border-danger bg-danger text-on-status hover:brightness-90 active:brightness-75 focus-visible:outline-offset-focus',
   dangerQuiet:
-    'border-transparent bg-danger-subtle text-danger-text hover:bg-danger hover:text-on-status',
+    'border-transparent bg-danger-subtle text-danger-text hover:bg-danger hover:text-on-status active:bg-danger active:text-on-status active:brightness-90',
 } as const;
 
 export type ButtonVariant = keyof typeof variantClasses;

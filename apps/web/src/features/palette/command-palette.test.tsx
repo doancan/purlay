@@ -3,7 +3,7 @@
  * arrows and Enter drive it, what each kind of item does, and what happens to focus. The
  * API is a fake the test writes; the router is a history it can read.
  */
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { act, fireEvent, type RenderResult } from '@testing-library/react';
 import { useState } from 'react';
 import type { Channel, ModuleId } from '@purlay/types';
@@ -334,7 +334,8 @@ describe('a row has a tile', () => {
       const avatar = row.querySelector('[data-avatar]');
       expect(avatar?.getAttribute('aria-hidden')).toBe('true');
       expect(avatar?.className).toContain('size-avatar-sm');
-      expect(avatar?.textContent).toBe('BO');
+      // The small size draws one letter: two wide capitals overflow its 20px.
+      expect(avatar?.textContent).toBe('B');
     }
     const channel = rows.find((row) => spoken(row)?.startsWith('api') === true);
     expect(channel?.querySelector('[data-avatar]')).toBeNull();
@@ -421,6 +422,28 @@ describe('the keyboard', () => {
     await user.keyboard('{ArrowDown}');
     expect(selected()).toBe(all[0]);
     expectFocusOn(input());
+  });
+
+  test('a group’s first option is brought into view with its heading; any other option alone', async () => {
+    const scrolled: string[] = [];
+    const scrolling = spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (
+      this: Element,
+    ): void {
+      scrolled.push(this.getAttribute('role') === 'option' ? 'option' : this.textContent);
+    });
+    try {
+      await mount();
+      const user = person();
+      scrolled.length = 0;
+      await user.keyboard('{End}');
+      expect(scrolled).toEqual(['option']);
+      scrolled.length = 0;
+      // Wrapping round to the top: the list opens on the views' heading, not on a nameless row.
+      await user.keyboard('{ArrowDown}');
+      expect(scrolled).toEqual(['Views', 'option']);
+    } finally {
+      scrolling.mockRestore();
+    }
   });
 
   test('Home and End jump to the ends without moving the caret', async () => {
@@ -769,12 +792,22 @@ describe('focus', () => {
 describe('in Turkish', () => {
   test('every word is Turkish, and the groups keep their order', async () => {
     const { view, input } = await mount(apiWith(), `/w/acme/c/${IDS.api}`, 'tr');
-    expect(input().placeholder).toBe('Bir kanala, kişiye ya da görünüme git…');
+    expect(input().placeholder).toBe('Bir kanala, kişiye ya da görünüme gidin…');
     expect(view.getByText('Görünümler')).toBeDefined();
     expect(view.getByText('Ayarlar')).toBeDefined();
     await person().type(input(), 'zzz');
     expect(view.getAllByText('“zzz” için eşleşme yok').length).toBeGreaterThan(0);
     await expectNoAxeViolations(view.getByRole('dialog'));
+  });
+
+  test('a long query is shortened in the empty message, so “eşleşme yok” after it is never cut off', async () => {
+    const { view, input } = await mount(apiWith(), `/w/acme/c/${IDS.api}`, 'tr');
+    const long = 'zzqqxx bu çok uzun bir arama, paletin genişliğinden de uzun';
+    await person().type(input(), long);
+    expect(view.getByText('“zzqqxx bu çok uzun bir arama, p…” için eşleşme yok')).toBeDefined();
+    // The announcement is not drawn, so it says the whole query.
+    const live = view.getAllByRole('status').find((node) => node.textContent.includes(long));
+    expect(live?.textContent).toBe(`“${long}” için eşleşme yok`);
   });
 
   test('counts results in Turkish', async () => {

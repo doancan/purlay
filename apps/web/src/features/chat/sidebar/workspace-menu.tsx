@@ -19,6 +19,7 @@ import { href } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { Icon } from '../../../components/icon';
 import { Avatar, initialsOf } from '../../../ui/avatar';
+import { cn } from '../../../ui/cn';
 import { Dialog } from '../../../ui/dialog';
 import {
   Menu,
@@ -37,6 +38,35 @@ import { useMarkAllRead } from '../../shell/read-all';
 import { isMacPlatform, keyLabels } from '../../shortcuts/platform';
 import { useWorkspace } from '../../shell/workspace';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
+
+/**
+ * `sm` is a menu row's face; `band` heads the sidebar, a step larger, as two letters at 20px touched the tile's
+ * edges there with nothing beside them to share the weight; `lg` heads the menu.
+ */
+const MARK_SIZES = {
+  sm: 'size-avatar-sm rounded-md text-caption',
+  band: 'size-6 rounded-md text-caption',
+  lg: 'size-avatar-lg rounded-lg text-label',
+} as const;
+
+/** The workspace's mark: its initials on the accent, at an avatar's sizes, so it sits in a row as a face does. */
+const WorkspaceMark = ({
+  name,
+  size,
+}: {
+  readonly name: string;
+  readonly size: keyof typeof MARK_SIZES;
+}): React.JSX.Element => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      'inline-flex shrink-0 items-center justify-center bg-accent font-semibold text-on-accent',
+      MARK_SIZES[size],
+    )}
+  >
+    {initialsOf(name)}
+  </span>
+);
 
 export const WorkspaceMenu = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -83,29 +113,17 @@ export const WorkspaceMenu = (): React.JSX.Element => {
       <Menu
         side="bottom"
         trigger={
-          // The workspace's mark, its name, and who you are in it, in the sidebar's top band: the one door to the
-          // workspace says which, at a glance. A white card with its line at rest; hover tints the fill and nothing else (D-188: hover
-          // changes the fill, never the line); open is where you are, so it takes the accent line. It is shorter than its
-          // band, so no state touches the band's edges.
+          // The workspace's mark and name in the sidebar's top band: the one door to the workspace says which, at a
+          // glance. One line, a row's height, so the band has room above and below it; who you are in the workspace
+          // heads the menu it opens. Hover tints the fill and nothing else (D-188); open takes the selected tone.
           <button
             type="button"
-            className="group flex h-switcher min-w-0 flex-1 items-center gap-2 rounded-lg border-hairline border-transparent px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover data-[state=open]:bg-nav-selected max-narrow:h-touch"
+            className="group flex h-row min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover data-[state=open]:bg-nav-selected max-narrow:h-touch"
           >
-            {/* A picture of the workspace, as an avatar's initials are; the name beside it says it. */}
-            <span
-              aria-hidden="true"
-              className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-lg bg-accent text-label font-semibold text-on-accent"
-            >
-              {initialsOf(workspace.name)}
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-label font-semibold text-nav-ink">
-                {workspace.name}
-              </span>
-              {/* Seen, not heard: the button's name is the workspace and what it does, kept short. */}
-              <span aria-hidden="true" className="truncate text-caption text-nav-ink-muted">
-                {standing}
-              </span>
+            {/* A picture of the workspace, as an avatar's initials are, its edge on the rows' glyph column. */}
+            <WorkspaceMark name={workspace.name} size="band" />
+            <span className="min-w-0 flex-1 truncate text-body font-semibold text-nav-ink">
+              {workspace.name}
             </span>
             {/* The name is what is seen, so it is first in what is heard; then what it does. */}
             <VisuallyHidden> {t('sidebar.switch')}</VisuallyHidden>
@@ -115,6 +133,15 @@ export const WorkspaceMenu = (): React.JSX.Element => {
           </button>
         }
       >
+        {/* Which workspace this is and who you are in it, as the account menu opens with who you are (D-207). */}
+        <div className="flex items-center gap-3 px-2 pt-2 pb-3">
+          <WorkspaceMark name={workspace.name} size="lg" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-label font-semibold text-ink">{workspace.name}</div>
+            <div className="truncate text-caption text-ink-muted">{standing}</div>
+          </div>
+        </div>
+        <MenuSeparator />
         <MenuLabel>{t('sidebar.workspaces')}</MenuLabel>
         {/* One of several, so a radio: a screen reader says which one is this, not only the eye. */}
         <MenuRadioGroup
@@ -133,12 +160,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
                 // This one in the accent, as its card is; the others each in their own tint.
                 node:
                   each.id === workspace.id ? (
-                    <span
-                      aria-hidden="true"
-                      className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-md bg-accent text-caption font-semibold text-on-accent"
-                    >
-                      {initialsOf(each.name)}
-                    </span>
+                    <WorkspaceMark name={each.name} size="sm" />
                   ) : (
                     <Avatar size="sm" name={each.name} username={each.slug} />
                   ),

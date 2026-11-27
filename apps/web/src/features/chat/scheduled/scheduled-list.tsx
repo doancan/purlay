@@ -90,37 +90,47 @@ const Row = ({
   const failed = item.state === 'failed';
   const sendAt = new Date(item.sendAt);
   return (
-    // The actions sit beside the row's button, in the flow, so its words wrap before them; the row is tinted as one.
+    // The actions sit beside the row's button, in the flow, so its words wrap before them; the row is tinted as
+    // one. On a phone they go under the words, which then have the row's full width.
     <li
       className={cn(
-        'flex items-start transition-colors duration-hover ease-standard hover:bg-surface-050',
+        'flex items-start transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:flex-col max-narrow:items-stretch',
         listRowClasses,
       )}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        className={listButtonClasses('min-w-0 flex-1 flex-col gap-1 pr-2')}
-      >
-        <Place channel={channel} thread={item.parentId !== null} />
-        <time dateTime={item.sendAt} className="text-caption text-ink-muted">
-          {describeWhen(sendAt, clock(), format, t)}
-        </time>
-        <span className="line-clamp-2 whitespace-pre-wrap text-body text-ink">{item.content}</span>
-        {item.attachments.length > 0 && (
-          <span className="flex items-center gap-1 text-caption text-ink-muted">
-            <Icon name="attach" size="sm" />
-            {t('scheduled.files', { count: item.attachments.length })}
+      <button type="button" onClick={onOpen} className={listButtonClasses('min-w-0 flex-1')}>
+        {/* Stacked in a span of their own: a gap given to the button would sit beside its own, and the
+            cascade would pick. */}
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          {/* Where, then when, on one line as Sent's and the reminders' rows say them. */}
+          <span className="flex min-w-0 items-baseline gap-2">
+            <Place channel={channel} thread={item.parentId !== null} />
+            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-caption text-ink-muted tabular-nums">
+              <Icon name="schedule" size="sm" />
+              <time dateTime={item.sendAt} title={format.absolute(sendAt)}>
+                {describeWhen(sendAt, clock(), format, t)}
+              </time>
+            </span>
           </span>
-        )}
-        {failed && (
-          <span className="flex items-center gap-1 text-label text-danger-text">
-            <Icon name="failed" size="sm" />
-            {t('scheduled.failed', { reason: t(reasonKey(item.failureCode)) })}
+          <span className="line-clamp-2 whitespace-pre-wrap text-body text-ink">
+            {item.content}
           </span>
-        )}
+          {item.attachments.length > 0 && (
+            <span className="flex items-center gap-1 text-caption text-ink-muted">
+              <Icon name="attach" size="sm" />
+              {t('scheduled.files', { count: item.attachments.length })}
+            </span>
+          )}
+          {failed && (
+            <span className="flex items-center gap-1 text-label text-danger-text">
+              <Icon name="failed" size="sm" />
+              {t('scheduled.failed', { reason: t(reasonKey(item.failureCode)) })}
+            </span>
+          )}
+        </span>
       </button>
-      <span className="flex shrink-0 gap-1 py-2 pr-2">
+      {/* On a phone the glyphs start where the words do: the button's inset less the icon button's own. */}
+      <span className="flex shrink-0 gap-1 py-2 pr-2 max-narrow:-mt-2 max-narrow:px-1 max-narrow:pt-0">
         <IconButton
           glyph="send"
           label={t('scheduled.sendNow')}
@@ -330,6 +340,7 @@ export const ScheduledList = ({
   if (query.isError && query.data === undefined) {
     return (
       <ErrorState
+        framed
         title={t('scheduled.loadFailed.title')}
         body={t('scheduled.loadFailed.body')}
         retryLabel={t('common.retry')}
@@ -345,7 +356,7 @@ export const ScheduledList = ({
     return (
       <GlyphEmptyState
         glyph="schedule"
-        tone="success"
+        tone="accent"
         title={t('scheduled.empty.title')}
         body={t('scheduled.empty.body')}
       />

@@ -21,12 +21,11 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { href } from '../../../router/routes';
 import { useRoute } from '../../../router/router-provider';
 import { Button } from '../../../ui/button';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../../shell/nav';
-import { ListCard, ListColumn, ListFilter } from '../../../ui/list-column';
+import { ListCard, ListColumn, ListFilter, ListSkeleton } from '../../../ui/list-column';
 import { useWorkspace } from '../../shell/workspace';
 import { useSession } from '../../session/session';
 import { noticesOf } from '../../../modules/registry';
@@ -66,6 +65,13 @@ const CATEGORY_GLYPH = {
   direct: 'person',
   threads: 'reply',
 } as const satisfies Record<Exclude<InboxCategory, 'all' | 'updates'>, GlyphName>;
+
+/** Each category tab's mark: the categories' own, with the inbox for all of it and the bell for updates. */
+const TAB_GLYPH = {
+  all: 'inbox',
+  ...CATEGORY_GLYPH,
+  updates: 'notifications',
+} as const satisfies Record<InboxCategory, GlyphName>;
 
 export const InboxScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -115,19 +121,11 @@ export const InboxScreen = (): React.JSX.Element => {
   if (category === 'updates') {
     body = <LazyUpdates />;
   } else if (query.isPending) {
-    body = (
-      <LoadingStatus label={t('state.inbox.loading')} className="flex flex-col gap-4 py-2">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
-          </div>
-        ))}
-      </LoadingStatus>
-    );
+    body = <ListSkeleton label={t('state.inbox.loading')} />;
   } else if (query.isError && query.data === undefined) {
     body = (
       <ErrorState
+        framed
         title={t('state.inbox.error.title')}
         body={t('state.inbox.error.body')}
         retryLabel={t('common.retry')}
@@ -203,8 +201,9 @@ export const InboxScreen = (): React.JSX.Element => {
       <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
+          {/* The rail's mark for the inbox, and its All tab's: the bell is Followed conversations'. */}
           <HeaderTile>
-            <Icon name="notifications" size="lg" />
+            <Icon name="inbox" size="lg" />
           </HeaderTile>
           <div className="flex min-w-0 flex-col">
             <h1 className="whitespace-nowrap text-heading text-ink">{t('inbox.title')}</h1>
@@ -237,13 +236,15 @@ export const InboxScreen = (): React.JSX.Element => {
             choices={categoriesOffered(updates).map((choice) => ({
               value: choice,
               label: t(`inbox.category.${choice}`),
+              glyph: TAB_GLYPH[choice],
             }))}
             onChange={showCategory}
           />
           {category !== 'updates' && (
             // What kind of thing (left) and whether it is read (right) are two questions: apart, so the
             // second "All" is not read as a sixth kind.
-            <div className="ml-auto">
+            // On a phone each takes the column's width, as one filter alone does.
+            <div className="ml-auto max-narrow:ml-0 max-narrow:w-full">
               <ListFilter
                 label={t('inbox.show')}
                 value={filter}

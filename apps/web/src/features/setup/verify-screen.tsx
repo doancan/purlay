@@ -9,26 +9,23 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
-import { buttonStyle } from '../../ui/button';
-import { Button } from '../../ui/button';
+import { Button, buttonStyle } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { browserInvitationPorts } from '../invitations/pending';
-import { LogoMark, Notice } from '../shell/notice';
+import { Notice } from '../shell/notice';
 import { createSetupClient, isSetupFailure, type SetupClient } from './client';
 import { failureWords } from './errors';
-import { StandaloneScreen } from '../shell/standalone';
+import { StandaloneCard, StandaloneScreen } from '../shell/standalone';
 
 const FRAGMENT = /^#([0-9a-f]{64})$/;
 
 /** The link's token, or nothing for a fragment that is not one. */
 export const readVerifyLink = (hash: string): string | null => FRAGMENT.exec(hash)?.[1] ?? null;
 
+/** Every answer is a notice, in the notice's card (`sign-in/door-card`): its glyph says which, and no mark above it. */
 const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
   <StandaloneScreen>
-    <div className="flex w-full max-w-dialog flex-col items-center gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 text-center shadow-card">
-      <LogoMark />
-      {children}
-    </div>
+    <StandaloneCard>{children}</StandaloneCard>
   </StandaloneScreen>
 );
 
@@ -56,8 +53,9 @@ export const VerifyScreen = ({ client }: { readonly client?: SetupClient }): Rea
     refetchOnWindowFocus: false,
   });
 
-  const signIn = (
-    <a href={href('signIn')} className={buttonStyle('primary', 'lg')}>
+  // Verified, the way on is signing in; refused or incomplete, it is still the one place to go from here.
+  const signIn = (variant: 'primary' | 'secondary'): React.JSX.Element => (
+    <a href={href('signIn')} className={buttonStyle(variant)}>
       {t('setup.verify.done.action')}
     </a>
   );
@@ -70,6 +68,7 @@ export const VerifyScreen = ({ client }: { readonly client?: SetupClient }): Rea
           glyph="warning"
           title={t('setup.verify.incomplete.title')}
           body={t('setup.verify.incomplete.body')}
+          action={signIn('secondary')}
         />
       </Card>
     );
@@ -77,7 +76,7 @@ export const VerifyScreen = ({ client }: { readonly client?: SetupClient }): Rea
   if (answer.isPending) {
     return (
       <Card>
-        <LoadingStatus label={t('setup.verify.loading')} className="flex w-full flex-col gap-3">
+        <LoadingStatus label={t('setup.verify.loading')} className="flex w-full flex-col gap-3 p-8">
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
@@ -92,7 +91,7 @@ export const VerifyScreen = ({ client }: { readonly client?: SetupClient }): Rea
           glyph="resolved"
           title={t('setup.verify.done.title')}
           body={t('setup.verify.done.body')}
-          action={signIn}
+          action={signIn('primary')}
         />
       </Card>
     );
@@ -106,6 +105,7 @@ export const VerifyScreen = ({ client }: { readonly client?: SetupClient }): Rea
           glyph="warning"
           title={t('setup.verify.refused.title')}
           body={t('setup.verify.refused.body')}
+          action={signIn('secondary')}
         />
       </Card>
     );

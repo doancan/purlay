@@ -81,7 +81,7 @@ export const PanelFrame = ({
         event.preventDefault();
         close();
       }}
-      className="flex w-thread shrink-0 flex-col border-l-hairline border-border-subtle bg-surface-100 max-narrow:absolute max-narrow:inset-0 max-narrow:z-sticky max-narrow:w-full"
+      className="flex w-thread shrink-0 flex-col border-l-hairline border-border-subtle bg-surface-100 max-narrow:absolute max-narrow:inset-0 max-narrow:z-sticky max-narrow:w-full max-narrow:border-transparent"
     >
       <div className="flex h-header shrink-0 items-center justify-between gap-2 border-b-hairline border-border-subtle px-4">
         <h2
@@ -109,7 +109,10 @@ export const PanelEmpty = ({
   readonly title: string;
   readonly body: string;
 }): React.JSX.Element => (
-  <GlyphEmptyState glyph={glyph} tone="accent" title={title} body={body} as="h3" />
+  // Inset from the panel's edges, as its rows are: the card is the list's, and the panel is its ground.
+  <div className="p-4">
+    <GlyphEmptyState glyph={glyph} tone="accent" title={title} body={body} as="h3" />
+  </div>
 );
 
 /**
@@ -125,7 +128,7 @@ export const StaleBanner = ({
 }): React.JSX.Element => {
   const { t } = useI18n();
   return (
-    <p role="alert" className="flex items-center gap-2 px-4 pt-3 text-label text-danger-text">
+    <p role="alert" className="flex items-center gap-2 px-4 py-3 text-label text-danger-text">
       <Icon name="failed" size="sm" />
       {message}
       <span aria-hidden="true">·</span>

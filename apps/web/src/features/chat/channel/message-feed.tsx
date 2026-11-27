@@ -261,9 +261,10 @@ export const MessageFeed = ({
         {[0, 1, 2, 3].map((row) => (
           <div key={row} className="flex gap-3">
             <span className="size-avatar-lg shrink-0 rounded-lg bg-surface-200" />
-            <div className="flex flex-col gap-2">
-              <Skeleton className="w-members" />
-              <Skeleton className="w-feed" />
+            {/* As wide as a message may be, and no wider than the column: beside a panel or on a phone it is narrower. */}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <Skeleton className="w-members max-w-full" />
+              <Skeleton className="w-feed max-w-full" />
             </div>
           </div>
         ))}
@@ -272,7 +273,8 @@ export const MessageFeed = ({
   }
   if (feed.isError && feed.data === undefined) {
     return (
-      <div className="flex-1">
+      // Inset to the header's edge, as the empty feed is: the failure starts where the channel's name does.
+      <div className="flex-1 px-6 max-narrow:px-4">
         <ErrorState
           title={t('state.feed.error.title')}
           body={t('state.feed.error.body')}
@@ -286,7 +288,8 @@ export const MessageFeed = ({
   }
   if (items.length === 0 && !feed.hasNextPage) {
     return (
-      <div className="flex-1">
+      // Inset to the header's edge, so the heading starts where the channel's name above it does.
+      <div className="flex-1 px-2">
         {/* A conversation has nothing to describe, only its people (#662). */}
         <EmptyState
           title={t('state.feed.empty.title')}

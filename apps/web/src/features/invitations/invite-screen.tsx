@@ -30,25 +30,17 @@ import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { SessionGate } from '../session/session';
-import { LogoMark, Notice } from '../shell/notice';
+import { LogoMark } from '../shell/notice';
+import { DoorCard, DoorNotice } from '../sign-in/door-card';
 import { EmailSignInForm } from '../sign-in/email-sign-in-form';
 import { GitHubButton } from '../sign-in/github-button';
 import { GoogleButton } from '../sign-in/google-button';
 import { OidcButton } from '../sign-in/oidc-button';
 import { browserInvitationPorts, forgetInvitation, pendingInvitation } from './pending';
 import { GuestInvitationSummary } from './guest-invitation-summary';
-import { StandaloneScreen } from '../shell/standalone';
 
 const doesNotOpen = (failure: unknown): boolean =>
   isApiError(failure) && failure.code === 'INVITATION_NOT_FOUND';
-
-const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
-  <StandaloneScreen>
-    <div className="flex w-full max-w-dialog flex-col gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 shadow-card">
-      {children}
-    </div>
-  </StandaloneScreen>
-);
 
 const JoinInvitation = (): React.JSX.Element => {
   const { t, format } = useI18n();
@@ -83,48 +75,45 @@ const JoinInvitation = (): React.JSX.Element => {
   if (goneFor) {
     forgetInvitation(ports);
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="warning"
-          title={t('invite.gone.title')}
-          body={t('invite.gone.body')}
-          action={home}
-        />
-      </Card>
+      <DoorNotice
+        glyph="warning"
+        title={t('invite.gone.title')}
+        body={t('invite.gone.body')}
+        action={home}
+      />
     );
   }
 
   if (preview.isError) {
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="failed"
-          title={t('invite.failed.title')}
-          body={describe(preview.error)}
-          action={
-            <Button
-              onClick={() => {
-                void preview.refetch();
-              }}
-            >
-              {t('common.retry')}
-            </Button>
-          }
-        />
-      </Card>
+      <DoorNotice
+        glyph="failed"
+        title={t('invite.failed.title')}
+        body={describe(preview.error)}
+        action={
+          <Button
+            onClick={() => {
+              void preview.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </Button>
+        }
+      />
     );
   }
 
   if (preview.data === undefined) {
     return (
-      <Card>
-        <LoadingStatus label={t('invite.loading')}>
+      <DoorCard>
+        <LoadingStatus
+          label={t('invite.loading')}
+          className="flex w-full flex-col items-center gap-3"
+        >
           <Skeleton className="w-members" />
           <Skeleton />
         </LoadingStatus>
-      </Card>
+      </DoorCard>
     );
   }
 
@@ -152,40 +141,41 @@ const JoinInvitation = (): React.JSX.Element => {
   };
 
   return (
-    <Card>
+    <DoorCard>
       <LogoMark />
-      <section className="flex flex-col gap-2">
-        <h1 className="text-display">{t('invite.title', { workspace: workspace.name })}</h1>
+      <div className="flex flex-col items-center gap-2">
+        <h1 className="text-balance text-display wrap-anywhere">
+          {t('invite.title', { workspace: workspace.name })}
+        </h1>
         <p className="text-balance text-body text-ink-muted">
           {member
             ? t('invite.member', { workspace: workspace.name })
             : t('invite.body', { until: format.absolute(expiresAt) })}
         </p>
         {guest !== undefined && <GuestInvitationSummary value={guest} history />}
-      </section>
+      </div>
       {failed !== null && (
-        <p role="alert" className="text-label text-danger-text">
+        <p role="alert" className="text-balance text-label text-danger-text">
           {`${t('invite.joinFailed')} ${describe(failed)}`}
         </p>
       )}
-      <div>
-        {member ? (
-          <Button variant="primary" onClick={enter}>
-            {t('invite.open')}
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            busy={joining}
-            onClick={() => {
-              void join();
-            }}
-          >
-            {t('invite.join')}
-          </Button>
-        )}
-      </div>
-    </Card>
+      {member ? (
+        <Button variant="primary" className="w-full" onClick={enter}>
+          {t('invite.open')}
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          busy={joining}
+          className="w-full"
+          onClick={() => {
+            void join();
+          }}
+        >
+          {t('invite.join')}
+        </Button>
+      )}
+    </DoorCard>
   );
 };
 
@@ -204,24 +194,21 @@ const SignedOutInvitation = (): React.JSX.Element => {
   if (token === null || gone) {
     forgetInvitation(ports);
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="warning"
-          title={t('invite.gone.title')}
-          body={t('invite.gone.body')}
-          action={
-            <Button
-              variant="primary"
-              onClick={() => {
-                navigate(href('home'), { replace: true });
-              }}
-            >
-              {t('invite.home')}
-            </Button>
-          }
-        />
-      </Card>
+      <DoorNotice
+        glyph="warning"
+        title={t('invite.gone.title')}
+        body={t('invite.gone.body')}
+        action={
+          <Button
+            variant="primary"
+            onClick={() => {
+              navigate(href('home'), { replace: true });
+            }}
+          >
+            {t('invite.home')}
+          </Button>
+        }
+      />
     );
   }
 
@@ -247,36 +234,41 @@ const SignedOutInvitation = (): React.JSX.Element => {
   const oidc = methods.data?.oidc ?? null;
   const mail = methods.data?.email === true;
   return (
-    <Card>
+    <DoorCard>
       <LogoMark />
-      <section className="flex flex-col gap-2">
-        <h1 className="text-display">{t('invite.signedOut.title')}</h1>
+      <div className="flex flex-col items-center gap-2">
+        <h1 className="text-balance text-display">{t('invite.signedOut.title')}</h1>
         <p className="text-balance text-body text-ink-muted">{t('invite.signedOut.body')}</p>
-      </section>
+      </div>
       {methods.data === undefined && !methods.isError ? (
-        <LoadingStatus label={t('common.loading')}>
-          <Skeleton />
+        <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
+          <Skeleton className="h-control w-full rounded-md max-narrow:h-touch" />
         </LoadingStatus>
       ) : (
         <>
-          {oidc !== null && (
-            <OidcButton
-              name={oidc.name}
-              variant={mail || github || google ? 'secondary' : 'primary'}
-              before={async () => await askPassport()}
-            />
-          )}
-          {(github || methods.isError) && (
-            <GitHubButton
-              variant={mail || google || oidc !== null ? 'secondary' : 'primary'}
-              before={async () => await askPassport()}
-            />
-          )}
-          {google && (
-            <GoogleButton
-              variant={mail || github || oidc !== null ? 'secondary' : 'primary'}
-              before={async () => await askPassport()}
-            />
+          {/* The ways out to another page stand together, as on the sign-in card. */}
+          {(oidc !== null || github || google || methods.isError) && (
+            <div className="flex w-full flex-col gap-3">
+              {oidc !== null && (
+                <OidcButton
+                  name={oidc.name}
+                  variant={mail || github || google ? 'secondary' : 'primary'}
+                  before={async () => await askPassport()}
+                />
+              )}
+              {(github || methods.isError) && (
+                <GitHubButton
+                  variant={mail || google || oidc !== null ? 'secondary' : 'primary'}
+                  before={async () => await askPassport()}
+                />
+              )}
+              {google && (
+                <GoogleButton
+                  variant={mail || github || oidc !== null ? 'secondary' : 'primary'}
+                  before={async () => await askPassport()}
+                />
+              )}
+            </div>
           )}
           {mail && (
             <EmailSignInForm
@@ -288,7 +280,7 @@ const SignedOutInvitation = (): React.JSX.Element => {
         </>
       )}
       {problem !== null && (
-        <p role="alert" className="text-label text-danger-text">
+        <p role="alert" className="text-balance text-label text-danger-text">
           {problem}
         </p>
       )}
@@ -298,7 +290,7 @@ const SignedOutInvitation = (): React.JSX.Element => {
           {t('invite.signedOut.signIn')}
         </Link>
       </p>
-    </Card>
+    </DoorCard>
   );
 };
 

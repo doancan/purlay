@@ -286,9 +286,9 @@ describe('the second step, for an account with two-step verification on (D-236)'
     await user.type(view.getByLabelText('Parola'), 'dogru-parola-123');
     await user.click(view.getByRole('button', { name: 'Giriş yap' }));
     await settle();
-    expect(view.getByText('Doğrulama uygulamandaki 6 haneli kodu gir.')).toBeDefined();
+    expect(view.getByText('Doğrulama uygulamanızdaki 6 haneli kodu girin.')).toBeDefined();
     await enter(view, 'Kod', '123456', 'Doğrula');
-    expect(view.getByRole('alert').textContent).toContain('Bu kod doğru değil. Yeniden dene.');
+    expect(view.getByRole('alert').textContent).toContain('Bu kod doğru değil. Yeniden deneyin.');
   });
 
   test('a server whose administrator turned passwords off draws no password form (D-239)', async () => {

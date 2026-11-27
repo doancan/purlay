@@ -96,7 +96,7 @@ test.describe('the first run', () => {
     await first.getByRole('button', { name: 'Create channel' }).click();
     await expect(first.getByRole('heading', { name: channelName, exact: true })).toBeVisible();
     await first.getByRole('button', { name: 'Add people' }).click();
-    const people = first.getByRole('dialog', { name: `Add people to ${channelName}` });
+    const people = first.getByRole('dialog', { name: `Add people to #${channelName}` });
     await people.getByLabel('Find a person').fill(joiner.username);
     await people.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(people.getByRole('button', { name: 'Added' })).toBeDisabled();

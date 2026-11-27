@@ -27,10 +27,10 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { LogoMark, Notice } from '../shell/notice';
+import { LogoMark } from '../shell/notice';
 import { browserInvitationPorts, keepInvitation } from '../invitations/pending';
 import { browserNativePorts, keepNativeHandoff, nativePlatformIn } from '../native/pending';
-import { StandaloneScreen } from '../shell/standalone';
+import { DoorCard, DoorNotice } from './door-card';
 
 // `<token>`, then `.<invitation>` if one rode along, then `~<challenge>~<state>` if the native application
 // asked (D-191). The pair is written by the server with the contract's patterns and read with the same.
@@ -66,14 +66,6 @@ export const readSignInLink = (
 
 const notFound = (failure: unknown): boolean =>
   isApiError(failure) && failure.code === 'SIGN_IN_LINK_NOT_FOUND';
-
-const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
-  <StandaloneScreen>
-    <div className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 text-center shadow-card">
-      {children}
-    </div>
-  </StandaloneScreen>
-);
 
 export const EmailSignInScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -132,49 +124,43 @@ export const EmailSignInScreen = (): React.JSX.Element => {
 
   if (kind === 'gone') {
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="warning"
-          title={t('signIn.title')}
-          body={link === null ? t('signIn.link.missing') : t('signIn.link.notFound')}
-          action={back}
-        />
-      </Card>
+      <DoorNotice
+        glyph="warning"
+        title={t('signIn.title')}
+        body={link === null ? t('signIn.link.missing') : t('signIn.link.notFound')}
+        action={back}
+      />
     );
   }
 
   if (kind === 'failed') {
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="failed"
-          title={t('signIn.link.failed')}
-          body={describe(preview.error)}
-          action={
-            <Button
-              ref={action}
-              onClick={() => {
-                void preview.refetch();
-              }}
-            >
-              {t('common.retry')}
-            </Button>
-          }
-        />
-      </Card>
+      <DoorNotice
+        glyph="failed"
+        title={t('signIn.link.failed')}
+        body={describe(preview.error)}
+        action={
+          <Button
+            ref={action}
+            onClick={() => {
+              void preview.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </Button>
+        }
+      />
     );
   }
 
   if (kind === 'reading' || preview.data === undefined) {
     return (
-      <Card>
+      <DoorCard>
         <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
-      </Card>
+      </DoorCard>
     );
   }
 
@@ -206,15 +192,15 @@ export const EmailSignInScreen = (): React.JSX.Element => {
   };
 
   return (
-    <Card>
+    <DoorCard>
       <LogoMark />
       <div className="flex flex-col items-center gap-2">
-        <h1 className="text-display">{t('signIn.title')}</h1>
-        <p className="text-body text-ink-muted">
+        <h1 className="text-balance text-display">{t('signIn.title')}</h1>
+        <p className="text-balance text-body text-ink-muted">
           {t('signIn.link.as', { email: preview.data.email })}
         </p>
         {me.data !== undefined && me.data.user.email !== preview.data.email && (
-          <p role="note" className="text-label text-warning-text">
+          <p role="note" className="text-balance text-label text-warning-text">
             {t('signIn.link.replaces', { current: me.data.user.email })}
           </p>
         )}
@@ -235,6 +221,6 @@ export const EmailSignInScreen = (): React.JSX.Element => {
       >
         {t('signIn.link.submit')}
       </Button>
-    </Card>
+    </DoorCard>
   );
 };

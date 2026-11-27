@@ -21,13 +21,38 @@ import { useMe, useSetupStatus } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
-import { ErrorState } from '../../ui/states';
+import { Button } from '../../ui/button';
+import { Notice } from '../shell/notice';
+import { StandaloneCard, StandaloneScreen } from '../shell/standalone';
 import { PushProvider } from '../push/push';
 import { AlertPreferencesProvider } from '../alerts/preferences-context';
 import { LazyTwoFactorEnrolment } from '../settings/load';
 import type { MeResponse } from '@purlay/types';
 
 const SessionContext = createContext<MeResponse | null>(null);
+
+/**
+ * Purlay could not be reached before there was anything to show: a page of its own, as the other screens without the
+ * shell are — its card on the canvas, inset from every edge — not a line of text against the window's corner.
+ */
+const Unreachable = ({ onRetry }: { readonly onRetry: () => void }): React.JSX.Element => {
+  const { t } = useI18n();
+  return (
+    <StandaloneScreen>
+      <StandaloneCard>
+        <div role="alert" className="flex flex-1 flex-col">
+          <Notice
+            as="h1"
+            glyph="failed"
+            title={t('state.session.error.title')}
+            body={t('state.session.error.body')}
+            action={<Button onClick={onRetry}>{t('common.retry')}</Button>}
+          />
+        </div>
+      </StandaloneCard>
+    </StandaloneScreen>
+  );
+};
 
 /** The person and their memberships. Only valid below `SessionGate`. */
 export const useSession = (): MeResponse => {
@@ -72,7 +97,6 @@ export const SessionGate = ({
 }): React.JSX.Element | null => {
   const me = useMe();
   const { navigate, match, search } = useRoute();
-  const { t } = useI18n();
   const signedOut = me.isError && isApiError(me.error) && me.error.status === 401;
   // Nobody signed in at `/` on a server nobody has set up: the wizard, not a sign-in card with
   // nothing behind it. Asked of the server once, and only here; a failed ask is "not open".
@@ -140,10 +164,7 @@ export const SessionGate = ({
       );
     if (admission.isError || state === 'approved')
       return (
-        <ErrorState
-          title={t('state.session.error.title')}
-          body={t('state.session.error.body')}
-          retryLabel={t('common.retry')}
+        <Unreachable
           onRetry={() => {
             void me.refetch().then(async () => {
               await admission.refetch();
@@ -158,10 +179,7 @@ export const SessionGate = ({
   // end of the session, and goes to sign-in above whatever is held.
   if (me.isError && me.data === undefined) {
     return (
-      <ErrorState
-        title={t('state.session.error.title')}
-        body={t('state.session.error.body')}
-        retryLabel={t('common.retry')}
+      <Unreachable
         onRetry={() => {
           void me.refetch();
         }}

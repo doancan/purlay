@@ -230,14 +230,17 @@ export const AdministrationScreen = ({
       </aside>
       <Main
         key={section}
-        className="min-w-0 flex-1 px-10 pt-10 pb-16 max-narrow:px-4 max-narrow:pt-6"
+        className="min-w-0 flex-1 px-10 pt-10 pb-16 max-narrow:px-4 max-narrow:pt-6 max-narrow:pb-10"
       >
-        <div className="mx-auto flex w-full flex-col gap-6">
-          <header className="flex flex-col gap-2">
+        {/* The settings pages' shape (`SettingsPage`): the title and its sentence as one group, further from the cards than the cards are from each other. */}
+        <div className="flex w-full flex-col gap-8 max-narrow:gap-6">
+          <header className="flex flex-col gap-1">
             <h1 className="text-display text-ink">{t(`admin.${section}`)}</h1>
             <p className="text-body text-ink-muted">{t(`admin.${section}.body`)}</p>
           </header>
-          <Content section={section} />
+          <div className="flex flex-col gap-6">
+            <Content section={section} />
+          </div>
         </div>
       </Main>
     </div>

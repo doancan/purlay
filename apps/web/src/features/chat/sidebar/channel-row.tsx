@@ -14,13 +14,20 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Link } from '../../../router/router-provider';
 import { Badge } from '../../../ui/badge';
 import { cn } from '../../../ui/cn';
+import { navMarkerClasses } from '../../../ui/nav-row';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useDeepWork } from '../../shell/deep-work';
 import { useRowMenu } from './row-menu';
 
-/** `group`, so what is drawn on the row can follow its hover (a group's faces, D-167). */
-const rowClasses =
-  'group flex h-row w-full items-center gap-2 rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch';
+/**
+ * `group`, so what is drawn on the row can follow its hover (a group's faces, D-167). A face is a step wider than a
+ * glyph (20px against 16px), so it stands a step closer to the words: a person's name starts where a channel's does.
+ */
+const rowClasses = (avatar: React.ReactNode): string =>
+  cn(
+    'group flex h-row w-full items-center rounded-lg px-2 text-body transition-colors duration-hover ease-standard max-narrow:h-touch',
+    avatar === undefined ? 'gap-2' : 'gap-1',
+  );
 
 const incidentClasses =
   'inline-flex h-badge shrink-0 items-center rounded-pill bg-danger-subtle px-1 font-mono text-caption font-medium text-danger-text';
@@ -30,7 +37,8 @@ const toneClasses = {
   unread: 'text-nav-ink font-semibold hover:bg-nav-hover',
   // Where you are, in the navigation's one selected tone (D-207): the accent's family, quieter than
   // its fill, so the column's loudest mark is a mention's badge, not the row you already know you are in.
-  current: 'bg-nav-selected text-nav-ink font-semibold [&>svg]:text-nav-ink',
+  // Its glyph is in the accent, as on every other current row (Followed, All unreads, the rail).
+  current: 'relative bg-nav-selected text-nav-ink font-semibold [&>svg]:text-accent-text',
 } as const;
 
 /** What a row looks like, from what is true of it: where you are beats what is unread. */
@@ -118,7 +126,11 @@ export const ChannelRow = ({
         params={{ slug, channelId: channel.id }}
         {...(current ? { 'aria-current': 'page' as const } : {})}
         {...handlers}
-        className={cn(rowClasses, toneClasses[rowTone(current, content.unread)])}
+        className={cn(
+          rowClasses(content.avatar),
+          toneClasses[rowTone(current, content.unread)],
+          current && navMarkerClasses,
+        )}
       >
         <RowContent {...content}>{children}</RowContent>
       </Link>
@@ -143,7 +155,11 @@ export const ActionRow = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className={cn(rowClasses, toneClasses[rowTone(false, content.unread)], 'text-left')}
+    className={cn(
+      rowClasses(content.avatar),
+      toneClasses[rowTone(false, content.unread)],
+      'text-left',
+    )}
   >
     <RowContent {...content}>{children}</RowContent>
   </button>
@@ -154,7 +170,13 @@ export const StaticRow = ({
   children,
   ...content
 }: Omit<ActionRowProps, 'onClick' | 'disabled'>): React.JSX.Element => (
-  <div className={cn(rowClasses, toneClasses[rowTone(false, content.unread)], 'text-left')}>
+  <div
+    className={cn(
+      rowClasses(content.avatar),
+      toneClasses[rowTone(false, content.unread)],
+      'text-left',
+    )}
+  >
     <RowContent {...content}>{children}</RowContent>
   </div>
 );
