@@ -457,6 +457,35 @@ test.describe('at a phone width', () => {
 test.describe('on a device that is only touch', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
+  test('notification settings explain how to open Purlay from the iOS Home Screen', async ({
+    browserName,
+    page,
+    signIn,
+    world,
+    expectNoAxe,
+  }) => {
+    test.skip(browserName !== 'webkit', 'exercise the iOS capability surface in WebKit');
+    // WebKit runs on a desktop here. Provide the capabilities of an ordinary Safari tab on iOS.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'standalone', { value: false, configurable: true });
+      Reflect.deleteProperty(window, 'Notification');
+      Reflect.deleteProperty(window, 'PushManager');
+    });
+    await signIn();
+    await page.goto(`/w/${world.workspace.slug}/settings/notifications`, {
+      waitUntil: 'domcontentloaded',
+    });
+
+    const card = page.getByRole('region', { name: 'Notifications on this device' });
+    await expect(card.getByText('Not available here', { exact: true })).toBeVisible();
+    await expect(
+      card.getByText('tap Share, then Add to Home Screen, and open it from there.'),
+    ).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Turn on', exact: true })).toHaveCount(0);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxe(card);
+  });
+
   test('the thread’s Resolve names no key', async ({ page, signIn, world }) => {
     await signIn('bob');
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
