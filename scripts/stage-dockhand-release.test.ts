@@ -5,8 +5,11 @@ import { join } from 'node:path';
 
 const project = 'purlay-demo';
 const digest = 'a'.repeat(64);
-const image = `ghcr.io/purlay/purlay-api@sha256:${digest}`;
+const registry = 'ghcr.io/purlay/purlay-api';
+const image = `${registry}@sha256:${digest}`;
 const revision = 'e'.repeat(40);
+const oldDigest = 'b'.repeat(64);
+const oldRevision = 'd'.repeat(40);
 const directory = join(import.meta.dir, '..');
 
 const docker = `#!/bin/bash
@@ -24,9 +27,25 @@ entrypoint='["/usr/local/bin/bun"]'
 state="$TEST_DIRECTORY/state"
 trace="$TEST_DIRECTORY/trace"
 case "$1 $2" in
+  "buildx imagetools")
+    [ "$3 $4" = 'inspect --format' ] && [ "$5" = '{{.Manifest.Digest}}' ] || exit 9
+    case "$6" in
+      "$TEST_REGISTRY":release)
+        [ "$TEST_MODE" != scheduled-lag ] || image_id="sha256:$TEST_OLD_DIGEST"
+        ;;
+      "$TEST_REGISTRY:sha-$TEST_REVISION") ;;
+      *) exit 9 ;;
+    esac
+    printf '%s\\n' "$image_id"
+    ;;
   "image inspect")
-    [ "$5" = "$TEST_IMAGE" ] || exit 9
     detail="$TEST_REVISION"
+    if [ "$5" = "$TEST_REGISTRY@sha256:$TEST_OLD_DIGEST" ]; then
+      detail="$TEST_OLD_REVISION"
+      image_id="sha256:$TEST_OLD_DIGEST"
+    else
+      [ "$5" = "$TEST_IMAGE" ] || exit 9
+    fi
     case "$4" in
       *Entrypoint*) detail="$entrypoint" ;;
       *revision*) [ "$TEST_MODE" != bad-revision ] || detail=wrong ;;
@@ -82,8 +101,12 @@ case "$1 $2" in
           "$TEST_PROJECT" "$label" "$image_id" "$code" "$stamp" "$stamp" "$entrypoint"
         ;;
       *)
-        selected='ghcr.io/purlay/purlay-api:old'
+        selected='ghcr.io/doancan/purlay-api:release'
         actual='sha256:old'
+        if [[ "$TEST_MODE" = scheduled-* ]]; then
+          selected="$TEST_REGISTRY@sha256:$TEST_OLD_DIGEST"
+          actual="sha256:$TEST_OLD_DIGEST"
+        fi
         if [ -f "$state/$service" ]; then selected="$TEST_IMAGE"; actual="$image_id"; fi
         if [[ "$service" = garage && "$TEST_MODE" = interrupted-changed-store && -f "$TEST_DIRECTORY/interrupted" ]]; then
           stamp='2026-11-26T12:05:00.003Z'
@@ -98,17 +121,35 @@ case "$1 $2" in
     shift 7
     case "$*" in
       'config --quiet') ;;
+      'exec -T backup pg_dump --format=custom --no-owner --no-acl')
+        printf 'take dump\\n' >> "$trace"
+        printf '%s' 'fixture dump'
+        ;;
+      'exec -T backup pg_restore --file=/dev/null')
+        printf 'read dump payload\\n' >> "$trace"
+        [ "$(cat)" = 'fixture dump' ] || exit 9
+        if [[ "$TEST_MODE" = scheduled-unreadable && ! -f "$state/temporary-read-error" ]]; then
+          touch "$state/temporary-read-error"
+          exit 1
+        fi
+        ;;
       'exec -T backup pg_restore --list')
         printf 'validate dump\\n' >> "$trace"
         [ "$(cat)" = 'fixture dump' ] || exit 9
         [ "$TEST_MODE" != bad-backup ] || exit 8
+        [ "$TEST_MODE" != scheduled-network ] || touch "$state/archive-listed"
         printf '1234; 1259 200 TABLE public kysely_migration purlay\\n'
         ;;
       'run --no-deps --pull never -T --name '*' storage-init')
         printf 'run initializer\\n' >> "$trace"
-        [ "$TEST_MODE" != refused ] || exit 1
+        if [[ "$TEST_MODE" = scheduled-* ]]; then
+          attempt="$TEST_DIRECTORY/$TEST_PROJECT-$TEST_DIGEST.attempted"
+          grep -Fqx -- "initializer=$7" "$attempt" || exit 9
+        fi
+        [[ "$TEST_MODE" != refused && "$TEST_MODE" != scheduled-refused ]] || exit 1
         touch "$state/$7"
         [ "$TEST_MODE" != changed-backup ] || printf 'changed' >> "$TEST_DIRECTORY/pre-update.dump"
+        [ "$TEST_MODE" != scheduled-changed ] || touch "$state/new-publication"
         ;;
       'stop scheduler') printf 'stop scheduler\\n' >> "$trace" ;;
       'up -d --no-deps --pull never --wait --wait-timeout 900 api')
@@ -141,12 +182,51 @@ function withFixture(
       trace: string;
       receipts: string[];
       record: string;
+      backups: string[][];
+      attempts: string[];
     },
   ) => void,
 ): void {
   const fixture = mkdtempSync(join(tmpdir(), 'stage-dockhand-'));
   try {
     writeFileSync(join(fixture, 'docker'), docker, { mode: 0o700 });
+    writeFileSync(
+      join(fixture, 'git'),
+      `#!/bin/bash
+set -eu
+case "$3" in
+  fetch) ;;
+  rev-parse) printf '%s\\n' "$TEST_REVISION" ;;
+  merge-base)
+    if [ "$5" = "$TEST_OLD_REVISION" ]; then
+      [ "$TEST_MODE" != scheduled-rollback ]
+    else
+      [ "$TEST_MODE" != scheduled-off-main ]
+    fi
+    ;;
+  *) exit 9 ;;
+esac
+`,
+      { mode: 0o700 },
+    );
+    writeFileSync(
+      join(fixture, 'curl'),
+      `#!/bin/bash
+set -eu
+[ "\${*: -1}" = https://api.github.com/repos/purlay/purlay/releases/latest ] || exit 9
+if [[ "$TEST_MODE" = scheduled-network && -f "$TEST_DIRECTORY/state/archive-listed" &&
+  ! -f "$TEST_DIRECTORY/state/temporary-network-error" ]]; then
+  touch "$TEST_DIRECTORY/state/temporary-network-error"
+  exit 1
+fi
+if [ -f "$TEST_DIRECTORY/state/new-publication" ]; then
+  printf '{"tag_name":"v2.1.0"}\\n'
+else
+  printf '{"tag_name":"v2.0.0"}\\n'
+fi
+`,
+      { mode: 0o700 },
+    );
     writeFileSync(
       join(fixture, 'mv'),
       `#!/bin/bash
@@ -163,15 +243,18 @@ exec /bin/mv "$@"
     writeFileSync(join(fixture, 'pre-update.dump'), 'fixture dump');
     writeFileSync(join(fixture, 'trace'), '');
     mkdirSync(join(fixture, 'state'));
+    mkdirSync(join(fixture, 'backups'));
+    if (mode === 'scheduled-pending') writeFileSync(join(fixture, `${project}.preflight`), '');
     check((fresh) => {
+      const args = mode.startsWith('scheduled-')
+        ? ['--follow-release', registry, join(fixture, 'backups')]
+        : [image, revision, fresh ? '--fresh' : join(fixture, 'pre-update.dump')];
       const result = Bun.spawnSync(
         [
           join(directory, 'scripts/stage-dockhand-release.sh'),
           project,
           join(fixture, 'stack.env'),
-          image,
-          revision,
-          fresh ? '--fresh' : join(fixture, 'pre-update.dump'),
+          ...args,
         ],
         {
           env: {
@@ -181,7 +264,10 @@ exec /bin/mv "$@"
             PURLAY_DOCKHAND_RECEIPTS: fixture,
             TEST_DIRECTORY: fixture,
             TEST_DIGEST: digest,
+            TEST_OLD_DIGEST: oldDigest,
+            TEST_OLD_REVISION: oldRevision,
             TEST_PROJECT: project,
+            TEST_REGISTRY: registry,
             TEST_REVISION: revision,
             TEST_IMAGE: image,
             TEST_MODE: mode,
@@ -189,7 +275,8 @@ exec /bin/mv "$@"
           timeout: 5_000,
         },
       );
-      const receipts = readdirSync(fixture).filter((entry) => entry.endsWith('.receipt'));
+      const entries = readdirSync(fixture);
+      const receipts = entries.filter((entry) => entry.endsWith('.receipt'));
       const receipt = receipts[0];
       return {
         code: result.exitCode,
@@ -198,6 +285,10 @@ exec /bin/mv "$@"
         trace: readFileSync(join(fixture, 'trace'), 'utf8'),
         receipts,
         record: receipt ? readFileSync(join(fixture, receipt), 'utf8') : '',
+        backups: readdirSync(join(fixture, 'backups')).map((entry) =>
+          readdirSync(join(fixture, 'backups', entry)),
+        ),
+        attempts: entries.filter((entry) => entry.endsWith('.attempted')),
       };
     });
   } finally {
@@ -303,6 +394,81 @@ describe('staging the existing Dockhand stack', () => {
       expect(second.code).toBe(0);
       expect(second.trace).toBe('start empty project\n');
       expect(second.receipts).toHaveLength(1);
+    });
+  });
+});
+
+describe('following the tested release channel', () => {
+  test('keeps a single protected dump for a healthy forward release and skips unchanged work', () => {
+    withFixture('scheduled-normal', (run) => {
+      const first = run();
+      expect(first.code).toBe(0);
+      expect(first.trace).toBe(
+        'take dump\nread dump payload\nvalidate dump\nrun initializer\nstop scheduler\nstart API\nstart scheduler\n',
+      );
+      expect(first.record).toMatch(/backup_sha256=[0-9a-f]{64}\n/);
+      const next = run();
+      expect(next.code).toBe(0);
+      expect(next.out).toContain('already ready');
+      expect(next.trace).toBe(first.trace);
+    });
+  });
+
+  test.each([
+    ['scheduled-lag', 'does not yet match the tested main build', ''],
+    ['scheduled-off-main', 'outside main', ''],
+    ['scheduled-rollback', 'not a forward revision', ''],
+    ['scheduled-pending', 'earlier rollout has a pending preflight', ''],
+    [
+      'scheduled-refused',
+      'initializer refused',
+      'take dump\nread dump payload\nvalidate dump\nrun initializer\n',
+    ],
+    [
+      'scheduled-changed',
+      'release changed during preflight',
+      'take dump\nread dump payload\nvalidate dump\nrun initializer\n',
+    ],
+  ])('withholds promotion on %s', (mode, reason, trace) => {
+    withFixture(mode, (run) => {
+      const result = run();
+      expect(result.code).toBe(1);
+      expect(result.err).toContain(reason);
+      expect(result.trace).toBe(trace);
+      expect(result.receipts).toEqual([]);
+      if (trace) {
+        expect(result.backups).toEqual([['postgres.dump']]);
+        expect(result.attempts).toHaveLength(1);
+        const next = run();
+        expect(next.err).toContain('already has an automatic attempt');
+        expect(next.trace).toBe(trace);
+      }
+    });
+  });
+
+  test.each([
+    ['scheduled-unreadable', 'dump payload could not be read', 'take dump\nread dump payload\n'],
+    [
+      'scheduled-network',
+      'could not be reverified',
+      'take dump\nread dump payload\nvalidate dump\n',
+    ],
+  ])('retries the same digest after a temporary preparation error on %s', (mode, reason, trace) => {
+    withFixture(mode, (run) => {
+      const first = run();
+      expect(first.code).toBe(1);
+      expect(first.err).toContain(reason);
+      expect(first.trace).toBe(trace);
+      expect(first.backups).toEqual([]);
+      expect(first.attempts).toEqual([]);
+      const next = run();
+      expect(next.code).toBe(0);
+      expect(next.trace).toBe(
+        `${trace}take dump\nread dump payload\nvalidate dump\nrun initializer\nstop scheduler\nstart API\nstart scheduler\n`,
+      );
+      expect(next.backups).toEqual([['postgres.dump']]);
+      expect(next.attempts).toHaveLength(1);
+      expect(next.receipts).toHaveLength(1);
     });
   });
 });
