@@ -73,11 +73,22 @@
       "jobs": [],
       "frames": [],
       "publishes": [],
-      "consumes": [],
+      "consumes": [
+        "core.member-left"
+      ],
       "entitlement": "grant",
       "retention": []
     }
   ],
-  "facts": [],
+  "facts": [
+    {
+      "type": "core.member-left",
+      "shape": 1,
+      "reads": [],
+      "schemas": {
+        "1": "a8a231f9db215832941723a133576c263f7bd313d8bdd02c65cfae8823c5e6c0"
+      }
+    }
+  ],
   "exceptions": []
 }
