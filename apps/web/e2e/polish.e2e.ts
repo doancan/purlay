@@ -267,6 +267,45 @@ test.describe("a message's hover controls (#653, D-150)", () => {
     expect(measured.length, 'no row was measured').toBeGreaterThan(3);
   });
 
+  test('an older grouped message shows its send time on hover and keyboard focus', async ({
+    page,
+    signIn,
+    room,
+    api,
+  }) => {
+    const made = await room({ members: ['dogancan', 'alice'] });
+    const first = await api('alice').say(made.id, 'Start of the group');
+    const second = await api('alice').say(made.id, 'Next message in the group');
+    const sent = new Date(second.createdAt);
+    await page.clock.setFixedTime(new Date(sent.getTime() + 48 * 60 * 60_000));
+    await signIn();
+    await page.goto(made.path);
+
+    const row = page.locator(`[data-message-id="${second.id}"]`);
+    const time = row.locator('time');
+    const clock = sent.toISOString().slice(11, 16);
+    const full = await page.evaluate(
+      (createdAt) =>
+        new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(
+          new Date(createdAt),
+        ),
+      second.createdAt,
+    );
+    await expect(time).toHaveCSS('opacity', '0');
+    await row.hover();
+    await expect(time).toHaveCSS('opacity', '1');
+    await expect(time).toHaveText(clock);
+    await expect(time).toHaveAttribute('title', full);
+    await page.mouse.move(1, 1);
+    await expect(time).toHaveCSS('opacity', '0');
+
+    await page.locator(`[data-message-id="${first.id}"]`).focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(row).toBeFocused();
+    await expect(time).toHaveCSS('opacity', '1');
+    await expect(time).toHaveText(clock);
+  });
+
   test('are not drawn while the message is being edited', async ({ page, signIn, room }) => {
     // Seeded before the page loads, as editing.e2e.ts does: sent from the page and edited at once,
     // the row being edited could be the optimistic one the server's echo was replacing.
