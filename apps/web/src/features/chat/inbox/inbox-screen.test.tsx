@@ -4,10 +4,16 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { within } from '@testing-library/react';
-import type { Notification, NotificationPage, ReadNotificationsRequest } from '@purlay/types';
+import type {
+  Channel,
+  Notification,
+  NotificationPage,
+  ReadNotificationsRequest,
+} from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import { ApiError } from '../../../data/errors';
 import type { Api } from '../../../data/api';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import {
@@ -117,15 +123,19 @@ describe('the list', () => {
       [undefined, 'Bob wrote to the conversation'],
       ['tr', 'Bob konuşmaya yazdı'],
     ] as const) {
+      const channels = Promise.withResolvers<Channel[]>();
       const view = await visit(
         {
-          channels: () => Promise.resolve([group]),
+          channels: () => channels.promise,
           notifications: () => Promise.resolve(page([told(3, 'direct_message')])),
         },
         locale,
       );
-      const [row] = view.getAllByRole('button', { name: /words/ }).map((b) => b.textContent);
-      expect(row).toContain(words);
+      // The inbox can display a notification before it knows who is in the conversation.
+      const row = await view.findByRole('button', { name: /words 3/ });
+      expect(within(row).queryByText(words)).toBeNull();
+      channels.resolve([group]);
+      expect(await within(row).findByText(words)).toBeDefined();
       view.unmount();
     }
   });
@@ -146,7 +156,7 @@ describe('the list', () => {
   test('a due reminder says so in each language, with the message it is about, and opens on it', async () => {
     for (const [locale, words] of [
       [undefined, 'Your message reminder is due'],
-      ['tr', 'Mesaj hatırlatıcının zamanı geldi'],
+      ['tr', 'Mesaj hatırlatıcınızın zamanı geldi'],
     ] as const) {
       const view = await visit(
         { notifications: () => Promise.resolve(page([told(6, 'reminder')])) },
@@ -309,7 +319,7 @@ describe('the states', () => {
           : Promise.resolve(page([told(4, 'mention')]));
       },
     });
-    expect(view.getByRole('alert').textContent).toContain("Couldn't load your inbox");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t load your inbox');
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await settle();
     expect(view.getByRole('button', { name: /words 4/ })).toBeDefined();
@@ -322,7 +332,7 @@ describe('the states', () => {
       'tr',
     );
     expect(view.getByRole('heading', { level: 1, name: 'Gelen kutusu' })).toBeDefined();
-    expect(view.getByText(/Alice senden bahsetti/)).toBeDefined();
+    expect(view.getByText(/Alice sizden bahsetti/)).toBeDefined();
     expect(view.getByRole('button', { name: 'Tümünü okundu yap' })).toBeDefined();
     view.unmount();
   });
@@ -331,8 +341,8 @@ describe('the states', () => {
 describe('the sidebar', () => {
   test('has Inbox, current on the inbox', async () => {
     const view = await visit({ notifications: () => Promise.resolve(page([])) });
-    // On a wide window it is the button that opens the inbox's panel (D-208).
-    const link = view.getByRole('button', { name: 'Inbox' });
+    // The link to this page on every width (D-208, amended): no panel opens over it.
+    const link = view.getByRole('link', { name: 'Inbox' });
     expect(link.getAttribute('aria-current')).toBe('page');
     view.unmount();
   });
@@ -558,10 +568,61 @@ describe('one thread, one row (D-162)', () => {
       'tr',
     );
     const rows = view.getAllByRole('button', { name: /words/ }).map((b) => b.textContent);
-    expect(rows[0]).toContain('Alice ve Bob thread’ine yanıt verdi');
+    expect(rows[0]).toContain('Alice ve Bob thread’inize yanıt verdi');
     expect(rows[0]).toContain('“Who owns the cache?” thread’inde 3 yeni yanıt');
-    expect(rows[1]).toContain('Bob dahil olduğun bir thread’e yanıt verdi');
+    expect(rows[1]).toContain('Bob dahil olduğunuz bir thread’e yanıt verdi');
     expect(rows[1]).toContain('“Who owns the cache?” thread’inde');
+    view.unmount();
+  });
+});
+
+describe('reading, hardened', () => {
+  test('an answer already on its way when the person reads does not paint the row unread again', async () => {
+    const held: { answer?: (page: NotificationPage) => void } = {};
+    let calls = 0;
+    const view = await visit({
+      notifications: () => {
+        calls += 1;
+        // The first answer at once; the second — a frame's read-again — is held until after the read.
+        if (calls === 1) return Promise.resolve(page([told(8, 'mention')]));
+        return new Promise((resolve) => {
+          held.answer = resolve;
+        });
+      },
+      readNotifications: () => Promise.resolve(),
+    });
+    const { client } = view.world;
+    // A frame says the inbox changed: the page is asked again, and the answer waits.
+    void client.invalidateQueries({ queryKey: keys.notifications(IDS.workspace) });
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Mark read' }));
+    await settle();
+    // The stale answer lands now, still saying unread.
+    held.answer?.(page([told(8, 'mention')]));
+    await settle();
+    const cached = client.getQueryData<{ pages: NotificationPage[] }>(
+      keys.notifications(IDS.workspace),
+    );
+    expect(cached?.pages[0]?.data[0]?.readAt).not.toBeNull();
+    view.unmount();
+  });
+
+  test('a category holding more rows than the server reads at once is read in several requests', async () => {
+    const reads: ReadNotificationsRequest[] = [];
+    const many = Array.from({ length: 130 }, (_, n) => told(100 + n, 'mention'));
+    const view = await visit({
+      notifications: () => Promise.resolve(page(many)),
+      readNotifications: (input) => {
+        reads.push(input);
+        return Promise.resolve();
+      },
+    });
+    const categories = within(view.getByRole('group', { name: 'Category' }));
+    await person().click(categories.getByRole('button', { name: 'Mentions' }));
+    await settle();
+    await person().click(view.getByRole('button', { name: 'Mark all read' }));
+    await settle();
+    expect(reads.map((r) => ('ids' in r ? r.ids.length : 0))).toEqual([100, 30]);
     view.unmount();
   });
 });

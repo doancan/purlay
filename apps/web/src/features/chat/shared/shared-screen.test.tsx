@@ -93,6 +93,24 @@ describe('Shared workspace catalogue', () => {
     view.unmount();
   });
 
+  test('a link is named by its title over its address, or by its address once when it has no title', async () => {
+    const bare: SharedLinkItem = {
+      ...link,
+      key: 'b'.repeat(64),
+      messageId: messageIdAt(5),
+      link: { url: 'https://example.com/bare', label: 'https://example.com/bare' },
+    };
+    const view = await visit({
+      shared: () => Promise.resolve({ data: [link, bare], nextCursor: null, indexing: false }),
+    });
+    await waitFor(() => {
+      expect(view.getByRole('link', { name: 'Leave policy' })).toBeDefined();
+    });
+    expect(view.getAllByText(link.link.url)).toHaveLength(1);
+    expect(view.getAllByText(bare.link.url)).toHaveLength(1);
+    view.unmount();
+  });
+
   test('search submits once, preserves the tab in the address and clears incompatible file type', async () => {
     const asked: SharedFilters[] = [];
     const view = await visit(

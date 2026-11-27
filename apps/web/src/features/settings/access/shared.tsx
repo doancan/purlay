@@ -5,7 +5,7 @@ import {
   useQueryClient,
   onlineManager,
 } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type {
   WorkspaceAccessListQuery,
   WorkspaceAccessSourceSummary,
@@ -118,22 +118,49 @@ export const AccessProblem = ({
     </p>
   );
 
+/**
+ * The server refused because access management has not been turned on there (`WORKSPACE_PROVISIONING_READY`, D-311):
+ * not a failure to read, so nothing to retry — an operator's change to the server is what moves it on.
+ */
+const isNotTurnedOn = (failure: Error | null): boolean =>
+  isApiError(failure) && failure.code === 'WORKSPACE_PROVISIONING_NOT_READY';
+
+const NotTurnedOn = (): React.JSX.Element => {
+  const { t } = useI18n();
+  const titleId = useId();
+  return (
+    <div
+      role="status"
+      aria-labelledby={titleId}
+      className="flex flex-col gap-1 px-6 py-5 max-narrow:px-4"
+    >
+      <p id={titleId} className="text-body font-semibold text-ink">
+        {t('access.notReady.title')}
+      </p>
+      <p className="text-body text-ink-muted">{t('access.notReady.body')}</p>
+    </div>
+  );
+};
+
 export const AccessListState = ({
   pending,
-  failed,
+  failure,
   paused = false,
   empty,
   retry,
   children,
 }: {
   readonly pending: boolean;
-  readonly failed: boolean;
+  /** The read's failure, or null: its kind decides between Retry and a server that has the feature off. */
+  readonly failure: Error | null;
   readonly paused?: boolean;
   readonly empty: boolean;
   readonly retry: () => void;
   readonly children: React.ReactNode;
 }): React.JSX.Element => {
   const { t } = useI18n();
+  const failed = failure !== null;
+  if (isNotTurnedOn(failure)) return <NotTurnedOn />;
   return (
     <>
       {(failed || paused) && (
@@ -145,12 +172,15 @@ export const AccessListState = ({
         </div>
       )}
       {pending && !failed && !paused ? (
-        <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 p-6">
+        <LoadingStatus
+          label={t('common.loading')}
+          className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
+        >
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
       ) : empty && !failed && !paused ? (
-        <p role="status" className="p-6 text-body text-ink-muted">
+        <p role="status" className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
           {t('access.empty')}
         </p>
       ) : (

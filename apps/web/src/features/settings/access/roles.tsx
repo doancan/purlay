@@ -61,7 +61,7 @@ export const AccessRolesPage = (): React.JSX.Element => {
         </div>
         <AccessListState
           pending={roles.isPending}
-          failed={roles.isError}
+          failure={roles.error}
           paused={roles.isPaused}
           empty={items.length === 0}
           retry={() => {

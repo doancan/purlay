@@ -81,7 +81,10 @@ export const QuietHoursCard = (): React.JSX.Element => {
     return (
       <SettingsCard title={t('quietHours.title')} description={t('quietHours.description')}>
         {readFailure ?? (
-          <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
+          <LoadingStatus
+            label={t('common.loading')}
+            className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
+          >
             <Skeleton />
           </LoadingStatus>
         )}
@@ -156,7 +159,11 @@ export const QuietHoursCard = (): React.JSX.Element => {
       }
     >
       {readFailure}
-      <SettingsRow label={t('quietHours.on')} description={t('quietHours.zone', { timeZone })}>
+      <SettingsRow
+        label={t('quietHours.on')}
+        description={t('quietHours.zone', { timeZone })}
+        toggle
+      >
         <Checkbox
           aria-label={t('quietHours.on')}
           checked={shown !== null}
@@ -172,8 +179,10 @@ export const QuietHoursCard = (): React.JSX.Element => {
           <SettingsRow
             label={t('quietHours.between')}
             {...(shown.from > shown.to ? { description: t('quietHours.overnight') } : {})}
+            // The field column, as other fields have: the times stay put when the problem line appears.
+            fill
           >
-            <span className="flex flex-wrap items-center gap-2">
+            <span className="flex w-full flex-wrap items-center gap-2">
               <label htmlFor={fromId} className="text-label text-ink-muted">
                 {t('quietHours.from')}
               </label>
@@ -184,7 +193,7 @@ export const QuietHoursCard = (): React.JSX.Element => {
                 aria-invalid={invalidFrom || undefined}
                 aria-describedby={invalidFrom ? timeProblemId : undefined}
                 value={typed.from ?? asClock(shown.from)}
-                className="h-control rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-body text-ink max-narrow:text-title max-narrow:font-normal"
+                className="h-control rounded-md border-hairline border-border-strong bg-surface-100 px-3 text-body text-ink aria-invalid:border-danger disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
                 onChange={(event) => {
                   setTyped({ ...typed, from: event.target.value });
                   const from = fromClock(event.target.value);
@@ -201,7 +210,7 @@ export const QuietHoursCard = (): React.JSX.Element => {
                 aria-invalid={invalidTo || undefined}
                 aria-describedby={invalidTo ? timeProblemId : undefined}
                 value={typed.to ?? asClock(shown.to)}
-                className="h-control rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-body text-ink max-narrow:text-title max-narrow:font-normal"
+                className="h-control rounded-md border-hairline border-border-strong bg-surface-100 px-3 text-body text-ink aria-invalid:border-danger disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
                 onChange={(event) => {
                   setTyped({ ...typed, to: event.target.value });
                   const to = fromClock(event.target.value);

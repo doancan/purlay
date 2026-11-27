@@ -9,11 +9,14 @@ import { join } from 'node:path';
 import { ConfigurationError } from '../../platform/config';
 import {
   IMMUTABLE,
+  SHELL_MISSING,
   clientFileFor,
   fileFor,
   isUnchanged,
   openClient,
   routeOf,
+  type Client,
+  type ClientFile,
   type Route,
 } from './client';
 
@@ -28,6 +31,13 @@ afterAll(() => {
   rmSync(dist, { recursive: true, force: true });
   rmSync(empty, { recursive: true, force: true });
 });
+
+/** The file a path is answered with, in a build that has its shell. */
+const fileOf = (client: Client, path: string): ClientFile | undefined => {
+  const found = clientFileFor(client, path);
+  if (found === SHELL_MISSING) throw new Error(`no shell in ${client.dist}`);
+  return found;
+};
 
 describe('which paths are whose', () => {
   test.each<[string, Route]>([
@@ -83,7 +93,7 @@ describe('which file a path is answered with', () => {
   });
 
   test('a file without a hash is asked about every time', () => {
-    expect(clientFileFor(client, '/theme-init.js')?.cacheControl).toBe('no-cache');
+    expect(fileOf(client, '/theme-init.js')?.cacheControl).toBe('no-cache');
   });
 
   test.each(['/', '/w/acme/c/1', '/index.html'])(
@@ -98,10 +108,10 @@ describe('which file a path is answered with', () => {
   );
 
   test('names its version by size and modification, the same for the same file', () => {
-    const shell = clientFileFor(client, '/')?.etag;
+    const shell = fileOf(client, '/')?.etag;
     expect(shell).toMatch(/^W\/"[0-9a-z]+-[0-9a-z]+"$/);
-    expect(clientFileFor(client, '/w/acme')?.etag).toBe(shell);
-    expect(clientFileFor(client, '/theme-init.js')?.etag).not.toBe(shell);
+    expect(fileOf(client, '/w/acme')?.etag).toBe(shell);
+    expect(fileOf(client, '/theme-init.js')?.etag).not.toBe(shell);
   });
 
   test.each([
@@ -119,6 +129,28 @@ describe('which file a path is answered with', () => {
   });
 });
 
+describe('a build being replaced in place', () => {
+  // Opened with its shell, which then goes: what a rebuild that empties the directory first does.
+  const replaced = mkdtempSync(join(tmpdir(), 'client-replaced-'));
+  writeFileSync(join(replaced, 'index.html'), '<!doctype html>');
+  const client = openClient(replaced);
+  rmSync(join(replaced, 'index.html'));
+  afterAll(() => {
+    rmSync(replaced, { recursive: true, force: true });
+  });
+
+  test.each(['/', '/w/acme/settings/workspace-mfa'])('%s is a shell that is missing', (path) => {
+    expect(clientFileFor(client, path)).toBe(SHELL_MISSING);
+  });
+
+  test.each(['/assets/app-abc123.js', '/index.html', '/favicon.ico'])(
+    '%s is still nothing: a file is never answered with a page',
+    (path) => {
+      expect(clientFileFor(client, path)).toBeUndefined();
+    },
+  );
+});
+
 describe('opening the build', () => {
   test('a directory with a shell opens', () => {
     expect(openClient(dist).dist).toBe(dist);
@@ -131,8 +163,8 @@ describe('opening the build', () => {
 
   test('a trailing separator names the same build, not one every path falls outside', () => {
     const client = openClient(`${dist}/`);
-    expect(clientFileFor(client, '/')?.path).toBe(join(dist, 'index.html'));
-    expect(clientFileFor(client, '/assets/app-abc123.js')?.path).toBe(
+    expect(fileOf(client, '/')?.path).toBe(join(dist, 'index.html'));
+    expect(fileOf(client, '/assets/app-abc123.js')?.path).toBe(
       join(dist, 'assets', 'app-abc123.js'),
     );
   });

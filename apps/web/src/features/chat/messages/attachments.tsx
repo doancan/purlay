@@ -264,15 +264,11 @@ export const Attachments = ({
   return (
     <ul
       aria-label={t('attachment.list')}
-      // A zoomed PDF scrolls inside a viewport whose width is fixed by the conversation, never
+      // As wide as the column, never as wide as its contents: a file name with no space to break at
+      // would otherwise widen the list past a phone's edge instead of truncating (found at 390px). A
+      // zoomed PDF also scrolls inside a viewport whose width is fixed by the conversation, never
       // measured from the document it just enlarged (which otherwise fed ResizeObserver a loop).
-      className={
-        attachments.some(
-          (attachment) => previewOf(attachment.fileName, attachment.sizeBytes)?.kind === 'pdf',
-        )
-          ? 'mt-1 flex w-full flex-wrap items-start gap-2'
-          : 'mt-1 flex flex-wrap items-start gap-2'
-      }
+      className="mt-1 flex w-full flex-wrap items-start gap-2"
     >
       {attachments.map((attachment) => (
         <li

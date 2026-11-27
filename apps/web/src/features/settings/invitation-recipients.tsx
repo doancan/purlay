@@ -304,7 +304,7 @@ export const InvitationRecipients = (): React.JSX.Element => {
         ))}
       </ul>
       {list.hasNextPage && (
-        <div className="px-6 py-4">
+        <div className="px-6 py-4 max-narrow:px-4">
           <Button
             busy={list.isFetchingNextPage}
             onClick={() => {

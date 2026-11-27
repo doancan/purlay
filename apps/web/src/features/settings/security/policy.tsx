@@ -18,8 +18,7 @@ import { href } from '../../../router/routes';
 import { Button, buttonStyle } from '../../../ui/button';
 import { Checkbox } from '../../../ui/checkbox';
 import { Select } from '../../../ui/select';
-import { TextField } from '../../../ui/text-field';
-import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import { SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { WorkspaceMfa } from './mfa';
@@ -211,9 +210,10 @@ const PolicyEditor = ({
         description={t(mayEnforce ? 'security.policy.testHint' : 'security.policy.ownerOnly')}
       >
         <fieldset disabled={task.busy || readFailed} className="min-w-0">
-          <SettingsRow label={t('security.policy.mode')} wide>
+          <SettingsRow label={t('security.policy.mode')} fill>
             <Select
               aria-label={t('security.policy.mode')}
+              className="w-full"
               value={draft.mode}
               onChange={(event) => {
                 change('mode', event.currentTarget.value === 'enforced' ? 'enforced' : 'off');
@@ -226,10 +226,11 @@ const PolicyEditor = ({
           <SettingsRow
             label={t('security.policy.signIn')}
             description={t('security.policy.guests')}
-            wide
+            fill
           >
             <Select
               aria-label={t('security.policy.signIn')}
+              className="w-full"
               value={draft.signIn}
               onChange={(event) => {
                 change('signIn', event.currentTarget.value === 'company' ? 'company' : 'any');
@@ -276,7 +277,7 @@ const PolicyEditor = ({
               </a>
             </div>
           )}
-          <SettingsRow label={t('security.policy.requireMfa')}>
+          <SettingsRow label={t('security.policy.requireMfa')} toggle>
             <Checkbox
               aria-label={t('security.policy.requireMfa')}
               checked={draft.requireMfa}
@@ -285,32 +286,30 @@ const PolicyEditor = ({
               }}
             />
           </SettingsRow>
-          <div className="grid grid-cols-3 gap-4 border-t-hairline border-border-subtle px-6 py-5 max-narrow:grid-cols-1 max-narrow:px-4">
-            {(['idleMinutes', 'maxAgeHours', 'mfaMaxAgeMinutes'] as const).map((field) => (
-              <TextField
-                key={field}
-                type="number"
-                min={field === 'maxAgeHours' ? 1 : 5}
-                max={field === 'maxAgeHours' ? 720 : 1440}
-                step={1}
-                label={t(
-                  field === 'idleMinutes'
-                    ? 'security.policy.idle'
-                    : field === 'maxAgeHours'
-                      ? 'security.policy.maxAge'
-                      : 'security.policy.mfaAge',
-                )}
-                hint={t('security.policy.noLimit')}
-                value={draft[field] ?? ''}
-                onChange={(event) => {
-                  change(
-                    field,
-                    event.currentTarget.value === '' ? null : Number(event.currentTarget.value),
-                  );
-                }}
-              />
-            ))}
-          </div>
+          {(['idleMinutes', 'maxAgeHours', 'mfaMaxAgeMinutes'] as const).map((field) => (
+            <SettingsTextRow
+              key={field}
+              type="number"
+              min={field === 'maxAgeHours' ? 1 : 5}
+              max={field === 'maxAgeHours' ? 720 : 1440}
+              step={1}
+              label={t(
+                field === 'idleMinutes'
+                  ? 'security.policy.idle'
+                  : field === 'maxAgeHours'
+                    ? 'security.policy.maxAge'
+                    : 'security.policy.mfaAge',
+              )}
+              hint={t('security.policy.noLimit')}
+              value={draft[field] ?? ''}
+              onChange={(event) => {
+                change(
+                  field,
+                  event.currentTarget.value === '' ? null : Number(event.currentTarget.value),
+                );
+              }}
+            />
+          ))}
         </fieldset>
         <div className="flex flex-col gap-3 border-t-hairline border-border-subtle px-6 py-4 max-narrow:px-4">
           {readFailed && (

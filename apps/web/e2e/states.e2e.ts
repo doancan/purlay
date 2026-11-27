@@ -81,7 +81,7 @@ test.describe('the channel feed', () => {
     });
     await page.goto(channelPath(world.workspace.slug, world.channels.api));
     const alert = page.getByRole('alert');
-    await expect(alert).toContainText("Couldn't load messages");
+    await expect(alert).toContainText('Couldn’t load messages');
     await expect(page.locator('textarea[data-composer]')).toBeEnabled();
     await expectNoAxe();
     await expect(page.getByRole('main')).toHaveScreenshot('feed-error.png');
@@ -125,7 +125,7 @@ test.describe('the open questions', () => {
     await signIn('bob');
     await page.route('**/api/workspaces/*/unresolved*', fail);
     await page.goto(`/w/${world.workspace.slug}/questions`);
-    await expect(page.getByRole('alert')).toContainText("Couldn't load open questions");
+    await expect(page.getByRole('alert')).toContainText('Couldn’t load open questions');
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
     await expectNoAxe();
     await expect(page.getByRole('main')).toHaveScreenshot('questions-error.png');
@@ -165,7 +165,7 @@ test.describe('a thread', () => {
     await expect(page.locator('article').first()).toBeVisible();
     await page.route('**/api/messages/*/thread*', fail);
     await openFirstThread(page);
-    await expect(page.getByText("Couldn't load replies")).toBeVisible();
+    await expect(page.getByText('Couldn’t load replies')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
     // The root, intact, at the top of the panel.
     await expect(page.locator('[data-thread-root] article').first()).toBeVisible();
@@ -196,10 +196,12 @@ test.describe('the channel list', () => {
       .getByRole('complementary', { name: 'Workspace' })
       .or(page.getByRole('dialog', { name: 'Workspace' }));
     const channels = sidebar.getByRole('navigation', { name: 'Channels' });
-    await expect(channels.getByRole('alert')).toContainText("Couldn't load channels");
+    await expect(channels.getByRole('alert')).toContainText('Couldn’t load channels');
     // The people list is built from the same list (a direct message is a channel), so it says
     // so in its own section instead of showing a half-truth; the header and the footer stay.
-    await expect(sidebar.getByRole('region', { name: 'People' }).getByRole('alert')).toBeVisible();
+    await expect(sidebar.getByRole('region', { name: 'People' }).getByRole('alert')).toContainText(
+      'Couldn’t load people',
+    );
     await expect(sidebar.getByRole('heading', { name: 'People' })).toBeVisible();
     failing = false;
     await channels.getByRole('button', { name: 'Retry' }).click();

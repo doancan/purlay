@@ -29,7 +29,6 @@ import { Link, useRoute } from '../../../router/router-provider';
 import { Button } from '../../../ui/button';
 import { Avatar } from '../../../ui/avatar';
 import { cn } from '../../../ui/cn';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useFeedPorts } from '../channel/feed-ports';
 import {
@@ -40,7 +39,13 @@ import {
   useChannelTitle,
 } from '../channel/channel-header';
 import { NavToggle } from '../../shell/nav';
-import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../../ui/list-column';
+import {
+  ListCard,
+  ListColumn,
+  ListSkeleton,
+  listButtonClasses,
+  listRowClasses,
+} from '../../../ui/list-column';
 import { SlideTrack } from '../../../ui/slide-track';
 import { useWorkspace } from '../../shell/workspace';
 import { lastChannel } from '../../../data/last-channel';
@@ -85,6 +90,23 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
     (channels.data ?? []).find((c) => c.id === narrowed) ??
     joined.find((c) => c.id === remembered) ??
     joined[0];
+  const count =
+    open !== null && open.count > 0 ? (
+      <span className="font-mono text-caption text-warning-text">
+        {format.number(open.count)}
+        {open.more && '+'}
+      </span>
+    ) : null;
+  // On a narrow window the view this is goes without its segment, so the title carries its count and Feed is a
+  // glyph with its name, as the channel's header draws Open questions there (#624).
+  const feed = (
+    <>
+      <span aria-hidden="true" className="hidden max-narrow:inline-flex">
+        <Icon name="channels" />
+      </span>
+      <span className="max-narrow:hidden">{t('header.feed')}</span>
+    </>
+  );
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
@@ -94,7 +116,10 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
           <Icon name="open-question" size="lg" />
         </HeaderTile>
         <div className="flex min-w-0 flex-col">
-          <h1 className="whitespace-nowrap text-heading text-ink">{t('questions.title')}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="whitespace-nowrap text-heading text-ink">{t('questions.title')}</h1>
+            {count !== null && <span className="hidden max-narrow:inline-flex">{count}</span>}
+          </div>
           <span className="truncate text-caption text-ink-muted max-narrow:hidden">
             {t('questions.lede')}
           </span>
@@ -110,17 +135,19 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
           <Link
             to="workspace"
             params={{ slug: workspace.slug }}
+            aria-label={t('header.feed')}
             className={cn(segmentClasses, 'text-ink-muted')}
           >
-            {t('header.feed')}
+            {feed}
           </Link>
         ) : (
           <Link
             to="channel"
             params={{ slug: workspace.slug, channelId: back.id }}
+            aria-label={t('header.feed')}
             className={cn(segmentClasses, 'text-ink-muted')}
           >
-            {t('header.feed')}
+            {feed}
           </Link>
         )}
         <Link
@@ -130,12 +157,7 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
           className={cn(segmentClasses, activeSegmentClasses)}
         >
           {t('header.questions')}
-          {open !== null && open.count > 0 && (
-            <span className="font-mono text-caption text-warning-text">
-              {format.number(open.count)}
-              {open.more && '+'}
-            </span>
-          )}
+          {count}
         </Link>
       </SlideTrack>
       {/* The room the channel's controls take there, so the views sit where they sit in a channel. */}
@@ -178,7 +200,16 @@ const KnownGroupTitle = ({
   const title = useChannelTitle(channel);
   return (
     <h2 id={id} className="flex items-center gap-1 text-label text-ink-muted">
-      <Icon name={channel.type === 'direct_message' ? 'person' : 'channel'} size="sm" />
+      <Icon
+        name={
+          channel.type === 'direct_message'
+            ? 'person'
+            : channel.type === 'private'
+              ? 'private-channel'
+              : 'channel'
+        }
+        size="sm"
+      />
       <span>{title}</span>
       <span aria-hidden="true">·</span>
       <span>{t('questions.count', { count })}</span>
@@ -222,10 +253,13 @@ const QuestionRow = ({
         />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="text-body font-semibold text-ink">
+            <span className="min-w-0 truncate text-label font-semibold text-ink">
               {authorOf(question, t('user.erased')).displayName}
             </span>
-            <time dateTime={question.createdAt} className="font-mono text-caption text-ink-subtle">
+            <time
+              dateTime={question.createdAt}
+              className="shrink-0 font-mono text-caption text-ink-muted"
+            >
               {format.time(question.createdAt, now)}
             </time>
             {/* On the author's line, where a wide window drew it anyway: as a column of its own it
@@ -239,7 +273,7 @@ const QuestionRow = ({
             {textOf(question)}
           </span>
           <span className="block text-caption text-ink-muted">
-            {t('questions.waiting', { count: age })}
+            {age === 0 ? t('questions.waitingToday') : t('questions.waiting', { count: age })}
             {' · '}
             {owner?.user.displayName ?? t('knowledge.unassigned')}
           </span>
@@ -323,19 +357,11 @@ export const QuestionsScreen = (): React.JSX.Element => {
 
   let body: React.JSX.Element;
   if (query.isPending) {
-    body = (
-      <LoadingStatus label={t('state.questions.loading')} className="flex flex-col gap-4 py-2">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
-          </div>
-        ))}
-      </LoadingStatus>
-    );
+    body = <ListSkeleton label={t('state.questions.loading')} />;
   } else if (query.isError && query.data === undefined) {
     body = (
       <ErrorState
+        framed
         title={t('state.questions.error.title')}
         body={t('state.questions.error.body')}
         retryLabel={t('common.retry')}

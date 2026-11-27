@@ -18,7 +18,7 @@ import { useChannelFiles } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { LoadingStatus, SkeletonRow } from '../../../ui/skeleton';
 import { ErrorState } from '../../../ui/states';
 import { nameOf } from '../../../lib/author';
 import { isPlainClick, useImageViewer, type ViewedImage } from '../messages/image-viewer-door';
@@ -39,7 +39,7 @@ const Preview = ({ file }: { readonly file: ChannelFile }): React.JSX.Element =>
     return (
       <span
         aria-hidden="true"
-        className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md bg-surface-200 text-ink-muted"
+        className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md border-hairline border-border-subtle bg-surface-050 text-ink-muted"
       >
         <Icon name="file" />
       </span>
@@ -50,7 +50,7 @@ const Preview = ({ file }: { readonly file: ChannelFile }): React.JSX.Element =>
       src={`${at(file)}/thumbnail`}
       alt=""
       loading="lazy"
-      className="size-avatar-lg shrink-0 rounded-md bg-surface-200 object-cover"
+      className="size-avatar-lg shrink-0 rounded-md border-hairline border-border-subtle bg-surface-050 object-cover"
       onError={() => {
         setFailed(true);
       }}
@@ -77,7 +77,7 @@ const FileRow = ({
   const image = onOpen !== undefined;
   const parentId = file.parentId;
   return (
-    <li className="flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-200">
+    <li className="flex items-start gap-3 rounded-lg px-2 py-2 transition-colors duration-hover ease-standard hover:bg-surface-200">
       <Preview file={file} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <a
@@ -101,7 +101,7 @@ const FileRow = ({
               ? t('attachment.open', { name: attachment.fileName })
               : t('attachment.download', { name: attachment.fileName, size })
           }
-          className="truncate rounded-sm text-label font-medium text-ink hover:text-ink"
+          className="truncate rounded-sm text-label font-medium text-ink transition-colors duration-hover ease-standard hover:text-accent-text"
         >
           {attachment.fileName}
         </a>
@@ -168,23 +168,24 @@ const FilesPanelView = ({
   let body: React.JSX.Element;
   if (query.isPending) {
     body = (
-      <LoadingStatus label={t('files.loading')} className="flex flex-col gap-3 p-4">
+      // The rows' own shape, at their place: a thumbnail and two lines, so nothing moves when they land.
+      <LoadingStatus label={t('files.loading')} className="flex flex-col gap-1 px-2 py-2">
         {[0, 1, 2].map((row) => (
-          <div key={row} className="flex items-center gap-3">
-            <Skeleton className="size-avatar-lg" />
-            <Skeleton className="w-members" />
-          </div>
+          <SkeletonRow key={row} />
         ))}
       </LoadingStatus>
     );
   } else if (query.isError && query.data === undefined) {
     body = (
-      <ErrorState
-        title={t('files.error.title')}
-        body={t('files.error.body')}
-        retryLabel={t('common.retry')}
-        onRetry={readAgain}
-      />
+      // Inset as the panel's rows are: unframed, the failure starts where their words do, not at the panel's edge.
+      <div className="px-4">
+        <ErrorState
+          title={t('files.error.title')}
+          body={t('files.error.body')}
+          retryLabel={t('common.retry')}
+          onRetry={readAgain}
+        />
+      </div>
     );
   } else if (files.length === 0) {
     body = <PanelEmpty glyph="file" title={t('files.empty.title')} body={t('files.empty.body')} />;

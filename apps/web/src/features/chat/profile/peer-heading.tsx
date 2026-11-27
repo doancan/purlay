@@ -45,7 +45,7 @@ export const PeerHeading = ({
           aria-describedby={hintId}
           aria-pressed={open}
           aria-controls={open ? PROFILE_PANEL_ID : undefined}
-          className="max-w-full truncate rounded-sm hover:text-accent-text"
+          className="max-w-full truncate rounded-sm transition-colors duration-hover ease-standard hover:text-accent-text aria-pressed:text-accent-text"
           onClick={() => {
             if (open) side.close();
             else side.open('profile');

@@ -220,7 +220,7 @@ describe('a channel’s incident', () => {
           : Promise.resolve({ incident: null }),
     });
     const panel = await openPanel(view);
-    expect(within(panel).getByText('The incident did not load.')).toBeDefined();
+    expect(within(panel).getByText('Couldn’t load the incident')).toBeDefined();
     failing = false;
     await person().click(within(panel).getByRole('button', { name: 'Retry' }));
     await settle();
@@ -645,7 +645,7 @@ describe('a channel’s incident', () => {
         },
       });
       const panel = await openPanel(view);
-      expect(within(panel).getByText('Nobody is responding yet.')).toBeDefined();
+      expect(within(panel).getByText('Nobody is responding yet')).toBeDefined();
       await person().click(within(panel).getByRole('button', { name: 'Bring someone in…' }));
       // The channel's members not responding, never the person themselves: they have their own button.
       expect(view.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
@@ -792,7 +792,7 @@ describe('a channel’s incident', () => {
         },
       });
       const panel = await openPanel(view);
-      expect(within(panel).getByText('No runbook linked.')).toBeDefined();
+      expect(within(panel).getByText('No runbook linked')).toBeDefined();
       await person().click(within(panel).getByRole('button', { name: 'Link the runbook' }));
       const field = within(panel).getByRole('textbox', { name: 'Runbook link' });
       await person().clear(field);
@@ -806,7 +806,7 @@ describe('a channel’s incident', () => {
       await settle();
       await person().click(within(panel).getByRole('button', { name: 'Remove' }));
       await settle();
-      expect(within(panel).getByText('No runbook linked.')).toBeDefined();
+      expect(within(panel).getByText('No runbook linked')).toBeDefined();
       expect(asked).toEqual([
         { runbookUrl: 'https://runbooks.example.test/db' },
         { runbookUrl: null },

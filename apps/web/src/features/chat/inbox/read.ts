@@ -38,7 +38,7 @@ const readIn = (
  * Marks these read in every cached view of the workspace's inbox. A row read stays in the Unread
  * view, muted, until the person looks again, so nothing jumps out from under the pointer.
  */
-export const markLocally = (
+const markLocally = (
   client: QueryClient,
   workspaceId: string,
   read: (notification: Notification) => boolean,

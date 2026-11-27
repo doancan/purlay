@@ -311,9 +311,12 @@ describe('server account operations', () => {
     });
     await person().click(await view.findByRole('button', { name: 'Lift suspension' }));
     expect(await view.findByText('Change saved')).toBeDefined();
-    expect(
-      view.getByRole('button', { name: 'Grant administrator access' }).hasAttribute('disabled'),
-    ).toBe(true);
+    const grant = view.getByRole('button', { name: 'Grant administrator access' });
+    expect(grant.hasAttribute('disabled')).toBe(true);
+    // A dead button says why, on a line of its own that the button is described by.
+    const reason = document.getElementById(grant.getAttribute('aria-describedby') ?? '');
+    expect(reason?.tagName).toBe('P');
+    expect(reason?.textContent).not.toBe('');
     await person().click(view.getByRole('button', { name: 'Suspend' }));
     await person().click(within(view.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
     expect(view.queryByRole('dialog')).toBeNull();

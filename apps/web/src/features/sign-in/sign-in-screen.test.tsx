@@ -78,7 +78,7 @@ describe('the sentence for each reason a sign-in came back unfinished', () => {
       'This Purlay server makes accounts by invitation only — ask someone on it for an invitation link.',
     );
     expect(await saidAt(signInFailureHref('signup-closed'), 'tr')).toBe(
-      'Bu Purlay sunucusunda hesap yalnızca davetle açılır — sunucudaki birinden davet bağlantısı iste.',
+      'Bu Purlay sunucusunda hesap yalnızca davetle açılır — sunucudaki birinden davet bağlantısı isteyin.',
     );
   });
 
@@ -260,7 +260,7 @@ describe('what the screen offers is what the server has connected', () => {
       [
         'tr',
         'Google ile devam et',
-        'Google yanıt vermedi. Biraz sonra yeniden dene ya da başka bir yolla gir.',
+        'Google yanıt vermedi. Biraz sonra yeniden deneyin ya da başka bir yolla girin.',
       ],
     ] as const) {
       test(`its label and its unavailable sentence, in ${locale}`, async () => {
@@ -278,7 +278,7 @@ describe('what the screen offers is what the server has connected', () => {
       ],
       [
         'tr',
-        'Bu giriş adresin sana ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsan öyle gir ya da bir davet iste.',
+        'Bu giriş adresin size ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsanız öyle girin ya da bir davet isteyin.',
       ],
     ] as const) {
       test(`an address it does not vouch for is said without naming a provider, in ${locale}`, async () => {
@@ -342,7 +342,7 @@ describe('what the screen offers is what the server has connected', () => {
     [
       'tr',
       'Bu sunucu henüz kurulmadı',
-      'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanla yine de girebilirsin. Sunucuyu sen yönetiyorsan kurulumu tarayıcıdan tamamlayabilirsin.',
+      'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanızla yine de girebilirsiniz. Sunucuyu siz yönetiyorsanız kurulumu tarayıcıdan tamamlayabilirsiniz.',
       'Bu sunucuyu kur',
     ],
   ] as const) {
@@ -494,7 +494,7 @@ describe('signing in for the native application (D-191)', () => {
     try {
       const view = await visit('tr');
       expect(
-        view.getByText('Purlay for Mac uygulamasına devam etmek için giriş yap.'),
+        view.getByText('Purlay for Mac uygulamasına devam etmek için giriş yapın.'),
       ).toBeDefined();
     } finally {
       window.sessionStorage.clear();

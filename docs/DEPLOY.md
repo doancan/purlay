@@ -193,6 +193,11 @@ Run from a shell without conflicting exported Compose or stack settings. The com
 shared by the operators of this project. Keep the saved Dockhand image pin in sync with the successful
 release before any later manual Dockhand redeploy.
 
+After a repository transfer, check the image references of the running API and scheduler in Dockhand.
+The containers keep the old registry path until the stack configuration is updated. Confirm the host
+can pull the tested digest from the new registry path, then use it for the staged release. Save that
+same digest in Dockhand after verifying both readers. Keep the existing project and volumes.
+
 Supply a recent protected custom PostgreSQL dump from this stack, copied out of the rolling backup
 directory. Keep the attachment volume's separate backup. The command checks the dump's archive listing
 and records its SHA-256. The operator is responsible for the source, freshness and restore verification
@@ -223,6 +228,15 @@ The command exits on a partial rollout. If API readiness fails after the switch,
 migration and readiness logs before deciding how to recover. The command leaves the scheduler stopped
 in that case.
 
+To confirm a completed staged release, use the same Docker context and `PURLAY_DOCKHAND_RECEIPTS`
+directory. The command compares both healthy readers, their tested image revision, and the retained
+initializer completion with the recorded receipt. It refuses missing or mismatched evidence without
+pulling an image, running a container, or writing a receipt. Verify the protected backup separately.
+
+```bash
+scripts/stage-dockhand-release.sh "$COMPOSE_PROJECT" --verify "$TESTED_GHCR_DIGEST" "$TESTED_GIT_COMMIT"
+```
+
 For an empty project, pass `--fresh` in place of the dump. Compose brings up PostgreSQL and Garage,
 waits for the managed initializer to succeed, then starts API and scheduler in dependency order. To
 verify the managed initializer for a manually deployed stack, use:
@@ -235,8 +249,65 @@ For Compose, infrastructure or credential changes, plan the full stack rollout i
 the stack-level **Redeploy** action intentionally. [Dockhand stack controls](https://dockhand.pro/manual/#stacks-redeploy-options)
 [Compose dependency ordering](https://docs.docker.com/compose/how-tos/startup-order/)
 
-Dockhand does not do what `scripts/deploy.sh` does: there is **no backup taken at the switch and no automatic
-way back**, and the database migrates as the new API starts. The stack's `backup` service is the answer: it
+### Schedule staged releases every 15 minutes
+
+Use the same exclusive deployment operator and private stack environment as for an explicit staged release.
+First complete a staged release with both readers pinned to the same tested digest. Keep the Dockhand
+per-container schedules, scheduled Git redeploy and deployment webhooks off for this project while the timer
+owns updates. The timer account needs its existing unattended Docker and private GHCR pull access, an
+operator-maintained Purlay Git checkout, and access to the public GitHub API. Use Docker Compose, Buildx,
+Git, `curl` and `jq`. Keep the receipt directory and the protected dump directory on operator-owned storage
+outside the rotating backup volume. Preserve attachment-volume backups separately.
+
+The command checks that `:release` resolves to the same immutable manifest as the tested `:sha-<commit>` tag
+for the latest published GitHub release on `main`. An update must also advance from the revision currently
+running on both readers. The command takes and reads through a fresh custom PostgreSQL dump before preparing
+storage. Temporary backup or release metadata failures before starting the initializer can retry on the next
+tick. Unverified temporary dumps are discarded after a failed check. Once the initializer is about to start,
+the command records the single unattended attempt and retains that verified backup. A refused or interrupted
+attempt leaves its evidence for the operator to inspect and recover with the explicit release command.
+The command checks the published release and registry digest again before touching the old readers. A repeated
+healthy digest rechecks completion without taking another dump. Retain the automatic dumps according to
+the same restore policy as the manual release dumps.
+Stop this timer for recovery and planned maintenance. Resolve any pending preflight before enabling it again.
+
+For a Linux host with a systemd user manager, place these two units in the existing operator's user unit
+directory and substitute the actual absolute paths and project name. Keep credentials in their existing
+private locations. The existing operator's user manager must run while that account is logged out.
+
+`purlay-release.service`
+
+```ini
+[Unit]
+Description=Stage the tested Purlay release
+
+[Service]
+Type=oneshot
+TimeoutStartSec=45min
+Environment=PURLAY_DOCKHAND_RECEIPTS=/srv/purlay/release-receipts
+ExecStart=/srv/purlay/source/scripts/stage-dockhand-release.sh purlay /srv/purlay/stack.env --follow-release ghcr.io/purlay/purlay-api /srv/purlay/release-backups
+```
+
+`purlay-release.timer`
+
+```ini
+[Unit]
+Description=Check for a tested Purlay release every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Run the service once and verify the journal before enabling the timer. The timer leaves a running release
+check active at the next quarter-hour. [systemd timer configuration](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html)
+
+Dockhand's direct per-container update takes no backup at the switch. The database migrates as the new API
+starts. The stack's recurring backup service
 dumps the database every `BACKUP_EVERY_MINUTES` (60) into the `backups` volume and keeps the newest
 `BACKUP_KEEP` (48), so a dump is at most an hour old when an update lands; it shows *unhealthy* in Dockhand if
 dumps stop. To go back after a bad release, stop `api` and `scheduler`, restore the newest dump from before it,

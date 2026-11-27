@@ -50,6 +50,8 @@ describe('drafts', () => {
     expect(view.getByText('Pool size to 20?')).toBeDefined();
     expect(view.getByText('Yes, after the window.')).toBeDefined();
     expect(view.getByText('· in a thread')).toBeDefined();
+    // A channel is named with its #, as Saved names it.
+    expect(view.getByText('#api')).toBeDefined();
     expect(view.queryByText('lost')).toBeNull();
   });
 

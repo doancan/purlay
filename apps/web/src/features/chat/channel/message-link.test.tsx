@@ -166,7 +166,7 @@ describe('opening a link to a message', () => {
     });
     await settle();
     expect(
-      view.getByText("That message no longer exists, or you can't see it.").getAttribute('role'),
+      view.getByText('That message no longer exists, or you can’t see it.').getAttribute('role'),
     ).toBe('status');
     expect(rowOf(99)).not.toBeNull();
     view.unmountAll();
@@ -182,7 +182,7 @@ describe('opening a link to a message', () => {
       },
     });
     await settle();
-    expect(view.getByText("That message no longer exists, or you can't see it.")).toBeDefined();
+    expect(view.getByText('That message no longer exists, or you can’t see it.')).toBeDefined();
     expect(rowOf(99)).not.toBeNull();
     view.unmountAll();
   });
@@ -224,7 +224,7 @@ describe('copying a link to a message', () => {
     await person().click(within(row).getByRole('button', { name: 'More' }));
     await person().click(view.getByRole('menuitem', { name: 'Copy link' }));
     await settle();
-    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
+    expect(view.getByText('Couldn’t copy. Select the text and copy it yourself.')).toBeDefined();
     view.unmountAll();
   });
 });

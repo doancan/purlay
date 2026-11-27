@@ -31,7 +31,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme (every grey, the navigation's too, from one neutral family on even lightness steps: D-343), the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size; what the person arranges about the sidebar is what it shows, not where things sit (D-195). Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -60,8 +60,8 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   later (D-316). A tab carries a count only when it lists what is *waiting for a moment* — Reminders and Scheduled — and not for what is kept or done (Drafts, Sent, Saved's In progress, Archived and Completed): a count there would be a number to keep at zero. Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its first place sits in the same top band as the sidebar's workspace row and the screen's header (D-317).
-- **Sidebar (264px)** — a band as tall as the header, ending on the same line (D-317), holds the workspace's row (D-209): its mark, its name and, under it, your role and how many
-  are in it, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
+- **Sidebar (264px)** — a band as tall as the header, ending on the same line (D-317), holds the workspace's row (D-209): one line, a control tall, of its mark, its name and a chevron, your role and how many
+  are in it heading the menu it opens (D-347) — the one door to the **workspace menu** (the workspaces to switch to, as
   radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
   channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
   **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
@@ -231,13 +231,9 @@ your thread* when the person started it, *replied in a thread you're in* when th
 in “…”*, the newest replier's avatar, who replied (*Alice, Bob and 1 other*), the newest one's time and
 words, unread while any of them is. Opening it, or its **Mark read**, reads every reply it gathers.
 
-**The inbox panel** (D-208). On a wide window the rail's Inbox opens a panel beside it rather than the
-page: the inbox's title and **Mark all read**, the four categories, the newest ten of the one chosen in
-rows a line shorter than the page's — the message in one line, **Mark read** as an icon — and **See all**
-at its foot, which opens the page on the same category. Opening a row reads it, closes the panel and goes
-to the message; the panel remembers its category while closed. It carries no count of its own (D-110).
-In a category, **Mark all read** reads the rows shown — "up to the newest" is the whole inbox's, and would
-read what the other categories hold. Below the narrow breakpoint the rail's Inbox is the link to the page.
+**The rail's Inbox** (D-208, amended). On every width it is the link to the inbox's page; no panel opens
+over the screen. It carries no count of its own (D-110). In a category, **Mark all read** reads the rows
+shown — "up to the newest" is the whole inbox's, and would read what the other categories hold.
 
 **The Reminders tab of Saved** (D-315). The messages the person asked to be reminded of, the soonest first,
 each row saying when (the absolute time, in the viewer's zone), who wrote it, where, and its words in two
@@ -1052,6 +1048,9 @@ is read.
 
 ## 7. Keyboard model
 
+Every shortcut on screen is printed by one component as the keyboard prints it: ⌘ ⇧ ⌥ ⌃ ↵ on a Mac, the modifiers in
+Apple's order, and Ctrl, Shift, Alt, Enter elsewhere, a cap per key (D-344). The table writes them in neutral words.
+
 | Key | Action |
 |---|---|
 | `Cmd/Ctrl+K` | Command palette — the views (open questions, inbox, saved, search), channels (public ones not joined, marked so), group conversations, people, every settings page the person may open, the theme and language; and, whatever was typed, **Search messages for “…”** as its last row, so a query never ends in nothing (D-157) |
@@ -1080,7 +1079,8 @@ ring on changes only its style and width and never fades it in from the text's o
 
 ## 8. Required states
 
-Every view implements all four, **and a test asserts each one renders** (D-53). An unhandled empty
+Every view implements all four, **and a test asserts each one renders** (D-53). A list's loading state is rows shaped
+like its loaded ones in the same card, and its error sits in that card too (D-346). An unhandled empty
 state is an incomplete feature, not a polish item (`CONTRIBUTING.md` §4) — a screen missing one is
 missing specified behaviour and does not merge.
 
@@ -1150,7 +1150,9 @@ says the minutes left. A mode you can forget you are in is a mode that loses you
 
 ## 9. Visual system
 
-Decided here so Phase 0 does not invent one at random.
+Decided here so Phase 0 does not invent one at random. The words on screen follow one set of rules in both languages:
+no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-348),
+and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-350); apostrophes are typographic and English is British (D-351).
 
 > **These values are tokens, and the tokens are the only source.** Colour, spacing, type scale,
 > radius, shadow, motion duration and easing are declared once, in `packages/tokens/tokens.json`,
@@ -1170,11 +1172,13 @@ Decided here so Phase 0 does not invent one at random.
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
 - **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread folds
-  on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, the
-  inbox panel, a tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
+  on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, a
+  tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
   fades as the dialog opens like the palette; a toast rises into its corner (D-211), above the sidebar's account row and not over it (D-322). No message entry
-  animation — at conversational speed it reads as lag. The selected tab of a side-by-side group slides to
-  its new place in 200ms. The one longer motion is a celebration: sending 🎉 (in a message or as a
+  animation — at conversational speed it reads as lag. The selected tab of a side-by-side group, and of every list's filter, slides to
+  its new place in 200ms. What the person adds to a list — an issue, a bookmark, a reaction — rises into its
+  place in 200ms over a fill of the accent that fades in four times that, so the eye finds it without a toast;
+  a message never does. The one longer motion is a celebration: sending 🎉 (in a message or as a
   reaction) sets off a one-shot SVG firework show over the screen (about 3s, one of five shows, never looping, the token gate's single
   exception). Everything is instant under reduced motion, and the firework is not drawn.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer

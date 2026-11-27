@@ -101,7 +101,7 @@ test.describe('send later', () => {
     const main = page.getByRole('main');
     await expect(main.getByRole('button', { name: 'Scheduled (1)' })).toBeVisible();
     await expect(main.getByText(words)).toBeVisible();
-    await expect(main.getByText('ops', { exact: true })).toBeVisible();
+    await expect(main.getByText('#ops', { exact: true })).toBeVisible();
 
     // Cancelling takes it from the list and from the server, and Undo is offered.
     await main.getByRole('button', { name: 'Cancel scheduled message' }).click();

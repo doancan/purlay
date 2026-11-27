@@ -33,7 +33,7 @@ Repeating them here as boxes to tick would be theatre. What is left is what only
 confirm:
 
 - [ ] Documentation updated **in this change** — a non-obvious choice is a numbered decision in
-      `docs/DECISIONS.md` with what was rejected and why
+      `docs/decisions/` (`bun run decision:new`) with what was rejected and why
 - [ ] The minimal delta the issue required; no unrelated refactor rode along
 - [ ] Contracts live in `@purlay/types`; no ad-hoc shape declared inside an app
 - [ ] **No rule was loosened to make this pass** — no new lint exception, no widened budget, no

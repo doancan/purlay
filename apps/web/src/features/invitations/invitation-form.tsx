@@ -156,7 +156,7 @@ export const InvitationForm = ({
       ) : mail ? (
         <MailForm invitations={invitations} />
       ) : (
-        <p className="text-label text-ink-muted">{t('invite.mail.off')}</p>
+        <p className="text-body text-ink-muted">{t('invite.mail.off')}</p>
       )}
       {mail && <p className="text-label text-ink-muted">{t('invite.mail.or')}</p>}
       {invitations.link !== null && (
