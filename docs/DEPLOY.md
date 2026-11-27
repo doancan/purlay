@@ -168,6 +168,14 @@ To check the client address, sign in, then in the `postgres` container
 `psql -U purlay -c 'SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1'` must be your address,
 not Nginx Proxy Manager's or Cloudflare's.
 
+The `release-image` workflow promotes the tested image to `:release` and `:vX.Y.Z` (D-262).
+Existing Dockhand stacks that follow `:release` can keep their `*/15 * * * *` per-container
+schedule for API and scheduler. Keep `storage-init` excluded with its `dockhand.update=false`
+label. Per-container updates can leave the initializer in `created`, and Docker can report
+exit code 0 in that state before the command has run. Verify completion by exact digest
+before recording the rollout. Use the staged command below for a release whose initializer
+must finish before the readers change. [Dockhand container labels](https://dockhand.pro/manual/#container-labels)
+
 ### Stage a tested release
 
 Use the staged command for an application-only image update to the existing, unmodified Dockhand Compose
@@ -202,7 +210,7 @@ from Docker before replacing readers. A refused initializer leaves the old API a
 and preserves the existing PostgreSQL, Garage and backup containers and the protected dump. The
 initializer can change Garage as it works, so keep the attachment backup even when staging fails.
 
-After preflight succeeds, the command drains the old scheduler, starts the new API and waits for it to
+After preflight succeeds, the command stops the old scheduler, starts the new API and waits for it to
 pass readiness after migrations, then starts the scheduler. It writes a completion receipt only once
 both readers are healthy at the tested digest. Keep the successful one-off container with its receipt
 to allow a subsequent invocation of the same release to verify completion without recreating readers.
