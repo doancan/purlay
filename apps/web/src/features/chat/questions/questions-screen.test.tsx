@@ -88,6 +88,24 @@ describe('grouping', () => {
 });
 
 describe('the list', () => {
+  test('a question under a day old says so, not that it has waited 0 days', async () => {
+    // The screen's age is the feed's clock, the real one here: the times are set from it.
+    const day = 86_400_000;
+    const ago = (ms: number): string => new Date(Date.now() - ms).toISOString();
+    const view = await visit(() =>
+      Promise.resolve(
+        asPage([
+          question(1, IDS.api, { createdAt: ago(60_000) }),
+          question(2, IDS.api, { createdAt: ago(3 * day + 60_000) }),
+        ]),
+      ),
+    );
+    const main = within(view.getByRole('main'));
+    expect(await main.findByText(/Waiting less than a day/)).toBeDefined();
+    expect(main.getByText(/Waiting 3 days/)).toBeDefined();
+    expect(main.queryByText(/Waiting 0 days/)).toBeNull();
+  });
+
   test('unanswered and assigned filters reach the server, and oldest-first sorts across channels', async () => {
     const asked: UnresolvedQuery[] = [];
     const first = question(1, IDS.api, {
@@ -274,11 +292,12 @@ describe('its states (UX §8)', () => {
     expect(screen.getByText(/the moment it has a reply and no resolution/)).toBeDefined();
     // Designed, not a blank: a tile with the resolved glyph above the title, centred.
     const heading = screen.getByRole('heading', { level: 2, name: 'Every thread is resolved' });
-    const tile = heading.previousElementSibling;
+    const state = heading.closest('section');
+    const tile = state?.firstElementChild;
     expect(tile?.getAttribute('aria-hidden')).toBe('true');
     expect(tile?.className).toContain('rounded-lg');
     expect(tile?.className).toContain('bg-success-subtle');
-    expect(heading.parentElement?.className).toContain('text-center');
+    expect(state?.className).toContain('text-center');
     await expectNoAxeViolations(screen.container);
   });
 
@@ -390,6 +409,22 @@ describe('the tabs', () => {
     expect(within(views).getByRole('link', { name: 'Feed' }).getAttribute('href')).toBe(
       `/w/acme/c/${IDS.incidents}`,
     );
+  });
+
+  test('on a narrow window, where the current tab is put away, the title carries the count and Feed keeps its name as a glyph', async () => {
+    const screen = await visit(() =>
+      Promise.resolve(asPage([question(2, IDS.api), question(3, IDS.api)])),
+    );
+    const heading = screen.getByRole('heading', { level: 1, name: 'Open questions' });
+    const beside = heading.nextElementSibling;
+    expect(beside?.textContent).toBe('2');
+    expect(beside?.className).toContain('max-narrow:inline-flex');
+    const feed = within(screen.getByRole('navigation', { name: 'Channel views' })).getByRole(
+      'link',
+      { name: 'Feed' },
+    );
+    expect(feed.querySelector('svg')).not.toBeNull();
+    expect(feed.querySelector('.max-narrow\\:hidden')?.textContent).toBe('Feed');
   });
 
   test('with no remembered channel Feed goes to the first one the person is in', async () => {

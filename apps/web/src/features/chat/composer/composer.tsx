@@ -805,7 +805,13 @@ const Inner = ({
     insideFence(text.slice(0, caretAt)) ||
     (ports.touchOnly?.() ?? false);
   const counter = (
-    <span aria-live="polite" className="ml-auto text-caption text-ink-muted">
+    <span
+      aria-live="polite"
+      className={cn(
+        'ml-auto text-caption tabular-nums',
+        left !== null && left < 0 ? 'text-danger-text' : 'text-ink-muted',
+      )}
+    >
       {left === null
         ? null
         : left >= 0
@@ -1079,8 +1085,10 @@ const Inner = ({
             }}
           />
           {/* The same buttons in a thread as in the channel (D-164): a reply is a message like any other. */}
-          <div className="flex items-center gap-3 pb-2 pl-2 pr-2 pt-1">
-            <span className="flex items-center gap-1">
+          {/* On a phone the targets are finger-sized and touch one another: with the row's desktop gaps the
+              delivery choice pushed Send past the card's edge in a direct message at 390px. */}
+          <div className="flex items-center gap-3 px-2 pb-2 pt-1 max-narrow:gap-1">
+            <span className="flex items-center gap-1 max-narrow:gap-0">
               <IconButton
                 label={t('composer.mention')}
                 glyph="mention"
@@ -1107,7 +1115,8 @@ const Inner = ({
                 <span
                   aria-hidden="true"
                   data-hints-divider=""
-                  className="mx-1 h-4 border-l-hairline border-border-subtle max-narrow:hidden touch-only:hidden"
+                  // As far from the last button as the row's gap puts the hints after it.
+                  className="ml-2 h-4 border-l-hairline border-border-subtle max-narrow:hidden touch-only:hidden"
                 />
               )}
             </span>
@@ -1120,9 +1129,12 @@ const Inner = ({
             />
             {!compact && <TypingLine channelId={channelId} />}
             {counter}
-            {canSchedule && <SendLater onSchedule={scheduleLater} />}
-            {mayPrioritise && <PriorityChoice value={priority} onChange={setChosenPriority} />}
-            {sendButton}
+            {/* What decides how the message goes, one group beside the button that sends it. */}
+            <span className="flex shrink-0 items-center gap-2 max-narrow:gap-1">
+              {canSchedule && <SendLater onSchedule={scheduleLater} />}
+              {mayPrioritise && <PriorityChoice value={priority} onChange={setChosenPriority} />}
+              {sendButton}
+            </span>
           </div>
           {linkSelection !== null && (
             <Suspense fallback={null}>

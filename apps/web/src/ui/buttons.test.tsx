@@ -53,6 +53,22 @@ describe('Button', () => {
     expect(button.getAttribute('aria-busy')).toBe('true');
   });
 
+  test('answers a press, a step past its hover, in every variant', async () => {
+    const variants = ['primary', 'secondary', 'ghost', 'danger', 'dangerQuiet'] as const;
+    const { getAllByRole } = await renderApp(
+      <>
+        {variants.map((variant) => (
+          <Button key={variant} variant={variant}>
+            {variant}
+          </Button>
+        ))}
+      </>,
+    );
+    for (const button of getAllByRole('button')) {
+      expect(button.className.split(' ').some((name) => name.startsWith('active:'))).toBe(true);
+    }
+  });
+
   test('an idle button is not marked busy at all', async () => {
     const { getByRole } = await renderApp(<Button>Send</Button>);
     expect(getByRole('button').hasAttribute('aria-busy')).toBe(false);
@@ -122,6 +138,25 @@ describe('IconButton', () => {
     expect(tip.textContent).toContain('Esc');
   });
 
+  test('a toggle that is on keeps a fill at rest, so a toolbar shows it on', async () => {
+    const { getByRole } = await renderApp(
+      <IconButton label="Bold" glyph="bold" aria-pressed={true} />,
+    );
+    const classes = getByRole('button', { name: 'Bold' }).className.split(' ');
+    expect(classes).toContain('aria-pressed:bg-surface-200');
+    expect(classes).toContain('aria-pressed:text-ink');
+  });
+
+  test('the sidebar band’s is a row tall with a row’s corner, as the workspace’s door beside it', async () => {
+    const { getByRole } = await renderApp(
+      <IconButton label="Options" glyph="preferences" size="head" />,
+    );
+    const classes = getByRole('button').className.split(' ');
+    expect(classes).toContain('h-control');
+    expect(classes).toContain('rounded-lg');
+    expect(classes).not.toContain('h-switcher');
+  });
+
   test('clicks, and is inert when disabled', async () => {
     const onClick = mock(() => undefined);
     const { getByRole } = await renderApp(
@@ -152,7 +187,7 @@ describe('IconButton', () => {
 
 describe('Kbd', () => {
   test('is a <kbd>, so a screen reader knows it is a key', async () => {
-    const { container } = await renderApp(<Kbd>⌘K</Kbd>);
+    const { container } = await renderApp(<Kbd mac>⌘K</Kbd>);
     expect(container.querySelector('kbd')?.textContent).toBe('⌘K');
   });
 });

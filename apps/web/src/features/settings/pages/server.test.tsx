@@ -1429,7 +1429,7 @@ describe('Settings → Server → Accounts (D-233)', () => {
     await settle();
     expect(asked[0]).toBe('');
     expect(asked.at(-1)).toBe('zzz');
-    expect(card(view, 'Accounts').getByText('No account matches.')).toBeDefined();
+    expect(card(view, 'Accounts').getByText('No account matches')).toBeDefined();
     view.unmount();
   });
 });

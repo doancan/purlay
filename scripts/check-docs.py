@@ -68,8 +68,43 @@ for f, s in docs.items():
         else:
             resolved.append((f, doc, sec, TITLES[tgt][sec]))
 
+# ---- the decision record: one file per decision (D-344) ----------------------
+# `docs/decisions/<category>/D-<n>-<words>.md`, headed `# D-<n>. <title>`, and the open questions in their own file.
+# The checks below read them as the one record they were (`dec`), so each rule is the same rule it was when the
+# record was a single file: a decision is a `### D-n.` section, the open questions are `## Part D`.
+RECORD_DIR = 'docs/decisions/'
+RECORD_CATEGORIES = {'product', 'architecture', 'data', 'security', 'web-ui', 'mobile', 'operations', 'engineering', 'integrations'}
+_DECISION_FILE = re.compile(r'^docs/decisions/([^/]+)/D-(\d+)-[a-z0-9-]+\.md$')
+
+def is_record(f):
+    """The decision record, and the pointer the single file left where links to it still arrive."""
+    return f == 'docs/DECISIONS.md' or f.startswith(RECORD_DIR)
+
+_decision_files = []
+for f in sorted(docs):
+    if not f.startswith(RECORD_DIR) or f.count('/') < 3:
+        continue
+    m = _DECISION_FILE.match(f)
+    if m is None:
+        problems['a file in the decision record is not named D-<n>-<words>.md'].append(f)
+        continue
+    if m.group(1) not in RECORD_CATEGORIES:
+        problems['a decision is in a category that does not exist'].append(f)
+    head = re.match(r'# D-(\d+)\. \S', docs[f])
+    if head is None or head.group(1) != m.group(2):
+        problems["a decision's file name and its heading disagree"].append(f)
+        continue
+    _decision_files.append((int(m.group(2)), f))
+_decision_files.sort()
+# Two files of one number would read as one decision cited for two things.
+for (_a, _fa), (_b, _fb) in zip(_decision_files, _decision_files[1:]):
+    if _a == _b:
+        problems['two files hold the same decision'].append(f"{_fa}, {_fb}")
+dec = ''.join(re.sub(r'^# D-', '### D-', docs[f], count=1) + '\n' for _, f in _decision_files)
+dec += '\n## Part D — Open, deliberately\n\n' + re.sub(r'^#{1,6} D-', '### D-', docs.get('docs/decisions/open-questions.md', ''), flags=re.M) + '\n## End\n'
+
 # ---- identifier existence --------------------------------------------------
-dec, sch = docs['docs/DECISIONS.md'], docs['docs/SCHEMA.md']
+sch = docs['docs/SCHEMA.md']
 defined = {
  'D': {int(m) for m in re.findall(r'^### D-(\d+)\.', dec, re.M)},
  'I': {int(m) for m in re.findall(r'^\| I-(\d+) \|', sch, re.M)},
@@ -169,7 +204,7 @@ def is_changelog(f):
 figure_re = re.compile(r'(?<![\w.,/-])\d{7,}(?!\w)')
 figure_homes = collections.defaultdict(set)
 for f, s in docs.items():
-    if f == 'docs/DECISIONS.md' or is_changelog(f) or f.startswith(('docs/spikes/', 'docs/superpowers/')):
+    if is_record(f) or is_changelog(f) or f.startswith(('docs/spikes/', 'docs/superpowers/')):
         continue
     for figure in figure_re.findall(s):
         figure_homes[figure].add(f)
@@ -228,7 +263,7 @@ def historical_spans(body: str) -> list[tuple[int, int]]:
     return spans
 
 for f, body in docs.items():
-    if f in VERSION_OWNERS or f.startswith(VERSION_OWNER_PREFIXES):
+    if f in VERSION_OWNERS or is_record(f) or f.startswith(VERSION_OWNER_PREFIXES):
         continue
     skip = historical_spans(body)
     for m in version_re.finditer(body):
@@ -242,8 +277,8 @@ for f, body in docs.items():
 count_re = re.compile(r"(\d+)\s+decisions\b")
 real = len(defined["D"])
 for f, body in docs.items():
-    if is_changelog(f):
-        continue  # historical entries record what was true on their date
+    if is_changelog(f) or is_record(f):
+        continue  # historical entries, and decisions, record what was true on their date
     for m in count_re.finditer(body):
         if int(m.group(1)) != real:
             line = body[:m.start()].count("\n") + 1
@@ -258,11 +293,11 @@ for f, body in docs.items():
 # three hundred passes over the same text.
 _cited_elsewhere = set()
 for f, body in docs.items():
-    if f != "docs/DECISIONS.md" and not is_changelog(f):
+    if not is_record(f) and not is_changelog(f):
         _cited_elsewhere |= {int(m) for m in re.findall(r"\bD-(\d+)\b", body)}
 for n in sorted(defined["D"]):
     if n not in _cited_elsewhere:
-        problems["decision never cited outside DECISIONS.md"].append(f"D-{n}")
+        problems["decision never cited outside the decision record"].append(f"D-{n}")
 
 # ---- 12. section numbering is locked to its meaning -------------------------
 # A reference names a number. When the text at that number changes, every
@@ -317,7 +352,7 @@ if _open:
     for _n in re.findall(r'^### D-(\d+)\.', _open.group(0), re.M):
         problems['a decision is filed under the open questions'].append(f"D-{_n}")
 
-# ---- a merge left markers behind, or the decisions are out of order -----------
+# ---- a merge left markers behind ---------------------------------------------
 # #268 reached main with an unresolved conflict in two documents, and every gate
 # was green: nothing in this repository read for the markers, and the numbering
 # check counts decisions without looking at where they sit. Both are cheap to see.
@@ -342,10 +377,6 @@ for _p in FILES:
 if _scanned < 50:
     problems['the marker scan read almost nothing'].append(f"{_scanned} files")
 
-_order = [int(n) for n in re.findall(r'^### D-(\d+)\. ', docs.get('docs/DECISIONS.md', ''), re.M)]
-for _a, _b in zip(_order, _order[1:]):
-    if _b < _a:
-        problems['decisions are out of order'].append(f"D-{_b} comes after D-{_a}")
 
 # ---- retired claims: sentences that were true once and are not now ----------
 # A document that keeps saying what the code stopped doing is the defect the module review found five of (D-255):
@@ -385,7 +416,7 @@ for _f, _body in docs.items():
     if is_changelog(_f):
         continue
     for _pattern, _exempt, _why in RETIRED_CLAIMS:
-        if _f in _exempt:
+        if _f in _exempt or ('docs/DECISIONS.md' in _exempt and is_record(_f)):
             continue
         for _m in re.finditer(_pattern, _body):
             _line = _body.count('\n', 0, _m.start()) + 1

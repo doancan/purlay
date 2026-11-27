@@ -181,7 +181,7 @@ const GuestInvitationControls = ({
             <Skeleton />
           </LoadingStatus>
         ) : !ready ? (
-          <p className="text-label text-ink-muted">{t('guestInvite.notReady')}</p>
+          <p className="text-body text-ink-muted">{t('guestInvite.notReady')}</p>
         ) : null}
         {made !== null ? (
           <div className="flex min-w-0 flex-col gap-3">

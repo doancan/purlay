@@ -15,6 +15,7 @@
  * menu behind it: a sidebar that shows less than the workspace has must not look the same as one that shows all.
  */
 import { useI18n } from '../../../i18n/i18n-provider';
+import { cn } from '../../../ui/cn';
 import { IconButton } from '../../../ui/icon-button';
 import {
   Menu,
@@ -53,8 +54,9 @@ export const SidebarOptions = (): React.JSX.Element => {
                 : t('sidebar.options')
             }
             glyph="preferences"
+            // A row's height and corner, as the workspace's door beside it is.
             size="head"
-            {...(changed ? { className: 'bg-nav-hover text-nav-ink' } : {})}
+            className={cn(changed && 'bg-nav-hover text-nav-ink')}
           />
         }
       >

@@ -65,6 +65,13 @@ describe('the session gate', () => {
       aSignedInApi({ me: () => answer, channels: () => Promise.resolve([]) }),
     );
     expect(view.getByRole('alert').textContent).toContain("Couldn't reach Purlay");
+    // A page of its own, as the other screens without the shell are: its heading in the one main landmark.
+    expect(
+      within(view.getByRole('main')).getByRole('heading', {
+        level: 1,
+        name: "Couldn't reach Purlay",
+      }),
+    ).toBeDefined();
     expect(here(view)).toBe('/w/acme');
     answer = Promise.resolve(aSession());
     await person().click(view.getByRole('button', { name: 'Retry' }));

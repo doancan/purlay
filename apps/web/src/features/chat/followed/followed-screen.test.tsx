@@ -166,6 +166,37 @@ describe('followed conversations', () => {
     view.unmount();
   });
 
+  test('says what is unread only where there is something to read', async () => {
+    const replied = (n: number, replyCount: number): FollowedThread => {
+      const { root } = item(n);
+      return {
+        ...item(n),
+        root: { ...root, thread: root.thread === null ? null : { ...root.thread, replyCount } },
+      };
+    };
+    const answered = replied(2, 2);
+    const waiting = {
+      ...replied(3, 3),
+      unread: { count: 1, firstUnreadMessageId: aMessage(4).id },
+    };
+    const view = await visit({
+      followedThreads: () => Promise.resolve(page(item(1), answered, waiting)),
+    });
+    const quiet = await view.findByRole('link', { name: /Shift handover 1/ });
+    // Nobody answered yet: "0 replies" alone, not "No unread replies" as well.
+    expect(quiet.textContent).toContain('0 replies');
+    expect(quiet.textContent).not.toContain('No unread replies');
+    expect(view.getByRole('link', { name: /Shift handover 2/ }).textContent).toContain(
+      'No unread replies',
+    );
+    expect(view.getByRole('link', { name: /Shift handover 3/ }).textContent).toContain(
+      '1 unread reply',
+    );
+    // Each row keeps its own Unfollow, named in words whatever the width draws.
+    expect(view.getAllByRole('button', { name: 'Unfollow' })).toHaveLength(3);
+    view.unmount();
+  });
+
   test('links read conversations to the thread and waiting ones to their first unread reply, without acknowledging either', async () => {
     const waiting = { ...item(2), unread: { count: 1, firstUnreadMessageId: aMessage(3).id } };
     const view = await visit({ followedThreads: () => Promise.resolve(page(item(1), waiting)) });

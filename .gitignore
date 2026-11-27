@@ -227,3 +227,5 @@ Desktop.ini
 # The latency baseline CI keeps between runs (ci.yml).
 .budget/
 .playwright-mcp
+# local design-audit scratch (screenshots, helper)
+/.design-audit

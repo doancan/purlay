@@ -176,6 +176,11 @@ const api = Bun.spawn(['bun', '--no-env-file', 'run', 'apps/api/src/index.ts'], 
     ENCRYPTION_KEY: DEVELOPMENT_KEY,
     // A sandbox: the browser tests' outsiders make workspaces of their own (D-124, D-155).
     WORKSPACE_CREATORS: '*',
+    // One process on one revision is every reader there is, so a person's demo attests it and shows access policies
+    // and access management working (D-310, D-311). The browser tests' worlds keep them off: they test the refusal.
+    ...(databaseName.startsWith('purlay_e2e')
+      ? {}
+      : { WORKSPACE_ACCESS_READY: 'true', WORKSPACE_PROVISIONING_READY: 'true' }),
     ...(servedModules === undefined ? {} : { MODULES: servedModules }),
     ...(files === null ? {} : { STORAGE_DIRECTORY: files }),
     // The API serves the build itself, as the image does (D-61).

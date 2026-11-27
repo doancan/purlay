@@ -95,7 +95,7 @@ describe('administration operational evidence', () => {
       const card = within(
         await view.findByRole('region', { name: 'Backup and recovery evidence' }),
       );
-      expect(await card.findByText('No completed restore check has been reported.')).toBeDefined();
+      expect(await card.findByText('No completed restore check has been reported')).toBeDefined();
       if (status.backup !== null)
         expect(card.getByText(status.backup.databaseSha256)).toBeDefined();
       await person().click(card.getByRole('button', { name: 'Refresh' }));
@@ -205,7 +205,7 @@ describe('administration operational evidence', () => {
       { settings },
     );
     const card = within(await view.findByRole('region', { name: 'Test saved mail configuration' }));
-    expect(await card.findByText('No saved-configuration test has been recorded.')).toBeDefined();
+    expect(await card.findByText('No saved-configuration test has been recorded')).toBeDefined();
     await person().click(card.getByRole('button', { name: 'Send test email' }));
     expect(
       await card.findByText(

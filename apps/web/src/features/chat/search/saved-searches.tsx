@@ -8,6 +8,7 @@ import { useDescribeFailure } from '../../../data/failure';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useRoute } from '../../../router/router-provider';
 import { searchHref } from '../../../router/routes';
+import { Icon } from '../../../components/icon';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
 import { useWorkspace } from '../../shell/workspace';
@@ -54,17 +55,19 @@ export const SavedSearches = ({
   };
   return (
     <section className="flex flex-col gap-3" aria-label={t('search.saved')}>
-      <Button
-        variant="ghost"
-        glyph={open ? 'collapse' : 'expand'}
-        className="self-start"
+      {/* Drawn as the disclosures in the form above are (`ui/disclosure`), from the column's edge: a button,
+          not a `<details>`, because opening it is what fetches the list. */}
+      <button
+        type="button"
         aria-expanded={open}
         onClick={() => {
           setOpen(!open);
         }}
+        className="flex w-fit items-center gap-1 rounded-sm py-1 text-label text-ink-muted transition-colors duration-hover ease-standard hover:text-ink"
       >
+        <Icon name={open ? 'collapse' : 'expand'} size="sm" />
         {t('search.saved')}
-      </Button>
+      </button>
       {open && (
         <>
           {active && (
@@ -106,15 +109,19 @@ export const SavedSearches = ({
               {t('common.loading')}
             </p>
           )}
+          {/* What went wrong beside the way to try again: a Retry alone did not say what failed. */}
           {query.isError && (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                void query.refetch();
-              }}
-            >
-              {t('common.retry')}
-            </Button>
+            <div role="alert" className="flex flex-wrap items-center gap-3">
+              <p className="min-w-0 flex-1 text-label text-danger-text">{describe(query.error)}</p>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void query.refetch();
+                }}
+              >
+                {t('common.retry')}
+              </Button>
+            </div>
           )}
           {query.isSuccess && query.data.pages.every((page) => page.data.length === 0) && (
             <p className="text-label text-ink-muted">{t('search.noSaved')}</p>
@@ -152,6 +159,7 @@ export const SavedSearches = ({
           {query.hasNextPage && (
             <Button
               variant="secondary"
+              className="self-start"
               busy={query.isFetchingNextPage}
               onClick={() => {
                 void query.fetchNextPage();

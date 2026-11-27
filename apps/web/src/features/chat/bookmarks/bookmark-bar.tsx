@@ -3,7 +3,8 @@
  * one click away for everyone who can see the channel.
  *
  * - **What the server says** (`GET …/bookmarks`), kept current by `BOOKMARKS_UPDATED`. An add is shown
- *   when the server has it; a removal is taken off at once and put back if refused.
+ *   when the server has it; a removal is taken off at once and put back if refused. A list that could
+ *   not be read says so, with Retry, rather than passing for an empty one.
  * - **Members change it**: Add a bookmark, and × on a chip, are a member's; anyone else who can see the
  *   channel reads the row, and sees nothing at all when it is empty.
  * - **Undo** for a removal: the toast adds the same address and name back.
@@ -20,7 +21,9 @@ import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { captureAccess } from '../../../data/access-revision';
 import { useI18n } from '../../../i18n/i18n-provider';
+import { useArrivals, type ArrivalProps } from '../../../ui/arrival';
 import { Button } from '../../../ui/button';
+import { cn } from '../../../ui/cn';
 import { Dialog } from '../../../ui/dialog';
 import { TextField } from '../../../ui/text-field';
 import { useToast } from '../../../ui/toast';
@@ -151,21 +154,36 @@ const AddBookmarkDialog = ({
 const Chip = ({
   bookmark,
   onRemove,
+  arrival,
 }: {
   readonly bookmark: ChannelBookmark;
   readonly onRemove: (() => void) | null;
+  /** Drawn arriving once when it was just added; the channel's bookmarks there on opening do not arrive. */
+  readonly arrival: ArrivalProps;
 }): React.JSX.Element => {
   const { t } = useI18n();
   return (
-    <li className="group/chip relative flex shrink-0 items-center rounded-pill border-hairline border-border-subtle bg-surface-050 transition-colors duration-hover ease-standard hover:bg-surface-200 animate-pop-in">
+    <li
+      {...arrival}
+      className="group/chip relative flex shrink-0 items-center rounded-pill border-hairline border-border-subtle bg-surface-050 transition-colors duration-hover ease-standard hover:bg-surface-200 data-arrived:animate-arrive"
+    >
       <a
         href={bookmark.url}
         target="_blank"
         rel="noopener noreferrer"
         title={bookmark.url}
-        className="flex max-w-field items-center gap-1 rounded-pill px-3 py-1 text-label text-ink group-hover/chip:pr-1 group-focus-within/chip:pr-1"
+        className="flex max-w-field items-center gap-1 rounded-pill px-3 py-1 text-label text-ink"
       >
-        <Icon name="link" size="sm" />
+        {/* The × takes this glyph's place under the pointer or focus, so the chip never changes width. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            'inline-flex size-icon-md shrink-0 items-center justify-center text-ink-subtle',
+            onRemove !== null && 'group-focus-within/chip:invisible group-hover/chip:invisible',
+          )}
+        >
+          <Icon name="link" size="sm" />
+        </span>
         <span className="truncate">{bookmark.title}</span>
       </a>
       {onRemove !== null && (
@@ -173,7 +191,7 @@ const Chip = ({
           type="button"
           aria-label={t('bookmarks.removeOf', { name: bookmark.title })}
           onClick={onRemove}
-          className="mr-1 hidden size-icon-md items-center justify-center rounded-pill text-ink-muted hover:text-ink focus-visible:flex group-hover/chip:flex group-focus-within/chip:flex"
+          className="absolute inset-y-0 left-3 my-auto hidden size-icon-md items-center justify-center rounded-pill text-ink-muted hover:text-ink focus-visible:flex group-hover/chip:flex group-focus-within/chip:flex"
         >
           <Icon name="close" size="sm" />
         </button>
@@ -200,6 +218,7 @@ export const BookmarkBar = ({
   });
   const member = channel.state !== null;
   const bookmarks = query.data ?? [];
+  const arrival = useArrivals(query.data?.map((bookmark) => bookmark.id));
   const stillCurrent = captureAccess(client, key);
 
   const add = async (input: Added): Promise<void> => {
@@ -240,19 +259,23 @@ export const BookmarkBar = ({
     );
   };
 
+  // A list nobody could read is not an empty one: said, with Retry, to members and readers alike.
+  const unread = query.isError && query.data === undefined;
   // Nothing to read and nothing this person may add: no row at all.
-  if (query.isPending || (bookmarks.length === 0 && !member)) return null;
+  if (query.isPending || (bookmarks.length === 0 && !member && !unread)) return null;
 
   return (
     <nav
       aria-label={t('bookmarks.label')}
-      className="flex shrink-0 items-center gap-2 overflow-x-auto border-b-hairline border-border-subtle px-4 py-2"
+      className="flex shrink-0 items-center gap-2 border-b-hairline border-border-subtle px-4 py-2"
     >
+      {/* The chips scroll on their own, so a long row never pushes "Add a bookmark" out of sight. */}
       {bookmarks.length > 0 && (
-        <ul className="flex items-center gap-2">
+        <ul className="flex min-w-0 items-center gap-2 overflow-x-auto">
           {bookmarks.map((bookmark) => (
             <Chip
               key={bookmark.id}
+              arrival={arrival(bookmark.id)}
               bookmark={bookmark}
               onRemove={
                 member
@@ -265,7 +288,27 @@ export const BookmarkBar = ({
           ))}
         </ul>
       )}
-      {member && bookmarks.length < BOOKMARKS_MAX && (
+      {unread && (
+        <p
+          role="alert"
+          className="flex min-w-0 items-center gap-2 py-1 text-label text-danger-text"
+        >
+          <Icon name="failed" size="sm" />
+          {t('bookmarks.loadFailed')}
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            className="underline"
+            disabled={query.isFetching}
+            onClick={() => {
+              void query.refetch();
+            }}
+          >
+            {t('common.retry')}
+          </button>
+        </p>
+      )}
+      {member && !unread && bookmarks.length < BOOKMARKS_MAX && (
         <>
           <button
             type="button"

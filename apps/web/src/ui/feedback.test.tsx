@@ -36,6 +36,21 @@ describe('loading', () => {
     const { container } = await renderApp(<Skeleton className="w-sidebar" />);
     expect(container.firstElementChild?.className).toContain('w-sidebar');
   });
+
+  test('a size or a corner from the caller replaces a line’s, which would otherwise win', async () => {
+    const { container } = await renderApp(
+      <>
+        <Skeleton className="size-avatar-lg rounded-md" />
+        <Skeleton className="w-1/3" />
+      </>,
+    );
+    const [tile, line] = Array.from(container.children).map((block) => block.className.split(' '));
+    expect(tile).not.toContain('h-3');
+    expect(tile).not.toContain('rounded-sm');
+    expect(tile).toContain('size-avatar-lg');
+    expect(tile).toContain('rounded-md');
+    for (const name of ['h-3', 'rounded-sm', 'w-1/3']) expect(line).toContain(name);
+  });
 });
 
 describe('EmptyState', () => {
@@ -164,11 +179,11 @@ describe('TextField', () => {
 });
 
 describe('a skeleton row', () => {
-  test('is the outline of a message row: an avatar square and two lines, hidden from assistive technology', async () => {
+  test('is the outline of a panel row: a thumbnail’s tile and two lines, hidden from assistive technology', async () => {
     const { container } = await renderApp(<SkeletonRow />);
     const row = container.firstElementChild as HTMLElement;
     expect(row.getAttribute('aria-hidden')).toBe('true');
-    expect(row.querySelector('.size-avatar-lg.rounded-lg')).not.toBeNull();
+    expect(row.querySelector('.size-avatar-lg.rounded-md')).not.toBeNull();
     expect(row.querySelectorAll('.h-3')).toHaveLength(2);
   });
 });

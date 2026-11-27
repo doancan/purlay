@@ -8,7 +8,7 @@
  * found.
  */
 import { expect, test } from './fixtures';
-import { isNarrow, openNav, railLink, shellReady } from './support';
+import { openNav, railLink, shellReady } from './support';
 
 test.describe('the inbox', () => {
   test('a mention is in it; opening it goes to the channel and reads it', async ({
@@ -30,18 +30,9 @@ test.describe('the inbox', () => {
     // and the inbox's own.
     await page.goto(`/w/${tenant.slug}/questions`);
     await shellReady(page);
-    // Wide, the rail's Inbox opens its panel (D-208); narrow, it is the link to the page.
-    if (isNarrow(page)) {
-      await (await railLink(page, 'Inbox')).click();
-      await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
-    } else {
-      await openNav(page);
-      await page
-        .getByRole('navigation', { name: 'Places' })
-        .getByRole('button', { name: /^Inbox/ })
-        .click();
-      await expect(page.getByRole('dialog', { name: 'Inbox' })).toBeVisible();
-    }
+    // The rail's Inbox is the link to the page at every width (D-208, amended).
+    await (await railLink(page, 'Inbox')).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
 
     const row = page.getByRole('button', { name: new RegExp(made.name) });
     await expect(row).toContainText('Carol Reyes mentioned you');

@@ -1093,7 +1093,8 @@ runs it against a PostgreSQL of its own on a private network in CI and checks li
 check, the absence of a shell, and that `/` is the client's shell naming a script that is served and
 cached for good; `image.yml` runs on every pull request (so it can be required), and on main builds the image once, pushes it by digest with provenance and an SBOM, smoke-tests that digest and only then tags it. The
 middle stage builds the client; only its `dist` reaches the runtime stage, which sets `CLIENT_DIST` to it
-(D-61).
+(D-61). A page asked for while that directory is being replaced gets a short 503 that refreshes itself, never the
+JSON error envelope (D-348).
 
 **Migrations on start, for any number of nodes.** With `MIGRATE_ON_START=true` the process calls the
 migrator after its listener opens. The migrator's advisory lock, polled without holding a transaction open

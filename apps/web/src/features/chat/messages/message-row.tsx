@@ -50,6 +50,9 @@ import { MessageActions } from './message-actions';
 import { useRowStops } from './row-stops';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 
+/** `HH:mm`, the tail of a `datetime-local` value (`YYYY-MM-DDTHH:mm`). */
+const CLOCK_LENGTH = 5;
+
 export interface MessageRowProps {
   readonly message: Message;
   /** Where the message is on its way to the server; `sent` for everything the server has. */
@@ -174,7 +177,12 @@ const MessageRowView = ({
       title={absolute}
       className={cn('font-mono text-caption text-ink-subtle', grouped && !on && 'opacity-0')}
     >
-      {format.time(message.createdAt, new Date(nowMinute))}
+      {grouped
+        ? // The gutter is an avatar wide: a relative time ("12m ago", "10 dk. önce") ran out of it into
+          // the words beside it, so it shows the clock (HH:mm, five characters in every locale), as
+          // Slack's gutter does. The header keeps UX §3's relative time; the full time is on hover.
+          format.inputValue(message.createdAt).slice(-CLOCK_LENGTH)
+        : format.time(message.createdAt, new Date(nowMinute))}
     </time>
   );
   const sending = delivery === 'sending' && (
@@ -208,7 +216,9 @@ const MessageRowView = ({
         {grouped ? (
           <>
             {sending}
-            {time}
+            {/* In a box with the body's line height, so the time sits on the first line's baseline
+            rather than above it. */}
+            <span className="whitespace-nowrap text-body">{time}</span>
           </>
         ) : (
           <Avatar
@@ -247,7 +257,7 @@ const MessageRowView = ({
           {editing ? (
             <MessageEditor message={message} />
           ) : deleted ? (
-            <p>{t('message.deleted')}</p>
+            <p className="text-body">{t('message.deleted')}</p>
           ) : event !== null ? (
             <GitHubEventCard event={event} />
           ) : (

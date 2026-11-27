@@ -7,7 +7,7 @@
  * code owns each one; this fails when a document stops matching it.
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { CORE_COLUMNS_FOR_A_MODULE, TABLE_LIFECYCLE } from '@purlay/db';
 import { MAX_FRAME_BYTES, PAGE_LIMIT } from '@purlay/types';
 import { STARVATION_FACTOR } from './cli/budget-latency';
@@ -42,6 +42,14 @@ import {
 
 /** As prose: a line break in Markdown is a space, and rewrapping a paragraph changes nothing. */
 const prose = (path: string): string => readFileSync(path, 'utf8').replace(/\s+/g, ' ');
+/** The file of a decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-344). */
+const decisionFile = (number: number): string => {
+  const name = readdirSync('docs/decisions', { recursive: true, encoding: 'utf8' }).find((path) =>
+    new RegExp(`(?:^|/)D-${String(number)}-[^/]*\\.md$`).test(path),
+  );
+  if (name === undefined) throw new Error(`no file for decision ${String(number)}`);
+  return `docs/decisions/${name}`;
+};
 const api = prose('docs/API.md');
 const architecture = prose('docs/ARCHITECTURE.md');
 const modules = prose('docs/MODULES.md');
@@ -80,7 +88,7 @@ const capIn = (file: string, name: string): number => {
 
 describe('numbers the documents state', () => {
   test('durable push documents state the actual admission, lifetime, retry and maintenance bounds', () => {
-    const decision = prose('docs/DECISIONS.md').split('### D-307.')[1]?.toLowerCase() ?? '';
+    const decision = prose(decisionFile(307)).toLowerCase();
     const configuration = prose('docs/CONFIG.md').toLowerCase();
     const schema = prose('docs/SCHEMA.md').toLowerCase();
     const push = 'apps/api/src/modules/push/';

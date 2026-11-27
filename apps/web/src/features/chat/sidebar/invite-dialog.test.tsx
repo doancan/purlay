@@ -108,7 +108,7 @@ describe('invite people', () => {
     const dialog = await invite(view);
     await expectNoAxeViolations(dialog);
     // The open links are the Invitations page's: the quick dialog does not read them.
-    expect(view.queryByText('No links are open.')).toBeNull();
+    expect(view.queryByText('No open links')).toBeNull();
 
     await person().click(view.getByRole('button', { name: 'Make a link' }));
     await settle();

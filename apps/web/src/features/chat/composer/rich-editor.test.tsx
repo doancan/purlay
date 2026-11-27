@@ -3,7 +3,7 @@ import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
 import { act, fireEvent, render } from '@testing-library/react';
 import { createRef, type ComponentProps, type RefObject } from 'react';
 import * as views from 'prosemirror-view';
-import { AllSelection } from 'prosemirror-state';
+import { AllSelection, TextSelection } from 'prosemirror-state';
 import { baseKeymap, macBaseKeymap } from 'prosemirror-commands';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
 import { installDom } from '../../../testing/dom';
@@ -294,6 +294,43 @@ describe('the formatted editor adapter', () => {
       expect(editor.view.state.doc.firstChild?.type.name).toBe(expected);
     });
   }
+
+  for (const [prefix, language] of [
+    ['```', null],
+    ['```ts', 'ts'],
+  ] as const) {
+    test(`Enter after ${prefix} opens a code block and is not handed on to send`, () => {
+      const onKeyDown = mock((): void => undefined);
+      const editor = mount('', { onKeyDown });
+      editor.view.dispatch(editor.view.state.tr.insertText(prefix));
+      editor.key('Enter');
+      expect(onKeyDown).not.toHaveBeenCalled();
+      expect(editor.view.state.doc.firstChild?.type.name).toBe('code_block');
+      expect(editor.view.state.doc.firstChild?.attrs['language']).toBe(language);
+      expect(editor.view.state.doc.textContent).toBe('');
+      expect(editor.field.inCode).toBe(true);
+    });
+  }
+
+  test('Enter after backticks that are not a whole fence line is the composer’s to handle', () => {
+    const onKeyDown = mock((): void => undefined);
+    const editor = mount('', { onKeyDown });
+    editor.view.dispatch(editor.view.state.tr.insertText('see ```'));
+    editor.key('Enter');
+    expect(editor.view.state.doc.firstChild?.type.name).toBe('paragraph');
+    act(() => {
+      const { tr } = editor.view.state;
+      editor.view.dispatch(
+        tr
+          .delete(1, tr.doc.content.size - 1)
+          .insertText('```', 1)
+          .setSelection(TextSelection.create(tr.doc, 2)),
+      );
+    });
+    editor.key('Enter');
+    expect(editor.view.state.doc.firstChild?.type.name).toBe('paragraph');
+    expect(onKeyDown).toHaveBeenCalledTimes(2);
+  });
 
   test('emoticons convert on input or send, with immediate Backspace undo and code protection', () => {
     const editor = mount('hello :)');

@@ -470,7 +470,7 @@ describe('pinning, while other things happen', () => {
     expect(within(rowOf(view, 1)).queryByText('Pinned')).toBeNull();
     await openPins(view);
     expect(within(panelOf(view)).getByRole('alert').textContent).toContain(
-      'The pinned messages did not load.',
+      "Couldn't load pinned messages",
     );
     view.unmountAll();
   });
@@ -680,7 +680,7 @@ describe('the Pins panel', () => {
     });
     await openPins(view);
     const alert = within(panelOf(view)).getByRole('alert');
-    expect(alert.textContent).toContain('The pinned messages did not load.');
+    expect(alert.textContent).toContain("Couldn't load pinned messages");
     await expectNoAxeViolations(view.container);
 
     refuse = false;

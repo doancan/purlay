@@ -380,7 +380,9 @@ const BlockNode = ({
           </li>
         ) : (
           // The item stays a list item, so a numbered list keeps its number; the box sits inside it.
-          <li key={index}>
+          // In a bulleted list the box is the marker: no bullet beside it, and it hangs where the
+          // bullet would, so the words line up with a plain item's.
+          <li key={index} className={node.ordered ? undefined : '-ml-5 list-none'}>
             <div className="flex items-baseline gap-2">
               <Icon
                 name={item.checked ? 'task-done' : 'task-open'}

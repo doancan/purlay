@@ -254,7 +254,7 @@ describe('the header', () => {
     // Named as the sidebar names them, never by the handle (that is their profile's).
     expect(other.getByRole('heading', { level: 1 }).textContent).toBe('Bob');
     // A conversation with a person is headed by the person's own avatar, not a glyph.
-    expect(other.getByRole('heading', { level: 1 }).previousElementSibling?.textContent).toBe('BO');
+    expect(other.getByRole('heading', { level: 1 }).previousElementSibling?.textContent).toBe('B');
     expect(other.queryByText('No topic yet')).toBeNull();
     other.unmountAll();
     const note = await mountChannel({
@@ -415,7 +415,8 @@ describe('the feed, populated', () => {
     );
     expect(label?.previousElementSibling?.className).toContain('border-t-hairline');
     expect(label?.nextElementSibling?.className).toContain('border-t-hairline');
-    expect(label?.parentElement?.className).toContain('uppercase');
+    // Sentence case, as every other label is: the uppercase day shouted in a calm feed.
+    expect(label?.parentElement?.className).not.toContain('uppercase');
     expect(view.container.querySelector('[role="feed"]')?.className).not.toContain('max-w-');
     view.unmountAll();
   });

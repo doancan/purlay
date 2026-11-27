@@ -275,6 +275,11 @@ describe('what a row shows', () => {
     expect(view.queryByText('alice')).toBeNull();
     const time = view.container.querySelector('time');
     expect(time?.className).toContain('opacity-0');
+    // The clock, not "5m ago": a relative time is wider than the avatar's column it stands in.
+    expect(time?.textContent).toMatch(/^\d{2}:\d{2}$/);
+    expect(time?.getAttribute('title')).toContain('2026');
+    // Set in the body's line, so it sits on the first line's baseline and not above it.
+    expect(time?.parentElement?.className).toContain('text-body');
     const row = view.getByRole('article');
     act(() => {
       fireEvent.pointerOver(row);
@@ -413,7 +418,8 @@ describe('a revised message', () => {
         children: <p>thread summary</p>,
       }),
     );
-    expect(view.getByText('This message was deleted.')).toBeDefined();
+    // In the body's type, as the words it replaced were: no larger than the messages round it.
+    expect(view.getByText('This message was deleted.').className).toContain('text-body');
     expect(view.queryByText('edited')).toBeNull();
     expect(view.queryByRole('button', { name: /👍/ })).toBeNull();
     expect(view.queryByRole('button', { name: 'Add reaction' })).toBeNull();

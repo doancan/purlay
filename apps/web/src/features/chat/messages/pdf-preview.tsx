@@ -286,14 +286,17 @@ export const PdfPreview = ({
               {t(body)}
             </p>
           ) : (
-            <ErrorState
-              title={t('attachment.preview.failed')}
-              body={t(body)}
-              retryLabel={t('common.retry')}
-              onRetry={() => {
-                setAttempt((value) => value + 1);
-              }}
-            />
+            // Inset as the notes beside it are (p-4): unframed, the failure must not touch the stage's edge.
+            <div className="px-4">
+              <ErrorState
+                title={t('attachment.preview.failed')}
+                body={t(body)}
+                retryLabel={t('common.retry')}
+                onRetry={() => {
+                  setAttempt((value) => value + 1);
+                }}
+              />
+            </div>
           )
         ) : !active ? (
           <p role="status" className="p-4 text-body text-ink-muted">

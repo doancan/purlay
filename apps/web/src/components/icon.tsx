@@ -22,6 +22,7 @@
  */
 import {
   AlarmClock,
+  Archive,
   ArrowLeft,
   AtSign,
   BadgeCheck,
@@ -70,6 +71,7 @@ import {
   Ellipsis,
   ExternalLink,
   File,
+  Forward,
   GitMerge,
   GitPullRequest,
   Hash,
@@ -159,6 +161,8 @@ const glyphs = {
   'private-channel': Lock,
   search: Search,
   reply: Reply,
+  /** A message sent on to another conversation: the reply's arrow, pointing away. */
+  forward: Forward,
   send: SendHorizontal,
   resolved: CircleCheck,
   failed: CircleAlert,
@@ -179,6 +183,8 @@ const glyphs = {
   star: Star,
   save: Bookmark,
   saved: BookmarkCheck,
+  /** Put away, kept but out of the way: a saved message archived. */
+  archive: Archive,
   pin: Pin,
   unpin: PinOff,
   'deep-work': BellOff,

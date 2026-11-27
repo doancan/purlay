@@ -231,9 +231,9 @@ export const CodeBlock = ({
       ) : (
         <div className="relative">
           <pre
-            // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it.
-            // The clamp hides rather than scrolls, so it takes none.
-            tabIndex={clamped ? undefined : 0}
+            // A scrollable region is a tab stop, or a keyboard cannot reach what overflows it. Clamped too:
+            // the clamp hides the lines below, but a long line still scrolls sideways.
+            tabIndex={0}
             aria-label={`${language === '' ? t('message.code.plain') : language}, ${t('message.code.lines', { count })}`}
             className={cn(
               'scrollbar-thin overflow-x-auto p-3 text-code text-ink',

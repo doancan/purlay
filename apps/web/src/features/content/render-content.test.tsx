@@ -280,6 +280,14 @@ describe('markdown', () => {
     // A flex item is not a list item, and has no number to show.
     expect(items.some((item) => item.className.includes('flex'))).toBe(false);
     expect(view.getAllByRole('img')).toHaveLength(2);
+    expect(items.some((item) => item.className.includes('list-none'))).toBe(false);
+  });
+
+  test('in a bulleted list the task box is the marker: no bullet beside it, a plain item keeps its own', async () => {
+    const view = await mount('- [x] shipped\n- plain');
+    const [task, plain] = [...body(view).querySelectorAll('ul > li')];
+    expect(task?.className).toContain('list-none');
+    expect(plain?.className ?? '').not.toContain('list-none');
   });
 
   test('a task box says whether it is done, in the language of the page', async () => {
@@ -603,7 +611,8 @@ describe('a code block', () => {
     const pre = view.container.querySelector('pre');
     expect(pre?.className).toContain('max-h-code');
     expect(fade(view)?.getAttribute('aria-hidden')).toBe('true');
-    expect(pre?.getAttribute('tabindex')).toBeNull();
+    // Clamped, it still scrolls sideways, so it is still a tab stop (axe: scrollable-region-focusable).
+    expect(pre?.getAttribute('tabindex')).toBe('0');
     const open = view.getByRole('button', { name: 'Show all 14 lines' });
     expect(open.getAttribute('aria-expanded')).toBe('false');
     await person().click(open);

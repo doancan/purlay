@@ -72,7 +72,7 @@ export const Backups = (): React.JSX.Element => {
             )}
             <p className="text-caption text-ink-muted">{t('admin.backup.restoreLimit')}</p>
             <a
-              className="text-label text-accent-text underline"
+              className="self-start rounded-sm text-label text-accent-text hover:underline"
               href="https://github.com/purlay/purlay/blob/main/docs/DEPLOY.md"
             >
               {t('admin.backup.guide')}

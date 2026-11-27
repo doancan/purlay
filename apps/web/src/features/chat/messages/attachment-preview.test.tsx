@@ -144,7 +144,7 @@ describe('the preview in a message', () => {
     await person().click(view.getByRole('button', { name: 'Preview notes.md' }));
     await settle();
     const region = view.getByRole('region', { name: 'Preview of notes.md' });
-    expect(within(region).getByText('The file could not be read.')).toBeDefined();
+    expect(within(region).getByText("Couldn't read the file")).toBeDefined();
     await person().click(within(region).getByRole('button', { name: 'Retry' }));
     await settle();
     // A Markdown file is its own block (D-259), opened on its preview. A heading in a message is drawn

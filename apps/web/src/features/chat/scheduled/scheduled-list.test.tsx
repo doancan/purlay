@@ -190,10 +190,10 @@ describe('the list', () => {
     ]);
     await openTab(view);
     expect(within(view.getByRole('main')).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(rowAt(view, 0)).getByText('api')).toBeDefined();
+    expect(within(rowAt(view, 0)).getByText('#api')).toBeDefined();
     expect(within(rowAt(view, 0)).getByText('Today at 14:30')).toBeDefined();
     expect(within(rowAt(view, 0)).getByText('Today’s words')).toBeDefined();
-    expect(within(rowAt(view, 1)).getByText('deploys')).toBeDefined();
+    expect(within(rowAt(view, 1)).getByText('#deploys')).toBeDefined();
     expect(within(rowAt(view, 1)).getByText('· in a thread')).toBeDefined();
     expect(within(rowAt(view, 1)).getByText('Fri, Sep 11 at 06:00')).toBeDefined();
     expect(within(rowAt(view, 1)).getByText('2 files')).toBeDefined();

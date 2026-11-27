@@ -199,7 +199,9 @@ test.describe('the channel list', () => {
     await expect(channels.getByRole('alert')).toContainText("Couldn't load channels");
     // The people list is built from the same list (a direct message is a channel), so it says
     // so in its own section instead of showing a half-truth; the header and the footer stay.
-    await expect(sidebar.getByRole('region', { name: 'People' }).getByRole('alert')).toBeVisible();
+    await expect(sidebar.getByRole('region', { name: 'People' }).getByRole('alert')).toContainText(
+      "Couldn't load people",
+    );
     await expect(sidebar.getByRole('heading', { name: 'People' })).toBeVisible();
     failing = false;
     await channels.getByRole('button', { name: 'Retry' }).click();
