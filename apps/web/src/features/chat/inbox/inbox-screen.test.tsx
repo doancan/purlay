@@ -147,7 +147,7 @@ describe('the list', () => {
   test('a due reminder says so in each language, with the message it is about, and opens on it', async () => {
     for (const [locale, words] of [
       [undefined, 'Your message reminder is due'],
-      ['tr', 'Mesaj hatırlatıcının zamanı geldi'],
+      ['tr', 'Mesaj hatırlatıcınızın zamanı geldi'],
     ] as const) {
       const view = await visit(
         { notifications: () => Promise.resolve(page([told(6, 'reminder')])) },
@@ -323,7 +323,7 @@ describe('the states', () => {
       'tr',
     );
     expect(view.getByRole('heading', { level: 1, name: 'Gelen kutusu' })).toBeDefined();
-    expect(view.getByText(/Alice senden bahsetti/)).toBeDefined();
+    expect(view.getByText(/Alice sizden bahsetti/)).toBeDefined();
     expect(view.getByRole('button', { name: 'Tümünü okundu yap' })).toBeDefined();
     view.unmount();
   });
@@ -538,9 +538,9 @@ describe('one thread, one row (D-162)', () => {
       'tr',
     );
     const rows = view.getAllByRole('button', { name: /words/ }).map((b) => b.textContent);
-    expect(rows[0]).toContain('Alice ve Bob thread’ine yanıt verdi');
+    expect(rows[0]).toContain('Alice ve Bob thread’inize yanıt verdi');
     expect(rows[0]).toContain('“Who owns the cache?” thread’inde 3 yeni yanıt');
-    expect(rows[1]).toContain('Bob dahil olduğun bir thread’e yanıt verdi');
+    expect(rows[1]).toContain('Bob dahil olduğunuz bir thread’e yanıt verdi');
     expect(rows[1]).toContain('“Who owns the cache?” thread’inde');
     view.unmount();
   });

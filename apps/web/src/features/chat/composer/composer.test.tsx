@@ -255,7 +255,7 @@ describe('what it shows', () => {
       locale: 'tr',
       props: { channelId: IDS.api, channelName: 'Alice Chen' },
     });
-    expect(box().getAttribute('placeholder')).toBe('Mesaj yaz: Alice Chen');
+    expect(box().getAttribute('placeholder')).toBe('Mesaj yazın: Alice Chen');
   });
 
   test('is a labelled textarea for the channel, in one card with a send button, and no prompt prefix', async () => {
@@ -2490,7 +2490,7 @@ describe('attaching files (D-109, #370)', () => {
       new ApiError(409, 'TOO_MANY_PENDING_UPLOADS', 'many'),
       {
         en: 'Too many files waiting: send or remove some',
-        tr: 'Bekleyen dosya çok: gönder ya da birini kaldır',
+        tr: 'Bekleyen dosya çok: gönderin ya da birini kaldırın',
         retry: true,
       },
     ],
@@ -2509,7 +2509,7 @@ describe('attaching files (D-109, #370)', () => {
       new ApiError(401, 'UNAUTHENTICATED', 'who'),
       {
         en: 'Session ended: sign in again',
-        tr: 'Oturumun sona erdi: tekrar giriş yap',
+        tr: 'Oturumunuz sona erdi: tekrar giriş yapın',
         retry: true,
       },
     ],
@@ -2523,7 +2523,7 @@ describe('attaching files (D-109, #370)', () => {
       new ApiError(404, 'WORKSPACE_NOT_FOUND', 'gone'),
       {
         en: 'You no longer have access to this workspace',
-        tr: 'Bu çalışma alanına artık erişimin yok',
+        tr: 'Bu çalışma alanına artık erişiminiz yok',
         retry: false,
       },
     ],

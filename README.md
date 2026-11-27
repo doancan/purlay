@@ -156,7 +156,7 @@ documents.
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here: orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when, non-goals |
-| [`docs/decisions/`](docs/decisions/README.md) | **Why** — 348 decisions, one file each, with their rejected alternatives |
+| [`docs/decisions/`](docs/decisions/README.md) | **Why** — 349 decisions, one file each, with their rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/MODULES.md`](docs/MODULES.md) | How a module is declared, loaded, kept apart and removed |
 | [`docs/MODULE-GUIDE.md`](docs/MODULE-GUIDE.md) | What to run and write to add a module |

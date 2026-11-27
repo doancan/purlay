@@ -677,7 +677,7 @@ describe('reactions', () => {
       await person().click(view.getByRole('button', { name: '🎉, 1 tepki' }));
       expect(
         await view.findByText(
-          'Bir mesaja en fazla 3 tepki ekleyebilirsin. Başka bir tane eklemek için birini geri al.',
+          'Bir mesaja en fazla 3 tepki ekleyebilirsiniz. Başka bir tane eklemek için birini geri alın.',
         ),
       ).toBeDefined();
     });

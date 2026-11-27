@@ -106,7 +106,7 @@ describe('followed conversations', () => {
     ],
     [
       'tr',
-      'Takip ettiğin konuşmalarda okunmamış yanıt yok',
+      'Takip ettiğiniz konuşmalarda okunmamış yanıt yok',
       'Tümü',
       'Henüz takip edilen konuşma yok',
     ],

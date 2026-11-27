@@ -1170,7 +1170,7 @@ describe('Settings → Server — Google (D-251)', () => {
       'Google refused this client ID and secret. Check both against the Google Cloud console.',
     );
     expect(tr[words.what]).toBe(
-      'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştır.',
+      'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştırın.',
     );
     for (const key of [words.what, ...words.fix]) expect(tr[key]).not.toBe(en[key]);
   });

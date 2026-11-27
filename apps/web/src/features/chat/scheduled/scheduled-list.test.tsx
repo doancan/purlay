@@ -240,7 +240,7 @@ describe('the list', () => {
       { locale: 'tr' },
     );
     await openTab(view);
-    expect(view.getByText('Gönderilemedi: artık kanalda değilsin')).toBeDefined();
+    expect(view.getByText('Gönderilemedi: artık kanalda değilsiniz')).toBeDefined();
   });
 
   test('a pending one says nothing of failure', async () => {
@@ -465,7 +465,7 @@ describe('editing', () => {
     await person().click(view.getByRole('button', { name: 'Zamanlanmış mesajı düzenle' }));
     await settle();
     expect(
-      view.getByText('api içindeki taslağına geri taşındı, artık zamanlanmış değil.'),
+      view.getByText('api içindeki taslağınıza geri taşındı, artık zamanlanmış değil.'),
     ).toBeDefined();
   });
 

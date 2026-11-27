@@ -70,6 +70,15 @@ describe('the catalogues agree', () => {
       }
     }
   });
+
+  test('Turkish addresses the person as siz, never sen (D-349)', () => {
+    const sen =
+      /(?:^|[^\p{L}])(?:sen|seni|sana|senin|sende|senden)(?=[^\p{L}]|$)|\p{L}(?:misin|mısın|musun|müsün|[ae]bilirsin|[ae]mezsin|[ıiuü]yorsun)(?=[^\p{L}]|$)/iu;
+    const informal = Object.entries(tr).filter(([, message]) =>
+      text(message).some((form) => sen.test(form)),
+    );
+    expect(informal.map(([key]) => key)).toEqual([]);
+  });
 });
 
 describe('looking a message up', () => {

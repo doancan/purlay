@@ -287,7 +287,7 @@ describe('two-step verification', () => {
     const here = within(view.getByRole('region', { name: 'İki adımlı doğrulama' }));
     expect(here.getByText('Kapalı')).toBeDefined();
     await press(here, 'Aç…');
-    expect(here.getByText('Sen olduğunu parolanla doğrula.')).toBeDefined();
-    expect(here.getByLabelText('Parolan')).toBeDefined();
+    expect(here.getByText('Siz olduğunuzu parolanızla doğrulayın.')).toBeDefined();
+    expect(here.getByLabelText('Parolanız')).toBeDefined();
   });
 });

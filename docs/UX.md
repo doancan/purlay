@@ -1149,7 +1149,8 @@ says the minutes left. A mode you can forget you are in is a mode that loses you
 ## 9. Visual system
 
 Decided here so Phase 0 does not invent one at random. The words on screen follow one set of rules in both languages:
-no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-347).
+no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-347),
+and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-349).
 
 > **These values are tokens, and the tokens are the only source.** Colour, spacing, type scale,
 > radius, shadow, motion duration and easing are declared once, in `packages/tokens/tokens.json`,

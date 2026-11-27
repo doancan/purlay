@@ -200,11 +200,11 @@ describe('a person’s export of their own data', () => {
       },
       'tr',
     );
-    const kart = cardOf(turkish, 'Verilerin');
+    const kart = cardOf(turkish, 'Verileriniz');
     await person().click(within(kart).getByRole('button', { name: 'Verilerimi dışa aktar' }));
     await settle();
     expect(within(kart).getByRole('alert').textContent).toBe(
-      'Verilerinin bir dışa aktarımı zaten hazırlanıyor.',
+      'Verilerinizin bir dışa aktarımı zaten hazırlanıyor.',
     );
     expect(within(kart).getByText('Hazırlanıyor…')).toBeDefined();
   });

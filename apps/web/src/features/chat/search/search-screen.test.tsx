@@ -475,12 +475,12 @@ describe('narrowed to who wrote it (D-166)', () => {
     expect(within(view.container).getByRole('button', { name: 'Kimden Alice' })).toBeDefined();
     expect(
       view.getByText(
-        'Yazan: Alice. Görebildiğin tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
+        'Yazan: Alice. Görebildiğiniz tüm kanallara bakıldı. Silinmiş bir mesaj hiç bulunmaz.',
       ),
     ).toBeDefined();
     await person().click(within(view.container).getByRole('button', { name: 'Kimden Alice' }));
     expect(view.getByRole('menuitemradio', { name: 'Herkes' })).toBeDefined();
-    expect(view.getByRole('menuitemradio', { name: /Dogancan sen/ })).toBeDefined();
+    expect(view.getByRole('menuitemradio', { name: /Dogancan siz/ })).toBeDefined();
     view.unmount();
   });
 });

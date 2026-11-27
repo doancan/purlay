@@ -792,7 +792,7 @@ describe('focus', () => {
 describe('in Turkish', () => {
   test('every word is Turkish, and the groups keep their order', async () => {
     const { view, input } = await mount(apiWith(), `/w/acme/c/${IDS.api}`, 'tr');
-    expect(input().placeholder).toBe('Bir kanala, kişiye ya da görünüme git…');
+    expect(input().placeholder).toBe('Bir kanala, kişiye ya da görünüme gidin…');
     expect(view.getByText('Görünümler')).toBeDefined();
     expect(view.getByText('Ayarlar')).toBeDefined();
     await person().type(input(), 'zzz');
