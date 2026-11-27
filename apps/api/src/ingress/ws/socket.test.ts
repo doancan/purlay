@@ -40,6 +40,7 @@ const opening = async (
     log,
     userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
     attention: nobodyActive,
+    frameProjection: undefined,
   });
   const sent: unknown[] = [];
   const closed: { code: number; reason: string }[] = [];
@@ -77,6 +78,7 @@ describe('a socket whose identity cannot be read when it opens', () => {
       log,
       userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
       attention: nobodyActive,
+      frameProjection: undefined,
     });
     const closed: number[] = [];
     const sent: unknown[] = [];
@@ -134,6 +136,7 @@ describe('a socket that closes', () => {
       log,
       userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
       attention: nobodyActive,
+      frameProjection: undefined,
     });
     lifecycle.close(
       {
@@ -169,6 +172,7 @@ describe('who is online, in a process that does not run chat', () => {
       log,
       userWrites: inProcessRateLimiter(clock, SOCKET_FRAME_BUDGET),
       attention: nobodyActive,
+      frameProjection: undefined,
       ...(closedEvent === undefined ? {} : { closedEvent }),
       ...(announced ? { announcePresence } : {}),
     };

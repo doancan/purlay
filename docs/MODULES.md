@@ -111,7 +111,7 @@ What a module contributes besides is a slot of `BundledModule` in `composition.t
 each job its manifest names under `jobs` or `retention` and of no other (a build where the names and the work differ does
 not start; `bun run job` takes the work from the composition and names no module, D-260),
 `userErased`, `workspacePurge`, `export`, `personalExport` (the **data** hooks: the erasure of a person, D-139, the tables
-of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`
+of an export, D-140, and what a purge takes), `workspaceCreated`, `workspaceChannels`, `readAttachment`, `pushNotices`,
 `noticeWords` (what a push says of each kind of notice the manifest declares `pushed`, in the person's language, D-286 §9),
 `announcePresence` and `frameProjection` (how the socket tells who is online and checks each live frame, D-352)
 and `collatedColumns`. Its migrations are its set in `PRODUCT_MIGRATION_SETS` (`@purlay/db`). **Not yet fields of
@@ -1209,7 +1209,8 @@ table, so that §11's listing test reads only the modules.
   `auditActions`, `notifications`, `searchSources`, `publishes`, `consumes`, `uses` (`platform/module-kit/manifest.ts`, §2). It is not a trust boundary.
 - **`BundledModule`** — a manifest plus what the module contributes to the places the core leaves open: the slots in
   `composition.ts` (`userErased`, `workspacePurge`, `export`, `personalExport`, `workspaceCreated`, `workspaceChannels`,
-  `readAttachment`, `pushNotices`, `collatedColumns`, `jobWork`, `workers`, `frameHandlers`, `routes`, `factConsumers`, `ports`).
+  `readAttachment`, `pushNotices`, `announcePresence`, `frameProjection`, `collatedColumns`, `jobWork`, `workers`, `frameHandlers`,
+  `routes`, `factConsumers`, `ports`).
 - **Bundled** — carried by this build: in `bundledModules`. A bundled module has a row in §11, a set in
   `PRODUCT_MIGRATION_SETS` and routes the application registers, whether or not a process runs it.
 - **Run** — named by this process's `MODULES`. What a process *acts* with is the modules it runs; what it keeps whole is
