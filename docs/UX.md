@@ -1291,10 +1291,7 @@ the page's data fails; that failure offers **Retry** alongside the last known se
 view of a connection is cached, never its credentials. Cancelling a connection form forgets its secrets
 and unsaved fields; opening a replacement starts from the latest public settings. Each disconnect
 question starts afresh, including after a last-channel refusal was cancelled. The workspace-creator
-choices follow refreshed settings until an unsaved edit is made. Accounts kept from a previous search
-cannot be suspended while the new results are loading, and an account change holds the other account
-actions until it finishes. A failed account-list read asks to retry reading, without claiming a preceding
-account change was undone.
+choices follow refreshed settings until an unsaved edit is made.
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
   sentence on what that stops), the callback address with **Copy**, **Replace credentials** (or **Connect

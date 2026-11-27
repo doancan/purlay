@@ -7,6 +7,8 @@ export const WORKSPACE_DIRECTORIES_MAX = 8;
 export const DIRECTORY_CREDENTIALS_MAX = 5;
 /** All five live credentials plus the five most recent expired/revoked metadata rows. */
 export const DIRECTORY_CREDENTIAL_METADATA_MAX = 10;
+/** The longest directory identity a provider may name a person by, as the link table holds it. */
+export const DIRECTORY_EXTERNAL_ID_MAX = 255;
 export const DirectoryIdentityClaim = /* @__PURE__ */ Type.Union([
   /* @__PURE__ */ Type.Literal('sub'),
   /* @__PURE__ */ Type.Literal('oid'),

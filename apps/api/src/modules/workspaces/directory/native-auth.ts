@@ -9,6 +9,7 @@ import type {
 import { liveCompanySessionProof } from '../../../platform/company-session';
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import { normalisedMailbox } from '@purlay/types';
+import { DIRECTORY_EXTERNAL_ID_MAX } from '@purlay/types/workspace-directory';
 import type { Clock } from '../../../platform/clock';
 import { type EventBus } from '../../../platform/events';
 import { AppError } from '../../../platform/errors';
@@ -149,7 +150,8 @@ export const workspaceDirectoryNative = (
             .catch(() => null),
         );
         const ext = body?.['externalId'];
-        if (typeof ext !== 'string' || ext.length === 0 || ext.length > 255) throw forbidden();
+        if (typeof ext !== 'string' || ext.length === 0 || ext.length > DIRECTORY_EXTERNAL_ID_MAX)
+          throw forbidden();
         externalId = ext;
       } else if (userPath[1] !== undefined) {
         resource = await current.adapter.findOne<ResourceIdentity>({
