@@ -956,7 +956,11 @@ describe('integration: APNs joins the durable push queue', () => {
         ['urgent_repeat', originalNotificationId, 121],
         ['mention', originalNotificationId, 120],
       ] as const) {
-        await expect(newIntent(kind, notificationId, lifetimeSeconds)).rejects.toMatchObject({
+        const failure = await newIntent(kind, notificationId, lifetimeSeconds).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(failure).toMatchObject({
           code: '23514',
           constraint: 'push_intents_repeat_source',
         });
