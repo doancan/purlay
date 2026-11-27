@@ -93,7 +93,7 @@ describe('integration: APNs device routes', () => {
     expect(
       (await off.handle(request(`${path}/remove`, { deviceToken: '0000' }, owner.cookie))).status,
     ).toBe(204);
-    const registered = () =>
+    const registered = (): Promise<{ session_id: string } | undefined> =>
       cloned.db
         .selectFrom('apns_subscriptions')
         .where('session_id', '=', owner.sessionId)
