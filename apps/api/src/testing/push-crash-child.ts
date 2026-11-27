@@ -40,9 +40,13 @@ if (stage !== 'retry-restart') {
     required('PUSH_WRITER'),
     required('PUSH_CHANNEL'),
   );
+  const mention = process.env['PUSH_MENTION'];
   await send({ atomically: atomicallyOn(database), clock, bus }, context, {
     id: messageId(clock.now()),
-    content: 'Private crash fixture message',
+    content:
+      mention === undefined
+        ? 'Private crash fixture message'
+        : `@${mention} Private crash fixture message`,
   });
 }
 if (stage === 'committed') process.kill(process.pid, 'SIGKILL');

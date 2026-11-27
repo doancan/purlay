@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
+  sql,
   type Database,
   type Selectable,
 } from '@purlay/db';
@@ -143,12 +144,33 @@ describe('integration: actual push sender process death', () => {
     }, 30_000);
   }
 
-  test('a fresh sender process retries a persisted HTTP 503 on startup without a wake-up', async () => {
+  const retryAfterRestart = async (expireGuest: boolean): Promise<void> => {
     const owned = await cloneIntegrationDatabase();
     try {
-      const clock = movable(NOW);
-      const room = await aRoom(owned.db, ['writer', 'reader'], { type: 'direct_message' });
-      const recipient = room.members['reader']!.userId;
+      const start = expireGuest ? new Date() : NOW;
+      const clock = movable(start);
+      const room = await aRoom(owned.db, ['writer', 'reader'], {
+        type: expireGuest ? 'private' : 'direct_message',
+      });
+      const reader = room.members['reader']!;
+      const recipient = reader.userId;
+      if (expireGuest) {
+        const joined = new Date(start.getTime() - 60_000);
+        await owned.db
+          .updateTable('workspace_members')
+          .set({ access_kind: 'guest', guest_since: joined, guest_modules: ['chat'] })
+          .where('workspace_id', '=', room.workspaceId)
+          .where('user_id', '=', recipient)
+          .returning('user_id')
+          .executeTakeFirstOrThrow();
+        await owned.db
+          .updateTable('channel_members')
+          .set({ joined_at: joined })
+          .where('channel_id', '=', room.channelId)
+          .where('user_id', '=', recipient)
+          .returning('user_id')
+          .executeTakeFirstOrThrow();
+      }
       const { slug } = await owned.db
         .selectFrom('workspaces')
         .select('slug')
@@ -163,15 +185,16 @@ describe('integration: actual push sender process death', () => {
         .selectAll('delivery')
         .where('intent.user_id', '=', recipient);
       const waitForStatus = async (
-        status: number,
+        state: string,
+        status: number | null,
       ): Promise<Selectable<Database['push_deliveries']>> => {
         const deadline = Date.now() + 7_000;
         while (Date.now() < deadline) {
           const row = await delivery.executeTakeFirst();
-          if (row?.last_status === status) return row;
+          if (row?.state === state && row.last_status === status) return row;
           await Bun.sleep(20);
         }
-        throw new Error(`No persisted push with status ${String(status)}`);
+        throw new Error(`No persisted ${state} push with status ${String(status)}`);
       };
 
       const attempts: { method: string; path: string; headers: Headers; body: Uint8Array }[] = [];
@@ -192,16 +215,19 @@ describe('integration: actual push sender process death', () => {
           });
         },
       });
-      const env = { PUSH_LOOPBACK_PORT: String(provider.port) };
+      const env = {
+        PUSH_LOOPBACK_PORT: String(provider.port),
+        ...(expireGuest ? { PUSH_MENTION: reader.username } : {}),
+      };
       let child: ReturnType<typeof spawnSender> | undefined;
       try {
-        child = spawnSender(owned.connectionString, room, NOW, 'retry-initial', env);
-        const pending = await waitForStatus(503);
+        child = spawnSender(owned.connectionString, room, start, 'retry-initial', env);
+        const pending = await waitForStatus('pending', 503);
         expect(pending).toMatchObject({
           state: 'pending',
           attempts: 1,
           lease_id: null,
-          next_attempt_at: new Date(NOW.getTime() + 12_000),
+          next_attempt_at: new Date(start.getTime() + 12_000),
         });
         expect(attempts).toHaveLength(1);
         expect(attempts[0]).toMatchObject({ method: 'POST', path: `/send/${recipient}` });
@@ -209,6 +235,20 @@ describe('integration: actual push sender process death', () => {
         await child.exited;
         expect(child.signalCode).toBe('SIGKILL');
 
+        if (expireGuest) {
+          expect(await browser.read(attempts[0]!.body)).toMatchObject({
+            url: `/w/${slug}/c/${room.channelId}`,
+          });
+          // Expire the grant and leave all notification, session and delivery rows in place.
+          await owned.db
+            .updateTable('workspace_members')
+            .set({ guest_expires_at: sql<Date>`statement_timestamp()` })
+            .where('workspace_id', '=', room.workspaceId)
+            .where('user_id', '=', recipient)
+            .returning('user_id')
+            .executeTakeFirstOrThrow();
+          expect(await delivery.execute()).toEqual([pending]);
+        }
         status = 201;
         child = spawnSender(
           owned.connectionString,
@@ -217,20 +257,25 @@ describe('integration: actual push sender process death', () => {
           'retry-restart',
           env,
         );
-        const delivered = await waitForStatus(201);
-        expect(delivered).toMatchObject({
+        const settled = expireGuest
+          ? await waitForStatus('canceled', null)
+          : await waitForStatus('delivered', 201);
+        expect(settled).toMatchObject({
           intent_id: pending.intent_id,
           subscription_id: pending.subscription_id,
           session_id: pending.session_id,
           generation: pending.generation,
-          state: 'delivered',
-          attempts: 2,
+          attempts: expireGuest ? 1 : 2,
           lease_id: null,
         });
         // Leave the new process alive through another poll to observe any duplicate POST.
         await Bun.sleep(1_100);
+        expect(await delivery.execute()).toEqual([settled]);
+        if (expireGuest) {
+          expect(attempts).toHaveLength(1);
+          return;
+        }
         expect(attempts).toHaveLength(2);
-        expect(await delivery.execute()).toEqual([delivered]);
         const [first, second] = attempts;
         expect(second).toMatchObject({ method: 'POST', path: `/send/${recipient}` });
         expect(first!.headers.get('topic')).toMatch(/^[\w-]+$/);
@@ -250,5 +295,13 @@ describe('integration: actual push sender process death', () => {
     } finally {
       await owned.drop();
     }
+  };
+
+  test('a fresh sender process retries a persisted HTTP 503 on startup without a wake-up', async () => {
+    await retryAfterRestart(false);
+  }, 30_000);
+
+  test('a fresh sender cancels a pending push when the intended guest expires before retry', async () => {
+    await retryAfterRestart(true);
   }, 30_000);
 });
