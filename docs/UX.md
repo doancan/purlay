@@ -440,6 +440,7 @@ it. On a narrow window the navigation opens as the sidebar does.
   one an hour). The letter ends with a link to `/mail/stop#…`, a page of its own that needs no sign-in: it asks
   *Stop these emails?* and stops them only on its button, so a mail scanner that opens it changes nothing.
 - **Keyboard shortcuts** — the reference, as a page.
+- **Workspace General** — an owner or admin can set whether members may send new Urgent messages (D-337). The switch starts on. A failed save restores the saved choice.
 - **About** (D-248), for everyone — two cards. **Version**: *This server runs* the version it says it runs, and
   *Newest release*, with its number, the day it was published and **View release on GitHub** (another tab), or
   *Unknown* where the server could not learn it; below, one sentence in a status line — *You are up to date.*
@@ -628,7 +629,8 @@ page of the same name.
   point: an `@mention`, the profile's handle line, and beside the name where people are picked.
 - **The header line** is over a group's first message: the name, then the time in the mono face.
 - **Consecutive messages** from the same author within 5 minutes hide the avatar and the header;
-  their time shows on hover, in the avatar's column.
+  their send time (`HH:mm`) shows on hover or keyboard focus, in the avatar's column. Hovering
+  over the time shows the full date and time.
   The avatar belongs to the group's first message, so a message arriving below never changes one above.
 - **Hover controls** are one floating bar — hairline edge, the float shadow — on the row's own top
   edge, in its right corner (D-150, amending D-119 §6; D-187 puts every message on the left, so the
@@ -959,7 +961,7 @@ workspace switch within the same account still preserves waiting uploads and dra
 **Drafts** persist per channel in `localStorage`. Losing a half-written message on a channel
 switch is unforgivable in a tool people live in.
 
-**Delivery** (D-337). Where the message may ask more of its recipient — in a direct message, or once the words name somebody — a native *Delivery* choice (*Standard*, *Important*, *Urgent*) appears beside Send; it goes back to *Standard* after each send and is not offered, nor sent, where the words no longer name anybody. An important or urgent message is drawn with its word and a bell glyph (never colour alone) on the line under its words; a deleted one is not. It waits in Deep Work like any message.
+**Delivery** (D-337). Where the message may ask more of its recipient — in a direct message, or once the words name somebody — a native *Delivery* choice (*Standard*, *Important*, *Urgent*) appears beside Send; it goes back to *Standard* after each send and is not offered, nor sent, where the words no longer name anybody. In a workspace with Urgent delivery disabled, the composer offers *Standard* and *Important* and resets an unsent Urgent selection to *Standard*. An important or urgent message is drawn with its word and a bell glyph (never colour alone) on the line under its words; a deleted one is not. It waits in Deep Work like any message.
 
 **Send later** (D-316). Beside Send, in a channel's box and in a thread's, an icon button opens a menu of times:
 *In 1 hour (14:00)* (the clock time said, D-319), *Tomorrow at 09:00*, *Monday at 09:00* — left out on a Sunday, when it is tomorrow, and on a Monday,

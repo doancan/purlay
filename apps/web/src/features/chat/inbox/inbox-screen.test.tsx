@@ -426,6 +426,27 @@ describe('one thread, one row (D-162)', () => {
     told(n, 'thread_reply', { parentId: root, ...over });
   const CAROL = aUser('carol', '00000000-0000-4000-8000-0000000000e4');
 
+  test('shows the priority of the reply displayed in the inbox row', async () => {
+    const newest = reply(3);
+    const older = reply(2);
+    const view = await visit({
+      notifications: () =>
+        Promise.resolve(
+          page([
+            { ...newest, message: { ...newest.message, priority: 'important' } },
+            { ...older, message: { ...older.message, priority: 'urgent' } },
+            told(1, 'mention'),
+          ]),
+        ),
+    });
+    expect(view.getByRole('button', { name: /words 3 Important/ })).toBeDefined();
+    expect(view.queryByText('Urgent')).toBeNull();
+    const normal = within(view.getByRole('button', { name: /words 1/ }));
+    expect(normal.queryByText('Important')).toBeNull();
+    expect(normal.queryByText('Urgent')).toBeNull();
+    view.unmount();
+  });
+
   test('a thread’s replies are one row: how many, in which thread, by whom, newest first', async () => {
     const byCarol = { ...reply(3), message: { ...reply(3).message, sender: CAROL } };
     const view = await visit({

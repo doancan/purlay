@@ -75,6 +75,33 @@ const lines = (view: View): string[] =>
     .map((item) => item.querySelector('[data-audit-line]')?.textContent ?? '');
 
 describe('the audit log', () => {
+  test('describes both urgent delivery policy changes in the workspace trail', async () => {
+    const view = await openPage({
+      audit: () =>
+        Promise.resolve(
+          page([
+            anEntry(1, {
+              action: 'workspace.urgent_messages_changed',
+              targetType: 'workspace',
+              targetId: IDS.workspace,
+              metadata: { to: 'true' },
+            }),
+            anEntry(2, {
+              action: 'workspace.urgent_messages_changed',
+              targetType: 'workspace',
+              targetId: IDS.workspace,
+              metadata: { to: 'false' },
+            }),
+          ]),
+        ),
+    });
+    expect(lines(view)).toEqual([
+      `${ME.displayName} allowed urgent messages`,
+      `${ME.displayName} turned off urgent messages`,
+    ]);
+    view.unmount();
+  });
+
   test('delegated audit readers see source-aware access changes in words and lose the page when their capability is withdrawn', async () => {
     const events = [
       ['workspace.access.manual_added', 'added manual workspace access.'],

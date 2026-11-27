@@ -25,13 +25,14 @@ import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
 import { ArchivedChannelsCard } from './archived-channels';
 import { DeleteWorkspaceCard } from './delete-workspace';
+import { UrgentMessagesCard } from './urgent-messages-card';
 
 export const GeneralPage = (): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
   const { show } = useToast();
   const { copy } = useContentPorts();
-  const { workspace, role } = useWorkspace();
+  const { workspace, role, urgentMessagesEnabled } = useWorkspace();
   const { mayCreateWorkspace } = useSession();
   const modules = useModules();
   const { renameWorkspace } = useActions();
@@ -148,7 +149,18 @@ export const GeneralPage = (): React.JSX.Element => {
           </SettingsRow>
         </SettingsCard>
       </form>
-      {modules.includes('chat') && <ArchivedChannelsCard />}
+      {modules.includes('chat') && (
+        <>
+          {urgentMessagesEnabled !== undefined && (
+            <UrgentMessagesCard
+              key={workspace.id}
+              workspaceId={workspace.id}
+              enabled={urgentMessagesEnabled}
+            />
+          )}
+          <ArchivedChannelsCard />
+        </>
+      )}
       {/* Offered only to whom the server lets make one (D-155): never a form that would be refused. */}
       {mayCreateWorkspace && (
         <SettingsCard title={t('settings.general.another')}>

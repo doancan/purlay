@@ -129,6 +129,12 @@ x-environment: &environment
   VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
   VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
   VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+  # APNs for native iOS (#1559). Set all five together.
+  APNS_ENVIRONMENT: ${APNS_ENVIRONMENT:-}
+  APNS_TOPIC: ${APNS_TOPIC:-}
+  APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+  APNS_KEY_ID: ${APNS_KEY_ID:-}
+  APNS_PRIVATE_KEY: ${APNS_PRIVATE_KEY:-}
   # Email sign-in (D-138): both or neither, and empty is neither — GitHub sign-in only.
   SMTP_URL: ${SMTP_URL:-}
   MAIL_FROM: ${MAIL_FROM:-}
@@ -184,6 +190,9 @@ services:
   storage-init:
     <<: *application
     command: ['apps/api/src/cli/storage-init.ts']
+    # The initializer belongs to a Compose deployment, including with environment-wide updates enabled.
+    labels:
+      dockhand.update: 'false'
     # Measured bounds, not a guess (docs/spikes/resources.md, #639): a runaway takes this
     # container down, not the host. Raised with STORAGE_INIT_MEMORY_LIMIT on a larger server.
     mem_limit: ${STORAGE_INIT_MEMORY_LIMIT:-256m}

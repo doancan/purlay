@@ -30,6 +30,7 @@ have it.
 ### Added
 
 - **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
+- **Messages** — workspace owners and admins can turn off Urgent delivery in General settings (D-337)
 
 ### Changed
 

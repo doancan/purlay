@@ -15,6 +15,7 @@ import {
   ConfigurationError,
   DEVELOPMENT_ENCRYPTION_KEY,
   Environment,
+  apnsCredentialsFor,
   loadConfig,
 } from './config';
 import { DEFAULT_REDIS_NAMESPACE } from './redis-names';
@@ -732,6 +733,70 @@ describe('Web Push keys (#78)', () => {
     expect(refusal({ ...valid, ...vapid, VAPID_PRIVATE_KEY: 'A'.repeat(43) })).toContain(
       'VAPID_PRIVATE_KEY: not a P-256 private key',
     );
+  });
+});
+
+describe('APNs credentials (#1559)', () => {
+  const key = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey;
+  const pem = key.export({ type: 'pkcs8', format: 'pem' });
+  const apns = {
+    APNS_ENVIRONMENT: 'sandbox',
+    APNS_TOPIC: 'com.purlay.ios',
+    APNS_TEAM_ID: 'ABCD123456',
+    APNS_KEY_ID: 'ZYXW987654',
+    APNS_PRIVATE_KEY: pem,
+  };
+
+  test('is optional in production and accepts a complete sandbox or production set', () => {
+    expect(apnsCredentialsFor(loadConfig(production))).toBeUndefined();
+    expect(apnsCredentialsFor(loadConfig({ ...valid, ...apns }))).toEqual({
+      environment: 'sandbox',
+      topic: apns.APNS_TOPIC,
+      teamId: apns.APNS_TEAM_ID,
+      keyId: apns.APNS_KEY_ID,
+      signingKey: pem,
+    });
+    const escaped = pem.replaceAll('\n', '\\n');
+    expect(
+      apnsCredentialsFor(
+        loadConfig({
+          ...production,
+          ...apns,
+          APNS_ENVIRONMENT: 'production',
+          APNS_PRIVATE_KEY: escaped,
+        }),
+      ),
+    ).toMatchObject({ environment: 'production', signingKey: escaped });
+  });
+
+  test('refuses any missing field and reports bad environment, topic and identifiers', () => {
+    for (const name of Object.keys(apns)) {
+      expect(refusal({ ...valid, ...apns, [name]: '' })).toContain('set all five, or none');
+    }
+    const malformed = {
+      APNS_ENVIRONMENT: 'https://example.test',
+      APNS_TOPIC: 'com.purlay/ios',
+      APNS_TEAM_ID: 'abcd123456',
+      APNS_KEY_ID: 'too-short',
+    };
+    const problems = refusal({ ...valid, ...apns, ...malformed });
+    for (const name of Object.keys(malformed)) expect(problems).toContain(name);
+  });
+
+  test('refuses corrupted keys and other curves without returning key material', () => {
+    const wrongCurve = generateKeyPairSync('ec', { namedCurve: 'secp384r1' }).privateKey.export({
+      type: 'pkcs8',
+      format: 'pem',
+    });
+    const marker = 'DO-NOT-RETURN-THIS-KEY';
+    const malformedPem = '-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----';
+    for (const value of [marker, wrongCurve, malformedPem, `${pem}${marker}`, marker.repeat(120)]) {
+      const problem = refusal({ ...valid, ...apns, APNS_PRIVATE_KEY: value });
+      expect(problem).toContain('APNS_PRIVATE_KEY');
+      expect(problem).toContain('value withheld');
+      expect(problem).not.toContain(marker);
+      expect(problem).not.toContain('BEGIN PRIVATE KEY');
+    }
   });
 });
 

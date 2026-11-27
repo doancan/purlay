@@ -161,13 +161,16 @@ const Inner = ({
   const [error, setError] = useState<string | null>(null);
   // How much the next message asks of its recipient (#1381); it goes back to the usual once sent.
   const [chosenPriority, setChosenPriority] = useState<MessagePriority>('normal');
-  const { workspace } = useWorkspace();
+  const { workspace, urgentMessagesEnabled } = useWorkspace();
+  const allowUrgent = urgentMessagesEnabled !== false;
   const channels = useChannels(workspace.id);
   // Offered where the server would accept it: a direct message, or words that name somebody.
   const mayPrioritise =
     channels.data?.find((channel) => channel.id === channelId)?.type === 'direct_message' ||
     /(^|\s)@\w/.test(text);
-  const priority: MessagePriority = mayPrioritise ? chosenPriority : 'normal';
+  const choice = allowUrgent || chosenPriority !== 'urgent' ? chosenPriority : 'normal';
+  if (choice !== chosenPriority) setChosenPriority(choice);
+  const priority = mayPrioritise ? choice : 'normal';
   // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
   const [focused, setFocused] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -228,13 +231,6 @@ const Inner = ({
   // channel switch or a closed thread loses neither, and the send still goes when they land (D-171).
   const uploads = useUploads(key, () => latest.current);
   const waiting = uploads.waiting;
-  const setWaiting = (wanted: boolean): void => {
-    uploads.wait(
-      wanted
-        ? { channelId, parentId, channelName, content: latest.current, storage: ports.storage }
-        : null,
-    );
-  };
   // Where the caret is, for the `@` list: it reads what was typed up to here.
   const [selection, setSelection] = useState<Selection>({ start: text.length, end: text.length });
   const caretAt = selection.start;
@@ -509,7 +505,7 @@ const Inner = ({
   /** The box and its draft emptied, as a send leaves them: gone from storage now, not a debounce from now (a reload must not bring back what was sent). */
   const clearWritten = (): void => {
     uploads.clear();
-    setWaiting(false);
+    uploads.wait(null);
     fileOffer.set(null);
     pasteHandler.dismissNotice();
     latest.current = '';
@@ -539,13 +535,27 @@ const Inner = ({
     const refusal = refusalOf(content);
     if (refusal !== null) {
       if (uploads.items.some((item) => item.status === 'failed' || item.status === 'too-large'))
-        setWaiting(false);
+        uploads.wait(null);
       setError(refusal);
+      return;
+    }
+    const intended = waiting?.priority ?? priority;
+    if (intended === 'urgent' && !allowUrgent) {
+      uploads.wait(null);
+      setError(t('priority.unavailable'));
       return;
     }
     // Still uploading: it goes when they land, and says so meanwhile (`UX.md` §5).
     if (uploads.items.some((item) => item.status === 'uploading')) {
-      setWaiting(true);
+      uploads.wait({
+        workspaceId: workspace.id,
+        channelId,
+        parentId,
+        channelName,
+        content: latest.current,
+        priority: intended,
+        storage: ports.storage,
+      });
       setError(null);
       return;
     }
@@ -558,11 +568,11 @@ const Inner = ({
         attachments: uploads.items.flatMap((item) =>
           item.status === 'ready' ? [item.attachment] : [],
         ),
-        ...(priority === 'normal' ? {} : { priority }),
+        priority: intended === 'normal' ? undefined : intended,
       });
     } catch (failure) {
       if (!isApiError(failure) || failure.code !== 'UNAUTHENTICATED') throw failure;
-      setWaiting(false);
+      uploads.wait(null);
       setError(t('composer.accountChanged'));
       return;
     }
@@ -1132,7 +1142,13 @@ const Inner = ({
             {/* What decides how the message goes, one group beside the button that sends it. */}
             <span className="flex shrink-0 items-center gap-2 max-narrow:gap-1">
               {canSchedule && <SendLater onSchedule={scheduleLater} />}
-              {mayPrioritise && <PriorityChoice value={priority} onChange={setChosenPriority} />}
+              {mayPrioritise && (
+                <PriorityChoice
+                  value={priority}
+                  allowUrgent={allowUrgent}
+                  onChange={setChosenPriority}
+                />
+              )}
               {sendButton}
             </span>
           </div>

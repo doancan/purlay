@@ -42,23 +42,26 @@ const CHOICES: readonly MessagePriority[] = ['normal', 'important', 'urgent'];
  */
 export const PriorityChoice = ({
   value,
+  allowUrgent,
   onChange,
 }: {
   readonly value: MessagePriority;
+  readonly allowUrgent: boolean;
   readonly onChange: (next: MessagePriority) => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
+  const choices = allowUrgent ? CHOICES : CHOICES.slice(0, 2);
   return (
     <Select
       aria-label={t('priority.label')}
       value={value}
       onChange={(event) => {
-        const next = CHOICES.find((choice) => choice === event.target.value);
+        const next = choices.find((choice) => choice === event.target.value);
         if (next !== undefined) onChange(next);
       }}
       className="shrink-0"
     >
-      {CHOICES.map((choice) => (
+      {choices.map((choice) => (
         <option key={choice} value={choice}>
           {t(`priority.${choice}`)}
         </option>

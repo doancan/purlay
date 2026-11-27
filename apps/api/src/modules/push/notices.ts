@@ -5,16 +5,17 @@
  * `noPushNotices` says so.
  */
 import type { Executor } from '@purlay/db';
-import type { PushLocale } from '@purlay/types';
+import type { Message, PushLocale } from '@purlay/types';
 
 /** Core admission port: the source owner captures its recipients in the same transaction as its notice. */
-export { enqueuePush } from '../../platform/push-work';
+export { enqueuePush, type PushCapture } from '../../platform/push-work';
 
 /** One notification still to be pushed: the person told, why, and the channel it happened in. */
 interface PushNotice {
   readonly userId: string;
   /** The notification's reason, as the person's inbox names it. */
   readonly type: string;
+  readonly priority?: NonNullable<Message['priority']>;
   readonly channelId: string;
   readonly workspaceId: string;
   /** The channel's name; none for a direct message or a group. */

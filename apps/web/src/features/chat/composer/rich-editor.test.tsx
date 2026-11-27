@@ -1,5 +1,5 @@
 /** Real editor state/DOM adapter, with browser text insertion driven through its public props. */
-import { afterAll, afterEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { act, fireEvent, render } from '@testing-library/react';
 import { createRef, type ComponentProps, type RefObject } from 'react';
 import * as views from 'prosemirror-view';
@@ -27,7 +27,37 @@ afterAll(async () => {
   await mock.module('prosemirror-view', () => originalViews);
 });
 installDom();
+
+let restoreSelectionEvents: (() => void) | undefined;
+beforeEach(() => {
+  // Happy DOM 21 dispatches selectionchange inside Selection.collapse(). Real browsers
+  // queue one event per document, after ProseMirror finishes synchronizing the selection.
+  // https://w3c.github.io/selection-api/#selectionchange-event
+  const dispatch = document.dispatchEvent.bind(document);
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  let delivering: Event | undefined;
+  const intercepted = spyOn(document, 'dispatchEvent').mockImplementation((event) => {
+    // Happy DOM calls dispatchEvent again with the same event during propagation.
+    if (event.type !== 'selectionchange' || event === delivering) return dispatch(event);
+    pending ??= setTimeout(() => {
+      pending = undefined;
+      delivering = event;
+      try {
+        dispatch(event);
+      } finally {
+        delivering = undefined;
+      }
+    }, 0);
+    return true;
+  });
+  restoreSelectionEvents = (): void => {
+    if (pending !== undefined) clearTimeout(pending);
+    intercepted.mockRestore();
+  };
+});
 afterEach(() => {
+  restoreSelectionEvents?.();
+  restoreSelectionEvents = undefined;
   observedViews.length = 0;
 });
 
@@ -107,6 +137,27 @@ const mod = (): KeyboardEventInit =>
   baseKeymap === macBaseKeymap ? { metaKey: true } : { ctrlKey: true };
 
 describe('the formatted editor adapter', () => {
+  test('queues one selection notification for successive selection updates', async () => {
+    const text = document.createTextNode('selection');
+    document.body.append(text);
+    const selection = editorValue(document.getSelection());
+    const observed: number[] = [];
+    const recordSelection = (): void => {
+      observed.push(selection.anchorOffset);
+    };
+    document.addEventListener('selectionchange', recordSelection);
+    try {
+      selection.collapse(text, 0);
+      selection.collapse(text, 3);
+      expect(observed).toEqual([]);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(observed).toEqual([3]);
+    } finally {
+      document.removeEventListener('selectionchange', recordSelection);
+      text.remove();
+    }
+  });
+
   test('keeps labels, selection, focus and external source updates separate from edits', () => {
     const editor = mount('__bold__ and words');
     const { field, view } = editor;

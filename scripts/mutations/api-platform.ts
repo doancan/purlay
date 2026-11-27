@@ -1855,10 +1855,10 @@ export const API_PLATFORM: readonly Mutation[] = [
   },
   {
     id: 'push-capture-disabled-server',
-    why: 'A notification born while push is disabled must not be replayed when push is re-enabled.',
+    why: 'A notification born while Web Push is disabled must not be replayed when Web Push is re-enabled.',
     file: 'apps/api/src/platform/push-work.ts',
-    find: 'setting?.push_enabled !== true || setting.push_public_key === null',
-    replace: 'setting?.push_public_key == null',
+    find: 'const webKey = setting?.push_enabled ? setting.push_public_key : null;',
+    replace: 'const webKey = setting?.push_public_key ?? null;',
     tests: ['apps/api/src/modules/push/authority-recovery.integration.test.ts'],
   },
   {

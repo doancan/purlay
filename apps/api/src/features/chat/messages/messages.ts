@@ -78,6 +78,7 @@ import {
   type MessageRow,
 } from './reader';
 import type { PushSender } from '../../../modules/push/sender';
+import type { PushCapture } from '../../../modules/push/notices';
 
 export interface OutgoingMessage {
   readonly id: string;
@@ -259,6 +260,7 @@ export const sendMessage = async (
   context: ChannelContext,
   input: OutgoingMessage,
   engine?: Engine,
+  capture?: PushCapture,
 ): Promise<Sent> => {
   const again = async (existing: MessageRow): Promise<Sent> => {
     // Ownership identifies a retry; it cannot grant access to history after guest re-admission.
@@ -379,6 +381,22 @@ export const sendMessage = async (
     return await again(existing);
   }
 
+  if (input.priority === 'urgent') {
+    // The insert's workspace FK already holds KEY SHARE against the setting writer's FOR UPDATE.
+    // Check after idempotency, with no added lock or upgrade before the attachment bookkeeping.
+    const workspace = await executor
+      .selectFrom('workspaces')
+      .select('urgent_messages_enabled')
+      .where('id', '=', context.workspaceId)
+      .executeTakeFirstOrThrow();
+    if (!workspace.urgent_messages_enabled)
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        message: 'Urgent messages are disabled in this workspace.',
+        details: { fields: { priority: 'urgent messages are disabled in this workspace' } },
+      });
+  }
+
   const sentAt = clock.now();
   await addSharedLinks(executor, { ...context, messageId: input.id }, sharedLinksOf(reading.tree));
 
@@ -434,16 +452,20 @@ export const sendMessage = async (
       details: { fields: { priority: 'only in a direct message, or naming somebody' } },
     });
   }
-  const { recipients, told } = await recordDelivery(executor, {
-    context,
-    messageId: input.id,
-    mentioned,
-    thread:
-      input.parentId === undefined || root === undefined
-        ? null
-        : { rootId: input.parentId, rootAuthorId: root.authorId },
-    now: clock.now(),
-  });
+  const { recipients, told } = await recordDelivery(
+    executor,
+    {
+      context,
+      messageId: input.id,
+      mentioned,
+      thread:
+        input.parentId === undefined || root === undefined
+          ? null
+          : { rootId: input.parentId, rootAuthorId: root.authorId },
+      now: clock.now(),
+    },
+    capture,
+  );
 
   const written = await readBuilt(executor, input.id, undefined, {
     id: input.id,
@@ -785,7 +807,7 @@ export const send = async (
   const sent = await atomically(async (transaction) => {
     // The session the caller authenticated with, held live for this transaction (D-85).
     if (sessionId !== undefined) await requireLiveSession(transaction, clock, sessionId);
-    return await sendMessage(transaction, clock, context, input, engine);
+    return await sendMessage(transaction, clock, context, input, engine, push?.capture);
   });
   if (sent.unformatted === 'engine') {
     // Inside the bounds the engine should never fail (D-101): a gap in them to close, not a broken

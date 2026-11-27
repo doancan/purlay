@@ -18,7 +18,7 @@
  * Nothing here is React: the provider (`uploads.tsx`) gives it the network, the engine and the
  * words, and the composer reads it through `useSyncExternalStore`.
  */
-import type { Attachment } from '@purlay/types';
+import type { Attachment, MessagePriority } from '@purlay/types';
 import type { FailureCode } from '../../../data/failure';
 import { isApiError } from '../../../data/errors';
 import { writeDraft, type DraftStorage } from './drafts';
@@ -46,12 +46,14 @@ export type Upload = {
 
 /** A send asked for while files were uploading: what it is, and where it goes. */
 export interface Waiting {
+  readonly workspaceId: string;
   readonly channelId: string;
   readonly parentId: string | undefined;
   /** The place as the person knows it, to name it if the send cannot go. */
   readonly channelName: string;
   /** The words, as the composer last held them. */
   readonly content: string;
+  readonly priority: MessagePriority;
   /** Where the place's draft lives, cleared once this is sent. */
   readonly storage: DraftStorage | null;
 }
@@ -77,9 +79,11 @@ export interface OutboxPorts {
     readonly content: string;
     readonly parentId?: string;
     readonly attachments: readonly Attachment[];
+    readonly priority: Exclude<MessagePriority, 'normal'> | undefined;
   }) => void;
-  /** A send that was waiting while nobody was looking cannot go: a file did not upload. */
-  readonly refused: (channelName: string, reason: 'upload' | 'account') => void;
+  readonly allowUrgent: (workspaceId: string) => boolean;
+  /** Explains why a send waiting in another place is still a draft. */
+  readonly refused: (channelName: string, reason: 'upload' | 'account' | 'urgent') => void;
 }
 
 export interface Outbox {
@@ -125,10 +129,15 @@ export const createOutbox = (ports: OutboxPorts): Outbox => {
     const { items, waiting } = read(key);
     if (waiting === null || (held.get(key) ?? 0) > 0) return;
     if (items.some((item) => item.status === 'uploading')) return;
-    if (items.some((item) => item.status === 'failed' || item.status === 'too-large')) {
-      // Kept, words and files, for the person to retry or remove when they go back — and said now.
+    const refusal = items.some((item) => item.status === 'failed' || item.status === 'too-large')
+      ? 'upload'
+      : waiting.priority === 'urgent' && !ports.allowUrgent(waiting.workspaceId)
+        ? 'urgent'
+        : null;
+    if (refusal !== null) {
+      // Keep the draft and files so the person can return and try again.
       write(key, { items, waiting: null });
-      ports.refused(waiting.channelName, 'upload');
+      ports.refused(waiting.channelName, refusal);
       return;
     }
     try {
@@ -136,6 +145,7 @@ export const createOutbox = (ports: OutboxPorts): Outbox => {
         channelId: waiting.channelId,
         content: waiting.content,
         ...(waiting.parentId === undefined ? {} : { parentId: waiting.parentId }),
+        priority: waiting.priority === 'normal' ? undefined : waiting.priority,
         attachments: items.flatMap((item) => (item.status === 'ready' ? [item.attachment] : [])),
       });
     } catch (failure) {

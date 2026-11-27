@@ -43,6 +43,7 @@ export type CollatedColumn = readonly [table: string, column: string];
  * every module's, so a new collated column cannot be added without being checked.
  */
 export const CORE_COLLATED_COLUMNS: readonly CollatedColumn[] = [
+  ['apns_subscriptions', 'device_token'],
   ['users', 'email'],
   ['users', 'username'],
   ['workspace_identity_bindings', 'issuer'],

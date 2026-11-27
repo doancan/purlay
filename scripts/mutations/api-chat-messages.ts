@@ -1082,9 +1082,9 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     id: 'send-announces-before-the-commit',
     why: 'subscribers receive a message that then rolls back, and nothing can retract the frame',
     file: MESSAGES,
-    find: `    return await sendMessage(transaction, clock, context, input, engine);
+    find: `    return await sendMessage(transaction, clock, context, input, engine, push?.capture);
   });`,
-    replace: `    const early = await sendMessage(transaction, clock, context, input, engine);
+    replace: `    const early = await sendMessage(transaction, clock, context, input, engine, push?.capture);
     await bus.publish(channelTopic(context.channelId), {
       event: 'MESSAGE_CREATED',
       data: early.message,
@@ -1233,6 +1233,14 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     find: 'attachments: row.deleted_at === null ? [...(attachments.get(row.id) ?? [])] : [],',
     replace: 'attachments: [...(attachments.get(row.id) ?? [])],',
     tests: ['apps/api/src/features/chat/messages/attachments.integration.test.ts'],
+  },
+  {
+    id: 'urgent-message-ignores-workspace-setting',
+    why: 'a new urgent message is accepted after its workspace disabled urgent delivery (D-337)',
+    file: MESSAGES,
+    find: 'if (!workspace.urgent_messages_enabled)',
+    replace: 'if (false)',
+    tests: ['apps/api/src/ingress/http/message-priority.integration.test.ts'],
   },
   {
     id: 'versions-not-kept',

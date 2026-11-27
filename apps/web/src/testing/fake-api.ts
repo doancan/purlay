@@ -295,6 +295,7 @@ export const anApi = (overrides: Partial<Api> = {}): Api => ({
   endMySession: unexpected('endMySession'),
   signOut: unexpected('signOut'),
   renameWorkspace: unexpected('renameWorkspace'),
+  setUrgentMessages: unexpected('setUrgentMessages'),
   signOutEverywhere: unexpected('signOutEverywhere'),
   pushKey: unexpected('pushKey'),
   subscribePush: unexpected('subscribePush'),

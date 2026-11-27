@@ -188,6 +188,12 @@ export const UpdateWorkspaceRequest = FromClient({
 });
 export type UpdateWorkspaceRequest = Static<typeof UpdateWorkspaceRequest>;
 
+/** `PUT /api/workspaces/:workspaceId/urgent-messages` — an owner or admin controls new urgent sends. */
+export const UrgentMessagesSetting = Type.Object({ enabled: Type.Boolean() });
+export type UrgentMessagesSetting = Static<typeof UrgentMessagesSetting>;
+export const SetUrgentMessagesRequest = FromClient({ enabled: Type.Boolean() });
+export type SetUrgentMessagesRequest = Static<typeof SetUrgentMessagesRequest>;
+
 /**
  * How long a workspace whose deletion was asked for waits before its content is erased (D-242): any owner
  * can take it back until then. A week, so an owner away for a few days, or a deletion nobody else agreed
@@ -910,6 +916,7 @@ export const AUDIT_ACTIONS = [
   'invitation.revoked',
   'message.removed_by_moderator',
   'workspace.renamed',
+  'workspace.urgent_messages_changed',
   'workspace.mfa.enrolled',
   'workspace.mfa.rotated',
   'workspace.mfa.revoked',
@@ -987,6 +994,7 @@ export const CORE_AUDIT_ACTIONS = [
   'invitation.created',
   'invitation.revoked',
   'workspace.renamed',
+  'workspace.urgent_messages_changed',
   'workspace.mfa.enrolled',
   'workspace.mfa.rotated',
   'workspace.mfa.revoked',
@@ -1415,6 +1423,11 @@ export const PushUnsubscribeRequest = /* @__PURE__ */ FromClient({
   endpoint: /* @__PURE__ */ Type.String({ pattern: '^https://', maxLength: 2048 }),
 });
 export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
+
+/** APNs registration and removal take the device's token as hexadecimal bytes (D-342). */
+export const ApnsDeviceRequest = /* @__PURE__ */ FromClient({
+  deviceToken: /* @__PURE__ */ Type.String({ minLength: 2, maxLength: 512 }),
+});
 
 /**
  * A path of this site. `//host`, `/\\host` and a slash after a tab or a newline are other sites'

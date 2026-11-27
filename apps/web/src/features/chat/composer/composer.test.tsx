@@ -454,6 +454,48 @@ describe('how much a message asks of its recipient (#1381)', () => {
     expect(view.getByRole('combobox', { name: 'Delivery' })).toHaveProperty('value', 'normal');
   });
 
+  test('a workspace update removes Urgent, keeps the draft, and clears the stale selection', async () => {
+    const session = aSession();
+    let enabled = true;
+    const { view, box, sent, user } = await mount({
+      api: aSignedInApi({
+        ...direct(),
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((membership) => ({
+              ...membership,
+              urgentMessagesEnabled: enabled,
+            })),
+          }),
+      }),
+    });
+    const update = async (next: boolean): Promise<void> => {
+      enabled = next;
+      act(() => {
+        view.world.sockets.deliver({
+          event: 'WORKSPACE_UPDATED',
+          data: { workspaceId: IDS.workspace },
+          ts: new Date(WHEN).getTime(),
+        });
+      });
+      await settle();
+    };
+    const delivery = await view.findByRole('combobox', { name: 'Delivery' });
+    await user.selectOptions(delivery, 'urgent');
+    await user.type(box(), 'Keep this draft');
+    await update(false);
+    expect(view.queryByRole('option', { name: 'Urgent' }) === null).toBe(true);
+    expect(view.getByRole('option', { name: 'Important' })).toBeDefined();
+    expect(delivery).toHaveProperty('value', 'normal');
+    expect(box()).toHaveProperty('value', 'Keep this draft');
+    await update(true);
+    expect(view.getByRole('option', { name: 'Urgent' })).toBeDefined();
+    expect(delivery).toHaveProperty('value', 'normal');
+    await user.click(view.getByRole('button', { name: 'Send' }));
+    expect(sent()).toEqual([{ channelId: IDS.api, content: 'Keep this draft' }]);
+  });
+
   test('is not offered in a channel until the words name somebody, and a choice does not outlive that', async () => {
     const { view, box, sent, user } = await mount();
     await user.click(box());
@@ -2302,6 +2344,67 @@ describe('attaching files (D-109, #370)', () => {
     ]);
   });
 
+  test.each(['open', 'closed'] as const)(
+    'a pending urgent send keeps its draft and ready attachment when urgent is disabled with the composer %s',
+    async (composer) => {
+      const uploads = held();
+      const { view, box, sent, user, shown } = await mount({
+        api: aSignedInApi({
+          ...uploads.api,
+          channels: () =>
+            Promise.resolve([aChannel(IDS.api, null, { type: 'direct_message', name: null })]),
+        }),
+      });
+      paste(box(), [new File([new Uint8Array([1])], 'keep.txt')]);
+      await user.selectOptions(await view.findByRole('combobox', { name: 'Delivery' }), 'urgent');
+      await user.type(box(), 'Keep this attachment{Enter}');
+      expect(view.getByText('Sends when the files finish uploading.')).toBeDefined();
+      if (composer === 'closed') shown(false);
+      act(() => {
+        view.world.client.setQueryData<MeResponse>(keys.me, (me) =>
+          me === undefined
+            ? undefined
+            : {
+                ...me,
+                memberships: me.memberships.map((member) => ({
+                  ...member,
+                  urgentMessagesEnabled: false,
+                })),
+              },
+        );
+      });
+      await settle();
+      uploads.finish(0);
+      await settle();
+      expect(sent()).toEqual([]);
+      if (composer === 'closed') {
+        expect(
+          view.getByText(
+            'The message to api is still a draft because that workspace turned off urgent messages.',
+          ),
+        ).toBeDefined();
+        shown(true);
+      } else {
+        expect(
+          view.getByText(
+            'This workspace turned off urgent messages. Choose a delivery option and send again.',
+          ),
+        ).toBeDefined();
+      }
+      expect(box()).toHaveProperty('value', 'Keep this attachment');
+      expect(view.getByText('keep.txt')).toBeDefined();
+      expect(view.queryByText('Sends when the files finish uploading.')).toBeNull();
+      await user.click(view.getByRole('button', { name: 'Send' }));
+      expect(sent()).toEqual([
+        {
+          channelId: IDS.api,
+          content: 'Keep this attachment',
+          attachmentIds: [uploads.calls[0]?.id],
+        },
+      ]);
+    },
+  );
+
   // A send that is waiting on its files belongs to where it was written, not to the composer on the
   // screen: leaving the channel, or closing a thread's panel, neither sends it early nor loses it.
   test('a send waiting on its files still goes once they land, after the person has moved to another channel', async () => {
@@ -2422,6 +2525,29 @@ describe('attaching files (D-109, #370)', () => {
     expect(uploads.calls[1]?.id).toBe(uploads.calls[0]?.id);
   });
 
+  test('a stale Retry click cannot upload a file after the account receipt changes', async () => {
+    const uploads = held();
+    const { view, box, sent } = await mount({ api: aSignedInApi(uploads.api) });
+    paste(box(), [new File(['previous account only'], 'private.txt')]);
+    uploads.refuse(0, new ApiError(503, 'STORAGE_UNAVAILABLE', 'down'));
+    await settle();
+    const retry = view.getByRole('button', { name: 'Retry private.txt' });
+    const receipt = aSession();
+    act(() => {
+      // The receipt arrives before React redraws the old composer's pending click.
+      view.world.client.setQueryData<MeResponse>(keys.me, {
+        ...receipt,
+        user: { ...receipt.user, id: IDS.alice, username: 'alice', displayName: 'Alice' },
+      });
+      expect(retry.isConnected).toBe(true);
+      fireEvent.click(retry);
+    });
+    await settle();
+    expect(uploads.calls.map(({ name }) => name)).toEqual(['private.txt']);
+    expect(view.queryByText('private.txt')).toBeNull();
+    expect(sent()).toEqual([]);
+  });
+
   // Why, in words, from the code the upload was refused with (D-159); Retry only where trying the
   // same bytes again can be answered differently, and Remove always.
   const refusals: readonly [
@@ -2526,6 +2652,21 @@ describe('attaching files (D-109, #370)', () => {
         tr: 'Bu çalışma alanına artık erişiminiz yok',
         retry: false,
       },
+    ],
+    [
+      'a missing upload length',
+      new ApiError(411, 'LENGTH_REQUIRED', 'length required'),
+      { en: 'Didn’t upload', tr: 'Yüklenmedi', retry: true },
+    ],
+    [
+      'an attachment id already used for different bytes',
+      new ApiError(409, 'ATTACHMENT_ID_CONFLICT', 'conflict'),
+      { en: 'Didn’t upload', tr: 'Yüklenmedi', retry: true },
+    ],
+    [
+      'database temporarily unavailable',
+      new ApiError(503, 'DATABASE_UNAVAILABLE', 'database down'),
+      { en: 'Didn’t upload', tr: 'Yüklenmedi', retry: true },
     ],
     [
       'a refusal no upload meets',

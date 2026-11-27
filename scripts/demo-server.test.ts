@@ -4,7 +4,13 @@
  * (`apps/api/src/ingress/http/client.test.ts`).
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { forwardableCode, routeOf, startFront, type Route } from './demo-server';
+import {
+  forwardableCode,
+  routeOf,
+  startFront,
+  type DocumentEvent,
+  type Route,
+} from './demo-server';
 
 let seen: { url: string; cookie: string | null; method: string; body: string }[] = [];
 const sockets: { cookie: string | null; origin: string | null; got: string[] }[] = [];
@@ -161,6 +167,86 @@ describe('the API proxy', () => {
     }
     expect(written.join('')).toContain('GET /w/acme/questions');
     expect(written.join('')).toContain('50 ms');
+  });
+
+  test('only document requests leave receipts, with no URL or credentials', async () => {
+    const receipts: DocumentEvent[] = [];
+    const traced = startFront({
+      api: `http://localhost:${String(fakeApi.port)}`,
+      sessions: {},
+      port: 0,
+      documentLog: (event) => {
+        receipts.push(event);
+      },
+    });
+    const origin = `http://localhost:${String(traced.port)}`;
+    try {
+      expect((await fetch(`${origin}/assets/app.js`)).status).toBe(200);
+      expect(receipts).toEqual([]);
+      const pathname = '/join/token-in-path';
+      const response = await fetch(`${origin}${pathname}?token=token-in-query`, {
+        headers: { 'sec-fetch-dest': 'document', cookie: '__Host-purlay_session=private-cookie' },
+      });
+      expect(response.status).toBe(200);
+      const pathHash = new Bun.CryptoHasher('sha256').update(pathname).digest('hex');
+      expect(receipts).toHaveLength(2);
+      const [received, responding] = receipts;
+      expect(received).toMatchObject({ id: 1, stage: 'received', pathHash });
+      expect(responding).toMatchObject({ id: 1, stage: 'responding', pathHash, status: 200 });
+      expect(typeof received?.port).toBe('number');
+      expect(received?.port).toBe(responding?.port);
+      expect(JSON.stringify(receipts)).not.toMatch(/token-in-path|token-in-query|private-cookie/);
+    } finally {
+      await traced.stop(true);
+    }
+  });
+
+  test('a client abort before response headers leaves an abort receipt', async () => {
+    const received = Promise.withResolvers<DocumentEvent>();
+    const aborted = Promise.withResolvers<DocumentEvent>();
+    const responding = Promise.withResolvers<DocumentEvent>();
+    const upstreamStarted = Promise.withResolvers<undefined>();
+    const upstream = Promise.withResolvers<Response>();
+    const silent = Bun.serve({
+      port: 0,
+      fetch: () => {
+        upstreamStarted.resolve(undefined);
+        return upstream.promise;
+      },
+    });
+    const traced = startFront({
+      api: `http://localhost:${String(silent.port)}`,
+      sessions: {},
+      port: 0,
+      documentLog: (event) => {
+        if (event.stage === 'received') received.resolve(event);
+        if (event.stage === 'aborted') aborted.resolve(event);
+        if (event.stage === 'responding') responding.resolve(event);
+      },
+    });
+    const client = new AbortController();
+    try {
+      const reply = fetch(`http://localhost:${String(traced.port)}/w/acme/questions`, {
+        headers: { 'sec-fetch-dest': 'document' },
+        signal: client.signal,
+      });
+      const arrival = await received.promise;
+      await upstreamStarted.promise;
+      client.abort();
+      expect(await reply.catch((error: unknown) => error)).toBeInstanceOf(DOMException);
+      expect(await aborted.promise).toMatchObject({
+        id: arrival.id,
+        pathHash: arrival.pathHash,
+        port: arrival.port,
+        stage: 'aborted',
+      });
+      upstream.resolve(new Response('done'));
+      expect(await responding.promise).toMatchObject({ id: arrival.id, status: 200 });
+    } finally {
+      upstream.resolve(new Response('done'));
+      await traced.stop(true);
+      await silent.stop(true);
+    }
   });
 
   test('an API that is not there is a 502, said plainly', async () => {

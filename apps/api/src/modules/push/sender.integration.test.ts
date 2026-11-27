@@ -7,7 +7,7 @@ import type { PushSenderDependencies } from './sender';
 import { inMemoryAttention, nobodyActive, type Attention } from '../../platform/attention';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { messageId, type MessagePriority } from '@purlay/types';
 import { fixedClock } from '../../platform/clock';
 import { enqueuePush } from '../../platform/push-work';
 import { movable } from '../../testing/push-world';
@@ -85,6 +85,7 @@ const sending = async (
     content: string,
     id?: string,
     parentId?: string,
+    priority?: MessagePriority,
   ) => Promise<string>;
   readonly settled: () => Promise<void>;
 }> => {
@@ -104,7 +105,7 @@ const sending = async (
   });
   let at = 0;
   return {
-    say: async (room, as, content, id, parentId): Promise<string> => {
+    say: async (room, as, content, id, parentId, priority): Promise<string> => {
       at += 1;
       const context = room.members[as]?.context;
       if (context === undefined) throw new Error(`no member ${as}`);
@@ -115,6 +116,7 @@ const sending = async (
           id: id ?? messageId(new Date(NOW.getTime() + at)),
           content,
           ...(parentId === undefined ? {} : { parentId }),
+          ...(priority === undefined ? {} : { priority }),
         },
       );
       return sent.id;
@@ -233,39 +235,54 @@ describe('integration: a device is told', () => {
       }
     });
   });
-  test('of a mention, in its person’s language, with who and where and never what was said', async () => {
-    await withRollback(async (db) => {
-      const room = await aRoom(db, ['alice', 'bob']);
-      const bob = await aBrowser();
-      await subscribeDevice(db, room, 'bob', bob);
-      await db
-        .updateTable('users')
-        .set({ locale: 'tr' })
-        .where('id', '=', room.members['bob']?.userId ?? '')
-        .execute();
-      const service = aPushService();
-      const { say, settled } = await sending(db, service.post);
-      await say(room, 'alice', `${mention(room, 'bob')} the secret plan`);
-      await settled();
+  test.each([
+    ['ordinary', 'tr', undefined, 'alice senden bahsetti'],
+    ['important', 'en', 'important', 'Important · alice mentioned you'],
+    ['urgent', 'tr', 'urgent', 'Acil · alice senden bahsetti'],
+  ] as const)(
+    'of an %s mention, in its person’s language without message content',
+    async (_label, locale, priority, body) => {
+      await withRollback(async (db) => {
+        const room = await aRoom(db, ['alice', 'bob']);
+        const bob = await aBrowser();
+        await subscribeDevice(db, room, 'bob', bob);
+        await db
+          .updateTable('users')
+          .set({ locale })
+          .where('id', '=', room.members['bob']?.userId ?? '')
+          .execute();
+        const service = aPushService();
+        const { say, settled } = await sending(db, service.post);
+        await say(
+          room,
+          'alice',
+          `${mention(room, 'bob')} the secret plan`,
+          undefined,
+          undefined,
+          priority,
+        );
+        await settled();
 
-      expect(service.sent.map((push) => push.url)).toEqual(['https://push.example.com/send/bob']);
-      const [push] = service.sent;
-      expect(push?.headers['content-encoding']).toBe('aes128gcm');
-      expect(push?.headers['authorization']).toMatch(/^vapid t=[\w-]+\.[\w-]+\.[\w-]+, k=/);
-      const channel = await db
-        .selectFrom('channels')
-        .select('name')
-        .where('id', '=', room.channelId)
-        .executeTakeFirstOrThrow();
-      const read = await bob.read(push?.body ?? new Uint8Array());
-      expect(read).toMatchObject({
-        title: `#${channel.name ?? ''}`,
-        body: 'alice senden bahsetti',
-        tag: `channel:${room.channelId}`,
+        expect(service.sent.map((push) => push.url)).toEqual(['https://push.example.com/send/bob']);
+        const [push] = service.sent;
+        expect(push?.headers['content-encoding']).toBe('aes128gcm');
+        expect(push?.headers['authorization']).toMatch(/^vapid t=[\w-]+\.[\w-]+\.[\w-]+, k=/);
+        const channel = await db
+          .selectFrom('channels')
+          .select('name')
+          .where('id', '=', room.channelId)
+          .executeTakeFirstOrThrow();
+        const read = await bob.read(push?.body ?? new Uint8Array());
+        expect(read).toMatchObject({
+          title: `#${channel.name ?? ''}`,
+          body,
+          tag: `channel:${room.channelId}`,
+        });
+        expect(JSON.stringify(read)).not.toContain('secret');
+        expect(read).not.toHaveProperty('priority');
       });
-      expect(JSON.stringify(read)).not.toContain('secret');
-    });
-  });
+    },
+  );
 
   test('of a group, titled by its other people and saying it was written to the conversation', async () => {
     await withRollback(async (db) => {

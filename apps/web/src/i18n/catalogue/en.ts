@@ -1167,6 +1167,7 @@ export const en = {
   'audit.kind.identity.unlinked': 'Company identity unlinked',
   'audit.action.identity.unlinked': '{actor} unlinked their company identity',
   'audit.kind.workspace.renamed': 'Workspace renamed',
+  'audit.kind.workspace.urgent_messages_changed': 'Urgent message delivery changed',
   'audit.kind.retention.changed': 'History window changed',
   'audit.kind.account.erased': 'Account erased',
   'audit.kind.content.erased': 'Writing erased on request',
@@ -1229,6 +1230,9 @@ export const en = {
   'audit.action.invitation.revoked': '{actor} revoked an invitation link',
   'audit.action.message.removed_by_moderator': '{actor} deleted a message by {author}',
   'audit.action.workspace.renamed': '{actor} renamed the workspace from {from} to {to}',
+  'audit.action.workspace.urgent_messages_changed': '{actor} changed urgent message delivery',
+  'audit.action.workspace.urgent_messages_enabled': '{actor} allowed urgent messages',
+  'audit.action.workspace.urgent_messages_disabled': '{actor} turned off urgent messages',
   'audit.action.retention.changed': '{actor} changed how long history is kept from {from} to {to}',
   'audit.workspaceWindow': 'the workspace’s window',
   'audit.action.channel.retention_changed':
@@ -2388,6 +2392,10 @@ export const en = {
   'priority.normal': 'Standard',
   'priority.important': 'Important',
   'priority.urgent': 'Urgent',
+  'priority.unavailable':
+    'This workspace turned off urgent messages. Choose a delivery option and send again.',
+  'priority.notSent':
+    'The message to {channel} is still a draft because that workspace turned off urgent messages.',
   'composer.pasted': 'Pasted text became a code block',
   'composer.pasteChanged': 'The pasted block changed. Your edits were kept.',
   'composer.pasted.table': 'Pasted rows became a table',
@@ -3044,6 +3052,11 @@ export const en = {
   'settings.general.title': 'General',
   'settings.general.description': 'The workspace’s name and address.',
   'settings.general.workspace': 'Workspace',
+  'settings.general.urgentMessages.title': 'Message delivery',
+  'settings.general.urgentMessages.allow': 'Allow urgent messages',
+  'settings.general.urgentMessages.hint':
+    'Members can choose Urgent in direct messages or when mentioning someone.',
+  'settings.general.urgentMessages.failed': 'Could not change urgent message delivery.',
   'settings.general.nameHint': 'What everyone in the workspace sees.',
   'settings.general.address': 'Address',
   'settings.general.addressHint':

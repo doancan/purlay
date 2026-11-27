@@ -479,6 +479,7 @@ jobs:
         env:
           PURLAY_E2E_PROJECT: webkit
           PURLAY_E2E_PERFORMANCE: skip
+          PURLAY_E2E_NAVIGATION_LOG: apps/web/coverage/webkit-navigation.jsonl
 
       - name: keep the report
         if: failure()
@@ -488,6 +489,7 @@ jobs:
           path: |
             apps/web/playwright-report
             apps/web/test-results
+            apps/web/coverage/webkit-navigation.jsonl
           retention-days: 7
 
       - name: stop the browser server

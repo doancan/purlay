@@ -1,6 +1,6 @@
 /**
  * Choosing the devices a notice goes to (#78, D-126, D-143, D-286 §9): the live devices of the people it
- * told, whose subscription was made with the server's current key, minus the people in front of the
+ * told, using subscriptions that match the server's current provider settings, minus the people in front of the
  * workspace's page (D-143), and — for a module's notice — minus those in Deep Work or their quiet hours,
  * whose notices wait instead. What each device is told is worded here, in the person's language.
  */
@@ -20,20 +20,35 @@ import { eligiblePushSources } from './workspace-access';
 /** The server's push keys, or where to ask for them when an administrator can change them while the server runs. */
 export type PushKeys = VapidKeys | (() => Promise<VapidKeys | undefined>);
 
-interface Subscription {
-  readonly companyWorkspaceId: string | null;
+interface DeviceIdentity {
   readonly id: string;
   readonly userId: string;
   readonly sessionId: string;
-  readonly endpoint: string;
-  readonly p256dh: string;
-  readonly auth: string;
-  readonly locale: string;
-  readonly serverKey: string;
   readonly generation: string;
 }
 
-export interface Device extends Omit<Subscription, 'locale' | 'companyWorkspaceId'> {
+interface WebTransport {
+  readonly provider: 'web';
+  readonly endpoint: string;
+  readonly p256dh: string;
+  readonly auth: string;
+  readonly serverKey: string;
+}
+
+interface ApnsTransport {
+  readonly provider: 'apns';
+  readonly deviceToken: string;
+  readonly apnsScope: string;
+  readonly registeredAt: Date;
+}
+
+type Subscription = DeviceIdentity &
+  (WebTransport | ApnsTransport) & {
+    readonly companyWorkspaceId: string | null;
+    readonly locale: string;
+  };
+
+interface RoutedDevice extends DeviceIdentity {
   readonly workspaceId: string;
   readonly source:
     { readonly messageId: string; readonly notificationId?: string } | { readonly entryId: string };
@@ -42,10 +57,15 @@ export interface Device extends Omit<Subscription, 'locale' | 'companyWorkspaceI
   readonly module?: string;
 }
 
+export type WebDevice = RoutedDevice & WebTransport;
+type ApnsDevice = RoutedDevice & ApnsTransport;
+export type Device = WebDevice | ApnsDevice;
+
 interface SubscriptionLookup {
   readonly database: Executor;
   readonly clock: Clock;
   readonly keys: PushKeys;
+  readonly apnsScope?: string;
   readonly sessionLifetime?: () => WorkspaceAccessLifetime;
 }
 
@@ -62,14 +82,14 @@ interface Routed {
   readonly waiting: ReadonlySet<string>;
 }
 
-/** The live devices of these people whose subscription was made with the server's current key, in the order they were made. */
-const subscriptionsOf = async (
+/** Live Web Push subscriptions bound to the current browser key. */
+const webSubscriptionsOf = async (
   { database, clock, keys }: SubscriptionLookup,
   userIds: readonly string[],
-): Promise<Subscription[]> => {
+): Promise<(Subscription & WebTransport)[]> => {
   const current = typeof keys === 'function' ? await keys() : keys;
   if (current === undefined) return [];
-  return await database
+  const rows = await database
     .selectFrom('push_subscriptions as s')
     .innerJoin('users as person', 'person.id', 's.user_id')
     .innerJoin('sessions as live', 'live.id', 's.session_id')
@@ -96,9 +116,59 @@ const subscriptionsOf = async (
     .orderBy('s.created_at')
     .orderBy('s.id')
     .execute();
+  return rows.map((row) => ({ ...row, provider: 'web' }));
+};
+
+/** Live APNs registrations bound to the configured app and environment. */
+const apnsSubscriptionsOf = async (
+  { database, clock, apnsScope }: SubscriptionLookup,
+  userIds: readonly string[],
+): Promise<(Subscription & ApnsTransport)[]> => {
+  if (apnsScope === undefined) return [];
+  const rows = await database
+    .selectFrom('apns_subscriptions as s')
+    .innerJoin('sessions as live', 'live.id', 's.session_id')
+    .innerJoin('users as person', 'person.id', 'live.user_id')
+    .select([
+      's.session_id as id',
+      's.session_id as sessionId',
+      's.generation',
+      's.device_token as deviceToken',
+      's.registered_at as registeredAt',
+      'live.user_id as userId',
+      'live.company_workspace_id as companyWorkspaceId',
+      'person.locale',
+    ])
+    .where('live.user_id', 'in', userIds)
+    .where('person.deleted_at', 'is', null)
+    .where('person.suspended_at', 'is', null)
+    .where('live.expires_at', '>', clock.now())
+    .where(companySessionAllowsWorkspace('live', sql<string>`live.company_workspace_id`))
+    .where('s.provider_scope', '=', apnsScope)
+    .orderBy('s.registered_at')
+    .orderBy('s.session_id')
+    .execute();
+  return rows.map((row) => ({ ...row, provider: 'apns', apnsScope }));
+};
+
+const subscriptionsOf = async (
+  dependencies: SubscriptionLookup,
+  userIds: readonly string[],
+): Promise<Subscription[]> => {
+  const web = await webSubscriptionsOf(dependencies, userIds);
+  const apns = await apnsSubscriptionsOf(dependencies, userIds);
+  return [...web, ...apns];
 };
 
 const localeOf = (locale: string): PushLocale => (locale === 'tr' ? 'tr' : 'en');
+
+const canTell = (
+  subscription: Subscription,
+  notice: { readonly userId: string; readonly workspaceId: string },
+): boolean =>
+  notice.userId === subscription.userId &&
+  (subscription.companyWorkspaceId === null ||
+    subscription.companyWorkspaceId === notice.workspaceId);
 
 /** The devices of the people a message told, with what each is to be told. */
 export const devicesFor = async (
@@ -121,12 +191,7 @@ export const devicesFor = async (
   const slugs = new Map(workspaces.map((workspace) => [workspace.id, workspace.slug]));
   const rows = subscriptions.flatMap((subscription) =>
     told
-      .filter(
-        (notice) =>
-          notice.userId === subscription.userId &&
-          (subscription.companyWorkspaceId === null ||
-            subscription.companyWorkspaceId === notice.workspaceId),
-      )
+      .filter((notice) => canTell(subscription, notice))
       .flatMap((notice) => {
         const slug = slugs.get(notice.workspaceId);
         return slug === undefined ? [] : [{ ...subscription, ...notice, slug }];
@@ -161,6 +226,7 @@ export const devicesFor = async (
               localeOf(row.locale),
               saidOf(reason, row.groupNames !== null, row.rootSenderId, row.userId),
               row.authorName,
+              row.priority,
             ),
             url: `/w/${row.slug}/c/${row.channelId}${row.threadId === null ? '' : `?thread=${encodeURIComponent(row.threadId)}`}`,
             tag: `channel:${row.channelId}`,
@@ -228,12 +294,7 @@ export const routeInbox = async (
   ]);
   const candidates = subscriptions.flatMap((subscription) =>
     ready
-      .filter(
-        (entry) =>
-          entry.userId === subscription.userId &&
-          (subscription.companyWorkspaceId === null ||
-            subscription.companyWorkspaceId === entry.workspaceId),
-      )
+      .filter((entry) => canTell(subscription, entry))
       .map((entry) => ({ workspaceId: entry.workspaceId, sessionId: subscription.sessionId })),
   );
   const eligible = await eligiblePushSources(
@@ -245,7 +306,7 @@ export const routeInbox = async (
     ready
       .filter(
         (entry) =>
-          entry.userId === subscription.userId &&
+          canTell(subscription, entry) &&
           eligible.has(`${entry.workspaceId}:${subscription.sessionId}`),
       )
       .flatMap((entry) => {

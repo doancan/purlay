@@ -111,6 +111,78 @@ describe('general', () => {
     admin.unmount();
   });
 
+  test('an older server leaves the urgent delivery setting hidden', async () => {
+    const view = await openPage({});
+    expect(main(view).queryByRole('checkbox', { name: 'Allow urgent messages' })).toBeNull();
+    view.unmount();
+  });
+
+  test('an admin can change urgent delivery and see the server’s saved setting', async () => {
+    const saved = Promise.withResolvers<{ enabled: boolean }>();
+    const session = aSession();
+    let enabled = true;
+    const asked: [string, boolean][] = [];
+    const view = await openPage(
+      {
+        me: () =>
+          Promise.resolve({
+            ...session,
+            memberships: session.memberships.map((membership) => ({
+              ...membership,
+              role: 'admin' as const,
+              urgentMessagesEnabled: enabled,
+            })),
+          }),
+        setUrgentMessages: (workspaceId, next) => {
+          asked.push([workspaceId, next]);
+          return saved.promise.then((answer) => {
+            enabled = answer.enabled;
+            return answer;
+          });
+        },
+      },
+      'admin',
+    );
+    const choice = main(view).getByRole('checkbox', { name: 'Allow urgent messages' });
+    expect(choice).toHaveProperty('checked', true);
+    await expectNoAxeViolations(view.getByRole('main'));
+    choice.focus();
+    await person().keyboard(' ');
+    expect(choice).toHaveProperty('checked', false);
+    expect(choice).toHaveProperty('disabled', true);
+    expect(asked).toEqual([[WORKSPACE.id, false]]);
+    saved.resolve({ enabled: false });
+    await settle();
+    expect(choice).toHaveProperty('checked', false);
+    expect(choice).toHaveProperty('disabled', false);
+    expect(main(view).getByRole('status').textContent).toBe('Saved.');
+    view.unmount();
+  });
+
+  test('a refused urgent delivery edit restores the confirmed policy and offers the control again', async () => {
+    const session = aSession();
+    const view = await openPage({
+      me: () =>
+        Promise.resolve({
+          ...session,
+          memberships: session.memberships.map((membership) => ({
+            ...membership,
+            urgentMessagesEnabled: false,
+          })),
+        }),
+      setUrgentMessages: () => Promise.reject(new ApiError(403, 'FORBIDDEN', 'Refused')),
+    });
+    const choice = main(view).getByRole('checkbox', { name: 'Allow urgent messages' });
+    await person().click(choice);
+    await settle();
+    expect(choice).toHaveProperty('checked', false);
+    expect(choice).toHaveProperty('disabled', false);
+    expect(main(view).getByRole('alert').textContent).toContain(
+      'Could not change urgent message delivery.',
+    );
+    view.unmount();
+  });
+
   test('a new name is saved, and shows in the sidebar at once; the address is said and kept', async () => {
     const asked: [string, string][] = [];
     const view = await openPage({

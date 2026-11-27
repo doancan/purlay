@@ -38,12 +38,12 @@ export const settlePush = async (
   await atomicallyOn(database)(async (tx) => {
     const parent = await tx
       .selectFrom('push_intents')
-      .select('id')
+      .select('web_canceled')
       .where('id', '=', claim.intentId)
       .where('state', '=', 'admitted')
       .forUpdate()
       .executeTakeFirst();
-    if (parent === undefined) return;
+    if (parent === undefined || (parent.web_canceled && claim.apnsScope === undefined)) return;
     const target = await tx
       .selectFrom('push_deliveries')
       .select(['attempts', 'next_attempt_at'])
