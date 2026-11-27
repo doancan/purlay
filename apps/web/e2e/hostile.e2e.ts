@@ -63,17 +63,37 @@ test.describe('hostile content', () => {
     await expect(page.locator('[data-message-row]').first()).toBeVisible();
     await expect(page.locator('[data-message-row]')).toHaveCount(PAYLOADS.length);
 
-    // The page answers: a script that ran long, or a pattern that backtracked, would not.
-    const answered = await page.evaluate(
-      () =>
-        new Promise<number>((resolve) => {
-          const start = performance.now();
-          setTimeout(() => {
-            resolve(performance.now() - start);
-          }, 0);
-        }),
-    );
-    expect(answered).toBeLessThan(500);
+    // A delayed page timer can coincide with a delayed Playwright worker (#1528). Record the
+    // worker's event loop separately, keeping the first page timer as the only timing assertion.
+    const evaluationStarted = performance.now();
+    let lastWorkerBeat = evaluationStarted;
+    let longestWorkerGap = 0;
+    const workerHeartbeat = setInterval(() => {
+      const now = performance.now();
+      longestWorkerGap = Math.max(longestWorkerGap, now - lastWorkerBeat);
+      lastWorkerBeat = now;
+    }, 10);
+    try {
+      const answered = await page.evaluate(
+        () =>
+          new Promise<{ pageMs: number; visibility: DocumentVisibilityState }>((resolve) => {
+            const start = performance.now();
+            setTimeout(() => {
+              resolve({ pageMs: performance.now() - start, visibility: document.visibilityState });
+            }, 0);
+          }),
+      );
+      const evaluationEnded = performance.now();
+      const evaluationMs = evaluationEnded - evaluationStarted;
+      // The browser reply itself can reach the worker before the next heartbeat runs.
+      const workerMaxGapMs = Math.max(longestWorkerGap, evaluationEnded - lastWorkerBeat);
+      expect(
+        answered.pageMs,
+        `Page timer timing ${JSON.stringify({ ...answered, evaluationMs, workerMaxGapMs })}`,
+      ).toBeLessThan(500);
+    } finally {
+      clearInterval(workerHeartbeat);
+    }
 
     expect(await page.evaluate(() => (window as unknown as { __pwned?: unknown }).__pwned)).toBe(
       undefined,
