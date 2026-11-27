@@ -3770,7 +3770,7 @@ export const tr = {
   'admin.audit.action.server.fact_discarded': 'Modüller arası olgu bırakıldı',
   'admin.audit.action.server.smtp_tested': 'E-posta bağlantısı sınandı',
   'admin.audit.action.server.admission_policy_changed': 'Hesap kabul politikası değiştirildi',
-  'admin.audit.action.server.identity_changed': 'Sunucu adı veya destek bilgileri değiştirildi',
+  'admin.audit.action.server.identity_changed': 'Sunucu kimliği değiştirildi',
   'admin.audit.action.server.account_approved': 'Hesap onaylandı',
   'admin.audit.action.server.account_denied': 'Hesap onayı reddedildi',
   'admin.audit.action.server.audit_export_requested': 'Denetim kaydı dışa aktarımı istendi',
@@ -3985,6 +3985,9 @@ export const tr = {
   'admin.identity.name': 'Sunucu görünen adı',
   'admin.identity.support': 'Destek adresi',
   'admin.identity.supportHint': 'HTTPS bağlantısı veya mailto adresi; gizlemek için boş bırakın.',
+  'admin.identity.privacy': 'Gizlilik politikası adresi',
+  'admin.identity.terms': 'Hizmet koşulları adresi',
+  'admin.identity.legalHint': 'HTTPS bağlantısı. Gizlemek için boş bırakın.',
   'admin.admissionPolicy': 'Yeni hesap kabulü',
   'admin.admissionPolicy.body':
     'Davetle ve giriş sağlayıcılarıyla açılanlar dahil yeni hesaplara uygulanır. Mevcut hesapların erişimi korunur. Onayı kapatmak bekleyen hesapları kendiliğinden onaylamaz.',

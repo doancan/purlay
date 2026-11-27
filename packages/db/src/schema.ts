@@ -810,6 +810,7 @@ export interface ServerSettings {
   oidc_issuer: string | null;
   oidc_name: string | null;
   password_sign_in: Generated<boolean>;
+  privacy_url: string | null;
   push_enabled: Generated<boolean>;
   push_imported_from_env_at: Timestamp | null;
   push_private_key_encrypted: string | null;
@@ -824,6 +825,7 @@ export interface ServerSettings {
   smtp_allow_plaintext: Generated<boolean>;
   smtp_url_encrypted: string | null;
   support_url: string | null;
+  terms_url: string | null;
   updated_at: Generated<Timestamp>;
   workspace_creator_logins: Generated<string[]>;
   workspace_creators: Generated<string>;

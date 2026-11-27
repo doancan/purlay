@@ -113,6 +113,7 @@ import { InboxPage, InboxQuery, MarkInboxReadRequest } from './inbox';
 import { CreateIssueRequest, Issue, IssuePage, IssueQuery, UpdateIssueRequest } from './issues';
 import { Attachment, Channel, Message, Profile, Workspace } from './models';
 import { LatestReleaseAnswer } from './releases';
+import { InstanceInfo } from './server-administration';
 import { WebLinkPreviewRequest, WebLinkPreviewResponse } from './web-link-previews';
 import {
   CreateGuestInvitationRequest,
@@ -155,6 +156,13 @@ export const ENDPOINTS = [
     path: '/api/client',
     auth: 'none',
     responses: { 200: ClientInfo },
+  }),
+  read({
+    id: 'getInstanceInfo',
+    method: 'GET',
+    path: '/api/instance',
+    auth: 'none',
+    responses: { 200: InstanceInfo },
   }),
   read({
     id: 'nativeAuthorize',

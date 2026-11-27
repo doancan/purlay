@@ -17,7 +17,14 @@ import { lockServerAdministrator } from './changes';
 export const readServerPreferences = async (db: Executor): Promise<ServerPreferences> => {
   const row = await db
     .selectFrom('server_settings')
-    .select(['allowed_email_domains', 'require_account_approval', 'display_name', 'support_url'])
+    .select([
+      'allowed_email_domains',
+      'require_account_approval',
+      'display_name',
+      'support_url',
+      'privacy_url',
+      'terms_url',
+    ])
     .where('id', '=', true)
     .executeTakeFirst();
   return {
@@ -25,9 +32,11 @@ export const readServerPreferences = async (db: Executor): Promise<ServerPrefere
     requireAccountApproval: row?.require_account_approval ?? false,
     displayName: row?.display_name ?? 'Purlay',
     supportUrl: row?.support_url ?? null,
+    privacyUrl: row?.privacy_url ?? null,
+    termsUrl: row?.terms_url ?? null,
   };
 };
-/** Intentionally public: the name, support contact and joining requirements, never provider configuration. */
+/** Intentionally public: server identity and joining requirements. */
 export const instanceInfo = async (db: Executor): Promise<InstanceInfo> =>
   await readServerPreferences(db);
 export const emailDomainAllowed = (email: string, allowed: readonly string[]): boolean =>
@@ -50,6 +59,19 @@ export const admissionStateOf = (user: unknown): AdmissionState | 'verify-email'
   return 'approved';
 };
 
+const optionalAddress = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+};
+
+const validLegalAddress = (value: string | null): boolean => {
+  if (value === null) return true;
+  // Require an explicit HTTPS origin and refuse URL-parser repairs of whitespace or slashes.
+  if (!/^https:\/\/[^/\\]/i.test(value) || /[\s\u0000-\u001f\u007f\\]/.test(value)) return false;
+  const url = URL.parse(value);
+  return url !== null && url.hostname !== '' && url.username === '' && url.password === '';
+};
+
 export const changeServerPreferences = async (
   tx: Transaction,
   clock: Clock,
@@ -65,8 +87,9 @@ export const changeServerPreferences = async (
   const before = await readServerPreferences(tx);
   const change = { ...before, ...input };
   const name = change.displayName.trim();
-  const trimmedSupport = change.supportUrl?.trim() ?? '';
-  const support = trimmedSupport === '' ? null : trimmedSupport;
+  const support = optionalAddress(change.supportUrl);
+  const privacy = optionalAddress(change.privacyUrl);
+  const terms = optionalAddress(change.termsUrl);
   let validSupport = support === null;
   if (support !== null) {
     try {
@@ -85,7 +108,9 @@ export const changeServerPreferences = async (
     }
   }
   const invalidName = name === '' || /[\u0000-\u001f\u007f]/.test(name);
-  if (invalidName || !validSupport)
+  const validPrivacy = validLegalAddress(privacy);
+  const validTerms = validLegalAddress(terms);
+  if (invalidName || !validSupport || !validPrivacy || !validTerms)
     throw new AppError({
       code: 'VALIDATION_FAILED',
       message: 'Check the server identity.',
@@ -95,6 +120,8 @@ export const changeServerPreferences = async (
           ...(!validSupport
             ? { supportUrl: 'Use an HTTPS address or a plain mailto address.' }
             : {}),
+          ...(!validPrivacy ? { privacyUrl: 'Use an HTTPS address.' } : {}),
+          ...(!validTerms ? { termsUrl: 'Use an HTTPS address.' } : {}),
         },
       },
     });
@@ -104,13 +131,19 @@ export const changeServerPreferences = async (
   const policyChanged =
     before.requireAccountApproval !== change.requireAccountApproval ||
     before.allowedEmailDomains.join(',') !== domains.join(',');
-  const identityChanged = before.displayName !== name || before.supportUrl !== support;
+  const identityChanged =
+    before.displayName !== name ||
+    before.supportUrl !== support ||
+    before.privacyUrl !== privacy ||
+    before.termsUrl !== terms;
   if (!policyChanged && !identityChanged) return;
   const patch = {
     allowed_email_domains: domains,
     require_account_approval: change.requireAccountApproval,
     display_name: name,
     support_url: support,
+    privacy_url: privacy,
+    terms_url: terms,
     updated_at: clock.now(),
   };
   await tx

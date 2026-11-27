@@ -31,6 +31,7 @@ have it.
 
 - **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
 - **Messages** — workspace owners and admins can turn off Urgent delivery in General settings (D-337)
+- **Operations** — server administrators can publish their own privacy policy and terms links for native clients (D-357)
 
 ### Changed
 
