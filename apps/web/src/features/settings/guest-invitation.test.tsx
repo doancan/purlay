@@ -239,7 +239,7 @@ test('a failed list refresh can recover and clipboard refusal preserves the conf
         null,
     ).toBe(true);
     await user.click(view.getByRole('button', { name: 'Copy' }));
-    await view.findByText("Couldn't copy. Select the text and copy it yourself.");
+    await view.findByText('Couldn’t copy. Select the text and copy it yourself.');
     await user.click(view.getByRole('button', { name: 'Copy' }));
     await view.findByText('Copied');
     expect(copied).toEqual([

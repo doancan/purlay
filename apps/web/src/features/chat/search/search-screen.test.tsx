@@ -237,7 +237,7 @@ describe('the states', () => {
       },
       { path: '/w/acme/search?q=deploy' },
     );
-    expect(view.getByRole('alert').textContent).toContain("Couldn't search");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t search');
     expect(field(view).value).toBe('deploy');
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await settle();

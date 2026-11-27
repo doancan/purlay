@@ -309,7 +309,7 @@ describe('its states (UX §8)', () => {
         ? Promise.reject(new ApiError(0, 'NETWORK', 'offline'))
         : Promise.resolve(asPage([question(2, IDS.api)]));
     });
-    expect(screen.getByRole('alert').textContent).toContain("Couldn't load open questions");
+    expect(screen.getByRole('alert').textContent).toContain('Couldn’t load open questions');
     expect(screen.getByRole('heading', { level: 1, name: 'Open questions' })).toBeDefined();
     await expectNoAxeViolations(screen.container);
     await person().click(screen.getByRole('button', { name: 'Retry' }));

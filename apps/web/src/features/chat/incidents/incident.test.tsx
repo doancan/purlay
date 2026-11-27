@@ -220,7 +220,7 @@ describe('a channel’s incident', () => {
           : Promise.resolve({ incident: null }),
     });
     const panel = await openPanel(view);
-    expect(within(panel).getByText("Couldn't load the incident")).toBeDefined();
+    expect(within(panel).getByText('Couldn’t load the incident')).toBeDefined();
     failing = false;
     await person().click(within(panel).getByRole('button', { name: 'Retry' }));
     await settle();

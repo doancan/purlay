@@ -167,7 +167,7 @@ describe('general', () => {
     });
     await person().click(main(view).getByRole('button', { name: 'Copy' }));
     await settle();
-    expect(view.getByText(/Couldn't copy/)).toBeDefined();
+    expect(view.getByText(/Couldn’t copy/)).toBeDefined();
     view.unmount();
   });
 

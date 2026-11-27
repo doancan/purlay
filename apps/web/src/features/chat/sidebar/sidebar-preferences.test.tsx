@@ -556,6 +556,6 @@ describe('Copy workspace link', () => {
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'Copy workspace link' }));
     await settle();
-    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
+    expect(view.getByText('Couldn’t copy. Select the text and copy it yourself.')).toBeDefined();
   });
 });

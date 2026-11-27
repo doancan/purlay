@@ -84,7 +84,7 @@ describe('a feed that failed to load', () => {
           : Promise.resolve(page([aMessage(1)]));
       },
     });
-    expect(view.getByRole('alert').textContent).toContain("Couldn't load messages");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t load messages');
     expect(view.getByRole('textbox', { name: 'Message api' })).toBeDefined();
     await expectNoAxeViolations(view.container);
     await person().click(view.getByRole('button', { name: 'Retry' }));

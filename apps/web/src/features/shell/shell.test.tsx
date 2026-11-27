@@ -64,12 +64,12 @@ describe('the session gate', () => {
       '/w/acme',
       aSignedInApi({ me: () => answer, channels: () => Promise.resolve([]) }),
     );
-    expect(view.getByRole('alert').textContent).toContain("Couldn't reach Purlay");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t reach Purlay');
     // A page of its own, as the other screens without the shell are: its heading in the one main landmark.
     expect(
       within(view.getByRole('main')).getByRole('heading', {
         level: 1,
-        name: "Couldn't reach Purlay",
+        name: 'Couldn’t reach Purlay',
       }),
     ).toBeDefined();
     expect(here(view)).toBe('/w/acme');
@@ -177,7 +177,7 @@ describe('the session read again', () => {
       await view.world.client.refetchQueries({ queryKey: keys.me });
     });
     await settle();
-    expect(view.queryByText("Couldn't reach Purlay")).toBeNull();
+    expect(view.queryByText('Couldn’t reach Purlay')).toBeNull();
     expect(view.getByRole('heading', { level: 1, name: 'api' })).toBeDefined();
   });
 });

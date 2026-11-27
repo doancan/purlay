@@ -78,13 +78,13 @@ describe('ErrorState', () => {
     const onRetry = mock(() => undefined);
     const { getByRole, container } = await renderApp(
       <ErrorState
-        title="Couldn't load messages"
+        title="Couldn’t load messages"
         body="The server did not answer."
         retryLabel="Retry"
         onRetry={onRetry}
       />,
     );
-    expect(getByRole('alert').textContent).toContain("Couldn't load messages");
+    expect(getByRole('alert').textContent).toContain('Couldn’t load messages');
     fireEvent.click(getByRole('button', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
     await expectNoAxeViolations(container);

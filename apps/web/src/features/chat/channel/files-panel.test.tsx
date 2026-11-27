@@ -206,7 +206,7 @@ describe('a channel’s files panel', () => {
     });
     await openFiles(view);
     const alert = within(panelOf(view)).getByRole('alert');
-    expect(alert.textContent).toContain("Couldn't load files");
+    expect(alert.textContent).toContain('Couldn’t load files');
     await expectNoAxeViolations(view.container);
 
     await person().click(within(alert).getByRole('button', { name: 'Retry' }));

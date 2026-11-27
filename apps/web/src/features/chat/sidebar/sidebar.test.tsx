@@ -161,11 +161,11 @@ describe('the channels section', () => {
       '/w/acme/questions',
     );
     expect(
-      view.getAllByRole('alert').some((a) => a.textContent.includes("Couldn't load channels")),
+      view.getAllByRole('alert').some((a) => a.textContent.includes('Couldn’t load channels')),
     ).toBe(true);
     // The people list is built from the same list, and its failure names what it could not show.
     expect(
-      view.getAllByRole('alert').some((a) => a.textContent.includes("Couldn't load people")),
+      view.getAllByRole('alert').some((a) => a.textContent.includes('Couldn’t load people')),
     ).toBe(true);
     fail = false;
     await person().click(some(view.getAllByRole('button', { name: 'Retry' })[0]));
@@ -1300,7 +1300,7 @@ describe('browsing channels', () => {
       }),
     );
     const dialog = within(view.getByRole('dialog'));
-    expect(dialog.getByRole('alert').textContent).toContain("Couldn't load channels");
+    expect(dialog.getByRole('alert').textContent).toContain('Couldn’t load channels');
     const before = asks;
     await person().click(dialog.getByRole('button', { name: 'Retry' }));
     await settle();

@@ -336,7 +336,7 @@ describe('the channels to join, after an invitation', () => {
       },
     });
     const alert = within(screenOf(view)).getByRole('alert');
-    expect(alert.textContent).toContain("Couldn't load channels");
+    expect(alert.textContent).toContain('Couldn’t load channels');
     await person().click(within(alert).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(view.getAllByRole('checkbox')).toHaveLength(5);

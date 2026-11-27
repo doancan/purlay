@@ -310,7 +310,7 @@ describe('the states', () => {
           : Promise.resolve(page([told(4, 'mention')]));
       },
     });
-    expect(view.getByRole('alert').textContent).toContain("Couldn't load your inbox");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t load your inbox');
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await settle();
     expect(view.getByRole('button', { name: /words 4/ })).toBeDefined();

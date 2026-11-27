@@ -79,6 +79,17 @@ describe('the catalogues agree', () => {
     );
     expect(informal.map(([key]) => key)).toEqual([]);
   });
+
+  test('an apostrophe is the typographic one, and English is spelled the British way (D-350)', () => {
+    const american = /\b(?:organiz|behavior|color|favorite|center|canceled|recogniz|analyz)/i;
+    const wrong = Object.entries({ ...en }).filter(([, message]) =>
+      text(message).some((form) => /\p{L}'\p{L}/u.test(form) || american.test(form)),
+    );
+    const straightInTurkish = Object.entries(tr).filter(([, message]) =>
+      text(message).some((form) => /\p{L}'\p{L}/u.test(form)),
+    );
+    expect([...wrong, ...straightInTurkish].map(([key]) => key)).toEqual([]);
+  });
 });
 
 describe('looking a message up', () => {

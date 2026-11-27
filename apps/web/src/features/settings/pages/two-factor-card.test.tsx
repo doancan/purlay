@@ -248,7 +248,7 @@ describe('two-step verification', () => {
     // Not through user-event, which puts a clipboard of its own on the page as it clicks.
     fireEvent.click(here.getByRole('button', { name: 'Copy codes' }));
     await settle();
-    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
+    expect(view.getByText('Couldn’t copy. Select the text and copy it yourself.')).toBeDefined();
     expect(here.getByText('fresh-00001')).toBeDefined();
   });
 

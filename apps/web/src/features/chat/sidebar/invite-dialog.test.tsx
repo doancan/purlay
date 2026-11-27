@@ -175,7 +175,7 @@ describe('invite people', () => {
     expect([link.selectionStart, link.selectionEnd]).toEqual([0, link.value.length]);
     await person().click(view.getByRole('button', { name: 'Copy' }));
     await settle();
-    expect(view.getByText(/Couldn't copy/)).toBeDefined();
+    expect(view.getByText(/Couldn’t copy/)).toBeDefined();
   });
 
   test('the open links are a press away: the dialog closes on the Invitations page', async () => {

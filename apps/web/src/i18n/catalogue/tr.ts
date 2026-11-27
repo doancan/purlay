@@ -3237,7 +3237,7 @@ export const tr = {
   'setup.closed.body': 'Kurulum bitti. Devam etmek için giriş yapın.',
   'setup.closed.action': 'Girişe git',
   'setup.closed.bodySignedIn': 'Kurulum bitti.',
-  'setup.closed.open': "Purlay'ı aç",
+  'setup.closed.open': 'Purlay’ı aç',
   'setup.mismatch.title': 'Farklı bir adrestesiniz',
   'setup.mismatch.body':
     'Bu sunucu {address} adresi için kurulu, ama bu sayfa {origin} adresinde açıldı. Buradan gönderilen kod reddedilir. Doğru adresi açın ve kodu orada girin.',

@@ -239,7 +239,7 @@ describe('the Updates section', () => {
       },
     });
     const panel = await openUpdates(view);
-    expect(await within(panel).findByText("Couldn't load your inbox")).toBeDefined();
+    expect(await within(panel).findByText('Couldn’t load your inbox')).toBeDefined();
     await person().click(await within(panel).findByRole('button', { name: 'Retry' }));
     await settle();
     expect(await within(panel).findByText('No updates')).toBeDefined();

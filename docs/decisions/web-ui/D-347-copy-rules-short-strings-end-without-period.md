@@ -2,6 +2,8 @@
 
 *Amended by D-349: Turkish addresses the person as siz.*
 
+*Amended by D-350: English uses typographic apostrophes and British spelling.*
+
 **Decided (the owner, 2026-11-26).** The design audit (D-345) found the catalogue punctuating the same slot two ways (a
 filtered and an unfiltered empty state, one with a period and one without), error titles in three shapes, and Turkish
 naming one thing two ways: Deep Work and *Derin Çalışma*, a thread and *konu* (which is a channel's topic), the
@@ -25,7 +27,7 @@ workspace left in English in two strings, and an issues state called *Biten* in 
 - Translating Deep Work as *Derin Çalışma* everywhere: it is the feature's name, and fourteen strings already used it.
 - Switching threads to *konu*: it would collide with a channel's topic on the same screen.
 
-**Open, for the owner.** The English catalogue mixes straight and curly apostrophes and British and American spelling,
+**Open, for the owner.** The English catalogue mixed straight and curly apostrophes and British and American spelling (settled by D-350),
 and the Turkish one mixed the formal and informal *you* (settled by D-349); each needs a choice before a sweep.
 
 **Cost of reversing.** Low: strings in two catalogue files and the tests that quote them.

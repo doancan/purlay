@@ -192,7 +192,7 @@ test('a failed JPEG2000 decoder closes the worker and explains the unreadable pa
   const reader = row.getByRole('region', { name: 'Preview of decoder-failure.pdf' });
   await expect(reader.getByRole('img', { name: 'PDF page 1' })).toBeVisible();
   await reader.getByRole('button', { name: 'Next PDF page' }).click();
-  await expect(reader.getByRole('alert')).toContainText("Couldn't read the file");
+  await expect(reader.getByRole('alert')).toContainText('Couldn’t read the file');
   expect(refused).toBe(true);
   await expect.poll(() => closed).toBe(1);
   await expect(reader.getByRole('img')).toHaveCount(0);
@@ -258,7 +258,7 @@ test('a malformed and an encrypted PDF stay explicit and downloadable', async ({
     {
       name: 'malformed.pdf',
       bytes: Buffer.from('%PDF-1.7\nnot a document'),
-      text: "Couldn't read the file",
+      text: 'Couldn’t read the file',
     },
     {
       name: 'password.pdf',
