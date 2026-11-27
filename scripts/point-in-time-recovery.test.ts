@@ -67,17 +67,53 @@ const BASE_PATH = '/usr/bin:/bin';
 
 describe('docker/wal-archive.sh, the archive_command', () => {
   const script = join(repo, 'docker/wal-archive.sh');
-  const place = (): { archive: string; segments: string } => {
+  interface ArchivePlace {
+    readonly archive: string;
+    readonly segments: string;
+    readonly bin: string;
+    readonly syncLog: string;
+  }
+
+  const place = (): ArchivePlace => {
     const root = sandbox('wal-archive');
     const archive = join(root, 'archive');
     const segments = join(root, 'pg_wal');
+    const bin = join(root, 'bin');
+    const syncLog = join(root, 'sync.log');
     mkdirSync(archive);
     mkdirSync(segments);
-    return { archive, segments };
+    mkdirSync(bin);
+    // Observe the barriers without flushing the runner's filesystems. The restore rehearsal runs
+    // the real command in the container. The gzip, hard link and cleanup here are real as well.
+    writeFileSync(
+      join(bin, 'sync'),
+      String.raw`#!/bin/sh
+set -eu
+set -- "$WAL_ARCHIVE_DIR"/.*.partial
+[ "$#" -eq 1 ] && [ -s "$1" ] || { echo "sync: no staged WAL segment" >&2; exit 1; }
+if [ -e "$TEST_WAL_TARGET" ]; then
+  [ "$1" -ef "$TEST_WAL_TARGET" ] || { echo "sync: WAL was not published by hard link" >&2; exit 1; }
+  printf 'after-link\n' >> "$TEST_WAL_SYNC_LOG"
+else
+  printf 'before-link\n' >> "$TEST_WAL_SYNC_LOG"
+fi
+`,
+      { mode: 0o755 },
+    );
+    return { archive, segments, bin, syncLog };
   };
   const NAME = '000000010000000000000007';
-  const archiveOf = (archive: string, segment: string, name = NAME): Outcome =>
-    run(['sh', script, segment, name], { PATH: BASE_PATH, WAL_ARCHIVE_DIR: archive });
+  const archiveOf = (
+    { archive, bin, syncLog }: ArchivePlace,
+    segment: string,
+    name = NAME,
+  ): Outcome =>
+    run(['sh', script, segment, name], {
+      PATH: `${bin}:${BASE_PATH}`,
+      WAL_ARCHIVE_DIR: archive,
+      TEST_WAL_TARGET: join(archive, `${name}.gz`),
+      TEST_WAL_SYNC_LOG: syncLog,
+    });
   const segment = (segments: string, bytes: number, fill: number, name = NAME): string => {
     const path = join(segments, name);
     writeFileSync(path, Buffer.alloc(bytes, fill));
@@ -85,30 +121,39 @@ describe('docker/wal-archive.sh, the archive_command', () => {
   };
 
   test('keeps a segment compressed under its own name, readable back byte for byte, with nothing left over', () => {
-    const { archive, segments } = place();
+    const working = place();
+    const { archive, segments, syncLog } = working;
     const path = segment(segments, 1 << 20, 7);
-    expect(archiveOf(archive, path).code).toBe(0);
+    expect(archiveOf(working, path).code).toBe(0);
+    expect(readFileSync(syncLog, 'utf8').trimEnd().split('\n')).toEqual([
+      'before-link',
+      'after-link',
+    ]);
     expect(readdirSync(archive)).toEqual([`${NAME}.gz`]);
     const back = Bun.spawnSync(['gzip', '-dc', join(archive, `${NAME}.gz`)]);
     expect(Buffer.from(back.stdout).equals(readFileSync(path))).toBe(true);
   });
 
   test('archiving the same segment again is success and changes nothing (PostgreSQL retries after a crash)', () => {
-    const { archive, segments } = place();
+    const working = place();
+    const { archive, segments, syncLog } = working;
     const path = segment(segments, 4096, 1);
-    expect(archiveOf(archive, path).code).toBe(0);
+    expect(archiveOf(working, path).code).toBe(0);
     const before = statSync(join(archive, `${NAME}.gz`)).ino;
-    expect(archiveOf(archive, path).code).toBe(0);
+    const barriers = readFileSync(syncLog, 'utf8');
+    expect(archiveOf(working, path).code).toBe(0);
     expect(statSync(join(archive, `${NAME}.gz`)).ino).toBe(before);
+    expect(readFileSync(syncLog, 'utf8')).toBe(barriers);
   });
 
   test('a different segment under a name already archived is refused, and the archived one is kept', () => {
-    const { archive, segments } = place();
+    const working = place();
+    const { archive, segments } = working;
     const first = segment(segments, 4096, 1);
-    expect(archiveOf(archive, first).code).toBe(0);
+    expect(archiveOf(working, first).code).toBe(0);
     const kept = readFileSync(join(archive, `${NAME}.gz`));
     const other = segment(segments, 4096, 2, 'other');
-    const outcome = archiveOf(archive, other);
+    const outcome = archiveOf(working, other);
     expect(outcome.code).not.toBe(0);
     expect(outcome.stderr).toContain('refusing to overwrite');
     expect(readFileSync(join(archive, `${NAME}.gz`)).equals(kept)).toBe(true);
@@ -116,21 +161,23 @@ describe('docker/wal-archive.sh, the archive_command', () => {
   });
 
   test('a missing archive directory, or a segment that is not there, is a failure PostgreSQL will see', () => {
-    const { archive, segments } = place();
+    const working = place();
+    const { archive, segments } = working;
     const path = segment(segments, 4096, 1);
-    expect(archiveOf(join(archive, 'gone'), path).code).not.toBe(0);
-    expect(archiveOf(archive, join(segments, 'not-there')).code).not.toBe(0);
+    expect(archiveOf({ ...working, archive: join(archive, 'gone') }, path).code).not.toBe(0);
+    expect(archiveOf(working, join(segments, 'not-there')).code).not.toBe(0);
     expect(readdirSync(archive)).toEqual([]);
   });
 
   test.skipIf(process.getuid?.() === 0)(
     'a directory it cannot write to is a failure that leaves nothing behind',
     () => {
-      const { archive, segments } = place();
+      const working = place();
+      const { archive, segments } = working;
       const path = segment(segments, 4096, 1);
       chmodSync(archive, 0o500);
       try {
-        const outcome = archiveOf(archive, path);
+        const outcome = archiveOf(working, path);
         expect(outcome.code).not.toBe(0);
         expect(readdirSync(archive)).toEqual([]);
       } finally {
@@ -140,9 +187,10 @@ describe('docker/wal-archive.sh, the archive_command', () => {
   );
 
   test.each(['', '../escape', 'a/b', '.hidden'])('refuses the file name %p', (name) => {
-    const { archive, segments } = place();
+    const working = place();
+    const { archive, segments } = working;
     const path = segment(segments, 4096, 1);
-    expect(archiveOf(archive, path, name).code).not.toBe(0);
+    expect(archiveOf(working, path, name).code).not.toBe(0);
     expect(readdirSync(archive)).toEqual([]);
   });
 });
