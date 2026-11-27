@@ -2028,6 +2028,9 @@ export type ClientMinimum = Static<typeof ClientMinimum>;
  * an older client can ignore capability names introduced later (D-58).
  */
 export const ClientCapabilities = Type.Object({
+  personalExportDownload: Type.Optional(
+    Type.Boolean({ description: 'The server accepts POST to claim a personal export archive.' }),
+  ),
   scheduledMessages: Type.Optional(Type.Boolean()),
   messageReminders: Type.Optional(Type.Boolean()),
   personalMessageDeletion: Type.Optional(Type.Boolean()),

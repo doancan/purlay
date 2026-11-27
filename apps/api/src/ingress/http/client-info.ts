@@ -36,6 +36,7 @@ export const clientInfo = (
   return {
     // Scheduling, reminders and deleting a message for oneself are chat's: offered where chat runs (D-250).
     capabilities: {
+      personalExportDownload: true,
       notificationTypeFilters: true,
       scheduledMessages: modules.includes('chat'),
       messageReminders: modules.includes('chat'),

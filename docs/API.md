@@ -214,6 +214,10 @@ that query support is available. It does not depend on a workspace role, sign-in
 preference, and does not grant access: the endpoint still requires a live session and workspace/
 channel visibility. A future capability must be advertised according to actual API availability.
 
+`personalExportDownload: true` confirms that the server supports the one-use personal archive
+POST in §2. It is available on core-only servers. The caller still needs an independent session
+and an export that is theirs and ready. A native client checks the flag before offering the claim.
+
 Clients refresh discovery for the server/connection they are using rather than permanently
 inferring support from `server.version` or `contractVersion`. With an older server that does not
 advertise the flag, a client may probe the valid read query; for this filter the fallback applies
