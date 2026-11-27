@@ -2042,6 +2042,12 @@ export const ClientCapabilities = Type.Object({
       description: 'GET /api/notifications accepts the types CSV filter before pagination.',
     }),
   ),
+  nativeFreshSignIn: Type.Optional(
+    Type.Boolean({
+      description:
+        '/sign-in/native honours prompt=login, and a handed-over session keeps the time its browser signed in (D-356).',
+    }),
+  ),
 });
 export type ClientCapabilities = Static<typeof ClientCapabilities>;
 
@@ -2089,10 +2095,33 @@ export const NATIVE_DEVICE_NAME_PATTERN =
 /** The code, as `POST /api/native/authorize` makes it: 32 random bytes in hex. */
 export const NATIVE_CODE_PATTERN = '^[0-9a-f]{64}$';
 
-/** `POST /api/native/authorize` (D-191): the person, signed in, says yes to the application that sent them. */
-export const NativeAuthorizeRequest = FromClient({
+/**
+ * How recently the browser must have proved who it is for an application that asked for a fresh sign-in
+ * (`prompt: 'login'`, D-356): short enough that the session it hands over still has most of
+ * `ERASURE_SIGN_IN_MINUTES` left.
+ */
+export const NATIVE_FRESH_SIGN_IN_MINUTES = 5;
+
+const NativeQuestion = {
   challenge: Type.String({ pattern: NATIVE_CHALLENGE_PATTERN }),
   state: Type.String({ pattern: NATIVE_STATE_PATTERN }),
+};
+
+/**
+ * Asked of the browser by an application that needs the person's credential checked now, not when this
+ * browser last signed in: `/sign-in/native?…&prompt=login` (D-356).
+ */
+export const NativeSignInPrompt = Type.Literal('login');
+export type NativeSignInPrompt = Static<typeof NativeSignInPrompt>;
+
+/**
+ * `POST /api/native/authorize` (D-191): the person, signed in, says yes to the application that sent them.
+ * With `prompt: 'login'`, only a browser that proved who it is within `NATIVE_FRESH_SIGN_IN_MINUTES` may
+ * (D-356).
+ */
+export const NativeAuthorizeRequest = FromClient({
+  ...NativeQuestion,
+  prompt: Type.Optional(NativeSignInPrompt),
 });
 export type NativeAuthorizeRequest = Static<typeof NativeAuthorizeRequest>;
 
@@ -2104,7 +2133,7 @@ export const isNativeSignInPlatform = (value: unknown): value is NativeSignInPla
   value === 'macos' || value === 'ios';
 
 export const NativeSignInHandoff = FromClient({
-  ...NativeAuthorizeRequest.properties,
+  ...NativeQuestion,
   platform: Type.Optional(NativeSignInPlatform),
 });
 export type NativeSignInHandoff = Static<typeof NativeSignInHandoff>;

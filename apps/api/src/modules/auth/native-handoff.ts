@@ -34,7 +34,7 @@
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { sql, type Executor } from '@purlay/db';
-import { messageId } from '@purlay/types';
+import { messageId, NATIVE_FRESH_SIGN_IN_MINUTES, type NativeSignInPrompt } from '@purlay/types';
 import type { Clock } from '../../platform/clock';
 import { randomToken, tokenDigest } from '../../platform/tokens';
 import { atomicallyOn } from '../../platform/transactions';
@@ -48,8 +48,10 @@ import { lockCompanySignInMember } from '../workspaces/identity/authority';
 import { liveCompanySessionProof } from '../../platform/company-session';
 import { AppError } from '../../platform/errors';
 import {
+  authenticatedWithin,
   copyAuthenticationEvidence,
   copyWorkspaceAuthenticationAssurances,
+  retainUnknownAuthentication,
 } from './authentication-evidence';
 
 /** How long a code lasts: long enough to go from the browser to the application, and no longer. */
@@ -88,7 +90,14 @@ export const authorizeNative = async (
     userId,
     challenge,
     sourceSessionId,
-  }: { readonly userId: string; readonly challenge: string; readonly sourceSessionId?: string },
+    prompt,
+  }: {
+    readonly userId: string;
+    readonly challenge: string;
+    readonly sourceSessionId?: string;
+    /** `login`: only a browser that proved who it is within `NATIVE_FRESH_SIGN_IN_MINUTES` (D-356). */
+    readonly prompt?: NativeSignInPrompt;
+  },
 ): Promise<{ readonly code: string }> => {
   const code = randomToken();
   const digest = await tokenDigest(code);
@@ -114,6 +123,31 @@ export const authorizeNative = async (
         await lockCompanySignInMember(transaction, companyWorkspaceId, userId);
         await requireLiveSession(transaction, clock, sourceSessionId);
       }
+    }
+    // The application asked for the credential to be checked now (D-356). The code carries this session's
+    // evidence to the one it mints, so a browser that proved who it is long ago cannot hand over a session
+    // that looks freshly signed in; the page signs the browser in again and asks once more.
+    if (prompt === 'login') {
+      const evidence =
+        sourceSessionId === undefined
+          ? undefined
+          : await transaction
+              .selectFrom('session_authentication_evidence')
+              .select('authenticated_at')
+              .where('session_id', '=', sourceSessionId)
+              .where('user_id', '=', userId)
+              .executeTakeFirst();
+      if (
+        !authenticatedWithin(
+          evidence?.authenticated_at ?? null,
+          now,
+          NATIVE_FRESH_SIGN_IN_MINUTES * 60_000,
+        )
+      )
+        throw new AppError({
+          code: 'REAUTHENTICATION_REQUIRED',
+          message: 'Sign in again in this browser to continue.',
+        });
     }
     // The one lock every authorisation of this person is made under. `FOR NO KEY UPDATE` is compatible
     // with the key share the insert below takes on the same row, so it never waits on itself.
@@ -464,6 +498,9 @@ export const exchangeNativeCode = async (
         found.company_workspace_id,
       );
     }
+    // A source with no evidence hands over an unknown one, never none: a session with no evidence is judged by
+    // when it was issued, and this one was issued now (D-356).
+    await retainUnknownAuthentication(transaction, issued.sessionId, found.user_id);
     return found.company_workspace_id === null
       ? issued
       : { ...issued, companyWorkspaceId: found.company_workspace_id };

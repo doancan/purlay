@@ -700,6 +700,10 @@ export const en = {
   'native.body': '{app} will be signed in as {name}, {email}, on {host}.',
   'native.hint':
     'It gets a session of its own. To end it, sign out in the app, or choose Sign out everywhere in Settings.',
+  'native.again.title': 'Sign in again to continue',
+  'native.again.body':
+    '{app} asked for your sign-in to be checked again. Sign out of this browser, then sign back in.',
+  'native.again.action': 'Sign in again',
   'native.authorize': 'Open {app}',
   'native.other': 'Sign out of this browser and use another account',
   'native.failed': '{app} was not opened.',

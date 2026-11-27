@@ -53,7 +53,9 @@ export const NativeSignInScreen = (): React.JSX.Element => {
   const [failed, setFailed] = useState<unknown>(null);
   const [redirect, setRedirect] = useState<string | null>(null);
   const action = useRef<HTMLButtonElement>(null);
-  const card = redirect !== null ? 'done' : pair === null ? 'gone' : 'ask';
+  // The server would not hand over this browser's sign-in as a fresh one (`prompt=login`, D-356).
+  const [stale, setStale] = useState(false);
+  const card = redirect !== null ? 'done' : pair === null ? 'gone' : stale ? 'again' : 'ask';
 
   useEffect(() => {
     action.current?.focus();
@@ -98,13 +100,39 @@ export const NativeSignInScreen = (): React.JSX.Element => {
     );
   }
 
+  if (card === 'again') {
+    return (
+      <DoorNotice
+        glyph="warning"
+        title={t('native.again.title')}
+        body={t('native.again.body', { app })}
+        action={
+          <Button
+            ref={action}
+            variant="primary"
+            onClick={() => {
+              // The question waits in the tab through the sign-in, and is asked again after it.
+              signOut('here');
+            }}
+          >
+            {t('native.again.action')}
+          </Button>
+        }
+      />
+    );
+  }
+
   const authorize = async (): Promise<void> => {
     // Unreachable — the card with this button needs a pair — but the compiler cannot see the card.
     if (pair === null) return;
     setBusy(true);
     setFailed(null);
     try {
-      const answer = await api.authorizeNative({ challenge: pair.challenge, state: pair.state });
+      const answer = await api.authorizeNative({
+        challenge: pair.challenge,
+        state: pair.state,
+        ...(pair.prompt === undefined ? {} : { prompt: pair.prompt }),
+      });
       // Spent: asking again would make a second code for a question that has been answered.
       forgetNativeHandoff(ports);
       setRedirect(answer.redirect);
@@ -115,6 +143,10 @@ export const NativeSignInScreen = (): React.JSX.Element => {
         // The session ended while the page was open. What the page believes of it is stale, so ask again:
         // the gate takes the person to sign in, and the pair is still here after.
         void client.invalidateQueries({ queryKey: keys.me });
+        return;
+      }
+      if (isApiError(failure) && failure.code === 'REAUTHENTICATION_REQUIRED') {
+        setStale(true);
         return;
       }
       setFailed(failure);

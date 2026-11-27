@@ -714,6 +714,10 @@ export const tr = {
   'native.body': '{app}, {host} üzerinde {name}, {email} olarak oturum açacak.',
   'native.hint':
     'Uygulama kendi oturumunu alır. Bitirmek için uygulamadan çıkış yapın ya da Ayarlar’da Her yerden çıkış yap’ı seçin.',
+  'native.again.title': 'Devam etmek için yeniden giriş yapın',
+  'native.again.body':
+    '{app} giriş bilgilerinizin yeniden doğrulanmasını istedi. Bu tarayıcıdan çıkış yapın, ardından yeniden giriş yapın.',
+  'native.again.action': 'Yeniden giriş yap',
   'native.authorize': '{app} uygulamasını aç',
   'native.other': 'Bu tarayıcıdan çıkış yap ve başka bir hesap kullan',
   'native.failed': '{app} açılamadı.',

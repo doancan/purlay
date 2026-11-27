@@ -44,4 +44,8 @@ have it.
 - **Sign-in** — native sign-in in the browser names Purlay for Mac or Purlay for iOS (D-191)
 - **Notifications** — the device switch becomes available again when you restore browser permission and return to Purlay (D-126)
 
+### Security
+
+- **Sign-in** — erasing your account from the Mac or iOS app needs a recent sign-in in the browser too, and the app can ask you to sign in again first (D-356)
+
 ---

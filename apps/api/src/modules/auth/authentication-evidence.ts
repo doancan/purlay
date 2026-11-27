@@ -16,6 +16,21 @@ export type PrimaryAuthenticationProof =
       readonly companyAuthenticationRevision: string;
     };
 
+/**
+ * Whether a session's recorded primary authentication happened no more than `windowMs` before `now` (D-356).
+ * Unknown — no time recorded — is never recent. A time a little ahead is another node's clock, as the
+ * session's issuance is read: only this server writes the time, so nobody can push it forward to gain from it.
+ */
+export const authenticatedWithin = (
+  authenticatedAt: Date | null,
+  now: Date,
+  windowMs: number,
+): boolean => {
+  if (authenticatedAt === null) return false;
+  const age = now.getTime() - authenticatedAt.getTime();
+  return Number.isFinite(age) && age <= windowMs;
+};
+
 /** A conflict never upgrades an old unknown session or changes its original authentication. */
 export const recordPrimaryAuthentication = async (
   executor: Executor,
