@@ -245,6 +245,7 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
   link_previews: decided({ nobody: 'a GitHub item’s public title and state' }, 'swept'),
   mentions: decided('anonymised', 'with-parent'),
   notifications: decided('deleted', 'with-parent'),
+  urgent_message_repeats: decided('deleted', 'with-parent'),
   message_versions: decided('anonymised', 'with-parent'),
   message_attachments: decided({ nobody: 'ids only' }, 'with-parent'),
   message_shared_links: decided('anonymised', 'with-parent'),

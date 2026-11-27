@@ -8,7 +8,7 @@ import type { Executor } from '@purlay/db';
 import type { Message, PushLocale } from '@purlay/types';
 
 /** Core admission port: the source owner captures its recipients in the same transaction as its notice. */
-export { enqueuePush, type PushCapture } from '../../platform/push-work';
+export { enqueuePush, URGENT_REPEAT_KIND, type PushCapture } from '../../platform/push-work';
 
 /** One notification still to be pushed: the person told, why, and the channel it happened in. */
 interface PushNotice {
@@ -39,6 +39,7 @@ export interface PushNotices {
     messageId: string,
     userIds: readonly string[],
     notificationId?: string,
+    repeat?: boolean,
   ): Promise<PushNotice[]>;
   /** Current source visibility and unread state, asked again when a queued device may be sent to. */
   canDeliver(
@@ -48,6 +49,7 @@ export interface PushNotices {
     /** The instant it is asked at: what the person chose may have been for a while that has ended (D-329). */
     now: Date,
     notificationId?: string,
+    repeat?: boolean,
   ): Promise<boolean>;
 }
 

@@ -8,6 +8,7 @@
 3. **Urgent respects Deep Work** (decided by the owner, 2026-11-25): it waits as any message does, and is not pushed through it. Whether it should pass, as a workspace setting, is a later decision.
 4. **First slice only:** the field, the rule, the composer's *Delivery* choice (offered only where the rule would accept it) and the marker under the message. Not in it: the server-scheduled re-alert (every 2 minutes for 20 minutes until read, stopped by a read on any device), the workspace setting that turns urgent off, the inbox and notification marker, and a client's persistent banner.
 5. **Workspace control.** A workspace owner or admin can turn off new Urgent sends in General settings. The setting defaults to enabled for existing and new workspaces. Every member gets the setting in their membership. The server applies it to HTTP and socket sends, and a change tells members to refresh. An urgent send committed before the change keeps its priority, including when retried. Standard and Important remain available under the delivery rules above.
+6. **Device re-alerts.** D-358 defines the durable schedule and delivery checks.
 
 **Rejected.** *Priority on any channel message:* it pages everybody, which is what a mention is for and a channel is not. *A new notification reason (`urgent`):* the reason says why you were told; how much it asks is a property of the message, which a later schedule can read. *Passing Deep Work by default:* the product's promise is that Deep Work is quiet (D-106); a sender's choice must not be able to break it.
 

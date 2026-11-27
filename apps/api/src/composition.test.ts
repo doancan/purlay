@@ -581,11 +581,13 @@ describe('the workers of the modules a process runs', () => {
       'chat/index:shared-links',
       'chat/deliver:scheduled',
       'chat/deliver:reminders',
+      'chat/deliver:urgent-repeats',
     ]);
     expect(namesOf([chatModule, issuesModule])).toEqual([
       'chat/index:shared-links',
       'chat/deliver:scheduled',
       'chat/deliver:reminders',
+      'chat/deliver:urgent-repeats',
       'issues/outbox:consume',
     ]);
     expect(namesOf([issuesModule])).toEqual(['issues/outbox:consume']);
@@ -595,6 +597,7 @@ describe('the workers of the modules a process runs', () => {
 
   test('carry the deadline of their module’s manifest: the default for chat, none for a module that declared none', () => {
     expect(compose([chatModule], carried).workers.map(({ deadlineMs }) => deadlineMs)).toEqual([
+      DEFAULT_WORKER_DEADLINE_MS,
       DEFAULT_WORKER_DEADLINE_MS,
       DEFAULT_WORKER_DEADLINE_MS,
       DEFAULT_WORKER_DEADLINE_MS,

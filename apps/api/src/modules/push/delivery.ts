@@ -158,11 +158,17 @@ export const createDelivery = async (
     )
       .toString('base64url')
       .slice(0, 32);
+    if (claim.repeatNotificationId !== undefined && (await quiet(device))) return { kind: 'held' };
     if (!(await ownsPushClaim(database, claim, clock.now(), device.serverKey)))
       return { kind: 'canceled' };
     if (
       (await currentPushDevice(dependencies, claim)) === undefined ||
       !(await currentPushSource(dependencies, claim))
+    )
+      return { kind: 'canceled' };
+    if (
+      claim.repeatNotificationId !== undefined &&
+      dependencies.attention.active(device.userId, device.workspaceId)
     )
       return { kind: 'canceled' };
     const ttl = Math.floor((claim.expiresAt.getTime() - clock.now().getTime()) / 1_000);

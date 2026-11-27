@@ -299,6 +299,7 @@ type ChatPersonalExcluded =
   | 'channel_departures'
   | 'hidden_messages'
   | 'message_reminders'
+  | 'urgent_message_repeats'
   | 'scheduled_messages'
   | 'scheduled_message_attachments'
   | 'notifications'
@@ -345,6 +346,7 @@ const CHAT_PERSONAL_EXCLUDED: Readonly<Record<ChatPersonalExcluded, string>> = {
     'that they left a channel, or how: kept only to tell their own socket why it is gone, and a channel they are not in is not theirs to take',
   hidden_messages: 'markers of messages deleted for this person only: other people’s words, hidden',
   message_reminders: 'pending private reminders: transient, gone once they are delivered',
+  urgent_message_repeats: 'the transient device schedule for a notification',
   scheduled_messages: 'pending unsent messages: transient, exported as messages once they are sent',
   scheduled_message_attachments:
     'which unsent message holds a file: transient, as the message is; the file goes with it once it is sent',

@@ -102,10 +102,22 @@ export const createPushSender = async (
         const quiet = await inDeepWork(database, device.workspaceId, [device.userId], clock.now());
         if (quiet.has(device.userId)) return { kind: 'held' };
         if (!(await beginPushAttempt(database, claim, clock.now()))) return { kind: 'canceled' };
+        if (
+          claim.repeatNotificationId !== undefined &&
+          (await inDeepWork(database, device.workspaceId, [device.userId], clock.now())).has(
+            device.userId,
+          )
+        )
+          return { kind: 'held' };
         if (!(await ownsPushClaim(database, claim, clock.now()))) return { kind: 'canceled' };
         if (
           (await currentPushDevice(dependencies, claim)) === undefined ||
           !(await currentPushSource(dependencies, claim))
+        )
+          return { kind: 'canceled' };
+        if (
+          claim.repeatNotificationId !== undefined &&
+          dependencies.attention.active(device.userId, device.workspaceId)
         )
           return { kind: 'canceled' };
         return undefined;
@@ -147,7 +159,13 @@ export const createPushSender = async (
     const routed =
       claim.source === 'message'
         ? {
-            devices: await devicesFor(routing, claim.recordId, [claim.userId], claim.sourceId),
+            devices: await devicesFor(
+              routing,
+              claim.recordId,
+              [claim.userId],
+              claim.repeatNotificationId ?? claim.sourceId,
+              claim.repeatNotificationId !== undefined,
+            ),
             waiting: new Set<string>(),
           }
         : await routeInbox(routing, [claim.recordId]);

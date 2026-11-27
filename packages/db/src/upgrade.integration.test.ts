@@ -361,6 +361,8 @@ describe('integration: upgrading from the previous release', () => {
         '0133_workspace_urgent_messages',
         '0134_outbox_expired',
         '0135_server_legal_addresses',
+        '0136_push_repeat_source',
+        '0137_validate_push_repeat_source',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -382,6 +384,7 @@ describe('integration: upgrading from the previous release', () => {
         'chat/0019_webhooks',
         'chat/0020_webhook_retention_indexes',
         'chat/0021_channel_level_timers',
+        'chat/0022_urgent_message_repeats',
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
@@ -511,6 +514,7 @@ describe('integration: the contract release on a database that has run the expan
         'chat/0019_webhooks',
         'chat/0020_webhook_retention_indexes',
         'chat/0021_channel_level_timers',
+        'chat/0022_urgent_message_repeats',
       ]);
 
       expect(await columnsOfAttachments(db)).toEqual([
@@ -737,6 +741,7 @@ describe('integration: the matrix of sets around the contract', () => {
         'chat/0019_webhooks',
         'chat/0020_webhook_retention_indexes',
         'chat/0021_channel_level_timers',
+        'chat/0022_urgent_message_repeats',
       ]);
       expect(await linksOf(db)).toEqual([file]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
@@ -874,6 +879,8 @@ describe('integration: APNs joins the durable push queue', () => {
         '0133_workspace_urgent_messages',
         '0134_outbox_expired',
         '0135_server_legal_addresses',
+        '0136_push_repeat_source',
+        '0137_validate_push_repeat_source',
       ]);
       expect(await heap()).toBe(originalHeap);
       const deliveries = async (): Promise<
@@ -932,6 +939,36 @@ describe('integration: APNs joins the durable push queue', () => {
       expect(await deliveries()).toEqual([apnsDelivery]);
       await sql`delete from sessions where id = ${fixture.ios_session_id}`.execute(db);
       expect(await deliveries()).toEqual([]);
+
+      const originalNotificationId = crypto.randomUUID();
+      const newIntent = async (
+        kind: string,
+        notificationId: string | null,
+        lifetimeSeconds: number,
+      ): Promise<unknown> =>
+        await sql`
+          insert into push_intents
+            (source_kind, source_id, repeat_notification_id, record_id, workspace_id, user_id,
+             module, kind, created_at, expires_at, next_check_at)
+          select 'message', gen_random_uuid(), ${notificationId}::uuid, record_id, workspace_id,
+                 user_id, 'chat', ${kind}, now(),
+                 now() + make_interval(secs => ${lifetimeSeconds}), now()
+          from push_intents where id = ${fixture.intent_id}`.execute(db);
+      await newIntent('urgent_repeat', originalNotificationId, 120);
+      for (const [kind, notificationId, lifetimeSeconds] of [
+        ['urgent_repeat', null, 120],
+        ['urgent_repeat', originalNotificationId, 121],
+        ['mention', originalNotificationId, 120],
+      ] as const) {
+        const failure = await newIntent(kind, notificationId, lifetimeSeconds).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(failure).toMatchObject({
+          code: '23514',
+          constraint: 'push_intents_repeat_source',
+        });
+      }
     } finally {
       await db.destroy();
     }
@@ -997,6 +1034,7 @@ describe('integration: moving development read scopes into chat’s own table', 
           'chat/0019_webhooks',
           'chat/0020_webhook_retention_indexes',
           'chat/0021_channel_level_timers',
+          'chat/0022_urgent_message_repeats',
         ]);
         expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([
           {
@@ -1059,6 +1097,8 @@ describe('integration — server legal addresses on upgrade', () => {
         expect(upgraded.error).toBeUndefined();
         expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
           '0135_server_legal_addresses',
+          '0136_push_repeat_source',
+          '0137_validate_push_repeat_source',
         ]);
         expect(await preferences()).toEqual({ ...older, privacy_url: null, terms_url: null });
       } finally {

@@ -1088,6 +1088,38 @@ const ERASURE_PROBES: Readonly<Record<Table, Probe>> = {
       })
       .execute();
   }),
+  urgent_message_repeats: by(
+    'urgent_message_repeats',
+    'notification_id',
+    (world) => world.bobsMessage,
+    async (db, world) => {
+      const urgentMessage = anId();
+      await db
+        .insertInto('messages')
+        .values({
+          id: urgentMessage,
+          ...inWorkspace(world),
+          sender_id: world.bobId,
+          content: 'urgent mention',
+          priority: 'urgent',
+        })
+        .execute();
+      await db
+        .insertInto('notifications')
+        .values({
+          id: world.bobsMessage,
+          user_id: world.adaId,
+          ...inWorkspace(world),
+          message_id: urgentMessage,
+          type: 'mention',
+        })
+        .execute();
+      await db
+        .insertInto('urgent_message_repeats')
+        .values({ notification_id: world.bobsMessage, next_at: NOW })
+        .execute();
+    },
+  ),
   channel_departures: ofAda('channel_departures', async (db, world) => {
     await db
       .insertInto('channel_departures')

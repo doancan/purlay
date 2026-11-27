@@ -823,6 +823,7 @@ CREATE TABLE push_intents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_kind TEXT NOT NULL CHECK (source_kind IN ('message', 'inbox')),
     source_id UUID NOT NULL,
+    repeat_notification_id UUID,
     record_id UUID NOT NULL,
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -839,6 +840,13 @@ CREATE TABLE push_intents (
     CONSTRAINT push_intents_lifetime CHECK (
         isfinite(created_at) AND isfinite(expires_at)
         AND expires_at > created_at AND expires_at <= created_at + interval '1 day'
+    ),
+    CONSTRAINT push_intents_repeat_source CHECK (
+        CASE WHEN source_kind = 'message' AND kind = 'urgent_repeat' THEN
+            module = 'chat' AND repeat_notification_id IS NOT NULL
+            AND repeat_notification_id <> source_id
+            AND expires_at <= created_at + interval '2 minutes'
+        ELSE repeat_notification_id IS NULL END
     )
 );
 
@@ -2790,6 +2798,18 @@ CREATE INDEX idx_notifications_message   ON notifications (message_id);
 
 ---
 
+#### Urgent repeat cursor
+
+The original notification supplies the recipient, the read receipt and the start of the window (D-358).
+
+```sql
+CREATE TABLE urgent_message_repeats (
+    notification_id UUID PRIMARY KEY REFERENCES notifications(id) ON DELETE CASCADE,
+    next_at TIMESTAMPTZ NOT NULL CHECK (isfinite(next_at))
+);
+CREATE INDEX idx_urgent_message_repeats_due ON urgent_message_repeats (next_at, notification_id);
+```
+
 ### 7.5. `saved_messages`
 
 A person's saved messages (#484, D-128): a message kept to come back to, in progress, archived or
@@ -4625,6 +4645,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0133_workspace_urgent_messages.sql  workspaces.urgent_messages_enabled: whether the workspace allows new Urgent sends (D-337)
 0134_outbox_expired.sql      outbox_expired: how many facts the sweep gave up on at their expiry, by consumer and type  (D-353)
 0135_server_legal_addresses.sql  Nullable server_settings privacy and terms addresses (D-357)
+0136_push_repeat_source.sql  push_intents.repeat_notification_id and a slot check for repeat delivery (D-358)
+0137_validate_push_repeat_source.sql  validates the repeat source check after releasing the column-add lock (D-358)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder
@@ -4646,6 +4668,7 @@ chat/0018_channel_access_sources.sql source/group channel admission and scoped c
 chat/0019_webhooks.sql             outgoing_webhooks, webhook_deliveries, webhook_delivery_attempts (D-312)
 chat/0020_webhook_retention_indexes.sql  indexes by attempt and completion age (D-312)
 chat/0021_channel_level_timers.sql channel_level_timers: a notification level for a while, its end and the level it gives way to (D-329)
+chat/0022_urgent_message_repeats.sql urgent_message_repeats: the next slot for an original Urgent notification (D-358)
 issues/0001_issues.sql             issues: a workspace's issues, the issues module's set  (D-250)
 issues/0002_issues_search.sql      issues: the trigram indexes of the folded title and body, for the workspace-wide find  (D-285)
 ```

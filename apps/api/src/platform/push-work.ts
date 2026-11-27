@@ -4,6 +4,8 @@ import { PUSH_PENDING_PER_PERSON, PUSH_PERSON_LOCK, PUSH_TTL_SECONDS } from './p
 import { companySessionAllowsWorkspace } from './company-session';
 import { readWorkspaceSessionAccessDecisions } from './workspace-delivery-access';
 
+export const URGENT_REPEAT_KIND = 'urgent_repeat';
+
 /** The producer owns the source row and has already checked its recipients. */
 export interface PushWork {
   readonly source: 'message' | 'inbox';
@@ -14,6 +16,8 @@ export interface PushWork {
   readonly module: string;
   readonly kind: string;
   readonly createdAt: Date;
+  /** For a repeat, sourceId identifies the slot and notificationId identifies the original unread notice. */
+  readonly repeat?: { readonly notificationId: string; readonly expiresAt: Date };
 }
 
 export type PushCapture = (tx: Executor, now: Date, work: readonly PushWork[]) => Promise<void>;
@@ -138,16 +142,23 @@ export const enqueuePush = async (
     }
   const allowed = (workspaceId: string, sessionId: string): boolean =>
     epochs.get(workspaceId) === '0' || eligible.get(workspaceId)?.has(sessionId) === true;
-  const rows = work.filter(
-    (item) =>
-      item.createdAt.getTime() + PUSH_TTL_SECONDS * 1_000 > now.getTime() &&
-      devices.some(
-        (device) =>
-          device.user_id === item.userId &&
-          allowed(item.workspaceId, device.session_id) &&
-          (device.companyWorkspaceId === null || device.companyWorkspaceId === item.workspaceId),
-      ),
-  );
+  const rows = work
+    .map((item) => ({
+      ...item,
+      expiresAt:
+        item.repeat?.expiresAt ?? new Date(item.createdAt.getTime() + PUSH_TTL_SECONDS * 1_000),
+    }))
+    .filter(
+      (item) =>
+        item.expiresAt > now &&
+        (item.repeat === undefined || item.createdAt <= now) &&
+        devices.some(
+          (device) =>
+            device.user_id === item.userId &&
+            allowed(item.workspaceId, device.session_id) &&
+            (device.companyWorkspaceId === null || device.companyWorkspaceId === item.workspaceId),
+        ),
+    );
   if (rows.length === 0) return;
   const budgets = new Map(
     rows
@@ -178,13 +189,14 @@ export const enqueuePush = async (
       rows.map((item) => ({
         source_kind: item.source,
         source_id: item.sourceId,
+        repeat_notification_id: item.repeat?.notificationId ?? null,
         record_id: item.recordId,
         workspace_id: item.workspaceId,
         user_id: item.userId,
         module: item.module,
         kind: item.kind,
         created_at: item.createdAt,
-        expires_at: new Date(item.createdAt.getTime() + PUSH_TTL_SECONDS * 1_000),
+        expires_at: item.expiresAt,
         next_check_at: now,
         state: item.source === 'message' ? 'admitted' : 'pending',
       })),
