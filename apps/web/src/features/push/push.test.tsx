@@ -624,6 +624,36 @@ describe('one switch over the open tab and the closed one (D-148)', () => {
     return view;
   };
 
+  test('returning with browser permission restores the switch without opting the device in', async () => {
+    const { api, sent } = aServer();
+    const browser = aDevice({ permission: 'granted' });
+    const notices = aNotifier('granted');
+    let permission: NotificationPermission = 'denied';
+    const view = await openWith(api, browser.device, {
+      ...notices.notifier,
+      permission: () => permission,
+    });
+    expectBlocked(view);
+
+    permission = 'granted';
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(offered(view)).toEqual(['Turn on']);
+    expect(notices.asked()).toBe(0);
+    expect(browser.calls).toEqual([]);
+    expect(sent).toEqual([]);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBeNull();
+
+    await person().click(card(view).getByRole('button', { name: 'Turn on' }));
+    await settle();
+    expect(offered(view)).toContain('Turn off');
+    expect(notices.asked()).toBe(1);
+    expect(sent).toEqual([['subscribe', SUBSCRIPTION.endpoint, 'en']]);
+    expect(view.world.storage.getItem(PUSH_OWNER_KEY)).toBe(IDS.me);
+    view.unmount();
+  });
+
   const NO_KEY = (): Promise<{ publicKey: null }> => Promise.resolve({ publicKey: null });
 
   test('offered without push, for the open tab alone: asked once, nothing sent to the server', async () => {
