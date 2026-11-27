@@ -1,8 +1,8 @@
 /**
  * A list of things to do inside the caller's transaction (`MODULES.md` §10, steps 6–8, D-250).
  *
- * The domain bus tells modules what happened after a commit and may lose it. Some things a module must do
- * cannot be lost or late: a workspace must never exist without its first channel. The core owns the moment
+ * What is told after a commit may be lost (D-35). Some things a module must do cannot be lost or late: a
+ * workspace must never exist without its first channel. The core owns the moment
  * and runs the hooks inside its own transaction, in the order they were registered; a hook that throws fails the
  * caller, so its transaction rolls back whole. The module registers its hook where the application is put
  * together, so the core names no module.

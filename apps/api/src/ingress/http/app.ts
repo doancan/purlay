@@ -33,7 +33,7 @@ import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { responseHeaders } from './edge';
 import { type SetupDependencies } from './setup';
 import { githubAppApi, githubAppCaller, platformAppFetch } from '../../platform/github-app-api';
-import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
+import { latestReleaseCheck } from '../../platform/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import { serverMetrics, WEBSOCKET_CONNECTIONS } from '../../platform/metrics';
 import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
@@ -158,6 +158,8 @@ export const createApp = (given: Dependencies): HttpApplication => {
       return owner === CORE_OWNER || owner === NO_OWNER ? undefined : owner;
     },
     closedEvent: modules.closedEvent,
+    announcePresence: modules.announcePresence,
+    frameProjection: modules.frameProjection,
   });
   metrics.registry.gauge(
     WEBSOCKET_CONNECTIONS.name,

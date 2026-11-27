@@ -16,15 +16,15 @@
  */
 import { Type } from '@sinclair/typebox';
 import { type LatestRelease, RELEASE_REPOSITORY, RELEASE_TAG, releasePage } from '@purlay/types';
-import { HOUR_MS, type Clock } from '../../../platform/clock';
-import type { Logger } from '../../../platform/logging';
+import { HOUR_MS, type Clock } from './clock';
+import type { Logger } from './logging';
 import {
   GitHubRateLimited,
   GitHubUnavailable,
   githubAppCaller,
   readChecked,
   type GitHubAppFetch,
-} from '../../../platform/github-app-api';
+} from './github-app-api';
 
 /** How long a good answer is kept, and a failure. */
 const RELEASE_KEPT_MS = 6 * HOUR_MS;

@@ -16,6 +16,7 @@ import { recordPrimaryAuthentication } from '../modules/auth/authentication-evid
 import { NO_SESSION_LIFETIME } from '../modules/auth/session-lifetime';
 import { createSocketHub } from '../realtime/hub';
 import { workspaceFrameProjector } from '../features/chat/channels/workspace-delivery';
+import { chatModule } from '../features/chat/module';
 import { liveChannelScope } from '../features/chat/channels/live-history';
 import { requireChannelById } from '../features/chat/channels/guard';
 import { sendMessage } from '../features/chat/messages/messages';
@@ -389,6 +390,7 @@ describe('integration: workspace delivery provenance', () => {
         moduleOfFrame: () => 'chat',
         deadlineOf: () => 3_000,
         closedEvent: (event) => event === 'PRESENCE',
+        frameProjection: chatModule.frameProjection,
       });
       const socket = {
         id: 'policy-lifecycle',
