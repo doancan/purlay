@@ -86,7 +86,33 @@ const login = (url: URL, sessions: FrontOptions['sessions']): Response => {
   });
 };
 
-const HOP_BY_HOP = ['host', 'connection', 'accept-encoding', 'content-length'] as const;
+const CONNECTION_FIELDS = [
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+] as const;
+
+/** Keep connection controls on their own hop (RFC 9110 §7.6.1). */
+const forwardedHeaders = (source: Headers): Headers => {
+  const headers = new Headers(source);
+  const options = new Set(
+    source
+      .get('connection')
+      ?.split(',')
+      .map((name) => name.trim().toLowerCase()),
+  );
+  for (const name of [...headers.keys()]) {
+    if (options.has(name)) headers.delete(name);
+  }
+  for (const name of CONNECTION_FIELDS) headers.delete(name);
+  return headers;
+};
 
 const proxy = async (
   request: Request,
@@ -94,8 +120,9 @@ const proxy = async (
   api: string,
   upstreamMs: number,
 ): Promise<Response> => {
-  const headers = new Headers(request.headers);
-  for (const name of HOP_BY_HOP) headers.delete(name);
+  const headers = forwardedHeaders(request.headers);
+  headers.delete('host');
+  headers.delete('content-length');
   // Asked for plain bytes so the answer can be passed on as it came, headers and all.
   headers.set('accept-encoding', 'identity');
   // Read before the call, so a client that went away is not blamed on the API.
@@ -131,7 +158,7 @@ const proxy = async (
   } finally {
     clearTimeout(timer);
   }
-  const answer = new Headers(upstream.headers);
+  const answer = forwardedHeaders(upstream.headers);
   answer.delete('content-length');
   return new Response(upstream.body, { status: upstream.status, headers: answer });
 };
