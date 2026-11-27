@@ -31,7 +31,7 @@ export const armUrgentRepeats = async (
 /** A deterministic version 8 UUID identifies a slot across retries and racing workers. */
 const occurrenceId = (notificationId: string, slot: number): string => {
   const digest = createHash('sha256')
-    .update(`purlay:urgent-repeat:${notificationId}:${String(slot)}`)
+    .update(`purlay/urgent-repeat/v1:${notificationId}:${String(slot)}`)
     .digest('hex');
   return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 };

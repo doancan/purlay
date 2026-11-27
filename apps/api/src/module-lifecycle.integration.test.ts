@@ -519,7 +519,7 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
           following: true,
         })
         .execute();
-      await tx
+      const notification = await tx
         .insertInto('notifications')
         .values({
           user_id: who.userId,
@@ -528,7 +528,13 @@ const seed = async (database: DatabasePool, state: DatabaseState): Promise<World
           message_id: bobs,
           type: 'mention',
         })
-        .execute();
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      if (hasSet(state, 'chat'))
+        await tx
+          .insertInto('urgent_message_repeats')
+          .values({ notification_id: notification.id, next_at: NOW })
+          .execute();
       await tx
         .insertInto('thread_reads')
         .values({
