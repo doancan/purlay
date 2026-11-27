@@ -1,7 +1,8 @@
 /**
  * The push worker as the build serves it (#78, D-126): at the root, a script, and given a push by
  * the browser itself — Chromium's DevTools protocol delivers one the way a push service would,
- * after decryption — it shows a notice, the plain one when it cannot read what it was given.
+ * after decryption — it shows a notice with every app tab closed, the plain one when it cannot
+ * read what it was given.
  *
  * The one thing replaced is the browser's notification surface: the headless browser refuses
  * notifications whatever it is granted (`Notification.permission` stays `denied`), so inside the
@@ -21,6 +22,10 @@ interface Shown {
   readonly renotify: boolean;
 }
 
+interface WindowClients {
+  matchAll(options: { includeUncontrolled: boolean; type: 'window' }): Promise<unknown[]>;
+}
+
 declare global {
   // The record the stubbed surface keeps, inside the worker.
   var shownNotices: Shown[] | undefined;
@@ -35,7 +40,7 @@ test.describe('the push worker', () => {
     'a worker draws nothing of the page',
   );
 
-  test('is served at the root, and shows what it is pushed — plainly when it cannot read it', async ({
+  test('is served at the root and shows a push after the app tab closes', async ({
     page,
     context,
     baseURL,
@@ -76,8 +81,20 @@ test.describe('the push worker', () => {
       };
     });
     const registrationId = await registered;
+    const observer = await context.newPage();
+    const delivery = await context.newCDPSession(observer);
+    await delivery.send('ServiceWorker.enable');
+    const appWindows = (): Promise<number> =>
+      worker.evaluate(async () => {
+        const scope = globalThis as unknown as { clients: WindowClients };
+        return (await scope.clients.matchAll({ includeUncontrolled: true, type: 'window' })).length;
+      });
+    await expect.poll(appWindows).toBe(1);
+    await page.close();
+    await expect.poll(appWindows).toBe(0);
+
     const push = async (data: string): Promise<void> => {
-      await devtools.send('ServiceWorker.deliverPushMessage', {
+      await delivery.send('ServiceWorker.deliverPushMessage', {
         origin: new URL(baseURL ?? '').origin,
         registrationId,
         data,
