@@ -141,6 +141,10 @@ export const PERMISSIONS: Readonly<Record<string, PermissionCase>> = {
     endpoint: 'PATCH /api/workspaces/:workspaceId',
     allowed: { owner: true, admin: true, member: false },
   },
+  'change whether urgent messages are allowed': {
+    endpoint: 'PUT /api/workspaces/:workspaceId/urgent-messages',
+    allowed: { owner: true, admin: true, member: false },
+  },
   'read how long the history is kept': {
     endpoint: 'GET /api/workspaces/:workspaceId/retention',
     allowed: { owner: true, admin: false, member: false },

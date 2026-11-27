@@ -10,6 +10,7 @@ import {
   WorkspaceMemberList,
   WorkspaceGuestPage,
   UpdatedGuestAccess,
+  UrgentMessagesSetting,
   type WorkspaceGuestQuery,
   type UpdateGuestAccessRequest,
   type ConvertGuestRequest,
@@ -29,6 +30,10 @@ export interface WorkspacesApi {
   readonly createWorkspace: (input: CreateWorkspaceRequest) => Promise<Workspace>;
   /** A new name, an owner's or an admin's; the slug stays (D-124). */
   readonly renameWorkspace: (workspaceId: string, name: string) => Promise<Workspace>;
+  readonly setUrgentMessages: (
+    workspaceId: string,
+    enabled: boolean,
+  ) => Promise<UrgentMessagesSetting>;
   readonly members: (workspaceId: string, signal?: AbortSignal) => Promise<WorkspaceMemberList>;
   readonly guests: (
     workspaceId: string,
@@ -83,6 +88,13 @@ export const createWorkspacesApi = (http: Http): WorkspacesApi => ({
       `/api/workspaces/${at(workspaceId)}`,
       Workspace,
       options({ body: { name } }),
+    ),
+  setUrgentMessages: (workspaceId, enabled) =>
+    http.request(
+      'PUT',
+      `/api/workspaces/${at(workspaceId)}/urgent-messages`,
+      UrgentMessagesSetting,
+      options({ body: { enabled } }),
     ),
   members: (workspaceId, signal) =>
     http.request(

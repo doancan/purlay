@@ -15,6 +15,7 @@ interface WorkspaceScope {
   readonly workspace: Workspace;
   readonly role: UserRole;
   readonly access: WorkspaceAccess;
+  readonly urgentMessagesEnabled: boolean | undefined;
 }
 
 const WorkspaceContext = createContext<WorkspaceScope | null>(null);
@@ -47,6 +48,7 @@ export const WorkspaceScopeProvider = ({
         workspace: membership.workspace,
         role: membership.role,
         access: membership.access ?? { kind: 'member' },
+        urgentMessagesEnabled: membership.urgentMessagesEnabled,
       }}
     >
       <WorkspaceModulesProvider value={membership.modules ?? null}>

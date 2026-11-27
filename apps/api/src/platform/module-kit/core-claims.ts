@@ -77,6 +77,7 @@ export const CORE_ROUTES: readonly string[] = [
   '/api/workspace-security',
   '/api/workspaces',
   '/api/workspaces/:workspaceId',
+  '/api/workspaces/:workspaceId/urgent-messages',
   '/api/workspaces/:workspaceId/audit',
   '/api/workspaces/:workspaceId/audit/export',
   '/api/workspaces/:workspaceId/access/people',
