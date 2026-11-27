@@ -115,6 +115,16 @@ describe('the record', () => {
     expect(withIndex(readme, index)).toBe(`# Before\n\n${index}\n\nAfter\n`);
     expect(() => withIndex('# No markers', index)).toThrow('lost its index markers');
   });
+
+  test('escapes literal backslashes and pipes when writing a title to the table', () => {
+    const path = `product/${D}1-first.md`;
+    const title = String.raw`Path\| group | next`;
+    const escapedTitle = String.raw`Path\\\| group \| next`;
+    const record = aRecord({ [path]: `# ${D}1. ${title}` });
+    expect(renderIndex(readRecord(record))).toContain(
+      `| [${D}1](${path}) | ${escapedTitle} |  |  |`,
+    );
+  });
 });
 
 describe('a new decision', () => {

@@ -124,7 +124,7 @@ export const readRecord = (root: string): readonly Decision[] =>
 
 /** The cell for a title: the header without its `amends …` tail, which the last column says. */
 const shortTitle = (title: string): string =>
-  title.replace(new RegExp(`\\s+—\\s+(?:${VERBS})\\b.*$`, 'i'), '').replace(/\|/g, '\\|');
+  title.replace(new RegExp(`\\s+—\\s+(?:${VERBS})\\b.*$`, 'i'), '').replace(/[\\|]/g, '\\$&');
 
 /** The generated index: a table per category, each row linking its file and naming what amended it. */
 export const renderIndex = (decisions: readonly Decision[]): string => {
