@@ -87,6 +87,11 @@ const HELD_ELSEWHERE: Readonly<
     file: 'apps/api/src/ingress/http/personal-exports.integration.test.ts',
     schema: 'content-type',
   },
+  claimMyExportDownload: {
+    why: 'needs a finished export; the personal-export test claims it using the native method and verifies the shared single-use claim',
+    file: 'apps/api/src/ingress/http/personal-exports.integration.test.ts',
+    schema: 'content-type',
+  },
   fetchExternalImage: {
     why: 'fetches a page from another server, which needs the image proxy’s own stand-in',
     file: 'apps/api/src/ingress/http/images.integration.test.ts',

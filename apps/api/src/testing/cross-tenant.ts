@@ -1308,6 +1308,8 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
     'the caller’s own exports of their data, and names no workspace; nobody else’s is in it (D-241)',
   'GET /api/me/exports/:exportId/download':
     'one of the caller’s own exports, once; somebody else’s is the same 404 as one that is not there (D-241)',
+  'POST /api/me/exports/:exportId/download':
+    'claims the same single-use personal archive as the browser route; somebody else’s is the same 404 as one that is not there (D-241)',
   'POST /api/me/erase':
     'erases the caller’s own account and names no workspace; the ones it touches are their own (D-139 §5)',
   'GET /api/me/sign-in':

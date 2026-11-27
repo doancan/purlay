@@ -2034,6 +2034,9 @@ export type ClientMinimum = Static<typeof ClientMinimum>;
  */
 export const ClientCapabilities = Type.Object({
   apnsNotifications: Type.Optional(Type.Boolean()),
+  personalExportDownload: Type.Optional(
+    Type.Boolean({ description: 'The server accepts POST to claim a personal export archive.' }),
+  ),
   scheduledMessages: Type.Optional(Type.Boolean()),
   messageReminders: Type.Optional(Type.Boolean()),
   personalMessageDeletion: Type.Optional(Type.Boolean()),
