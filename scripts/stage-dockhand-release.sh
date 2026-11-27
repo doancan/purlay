@@ -4,7 +4,7 @@ set -euo pipefail
 umask 077
 
 fail() { printf 'dockhand-release: %s\n' "$*" >&2; exit 1; }
-[ "$#" -eq 5 ] || fail 'usage: scripts/stage-dockhand-release.sh <compose-project> <env-file> <tested-GHCR-image@sha256:digest> <tested-commit> <protected-dump|--fresh>'
+[ "$#" -eq 5 ] || fail 'usage: scripts/stage-dockhand-release.sh <compose-project> <env-file> <tested-GHCR-image@sha256:digest> <tested-commit> <protected-dump|--fresh> | <compose-project> <env-file> --follow-release <GHCR-package> <protected-backup-directory>'
 project="$1"
 env_file="$2"
 image="$3"
@@ -13,18 +13,65 @@ dump="$5"
 receipts="${PURLAY_DOCKHAND_RECEIPTS:-}"
 
 [[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ && "${#project}" -le 63 ]] || fail 'give the existing Compose project name (up to 63 characters)'
-[[ "$image" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] || fail 'give the tested GHCR image by digest'
-[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'give the full tested Git commit'
+package=''
+if [ "$image" = --follow-release ]; then
+  package="$revision"
+  [[ "$package" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+-api$ ]] || fail 'give the release GHCR package, without its tag'
+  [[ "$dump" = /* && -d "$dump" && -w "$dump" ]] || fail 'give an existing private protected-backup directory by absolute path'
+else
+  [[ "$image" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] || fail 'give the tested GHCR image by digest'
+  [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'give the full tested Git commit'
+fi
 [[ -f "$env_file" && -r "$env_file" ]] || fail 'the stack environment file is unavailable'
 [[ "$receipts" = /* && -d "$receipts" && -w "$receipts" ]] || fail 'set PURLAY_DOCKHAND_RECEIPTS to an existing private writable absolute directory'
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 lock="$receipts/$project.lock"
 mkdir -- "$lock" 2>/dev/null || fail "could not lock $project in the receipt directory"
-trap 'rm -f -- "$lock/receipt"; rmdir -- "$lock"' EXIT
+backup_dir=''
+cleanup() {
+  if [ -n "$backup_dir" ]; then
+    rm -f -- "$backup_dir/postgres.dump.partial"
+    rmdir -- "$backup_dir" 2>/dev/null || true
+  fi
+  rm -f -- "$lock/receipt"
+  rmdir -- "$lock"
+}
+trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+registry_digest() {
+  local value
+  value="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$1")" || fail "could not resolve $1"
+  [[ "$value" =~ ^sha256:[0-9a-f]{64}$ ]] || fail 'the registry did not return an immutable manifest digest'
+  printf '%s\n' "$value"
+}
+latest_release() {
+  curl --silent --show-error --fail --max-time 20 "https://api.github.com/repos/$repository/releases/latest" | jq -er '.tag_name'
+}
+verify_release_current() {
+  [[ "$(latest_release)" = "$latest" && "$(registry_digest "$package:release")" = "$release_digest" ]] \
+    || fail "$1"
+}
+
+if [ -n "$package" ]; then
+  release_digest="$(registry_digest "$package:release")"
+  image="$package@$release_digest"
+  repository="${package#ghcr.io/}"
+  repository="${repository%-api}"
+  latest="$(latest_release)" || fail 'could not determine the latest published GitHub release'
+  [[ "$latest" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'the latest release has an unexpected version tag'
+  refs="refs/purlay-deploy/$project"
+  GIT_TERMINAL_PROMPT=0 git -C "$root" fetch --no-tags --no-recurse-submodules --no-write-fetch-head \
+    "https://github.com/$repository.git" "+refs/heads/main:$refs/main" "+refs/tags/$latest:$refs/release" \
+    || fail 'could not fetch release and main history from GitHub'
+  revision="$(git -C "$root" rev-parse "$refs/release^{commit}")" || fail 'could not resolve the published tag commit'
+  [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'Git did not return the full published commit'
+  git -C "$root" merge-base --is-ancestor "$revision" "$refs/main" || fail 'the published release commit is outside main'
+  [[ "$(registry_digest "$package:sha-$revision")" = "$release_digest" ]] || fail 'the release tag does not yet match the tested main build of the published commit'
+fi
 
 # Protect unrelated containers even if the operator's environment enables orphan cleanup.
 export COMPOSE_REMOVE_ORPHANS=false
@@ -69,6 +116,12 @@ healthy() {
 candidate() {
   [[ "$1" = *"|$image_id|$image|running|healthy|"* ]]
 }
+verify_old_stack() {
+  [[ "$(managed api)" = "$old_api" && "$(managed scheduler)" = "$old_scheduler" ]] \
+    || fail 'the existing API or scheduler changed during preflight'
+  [[ "$(managed postgres)" = "$postgres" && "$(managed garage)" = "$garage" ]] \
+    || fail 'the existing PostgreSQL or Garage changed during preflight'
+}
 initializer() {
   if [ -n "$1" ]; then
     "$root/scripts/check-storage-init.sh" "$project" "$image" --one-off "$1"
@@ -92,6 +145,7 @@ if candidate "$old_api" && candidate "$old_scheduler"; then
     grep -Fqx -- "scheduler=${old_scheduler%%|*}" "$receipt"; then
     IFS= read -r one_off < "$receipt" || fail 'the local initializer receipt is unreadable'
     proof="$(initializer "$one_off")" || fail 'the running digest has no verified initializer receipt'
+    if [ -f "$preflight" ] && grep -Fqx -- "image=$image" "$preflight"; then rm -- "$preflight"; fi
     printf '%s\ndockhand-release: %s already ready at %s (%s)\n' "$proof" "$project" "$image" "$revision"
     exit 0
   elif [ -f "$preflight" ] && grep -Fqx -- "image=$image" "$preflight"; then
@@ -142,22 +196,57 @@ else
   postgres="$(managed postgres)"
   garage="$(managed garage)"
   healthy "$postgres" && healthy "$garage" || fail 'the existing PostgreSQL and Garage must both be healthy before the update'
-  [[ -f "$dump" && -r "$dump" && -s "$dump" ]] || fail 'a protected, readable pre-update PostgreSQL dump is required'
-  checksum="$(sha256sum < "$dump")" || fail 'could not hash the protected dump'
-  listing="$("${compose[@]}" exec -T backup pg_restore --list < "$dump")" || fail 'the backup service could not read the protected dump'
+  dump_to_verify="$dump"
+  if [ -n "$package" ]; then
+    [ ! -e "$preflight" ] || fail 'an earlier rollout has a pending preflight; resolve it before scheduling another release'
+    IFS='|' read -r _ api_image_id api_pin _ <<< "$old_api"
+    IFS='|' read -r _ scheduler_image_id scheduler_pin _ <<< "$old_scheduler"
+    [[ "$api_image_id" = "$scheduler_image_id" && "$api_pin" = "$scheduler_pin" &&
+      "$api_pin" = "$package@sha256:"* && "${api_pin##*:}" =~ ^[0-9a-f]{64}$ ]] \
+      || fail 'the automatic schedule requires a healthy baseline pinned to one digest of this package'
+    baseline="$(docker image inspect --format '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}' "$api_pin")" \
+      || fail 'could not verify the running baseline image'
+    IFS='|' read -r baseline_id baseline_revision <<< "$baseline"
+    [[ "$baseline_id" = "$api_image_id" && "$baseline_revision" =~ ^[0-9a-f]{40}$ && "$baseline_revision" != "$revision" ]] &&
+      git -C "$root" merge-base --is-ancestor "$baseline_revision" "$revision" \
+      || fail 'the release is not a forward revision from the running baseline'
+    attempt="$receipts/$project-$digest.attempted"
+    [ ! -e "$attempt" ] \
+      || fail 'this digest already has an automatic attempt; inspect its state and use the explicit release command to recover'
+    backup_dir="$(mktemp -d "$dump/$project-$digest.XXXXXXXXXX")" || fail 'could not reserve a protected dump location'
+    dump="$backup_dir/postgres.dump"
+    dump_to_verify="$dump.partial"
+    "${compose[@]}" exec -T backup pg_dump --format=custom --no-owner --no-acl </dev/null > "$dump_to_verify" \
+      || fail 'could not take the protected pre-update database dump'
+    "${compose[@]}" exec -T backup pg_restore --file=/dev/null < "$dump_to_verify" \
+      || fail 'the protected dump payload could not be read'
+  fi
+  [[ -f "$dump_to_verify" && -r "$dump_to_verify" && -s "$dump_to_verify" ]] || fail 'a protected, readable pre-update PostgreSQL dump is required'
+  checksum="$(sha256sum < "$dump_to_verify")" || fail 'could not hash the protected dump'
+  listing="$("${compose[@]}" exec -T backup pg_restore --list < "$dump_to_verify")" || fail 'the backup service could not read the protected dump'
   [[ "$listing" = *' TABLE public kysely_migration '* ]] || fail 'the protected dump has no Purlay migration table'
 
   nonce="$(mktemp -d "$lock/init.XXXXXXXXXX")" || fail 'could not allocate the initializer name'
   one_off="$project-storage-preflight-${nonce##*.}"
   rmdir -- "$nonce"
+  if [ -n "$package" ]; then
+    verify_release_current 'the release could not be reverified before initialization'
+    verify_old_stack
+    printf 'image=%s\nrevision=%s\ninitializer=%s\nbackup_sha256=%s\n' "$image" "$revision" "$one_off" "${checksum%% *}" > "$lock/receipt" \
+      || fail 'could not prepare the automatic attempt receipt'
+    mv -- "$dump_to_verify" "$dump" || fail 'could not retain the verified protected dump'
+    printf 'dockhand-release: protected pre-update database dump %s\n' "$dump"
+    # From this point, an interrupted Docker command may have reached the initializer.
+    mv -- "$lock/receipt" "$attempt" || fail 'could not record the pending automatic attempt'
+  fi
   "${compose[@]}" run --no-deps --pull never -T --name "$one_off" storage-init </dev/null \
     || fail "initializer refused; readers were left in place (container: $one_off)"
   proof="$(initializer "$one_off")" || fail 'initializer completed without a verified receipt; readers were left in place'
   [[ "$(sha256sum < "$dump")" = "$checksum" ]] || fail 'the protected dump changed during preflight'
-  [[ "$(managed api)" = "$old_api" && "$(managed scheduler)" = "$old_scheduler" ]] \
-    || fail 'the existing API or scheduler changed during preflight'
-  [[ "$(managed postgres)" = "$postgres" && "$(managed garage)" = "$garage" ]] \
-    || fail 'the existing PostgreSQL or Garage changed during preflight'
+  verify_old_stack
+  if [ -n "$package" ]; then
+    verify_release_current 'the release changed during preflight; readers were left in place'
+  fi
   checksum="${checksum%% *}"
   printf '%s\nimage=%s\nrevision=%s\nbackup_sha256=%s\nold_api=%s\nold_scheduler=%s\npostgres=%s\ngarage=%s\n' \
     "$one_off" "$image" "$revision" "$checksum" "${old_api%%|*}" "${old_scheduler%%|*}" "$postgres" "$garage" > "$lock/receipt"
