@@ -20,7 +20,7 @@ import {
   type GitHubFeedList,
 } from '@purlay/types';
 import { channelNotFound, type ChannelContext } from '../channels/guard';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import type { CredentialCipher } from '../../../platform/crypto';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership } from '../../../platform/tenancy';
@@ -65,8 +65,6 @@ const newSecret = (): string =>
 
 const webhookPathOf = (feedId: string): string => `/api/webhooks/github/${feedId}`;
 
-const iso = (at: Date | string): string => new Date(at).toISOString();
-
 /** A row as the contract says it; a value the table's checks let through and the contract does not is a bug, said. */
 const feedOf = (row: FeedRow): GitHubFeed => {
   const events = row.events.filter((name) => Value.Check(GitHubFeedEventName, name));
@@ -85,12 +83,12 @@ const feedOf = (row: FeedRow): GitHubFeed => {
     channelId: row.channel_id,
     repository: row.repository_full_name,
     events,
-    createdAt: iso(row.created_at),
-    lastDeliveryAt: row.last_delivery_at === null ? null : iso(row.last_delivery_at),
+    createdAt: isoInstant(row.created_at),
+    lastDeliveryAt: row.last_delivery_at === null ? null : isoInstant(row.last_delivery_at),
     lastFailure:
       reason === null || row.last_failure_at === null
         ? null
-        : { reason, at: iso(row.last_failure_at) },
+        : { reason, at: isoInstant(row.last_failure_at) },
   };
 };
 

@@ -13,6 +13,7 @@ import { aUniqueSlug } from '../../testing/users';
 import { userTopic, type EventBus } from '../../platform/events';
 import { joinByInvitation } from './invitations';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import { noDepartures } from '../../testing/departures';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -84,6 +85,7 @@ describe('integration: invitations over HTTP', () => {
       const base = {
         ...testDependencies({ database: db, clock }),
         workspaceChannels: chatWorkspaceChannels,
+        memberDepartures: noDepartures,
       };
       const bus: EventBus = {
         publish: (topic, frame): Promise<void> => {
@@ -127,6 +129,7 @@ describe('integration: invitations over HTTP', () => {
       const base = {
         ...testDependencies({ database: db, clock }),
         workspaceChannels: chatWorkspaceChannels,
+        memberDepartures: noDepartures,
       };
       const bus: EventBus = {
         publish: (): Promise<void> => Promise.reject(new Error('bus unavailable')),

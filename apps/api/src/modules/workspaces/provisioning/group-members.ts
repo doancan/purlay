@@ -323,13 +323,7 @@ export const updateWorkspaceAccessGroupMembers = async (
           ]),
         ];
         noteWorkspaceAccessChange(transaction, scope, users);
-        await projectWorkspaceAccess(
-          transaction,
-          dependencies.clock,
-          scope,
-          users,
-          dependencies.channels,
-        );
+        await projectWorkspaceAccess(transaction, dependencies, scope, users);
         await recordAudit(transaction, dependencies.clock, {
           workspaceId: scope.workspaceId,
           actorUserId: context.userId,

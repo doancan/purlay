@@ -5,6 +5,7 @@
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { __CAMEL__Budget } from './budget';
 import { __CAMEL__Export } from './export';
+import { __CAMEL__FactConsumers } from './facts';
 import { __CAMEL__Routes } from './http/routes';
 import { __CAMEL__PersonalExport } from './personal-export';
 import { __CAMEL__Workers } from './workers';
@@ -22,10 +23,13 @@ export const __CAMEL__Module = {
     budget: { poolShare: __CAMEL__Budget },
     routes: ['/api/workspaces/:workspaceId/__ID__'],
     jobs: [],
+    publishes: [],
+    consumes: [],
   },
   workspacePurge: __CAMEL__WorkspacePurge,
   export: __CAMEL__Export,
   personalExport: __CAMEL__PersonalExport,
   routes: __CAMEL__Routes,
   workers: __CAMEL__Workers,
+  factConsumers: __CAMEL__FactConsumers,
 };

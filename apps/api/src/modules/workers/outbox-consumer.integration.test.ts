@@ -3,6 +3,7 @@
  * and real PostgreSQL: `notes` publishes in its transaction, `wiki` consumes in the worker the composition made for it, under its
  * module's share, and a fact whose consumer was off waits and is delivered when it is on.
  */
+import { CORE_FACTS } from '@purlay/types';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   CLONE_HOOK_MS,
@@ -38,7 +39,7 @@ afterAll(async () => {
   await cloned.drop();
 }, DROP_HOOK_MS);
 
-const FACTS = [NOTE_CREATED, NOTE_PINNED];
+const FACTS = [...CORE_FACTS, NOTE_CREATED, NOTE_PINNED];
 const clock = fixedClock(NOW);
 
 const notes: BundledModule = { manifest: NOTES };

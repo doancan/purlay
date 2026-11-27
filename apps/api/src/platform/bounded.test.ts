@@ -3,35 +3,7 @@
  * to being worth nothing, and what has just come in is what a person is waiting for.
  */
 import { describe, expect, test } from 'bun:test';
-import { admit, dropOldest, dropOldestOf } from './bounded';
-
-describe('a map of waiting things, oldest first', () => {
-  test('within its bound nothing goes', () => {
-    const waiting = new Map([
-      ['a', 1],
-      ['b', 2],
-    ]);
-    expect(dropOldest(waiting, 2)).toEqual([]);
-    expect([...waiting.keys()]).toEqual(['a', 'b']);
-  });
-
-  test('past its bound the oldest go, in the order they came, and the newest stay', () => {
-    const waiting = new Map([
-      ['a', 1],
-      ['b', 2],
-      ['c', 3],
-      ['d', 4],
-    ]);
-    expect(dropOldest(waiting, 2)).toEqual(['a', 'b']);
-    expect([...waiting.keys()]).toEqual(['c', 'd']);
-  });
-
-  test('a bound of nothing lets everything go', () => {
-    const waiting = new Map([['a', 1]]);
-    expect(dropOldest(waiting, 0)).toEqual(['a']);
-    expect(waiting.size).toBe(0);
-  });
-});
+import { admit, dropOldestOf } from './bounded';
 
 describe('a line of waiting things, oldest first', () => {
   test('within its bound nothing goes', () => {

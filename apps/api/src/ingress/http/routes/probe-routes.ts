@@ -12,7 +12,7 @@ import {
   modulesInfoFamily,
   type ServerMetrics,
 } from '../../../platform/metrics';
-import { outboxMetrics, readOutbox } from '../../../platform/outbox-report';
+import { outboxMetrics, readOutboxReport, type OutboxView } from '../../../platform/outbox-report';
 import {
   CORE_COLLATED_COLUMNS,
   readiness,
@@ -37,12 +37,12 @@ export const probeRoutes = (
   context: RouteContext,
   own: {
     readonly metrics: ServerMetrics;
-    /** The modules the build carries that consume a fact, whether this process runs them or not: the rows wait for any node that does. */
-    readonly outboxConsumers: readonly string[];
+    /** What the outbox's gauges are read by: the consumers the build carries and what this node can deliver of them (D-353). */
+    readonly outbox: OutboxView;
   },
 ): Probes => {
   const { dependencies, modules, moduleIds } = context;
-  const { metrics, outboxConsumers } = own;
+  const { metrics, outbox } = own;
   const { log } = dependencies;
   /** Set once, by `startDraining`; readiness reads it before anything else. */
   let draining = false;
@@ -69,7 +69,7 @@ export const probeRoutes = (
   });
   const readOutboxMetrics = outboxMetrics({
     read: async () =>
-      await readOutbox(dependencies.database, outboxConsumers, dependencies.clock.now()),
+      await readOutboxReport(dependencies.database, outbox, dependencies.clock.now()),
     log,
   });
   const ready = async (): Promise<Readiness> =>

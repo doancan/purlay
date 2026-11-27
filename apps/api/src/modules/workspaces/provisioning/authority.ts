@@ -18,6 +18,7 @@ import {
 } from '../../../platform/tenancy';
 import { lapsed, type SessionLifetime } from '../../auth/session-lifetime';
 import type { WorkspaceChannels } from '../channels-port';
+import type { MemberDepartures } from '../member-departures';
 
 export interface WorkspaceProvisioningActor {
   readonly context: WorkspaceContext;
@@ -29,6 +30,8 @@ export interface WorkspaceProvisioningDependencies {
   readonly clock: Clock;
   readonly lifetime: () => SessionLifetime;
   readonly channels: WorkspaceChannels;
+  /** Tells the modules of a membership a projection deletes, in its transaction (D-355). */
+  readonly departures: MemberDepartures;
   readonly readersReady: () => Promise<boolean>;
   readonly bus: EventBus;
   readonly log?: Logger;

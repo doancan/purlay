@@ -23,7 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { messageId, PAGE_LIMIT } from '@purlay/types';
 import { expect, test } from './fixtures';
-import { apiAs, isNarrow, onEngine, type Persona, type Tenant } from './support';
+import { apiAs, isNarrow, onEngine, type Persona, type Tenant, wallClock } from './support';
 
 /** A 2×2 PNG: a real image the API decodes and re-encodes. */
 const PNG = Buffer.from(
@@ -34,8 +34,6 @@ const PNG = Buffer.from(
 const TOTAL = 2_000;
 /** Loaded messages at which the feed is read again: the window, then what a long scroll leaves. */
 const STAGES = [500, 2_000] as const;
-
-const wallClock = (): Date => new Date(performance.timeOrigin + performance.now());
 
 const percentile = (values: readonly number[], p: number): number => {
   const sorted = [...values].sort((a, b) => a - b);

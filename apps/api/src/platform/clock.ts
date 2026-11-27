@@ -23,3 +23,6 @@ export const systemClock: Clock = {
 
 /** A clock that does not move, for a test that needs to know exactly when it is. */
 export const fixedClock = (instant: Date): Clock => ({ now: (): Date => new Date(instant) });
+
+/** A row's instant as the wire carries it, in UTC: the driver hands a timestamp back as a `Date`, and a JSON column as text. */
+export const isoInstant = (value: Date | string): string => new Date(value).toISOString();

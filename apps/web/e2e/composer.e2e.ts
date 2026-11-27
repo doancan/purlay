@@ -10,13 +10,10 @@ import type { Locator, Page, WebSocketRoute } from '@playwright/test';
 import { Value } from '@sinclair/typebox/value';
 import { MeResponse } from '@purlay/types';
 import { expect, test } from './fixtures';
-import { navLink, onEngine } from './support';
+import { navLink, onEngine, rowWith } from './support';
 
 const boxOf = (page: Page, name: string): Locator =>
   page.getByRole('textbox', { name: `Message ${name}` });
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
 
 /** A row the server has accepted: on the screen, not still sending, not failed. */
 const expectDelivered = async (page: Page, text: string): Promise<void> => {

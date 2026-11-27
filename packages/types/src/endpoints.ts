@@ -931,5 +931,3 @@ export const ENDPOINTS = [
     responses: { 204: null },
   }),
 ] as const satisfies readonly EndpointSpec[];
-
-export type EndpointId = (typeof ENDPOINTS)[number]['id'];

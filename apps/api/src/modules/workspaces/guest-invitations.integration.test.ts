@@ -38,6 +38,7 @@ import { INVITE_COOKIE } from '../../platform/cookies';
 import { tokenDigest } from '../../platform/tokens';
 import { changeRole, removeMember } from './members';
 import { AppError } from '../../platform/errors';
+import { noDepartures } from '../../testing/departures';
 
 let cloned: ClonedDatabase;
 beforeAll(async () => {
@@ -151,6 +152,7 @@ describe('integration: named guest invitations', () => {
           successor,
           room.members['owner']?.userId ?? '',
           chatWorkspaceChannels,
+          noDepartures,
         );
       });
     } finally {
@@ -187,7 +189,7 @@ describe('integration: named guest invitations', () => {
       const successorId = room.members['member']?.userId ?? '';
       await changeRole(db, clock, creator, successorId, 'owner');
       const successor = await requireWorkspaceMembership(db, successorId, room.workspaceId);
-      await removeMember(db, clock, successor, creator.userId, chatWorkspaceChannels);
+      await removeMember(db, clock, successor, creator.userId, chatWorkspaceChannels, noDepartures);
       expect(
         await attempt(db, () =>
           acceptInvitation(

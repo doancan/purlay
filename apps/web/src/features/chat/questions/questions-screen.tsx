@@ -36,6 +36,7 @@ import {
   HeaderTile,
   segmentClasses,
   segmentTrackClasses,
+  useChannelLabel,
   useChannelTitle,
 } from '../channel/channel-header';
 import { NavToggle } from '../../shell/nav';
@@ -308,12 +309,8 @@ const Narrowed = ({ channel }: { readonly channel: Channel | undefined }): React
 
 const NarrowedName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t } = useI18n();
-  const title = useChannelTitle(channel);
-  return (
-    <span>
-      {t('questions.only', { name: channel.type === 'direct_message' ? title : `#${title}` })}
-    </span>
-  );
+  const label = useChannelLabel(channel);
+  return <span>{t('questions.only', { name: label })}</span>;
 };
 
 export const QuestionsScreen = (): React.JSX.Element => {

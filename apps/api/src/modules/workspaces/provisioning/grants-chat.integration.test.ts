@@ -24,6 +24,7 @@ import { lockWorkspaceProjectionScope } from './scope';
 import { retireWorkspaceAccessRole } from './roles';
 import { readWorkspaceMemberAccess } from './read-access';
 import { offboardWorkspaceMember } from './source-offboarding';
+import { noDepartures } from '../../../testing/departures';
 
 const now = new Date('2026-11-12T18:00:00Z');
 const clock = fixedClock(now);
@@ -92,6 +93,7 @@ const fixture = async (
       lifetime: () => NO_SESSION_LIFETIME,
       readersReady: () => Promise.resolve(true),
       channels: chatWorkspaceChannels,
+      departures: noDepartures,
       afterCommit: (_transaction, effect): void => {
         effects.push(effect);
       },
@@ -124,7 +126,12 @@ describe('integration: actual chat scoped grant port', () => {
         .values({ channel_id: f.channelId, user_id: f.targetId, joined_at: now })
         .execute();
       const scope = await lockWorkspaceProjectionScope(db, f.actor.context.workspaceId);
-      await projectWorkspaceAccess(db, clock, scope, [f.targetId], chatWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: chatWorkspaceChannels, departures: noDepartures },
+        scope,
+        [f.targetId],
+      );
       await assignWorkspaceAccessGrant(f.dependencies, f.actor, {
         roleId: f.role.id,
         roleRevision: f.role.revision,
@@ -396,7 +403,12 @@ describe('integration: actual chat scoped grant port', () => {
         .values({ channel_id: f.channelId, user_id: f.targetId, joined_at: now })
         .execute();
       const scope = await lockWorkspaceProjectionScope(db, f.actor.context.workspaceId);
-      await projectWorkspaceAccess(db, clock, scope, [f.targetId], chatWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: chatWorkspaceChannels, departures: noDepartures },
+        scope,
+        [f.targetId],
+      );
       expect(
         await db
           .selectFrom('channel_member_capabilities')

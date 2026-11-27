@@ -83,6 +83,7 @@ import {
 import type { Readiness } from '../../platform/readiness';
 import type { AccountDependencies } from './accounts';
 import type { Config } from '../../platform/config';
+import type { OutboxView } from '../../platform/outbox-report';
 import { queryOf, validated } from './validate';
 import { exportServerAudit } from '../../modules/administration/audit-export';
 import {
@@ -97,8 +98,8 @@ export interface AdministrationDependencies extends AccountDependencies {
   readonly config: Config;
   readonly modules: readonly string[];
   readonly jobs: readonly string[];
-  /** The modules the build carries that consume a fact: whose outbox the overview reports (D-288). */
-  readonly outboxConsumers: readonly string[];
+  /** What the outbox is read by: the consumers the build carries, what this node delivers of them and the grants (D-288, D-353). */
+  readonly outbox: OutboxView;
   readonly readiness: () => Promise<Readiness>;
 }
 const guard = async (
@@ -264,17 +265,17 @@ export const readAdministrationOverview = async (
     ready.ready,
     deps.clock.now(),
     (await deps.pushConfiguration.view()).enabled,
-    deps.outboxConsumers,
+    deps.outbox,
   );
 };
 /** `GET /api/server/outbox` — the dead and stuck facts between modules, as metadata and never a payload (D-288 §12). */
 export const readAdministrationOutbox = async (
-  deps: AccountDependencies,
+  deps: AccountDependencies & Pick<AdministrationDependencies, 'outbox'>,
   request: Request,
 ): Promise<ServerOutboxPage> => {
   await guard(deps, request);
   const query = validated(ServerOutboxQuery, queryOf(new URL(request.url), { numbers: ['limit'] }));
-  return await listServerOutbox(deps.database, deps.clock, query);
+  return await listServerOutbox(deps.database, deps.clock, query, deps.outbox);
 };
 /** `GET /api/server/outbox/:id` — one delivery whole, payload included, on the server's trail as read (D-288 §12). */
 export const readAdministrationOutboxFact = async (

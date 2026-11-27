@@ -18,6 +18,7 @@ export const workspaceProvisioningDependencies = ({
   clock: dependencies.clock,
   lifetime: () => dependencies.auth.sessionLifetime,
   channels: dependencies.workspaceChannels,
+  departures: dependencies.memberDepartures,
   bus: sockets.bus,
   log: dependencies.log,
   readersReady: async (): Promise<boolean> =>

@@ -359,6 +359,7 @@ describe('integration: upgrading from the previous release', () => {
         '0131_backfill_push_delivery_subscriptions',
         '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
+        '0134_outbox_expired',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -870,6 +871,7 @@ describe('integration: APNs joins the durable push queue', () => {
       expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
         '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
+        '0134_outbox_expired',
       ]);
       expect(await heap()).toBe(originalHeap);
       const deliveries = async (): Promise<

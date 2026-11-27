@@ -12,9 +12,13 @@ import type {
   ServerOutboxQuery,
 } from '@purlay/types';
 import { DAY_MS } from './clock';
-import { OUTBOX_STALE_AFTER_SECONDS } from './outbox-report';
+import { readGrants } from './grants';
+import { OUTBOX_STALE_AFTER_SECONDS, type OutboxView } from './outbox-report';
 
 const LIST_DEFAULT = 50;
+
+/** How many pages of rows a list of stuck facts reads past held ones before it answers with what it has and a cursor to go on. */
+const STUCK_PAGES_MAX = 5;
 
 /** A requeued fact is not given up on for this long, whatever its original expiry was: the sweep takes a pending row past it. */
 const REQUEUED_HOLD_DAYS = 7;
@@ -67,33 +71,82 @@ const factOf = (row: Metadata): ServerOutboxFact => ({
   finishedAt: row.finished_at?.toISOString() ?? null,
 });
 
-/** The facts asked for, oldest first by id (a UUIDv7), a page at a time. `dead` is the default: what needs a person. */
+/**
+ * The rows of a page that are held and not stuck (D-353): of a consumer the build carries, in a workspace that is not granted it. A
+ * consumer the build does not carry is not judged, since nothing of this version would deliver it: its row is stuck. Judged over the
+ * whole build and not by what this node runs, so the list is the same whichever node answers it.
+ */
+const heldOf = async (
+  database: Executor,
+  view: Pick<OutboxView, 'consumers' | 'granted'>,
+  rows: readonly Metadata[],
+  now: Date,
+): Promise<ReadonlySet<string>> => {
+  const judged = rows.filter((row) => view.consumers.includes(row.consumer));
+  const grants = await readGrants(database, [...new Set(judged.map((row) => row.workspace_id))]);
+  return new Set(
+    judged
+      .filter((row) => !view.granted(grants.get(row.workspace_id) ?? [], now).has(row.consumer))
+      .map((row) => row.id),
+  );
+};
+
+/**
+ * The facts asked for, oldest first by id (a UUIDv7), a page at a time. `dead` is the default: what needs a person. `stuck` is a
+ * pending fact older than the overview's fifteen minutes that is not held on purpose and not past its expiry (D-353); its page reads
+ * past held rows up to `STUCK_PAGES_MAX` pages, and may then be short with a cursor to go on.
+ */
 export const listOutboxFacts = async (
   database: Executor,
   query: ServerOutboxQuery,
   now: Date,
+  view: Pick<OutboxView, 'consumers' | 'granted'>,
 ): Promise<ServerOutboxPage> => {
   const limit = query.limit ?? LIST_DEFAULT;
   const state = query.state ?? 'dead';
-  let statement = database
-    .selectFrom('outbox')
-    .select(COLUMNS)
-    .orderBy('id')
-    .limit(limit + 1);
-  statement =
-    state === 'stuck'
-      ? statement
-          .where('state', '=', 'pending')
-          .where('created_at', '<', new Date(now.getTime() - OUTBOX_STALE_AFTER_SECONDS * 1000))
-      : statement.where('state', '=', state);
-  if (query.after !== undefined) statement = statement.where('id', '>', query.after);
-  if (query.consumer !== undefined) statement = statement.where('consumer', '=', query.consumer);
-  if (query.type !== undefined) statement = statement.where('type', '=', query.type);
-  if (query.workspaceId !== undefined)
-    statement = statement.where('workspace_id', '=', query.workspaceId);
-  const rows = await statement.execute();
-  const data = rows.slice(0, limit).map(factOf);
-  return { data, nextCursor: rows.length > limit ? (data.at(-1)?.id ?? null) : null };
+  const pageAfter = async (after: string | undefined): Promise<Metadata[]> => {
+    let statement = database
+      .selectFrom('outbox')
+      .select(COLUMNS)
+      .orderBy('id')
+      .limit(limit + 1);
+    statement =
+      state === 'stuck'
+        ? statement
+            .where('state', '=', 'pending')
+            .where('expires_at', '>', now)
+            .where('created_at', '<', new Date(now.getTime() - OUTBOX_STALE_AFTER_SECONDS * 1000))
+        : statement.where('state', '=', state);
+    if (after !== undefined) statement = statement.where('id', '>', after);
+    if (query.consumer !== undefined) statement = statement.where('consumer', '=', query.consumer);
+    if (query.type !== undefined) statement = statement.where('type', '=', query.type);
+    if (query.workspaceId !== undefined)
+      statement = statement.where('workspace_id', '=', query.workspaceId);
+    return await statement.execute();
+  };
+  if (state !== 'stuck') {
+    const rows = await pageAfter(query.after);
+    const data = rows.slice(0, limit).map(factOf);
+    return { data, nextCursor: rows.length > limit ? (data.at(-1)?.id ?? null) : null };
+  }
+  const kept: Metadata[] = [];
+  let after = query.after;
+  for (let page = 0; page < STUCK_PAGES_MAX; page += 1) {
+    const rows = await pageAfter(after);
+    const held = await heldOf(database, view, rows, now);
+    kept.push(...rows.filter((row) => !held.has(row.id)));
+    if (kept.length > limit) break;
+    if (rows.length <= limit) {
+      const data = kept.map(factOf);
+      return { data, nextCursor: null };
+    }
+    after = rows.at(-1)?.id;
+  }
+  const data = kept.slice(0, limit).map(factOf);
+  return {
+    data,
+    nextCursor: kept.length > limit ? (data.at(-1)?.id ?? null) : (after ?? null),
+  };
 };
 
 /** One delivery whole, payload included; `undefined` where there is none. The caller records that it was read. */

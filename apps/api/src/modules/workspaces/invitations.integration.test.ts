@@ -36,6 +36,7 @@ import type { Clock } from '../../platform/clock';
 import type { CreatedInvitation } from '@purlay/types';
 import { requireChannelById } from '../../features/chat/channels/guard';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import { noDepartures } from '../../testing/departures';
 
 /** The writing services take a transaction (#232); inside the harness's, one joins it. */
 const createInvitation = async (
@@ -258,6 +259,7 @@ describe('integration: joining by a link', () => {
           await as(db, other, 'in-otherowner17'),
           person,
           chatWorkspaceChannels,
+          noDepartures,
         );
       });
 
@@ -435,7 +437,14 @@ describe('integration: joining by a link', () => {
       await acceptInvitation(db, clock, person.userId, old.token);
       clock.advance(1_000);
       await atomicallyOn(db)(async (transaction) => {
-        await removeMember(transaction, clock, owner, person.userId, chatWorkspaceChannels);
+        await removeMember(
+          transaction,
+          clock,
+          owner,
+          person.userId,
+          chatWorkspaceChannels,
+          noDepartures,
+        );
       });
 
       clock.advance(1_000);
@@ -575,7 +584,7 @@ describe('integration: revoking races', () => {
     const outcome = await raced(
       db,
       async (transaction) => {
-        await removeMember(transaction, clock, owner, gone, chatWorkspaceChannels);
+        await removeMember(transaction, clock, owner, gone, chatWorkspaceChannels, noDepartures);
       },
       async () => await refusal(acceptInvitation(db, clock, gone, made.token)),
     );

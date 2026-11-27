@@ -366,13 +366,7 @@ export const assignWorkspaceAccessGrant = async (
         );
       }
       noteWorkspaceAccessChange(transaction, scope, users);
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        users,
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, users);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,
@@ -441,13 +435,7 @@ export const revokeWorkspaceAccessGrant = async (
           .where('id', '=', grantId)
           .execute();
       noteWorkspaceAccessChange(transaction, scope, users);
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        users,
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, users);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,

@@ -14,6 +14,7 @@ import { requireLegacyAdmissionOpen, recordLegacyManualAdmission } from './legac
 import { requireManualWorkspaceSource } from './native-state';
 import { projectWorkspaceAccess } from './projection';
 import { lockWorkspaceProjectionScope } from './scope';
+import { noDepartures } from '../../../testing/departures';
 
 const clock = fixedClock(new Date('2026-11-12T18:00:00Z'));
 const rejected = async (promise: Promise<unknown>): Promise<unknown> =>
@@ -70,19 +71,28 @@ describe('integration: existing writers preserve source authority', () => {
           created_at: clock.now(),
         })
         .execute();
-      await projectWorkspaceAccess(db, clock, scope, [helper.userId], chatWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: chatWorkspaceChannels, departures: noDepartures },
+        scope,
+        [helper.userId],
+      );
       const context = await requireWorkspaceMembership(db, helper.userId, room.workspaceId);
       expect((await createInvitation(db, clock, context)).invitation.id).toBeString();
       expect(await rejected(changeRole(db, clock, context, person.userId, 'admin'))).toMatchObject({
         body: { code: 'FORBIDDEN' },
       });
       expect(
-        await rejected(removeMember(db, clock, context, admin.userId, chatWorkspaceChannels)),
+        await rejected(
+          removeMember(db, clock, context, admin.userId, chatWorkspaceChannels, noDepartures),
+        ),
       ).toMatchObject({ body: { code: 'FORBIDDEN' } });
       expect(
-        await rejected(removeMember(db, clock, context, owner.userId, chatWorkspaceChannels)),
+        await rejected(
+          removeMember(db, clock, context, owner.userId, chatWorkspaceChannels, noDepartures),
+        ),
       ).toMatchObject({ body: { code: 'FORBIDDEN' } });
-      await removeMember(db, clock, context, person.userId, chatWorkspaceChannels);
+      await removeMember(db, clock, context, person.userId, chatWorkspaceChannels, noDepartures);
       expect(
         (
           await db
@@ -93,7 +103,12 @@ describe('integration: existing writers preserve source authority', () => {
             .executeTakeFirstOrThrow()
         ).blocked_at,
       ).not.toBeNull();
-      await projectWorkspaceAccess(db, clock, scope, [person.userId], chatWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: chatWorkspaceChannels, departures: noDepartures },
+        scope,
+        [person.userId],
+      );
       expect(
         await db
           .selectFrom('workspace_members')
@@ -156,7 +171,12 @@ describe('integration: existing writers preserve source authority', () => {
             .executeTakeFirstOrThrow()
         ).builtin_role,
       ).toBe('admin');
-      await projectWorkspaceAccess(db, clock, scope, [manual.userId], chatWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: chatWorkspaceChannels, departures: noDepartures },
+        scope,
+        [manual.userId],
+      );
       expect((await requireWorkspaceMembership(db, manual.userId, room.workspaceId)).role).toBe(
         'admin',
       );
@@ -216,7 +236,12 @@ describe('integration: existing writers preserve source authority', () => {
           .execute(),
       ).toEqual([{ capability: 'channel.settings.manage' }]);
       await leaveChannel(db, await requireChannelById(db, person.userId, room.channelId));
-      await projectWorkspaceAccess(db, clock, scope, [person.userId], chatWorkspaceChannels);
+      await projectWorkspaceAccess(
+        db,
+        { clock, channels: chatWorkspaceChannels, departures: noDepartures },
+        scope,
+        [person.userId],
+      );
       expect(
         await db
           .selectFrom('channel_members')

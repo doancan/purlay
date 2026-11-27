@@ -8,7 +8,6 @@
  */
 import type {
   ProbeResult,
-  ServerAccount,
   ServerGitHubAppRequest,
   ServerPolicyRequest,
   ServerSettingsAnswer,
@@ -52,20 +51,9 @@ export interface ServerClient {
   /** One rule of the sign-in policy: who may make an account, two-step verification, passwords (D-239). */
   readonly policy: (change: ServerPolicyRequest) => Promise<void>;
   readonly creators: (workspaceCreators: CreatorsChoice) => Promise<void>;
-  /** Accounts found by name, username or address (D-233). */
-  readonly accounts: (words: string, signal?: AbortSignal) => Promise<readonly ServerAccount[]>;
   readonly suspend: (userId: string) => Promise<void>;
   readonly lift: (userId: string) => Promise<void>;
 }
-
-const isAccount = (value: unknown): value is ServerAccount =>
-  isRecord(value) &&
-  typeof value['id'] === 'string' &&
-  typeof value['username'] === 'string' &&
-  typeof value['displayName'] === 'string' &&
-  (value['email'] === null || typeof value['email'] === 'string') &&
-  typeof value['isServerAdmin'] === 'boolean' &&
-  (value['suspendedAt'] === null || typeof value['suspendedAt'] === 'string');
 
 const isAnswer = (value: unknown): value is ServerSettingsAnswer =>
   isRecord(value) &&
@@ -115,12 +103,6 @@ export const createServerClient = (fetchFn: SetupFetch): ServerClient => {
     },
     creators: async (workspaceCreators): Promise<void> => {
       await call('POST', '/api/server/creators', { workspaceCreators });
-    },
-    accounts: async (words, signal): Promise<readonly ServerAccount[]> => {
-      const query = words === '' ? '' : `?q=${encodeURIComponent(words)}`;
-      const { status, json } = await call('GET', `/api/server/accounts${query}`, undefined, signal);
-      if (!Array.isArray(json) || !json.every(isAccount)) throw malformed(status);
-      return json;
     },
     suspend: async (userId): Promise<void> => {
       await call('PUT', `/api/server/accounts/${encodeURIComponent(userId)}/suspension`);

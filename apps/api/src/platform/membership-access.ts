@@ -5,6 +5,13 @@ import { liveCompanySessionProof } from './company-session';
 import { currentWorkspaceContentFence } from './workspace-content-fence';
 import { workspaceAccessRequired } from './workspace-content-access';
 
+/** A guest's access has begun and not ended, by the database's clock: expiry is read here, whatever the cleanup has done. */
+export const liveGuestWindow = (): RawBuilder<boolean> => sql<boolean>`(
+    workspace_members.guest_since <= statement_timestamp()
+    and (workspace_members.guest_expires_at is null
+      or workspace_members.guest_expires_at > statement_timestamp())
+  )`;
+
 /** The canonical guards join this table without an alias; a normal membership keeps its old behavior. */
 export const activeWorkspaceMembership = (
   options: { readonly visibilityOnly?: boolean } = {},
@@ -30,12 +37,7 @@ export const activeWorkspaceMembership = (
     options.visibilityOnly === true ? sql<boolean>`true` : currentWorkspaceContentFence();
   return sql<boolean>`${source} and ${content} and (
   workspace_members.access_kind = 'member'
-  or (
-    workspace_members.access_kind = 'guest'
-    and workspace_members.guest_since <= statement_timestamp()
-    and (workspace_members.guest_expires_at is null
-      or workspace_members.guest_expires_at > statement_timestamp())
-  )
+  or (workspace_members.access_kind = 'guest' and ${liveGuestWindow()})
 )`;
 };
 

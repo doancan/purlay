@@ -54,7 +54,7 @@ describe('the context createApp builds for a module', () => {
       },
     };
     const dependencies = testDependencies();
-    createApp({ ...dependencies, composition: compose([spy], [spy], 'open', []) });
+    createApp({ ...dependencies, composition: compose([spy], [spy]) });
     if (seen === undefined) throw new Error('the module was not handed a context');
     expect(Object.keys(seen).sort()).toEqual([
       'atomically',

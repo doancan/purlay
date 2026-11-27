@@ -1,5 +1,7 @@
 # D-250. Purlay is a set of modules over a small core, and chat is one of them — builds on D-1, D-2, D-7, D-24, D-43, D-86; amends D-1, D-2 and `PRD.md` §6
 
+*Amended by D-352: the in-process domain bus is removed unused; a hint goes over the socket `EventBus`, a fact through the outbox or a port.*
+
 **Context.** Purlay was team chat. The owner now means it to be an all-in-one workspace — chat, issues and projects,
 notes, mail — with more large features to follow, and four things have to stay true while it grows. An instance
 installed for chat alone is chat alone: no other feature's tables, routes, bundle or menu. Features work without one

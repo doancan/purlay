@@ -9,11 +9,13 @@ import type {
 import { liveCompanySessionProof } from '../../../platform/company-session';
 import { sql, type Executor, type Transaction } from '@purlay/db';
 import { normalisedMailbox } from '@purlay/types';
+import { DIRECTORY_EXTERNAL_ID_MAX } from '@purlay/types/workspace-directory';
 import type { Clock } from '../../../platform/clock';
 import { type EventBus } from '../../../platform/events';
 import { AppError } from '../../../platform/errors';
 import type { Logger } from '../../../platform/logging';
 import { noWorkspaceChannels, type WorkspaceChannels } from '../channels-port';
+import type { MemberDepartures } from '../member-departures';
 import { lockWorkspaceProjectionScope, workspaceAccessOutcome } from '../provisioning/scope';
 import { publishWorkspaceAccessOutcome } from '../provisioning/administration';
 import {
@@ -33,9 +35,15 @@ export interface DirectoryNativeDependencies {
   readonly clock: Clock;
   readonly bus: EventBus;
   readonly channels?: WorkspaceChannels;
+  /** Tells the modules of a membership a directory change ends (D-355); wired wherever `readersReady` is, which serves the directory. */
+  readonly departures?: MemberDepartures;
   readonly log?: Logger;
   readonly readersReady?: () => Promise<boolean>;
 }
+
+/** Without a directory there is no SCIM route to end a membership: a call is a wiring fault, refused loudly and never skipped. */
+const departuresUnwired: MemberDepartures = () =>
+  Promise.reject(new Error('the directory ended a membership with no departures wired'));
 interface NativeDirectoryComposition {
   readonly plugin: BetterAuthPlugin;
   readonly initialize: (instance: ReturnType<typeof betterAuth>, after: Promise<unknown>) => void;
@@ -64,7 +72,11 @@ export const workspaceDirectoryNative = (
 ): NativeDirectoryComposition => {
   let context: Awaited<ReturnType<typeof betterAuth>['$context']> | undefined;
   const targets = new WeakMap<ActiveDirectoryTransaction, ResourceIdentity>();
-  const changes = { clock: deps.clock, channels: deps.channels ?? noWorkspaceChannels };
+  const changes = {
+    clock: deps.clock,
+    channels: deps.channels ?? noWorkspaceChannels,
+    departures: deps.departures ?? departuresUnwired,
+  };
   const ready = async (): Promise<boolean> => {
     try {
       return (await deps.readersReady?.()) === true;
@@ -149,7 +161,8 @@ export const workspaceDirectoryNative = (
             .catch(() => null),
         );
         const ext = body?.['externalId'];
-        if (typeof ext !== 'string' || ext.length === 0 || ext.length > 255) throw forbidden();
+        if (typeof ext !== 'string' || ext.length === 0 || ext.length > DIRECTORY_EXTERNAL_ID_MAX)
+          throw forbidden();
         externalId = ext;
       } else if (userPath[1] !== undefined) {
         resource = await current.adapter.findOne<ResourceIdentity>({

@@ -18,6 +18,7 @@ import { aUserRow, aUniqueSlug } from '../../testing/users';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import { noWorkspaceChannels } from '../../modules/workspaces/channels-port';
 import { createApp } from './app';
+import { noDepartures } from '../../testing/departures';
 let clone: ClonedDatabase;
 beforeAll(async () => {
   clone = await cloneIntegrationDatabase();
@@ -89,7 +90,11 @@ describe('integration: mounted native directory protocol', () => {
       .returning('id')
       .executeTakeFirstOrThrow();
     const auth = aTestAuth(clone.db, {
-      directory: { channels: noWorkspaceChannels, readersReady: () => Promise.resolve(true) },
+      directory: {
+        channels: noWorkspaceChannels,
+        departures: noDepartures,
+        readersReady: () => Promise.resolve(true),
+      },
     });
     const app = createApp(
       testDependencies({
