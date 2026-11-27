@@ -358,6 +358,7 @@ describe('integration: upgrading from the previous release', () => {
         '0130_apns_push_deliveries',
         '0131_backfill_push_delivery_subscriptions',
         '0132_push_delivery_provider_foreign_keys',
+        '0133_workspace_urgent_messages',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -382,6 +383,9 @@ describe('integration: upgrading from the previous release', () => {
         'issues/0001_issues',
         'issues/0002_issues_search',
       ]);
+      const urgent = await sql<{ urgent_messages_enabled: boolean }>`
+        select urgent_messages_enabled from workspaces where id = ${workspace}`.execute(db);
+      expect(urgent.rows).toEqual([{ urgent_messages_enabled: true }]);
       expect(await columnsOfAttachments(db)).not.toContain('message_id');
       expect(await columnsOfAttachments(db)).not.toContain('channel_id');
       expect(await namesOfAttachmentsKeys(db)).toEqual([]);
@@ -865,6 +869,7 @@ describe('integration: APNs joins the durable push queue', () => {
       expect(upgraded.error).toBeUndefined();
       expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
         '0132_push_delivery_provider_foreign_keys',
+        '0133_workspace_urgent_messages',
       ]);
       expect(await heap()).toBe(originalHeap);
       const deliveries = async (): Promise<

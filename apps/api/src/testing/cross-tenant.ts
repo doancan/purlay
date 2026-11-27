@@ -440,6 +440,11 @@ export const CROSS_TENANT: Readonly<Record<string, CrossTenantCase>> = {
     body: () => ({ name: 'crossing' }),
     visibility: { kind: 'none', reason: 'the workspace itself; no channel is named or listed' },
   },
+  'PUT /api/workspaces/:workspaceId/urgent-messages': {
+    refusal: 'WORKSPACE_NOT_FOUND',
+    body: () => ({ enabled: false }),
+    visibility: { kind: 'none', reason: 'a workspace setting independent of any channel' },
+  },
   'POST /api/workspaces/:workspaceId/exports': {
     refusal: 'WORKSPACE_NOT_FOUND',
     visibility: {

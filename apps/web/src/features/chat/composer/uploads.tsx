@@ -37,6 +37,7 @@ import { systemClock } from '../../../system-clock';
 import { IconButton } from '../../../ui/icon-button';
 import { useToast } from '../../../ui/toast';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
+import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { createOutbox, type Outbox, type Upload, type Waiting } from './outbox';
 
@@ -55,9 +56,10 @@ export const OutboxProvider = ({
   const engine = useEngine();
   const { show } = useToast();
   const { t } = useI18n();
+  const { memberships } = useSession();
   // Read when an answer arrives, which may be long after this rendered.
-  const latest = useRef({ api, engine, show, t });
-  latest.current = { api, engine, show, t };
+  const latest = useRef({ api, engine, memberships, show, t });
+  latest.current = { api, engine, memberships, show, t };
   const [outbox] = useState(() => {
     // Transport updates may use the latest engine; old-account work never acquires its lifetime.
     const isCurrent = engine.isCurrent;
@@ -74,14 +76,19 @@ export const OutboxProvider = ({
         if (!isCurrent()) throw accountChanged();
         latest.current.engine.send({ ...message, foreground: false });
       },
-      refused: (channelName, reason) => {
+      allowUrgent: (workspaceId) =>
+        !latest.current.memberships.some(
+          (member) => member.workspace.id === workspaceId && member.urgentMessagesEnabled === false,
+        ),
+      refused: (channel, reason) => {
         if (!isCurrent()) return;
-        latest.current.show({
-          message: latest.current.t(
-            reason === 'account' ? 'composer.notSentAccount' : 'composer.notSent',
-            { channel: channelName },
-          ),
-        });
+        const key =
+          reason === 'account'
+            ? 'composer.notSentAccount'
+            : reason === 'urgent'
+              ? 'priority.notSent'
+              : 'composer.notSent';
+        latest.current.show({ message: latest.current.t(key, { channel }) });
       },
     });
   });
@@ -96,7 +103,7 @@ export interface Uploads {
   /** What was sent goes with it. */
   readonly clear: () => void;
   /** The send asked for while files were uploading, if there is one. */
-  readonly waiting: boolean;
+  readonly waiting: Waiting | null;
   readonly wait: (waiting: Waiting | null) => void;
 }
 
@@ -168,7 +175,7 @@ export const useUploads = (key: string, content: () => string): Uploads => {
     clear: (): void => {
       outbox.clear(key);
     },
-    waiting: place.waiting !== null,
+    waiting: place.waiting,
     wait: (waiting): void => {
       outbox.wait(key, waiting);
     },

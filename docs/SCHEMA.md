@@ -950,6 +950,7 @@ CREATE TABLE workspaces (
     retention_days      INTEGER,
     -- Monotonic retained marker: deleting a policy row cannot make a previously governed workspace implicit off (D-310).
     access_policy_epoch BIGINT NOT NULL DEFAULT 0,
+    urgent_messages_enabled BOOLEAN NOT NULL DEFAULT TRUE,  -- new Urgent sends (D-337)
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -4597,6 +4598,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0130_apns_push_deliveries.sql  APNs provider scope, Web Push cancellation, and provider references with a Web write trigger (D-342)
 0131_backfill_push_delivery_subscriptions.sql  backfill the Web references in batches, build provider indexes concurrently, and validate the identity check (D-342)
 0132_push_delivery_provider_foreign_keys.sql  install and validate the provider foreign keys, then drop the original Web-only key (D-342)
+0133_workspace_urgent_messages.sql  workspaces.urgent_messages_enabled: whether the workspace allows new Urgent sends (D-337)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

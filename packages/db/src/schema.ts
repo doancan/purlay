@@ -1470,6 +1470,7 @@ export interface Workspaces {
   storage_quota_bytes: Generated<Int8>;
   storage_used_bytes: Generated<Int8>;
   updated_at: Generated<Timestamp>;
+  urgent_messages_enabled: Generated<boolean>;
 }
 
 export interface WorkspaceSessionAssurances {

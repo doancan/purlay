@@ -1921,4 +1921,20 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     replace: 'new Date(locked.session.created_at).getTime()',
     tests: ['apps/api/src/modules/workspaces/security/authority.integration.test.ts'],
   },
+  {
+    id: 'workspace-urgent-setting-ignores-demotion',
+    why: 'an administrator who was demoted while waiting for the workspace lock can still change urgency (D-337)',
+    file: 'apps/api/src/modules/workspaces/urgent-messages.ts',
+    find: "  if (current.role === 'member') throw managersOnly();\n",
+    replace: '',
+    tests: ['apps/api/src/features/chat/messages/urgent-policy.concurrency.integration.test.ts'],
+  },
+  {
+    id: 'workspace-urgent-setting-skips-conflicting-lock',
+    why: 'disabling urgent delivery can commit while an urgent send still holds its workspace reference (D-337)',
+    file: 'apps/api/src/modules/workspaces/urgent-messages.ts',
+    find: '    .forUpdate()\n',
+    replace: '    .forNoKeyUpdate()\n',
+    tests: ['apps/api/src/features/chat/messages/urgent-policy.concurrency.integration.test.ts'],
+  },
 ];

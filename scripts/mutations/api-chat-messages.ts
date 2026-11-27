@@ -1235,6 +1235,14 @@ export const API_CHAT_MESSAGES: readonly Mutation[] = [
     tests: ['apps/api/src/features/chat/messages/attachments.integration.test.ts'],
   },
   {
+    id: 'urgent-message-ignores-workspace-setting',
+    why: 'a new urgent message is accepted after its workspace disabled urgent delivery (D-337)',
+    file: MESSAGES,
+    find: 'if (!workspace.urgent_messages_enabled)',
+    replace: 'if (false)',
+    tests: ['apps/api/src/ingress/http/message-priority.integration.test.ts'],
+  },
+  {
     id: 'versions-not-kept',
     why: 'an edit replaces the words and keeps nothing of what they were',
     file: 'apps/api/src/features/chat/messages/edit.ts',

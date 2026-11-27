@@ -47,8 +47,8 @@ export const WEB_FEATURES_SETTINGS: readonly Mutation[] = [
     id: 'general-archives-asked-without-chat',
     why: 'a server without chat gets a permanent 404 error and Retry on General (#1179)',
     file: 'apps/web/src/features/settings/pages/general.tsx',
-    find: "{modules.includes('chat') && <ArchivedChannelsCard />}",
-    replace: '{<ArchivedChannelsCard />}',
+    find: "{modules.includes('chat') && (\n",
+    replace: '{true && (\n',
     tests: ['apps/web/src/features/settings/pages/general.test.tsx'],
   },
   {

@@ -381,6 +381,22 @@ export const sendMessage = async (
     return await again(existing);
   }
 
+  if (input.priority === 'urgent') {
+    // The insert's workspace FK already holds KEY SHARE against the setting writer's FOR UPDATE.
+    // Check after idempotency, with no added lock or upgrade before the attachment bookkeeping.
+    const workspace = await executor
+      .selectFrom('workspaces')
+      .select('urgent_messages_enabled')
+      .where('id', '=', context.workspaceId)
+      .executeTakeFirstOrThrow();
+    if (!workspace.urgent_messages_enabled)
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        message: 'Urgent messages are disabled in this workspace.',
+        details: { fields: { priority: 'urgent messages are disabled in this workspace' } },
+      });
+  }
+
   const sentAt = clock.now();
   await addSharedLinks(executor, { ...context, messageId: input.id }, sharedLinksOf(reading.tree));
 
