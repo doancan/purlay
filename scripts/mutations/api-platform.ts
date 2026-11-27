@@ -615,7 +615,7 @@ export const API_PLATFORM: readonly Mutation[] = [
     id: 'guest-admission-before-its-instant',
     why: 'A scheduled guest admission grants workspace and channel access before it starts.',
     file: 'apps/api/src/platform/membership-access.ts',
-    find: '    and workspace_members.guest_since <= statement_timestamp()\n',
+    find: '    workspace_members.guest_since <= statement_timestamp()\n    and ',
     replace: '',
     tests: ['apps/api/src/features/chat/channels/guests.integration.test.ts'],
   },
