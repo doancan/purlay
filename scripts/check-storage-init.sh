@@ -5,7 +5,13 @@ set -euo pipefail
 fail() { printf 'storage-init: %s\n' "$*" >&2; exit 1; }
 project=${1:-}
 image=${2:-}
-[ "$#" -eq 2 ] || fail "usage: scripts/check-storage-init.sh <compose-project> <tested-image@sha256:digest>"
+explicit=''
+if [ "$#" -eq 4 ] && [ "$3" = --one-off ]; then
+  explicit="$4"
+  [[ "$explicit" =~ ^[a-z0-9][A-Za-z0-9_-]*$ ]] || fail "give the one-off initializer container name"
+elif [ "$#" -ne 2 ]; then
+  fail "usage: scripts/check-storage-init.sh <compose-project> <tested-image@sha256:digest> [--one-off <container-name>]"
+fi
 [[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "give the Compose project name"
 [[ "$image" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] || fail "give the tested GHCR image by digest"
 
@@ -14,27 +20,34 @@ tested="$(docker image inspect --format '{{.Id}}|{{json .Config.Entrypoint}}' "$
 IFS='|' read -r image_id expected_entrypoint <<< "$tested"
 [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "Docker did not report an image ID"
 
-# Compose versions use either an absent one-off label or False for a managed service.
-candidates="$(docker container ls --all --no-trunc \
-  --filter "label=com.docker.compose.project=$project" \
-  --filter 'label=com.docker.compose.service=storage-init' \
-  --format '{{.ID}}|{{.Label "com.docker.compose.oneoff"}}')" || fail "could not list the stack's containers"
-container=''
-while IFS='|' read -r candidate oneoff; do
-  [ -n "$candidate" ] && [ "$oneoff" != True ] || continue
-  [[ "$candidate" =~ ^[0-9a-f]{64}$ && ( -z "$oneoff" || "$oneoff" = False ) ]] \
-    || fail "Docker did not report a managed container ID"
-  [ -z "$container" ] || fail "expected exactly one managed storage-init container for $project"
-  container="$candidate"
-done <<< "$candidates"
-[ -n "$container" ] || fail "expected exactly one managed storage-init container for $project"
+container="$explicit"
+if [ -z "$container" ]; then
+  # Compose versions use either an absent one-off label or False for a managed service.
+  candidates="$(docker container ls --all --no-trunc \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter 'label=com.docker.compose.service=storage-init' \
+    --format '{{.ID}}|{{.Label "com.docker.compose.oneoff"}}')" || fail "could not list the stack's containers"
+  while IFS='|' read -r candidate oneoff; do
+    [ -n "$candidate" ] && [ "$oneoff" != True ] || continue
+    [[ "$candidate" =~ ^[0-9a-f]{64}$ && ( -z "$oneoff" || "$oneoff" = False ) ]] \
+      || fail "Docker did not report a managed container ID"
+    [ -z "$container" ] || fail "expected exactly one managed storage-init container for $project"
+    container="$candidate"
+  done <<< "$candidates"
+  [ -n "$container" ] || fail "expected exactly one managed storage-init container for $project"
+fi
 
 # Read only these fields. A full inspect would also expose the Garage admin token.
 format='{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.oneoff"}}|{{.Image}}|{{json .Config.Cmd}}|{{.State.Status}}|{{.State.ExitCode}}|{{.State.StartedAt}}|{{.State.FinishedAt}}|{{json .Config.Entrypoint}}'
 state="$(docker container inspect --format "$format" "$container")" || fail "the initializer disappeared or could not be inspected"
 IFS='|' read -r owner service oneoff seen command status code started finished entrypoint <<< "$state"
-[[ "$owner" = "$project" && "$service" = storage-init && ( -z "$oneoff" || "$oneoff" = False ) ]] \
-  || fail "the inspected container is not the stack's managed initializer"
+if [ -n "$explicit" ]; then
+  [[ "$owner" = "$project" && "$service" = storage-init && "$oneoff" = True ]] \
+    || fail "the inspected container is not the stack's one-off initializer"
+else
+  [[ "$owner" = "$project" && "$service" = storage-init && ( -z "$oneoff" || "$oneoff" = False ) ]] \
+    || fail "the inspected container is not the stack's managed initializer"
+fi
 [ "$seen" = "$image_id" ] || fail "the initializer did not use the tested image"
 [[ "$command" = '["apps/api/src/cli/storage-init.ts"]' && -n "$expected_entrypoint" && "$entrypoint" = "$expected_entrypoint" ]] \
   || fail "unexpected initializer command"
