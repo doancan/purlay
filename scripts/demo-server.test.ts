@@ -35,6 +35,23 @@ const fakeApi = Bun.serve<{ cookie: string | null; origin: string | null }>({
     if (url.pathname === '/api/redirect') {
       return new Response(null, { status: 302, headers: { location: '/somewhere' } });
     }
+    if (url.pathname === '/api/connection-metadata') {
+      return Response.json(
+        {
+          connectionOnly: request.headers.get('x-request-only'),
+          representation: request.headers.get('x-request-representation'),
+          keepAlive: request.headers.get('keep-alive'),
+        },
+        {
+          headers: {
+            connection: 'X-Response-Only',
+            'keep-alive': 'timeout=7',
+            'x-response-only': 'upstream socket',
+            'x-response-representation': 'document',
+          },
+        },
+      );
+    }
     return Response.json({ ok: true }, { status: url.pathname === '/api/missing' ? 404 : 200 });
   },
   websocket: {
@@ -140,6 +157,27 @@ describe('the API proxy', () => {
     const redirect = await fetch(`${base}/api/redirect`, { redirect: 'manual' });
     expect(redirect.status).toBe(302);
     expect(redirect.headers.get('location')).toBe('/somewhere');
+  });
+
+  test('each HTTP hop keeps its own connection metadata and passes representation headers through', async () => {
+    const response = await fetch(`${base}/api/connection-metadata`, {
+      headers: {
+        connection: 'X-Request-Only',
+        'keep-alive': 'timeout=2',
+        'x-request-only': 'downstream socket',
+        'x-request-representation': 'document',
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      connectionOnly: null,
+      representation: 'document',
+      keepAlive: null,
+    });
+    expect(response.headers.get('connection')).not.toBe('X-Response-Only');
+    expect(response.headers.get('x-response-only')).toBeNull();
+    expect(response.headers.get('keep-alive')).not.toBe('timeout=7');
+    expect(response.headers.get('x-response-representation')).toBe('document');
   });
 
   test('an API that takes a request and never answers it is a 504 that names the request, not a page that hangs', async () => {
