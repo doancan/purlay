@@ -128,7 +128,7 @@ export const readMyExports = async (
   return await listPersonalExports(dependencies.database, userId);
 };
 
-/** `GET /api/me/exports/:exportId/download` — once, by the person who asked, in a session of theirs. */
+/** `/api/me/exports/:exportId/download` — once, by the person who asked, in a session of theirs. */
 export const downloadMyExport = async (
   dependencies: ExportDependencies,
   request: Request,
