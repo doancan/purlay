@@ -76,8 +76,11 @@ export interface SocketDependencies {
   readonly closedEvent?: (event: string) => boolean;
   /** How a change of who is online is told (`composition.ts`, D-352); absent, nobody is counted. */
   readonly announcePresence?: PresenceAnnouncer | undefined;
-  /** What each live frame of a module's content is checked by (`composition.ts`, D-352); absent, none is checked. */
-  readonly frameProjection?: FrameProjection | undefined;
+  /**
+   * What each live frame of a module's content is checked by (`composition.ts`, D-352); `undefined` only in a build that
+   * carries no such module. Never optional: a caller that forgot it would write every frame unchecked, and must say so.
+   */
+  readonly frameProjection: FrameProjection | undefined;
   /** Defaults to `SOCKET_CONNECTION_LIMITS.perUser` and the configuration's `SOCKET_MAX_CONNECTIONS`; a test passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
