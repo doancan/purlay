@@ -56,7 +56,10 @@ import {
 } from './service';
 import type { WorkspaceDirectoryDependencies } from './authority';
 import { noDepartures, recordedDepartures } from '../../../testing/departures';
+import type { AuthDependencies } from '../../auth/better-auth';
 import type { MemberDepartures } from '../member-departures';
+
+type AuthDirectory = NonNullable<AuthDependencies['directory']>;
 
 let clone: ClonedDatabase;
 beforeAll(async () => {
@@ -70,6 +73,7 @@ const setup = async (
   channels: WorkspaceChannels = noWorkspaceChannels,
   claim: 'sub' | 'oid' = 'sub',
   departures: MemberDepartures = noDepartures,
+  authDepartures: MemberDepartures | null = departures,
 ): Promise<{
   readonly configured: Awaited<ReturnType<typeof setupCompanyNative>>;
   readonly dependencies: WorkspaceDirectoryDependencies;
@@ -89,7 +93,11 @@ const setup = async (
   const auth = aTestAuth(clone.db, {
     clock: systemClock,
     companyIdentity: { cipher: original.fixture.dependencies.cipher, fetch: original.idp.fetch },
-    directory: { channels, departures, readersReady: dependencies.readersReady },
+    // `null` leaves departures out, which the type forbids: the directory's own refusal of that is under test (D-355).
+    directory:
+      authDepartures === null
+        ? ({ channels, readersReady: dependencies.readersReady } as AuthDirectory)
+        : { channels, departures: authDepartures, readersReady: dependencies.readersReady },
   });
   const configured = { ...original, auth };
   await enableCompanyNative(configured);
@@ -192,6 +200,35 @@ describe('integration: native directory provisioning', () => {
       { workspaceId, userId: firstId, reason: 'provisioning' },
       { workspaceId, userId: secondId, reason: 'provisioning' },
     ]);
+  });
+
+  test('a deactivation with no departures wired fails loudly and keeps the membership (D-355)', async () => {
+    const f = await setup(noWorkspaceChannels, 'sub', noDepartures, null);
+    const resource = crypto.randomUUID();
+    expect((await call(f, 'POST', 'Users', user(resource))).status).toBe(201);
+    const { id: userId } = await clone.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', `${resource}@company.example`)
+      .executeTakeFirstOrThrow();
+    const link = await clone.db
+      .selectFrom('workspace_access_sources')
+      .select('directory_link_reference')
+      .where('directory_id', '=', f.directory.id)
+      .where('user_id', '=', userId)
+      .executeTakeFirstOrThrow();
+    const refused = await call(f, 'PUT', `Users/${String(link.directory_link_reference)}`, {
+      ...(user(resource) as object),
+      active: false,
+    });
+    expect(refused.status).toBe(500);
+    const kept = await clone.db
+      .selectFrom('workspace_members')
+      .select('id')
+      .where('workspace_id', '=', f.configured.fixture.actor.context.workspaceId)
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    expect(kept).toBeDefined();
   });
 
   test('preview keeps actual manual, directory and mixed sources live', async () => {
