@@ -191,7 +191,10 @@ export const PushProvider = ({
       setOwnerEpoch((epoch) => epoch + 1);
     };
     const focused = (): void => {
-      if (asks !== null && asks.permission() !== 'granted') setStatus(offOrBlocked(asks));
+      if (asks === null) return;
+      if (asks.permission() !== 'granted') setStatus(offOrBlocked(asks));
+      // Browser permission makes the switch available again. Turning it on is a separate choice.
+      else setStatus((current) => (current === 'blocked' ? 'off' : current));
     };
     window.addEventListener('storage', changed);
     window.addEventListener('focus', focused);
