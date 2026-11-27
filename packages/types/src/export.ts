@@ -91,6 +91,10 @@ export const WorkspaceExport = Type.Object({
 });
 export type WorkspaceExport = Static<typeof WorkspaceExport>;
 
+/** `GET /api/me/exports` — the caller's newest exports of their own data, newest first (D-241). */
+export const WorkspaceExportList = Type.Array(WorkspaceExport);
+export type WorkspaceExportList = Static<typeof WorkspaceExportList>;
+
 /** How long a ready export waits to be downloaded before it is thrown away (D-140). */
 export const EXPORT_KEPT_HOURS = 24;
 

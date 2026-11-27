@@ -82,6 +82,11 @@ const HELD_ELSEWHERE: Readonly<
     file: 'apps/api/src/features/chat/http/integrations.integration.test.ts',
     schema: 'UnfurlResponse',
   },
+  downloadMyExport: {
+    why: 'needs an export the queue has finished, and is single-use; the personal-export test makes one and downloads it',
+    file: 'apps/api/src/ingress/http/personal-exports.integration.test.ts',
+    schema: 'content-type',
+  },
   fetchExternalImage: {
     why: 'fetches a page from another server, which needs the image proxy’s own stand-in',
     file: 'apps/api/src/ingress/http/images.integration.test.ts',
@@ -615,6 +620,23 @@ const STEPS: readonly Step[] = [
     spec: (c) => ({ params: { attachmentId: c.throwawayAttachmentId } }),
     status: 204,
   },
+
+  // ── The person's settings and their exports
+  { id: 'getMySignIn', spec: () => ({}), status: 200 },
+  { id: 'setMyLocale', spec: () => ({ json: { locale: 'tr' } }), status: 204 },
+  { id: 'getMyQuietHours', spec: () => ({}), status: 200 },
+  // A window is read on the profile's clock, so the profile names one first.
+  { id: 'updateProfile', spec: () => ({ json: { timeZone: 'Europe/Istanbul' } }), status: 200 },
+  {
+    id: 'setMyQuietHours',
+    spec: () => ({ json: { quietHours: { from: 19 * 60, to: 9 * 60, days: [1, 2, 3, 4, 5] } } }),
+    status: 200,
+  },
+  { id: 'getMyMissedMail', spec: () => ({}), status: 200 },
+  // Off: on needs a mail relay, which this server has not.
+  { id: 'setMyMissedMail', spec: () => ({ json: { on: false } }), status: 200 },
+  { id: 'requestMyExport', spec: () => ({}), status: 202 },
+  { id: 'listMyExports', spec: () => ({}), status: 200 },
 
   // ── The native application's way in, and the ends of sessions
   {
