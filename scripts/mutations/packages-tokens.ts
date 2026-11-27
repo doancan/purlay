@@ -20,11 +20,11 @@ export const PACKAGES_TOKENS: readonly Mutation[] = [
   },
   {
     id: 'vocabulary-judged-on-one-compiler',
-    why: 'one raw class is reported against every class after it, and a class that builds nothing passes behind one that did',
+    why: 'accumulating the CSS of earlier candidates reports a raw class against every class after it',
     file: 'packages/tokens/src/vocabulary.ts',
-    find: '  const judged = new Map<string, string | undefined>();\n  const judge = async (candidate: string): Promise<string | undefined> => {\n    const css = (await freshCompiler()).build([candidate]);\n',
+    find: "  const judge = async (candidate: string): Promise<string | undefined> => {\n    design ??= await loadDesignSystem();\n    const [css] = design.candidatesToCss([candidate]);\n    const declarations = utilityDeclarations(css ?? '');\n",
     replace:
-      '  const judged = new Map<string, string | undefined>();\n  const shared = await freshCompiler();\n  const judge = async (candidate: string): Promise<string | undefined> => {\n    const css = shared.build([candidate]);\n',
+      "  let accumulatedCss = '';\n  const judge = async (candidate: string): Promise<string | undefined> => {\n    design ??= await loadDesignSystem();\n    const [css] = design.candidatesToCss([candidate]);\n    accumulatedCss += css ?? '';\n    const declarations = utilityDeclarations(accumulatedCss);\n",
     tests: ['packages/tokens/src/vocabulary.test.ts'],
   },
   {
