@@ -10,8 +10,10 @@ import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
   cloneIntegrationDatabase,
+  sql,
   type ClonedDatabase,
   type Executor,
+  type RawBuilder,
 } from '@purlay/db';
 import { CORE_MEMBER_LEFT, messageId, type UserRole } from '@purlay/types';
 import { composition, compositionFor } from '../../../composition';
@@ -131,6 +133,22 @@ const outboxStates = async (workspaceId: string): Promise<readonly string[]> =>
       .execute()
   ).map(({ state }) => state);
 
+/** The worker deadline is three seconds. Observe its actual database wait without depending on a sleep. */
+const whenWaitingOnIssueLock = async (condition: RawBuilder<boolean>): Promise<boolean> => {
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    const { rows } = await sql<{ waiting: boolean }>`
+      select exists (
+        select 1 from pg_stat_activity
+        where datname = current_database() and wait_event_type = 'Lock' and ${condition}
+      ) as waiting
+    `.execute(cloned.db);
+    if (rows[0]?.waiting === true) return true;
+    await Bun.sleep(5);
+  }
+  return false;
+};
+
 describe('integration: a member who leaves is taken off their open issues (D-355)', () => {
   test('leaving, then the delivery, unassigns only their open issues of that workspace, on the trail with nobody as the actor', async () => {
     const w = await aWorkspace(cloned.db, { ada: 'owner', bob: 'member' });
@@ -218,6 +236,68 @@ describe('integration: a member who leaves is taken off their open issues (D-355
       bob,
       cy: null,
     });
+  });
+
+  test('a new assignment waits for the departure cleanup and survives a concurrent rejoin', async () => {
+    const workspace = await aWorkspace(cloned.db, { ada: 'owner', bob: 'member' });
+    const assignee = who(workspace, 'bob').userId;
+    const oldIssue = await anIssue(workspace, 'open', assignee);
+    const newIssue = await anIssue(workspace, 'open', null);
+    await leave(workspace, 'bob');
+
+    const locked = Promise.withResolvers<number>();
+    const release = Promise.withResolvers<undefined>();
+    const blocker = cloned.db.transaction().execute(async (transaction) => {
+      await transaction
+        .selectFrom('issues')
+        .select('id')
+        .where('id', '=', oldIssue)
+        .forUpdate()
+        .executeTakeFirstOrThrow();
+      const { pid } = await transaction
+        .selectNoFrom(sql<number>`pg_backend_pid()`.as('pid'))
+        .executeTakeFirstOrThrow();
+      locked.resolve(pid);
+      await release.promise;
+    });
+    const pid = await Promise.race([locked.promise, blocker.then(() => 0)]);
+    const delivery = deliverPending(cloned.db, composition, { clock });
+    let assignment: Promise<Response> | undefined;
+    let waited = false;
+    try {
+      expect(await whenWaitingOnIssueLock(sql<boolean>`${pid} = any(pg_blocking_pids(pid))`)).toBe(
+        true,
+      );
+      await cloned.db
+        .insertInto('workspace_members')
+        .values({ workspace_id: workspace.id, user_id: assignee, role: 'member' })
+        .execute();
+
+      const app = createApp(testDependencies({ database: cloned.db, clock, composition }));
+      assignment = app.handle(
+        new Request(`https://purlay.test/api/workspaces/${workspace.id}/issues/${newIssue}`, {
+          method: 'PATCH',
+          headers: {
+            cookie: who(workspace, 'ada').cookie,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ assigneeId: assignee }),
+        }),
+      );
+      waited = await Promise.race([
+        whenWaitingOnIssueLock(sql<boolean>`wait_event = 'advisory'`),
+        assignment.then(() => false),
+      ]);
+    } finally {
+      release.resolve(undefined);
+      await Promise.allSettled([blocker, delivery, assignment]);
+    }
+
+    expect((await assignment).status).toBe(200);
+    expect(waited).toBe(true);
+    expect(await outboxStates(workspace.id)).toEqual(['delivered']);
+    expect(await assigneeOf(oldIssue)).toBeNull();
+    expect(await assigneeOf(newIssue)).toBe(assignee);
   });
 
   test('a workspace not granted issues is told nothing, and its issues stay as they were', async () => {

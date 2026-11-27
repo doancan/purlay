@@ -24,8 +24,9 @@ anybody. It is also the first fact a product module consumes: the outbox (D-283 
    `429` and tried again.
 3. **What issues does.** Issues lists `core.member-left` under `consumes` and handles it in `features/issues/facts.ts`. It reads
    the person's membership when the fact is delivered: one who may be given an issue again (they came back as a member, or as a
-   guest let into issues) keeps what they hold and the delivery is `skipped`. Otherwise every **open** issue of that workspace
-   assigned to them is unassigned, and each is written to the trail as a manual change is (`issue.assigned`, from the person to
+   guest let into issues) keeps what they hold and the delivery is `skipped`. A transaction lock for the assignee and workspace
+   orders this check and cleanup with new assignments, including those made just after a rejoin. Otherwise every **open** issue
+   assigned to them in that workspace is unassigned and written to the trail as a manual change is (`issue.assigned`, from the person to
    nobody) with no actor, since no person did it. A finished issue keeps its assignee, as the record of who did it. A second
    delivery finds nothing assigned and changes nothing. Where issues is not granted to the workspace, no row is written (D-353)
    and its issues stay as they were; where it is granted and not run by the node that publishes, the row is held for a node
@@ -33,11 +34,9 @@ anybody. It is also the first fact a product module consumes: the outbox (D-283 
 4. **A delivery says when it is.** A consumer is handed no clock, and D-46 forbids it reading one, so `DeliveredFact` carries
    `deliveredAt`, the drain's clock at the delivery: what issues writes as the issue's change and the trail's time.
 
-What is left: a person who comes back and is given an issue in the moment between the consumer's read of their membership and its
-update may lose that one assignment. It needs a rejoin and a new assignment within the same delivery, and is not guarded. And a
-fact is published for each person, each with its own check of the backlog: one change that ends more memberships than
+What is left: a fact is published for each person, each with its own check of the backlog: one change that ends more memberships than
 `OUTBOX_PENDING_MAX` (5000 unless set) at once, a directory of that many turned off, is refused whole until the operator raises it.
-Publishing many facts in one statement would lift both, and waits for a workspace that size.
+Publishing many facts in one statement could reduce the query cost and handle larger departures. It waits for a workspace that size.
 
 **Rejected.** *Unassigning in the core's transaction, by naming issues' table:* the core would import a module's table, which D-250
 and D-271 forbid, and a server without issues would carry its rule. *A port the core calls in the removal's transaction:* issues may

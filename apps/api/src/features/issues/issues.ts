@@ -115,13 +115,24 @@ const ISSUES_MODULE = 'issues';
 /**
  * Whether the person may be given an issue of the workspace now: a member whose account is not erased, or a guest whose access is
  * live and lets them into issues — whoever the guard would let open it (`membershipReachesModule`), so nobody is told of an issue they
- * cannot see (D-300). Under the membership row's share lock, so a member removed at that moment is not assigned.
+ * cannot see (D-300). Serialize the check with assignments and departure cleanup for the same person and workspace.
+ * The membership row's share lock also prevents a removal from racing an assignment.
  */
 export const isAssignable = async (
   transaction: IssuesTx,
   workspaceId: string,
   userId: string,
 ): Promise<boolean> => {
+  const key = `issues:assignee:${workspaceId}:${userId}`;
+  await transaction
+    .selectNoFrom((builder) =>
+      builder
+        .fn('pg_advisory_xact_lock', [
+          builder.fn('hashtextextended', [builder.val(key), builder.val(0)]),
+        ])
+        .as('lock'),
+    )
+    .execute();
   const member = await transaction
     .selectFrom('workspace_members')
     .innerJoin('users', 'users.id', 'workspace_members.user_id')
