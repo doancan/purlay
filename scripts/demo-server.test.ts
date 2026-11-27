@@ -26,6 +26,9 @@ const fakeApi = Bun.serve<{ cookie: string | null; origin: string | null }>({
         ? undefined
         : new Response('no', { status: 400 });
     }
+    if (url.pathname === '/api/no-content') {
+      return new Response(null, { status: 204 });
+    }
     seen.push({
       url: `${url.pathname}${url.search}`,
       cookie: request.headers.get('cookie'),
@@ -226,18 +229,89 @@ describe('the API proxy', () => {
         headers: { 'sec-fetch-dest': 'document', cookie: '__Host-purlay_session=private-cookie' },
       });
       expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
       const pathHash = new Bun.CryptoHasher('sha256').update(pathname).digest('hex');
-      expect(receipts).toHaveLength(2);
-      const [received, responding] = receipts;
+      expect(receipts).toHaveLength(4);
+      const [received, responding, started, completed] = receipts;
       expect(received).toMatchObject({ id: 1, stage: 'received', pathHash });
       expect(responding).toMatchObject({ id: 1, stage: 'responding', pathHash, status: 200 });
+      expect(started).toMatchObject({ id: 1, stage: 'body-started', pathHash });
+      expect(completed).toMatchObject({ id: 1, stage: 'body-completed', pathHash });
       expect(typeof received?.port).toBe('number');
       expect(received?.port).toBe(responding?.port);
       expect(JSON.stringify(receipts)).not.toMatch(/token-in-path|token-in-query|private-cookie/);
+      const empty = await fetch(`${origin}/api/no-content`, {
+        headers: { 'sec-fetch-dest': 'document' },
+      });
+      expect(empty.status).toBe(204);
+      expect(receipts.slice(4).map((event) => event.stage)).toEqual(['received', 'responding']);
     } finally {
       await traced.stop(true);
     }
   });
+
+  test.each(['body-completed', 'body-cancelled', 'body-failed'] as const)(
+    'a document records its first bytes before %s',
+    async (stage) => {
+      const source = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>();
+      const terminal = Promise.withResolvers<DocumentEvent>();
+      const encoder = new TextEncoder();
+      const api = Bun.serve({
+        port: 0,
+        fetch: () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start: (controller): void => {
+                controller.enqueue(encoder.encode('first'));
+                source.resolve(controller);
+              },
+            }),
+          ),
+      });
+      const receipts: DocumentEvent[] = [];
+      const traced = startFront({
+        api: `http://localhost:${String(api.port)}`,
+        sessions: {},
+        port: 0,
+        documentLog: (event) => {
+          receipts.push(event);
+          if (event.stage === stage) terminal.resolve(event);
+        },
+      });
+      try {
+        const client = new AbortController();
+        const response = await fetch(`http://localhost:${String(traced.port)}/__gallery`, {
+          headers: { 'sec-fetch-dest': 'document' },
+          signal: client.signal,
+        });
+        const reader = response.body?.getReader();
+        if (reader === undefined) throw new Error('expected a document body');
+        expect(await reader.read()).toEqual({ done: false, value: encoder.encode('first') });
+        expect(receipts.map((event) => event.stage)).toEqual([
+          'received',
+          'responding',
+          'body-started',
+        ]);
+        if (stage === 'body-completed') {
+          const controller = await source.promise;
+          controller.enqueue(encoder.encode('second'));
+          controller.close();
+          expect(await reader.read()).toEqual({ done: false, value: encoder.encode('second') });
+          expect((await reader.read()).done).toBe(true);
+        } else if (stage === 'body-cancelled') {
+          client.abort();
+        } else {
+          await api.stop(true);
+          await reader.read().catch(() => undefined);
+        }
+        expect(await terminal.promise).toMatchObject({ id: receipts[0]?.id, stage });
+        expect(receipts.at(-1)?.stage).toBe(stage);
+      } finally {
+        await traced.stop(true);
+        await api.stop(true);
+      }
+    },
+  );
 
   test('a client abort before response headers leaves an abort receipt', async () => {
     const received = Promise.withResolvers<DocumentEvent>();
