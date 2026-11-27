@@ -17,10 +17,11 @@ reached. Two of those pieces are named by a decision, so the decisions change wi
    memory, moved to PostgreSQL with D-307 (`adcbb765`); the line's half (`dropOldestOf`, `admit`) is what the sender's queue
    uses, and stays with its tests and mutations.
 3. **The rest of what nothing reached:** the web cache's `channelStarred` (a star is painted through the placement ledger,
-   `data/channel-placement.ts`; the test of #1198 now drives that path, `starred.test.tsx`), `DIRECTORY_EXTERNAL_ID_MAX` and
-   `EndpointId` in `@purlay/types`, an orphaned comment in `star-toggle.tsx`, and 44 more catalogue words no code names
-   (each checked against every literal and every template a key is built from); the four exports knip read are no longer
-   exported.
+   `data/channel-placement.ts`; the test of #1198 now drives that path, `starred.test.tsx`), `EndpointId` in
+   `@purlay/types`, an orphaned comment in `star-toggle.tsx`, and 44 more catalogue words no code names (each checked against
+   every literal and every template a key is built from); the four exports knip read are no longer exported.
+   `DIRECTORY_EXTERNAL_ID_MAX` was unused too, but the bound it names was written as a bare `255` in the two places that
+   check a directory identity (`directory/identity.ts`, `directory/native-auth.ts`): it stays, and they read it.
 4. **A helper written three times or more is one:** a row's instant on the wire is `isoInstant` (`platform/clock.ts`)
    instead of nine copies in chat; a channel named in a list of items from many places is `useChannelLabel` and
    `ChannelName` (`chat/channel/channel-header.tsx`) instead of five; the browser suite's `rowWith` and `wallClock` are

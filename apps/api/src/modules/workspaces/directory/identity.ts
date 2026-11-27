@@ -3,6 +3,7 @@ import { acquireActiveSCIMUserLink } from '@better-auth/scim';
 import type { DBTransactionAdapter } from '@better-auth/core/db/adapter';
 import type { Transaction } from '@purlay/db';
 import { Uuid } from '@purlay/types';
+import { DIRECTORY_EXTERNAL_ID_MAX } from '@purlay/types/workspace-directory';
 import { Value } from '@sinclair/typebox/value';
 import type { OidcProfile } from '../../auth/oidc';
 import { identityChanged, identityNotReady } from '../identity/authority';
@@ -22,7 +23,7 @@ const directoryExternalIdentity = (
   if (
     typeof value !== 'string' ||
     value.length === 0 ||
-    value.length > 255 ||
+    value.length > DIRECTORY_EXTERNAL_ID_MAX ||
     (snapshot.directoryClaim === 'oid' && !Value.Check(Uuid, value))
   )
     throw identityNotReady('The provider did not supply the configured verified directory claim.');
