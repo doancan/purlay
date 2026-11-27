@@ -184,7 +184,9 @@ export const WelcomeScreen = (): React.JSX.Element => {
     );
   } else if (channels.isError && channels.data === undefined) {
     body = (
+      // Framed, as the card it stands in for: the page's other states are cards too.
       <ErrorState
+        framed
         title={t('welcome.error.title')}
         body={t('welcome.error.body')}
         retryLabel={t('common.retry')}

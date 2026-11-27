@@ -259,7 +259,7 @@ describe('opening it, in the panel', () => {
       },
     });
     await showThread(view);
-    expect(view.getByRole('alert').textContent).toContain("Couldn't load replies");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t load replies');
     expect(within(sectionOf(view)).getByText('Why is the backoff 4s?')).toBeDefined();
     await expectNoAxeViolations(view.container);
     const retry = within(view.getByRole('alert')).getByRole('button', { name: 'Retry' });
@@ -1159,7 +1159,7 @@ describe('a thread asked for by the address', () => {
     await settle();
     const panel = sectionOf(view);
     const alert = within(panel).getByRole('alert');
-    expect(alert.textContent).toContain("Couldn't load this thread");
+    expect(alert.textContent).toContain('Couldn’t load this thread');
     await person().click(within(alert).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(within(sectionOf(view)).getByText('Why is the backoff 4s?')).toBeDefined();

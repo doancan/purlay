@@ -46,15 +46,22 @@ const contentClasses =
  * sheet that fills the screen: a phone has no room for a card's margins around a whole surface.
  * Each size's classes are whole, never one overriding the other (`cn` does not merge them).
  */
+/**
+ * The close button sits on the title's line, centred on it, its glyph's edge on the content's edge: the
+ * title's 24px line starts at the padding, so a 32px button starts 4px above it and 8px out to the side.
+ * On a narrow window the button is a finger tall (44px), and moves up and out by the difference.
+ */
 const sizeClasses = {
   default: {
     overlay: 'px-4 py-8',
     content: 'max-w-dialog rounded-2xl border-hairline border-border-subtle p-6 shadow-float',
+    close: 'right-4 top-5 max-narrow:right-3 max-narrow:top-3',
   },
   wide: {
     overlay: 'narrow:px-4 narrow:py-8',
     content:
       'max-w-dialog-lg p-6 max-narrow:min-h-full max-narrow:p-4 narrow:rounded-2xl narrow:border-hairline narrow:border-border-subtle narrow:shadow-float',
+    close: 'right-4 top-5 max-narrow:right-1 max-narrow:top-1',
   },
 } as const;
 
@@ -161,7 +168,7 @@ export const Dialog = ({
               opener.focus();
             }}
           >
-            <div className="flex flex-col gap-1 pr-6">
+            <div className="flex flex-col gap-1 pr-8">
               <RadixDialog.Title className="text-title text-ink">{title}</RadixDialog.Title>
               <RadixDialog.Description className="text-body text-ink-muted">
                 {description}
@@ -177,7 +184,7 @@ export const Dialog = ({
                 ref={close}
                 label={closeLabel}
                 glyph="close"
-                className="absolute right-3 top-3"
+                className={cn('absolute', sizeClasses[size].close)}
               />
             </RadixDialog.Close>
           </RadixDialog.Content>

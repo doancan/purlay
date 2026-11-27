@@ -30,8 +30,8 @@ test.describe('a group conversation', () => {
     await openNav(page);
     await page.getByRole('button', { name: 'New message' }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: /^Pick Bob/ }).click();
-    await dialog.getByRole('button', { name: /^Pick Carol/ }).click();
+    await dialog.getByRole('button', { name: /^Bob/ }).click();
+    await dialog.getByRole('button', { name: /^Carol/ }).click();
     await expect(dialog).toContainText('To: Bob');
     await dialog.getByRole('button', { name: 'Start conversation' }).click();
 

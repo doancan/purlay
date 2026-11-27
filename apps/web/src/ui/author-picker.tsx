@@ -61,7 +61,7 @@ export const AuthorPicker = ({
           type="button"
           id={buttonId}
           aria-labelledby={`${labelId} ${buttonId}`}
-          className="relative flex h-control w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border-hairline border-border-strong bg-surface-100 pr-8 pl-3 text-left text-label text-ink transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:h-touch"
+          className="relative flex h-control w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border-hairline border-border-strong bg-surface-100 pr-8 pl-3 text-left text-label text-ink transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
         >
           {chosen === undefined ? null : (
             <Avatar name={chosen.displayName} username={chosen.username} size="sm" />

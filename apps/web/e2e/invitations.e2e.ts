@@ -190,7 +190,7 @@ test.describe('an invitation', () => {
       await revoke.first().click();
       await expect(revoke).toHaveCount(open - 1);
     }
-    await expect(main.getByText('No links are open.')).toBeVisible();
+    await expect(main.getByText('No open links')).toBeVisible();
 
     // Somebody of the test's own opens it: the preview is a write on their budget, and carol's — the
     // person every room of the run is made by (`support.ts`) — was spent by the time she got here.

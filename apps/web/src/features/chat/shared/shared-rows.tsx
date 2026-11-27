@@ -114,9 +114,12 @@ export const SharedRows = ({
                     >
                       {item.link.label}
                     </a>
-                    <p className="truncate text-caption text-ink-muted" title={item.link.url}>
-                      {item.link.url}
-                    </p>
+                    {/* A link with no title of its own is named by its address: said once, not twice. */}
+                    {item.link.label !== item.link.url && (
+                      <p className="truncate text-caption text-ink-muted" title={item.link.url}>
+                        {item.link.url}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : item.attachment.kind === 'image' ? (
@@ -138,14 +141,22 @@ export const SharedRows = ({
               ) : (
                 <FileAttachment attachment={item.attachment} />
               )}
-              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-muted">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-ink-muted">
                 <span className="max-w-full truncate">{author(item)}</span>
+                <span aria-hidden="true">·</span>
                 {channel !== undefined && (
-                  <span className="max-w-full truncate">
-                    <ChannelName channel={channel} />
-                  </span>
+                  <>
+                    <span className="max-w-full truncate">
+                      <ChannelName channel={channel} />
+                    </span>
+                    <span aria-hidden="true">·</span>
+                  </>
                 )}
-                <time dateTime={item.sentAt} title={format.absolute(item.sentAt)}>
+                <time
+                  dateTime={item.sentAt}
+                  title={format.absolute(item.sentAt)}
+                  className="tabular-nums"
+                >
                   {format.date(item.sentAt)}
                 </time>
                 <a

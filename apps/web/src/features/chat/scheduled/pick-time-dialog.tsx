@@ -5,7 +5,7 @@
  * that is not allowed is said in place, as it is typed, and the way on is to change it: nothing is
  * scheduled from here until the time is one the server would accept.
  */
-import { useContext, useRef, useState } from 'react';
+import { useContext, useId, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { RealtimePortsContext } from '../../../realtime/realtime-provider';
 import { systemClock } from '../../../system-clock';
@@ -27,6 +27,7 @@ export const PickTimeDialog = ({
   const { t, format } = useI18n();
   const clock = (useContext(RealtimePortsContext).clock ?? systemClock).now;
   const field = useRef<HTMLInputElement>(null);
+  const formId = useId();
   // Opens on tomorrow morning: the commonest wish, and one the person only has to confirm.
   const [value, setValue] = useState(() => {
     const tomorrow = schedulePresets(clock(), format).find((preset) => preset.id === 'tomorrow');
@@ -56,10 +57,21 @@ export const PickTimeDialog = ({
       description={t('scheduled.dialog.description')}
       closeLabel={t('common.close')}
       returnFocus={returnFocus}
+      // The dialog's own footer, as the reminder's: Cancel quiet beside the one way on.
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button type="submit" form={formId} variant="primary">
+            {t('scheduled.dialog.confirm')}
+          </Button>
+        </>
+      }
     >
       <form
+        id={formId}
         noValidate
-        className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           if (chosen === null) {
@@ -84,14 +96,6 @@ export const PickTimeDialog = ({
             ? { hint: t('scheduled.dialog.hint', { when: describeWhen(chosen, now, format, t) }) }
             : {})}
         />
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" variant="primary">
-            {t('scheduled.dialog.confirm')}
-          </Button>
-        </div>
       </form>
     </Dialog>
   );

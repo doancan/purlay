@@ -36,19 +36,14 @@ test.describe('the inbox’s Updates', () => {
       ).unreadCount;
     expect(await unread()).toBe(1);
     const inbox = (): ReturnType<typeof page.getByRole> =>
-      page.getByRole('navigation', { name: 'Places' }).getByRole('button', { name: /^Inbox/ });
-    if (isNarrow(page)) {
-      await (await railLink(page, 'Inbox')).click();
-      await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
-      await page.getByRole('button', { name: 'Updates' }).click();
-    } else {
+      page.getByRole('navigation', { name: 'Places' }).getByRole('link', { name: /^Inbox/ });
+    if (!isNarrow(page)) {
       await openNav(page);
       await expect(inbox()).toContainText('unread');
-      await inbox().click();
-      const panel = page.getByRole('dialog', { name: 'Inbox' });
-      await expect(panel).toBeVisible();
-      await panel.getByRole('button', { name: 'Updates' }).click();
     }
+    await (await railLink(page, 'Inbox')).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
+    await page.getByRole('button', { name: 'Updates' }).click();
 
     const row = page.getByRole('button', { name: /assigned an issue to you/ });
     await expect(row).toContainText('unread');

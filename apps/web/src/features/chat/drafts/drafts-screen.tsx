@@ -13,7 +13,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
 import type { Channel, Message } from '@purlay/types';
-import { Icon } from '../../../components/icon';
+import { Icon, type GlyphName } from '../../../components/icon';
 import { useApi } from '../../../data/api-provider';
 import { keys } from '../../../data/keys';
 import { useChannels } from '../../../data/queries';
@@ -27,10 +27,10 @@ import {
   ListCard,
   ListColumn,
   ListFilter,
+  ListSkeleton,
   listButtonClasses,
   listRowClasses,
 } from '../../../ui/list-column';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
 import { HeaderTile } from '../channel/channel-header';
@@ -46,6 +46,12 @@ import { useWorkspace } from '../../shell/workspace';
 
 type Tab = 'drafts' | 'sent' | 'scheduled';
 
+/** Each tab's mark: the three are kinds of message, told apart at a glance as their empty states tell them. */
+const TAB_GLYPH = { drafts: 'edit', sent: 'send', scheduled: 'schedule' } as const satisfies Record<
+  Tab,
+  GlyphName
+>;
+
 const DraftRow = ({
   draft,
   channel,
@@ -60,9 +66,14 @@ const DraftRow = ({
   const { t } = useI18n();
   return (
     <li className={cn('group relative', listRowClasses)}>
-      <button type="button" onClick={onOpen} className={listButtonClasses('flex-col gap-1 pr-14')}>
-        <Place channel={channel} thread={draft.parentId !== null} />
-        <span className="line-clamp-2 whitespace-pre-wrap text-body text-ink">{draft.text}</span>
+      <button type="button" onClick={onOpen} className={listButtonClasses()}>
+        {/* The lines are stacked in a span of their own: a gap given to the button would sit beside the one
+            `listButtonClasses` gives it, and the cascade, not this line, would pick. Room is kept for Delete,
+            more on a phone, where it is finger-sized. */}
+        <span className="flex min-w-0 flex-1 flex-col gap-1 pr-6 max-narrow:pr-10">
+          <Place channel={channel} thread={draft.parentId !== null} />
+          <span className="line-clamp-2 whitespace-pre-wrap text-body text-ink">{draft.text}</span>
+        </span>
       </button>
       <span className="absolute top-2 right-2">
         <IconButton glyph="delete" label={t('drafts.delete')} onClick={onDelete} />
@@ -85,17 +96,19 @@ const SentRow = ({
   const { clock } = useFeedPorts();
   return (
     <li className={listRowClasses}>
-      <button type="button" onClick={onOpen} className={listButtonClasses('flex-col gap-1')}>
-        <span className="flex w-full items-baseline gap-2">
-          <Place channel={channel} thread={message.parentId !== null} />
-          <time
-            dateTime={message.createdAt}
-            className="ml-auto shrink-0 font-mono text-caption text-ink-muted"
-          >
-            {format.time(message.createdAt, clock.now())}
-          </time>
+      <button type="button" onClick={onOpen} className={listButtonClasses()}>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex min-w-0 items-baseline gap-2">
+            <Place channel={channel} thread={message.parentId !== null} />
+            <time
+              dateTime={message.createdAt}
+              className="ml-auto shrink-0 font-mono text-caption text-ink-muted"
+            >
+              {format.time(message.createdAt, clock.now())}
+            </time>
+          </span>
+          <span className="line-clamp-2 text-body text-ink">{textOf(message)}</span>
         </span>
-        <span className="line-clamp-2 text-body text-ink">{textOf(message)}</span>
       </button>
     </li>
   );
@@ -104,17 +117,6 @@ const SentRow = ({
 // The list and what can be done to it are loaded when the tab is first opened: most visits never open it.
 const ScheduledList = lazy(() =>
   import('../scheduled/scheduled-list').then((module) => ({ default: module.ScheduledList })),
-);
-
-const Loading = ({ label }: { readonly label: string }): React.JSX.Element => (
-  <LoadingStatus label={label} className="flex flex-col gap-4 py-2">
-    {[0, 1, 2].map((row) => (
-      <div key={row} className="flex flex-col gap-2">
-        <Skeleton className="w-members" />
-        <Skeleton className="w-feed" />
-      </div>
-    ))}
-  </LoadingStatus>
 );
 
 const Drafts = ({ byId }: { readonly byId: ReadonlyMap<string, Channel> }): React.JSX.Element => {
@@ -143,7 +145,7 @@ const Drafts = ({ byId }: { readonly byId: ReadonlyMap<string, Channel> }): Reac
     return (
       <GlyphEmptyState
         glyph="edit"
-        tone="success"
+        tone="accent"
         title={t('drafts.empty.title')}
         body={t('drafts.empty.body')}
       />
@@ -203,10 +205,11 @@ const Sent = ({ byId }: { readonly byId: ReadonlyMap<string, Channel> }): React.
     [query.data],
   );
 
-  if (query.isPending) return <Loading label={t('drafts.sent.loading')} />;
+  if (query.isPending) return <ListSkeleton label={t('drafts.sent.loading')} />;
   if (query.isError && query.data === undefined) {
     return (
       <ErrorState
+        framed
         title={t('drafts.sent.error.title')}
         body={t('drafts.sent.error.body')}
         retryLabel={t('common.retry')}
@@ -220,7 +223,7 @@ const Sent = ({ byId }: { readonly byId: ReadonlyMap<string, Channel> }): React.
     return (
       <GlyphEmptyState
         glyph="send"
-        tone="success"
+        tone="accent"
         title={t('drafts.sent.empty.title')}
         body={t('drafts.sent.empty.body')}
       />
@@ -298,7 +301,11 @@ export const DraftsScreen = (): React.JSX.Element => {
         <ListFilter
           label={t('drafts.tabs')}
           value={tab}
-          choices={tabs.map((choice) => ({ value: choice, label: tabLabel(choice) }))}
+          choices={tabs.map((choice) => ({
+            value: choice,
+            label: tabLabel(choice),
+            glyph: TAB_GLYPH[choice],
+          }))}
           onChange={(choice) => {
             setTab(choice);
             // The list has no push: opening the tab is a reason to ask again.
@@ -306,13 +313,13 @@ export const DraftsScreen = (): React.JSX.Element => {
           }}
         />
         {channels.isPending ? (
-          <Loading label={t('drafts.loading')} />
+          <ListSkeleton label={t('drafts.loading')} />
         ) : tab === 'drafts' ? (
           <Drafts byId={byId} />
         ) : tab === 'sent' ? (
           <Sent byId={byId} />
         ) : (
-          <Suspense fallback={<Loading label={t('scheduled.loading')} />}>
+          <Suspense fallback={<ListSkeleton label={t('scheduled.loading')} />}>
             <ScheduledList query={scheduled} byId={byId} />
           </Suspense>
         )}

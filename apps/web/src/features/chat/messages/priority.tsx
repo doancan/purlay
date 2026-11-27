@@ -6,6 +6,7 @@ import type { Message, MessagePriority } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { cn } from '../../../ui/cn';
+import { Select } from '../../../ui/select';
 
 /** The marked priorities of a message, which is none for a normal one. */
 const priorityOf = (message: Pick<Message, 'priority'>): 'important' | 'urgent' | null =>
@@ -36,8 +37,8 @@ export const PriorityMark = ({
 const CHOICES: readonly MessagePriority[] = ['normal', 'important', 'urgent'];
 
 /**
- * What the person picks to send it as. A native control: keyboard and screen reader come with it. The caller draws it only
- * where the server accepts a non-normal priority.
+ * What the person picks to send it as. The shared native select: keyboard and screen reader come with it, and it is
+ * drawn as the product's other fields are. The caller draws it only where the server accepts a non-normal priority.
  */
 export const PriorityChoice = ({
   value,
@@ -51,20 +52,20 @@ export const PriorityChoice = ({
   const { t } = useI18n();
   const choices = allowUrgent ? CHOICES : CHOICES.slice(0, 2);
   return (
-    <select
+    <Select
       aria-label={t('priority.label')}
       value={value}
       onChange={(event) => {
         const next = choices.find((choice) => choice === event.target.value);
         if (next !== undefined) onChange(next);
       }}
-      className="h-control shrink-0 rounded-md border-hairline border-border-subtle bg-surface-000 px-2 text-label text-ink max-narrow:h-touch"
+      className="shrink-0"
     >
       {choices.map((choice) => (
         <option key={choice} value={choice}>
           {t(`priority.${choice}`)}
         </option>
       ))}
-    </select>
+    </Select>
   );
 };

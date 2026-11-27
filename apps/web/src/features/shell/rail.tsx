@@ -110,12 +110,13 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
       aria-label={t('rail.label')}
       className={
         overlay
-          ? 'flex h-full w-rail shrink-0 flex-col items-center bg-nav-rail pb-4'
-          : 'flex w-rail shrink-0 flex-col items-center border-r-hairline border-nav-border bg-nav-rail pb-4'
+          ? 'flex h-full w-rail shrink-0 flex-col items-center bg-nav-rail pb-3'
+          : 'flex w-rail shrink-0 flex-col items-center border-r-hairline border-nav-border bg-nav-rail pb-3'
       }
     >
-      {/* The first place sits level with the workspace's name in the sidebar's band and the screen's header. */}
-      <div className="flex flex-col items-center gap-4 pt-1">
+      {/* The first place sits level with the workspace's name in the sidebar's band and the screen's header; the places
+          are one column of squares a step apart, and the gear at the foot sits level with the account's row beside it. */}
+      <div className="flex flex-col items-center gap-2 pt-1">
         {running(modules).flatMap((module) =>
           module.rail.map((entry) => (
             <RailItem key={`${module.id}.${entry.route}`} entry={entry} />

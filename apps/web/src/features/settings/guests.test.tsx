@@ -274,7 +274,7 @@ describe('restricted guest administration', () => {
           : Promise.resolve(aPage(aGuest())),
     });
     await view.findByText('Guest access could not be loaded.');
-    expect(view.queryByText('No guests match this search.') === null).toBe(true);
+    expect(view.queryByText('No guests match this search') === null).toBe(true);
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await view.findByRole('button', { name: `Manage access for ${ALICE.displayName}` });
   });

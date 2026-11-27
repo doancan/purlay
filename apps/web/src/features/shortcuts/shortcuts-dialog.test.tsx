@@ -13,6 +13,12 @@ import { ShortcutsDialog } from './shortcuts-dialog';
 
 installDom();
 
+/** The caps a person sees: each key's own `<kbd>`, not the one a chord wraps them in. */
+const capsIn = (element: Element | null | undefined): readonly (string | null)[] =>
+  [...(element?.querySelectorAll('kbd') ?? [])]
+    .filter((key) => key.querySelector('kbd') === null)
+    .map((key) => key.textContent);
+
 const open = async (
   mac: boolean,
   locale: 'en' | 'tr' = 'en',
@@ -66,19 +72,20 @@ describe('the reference', () => {
   });
 
   test.each([
-    ['a Mac', true, ['⌘', '⌥', '⇧', 'C']],
+    // A Mac's modifiers in the order its menu bar prints them (⌃ ⌥ ⇧ ⌘), whatever order they were written in.
+    ['a Mac', true, ['⌥', '⇧', '⌘', 'C']],
     ['everyone else', false, ['Ctrl', 'Alt', 'Shift', 'C']],
   ] as const)('gives the code block its chord, spelled for %s', async (_who, mac, keys) => {
     const view = await open(mac);
     const row = view.getByText('Code block').closest('li');
-    expect([...(row?.querySelectorAll('kbd') ?? [])].map((key) => key.textContent)).toEqual([
-      ...keys,
-    ]);
+    expect(capsIn(row)).toEqual([...keys]);
+    // One chord: the caps are held together, so a screen reader reads them as one shortcut.
+    expect(row?.querySelectorAll(':scope > span > kbd').length).toBe(1);
   });
 
   test('spells the modifiers for a Mac', async () => {
     const view = await open(true);
-    const keys = [...view.getByRole('dialog').querySelectorAll('kbd')].map((k) => k.textContent);
+    const keys = capsIn(view.getByRole('dialog'));
     expect(keys).toContain('⌘');
     expect(keys).toContain('⇧');
     expect(keys).toContain('⌥');
@@ -88,7 +95,7 @@ describe('the reference', () => {
 
   test('and for everything else', async () => {
     const view = await open(false);
-    const keys = [...view.getByRole('dialog').querySelectorAll('kbd')].map((k) => k.textContent);
+    const keys = capsIn(view.getByRole('dialog'));
     expect(keys).toContain('Ctrl');
     expect(keys).toContain('Shift');
     expect(keys).toContain('Alt');
@@ -100,7 +107,7 @@ describe('the reference', () => {
     const view = await open(false);
     const row = view.getByText('Move between messages').closest('li');
     expect(row?.textContent).toContain('or');
-    expect([...(row?.querySelectorAll('kbd') ?? [])].map((k) => k.textContent)).toEqual(['↑', '↓']);
+    expect(capsIn(row)).toEqual(['↑', '↓']);
   });
 
   test("closes with the button, and says so in the interface's language", async () => {

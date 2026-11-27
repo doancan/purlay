@@ -68,7 +68,12 @@ export const MissedMailCard = (): React.JSX.Element | null => {
 
   return (
     <SettingsCard title={t('missedMail.title')} description={t('missedMail.description')}>
-      <SettingsRow label={t('missedMail.on')} description={t('missedMail.hint')} htmlFor={id}>
+      <SettingsRow
+        label={t('missedMail.on')}
+        description={t('missedMail.hint')}
+        htmlFor={id}
+        toggle
+      >
         <Checkbox
           id={id}
           checked={chosen ?? before.on}

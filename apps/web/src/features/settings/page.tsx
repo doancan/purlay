@@ -84,7 +84,7 @@ export const SettingsCard = ({
       )}
     >
       {title !== undefined && (
-        <header className="flex items-start justify-between gap-4 border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4">
+        <header className="flex items-start justify-between gap-4 border-b-hairline border-border-subtle px-6 py-4 max-narrow:flex-col max-narrow:gap-3 max-narrow:px-4">
           <div className="flex min-w-0 flex-col gap-1">
             <h2
               id={headingId}
@@ -97,7 +97,10 @@ export const SettingsCard = ({
             )}
           </div>
           {actions !== undefined && (
-            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+            // On a narrow window the actions go under the heading, where they have its width.
+            <div className="flex shrink-0 flex-wrap items-center gap-2 max-narrow:w-full">
+              {actions}
+            </div>
           )}
         </header>
       )}
@@ -120,6 +123,11 @@ interface SettingsRowProps {
   readonly wide?: boolean;
   /** A field or a select: the control column is a field's width, so fields line up row to row. */
   readonly fill?: boolean;
+  /**
+   * A single check box: it stays beside its label at every width, as a phone's settings list draws a
+   * switch, rather than dropping under the words on a line of its own.
+   */
+  readonly toggle?: boolean;
   readonly children: React.ReactNode;
 }
 
@@ -129,18 +137,22 @@ export const SettingsRow = ({
   htmlFor,
   wide = false,
   fill = false,
+  toggle = false,
   children,
 }: SettingsRowProps): React.JSX.Element => (
   <div
     className={cn(
-      'flex not-first:border-t-hairline border-border-subtle px-6 py-5 max-narrow:flex-col max-narrow:gap-3 max-narrow:px-4 max-narrow:py-4',
-      wide
-        ? 'flex-col gap-3'
-        : // A label alone is centred on the control beside it; with a description it hangs from the top.
-          cn(
-            'justify-between gap-6',
-            description === undefined ? 'items-center max-narrow:items-start' : 'items-start',
-          ),
+      'flex not-first:border-t-hairline border-border-subtle px-6 py-5 max-narrow:px-4 max-narrow:py-4',
+      !toggle && 'max-narrow:flex-col max-narrow:gap-3',
+      toggle
+        ? cn('justify-between gap-6', description === undefined ? 'items-center' : 'items-start')
+        : wide
+          ? 'flex-col gap-3'
+          : // A label alone is centred on the control beside it; with a description it hangs from the top.
+            cn(
+              'justify-between gap-6',
+              description === undefined ? 'items-center max-narrow:items-start' : 'items-start',
+            ),
     )}
   >
     <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -157,12 +169,15 @@ export const SettingsRow = ({
     </div>
     <div
       className={cn(
-        'flex min-w-0 items-center gap-2 max-narrow:w-full',
-        wide
-          ? 'w-full'
-          : fill
-            ? 'w-full max-w-field shrink-0 max-narrow:max-w-none'
-            : 'max-w-field shrink-0 justify-end max-narrow:max-w-none max-narrow:justify-start',
+        'flex min-w-0 items-center gap-2',
+        !toggle && 'max-narrow:w-full',
+        toggle
+          ? 'shrink-0 justify-end'
+          : wide
+            ? 'w-full'
+            : fill
+              ? 'w-full max-w-field shrink-0 max-narrow:max-w-none'
+              : 'max-w-field shrink-0 justify-end max-narrow:max-w-none max-narrow:justify-start',
       )}
     >
       {children}

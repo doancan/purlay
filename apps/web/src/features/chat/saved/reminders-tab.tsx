@@ -15,14 +15,15 @@ import { useRoute } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
-import { ListCard, listButtonClasses, listRowClasses } from '../../../ui/list-column';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { ListCard, ListSkeleton, listButtonClasses, listRowClasses } from '../../../ui/list-column';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { authorOf } from '../../../lib/author';
 import { useMessageText } from '../../content/github-event';
 import { useWorkspace } from '../../shell/workspace';
 import { useChannelTitle } from '../channel/channel-header';
+import { useFeedPorts } from '../channel/feed-ports';
 import { useReminderActions, useReminders } from '../reminders/use-reminders';
+import { describeWhen } from '../scheduled/presets';
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const title = useChannelTitle(channel);
@@ -46,8 +47,15 @@ const Row = ({
   const textOf = useMessageText();
   const { message } = reminder;
   const author = authorOf(message, t('user.erased'));
+  const now = useFeedPorts().clock.now();
   return (
-    <li className={cn('group relative', listRowClasses)}>
+    // Tinted as one, as Saved's row is: the actions over it are drawn in the same tone.
+    <li
+      className={cn(
+        'group relative transition-colors duration-hover ease-standard hover:bg-surface-050 focus-within:bg-surface-050',
+        listRowClasses,
+      )}
+    >
       <button type="button" className={listButtonClasses('pr-5')} onClick={onOpen}>
         <Avatar name={author.displayName} username={author.username} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -57,9 +65,12 @@ const Row = ({
             <span className="min-w-0 truncate">
               {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             </span>
-            <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-mono text-caption">
+            {/* Said as the menus and the feed's mark say it, on the 24-hour clock; the full time is its tip. */}
+            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-caption tabular-nums">
               <Icon name="reminder" size="sm" />
-              <time dateTime={reminder.remindAt}>{format.absolute(reminder.remindAt)}</time>
+              <time dateTime={reminder.remindAt} title={format.absolute(reminder.remindAt)}>
+                {describeWhen(new Date(reminder.remindAt), now, format, t)}
+              </time>
             </span>
           </span>
           <span className="line-clamp-2 block text-body text-ink">{textOf(message)}</span>
@@ -72,11 +83,11 @@ const Row = ({
           aria-hidden="true"
           className="hidden shrink-0 max-narrow:block max-narrow:size-avatar"
         />
-        <Button variant="ghost" onClick={onChange}>
+        <Button variant="ghost" glyph="edit" onClick={onChange}>
           {t('reminders.change')}
         </Button>
         <Button
-          variant="dangerQuiet"
+          variant="ghost"
           glyph="delete"
           aria-label={t('reminders.remove')}
           onClick={onRemove}
@@ -101,20 +112,11 @@ export const RemindersTab = (): React.JSX.Element => {
   const deferred = useDeferred([open, setOpen]);
   const items = query.data ?? [];
 
-  if (query.isPending)
-    return (
-      <LoadingStatus label={t('reminders.loading')} className="flex flex-col gap-4 py-2">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
-          </div>
-        ))}
-      </LoadingStatus>
-    );
+  if (query.isPending) return <ListSkeleton label={t('reminders.loading')} />;
   if (query.isError && query.data === undefined)
     return (
       <ErrorState
+        framed
         title={t('reminders.error.title')}
         body={t('reminders.error.body')}
         retryLabel={t('common.retry')}

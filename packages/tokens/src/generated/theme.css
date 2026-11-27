@@ -32,6 +32,7 @@
   --color-accent-text: var(--accent-text);
   --color-on-accent: var(--on-accent);
   --color-accent-subtle: var(--accent-subtle);
+  --color-accent-arrive: var(--accent-arrive);
   --color-avatar-1: var(--avatar-1);
   --color-avatar-2: var(--avatar-2);
   --color-avatar-3: var(--avatar-3);
@@ -99,6 +100,8 @@
   --height-header: var(--size-header);
   --height-badge: var(--size-badge);
   --container-badge: var(--size-badge);
+  --height-kbd: var(--size-kbd);
+  --container-kbd: var(--size-kbd);
   --height-code: var(--size-code-clamp);
   --container-dialog: var(--size-dialog);
   --container-settings: var(--size-settings);
@@ -106,7 +109,6 @@
   --container-dialog-lg: var(--size-dialog-lg);
   --container-palette: var(--size-palette);
   --height-palette-list: var(--size-palette-list);
-  --container-inbox-panel: var(--size-inbox-panel);
   --height-inbox-panel-list: var(--size-inbox-panel-list);
   --height-attachment-preview: var(--size-attachment-preview);
   --container-toast: var(--size-toast);
@@ -135,6 +137,7 @@
   --transition-duration-exit: var(--duration-exit);
   --transition-duration-step: var(--duration-step);
   --transition-duration-mark: var(--duration-mark);
+  --transition-duration-arrive: var(--duration-arrive);
   --transition-duration-slide: var(--duration-slide);
   --transition-duration-celebrate: var(--duration-celebrate);
   --transition-duration-celebrate-grand: var(--duration-celebrate-grand);

@@ -98,7 +98,7 @@ describe('a person’s export of their own data', () => {
       },
     });
     const card = cardOf(view);
-    expect(within(card).getByText('You have not exported your data yet.')).toBeDefined();
+    expect(within(card).getByText('You have not exported your data yet')).toBeDefined();
     await expectNoAxeViolations(card);
 
     await person().click(within(card).getByRole('button', { name: 'Export my data' }));
@@ -169,7 +169,7 @@ describe('a person’s export of their own data', () => {
     );
     await person().click(within(card).getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(within(card).getByText('You have not exported your data yet.')).toBeDefined();
+    expect(within(card).getByText('You have not exported your data yet')).toBeDefined();
     view.unmount();
 
     const pending = await open({ myExports: () => new Promise(() => undefined) });
@@ -200,11 +200,11 @@ describe('a person’s export of their own data', () => {
       },
       'tr',
     );
-    const kart = cardOf(turkish, 'Verilerin');
+    const kart = cardOf(turkish, 'Verileriniz');
     await person().click(within(kart).getByRole('button', { name: 'Verilerimi dışa aktar' }));
     await settle();
     expect(within(kart).getByRole('alert').textContent).toBe(
-      'Verilerinin bir dışa aktarımı zaten hazırlanıyor.',
+      'Verilerinizin bir dışa aktarımı zaten hazırlanıyor.',
     );
     expect(within(kart).getByText('Hazırlanıyor…')).toBeDefined();
   });

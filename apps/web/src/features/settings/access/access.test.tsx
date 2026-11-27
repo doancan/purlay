@@ -180,6 +180,41 @@ test('each access list renders pending, retryable error and empty states', async
   }
 });
 
+test('a server that has not turned access management on says so calmly, with what an operator does, and no Retry', async () => {
+  for (const locale of ['en', 'tr'] as const) {
+    let reads = 0;
+    const view = await open(
+      'access-people',
+      {
+        workspaceAccessPeople: () => {
+          reads += 1;
+          return Promise.reject(
+            new ApiError(409, 'WORKSPACE_PROVISIONING_NOT_READY', 'not ready on every reader'),
+          );
+        },
+      },
+      locale,
+    );
+    const status = await view.findByRole('status', {
+      name:
+        locale === 'en'
+          ? 'Access management is not turned on on this server yet'
+          : 'Erişim yönetimi bu sunucuda henüz açılmadı',
+    });
+    expect(status.textContent).toContain('WORKSPACE_PROVISIONING_READY');
+    // Not a failure to read: nothing to retry until an operator changes the server.
+    expect(view.queryByRole('alert')).toBeNull();
+    expect(
+      view.queryByRole('button', { name: locale === 'en' ? 'Retry' : 'Yeniden dene' }),
+    ).toBeNull();
+    expect(view.queryByText(/Couldn’t refresh access/)).toBeNull();
+    expect(reads).toBe(1);
+    await expectNoAxeViolations(status);
+    view.unmount();
+    view.world.client.clear();
+  }
+});
+
 test('roles validate finite actions, create, edit and retire with exact revisions', async () => {
   const calls: unknown[] = [];
   const view = await open('access-roles', {
@@ -362,7 +397,7 @@ test('offboarding requires its preview and readmission never silently creates ma
   await person().click(await view.findByRole('button', { name: 'Allow readmission' }));
   form = await dialog(view, 'Allow Alice to return?');
   await person().click(form.getByRole('button', { name: 'Allow readmission' }));
-  await view.findByText('No admission sources.');
+  await view.findByText('No admission sources');
   expect(seen).toEqual([
     { preview: IDS.alice, revision: ACCESS.revision },
     { offboard: IDS.alice, revision: ACCESS.revision, confirm: true },

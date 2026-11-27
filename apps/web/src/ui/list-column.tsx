@@ -3,7 +3,10 @@
  * column the screen's full width, from its left edge as the feed is (D-177), on a ground a step below its cards, and the lists as cards
  * of rows divided by hairlines — so the four read alike and none drifts into a layout of its own.
  */
+import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
+import { LoadingStatus, Skeleton } from './skeleton';
+import { SlideTrack } from './slide-track';
 
 /** The scrolling column under a screen's header. */
 export const ListColumn = ({
@@ -50,9 +53,39 @@ export const ListCard = ({
 /** A row of a list card: divided from the one above it, never from the card's edge. */
 export const listRowClasses = 'not-first:border-t-hairline border-border-subtle';
 
+const SKELETON_ROWS = [0, 1, 2] as const;
+
+/**
+ * What a list screen's card looks like while it loads (`UX.md` §8): the card itself, with rows of the
+ * height, padding and avatar its rows will have, so nothing moves when they land. Every list screen waits
+ * in this one shape, in the white card its rows will stand in, never in loose lines on the column's ground.
+ */
+export const ListSkeleton = ({ label }: { readonly label: string }): React.JSX.Element => (
+  <LoadingStatus label={label}>
+    <ListCard>
+      {SKELETON_ROWS.map((row) => (
+        <li
+          key={row}
+          aria-hidden="true"
+          className="flex gap-3 px-5 py-3 not-first:border-t-hairline border-border-subtle max-narrow:px-4"
+        >
+          <Skeleton className="size-avatar shrink-0 rounded-lg" />
+          <span className="flex min-w-0 flex-1 flex-col gap-3 py-1">
+            <Skeleton className="w-1/3" />
+            <Skeleton className="w-3/4" />
+          </span>
+        </li>
+      ))}
+    </ListCard>
+  </LoadingStatus>
+);
+
 /**
  * The button a row is: the whole row, padded, tinted under the pointer. Its ring is drawn inward: the card clips what
  * overflows it, so an outward ring was cut off at the card's edges and landed on the neighbouring row inside.
+ *
+ * `extra` adds to the base and must never repeat a utility it already sets (a padding, a gap, an alignment) to
+ * change it: `cn` does not merge, so which of two `px-` wins is the stylesheet's order, not the call's.
  */
 export const listButtonClasses = (extra?: string): string =>
   cn(
@@ -60,18 +93,32 @@ export const listButtonClasses = (extra?: string): string =>
     extra,
   );
 
+interface ListFilterChoice<V extends string> {
+  readonly value: V;
+  readonly label: string;
+  /** A mark before the words, where the choices are kinds of thing a glyph can tell apart at a glance. */
+  readonly glyph?: GlyphName;
+}
+
 interface ListFilterProps<V extends string> {
-  /** What the choice is about, said as the group is entered. */
+  /** What the choice is about, said as the group is entered; also the name the sliding mark is kept by. */
   readonly label: string;
   readonly value: V;
-  readonly choices: readonly { readonly value: V; readonly label: string }[];
+  readonly choices: readonly ListFilterChoice<V>[];
   readonly onChange: (value: V) => void;
 }
 
 /**
  * Which part of the list is shown — Unread, Archived — at the top of the column, over the rows it
- * filters, in every list screen alike: the chosen one raised on a sunk track. On a phone it is the
- * column's width, each choice a finger tall.
+ * filters, in every list screen alike: the chosen one raised on a sunk track, the raised mark sliding to a
+ * new choice as the header's Feed | Open questions does (D-247). On a phone it is the column's width, each
+ * choice a finger tall, and the chosen one carries its own fill, as the sliding mark is not drawn there.
+ * There the choices share the width and say only their words: a glyph is dropped, the chosen one's word is
+ * whole, and a word too long for its share is cut short, rather than the track scrolling sideways with its last
+ * choices out of sight (the whole word is still the button's name).
+ *
+ * The segments' corner and the track's add up: a `rounded-sm` segment, 4px in on a `rounded-lg` track,
+ * is the track's corner drawn again — as the sliding mark is, here and in the header's views.
  */
 export const ListFilter = <V extends string>({
   label,
@@ -79,10 +126,11 @@ export const ListFilter = <V extends string>({
   choices,
   onChange,
 }: ListFilterProps<V>): React.JSX.Element => (
-  <div
+  <SlideTrack
+    memory={`list-filter:${label}`}
     role="group"
     aria-label={label}
-    className="flex max-w-full self-start overflow-x-auto rounded-lg bg-surface-200 p-1 scrollbar-thin max-narrow:self-stretch"
+    className="flex max-w-full self-start overflow-x-auto rounded-lg bg-surface-200 p-1 scrollbar-thin max-narrow:w-full max-narrow:self-stretch"
   >
     {choices.map((choice) => (
       <button
@@ -93,14 +141,19 @@ export const ListFilter = <V extends string>({
           onChange(choice.value);
         }}
         className={cn(
-          'inline-flex h-control items-center justify-center whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1',
+          'relative inline-flex h-control items-center justify-center gap-2 whitespace-nowrap rounded-sm border-hairline border-transparent px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1 max-narrow:px-2',
           value === choice.value
-            ? 'bg-surface-100 text-ink shadow-card'
-            : 'text-ink-muted hover:text-ink',
+            ? 'text-ink max-narrow:min-w-fit max-narrow:border-border-default max-narrow:bg-surface-100 max-narrow:shadow-card'
+            : 'text-ink-muted hover:text-ink max-narrow:min-w-0',
         )}
       >
-        {choice.label}
+        {choice.glyph !== undefined && (
+          <span className="inline-flex max-narrow:hidden">
+            <Icon name={choice.glyph} />
+          </span>
+        )}
+        <span className="min-w-0 truncate">{choice.label}</span>
       </button>
     ))}
-  </div>
+  </SlideTrack>
 );

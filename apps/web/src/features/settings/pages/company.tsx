@@ -285,9 +285,10 @@ const CompanyManagement = ({
             ))}
           </ul>
         )}
-        <div className="flex flex-col gap-3 border-t-hairline border-border-subtle px-6 py-5 max-narrow:px-4">
-          <p className="text-caption text-ink-muted">{t('company.connection.callbackHint')}</p>
+        {/* A field's hint is under it, as TextField draws one. */}
+        <div className="flex flex-col gap-1 border-t-hairline border-border-subtle px-6 py-5 max-narrow:px-4">
           <CompanyCopyValue label={t('company.connection.callback')} value={callbackUrl} />
+          <p className="text-caption text-ink-muted">{t('company.connection.callbackHint')}</p>
         </div>
       </SettingsCard>
       {editing !== null && (

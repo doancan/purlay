@@ -22,13 +22,19 @@ import { colorTokens, cssVar } from '@purlay/tokens';
 import { useState } from 'react';
 import { Icon, glyphNames } from '../components/icon';
 import { SettingsMenu } from '../features/shell/settings-menu';
+import { AddressChips } from '../ui/address-chips';
 import { Avatar } from '../ui/avatar';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { Checkbox, Radio } from '../ui/checkbox';
+import { DateField } from '../ui/date-field';
 import { Dialog } from '../ui/dialog';
+import { Disclosure } from '../ui/disclosure';
 import { IconButton } from '../ui/icon-button';
 import { Kbd } from '../ui/kbd';
+import { ListFilter, ListSkeleton } from '../ui/list-column';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../ui/menu';
+import { Select } from '../ui/select';
 import { LoadingStatus, Skeleton } from '../ui/skeleton';
 import { EmptyState, ErrorState } from '../ui/states';
 import { TextField } from '../ui/text-field';
@@ -83,6 +89,98 @@ const typeClasses = {
   'text-code': 'text-code text-ink',
 } as const;
 
+/** The keys a shortcut hint prints, on each keyboard: every cap the same height, a glyph's square. */
+const KEY_SAMPLES = [
+  'Mod+K',
+  'Mod+Shift+D',
+  'Shift+Enter',
+  'Alt+↑',
+  'Esc',
+  'Tab',
+  'Backspace',
+  'Shift+F10',
+  '```',
+];
+
+const Keys = ({ mac }: { readonly mac: boolean }): React.JSX.Element => (
+  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    {KEY_SAMPLES.map((shortcut) => (
+      <Kbd key={shortcut} mac={mac}>
+        {shortcut}
+      </Kbd>
+    ))}
+  </div>
+);
+
+const FILTERS = [
+  { value: 'progress', label: 'In progress', glyph: 'saved' },
+  { value: 'archived', label: 'Archived', glyph: 'archive' },
+  { value: 'done', label: 'Completed', glyph: 'resolved' },
+] as const;
+
+/** The controls that hold a value: a field, a choice, a day, a filter, a part closed until asked for. */
+const Controls = (): React.JSX.Element => {
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]['value']>('progress');
+  const [day, setDay] = useState('2026-11-26');
+  const [addresses, setAddresses] = useState<readonly string[]>([
+    'alice@acme.dev',
+    'not-an-address',
+  ]);
+  return (
+    <>
+      <Section title="Choices">
+        <ListFilter label="Saved" value={filter} choices={FILTERS} onChange={setFilter} />
+        <Row>
+          <Select aria-label="Role" defaultValue="member">
+            <option value="owner">Owner</option>
+            <option value="member">Member</option>
+          </Select>
+          <Select aria-label="Disabled" disabled defaultValue="member">
+            <option value="member">Member</option>
+          </Select>
+        </Row>
+        <div className="flex flex-col gap-2">
+          {[
+            ['Unchecked', false, false],
+            ['Checked', true, false],
+            ['Disabled', false, true],
+          ].map(([label, checked, disabled]) => (
+            <label key={String(label)} className="flex items-start gap-2 text-body text-ink">
+              <Checkbox defaultChecked={checked === true} disabled={disabled === true} />
+              {label}
+            </label>
+          ))}
+          <label className="flex items-start gap-2 text-body text-ink">
+            <Radio name="gallery-radio" defaultChecked />
+            Radio, chosen
+          </label>
+          <label className="flex items-start gap-2 text-body text-ink">
+            <Radio name="gallery-radio" />
+            Radio
+          </label>
+        </div>
+      </Section>
+      <Section title="Day, addresses, disclosure">
+        <DateField label="Due" value={day} onChange={setDay} hint="The day it is due by." />
+        <AddressChips
+          label="Invite by email"
+          hint="Separate addresses with commas."
+          placeholder="name@company.com"
+          removeLabel={(address) => `Remove ${address}`}
+          invalidLabel="Not an email address"
+          tooMany="Only ten at a time."
+          addresses={addresses}
+          onChange={setAddresses}
+          max={10}
+        />
+        <Disclosure className="text-label" summary="Advanced filters">
+          <p className="text-body text-ink-muted">What a closed part holds.</p>
+        </Disclosure>
+      </Section>
+    </>
+  );
+};
+
 const Specimen = (): React.JSX.Element => (
   <div className="flex flex-col gap-8">
     <Section title="Type">
@@ -134,16 +232,20 @@ const Specimen = (): React.JSX.Element => (
 
     <Section title="Icon buttons, keys, badge">
       <Row>
-        <IconButton label="Search" glyph="search" shortcut="⌘K" />
+        <IconButton label="Search" glyph="search" shortcut="Mod+K" />
         <IconButton label="Close" glyph="close" />
+        {/* A toolbar toggle that is on keeps its fill at rest. */}
+        <IconButton label="Bold" glyph="bold" aria-pressed />
         <IconButton label="Disabled" glyph="more" disabled />
-        <Kbd>⌘K</Kbd>
-        <Kbd>Shift+Enter</Kbd>
         <Badge count={2} label="2 unread mentions" />
         <Badge count={12} label="12 unread mentions" />
         <IconButton label="Inbox, on the rail" glyph="inbox" size="rail" />
       </Row>
+      <Keys mac />
+      <Keys mac={false} />
     </Section>
+
+    <Controls />
 
     <Section title="Avatars and status pills">
       <Row>
@@ -205,6 +307,15 @@ const Specimen = (): React.JSX.Element => (
         retryLabel="Retry"
         onRetry={noop}
       />
+      {/* A list screen's: in the card its rows stand in, loading and failed alike. */}
+      <ListSkeleton label="Loading saved messages" />
+      <ErrorState
+        framed
+        title="Couldn't load saved messages"
+        body="The server did not answer."
+        retryLabel="Retry"
+        onRetry={noop}
+      />
     </Section>
   </div>
 );
@@ -228,7 +339,7 @@ const Overlays = (): React.JSX.Element => {
           <MenuItem onSelect={noop} glyph="settings">
             Settings
           </MenuItem>
-          <MenuItem onSelect={noop} glyph="shortcuts" shortcut="⌘/">
+          <MenuItem onSelect={noop} glyph="shortcuts" shortcut="Mod+/">
             Shortcuts
           </MenuItem>
           <MenuSeparator />

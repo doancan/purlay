@@ -18,6 +18,7 @@ import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
 import { Dialog } from '../../../ui/dialog';
+import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { TextField } from '../../../ui/text-field';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useSession } from '../../session/session';
@@ -117,11 +118,34 @@ export const NewConversationDialog = ({
   };
 
   const body = ((): React.ReactNode => {
-    if (members.isPending) return <p className="text-body text-ink-muted">{t('people.loading')}</p>;
+    if (members.isPending) {
+      // The list's own frame and rows, so the people land where they were drawn.
+      return (
+        <LoadingStatus label={t('people.loading')}>
+          <div
+            aria-hidden="true"
+            className="overflow-hidden rounded-lg border-hairline border-border-subtle"
+          >
+            {[0, 1, 2].map((row) => (
+              <div
+                key={row}
+                className="flex items-center gap-3 px-3 py-2 not-first:border-t-hairline border-border-subtle"
+              >
+                <span className="block size-avatar shrink-0 rounded-lg bg-surface-200" />
+                <Skeleton className="w-1/3" />
+              </div>
+            ))}
+          </div>
+        </LoadingStatus>
+      );
+    }
     if (members.isError) {
       return (
-        <div role="alert" className="flex items-center gap-2 text-body text-danger-text">
-          {`${t('people.failed')} ${describe(members.error)}`}
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 text-body text-danger-text"
+        >
+          <p className="min-w-0 flex-1">{`${t('people.failed')} ${describe(members.error)}`}</p>
           <Button
             onClick={() => {
               void members.refetch();
@@ -145,19 +169,19 @@ export const NewConversationDialog = ({
               <button
                 type="button"
                 aria-pressed={chosen}
-                aria-label={`${chosen ? t('conversations.picked') : t('conversations.pick')} ${person.displayName}`}
                 disabled={!chosen && full}
                 onClick={() => {
                   toggle(person.id);
                 }}
+                // The ring is drawn inward: the scrolling list clips what overflows it, as a list card does.
                 className={cn(
-                  'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:text-ink-muted',
-                  chosen ? 'bg-accent-subtle' : 'hover:bg-surface-050',
+                  'group/person flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-hover ease-standard focus-visible:-outline-offset-focus disabled:cursor-not-allowed',
+                  chosen ? 'bg-accent-subtle' : 'enabled:hover:bg-surface-050',
                 )}
               >
                 <Avatar name={person.displayName} username={person.username} size="md" />
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-label text-ink">
+                  <span className="truncate text-label text-ink group-disabled/person:text-ink-muted">
                     {person.displayName}
                     <span className="font-normal text-ink-muted">{` @${person.username}`}</span>
                   </span>
@@ -167,7 +191,9 @@ export const NewConversationDialog = ({
                   aria-hidden="true"
                   className={cn(
                     'inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-pill border-hairline',
-                    chosen ? 'border-accent bg-accent text-on-accent' : 'border-border-strong',
+                    chosen
+                      ? 'border-accent bg-accent text-on-accent'
+                      : 'border-border-strong group-disabled/person:border-border-subtle group-disabled/person:bg-surface-200',
                   )}
                 >
                   {chosen && <Icon name="confirm" size="sm" />}
@@ -193,11 +219,14 @@ export const NewConversationDialog = ({
         </Button>
       }
     >
-      {/* Who it is to, as chips that can be taken off; said in words for a screen reader. */}
-      <div className="flex min-h-control flex-wrap items-center gap-2 rounded-lg border-hairline border-border-subtle bg-surface-000 px-3 py-2">
-        <span className="text-label text-ink-muted">{t('conversations.toLabel')}</span>
+      {/* Who it is to, as chips that can be taken off; said in words for a screen reader. Every part of the
+          line is one chip tall, so picking the first person does not move the field and the list below. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border-hairline border-border-subtle bg-surface-000 px-3 py-2">
+        <span className="inline-flex h-6 items-center text-label text-ink-muted">
+          {t('conversations.toLabel')}
+        </span>
         {picked.length === 0 ? (
-          <span className="text-label font-normal text-ink-subtle">
+          <span className="inline-flex h-6 items-center text-label font-normal text-ink-subtle">
             {t('conversations.nobody')}
           </span>
         ) : (
@@ -206,17 +235,17 @@ export const NewConversationDialog = ({
             .map((person) => (
               <span
                 key={person.id}
-                className="inline-flex h-control items-center gap-2 rounded-pill bg-surface-100 pr-1 pl-1 text-label text-ink shadow-card"
+                className="inline-flex h-6 max-w-full min-w-0 items-center gap-1 rounded-pill bg-surface-100 pr-1 pl-1 text-label text-ink shadow-card"
               >
                 <Avatar name={person.displayName} username={person.username} size="sm" />
-                {person.displayName}
+                <span className="min-w-0 truncate pl-1">{person.displayName}</span>
                 <button
                   type="button"
                   aria-label={t('conversations.unpick', { name: person.displayName })}
                   onClick={() => {
                     toggle(person.id);
                   }}
-                  className="inline-flex size-avatar-sm items-center justify-center rounded-pill text-ink-muted hover:bg-surface-200 hover:text-ink"
+                  className="inline-flex size-avatar-sm shrink-0 items-center justify-center rounded-pill text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink"
                 >
                   <Icon name="close" size="sm" />
                 </button>

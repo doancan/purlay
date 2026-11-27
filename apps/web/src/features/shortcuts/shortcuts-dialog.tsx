@@ -7,6 +7,7 @@
  * that does nothing. Each row is a sentence and one or more key sequences (`↑` *or*
  * `↓`), the modifiers spelled for the platform in front of them.
  */
+import { Fragment } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { PlainKey } from '../../i18n/types';
 import type { ModuleShortcut } from '../../modules/manifest';
@@ -91,18 +92,22 @@ export const ShortcutList = ({
           </Heading>
           <ul className="flex flex-col gap-2">
             {group.rows.map((row) => (
-              <li key={row.label} className="flex items-center justify-between gap-4">
+              // A row is a cap's height and a line's; a long label wraps beside its keys, which never do.
+              <li key={row.label} className="flex min-h-6 items-center justify-between gap-4">
                 <span className="text-body text-ink">{t(row.label)}</span>
-                <span className="flex items-center gap-2">
+                <span className="flex shrink-0 items-center gap-2">
                   {row.keys(labels).map((sequence, at) => (
-                    <span key={sequence.join('+')} className="flex items-center gap-1">
+                    <Fragment key={sequence.join('+')}>
                       {at > 0 && (
-                        <span className="text-caption text-ink-muted">{t('shortcuts.or')}</span>
+                        <span className="whitespace-nowrap text-caption text-ink-muted">
+                          {t('shortcuts.or')}
+                        </span>
                       )}
-                      {sequence.map((key) => (
-                        <Kbd key={key}>{key}</Kbd>
-                      ))}
-                    </span>
+                      {/* One chord, spelled by the cap itself: a Mac's modifiers in its own order (⇧⌘R). */}
+                      <Kbd mac={mac} touch="show">
+                        {sequence.join('+')}
+                      </Kbd>
+                    </Fragment>
                   ))}
                 </span>
               </li>
@@ -136,7 +141,8 @@ export const ShortcutsDialog = ({
         role="region"
         tabIndex={0}
         aria-label={t('shortcuts.title')}
-        className="flex flex-col gap-4"
+        // The padding is the ring's room: a list focused on open is ringed around it, not on its words.
+        className="-m-2 flex flex-col gap-6 rounded-lg p-2"
       >
         <ShortcutList mac={mac} modules={modules} />
       </div>

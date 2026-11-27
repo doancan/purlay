@@ -57,7 +57,10 @@ interface AvatarProps {
   readonly className?: string;
   /** Here (D-136): a dot in the corner when active, a hollow ring when away (D-257); none otherwise. */
   readonly presence?: 'active' | 'away' | undefined;
-  /** How many letters: two, or one where avatars overlap and a second would be covered (D-167). */
+  /**
+   * How many letters: two, or one where avatars overlap and a second would be covered (D-167). The small size
+   * always draws one: two wide capitals (MW) are wider than its 20px.
+   */
   readonly letters?: 1 | 2;
 }
 
@@ -79,7 +82,7 @@ export const Avatar = ({
       className,
     )}
   >
-    {letters === 2 ? initialsOf(name) : Array.from(initialsOf(name))[0]}
+    {letters === 2 && size !== 'sm' ? initialsOf(name) : Array.from(initialsOf(name))[0]}
     {presence === 'active' && (
       <span
         data-online=""

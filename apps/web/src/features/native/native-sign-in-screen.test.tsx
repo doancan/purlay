@@ -133,7 +133,9 @@ describe('saying yes', () => {
       await click(view, 'Purlay for iOS uygulamasını aç');
       expect(asked).toEqual([PAIR]);
       expect(went).toHaveBeenCalledWith(REDIRECT);
-      expect(view.getByRole('heading', { name: 'Purlay for iOS uygulamasına dön' })).toBeDefined();
+      expect(
+        view.getByRole('heading', { name: 'Purlay for iOS uygulamasına dönün' }),
+      ).toBeDefined();
     } finally {
       went.mockRestore();
     }

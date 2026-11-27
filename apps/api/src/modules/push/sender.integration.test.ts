@@ -236,9 +236,9 @@ describe('integration: a device is told', () => {
     });
   });
   test.each([
-    ['ordinary', 'tr', undefined, 'alice senden bahsetti'],
+    ['ordinary', 'tr', undefined, 'alice sizden bahsetti'],
     ['important', 'en', 'important', 'Important · alice mentioned you'],
-    ['urgent', 'tr', 'urgent', 'Acil · alice senden bahsetti'],
+    ['urgent', 'tr', 'urgent', 'Acil · alice sizden bahsetti'],
   ] as const)(
     'of an %s mention, in its person’s language without message content',
     async (_label, locale, priority, body) => {

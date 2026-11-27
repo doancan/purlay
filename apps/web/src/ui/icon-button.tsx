@@ -14,28 +14,34 @@ import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
 import { Tooltip } from './tooltip';
 
+// A disabled one does not answer the pointer: no tint under it, whatever its size's hover is.
 const iconButtonClasses =
-  'inline-flex shrink-0 items-center justify-center transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:text-ink-muted';
+  'inline-flex shrink-0 items-center justify-center transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:bg-transparent disabled:text-ink-muted';
 
 /**
  * Sizes. A control sits in a row with other controls and is as tall as they are; a rail
  * button is a larger square on the window's edge, with a larger glyph and its tip opening
- * inward (D-110).
+ * inward (D-110). Pressed (`active:`) is one step firmer than hover, as a button's is: `border-subtle`
+ * is a step past `surface-200` and `nav-hover` in every theme.
  */
 const sizeClasses = {
+  /** A toggle in a toolbar that is on (`aria-pressed`) keeps the hover's fill, so it reads as on at rest. */
   control:
-    'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink',
+    'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink active:bg-border-subtle active:text-ink aria-pressed:bg-surface-200 aria-pressed:text-ink',
   /**
    * A control on a message's bar (D-150): the control's size on every window. A finger-tall bar
    * is taller than the band above a bubble and covered the author's name on a phone; at this size
    * it fits the band, and every target on the bar is the same (above the 24px WCAG minimum).
    */
-  bar: 'h-control aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink aria-pressed:text-ink',
-  rail: 'size-rail-item rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink max-narrow:h-touch max-narrow:w-touch',
+  bar: 'h-control aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink active:bg-border-subtle active:text-ink aria-pressed:text-ink',
+  rail: 'size-rail-item rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink active:bg-border-subtle active:text-nav-ink max-narrow:h-touch max-narrow:w-touch',
   /** A control in the sidebar, on the navigation's tone (D-118). */
-  nav: 'h-control max-narrow:h-touch aspect-square rounded-md text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
-  /** The sidebar's top band: as tall as the workspace's door beside it, so the two are one row of buttons. */
-  head: 'h-switcher max-narrow:h-touch aspect-square rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink data-[state=open]:bg-nav-selected data-[state=open]:text-nav-ink',
+  nav: 'h-control max-narrow:h-touch aspect-square rounded-md text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink active:bg-border-subtle active:text-nav-ink',
+  /**
+   * The sidebar's top band: a row's height and corner, as the workspace's door beside it is, so the two are
+   * one row of buttons; open, it is selected as the door is.
+   */
+  head: 'h-control max-narrow:h-touch aspect-square rounded-lg text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink active:bg-border-subtle active:text-nav-ink data-[state=open]:bg-nav-selected data-[state=open]:text-nav-ink',
 } as const;
 
 export interface IconButtonProps extends Omit<

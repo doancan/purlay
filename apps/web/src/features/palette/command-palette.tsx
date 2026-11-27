@@ -87,6 +87,22 @@ const GROUP_LABEL = {
   search: 'palette.group.search',
 } as const satisfies Record<PaletteGroup, string>;
 
+/**
+ * The most of a query the empty message quotes, in characters. Shortened in the words, not by the line's
+ * clamp: Turkish puts the query before "eşleşme yok", so a clamp would cut off the words that say it.
+ */
+const QUOTED_QUERY_LENGTH = 32;
+
+/** The query as the empty message quotes it: whole when short, else its start and an ellipsis. */
+const quoted = (query: string): string => {
+  const characters = Array.from(query);
+  if (characters.length <= QUOTED_QUERY_LENGTH) return query;
+  return `${characters
+    .slice(0, QUOTED_QUERY_LENGTH - 1)
+    .join('')
+    .trimEnd()}…`;
+};
+
 const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
@@ -135,11 +151,16 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   const current = shown[selected];
   const optionId = (index: number): string => `${base}-option-${String(index)}`;
 
-  // The current option stays in view as the arrows move it.
+  // The current option stays in view as the arrows move it — with its group's heading when it is the
+  // group's first, so wrapping round to the top never leaves the list opening on a nameless row.
   useEffect(() => {
-    document.getElementById(`${base}-option-${String(selected)}`)?.scrollIntoView({
-      block: 'nearest',
-    });
+    const option = document.getElementById(`${base}-option-${String(selected)}`);
+    if (option === null) return;
+    const group = option.closest('[role="group"]');
+    if (group?.querySelector('[role="option"]') === option) {
+      group.firstElementChild?.scrollIntoView({ block: 'nearest' });
+    }
+    option.scrollIntoView({ block: 'nearest' });
   }, [base, selected, shown]);
 
   const move = (to: number): void => {
@@ -202,9 +223,15 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
   let index = -1;
   return (
     <>
-      <div className="p-3 pb-2">
-        <div className="flex h-control max-narrow:h-touch items-center gap-2 rounded-lg border-hairline border-border-subtle bg-surface-050 px-3 text-ink-subtle focus-within:outline-focus focus-within:outline-focus-ring focus-within:outline-offset-focus">
-          <Icon name="search" />
+      {/* The field's edge is the rows' edge below it, and its glyph sits in the rows' glyph column. */}
+      <div className="p-2">
+        <div className="flex h-control max-narrow:h-touch items-center gap-3 rounded-lg border-hairline border-border-subtle bg-surface-050 px-3 text-ink-subtle focus-within:outline-focus focus-within:outline-focus-ring focus-within:outline-offset-focus">
+          <span
+            aria-hidden="true"
+            className="inline-flex size-avatar-sm shrink-0 items-center justify-center"
+          >
+            <Icon name="search" />
+          </span>
           <input
             type="text"
             role="combobox"
@@ -223,15 +250,16 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
               setFailed(null);
             }}
             onKeyDown={onKeyDown}
-            className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
+            className="min-w-0 flex-1 truncate bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
           />
-          <Kbd>Esc</Kbd>
         </div>
       </div>
 
       {typed && matched.length === 0 && (
-        <p className="px-4 pt-3 pb-1 text-body text-ink-muted">
-          {t('palette.empty', { query: query.trim() })}
+        // A long query is shortened in the words (`quoted`); the clamp only guards a narrow screen. Margins,
+        // not padding, so a clamped third line is not drawn into them.
+        <p className="mx-5 my-2 line-clamp-2 text-body text-ink-muted wrap-anywhere">
+          {t('palette.empty', { query: quoted(query.trim()) })}
         </p>
       )}
       {shown.length === 0 ? null : (
@@ -243,7 +271,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
           onMouseDown={(event) => {
             event.preventDefault();
           }}
-          className="max-h-palette-list overflow-y-auto p-2"
+          className="max-h-palette-list scroll-py-2 overflow-y-auto px-2 pb-2"
         >
           {GROUPS.map((group) => {
             const entries = shown.filter((entry) => entry.item.group === group);
@@ -278,8 +306,9 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
                           return;
                         if (!active) setSelected(mine);
                       }}
+                      // One height for every row, whatever its tile (glyph, avatar or faces): the list is a column.
                       className={cn(
-                        'flex items-center gap-3 rounded-md px-3 py-2 text-body text-ink',
+                        'flex h-10 max-narrow:h-touch cursor-pointer items-center gap-3 rounded-lg px-3 text-body text-ink',
                         active && 'bg-accent-subtle',
                       )}
                     >
@@ -306,7 +335,9 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
                         <Emphasised text={entry.item.label} positions={entry.positions} />
                       </span>
                       {entry.item.hint === undefined ? null : (
-                        <span className="text-caption text-ink-muted">{entry.item.hint}</span>
+                        <span className="max-w-1/3 shrink-0 truncate text-caption text-ink-muted">
+                          {entry.item.hint}
+                        </span>
                       )}
                     </div>
                   );
@@ -318,7 +349,7 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
       )}
 
       {failed !== null && (
-        <p role="alert" className="px-4 pb-2 text-label text-danger-text">
+        <p role="alert" className="px-5 pb-2 text-label text-danger-text">
           {`${t('palette.error')} ${failed}`}
         </p>
       )}
@@ -327,14 +358,18 @@ const Body = ({ onClose }: { readonly onClose: () => void }): React.JSX.Element 
       </VisuallyHidden>
 
       <div className={cn(keyHintsClasses, 'touch-only:hidden')}>
-        <span>
-          <Kbd>↑</Kbd> <Kbd>↓</Kbd> {t('palette.hint.move')}
+        <span className="flex items-center gap-1">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd>
+          <span className="ml-1">{t('palette.hint.move')}</span>
         </span>
-        <span>
-          <Kbd>Enter</Kbd> {t('palette.hint.open')}
+        <span className="flex items-center gap-2">
+          <Kbd>Enter</Kbd>
+          {t('palette.hint.open')}
         </span>
-        <span>
-          <Kbd>Esc</Kbd> {t('palette.hint.close')}
+        <span className="flex items-center gap-2">
+          <Kbd>Esc</Kbd>
+          {t('palette.hint.close')}
         </span>
       </div>
     </>

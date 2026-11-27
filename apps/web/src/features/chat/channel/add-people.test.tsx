@@ -97,8 +97,8 @@ describe('the list', () => {
     await settle();
     const rows = within(dialog).getAllByRole('listitem');
     expect(rows.map((row) => row.textContent)).toEqual([
-      `BO${BOB.displayName} @${BOB.username}Add`,
-      `AL${ALICE.displayName} @${ALICE.username}Member`,
+      `B${BOB.displayName} @${BOB.username}Add`,
+      `A${ALICE.displayName} @${ALICE.username}Member`,
     ]);
     expect(within(dialog).getAllByRole('button', { name: 'Add' })).toHaveLength(1);
     await expectNoAxeViolations(dialog);
@@ -116,9 +116,7 @@ describe('the list', () => {
     });
     const dialog = await openPeople(view);
     await settle();
-    expect(
-      within(dialog).getByText('Everybody in the workspace is in this channel.'),
-    ).toBeDefined();
+    expect(within(dialog).getByText('Everybody in the workspace is in this channel')).toBeDefined();
     expect(within(dialog).queryByRole('button', { name: 'Add' })).toBeNull();
     view.unmountAll();
   });
@@ -148,13 +146,13 @@ describe('the list', () => {
     const dialog = await openPeople(view);
     await settle();
     await person().type(within(dialog).getByLabelText('Find a person'), 'zz');
-    expect(within(dialog).getByText('Nobody by that name.')).toBeDefined();
+    expect(within(dialog).getByText('Nobody by that name')).toBeDefined();
     view.unmountAll();
 
     const alone = await mountChannel({ messages: page([]), members: people(ME) });
     const empty = await openPeople(alone);
     await settle();
-    expect(within(empty).getByText('Nobody else is in this workspace yet.')).toBeDefined();
+    expect(within(empty).getByText('Nobody else is in this workspace yet')).toBeDefined();
     alone.unmountAll();
   });
 
@@ -215,7 +213,7 @@ describe('the list', () => {
     });
     await person().click(view.getByRole('button', { name: 'Kişi ekle' }));
     await settle();
-    const dialog = view.getByRole('dialog', { name: /kanalına kişi ekle/ });
+    const dialog = view.getByRole('dialog', { name: '#api kanalına kişi ekle' });
     expect(within(dialog).getByRole('button', { name: 'Ekle' })).toBeDefined();
     view.unmountAll();
   });
