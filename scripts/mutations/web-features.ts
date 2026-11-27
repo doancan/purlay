@@ -622,6 +622,22 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/alerts/background-alerts.test.tsx'],
   },
   {
+    id: 'notification-permission-restored-keeps-blocked',
+    why: 'the device switch remains blocked after the browser restores notification permission',
+    file: 'apps/web/src/features/push/push.tsx',
+    find: "      else setStatus((current) => (current === 'blocked' ? 'off' : current));\n",
+    replace: '',
+    tests: ['apps/web/src/features/push/push.test.tsx'],
+  },
+  {
+    id: 'notification-permission-restored-switches-on',
+    why: 'browser permission alone turns on alerts without the person choosing them for this device',
+    file: 'apps/web/src/features/push/push.tsx',
+    find: "current === 'blocked' ? 'off' : current",
+    replace: "current === 'blocked' ? 'on' : current",
+    tests: ['apps/web/src/features/push/push.test.tsx'],
+  },
+  {
     id: 'notification-renotify-with-empty-tag',
     why: 'an untagged notice requests an invalid platform option combination',
     file: 'apps/web/src/features/push/notifier.ts',
