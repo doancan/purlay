@@ -1330,7 +1330,7 @@ export const UNSCOPED: Readonly<Record<string, string>> = {
   'POST /api/push/apns/subscriptions':
     'registers a token in the caller’s live session and refuses a token held by another session (D-342)',
   'POST /api/push/apns/subscriptions/remove':
-    'removes a matching token from the caller’s live session, answering the same 204 when absent (D-342)',
+    'names no workspace and removes only the caller’s live session registration, answering the same 204 when absent (D-342)',
   'GET /api/workspaces': 'lists the caller’s own memberships and names no workspace',
   'POST /api/workspaces': 'creates a workspace; there is nothing yet to be outside of',
   'GET /api/images':

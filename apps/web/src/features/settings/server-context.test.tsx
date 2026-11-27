@@ -24,7 +24,6 @@ describe('the client the Server cards call through', () => {
       disconnect: () => Promise.reject(new Error('unused')),
       policy: () => Promise.reject(new Error('unused')),
       creators: () => Promise.reject(new Error('unused')),
-      accounts: () => Promise.reject(new Error('unused')),
       suspend: () => Promise.reject(new Error('unused')),
       lift: () => Promise.reject(new Error('unused')),
     };

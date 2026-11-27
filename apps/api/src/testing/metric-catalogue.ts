@@ -49,7 +49,18 @@ export const metricCatalogue = (): readonly MetricEntry[] => {
       [{ job_name: job, last_success_at: new Date(0), consecutive_failures: 0 }],
       () => 'example',
     ),
-    ...outboxFamilies([{ consumer: 'example', pending: 0, oldestPendingSeconds: 0, dead: 0 }]),
+    ...outboxFamilies({
+      readings: [
+        {
+          consumer: 'example',
+          pending: 0,
+          oldestPendingSeconds: 0,
+          held: { not_granted: 0, not_run: 0, newer_shape: 0 },
+          dead: 0,
+        },
+      ],
+      expired: [{ consumer: 'example', type: 'example.made', expired: 0 }],
+    }),
   ].map((family): MetricEntry => ({
     name: family.name,
     type: family.type,

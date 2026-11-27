@@ -5,9 +5,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
+import { rowWith } from './support';
 
 const editor = (page: Page): Locator => page.getByRole('textbox', { name: 'Edit your message' });
 

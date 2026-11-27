@@ -11,6 +11,15 @@ import { ESLint } from 'eslint';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 
+/** The file of a decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-345). */
+const decisionFile = (number: number): string => {
+  const name = readdirSync('docs/decisions', { recursive: true, encoding: 'utf8' }).find((path) =>
+    new RegExp(`(?:^|/)D-${String(number)}-[^/]*\\.md$`).test(path),
+  );
+  if (name === undefined) throw new Error(`no file for decision ${String(number)}`);
+  return `docs/decisions/${name}`;
+};
+
 const base = JSON.parse(readFileSync('packages/config/tsconfig.base.json', 'utf8')) as {
   compilerOptions: Record<string, unknown>;
 };
@@ -531,7 +540,8 @@ describe('development serves the one origin it promises', () => {
  * fails here.
  */
 describe('the message-id skew window matches the decision that set it', () => {
-  const decisions = readFileSync('docs/DECISIONS.md', 'utf8');
+  // D-33, in its own file of the decision record (D-345).
+  const decisions = readFileSync(decisionFile(33), 'utf8');
   const source = readFileSync('packages/types/src/message-id.ts', 'utf8');
 
   const stated = /within `\[now − (\d+) s, now \+ (\d+) s\]`/.exec(decisions);

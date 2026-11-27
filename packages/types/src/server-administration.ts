@@ -399,7 +399,10 @@ export const ServerBackupStatus = Type.Object({
 });
 export type ServerBackupStatus = Static<typeof ServerBackupStatus>;
 
-/** What the operator's list of the outbox can be asked for (D-288 §12): `stuck` is pending past the overview's fifteen minutes. */
+/**
+ * What the operator's list of the outbox can be asked for (D-288 §12): `stuck` is pending past the overview's fifteen minutes, not
+ * past its expiry and not held for a workspace that is not granted its consumer (D-353).
+ */
 export const ServerOutboxState = Type.Union([
   Type.Literal('dead'),
   Type.Literal('stuck'),

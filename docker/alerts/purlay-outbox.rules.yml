@@ -16,6 +16,8 @@ groups:
           summary: 'Facts for {{ $labels.module }} were given up on'
           runbook: 'docs/DEPLOY.md, "A fact is dead: what to do"'
 
+      # The age is of the facts a node would deliver: one held on purpose (a workspace not granted the consumer, a node that does not
+      # run it, a newer shape) is `purlay_outbox_held` and pages nobody (D-353).
       - alert: PurlayOutboxOldestPendingStale
         expr: max by (module) (purlay_outbox_oldest_age_seconds) > 900
         for: 5m
@@ -33,6 +35,17 @@ groups:
         annotations:
           summary: 'A fact has waited over an hour for {{ $labels.module }}'
           runbook: 'docs/DEPLOY.md, "The outbox backlog is growing"'
+
+      # `sweep:outbox` counts a fact nobody delivered before its expiry in the table it reads from, so this counter is the same on every
+      # node (hence `max`) and survives the job's process (D-353).
+      - alert: PurlayOutboxFactsExpired
+        expr: max by (module, fact) (increase(purlay_outbox_expired_total[1h])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Facts {{ $labels.fact }} for {{ $labels.module }} expired before anyone delivered them'
+          runbook: 'docs/DEPLOY.md, "A fact expired undelivered"'
 
       - alert: PurlayOutboxDepthGrowing
         expr: max by (module) (purlay_outbox_pending) > 500 and deriv(max by (module) (purlay_outbox_pending)[30m:1m]) > 0

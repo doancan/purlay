@@ -15,6 +15,14 @@ const CREATORS_TESTS = 'apps/api/src/ingress/http/workspace-creators.integration
 
 export const API_INGRESS_HTTP: readonly Mutation[] = [
   {
+    id: 'apns-capability-advertised-without-provider',
+    why: 'iOS must only prompt to register on a deployment with an APNs provider.',
+    file: 'apps/api/src/ingress/http/client-info.ts',
+    find: '      ...(hasApns ? { apnsNotifications: true } : {}),',
+    replace: '      apnsNotifications: true,',
+    tests: ['apps/api/src/ingress/http/apns.integration.test.ts'],
+  },
+  {
     id: 'application-database-not-leased',
     why: 'handlers are given the pool as it is, so no module’s share holds a statement of its routes, the way a handler that takes the raw database would (O3, MODULES.md §7)',
     file: 'apps/api/src/ingress/http/app.ts',
@@ -877,8 +885,8 @@ export const API_INGRESS_HTTP: readonly Mutation[] = [
     id: 'suspension-client-capabilities-from-the-process-alone',
     why: 'the client is told chat’s capabilities while chat is stopped (D-296)',
     file: 'apps/api/src/ingress/http/routes/sign-in-routes.ts',
-    find: 'clientInfo(dependencies.config, dependencies.auth, runningNow())',
-    replace: 'clientInfo(dependencies.config, dependencies.auth, moduleIds)',
+    find: 'clientInfo(dependencies.config, dependencies.auth, runningNow(), hasApns)',
+    replace: 'clientInfo(dependencies.config, dependencies.auth, moduleIds, hasApns)',
     tests: ['apps/api/src/ingress/http/suspension.integration.test.ts'],
   },
   {

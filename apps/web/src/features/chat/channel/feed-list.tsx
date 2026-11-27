@@ -110,7 +110,8 @@ export const FeedList = ({
             <div
               key={item.key}
               aria-hidden="true"
-              className="flex items-center py-6 text-caption font-medium uppercase text-ink-muted"
+              // pb-3: the row after it brings its own pt-3, so the rule sits midway between the two messages.
+              className="flex items-center pt-6 pb-3 text-caption font-medium text-ink-muted"
             >
               <span className="flex-1 border-t-hairline border-border-subtle" />
               <span className="shrink-0 px-3">{item.label}</span>

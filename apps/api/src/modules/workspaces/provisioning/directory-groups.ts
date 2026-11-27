@@ -3,6 +3,7 @@ import type { Transaction } from '@purlay/db';
 import type { Clock } from '../../../platform/clock';
 import { recordAudit } from '../../audit/audit';
 import type { WorkspaceChannels } from '../channels-port';
+import type { MemberDepartures } from '../member-departures';
 import { groupNotFound, sourceNotFound } from './authority';
 import { accessGroupUsers } from './groups';
 import { normalizedAccessName } from './roles';
@@ -16,6 +17,7 @@ import {
 interface DirectoryGroupDependencies {
   readonly clock: Clock;
   readonly channels: WorkspaceChannels;
+  readonly departures: MemberDepartures;
 }
 
 export const reconcileDirectoryAccessGroup = async (
@@ -134,13 +136,7 @@ export const reconcileDirectoryAccessGroup = async (
     ),
   ].sort();
   noteWorkspaceAccessChange(transaction, scope, affected);
-  await projectWorkspaceAccess(
-    transaction,
-    dependencies.clock,
-    scope,
-    affected,
-    dependencies.channels,
-  );
+  await projectWorkspaceAccess(transaction, dependencies, scope, affected);
   await recordAudit(transaction, dependencies.clock, {
     workspaceId: scope.workspaceId,
     actorUserId: null,
@@ -192,13 +188,7 @@ export const retireDirectoryAccessGroup = async (
     .where('group_id', '=', group.id)
     .execute();
   noteWorkspaceAccessChange(transaction, scope, users);
-  await projectWorkspaceAccess(
-    transaction,
-    dependencies.clock,
-    scope,
-    users,
-    dependencies.channels,
-  );
+  await projectWorkspaceAccess(transaction, dependencies, scope, users);
   await recordAudit(transaction, dependencies.clock, {
     workspaceId: scope.workspaceId,
     actorUserId: null,

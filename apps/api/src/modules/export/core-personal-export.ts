@@ -211,6 +211,7 @@ export type CorePersonalExcluded =
   | 'object_deletions'
   | 'outbox'
   | 'outbox_ledger'
+  | 'outbox_expired'
   | 'workspace_exports'
   | 'personal_exports'
   | 'server_operational_status'
@@ -290,6 +291,8 @@ export const CORE_PERSONAL_EXCLUDED: Readonly<Record<CorePersonalExcluded, strin
   outbox: 'facts in flight between modules, short-lived infrastructure (D-288)',
   outbox_ledger:
     'which fact was delivered to which module and when, for an operator to prove: ids and times, about no person (#1305)',
+  outbox_expired:
+    'how many facts between modules expired undelivered, by module and type: a count, about no person (D-353)',
   workspace_exports: 'an owner’s export of a workspace: the workspace’s record',
   personal_exports:
     'the record of this very export and the ones before it: its archive is the export',

@@ -31,6 +31,7 @@ export const clientInfo = (
   config: Config,
   auth: Pick<Auth, 'signInLinks' | 'github' | 'oidc' | 'google' | 'signUp' | 'signInPolicy'>,
   modules: readonly string[],
+  hasApns: boolean,
 ): ClientInfo => {
   const { macos, ios } = clientPolicyOf(config);
   return {
@@ -38,6 +39,7 @@ export const clientInfo = (
     capabilities: {
       personalExportDownload: true,
       notificationTypeFilters: true,
+      ...(hasApns ? { apnsNotifications: true } : {}),
       scheduledMessages: modules.includes('chat'),
       messageReminders: modules.includes('chat'),
       personalMessageDeletion: modules.includes('chat'),

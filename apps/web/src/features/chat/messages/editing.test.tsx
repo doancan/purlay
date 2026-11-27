@@ -155,7 +155,7 @@ describe('the menu (D-150)', () => {
     await openMenu(view, theirs);
     await person().click(view.getByRole('menuitem', { name: /Copy text/ }));
     expect(
-      await view.findByText("Couldn't copy. Select the text and copy it yourself."),
+      await view.findByText('Couldn’t copy. Select the text and copy it yourself.'),
     ).toBeDefined();
     expect(view.queryByText('Copied')).toBeNull();
     view.unmountAll();

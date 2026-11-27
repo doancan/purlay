@@ -112,6 +112,10 @@ describe('the channels section', () => {
       .filter((a) => a.getAttribute('aria-current') === 'page');
     expect(current.map((a) => a.textContent.trim())).toEqual(['api']);
     expect(current[0]?.getAttribute('href')).toBe(`/w/acme/c/${IDS.api}`);
+    // Its glyph is in the accent, as every current row of the navigation draws it (D-207): Followed,
+    // All unreads, the rail, the settings' column.
+    expect(current[0]?.className).toContain('[&>svg]:text-accent-text');
+    expect(current[0]?.className).not.toContain('[&>svg]:text-nav-ink');
   });
 
   test('an unread channel is announced as unread, and a mention carries its count', async () => {
@@ -157,7 +161,11 @@ describe('the channels section', () => {
       '/w/acme/questions',
     );
     expect(
-      view.getAllByRole('alert').some((a) => a.textContent.includes("Couldn't load channels")),
+      view.getAllByRole('alert').some((a) => a.textContent.includes('Couldn’t load channels')),
+    ).toBe(true);
+    // The people list is built from the same list, and its failure names what it could not show.
+    expect(
+      view.getAllByRole('alert').some((a) => a.textContent.includes('Couldn’t load people')),
     ).toBe(true);
     fail = false;
     await person().click(some(view.getAllByRole('button', { name: 'Retry' })[0]));
@@ -256,7 +264,7 @@ describe('the people section', () => {
     test('an owner is told nobody else is here, keeps the note to self, and is offered the invite dialog', async () => {
       const view = await open(alone('owner'));
       const section = within(people(view));
-      expect(section.getByText('Nobody else is here yet.')).toBeDefined();
+      expect(section.getByText('Nobody else is here yet')).toBeDefined();
       expect(section.getByRole('button', { name: 'Dogancan you' })).toBeDefined();
       await expectNoAxeViolations(view.container);
       await person().click(section.getByRole('button', { name: 'Invite people…' }));
@@ -267,28 +275,28 @@ describe('the people section', () => {
     test('a member is told the same and offered nothing the server would refuse', async () => {
       const view = await open(alone('member'));
       const section = within(people(view));
-      expect(section.getByText('Nobody else is here yet.')).toBeDefined();
+      expect(section.getByText('Nobody else is here yet')).toBeDefined();
       expect(section.queryByRole('button', { name: 'Invite people…' })).toBeNull();
     });
 
     test('with anybody else there, there is no empty state', async () => {
       const view = await open();
-      expect(within(people(view)).queryByText('Nobody else is here yet.')).toBeNull();
+      expect(within(people(view)).queryByText('Nobody else is here yet')).toBeNull();
     });
   });
 
-  test('each person has an avatar with their initials, hidden from a screen reader, and none online has no dot', async () => {
+  test('each person has an avatar with their initial, hidden from a screen reader, and none online has no dot', async () => {
     const view = await open();
     const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));
     const avatars = [...section.querySelectorAll('li [aria-hidden="true"].size-avatar-sm')];
-    expect(avatars.map((avatar) => avatar.textContent)).toEqual(['AL', 'BO', 'DO']);
+    expect(avatars.map((avatar) => avatar.textContent)).toEqual(['A', 'B', 'D']);
     expect(section.querySelector('.size-dot')).toBeNull();
   });
 
   describe('who is online (D-136)', () => {
     const peopleOf = (view: View): HTMLElement =>
       some(view.getByRole('heading', { name: 'People' }).closest('section'));
-    /** Whose avatars carry the dot, by their initials. */
+    /** Whose avatars carry the dot, by their initial (a small avatar draws one letter). */
     const dotted = (view: View): string[] =>
       [...peopleOf(view).querySelectorAll('[data-avatar]')]
         .filter((avatar) => avatar.querySelector('[data-online]') !== null)
@@ -322,7 +330,7 @@ describe('the people section', () => {
         view.world.sockets.open();
       });
       await settle();
-      expect(dotted(view)).toEqual(['AL', 'DO']);
+      expect(dotted(view)).toEqual(['A', 'D']);
       expect(spoken(view)).toEqual(['Alice, online', 'Bob', 'Dogancan you, online']);
       await expectNoAxeViolations(peopleOf(view));
     });
@@ -353,7 +361,7 @@ describe('the people section', () => {
         view.world.sockets.open();
       });
       await settle();
-      expect(rings()).toEqual(['AL', 'DO']);
+      expect(rings()).toEqual(['A', 'D']);
       expect(dotted(view)).toEqual([]);
       expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you, away']);
     });
@@ -364,7 +372,7 @@ describe('the people section', () => {
       act(() => {
         view.world.sockets.open();
       });
-      expect(dotted(view)).toEqual(['DO']);
+      expect(dotted(view)).toEqual(['D']);
     });
 
     test('a frame moves the dot; one older than what was heard changes nothing', async () => {
@@ -382,13 +390,13 @@ describe('the people section', () => {
         view.world.sockets.deliver(told(BOB.id, true, 10));
       });
       await settle();
-      expect(dotted(view)).toEqual(['AL', 'BO', 'DO']);
+      expect(dotted(view)).toEqual(['A', 'B', 'D']);
       act(() => {
         // Bob was offline at the snapshot's version 9: older than his online at 10.
         view.world.sockets.deliver(told(ALICE.id, false, 11));
         view.world.sockets.deliver(told(BOB.id, false, 8));
       });
-      expect(dotted(view)).toEqual(['BO', 'DO']);
+      expect(dotted(view)).toEqual(['B', 'D']);
     });
 
     test('a snapshot that fails draws no dot and no error: nothing known is not offline', async () => {
@@ -413,7 +421,7 @@ describe('the people section', () => {
       });
     };
     /** Everybody else's dots: the person's own is the connection's, and moves with the clock. */
-    const others = (view: View): string[] => dotted(view).filter((who) => who !== 'DO');
+    const others = (view: View): string[] => dotted(view).filter((who) => who !== 'D');
     const reading = (
       answers: readonly (() => Promise<PresenceSnapshot>)[],
     ): { readonly api: Api; readonly reads: () => number } => {
@@ -460,7 +468,7 @@ describe('the people section', () => {
       reconnect(view);
       await settle();
       // Kept through the grace: a node that restarted knows nobody until their sockets return.
-      expect(others(view)).toEqual(['AL']);
+      expect(others(view)).toEqual(['A']);
       expect(world.reads()).toBe(1);
       act(() => {
         view.world.timers.advance(PRESENCE_GRACE_MS);
@@ -495,12 +503,12 @@ describe('the people section', () => {
         view.world.sockets.open();
       });
       await settle();
-      expect(others(view)).toEqual(['AL']);
+      expect(others(view)).toEqual(['A']);
       act(() => {
         view.world.sockets.sockets.at(-1)?.handlers.closed(1006);
       });
       // Inside the grace, what was known is kept.
-      expect(others(view)).toEqual(['AL']);
+      expect(others(view)).toEqual(['A']);
       act(() => {
         view.world.timers.advance(PRESENCE_GRACE_MS);
       });
@@ -535,7 +543,7 @@ describe('the people section', () => {
         view.world.sockets.open();
       });
       await settle();
-      expect(others(view)).toEqual(['AL']);
+      expect(others(view)).toEqual(['A']);
       expect(headed()).toBe(true);
       // Carol joins and Alice leaves; the members are read again, as a frame would have them.
       members = [
@@ -547,7 +555,7 @@ describe('the people section', () => {
       });
       await settle();
       expect(world.reads()).toBe(2);
-      expect(others(view)).toEqual(['CA']);
+      expect(others(view)).toEqual(['C']);
       expect(headed()).toBe(false);
     });
 
@@ -833,9 +841,10 @@ describe('the workspace menu', () => {
     const sidebar = within(view.getByRole('complementary'));
     const door = sidebar.getByRole('button', { name: 'acme-eng Switch workspace' });
     expect(door.getAttribute('aria-haspopup')).toBe('menu');
-    // A card (D-209): who the person is in it, seen under the name and kept out of what is heard.
-    expect(door.textContent).toContain('Owner');
+    // One line in the band: the mark and the name; who the person is in it heads the menu instead.
+    expect(door.textContent).not.toContain('Owner');
     await person().click(door);
+    expect(view.getByRole('menu').textContent).toContain('Owner · ');
     expect(workspacesIn(view)).toEqual([['acme-eng', 'true']]);
     expect(view.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
       'Create workspace…',
@@ -937,7 +946,7 @@ describe('the jump field', () => {
     const view = await open();
     const sidebar = within(view.getByRole('complementary'));
     const jump = sidebar.getByRole('button', { name: /Jump to…/ });
-    expect(jump.querySelector('kbd')?.textContent).toMatch(/^(⌘|Ctrl)K$/);
+    expect(jump.querySelector('kbd')?.textContent).toMatch(/^(⌘|Ctrl\+)K$/);
     expect(jump.getAttribute('aria-keyshortcuts')).toBe('Control+K Meta+K');
     expect(view.queryByRole('dialog', { name: 'Command palette' })).toBeNull();
     await person().click(jump);
@@ -1194,7 +1203,7 @@ describe('browsing channels', () => {
     await person().clear(field);
     await person().type(field, 'nowhere');
     expect(dialog.queryAllByRole('listitem')).toHaveLength(0);
-    expect(dialog.getByRole('status').textContent).toBe('No channel matches “nowhere”.');
+    expect(dialog.getByRole('status').textContent).toBe('No channel matches “nowhere”');
     await expectNoAxeViolations(view.getByRole('dialog'));
   });
 
@@ -1230,7 +1239,7 @@ describe('browsing channels', () => {
     expect(rows[1]?.textContent).toContain('1 üye');
     expect(rows[2]?.textContent).toContain('2 üye');
     await person().type(dialog.getByRole('searchbox'), 'yok-böyle');
-    expect(dialog.getByRole('status').textContent).toBe('“yok-böyle” ile eşleşen kanal yok.');
+    expect(dialog.getByRole('status').textContent).toBe('“yok-böyle” ile eşleşen kanal yok');
     await expectNoAxeViolations(view.getByRole('dialog'));
   });
 
@@ -1291,7 +1300,7 @@ describe('browsing channels', () => {
       }),
     );
     const dialog = within(view.getByRole('dialog'));
-    expect(dialog.getByRole('alert').textContent).toContain("Couldn't load channels");
+    expect(dialog.getByRole('alert').textContent).toContain('Couldn’t load channels');
     const before = asks;
     await person().click(dialog.getByRole('button', { name: 'Retry' }));
     await settle();
@@ -1305,7 +1314,7 @@ describe('the keyboard', () => {
     act(() => {
       view.getByRole('button', { name: /^Jump to…/ }).focus();
     });
-    expect(document.activeElement?.textContent).toMatch(/^Jump to…(⌘|Ctrl)K$/);
+    expect(document.activeElement?.textContent).toMatch(/^Jump to…(⌘|Ctrl\+)K$/);
     await person().tab();
     expect(document.activeElement?.textContent.trim()).toBe('Followed conversations');
     expect(document.activeElement?.getAttribute('href')).toBe('/w/acme/followed');

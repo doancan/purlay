@@ -10,7 +10,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { Type } from '@sinclair/typebox';
 import { Elysia, type AnyElysia } from 'elysia';
 import { closeIntegrationDatabase, withRollback, type Executor } from '@purlay/db';
-import { defineFact, type FactDeclaration } from '@purlay/types';
+import { CORE_FACTS, defineFact, type FactDeclaration } from '@purlay/types';
 import { compose, type BundledModule } from '../../composition';
 import { chatModule } from '../../features/chat/module';
 import { issuesRoutes } from '../../features/issues/http/routes';
@@ -103,7 +103,9 @@ const fixture = async (
                 : { WORKSPACE_DELIVERIES_PER_MINUTE: deliveriesPerMinute }),
             }),
           }),
+      // The core's facts too: issues consumes one of them (D-355).
       composition: compose([consumer, publisher], [consumer, publisher], 'open', [
+        ...CORE_FACTS,
         ISSUE_TOLD,
         CHAT_TOLD,
       ]),

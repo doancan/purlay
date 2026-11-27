@@ -17,8 +17,7 @@ import { AppError } from '../../../platform/errors';
 import { withinMessageHistory, type ChannelContext } from './guard';
 import { limitOf } from '../../../platform/pagination';
 import { asAttachment } from '../../../modules/attachments/uploads';
-
-const at = (value: Date | string): string => new Date(value).toISOString();
+import { isoInstant } from '../../../platform/clock';
 
 /** The message the cursor's file is in, within this channel; a file elsewhere is no cursor here. */
 const cursorOf = async (
@@ -100,7 +99,7 @@ export const channelFiles = async (
         displayName: row.display_name,
         avatarUrl: row.avatar_url,
       },
-      sentAt: at(row.created_at),
+      sentAt: isoInstant(row.created_at),
     })),
     nextCursor: rows.length > limit ? (page.at(-1)?.id ?? null) : null,
   };

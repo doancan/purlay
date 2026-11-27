@@ -413,17 +413,19 @@ const bundleProblems = (
 
 /**
  * What a module's facts and capabilities must be (D-283 §3): a type it publishes is named for it, a type it consumes is
- * published by the build or the core, and a capability it uses is provided by a partner it requires or lists as optional.
- * Whether two modules publish one type is the claims' (`overlapProblems`).
+ * published by the build or the core, by itself or by a partner it requires or lists as optional (D-353), and a capability it uses
+ * is provided by a partner it requires or lists as optional. Whether two modules publish one type is the claims' (`overlapProblems`).
  */
 const communicationProblems = (
   manifests: readonly ModuleManifest[],
   core: Partial<CoreClaims>,
 ): string[] => {
-  const published = new Set([
-    ...(core.facts ?? []),
-    ...manifests.flatMap((manifest) => manifest.publishes ?? []),
-  ]);
+  const coreFacts = new Set(core.facts ?? []);
+  const publishers = new Map(
+    manifests.flatMap((manifest) =>
+      (manifest.publishes ?? []).map((type) => [type, manifest.id] as const),
+    ),
+  );
   const providers = new Map(
     manifests.flatMap((manifest) =>
       manifest.provides.map((capability) => [capability, manifest.id] as const),
@@ -438,9 +440,18 @@ const communicationProblems = (
         if (!FACT_TYPE.test(type)) {
           return [`"${id}" consumes "${type}", which is not a fact type like "notes.created"`];
         }
-        return published.has(type)
+        if (coreFacts.has(type)) return [];
+        const publisher = publishers.get(type);
+        if (publisher === undefined) {
+          return [`"${id}" consumes "${type}", which nothing in this build publishes`];
+        }
+        // As for a capability it uses: what it is told by a module is a partner it says it has, so the edge is declared,
+        // a `degrades` sentence says what it does without it and `degradation.test.ts` runs the case.
+        return publisher === id || requires.includes(publisher) || optional.includes(publisher)
           ? []
-          : [`"${id}" consumes "${type}", which nothing in this build publishes`];
+          : [
+              `"${id}" consumes "${type}", published by "${publisher}", which it neither requires nor lists as optional`,
+            ];
       }),
       ...uses.flatMap((capability) => {
         if (!CAPABILITY.test(capability)) {

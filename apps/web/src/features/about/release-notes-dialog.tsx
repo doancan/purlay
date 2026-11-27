@@ -20,9 +20,18 @@ import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { renderContent } from '../content/render-content';
 
-/** A bullet cites the decision behind it, `(D-317)`: that is for the repository's readers, not for the window. */
-const withoutDecisions = (body: string): string =>
-  body.replace(/\s*\(D-\d+(?:[,;]\s*D-\d+)*\)/g, '');
+/**
+ * A bullet as the window shows it. It cites the decision behind it, `(D-317)`: that is for the repository's readers,
+ * not for the window. And in the changelog it runs on from its area (`**Messages:** a message…`), so it starts in
+ * lower case; standing alone under its area's label it is a sentence, and starts with a capital.
+ */
+export const readableNote = (body: string): string => {
+  const plain = body.replace(/\s*\(D-\d+(?:[,;]\s*D-\d+)*\)/g, '');
+  // A first word with a capital of its own is a name (`iOS`, `GitHub`) and stays as it is written.
+  const first = /^\S*/.exec(plain)?.[0] ?? '';
+  if (first !== first.toLocaleLowerCase('en')) return plain;
+  return plain.charAt(0).toLocaleUpperCase('en') + plain.slice(1);
+};
 
 /** The colour of each category's dot: a second voice beside its word, never the only one. */
 const DOT: Readonly<Record<ReleaseNotesGroup['category'], string>> = {
@@ -76,7 +85,9 @@ export const ReleaseNotesDialog = ({
         role="region"
         aria-label={t('releaseNotes.title', { version: notes.version })}
         tabIndex={0}
-        className="scrollbar-hover flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto"
+        // On a phone the window is a sheet the height of the screen: the notes take what the heading and the button
+        // leave, rather than stopping at the desktop's cap with the rest of the sheet empty under the button.
+        className="scrollbar-hover flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto max-narrow:max-h-none max-narrow:flex-1 max-narrow:basis-0"
       >
         {featured !== undefined && (
           <section className="flex flex-col gap-4 rounded-xl bg-accent-subtle p-5">
@@ -90,9 +101,7 @@ export const ReleaseNotesDialog = ({
                   {item.area !== null && (
                     <p className="text-heading font-semibold text-ink">{item.area}</p>
                   )}
-                  <div className="text-body text-ink">
-                    {renderContent(withoutDecisions(item.body))}
-                  </div>
+                  <div className="text-body text-ink">{renderContent(readableNote(item.body))}</div>
                 </li>
               ))}
             </ul>
@@ -117,7 +126,7 @@ export const ReleaseNotesDialog = ({
                     <span className="text-caption font-medium text-ink-muted">{item.area}</span>
                   )}
                   <div className="min-w-0 text-body text-ink">
-                    {renderContent(withoutDecisions(item.body))}
+                    {renderContent(readableNote(item.body))}
                   </div>
                 </li>
               ))}

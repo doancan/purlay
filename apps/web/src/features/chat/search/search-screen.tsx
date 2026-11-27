@@ -38,7 +38,9 @@ import {
 import { useRoute } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
-import { ErrorState } from '../../../ui/states';
+import { cn } from '../../../ui/cn';
+import { Skeleton } from '../../../ui/skeleton';
+import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { TextField } from '../../../ui/text-field';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
@@ -122,14 +124,21 @@ const Found = ({
           username={authorOf(message, t('user.erased')).username}
         />
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2 text-label text-ink-muted">
-            <span className="text-body font-semibold text-ink">
+          {/* A long name or channel gives way to the time, which always stands at the end. */}
+          <span className="flex min-w-0 items-baseline gap-2 text-label text-ink-muted">
+            <span className="min-w-0 truncate text-body font-semibold text-ink">
               {authorOf(message, t('user.erased')).displayName}
             </span>
             <span aria-hidden="true">·</span>
-            {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
-            {message.parentId !== null && <Icon name="reply" size="sm" />}
-            <time dateTime={message.createdAt} className="ml-auto font-mono text-caption">
+            <span className="min-w-0 truncate">
+              {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
+            </span>
+            {message.parentId !== null && (
+              <span className="inline-flex shrink-0 self-center">
+                <Icon name="reply" size="sm" />
+              </span>
+            )}
+            <time dateTime={message.createdAt} className="ml-auto shrink-0 font-mono text-caption">
               {format.time(message.createdAt, now)}
             </time>
           </span>
@@ -264,6 +273,7 @@ const SearchView = ({
   } else if (query.isError && query.data === undefined) {
     body = (
       <ErrorState
+        framed
         title={t('state.search.error.title')}
         body={t('state.search.error.body')}
         retryLabel={t('common.retry')}
@@ -272,12 +282,33 @@ const SearchView = ({
         }}
       />
     );
+  } else if (query.isPending) {
+    // The shape of the rows coming, so the list lands where it was drawn. Only drawn: the field already
+    // says Searching…, to the eye and to a screen reader.
+    body = (
+      <div
+        aria-hidden="true"
+        className="overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-card"
+      >
+        {[0, 1, 2].map((row) => (
+          <div key={row} className={cn(listRowClasses, 'flex gap-3 px-5 py-3 max-narrow:px-4')}>
+            <span className="block size-avatar shrink-0 rounded-lg bg-surface-200" />
+            <span className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
+              <Skeleton className="w-1/4" />
+              <Skeleton className="w-3/4" />
+            </span>
+          </div>
+        ))}
+      </div>
+    );
   } else if (query.isSuccess && found.length === 0) {
     body = (
-      <section className="flex flex-col items-center gap-3 py-6 text-center">
-        <h2 className="text-title text-ink">{t('state.search.empty.title', { words: asked })}</h2>
-        <p className="text-body text-ink-muted">
-          {author === null
+      <GlyphEmptyState
+        glyph="search"
+        tone="accent"
+        title={t('state.search.empty.title', { words: asked })}
+        body={
+          author === null
             ? narrowed === undefined
               ? t('state.search.empty.body')
               : t('state.search.empty.bodyIn', { channel: placeName(narrowed) })
@@ -286,9 +317,9 @@ const SearchView = ({
               : t('state.search.empty.bodyInFrom', {
                   person: author,
                   channel: placeName(narrowed),
-                })}
-        </p>
-      </section>
+                })
+        }
+      />
     );
   } else if (found.length > 0) {
     body = (

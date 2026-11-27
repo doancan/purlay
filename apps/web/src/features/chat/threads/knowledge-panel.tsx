@@ -78,7 +78,9 @@ export const KnowledgePanel = ({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-label font-semibold text-ink">{t('knowledge.title')}</h3>
         {member && draft === null && (
-          <Button ref={editButton} variant="ghost" onClick={start}>
+          // Its padding hangs into the card's, as the thread line's does: a whole control's height
+          // and inset made the heading's top margin twice the card's other three.
+          <Button ref={editButton} variant="ghost" className="-my-1 -mr-2" onClick={start}>
             {t('knowledge.edit')}
           </Button>
         )}
@@ -240,7 +242,8 @@ export const KnowledgePanel = ({
             >
               {t('common.cancel')}
             </Button>
-            <Button type="submit" busy={busy}>
+            {/* The form's one commit, primary as the message editor's Save and the issue dialog's are. */}
+            <Button type="submit" variant="primary" busy={busy}>
               {t('knowledge.save')}
             </Button>
           </div>

@@ -497,6 +497,50 @@ describe('a channel’s bookmarks', () => {
     empty.unmountAll();
   });
 
+  test('bookmarks that could not be read say so with Retry, rather than looking like none', async () => {
+    const server = aServer([aBookmark()]);
+    let reads = 0;
+    const view = await mountChannel({
+      messages: page([]),
+      api: {
+        ...server,
+        bookmarks: () => {
+          reads += 1;
+          return reads === 1
+            ? Promise.reject(new ApiError(500, 'INTERNAL', 'no'))
+            : server.bookmarks();
+        },
+      },
+    });
+    await settle();
+    const bar = within(barOf(view));
+    expect(bar.getByRole('alert').textContent).toContain('The bookmarks could not be loaded.');
+    // Nothing to add beside a list nobody could read: the limit it keeps is unknown.
+    expect(bar.queryByRole('button', { name: 'Add a bookmark' })).toBeNull();
+    await expectNoAxeViolations(barOf(view));
+
+    await person().click(bar.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(reads).toBe(2);
+    expect(within(barOf(view)).queryByRole('alert')).toBeNull();
+    expect(within(barOf(view)).getByRole('link', { name: 'Runbook' })).toBeDefined();
+    view.unmountAll();
+  });
+
+  test('someone not in the channel is told too when the bookmarks could not be read', async () => {
+    const view = await mountChannel({
+      channelId: IDS.browse,
+      channels: someChannels(),
+      messages: page([]),
+      api: { bookmarks: () => Promise.reject(new ApiError(503, 'DATABASE_UNAVAILABLE', 'down')) },
+    });
+    await settle();
+    const bar = within(barOf(view));
+    expect(bar.getByRole('alert').textContent).toContain('The bookmarks could not be loaded.');
+    expect(bar.getByRole('button', { name: 'Retry' })).toBeDefined();
+    view.unmountAll();
+  });
+
   test('another member’s change, heard on the socket, is read again', async () => {
     const server = aServer();
     const view = await mountChannel({ messages: page([]), api: server });

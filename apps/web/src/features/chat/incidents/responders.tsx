@@ -14,6 +14,7 @@ import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { Menu, MenuItem } from '../../../ui/menu';
 import { useSession } from '../../session/session';
+import { headingClasses, sectionClasses } from './section';
 import type { IncidentActions } from './use-incident';
 
 export const Responders = ({
@@ -39,13 +40,14 @@ export const Responders = ({
   };
   // Who could be brought in: read only for somebody who may bring them.
   const members = useChannelMembers(channelId, member);
+  const membersUnknown = members.isError && members.data === undefined;
   const responding = new Set(incident.responders.map((person) => person.id));
   const candidates = (members.data ?? [])
     .map((entry) => entry.user)
     .filter((person) => !responding.has(person.id) && person.id !== me.id);
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-2 px-4 pb-3">
-      <h3 ref={heading} id={headingId} tabIndex={-1} className="text-label font-semibold text-ink">
+    <section aria-labelledby={headingId} className={sectionClasses}>
+      <h3 ref={heading} id={headingId} tabIndex={-1} className={headingClasses}>
         {t('incident.responders', { count: incident.responders.length })}
       </h3>
       {incident.responders.length === 0 ? (
@@ -53,7 +55,7 @@ export const Responders = ({
       ) : (
         <ul className="flex flex-col gap-1">
           {incident.responders.map((person) => (
-            <li key={person.id} className="flex min-w-0 items-center gap-2">
+            <li key={person.id} className="flex min-h-control min-w-0 items-center gap-2">
               <Avatar
                 name={nameOf(person, t('user.erased'))}
                 username={person.username}
@@ -79,8 +81,8 @@ export const Responders = ({
           ))}
         </ul>
       )}
-      {member && (
-        <div className="flex flex-wrap gap-2">
+      {member && (!responding.has(me.id) || membersUnknown || candidates.length > 0) && (
+        <div className="flex flex-wrap gap-2 pt-1">
           {!responding.has(me.id) && (
             <Button
               onClick={() => {
@@ -90,7 +92,7 @@ export const Responders = ({
               {t('incident.imResponding')}
             </Button>
           )}
-          {members.isError && members.data === undefined && (
+          {membersUnknown && (
             // Who could be brought in is unknown: said, with Retry — never a menu silently missing.
             <span className="flex items-center gap-2 text-label text-danger-text">
               {t('incident.membersFailed')}
@@ -106,7 +108,7 @@ export const Responders = ({
             </span>
           )}
           {candidates.length > 0 && (
-            <Menu align="start" trigger={<Button variant="ghost">{t('incident.bringIn')}</Button>}>
+            <Menu align="start" trigger={<Button>{t('incident.bringIn')}</Button>}>
               {candidates.map((person) => (
                 <MenuItem
                   key={person.id}

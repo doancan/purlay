@@ -12,6 +12,7 @@ import {
   setsNamedBy,
 } from '@purlay/db';
 import { bundledModules, registry } from './composition';
+import { CORE_CLAIMS } from './platform/module-kit/core-claims';
 import { moduleRegistry } from './platform/module-kit/registry';
 import { moduleCells } from './testing/module-cells';
 
@@ -142,10 +143,13 @@ describe('db:migrate and the API read MODULES alike', () => {
   test('a module without its requirement is refused by both, in the same words', () => {
     const [first, second] = bundledModules.map((module) => module.manifest);
     const requires = { [first!.id]: [], [second!.id]: [first!.id] };
-    const needing = moduleRegistry([
-      { ...first!, requires: [] },
-      { ...second!, requires: [first!.id] },
-    ]);
+    const needing = moduleRegistry(
+      [
+        { ...first!, requires: [] },
+        { ...second!, requires: [first!.id] },
+      ],
+      CORE_CLAIMS,
+    );
     const problemsOf = (run: () => unknown): readonly string[] => {
       try {
         run();

@@ -23,12 +23,6 @@ import {
   sidebarActor,
 } from '../../../data/channel-placement';
 
-/**
- * Each channel's star requests, one after another: a second click waits for the first, so the
- * server is asked in the order the person clicked and the last click is what stays. Per client,
- * so two screens of one page share the line and two pages never do.
- */
-
 /** Star or let go of a channel, painted at once and put back when refused; null for a non-member. */
 export const useStar = (channel: Channel | undefined): ((starred: boolean) => void) | null => {
   const { t } = useI18n();
@@ -100,7 +94,8 @@ export const StarToggle = ({
       label={t('star.label')}
       glyph="star"
       aria-pressed={channel.starred}
-      className={cn('max-narrow:hidden', channel.starred && 'text-ink')}
+      // Starred is a filled star, not only a darker one: a shade of grey alone did not say it.
+      className={cn('max-narrow:hidden', channel.starred && 'text-ink [&>svg]:fill-current')}
       onClick={() => {
         set(!channel.starred);
       }}

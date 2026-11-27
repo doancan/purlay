@@ -113,7 +113,7 @@ test('an owner emails invitations from Settings and a newcomer joins through the
       );
       await card.getByRole('textbox', { name: 'Search email addresses' }).fill('nobody-matches');
       await card.getByRole('textbox', { name: 'Search email addresses' }).press('Enter');
-      await expect(card.getByText('No invitations match these filters.')).toBeVisible();
+      await expect(card.getByText('No invitations match these filters')).toBeVisible();
       await expect(card.getByRole('button', { name: 'Resend', exact: true })).toHaveCount(0);
       await filteredTab.goBack();
       await expect(card.getByRole('textbox', { name: 'Search email addresses' })).toHaveValue(

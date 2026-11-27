@@ -95,19 +95,22 @@ export const AboutPage = (): React.JSX.Element => {
   const versions = ((): React.JSX.Element => {
     if (release.isError) {
       return (
-        <ErrorState
-          title={t('about.error.title')}
-          body={t('about.error.body')}
-          retryLabel={t('common.retry')}
-          onRetry={() => {
-            void release.refetch();
-          }}
-        />
+        // Inset as the card's rows are, so the failure does not touch the card's edge.
+        <div className="px-6 max-narrow:px-4">
+          <ErrorState
+            title={t('about.error.title')}
+            body={t('about.error.body')}
+            retryLabel={t('common.retry')}
+            onRetry={() => {
+              void release.refetch();
+            }}
+          />
+        </div>
       );
     }
     if (running === undefined) {
       return (
-        <LoadingStatus label={t('common.loading')} className="px-6 py-5">
+        <LoadingStatus label={t('common.loading')} className="px-6 py-5 max-narrow:px-4">
           <Skeleton />
         </LoadingStatus>
       );

@@ -29,7 +29,7 @@ import {
   type UpdateIssueRequest,
   type WorkspaceMember,
 } from '@purlay/types';
-import { Icon } from '../../components/icon';
+import { Icon, type GlyphName } from '../../components/icon';
 import { useApi } from '../../data/api-provider';
 import { useDescribeFailure } from '../../data/failure';
 import { keys } from '../../data/keys';
@@ -37,11 +37,18 @@ import { useMembers } from '../../data/queries';
 import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
+import { useArrivals, type ArrivalProps } from '../../ui/arrival';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
-import { ListCard, ListColumn, ListFilter, listRowClasses } from '../../ui/list-column';
+import {
+  ListCard,
+  ListColumn,
+  ListFilter,
+  ListSkeleton,
+  listRowClasses,
+} from '../../ui/list-column';
 import { Select } from '../../ui/select';
-import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../ui/states';
 import { TextField } from '../../ui/text-field';
 import { useToast } from '../../ui/toast';
@@ -163,7 +170,7 @@ interface EditFormProps {
 }
 
 const EditForm = ({ issue, members, onDone }: EditFormProps): React.JSX.Element => {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const { workspace } = useWorkspace();
   const api = useApi();
   const change = useChange();
@@ -224,13 +231,13 @@ const EditForm = ({ issue, members, onDone }: EditFormProps): React.JSX.Element 
           value={body}
           maxLength={ISSUE_BODY_MAX}
           aria-describedby={`${bodyId}-hint`}
-          className="w-full resize-y rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-2 text-body text-ink"
+          className="w-full resize-y rounded-md border-hairline border-border-strong bg-surface-100 px-3 py-2 text-body text-ink max-narrow:text-title max-narrow:font-normal"
           onChange={(event) => {
             setBody(event.target.value);
           }}
         />
         <p id={`${bodyId}-hint`} className="text-caption text-ink-muted">
-          {t('issues.editBodyHint', { max: String(ISSUE_BODY_MAX) })}
+          {t('issues.editBodyHint', { max: format.number(ISSUE_BODY_MAX) })}
         </p>
       </div>
       <div className="flex flex-col gap-1">
@@ -257,25 +264,37 @@ const EditForm = ({ issue, members, onDone }: EditFormProps): React.JSX.Element 
           ))}
         </Select>
       </div>
-      <div className="flex gap-2">
-        <Button type="submit" variant="primary" busy={busy} disabled={title.trim() === ''}>
-          {t('issues.save')}
-        </Button>
+      <div className="flex justify-end gap-2 pt-1">
         <Button variant="ghost" onClick={onDone}>
           {t('common.cancel')}
+        </Button>
+        <Button type="submit" variant="primary" busy={busy} disabled={title.trim() === ''}>
+          {t('issues.save')}
         </Button>
       </div>
     </form>
   );
 };
 
+/** Where an issue stands, as a pill: open is neutral, done is the success the work came to. */
+const statusPillClasses =
+  'inline-flex h-badge shrink-0 items-center gap-1 rounded-pill px-2 text-caption font-medium';
+const statusTone: Record<IssueStatus, string> = {
+  open: 'bg-surface-200 text-ink-muted',
+  done: 'bg-success-subtle text-success-text',
+};
+/** One mark for each status, on its pill and on the button that moves an issue to it. */
+const statusGlyph: Record<IssueStatus, GlyphName> = { open: 'issues', done: 'resolved' };
+
 interface RowProps {
   readonly issue: Issue;
   readonly members: readonly WorkspaceMember[];
   readonly canDelete: boolean;
+  /** Drawn arriving once, when this issue was just added to the list on screen. */
+  readonly arrival: ArrivalProps;
 }
 
-const Row = ({ issue, members, canDelete }: RowProps): React.JSX.Element => {
+const Row = ({ issue, members, canDelete, arrival }: RowProps): React.JSX.Element => {
   const { t } = useI18n();
   const { workspace } = useWorkspace();
   const api = useApi();
@@ -302,9 +321,9 @@ const Row = ({ issue, members, canDelete }: RowProps): React.JSX.Element => {
     );
   }
   return (
-    <li className={listRowClasses}>
+    <li {...arrival} className={cn(listRowClasses, 'data-arrived:animate-arrive')}>
       <div className="flex flex-col gap-1 px-5 py-3 max-narrow:px-4">
-        <div className="flex items-start gap-3">
+        <div className="flex items-baseline gap-3">
           <h2
             className={
               issue.status === 'done'
@@ -314,7 +333,8 @@ const Row = ({ issue, members, canDelete }: RowProps): React.JSX.Element => {
           >
             {issue.title}
           </h2>
-          <span className="shrink-0 text-caption text-ink-muted">
+          <span className={cn(statusPillClasses, statusTone[issue.status])}>
+            <Icon name={statusGlyph[issue.status]} size="sm" />
             {t(`issues.status.${issue.status}`)}
           </span>
         </div>
@@ -328,9 +348,11 @@ const Row = ({ issue, members, canDelete }: RowProps): React.JSX.Element => {
               : t('issues.assignedTo', { name: assignee })}
           </p>
         )}
-        <div className="flex flex-wrap gap-1 pt-1">
+        {/* Ghost buttons have no edge: drawn out by their inset, their glyphs stand under the title's first letter. */}
+        <div className="-ml-3 flex flex-wrap gap-1 pt-1">
           <Button
             variant="ghost"
+            glyph={statusGlyph[moved]}
             onClick={() => {
               void change(
                 () => api.updateIssue(workspace.id, issue.id, { status: moved }),
@@ -414,22 +436,19 @@ export const IssuesScreen = (): React.JSX.Element => {
     [query.data],
   );
   const admin = role === 'owner' || role === 'admin';
+  // An issue just added rises into the list where it now stands; the first page, and a filter's, are not arrivals.
+  const arrival = useArrivals(
+    query.data === undefined ? undefined : issues.map((issue) => issue.id),
+    filter,
+  );
 
   let body: React.JSX.Element;
   if (query.isPending) {
-    body = (
-      <LoadingStatus label={t('issues.loading')} className="flex flex-col gap-4 py-2">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
-          </div>
-        ))}
-      </LoadingStatus>
-    );
+    body = <ListSkeleton label={t('issues.loading')} />;
   } else if (query.isError && query.data === undefined) {
     body = (
       <ErrorState
+        framed
         title={t('issues.error.title')}
         body={t('issues.error.body')}
         retryLabel={t('common.retry')}
@@ -454,6 +473,7 @@ export const IssuesScreen = (): React.JSX.Element => {
           {issues.map((issue) => (
             <Row
               key={issue.id}
+              arrival={arrival(issue.id)}
               issue={issue}
               members={members}
               canDelete={admin || issue.createdBy === user.id}

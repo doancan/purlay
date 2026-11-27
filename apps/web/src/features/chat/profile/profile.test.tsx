@@ -172,7 +172,7 @@ describe('a conversation with one other person', () => {
     await settle();
     const panel = view.getByRole('complementary', { name: /^Profile/ });
     expect(within(panel).getByRole('alert').textContent).toContain('The profile did not load.');
-    expect(panel.textContent).not.toContain('Nothing here yet.');
+    expect(panel.textContent).not.toContain('Nothing here yet');
 
     refuse = false;
     await person().click(within(panel).getByRole('button', { name: 'Retry' }));
@@ -201,7 +201,7 @@ describe('a conversation with one other person', () => {
     await person().click(nameOf(view));
     await settle();
     expect(view.getByRole('complementary', { name: /^Profile/ }).textContent).toContain(
-      'Nothing here yet.',
+      'Nothing here yet',
     );
     view.unmountAll();
   });

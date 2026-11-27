@@ -10,13 +10,14 @@
  * `ownSet`, which asks `tableExists` for them). `module-lifecycle.integration.test.ts` runs every step in every database state and process.
  */
 import { tableExists } from '@purlay/db';
-import { ISSUES_AUDIT_ACTIONS, ISSUES_NOTIFICATION_KINDS } from '@purlay/types';
+import { CORE_MEMBER_LEFT, ISSUES_AUDIT_ACTIONS, ISSUES_NOTIFICATION_KINDS } from '@purlay/types';
 import type { WorkspacePurge } from '../../modules/workspaces/deletion-purge';
 import { issuesBudget } from './budget';
 import type { PermissionDeclaration } from '../../platform/module-kit/manifest';
 import type { CapabilityPorts } from '../../platform/ports/module-ports';
 import { ISSUES_DELETE_ANY } from './issues';
 import { issuesExport } from './export';
+import { issuesFactConsumers } from './facts';
 import { issuesNoticeWords } from './notice-words';
 import { issuesRoutes } from './http/routes';
 import { issuesPersonalExport } from './personal-export';
@@ -62,6 +63,8 @@ export const issuesModule = {
     searchSources: ['issues'],
     // An assignment tells the assignee, in the core's inbox and in the assignment's transaction (D-286).
     notifications: ISSUES_NOTIFICATION_KINDS,
+    // A person who stops being a member is taken off the workspace's open issues (D-355, `facts.ts`).
+    consumes: [CORE_MEMBER_LEFT.type],
   },
   noticeWords: issuesNoticeWords,
   userErased: unassignErasedPerson,
@@ -70,5 +73,6 @@ export const issuesModule = {
   personalExport: issuesPersonalExport,
   searchSources: [issuesSearchSource],
   routes: issuesRoutes,
+  factConsumers: issuesFactConsumers,
   ports: { 'issues.records': issuesRecords } satisfies Partial<CapabilityPorts>,
 };

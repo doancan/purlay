@@ -99,14 +99,14 @@ export const CompanySignIn = ({
         </Button>
       </form>
       {problem !== null && (
-        <p role="alert" className="text-caption text-danger-text">
+        <p role="alert" className="text-label text-danger-text">
           {problem}
         </p>
       )}
       {workspace !== null &&
         (options.isError ? (
           <div className="flex flex-col gap-2">
-            <p role="alert" className="text-caption text-danger-text">
+            <p role="alert" className="text-label text-danger-text">
               {describe(options.error)}
             </p>
             <Button

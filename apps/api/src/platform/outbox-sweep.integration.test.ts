@@ -1,6 +1,7 @@
 /**
  * What `sweep:outbox` takes and what it leaves (D-288 §9), on real PostgreSQL: a finished fact a day after it ended, a dead or discarded one
- * after the configured horizon (a hundred and eighty days unless said), a pending one past its expiry, and nothing that is in flight or still to be looked at.
+ * after the configured horizon (a hundred and eighty days unless said), a pending one past its expiry, counted (D-353), and nothing that is
+ * in flight or still to be looked at.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import {
@@ -21,6 +22,7 @@ beforeAll(async () => {
 }, CLONE_HOOK_MS);
 beforeEach(async () => {
   await sql`delete from outbox`.execute(cloned.db);
+  await sql`delete from outbox_expired`.execute(cloned.db);
 });
 afterAll(async () => {
   await cloned.drop();
@@ -96,6 +98,50 @@ describe('integration: sweeping the outbox', () => {
       expired: 1,
     });
     expect(await remaining(workspaceId)).toHaveLength(2);
+  });
+
+  test('counts what it gives up on by consumer and fact type, in the statement that takes it, and adds to the count (D-353)', async () => {
+    const workspaceId = await aWorkspaceRow(cloned.db);
+    const expiredAt = ago(DAY_MS);
+    for (const [consumer, type] of [
+      ['wiki', 'notes.created'],
+      ['wiki', 'notes.created'],
+      ['wiki', 'notes.pinned'],
+      ['shelf', 'notes.created'],
+    ] as const) {
+      await anOutboxRow(cloned.db, workspaceId, {
+        consumer,
+        type,
+        at: ago(2 * DAY_MS),
+        expiresAt: expiredAt,
+      });
+    }
+    // Neither pending past its expiry nor anything else is counted.
+    await anOutboxRow(cloned.db, workspaceId, { state: 'dead', at: ago(200 * DAY_MS) });
+    await anOutboxRow(cloned.db, workspaceId, { at: ago(3_600_000) });
+    expect((await sweep()).expired).toBe(4);
+    await anOutboxRow(cloned.db, workspaceId, { at: ago(2 * DAY_MS), expiresAt: expiredAt });
+    expect((await sweep()).expired).toBe(1);
+    const counted = await cloned.db
+      .selectFrom('outbox_expired')
+      .select(['consumer', 'type', 'expired', 'last_expired_at'])
+      .where('consumer', 'in', ['wiki', 'shelf'])
+      .orderBy('consumer')
+      .orderBy('type')
+      .execute();
+    expect(counted).toEqual([
+      { consumer: 'shelf', type: 'notes.created', expired: '1', last_expired_at: NOW },
+      { consumer: 'wiki', type: 'notes.created', expired: '3', last_expired_at: NOW },
+      { consumer: 'wiki', type: 'notes.pinned', expired: '1', last_expired_at: NOW },
+    ]);
+    // A sweep with nothing expired adds nothing.
+    expect((await sweep()).expired).toBe(0);
+    const after = await cloned.db
+      .selectFrom('outbox_expired')
+      .select('expired')
+      .where('consumer', 'in', ['wiki', 'shelf'])
+      .execute();
+    expect(after.map(({ expired }) => expired).sort()).toEqual(['1', '1', '3']);
   });
 
   test('goes on past one batch and stops when a batch comes back short', async () => {

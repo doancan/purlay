@@ -13,12 +13,16 @@
 import { cn } from './cn';
 import { VisuallyHidden } from './visually-hidden';
 
-const skeletonClasses = 'block h-3 rounded-sm bg-surface-200 max-w-full';
+const skeletonClasses = 'block bg-surface-200 max-w-full';
+// A line of text's height and corner are the default, unless the caller gives its own: `cn` does not merge,
+// and in the stylesheet `h-3` came after `size-*`, so a tile asked for at an avatar's size was a line.
+const ownsHeight = (className: string): boolean => /(^|\s)(h|size)-/u.test(className);
+const ownsCorner = (className: string): boolean => /(^|\s)rounded(-|\s|$)/u.test(className);
 
-/** What a message row will be: an avatar's circle and two lines, so nothing moves when it lands. */
+/** What a panel's row will be — a file, a pin: a thumbnail's tile and two lines, so nothing moves when it lands. */
 export const SkeletonRow = ({ className }: SkeletonProps): React.JSX.Element => (
   <span aria-hidden="true" className={cn('flex gap-3 px-2 py-2', className)}>
-    <span className="block size-avatar-lg shrink-0 rounded-lg bg-surface-200" />
+    <span className="block size-avatar-lg shrink-0 rounded-md bg-surface-200" />
     <span className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
       <Skeleton className="w-1/4" />
       <Skeleton className="w-3/4" />
@@ -27,12 +31,23 @@ export const SkeletonRow = ({ className }: SkeletonProps): React.JSX.Element => 
 );
 
 interface SkeletonProps {
-  /** A width from the vocabulary (`w-sidebar`, `w-1/2`…); full width when absent. */
+  /**
+   * A width from the vocabulary (`w-sidebar`, `w-1/2`…), full width when absent; a height or size
+   * (`h-control`, `size-avatar-lg`) and a corner replace a line's.
+   */
   readonly className?: string;
 }
 
-export const Skeleton = ({ className }: SkeletonProps): React.JSX.Element => (
-  <span aria-hidden="true" className={cn(skeletonClasses, className)} />
+export const Skeleton = ({ className = '' }: SkeletonProps): React.JSX.Element => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      skeletonClasses,
+      !ownsHeight(className) && 'h-3',
+      !ownsCorner(className) && 'rounded-sm',
+      className,
+    )}
+  />
 );
 
 interface LoadingStatusProps {

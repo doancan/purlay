@@ -660,7 +660,7 @@ describe('older messages', () => {
       view.feed.sentinelVisible();
     });
     await settle();
-    expect(view.getByText("Couldn't load older messages")).toBeDefined();
+    expect(view.getByText('Couldn’t load older messages')).toBeDefined();
     fail = false;
     await person().click(view.getByRole('button', { name: 'Try again' }));
     await settle();
@@ -679,7 +679,7 @@ describe('older messages', () => {
     });
     await settle();
     await settle();
-    expect(view.getByText("Couldn't load older messages")).toBeDefined();
+    expect(view.getByText('Couldn’t load older messages')).toBeDefined();
     // The first fetch, and the one retry the query client allows a transient failure: no more.
     const afterSettling = asks;
     await settle();

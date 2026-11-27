@@ -374,7 +374,7 @@ describe('integration: durable push recovery', () => {
       expect(service.sent[2]!.url).toContain('/1');
       const payload = await world.devices[1]!.browser.read(service.sent[2]!.body);
       expect(payload).toMatchObject({ silent: true });
-      expect(JSON.stringify(payload)).toContain('senden bahsetti');
+      expect(JSON.stringify(payload)).toContain('sizden bahsetti');
       expect(service.sent[2]!.headers['topic']).toBe(
         service.sent.find((entry) => entry.url.endsWith('/1'))!.headers['topic'],
       );

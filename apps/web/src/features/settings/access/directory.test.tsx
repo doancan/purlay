@@ -364,7 +364,7 @@ test('a newer directory revision discards a displayed token and a workspace chan
   await person().click(form.getByRole('button', { name: 'Issue credential' }));
   form = await dialog(view, 'Save your directory token');
   await person().click(form.getByRole('button', { name: 'Copy' }));
-  await view.findByText("Couldn't copy. Select the text and copy it yourself.");
+  await view.findByText('Couldn’t copy. Select the text and copy it yourself.');
   directory = { ...directory, revision: IDS.bob };
   await act(async () => {
     await view.world.client.invalidateQueries({ queryKey: ['workspace-provisioning'] });

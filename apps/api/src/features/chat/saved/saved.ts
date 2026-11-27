@@ -22,14 +22,12 @@ import {
   type SavedPage,
   type SavedQuery,
 } from '@purlay/types';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import { requireMessageById, visibleChannelIds, withinMessageHistory } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { requireWorkspaceMembership, type WorkspaceContext } from '../../../platform/tenancy';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
 import { limitOf } from '../../../platform/pagination';
-
-const at = (value: Date | string): string => new Date(value).toISOString();
 
 /** The saves a person is shown in a workspace: in a channel they can see, of a message not deleted. */
 const shown = (
@@ -149,7 +147,7 @@ export const savedPage = async (
       const message = messages[index];
       // One message per row, in order: a row without one would vanish and look like a short page.
       if (message?.id !== row.id) throw new Error(`save ${row.save_id} lost its message`);
-      return { id: row.save_id, state: row.save_state, savedAt: at(row.saved_at), message };
+      return { id: row.save_id, state: row.save_state, savedAt: isoInstant(row.saved_at), message };
     }),
     nextCursor: rows.length > limit ? (page.at(-1)?.save_id ?? null) : null,
   };

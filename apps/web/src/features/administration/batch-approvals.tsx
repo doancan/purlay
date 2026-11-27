@@ -86,43 +86,48 @@ export const BatchApprovals = ({
     <>
       {(pending.length > 0 || selected.length > 0 || report !== null || uncertain) && (
         <div className="flex flex-col gap-3">
-          <p className="text-body text-ink-muted">
-            {t('admin.bulk.limit', { count: SERVER_APPROVAL_BATCH_MAX })}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              disabled={
-                busy ||
-                loading ||
-                pending.length === 0 ||
-                pageSelection.length > SERVER_APPROVAL_BATCH_MAX
-              }
-              onClick={() => {
-                onSelection(pageSelection);
-              }}
-            >
-              {t('admin.bulk.selectPage')}
-            </Button>
-            <Button
-              disabled={busy || selected.length === 0}
-              onClick={() => {
-                onSelection([]);
-              }}
-            >
-              {t('admin.bulk.clear')}
-            </Button>
-            <span className="text-label text-ink-muted">
-              {t('admin.bulk.selected', { count: selected.length })}
-            </span>
-            <Button
-              variant="primary"
-              disabled={busy || selected.length === 0}
-              onClick={() => {
-                setConfirming(true);
-              }}
-            >
-              {t('admin.bulk.approve')}
-            </Button>
+          {/* The selection's tools on the left, what it comes to and the one thing to do with it on the right. */}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                disabled={
+                  busy ||
+                  loading ||
+                  pending.length === 0 ||
+                  pageSelection.length > SERVER_APPROVAL_BATCH_MAX
+                }
+                onClick={() => {
+                  onSelection(pageSelection);
+                }}
+              >
+                {t('admin.bulk.selectPage')}
+              </Button>
+              <Button
+                disabled={busy || selected.length === 0}
+                onClick={() => {
+                  onSelection([]);
+                }}
+              >
+                {t('admin.bulk.clear')}
+              </Button>
+              <div className="ml-auto flex items-center gap-3 max-narrow:ml-0">
+                <span className="text-label text-ink-muted tabular-nums">
+                  {t('admin.bulk.selected', { count: selected.length })}
+                </span>
+                <Button
+                  variant="primary"
+                  disabled={busy || selected.length === 0}
+                  onClick={() => {
+                    setConfirming(true);
+                  }}
+                >
+                  {t('admin.bulk.approve')}
+                </Button>
+              </div>
+            </div>
+            <p className="text-caption text-ink-muted">
+              {t('admin.bulk.limit', { count: SERVER_APPROVAL_BATCH_MAX })}
+            </p>
           </div>
           {uncertain && (
             <div role="alert" className="flex flex-wrap items-center gap-3">

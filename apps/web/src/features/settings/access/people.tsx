@@ -86,7 +86,7 @@ export const AccessPeoplePage = (): React.JSX.Element => {
         </div>
         <AccessListState
           pending={people.isPending}
-          failed={people.isError}
+          failure={people.error}
           paused={people.isPaused}
           empty={items.length === 0}
           retry={() => {
@@ -169,7 +169,7 @@ const PersonAccess = ({
       <SettingsCard title={person.user.displayName} description={`@${person.user.username}`}>
         <AccessListState
           pending={query.isPending}
-          failed={query.isError}
+          failure={query.error}
           paused={query.isPaused}
           empty={false}
           retry={() => {

@@ -30,6 +30,10 @@ export interface DateFieldProps {
 const dayCell =
   'flex size-control items-center justify-center rounded-md text-label tabular-nums transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:text-ink-muted max-narrow:size-touch';
 
+/** Today and Clear: quiet buttons a control tall, which answer the pointer only when they can be pressed. */
+const footerButton =
+  'inline-flex h-control items-center rounded-md px-2 text-label transition-colors duration-hover ease-standard enabled:hover:bg-surface-200 disabled:cursor-not-allowed disabled:text-ink-muted max-narrow:h-touch';
+
 export const DateField = ({
   label,
   value,
@@ -180,7 +184,7 @@ export const DateField = ({
                   <span
                     key={day}
                     role="columnheader"
-                    className="flex size-control items-center justify-center text-caption text-ink-muted uppercase max-narrow:size-touch"
+                    className="flex size-control items-center justify-center text-caption text-ink-muted max-narrow:size-touch"
                   >
                     {weekday.format(asUtc(day)).slice(0, 2)}
                   </span>
@@ -208,7 +212,7 @@ export const DateField = ({
                             selected
                               ? 'bg-accent text-on-accent'
                               : cn(
-                                  'hover:bg-surface-200',
+                                  'enabled:hover:bg-surface-200',
                                   outside ? 'text-ink-muted' : 'text-ink',
                                   day === today && 'font-semibold underline',
                                 ),
@@ -229,7 +233,7 @@ export const DateField = ({
                 onClick={() => {
                   choose(today);
                 }}
-                className="rounded-md px-2 py-1 text-label text-ink hover:bg-surface-200 disabled:text-ink-muted"
+                className={cn(footerButton, 'text-ink')}
               >
                 {t('date.today')}
               </button>
@@ -240,7 +244,7 @@ export const DateField = ({
                   onChange('');
                   setOpen(false);
                 }}
-                className="rounded-md px-2 py-1 text-label text-ink-muted hover:bg-surface-200 hover:text-ink disabled:text-ink-muted"
+                className={cn(footerButton, 'text-ink-muted enabled:hover:text-ink')}
               >
                 {t('date.clear')}
               </button>

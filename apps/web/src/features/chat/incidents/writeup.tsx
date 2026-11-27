@@ -13,13 +13,12 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { renderContent } from '../../content/render-content';
+import { cn } from '../../../ui/cn';
+import { fieldClasses, headingClasses, sectionClasses } from './section';
 import type { IncidentActions } from './use-incident';
 
 /** Postmortem drafts by incident, with the version each began at: kept while the page is. */
 const drafts = new Map<string, { readonly text: string; readonly from: number }>();
-
-const fieldClasses =
-  'w-full rounded-md border-hairline border-border-subtle bg-surface-050 px-2 py-1 text-body text-ink';
 
 const Runbook = ({
   incident,
@@ -56,8 +55,8 @@ const Runbook = ({
     });
   };
   return (
-    <div ref={box} className="flex flex-col gap-1">
-      <h3 className="text-label font-semibold text-ink">{t('incident.runbook')}</h3>
+    <div ref={box} className={sectionClasses}>
+      <h3 className={headingClasses}>{t('incident.runbook')}</h3>
       {editing ? (
         <form
           className="flex flex-col gap-2"
@@ -74,7 +73,7 @@ const Runbook = ({
             aria-label={t('incident.runbookLink')}
             value={value}
             placeholder="https://"
-            className={fieldClasses}
+            className={cn(fieldClasses, 'h-control max-narrow:h-touch')}
             onChange={(event) => {
               setValue(event.target.value);
             }}
@@ -95,7 +94,7 @@ const Runbook = ({
           </div>
         </form>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
+        <>
           {url === null ? (
             <span className="text-label text-ink-muted">{t('incident.noRunbook')}</span>
           ) : (
@@ -103,33 +102,34 @@ const Runbook = ({
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="min-w-0 truncate text-label text-accent-text underline"
+              className="max-w-full self-start truncate text-label text-accent-text underline"
             >
               {url}
             </a>
           )}
           {member && (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setValue(url ?? 'https://');
-                setEditing(true);
-              }}
-            >
-              {t(url === null ? 'incident.addRunbook' : 'incident.changeRunbook')}
-            </Button>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                onClick={() => {
+                  setValue(url ?? 'https://');
+                  setEditing(true);
+                }}
+              >
+                {t(url === null ? 'incident.addRunbook' : 'incident.changeRunbook')}
+              </Button>
+              {url !== null && (
+                <Button
+                  variant="dangerQuiet"
+                  onClick={() => {
+                    save(null);
+                  }}
+                >
+                  {t('incident.removeRunbook')}
+                </Button>
+              )}
+            </div>
           )}
-          {member && url !== null && (
-            <Button
-              variant="dangerQuiet"
-              onClick={() => {
-                save(null);
-              }}
-            >
-              {t('incident.removeRunbook')}
-            </Button>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -182,8 +182,8 @@ const Postmortem = ({
 
   const shown = draft === undefined ? incident.postmortem : seen?.text;
   return (
-    <div ref={box} className="flex flex-col gap-1">
-      <h3 className="text-label font-semibold text-ink">{t('incident.postmortem')}</h3>
+    <div ref={box} className={sectionClasses}>
+      <h3 className={headingClasses}>{t('incident.postmortem')}</h3>
       {shown !== undefined &&
         (shown === '' ? (
           <span className="text-label text-ink-muted">{t('incident.noPostmortem')}</span>
@@ -191,6 +191,12 @@ const Postmortem = ({
           <div
             aria-label={t(draft === undefined ? 'incident.postmortem' : 'incident.savedMeanwhile')}
             role="region"
+            // What somebody else saved meanwhile is set apart from the person's own words below it.
+            className={
+              draft === undefined
+                ? undefined
+                : 'rounded-lg border-hairline border-border-subtle bg-surface-050 p-3'
+            }
           >
             {renderContent(shown)}
           </div>
@@ -198,8 +204,7 @@ const Postmortem = ({
       {draft === undefined
         ? member && (
             <Button
-              variant="ghost"
-              className="self-start"
+              className="mt-1 self-start"
               data-postmortem-edit=""
               onClick={() => {
                 write({ text: incident.postmortem, from: incident.postmortemVersion });
@@ -220,7 +225,7 @@ const Postmortem = ({
                 value={draft.text}
                 // Fixed while it is on its way: words typed meanwhile would be lost with the draft.
                 readOnly={busy}
-                className={fieldClasses}
+                className={cn(fieldClasses, 'resize-y py-2')}
                 onChange={(event) => {
                   write({ text: event.target.value, from: draft.from });
                 }}
@@ -274,8 +279,8 @@ export const WriteUp = (props: {
   readonly actions: IncidentActions;
   readonly member: boolean;
 }): React.JSX.Element => (
-  <section className="flex flex-col gap-3 px-4 pb-3">
+  <>
     <Runbook {...props} />
     <Postmortem {...props} />
-  </section>
+  </>
 );

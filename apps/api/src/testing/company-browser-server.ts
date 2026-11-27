@@ -18,6 +18,7 @@ import { aRoom } from './rooms';
 import { testConfig, testDependencies } from './doubles';
 import { anOidcStub, OIDC_STUB_CREDENTIALS } from './oidc-stub';
 import { runComposition } from './run-composition';
+import { noDepartures } from './departures';
 
 const argument = (name: string): string => {
   const value = process.argv[process.argv.indexOf(name) + 1];
@@ -87,6 +88,7 @@ const start = async (): Promise<void> => {
       ? {
           directory: {
             channels: runComposition.workspaceChannels,
+            departures: noDepartures,
             readersReady: (): Promise<boolean> => Promise.resolve(true),
           },
         }

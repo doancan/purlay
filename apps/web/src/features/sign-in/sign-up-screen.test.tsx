@@ -199,7 +199,7 @@ describe('the sign-up screen', () => {
     [
       'tr',
       'Hesaplar davetle açılır',
-      'Bu Purlay sunucusu kendiliğinden kayıt almıyor. Sunucudaki birinden davet bağlantısı iste ve hesabını o bağlantıyı açarak oluştur.',
+      'Bu Purlay sunucusu kendiliğinden kayıt almıyor. Sunucudaki birinden davet bağlantısı isteyin ve hesabınızı o bağlantıyı açarak oluşturun.',
       'Giriş yap',
     ],
   ] as const) {

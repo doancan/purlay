@@ -30,6 +30,7 @@ import {
 } from './channel-groups';
 import {
   AddChannelMemberRequest,
+  ApnsDeviceRequest,
   AuthMethods,
   ChannelList,
   ChangesQuery,
@@ -68,6 +69,7 @@ import {
   ReadChannelResponse,
   ReadAllChannelsResponse,
   ReadNotificationsRequest,
+  RemoveApnsDeviceRequest,
   ReadThreadRequest,
   SaveMessageRequest,
   SetMessageReminderRequest,
@@ -203,6 +205,23 @@ export const ENDPOINTS = [
     path: '/api/auth/methods',
     auth: 'none',
     responses: { 200: AuthMethods },
+  }),
+
+  read({
+    id: 'registerApnsDevice',
+    method: 'POST',
+    path: '/api/push/apns/subscriptions',
+    auth: 'session',
+    body: ApnsDeviceRequest,
+    responses: { 204: null },
+  }),
+  read({
+    id: 'removeApnsDevice',
+    method: 'POST',
+    path: '/api/push/apns/subscriptions/remove',
+    auth: 'session',
+    body: RemoveApnsDeviceRequest,
+    responses: { 204: null },
   }),
 
   // ── What this server runs, and what is newest
@@ -1001,5 +1020,3 @@ export const ENDPOINTS = [
     responses: { 204: null },
   }),
 ] as const satisfies readonly EndpointSpec[];
-
-export type EndpointId = (typeof ENDPOINTS)[number]['id'];

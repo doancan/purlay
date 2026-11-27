@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Value } from '@sinclair/typebox/value';
 import { ServerAuditAction, ServerAuditQuery, type AuditExportFormat } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
-import { Button } from '../../ui/button';
+import { Icon } from '../../components/icon';
+import { Button, buttonStyle } from '../../ui/button';
+import { Disclosure } from '../../ui/disclosure';
 import { Select } from '../../ui/select';
 import { TextField } from '../../ui/text-field';
 import { SettingsCard } from '../settings/page';
@@ -62,6 +64,7 @@ export const Audit = (): React.JSX.Element => {
         <label className="flex min-w-0 flex-col gap-1 text-label text-ink max-narrow:w-full">
           {t('admin.action')}
           <Select
+            className="max-narrow:w-full"
             value={action}
             onChange={(event) => {
               setAction(event.target.value);
@@ -84,22 +87,29 @@ export const Audit = (): React.JSX.Element => {
             }}
           />
         </div>
-        <TextField
-          label={t('admin.from')}
-          type="datetime-local"
-          value={from}
-          onChange={(event) => {
-            setFrom(event.target.value);
-          }}
-        />
-        <TextField
-          label={t('admin.to')}
-          type="datetime-local"
-          value={to}
-          onChange={(event) => {
-            setTo(event.target.value);
-          }}
-        />
+        {/* Narrow, each field takes the row, as the action and the person do: two half-width dates read as a pair that is not one. */}
+        <div className="max-narrow:w-full">
+          <TextField
+            label={t('admin.from')}
+            type="datetime-local"
+            className="max-narrow:w-full"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+            }}
+          />
+        </div>
+        <div className="max-narrow:w-full">
+          <TextField
+            label={t('admin.to')}
+            type="datetime-local"
+            className="max-narrow:w-full"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value);
+            }}
+          />
+        </div>
         <Button type="submit">{t('admin.find')}</Button>
       </form>
       {invalid && (
@@ -151,14 +161,19 @@ const AuditList = ({
       {(data) => (
         <>
           <SettingsCard title={t('admin.audit')}>
-            <div className="flex flex-wrap items-center gap-3 px-6 py-4 max-narrow:px-4">
-              <span className="text-body text-ink-muted">{t('admin.audit.download')}</span>
-              <a className="text-label text-accent-text underline" href={download('csv')}>
-                {t('admin.audit.csv')}
-              </a>
-              <a className="text-label text-accent-text underline" href={download('ndjson')}>
-                {t('admin.audit.ndjson')}
-              </a>
+            {/* The exports as the list's toolbar, ruled off from the entries they export. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b-hairline border-border-subtle px-6 py-3 max-narrow:px-4">
+              <span className="text-label text-ink-muted">{t('admin.audit.download')}</span>
+              <div className="flex flex-wrap gap-2">
+                <a href={download('csv')} download className={buttonStyle('secondary')}>
+                  <Icon name="download" size="sm" />
+                  {t('admin.audit.csv')}
+                </a>
+                <a href={download('ndjson')} download className={buttonStyle('secondary')}>
+                  <Icon name="download" size="sm" />
+                  {t('admin.audit.ndjson')}
+                </a>
+              </div>
             </div>
             {data.data.length === 0 ? (
               <Empty />
@@ -169,7 +184,18 @@ const AuditList = ({
                     key={entry.id}
                     className="flex flex-col gap-1 not-last:border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
                   >
-                    <p className="text-label text-ink break-words">{actionName(entry.action)}</p>
+                    {/* What happened and when on one line, as a log reads; who did it under it. */}
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                      <p className="min-w-0 text-label text-ink break-words">
+                        {actionName(entry.action)}
+                      </p>
+                      <time
+                        className="shrink-0 text-caption text-ink-muted tabular-nums"
+                        dateTime={entry.createdAt}
+                      >
+                        {format.absolute(entry.createdAt)}
+                      </time>
+                    </div>
                     {entry.actorUserId === null ? (
                       <p className="text-body text-ink-muted">
                         {entry.actorName ?? t('admin.system')}
@@ -177,7 +203,7 @@ const AuditList = ({
                     ) : (
                       <button
                         type="button"
-                        className="w-fit max-w-full cursor-pointer py-1 text-left text-body text-accent-text break-words underline"
+                        className="w-fit max-w-full cursor-pointer rounded-sm text-left text-body text-accent-text break-words hover:underline"
                         onClick={() => {
                           if (entry.actorUserId !== null)
                             chooseActor(entry.actorUserId, entry.actorName ?? t('admin.system'));
@@ -186,11 +212,10 @@ const AuditList = ({
                         {entry.actorName ?? t('admin.system')}
                       </button>
                     )}
-                    <time className="text-caption text-ink-muted" dateTime={entry.createdAt}>
-                      {format.absolute(entry.createdAt)}
-                    </time>
-                    <details className="text-caption text-ink-muted">
-                      <summary className="cursor-pointer">{t('admin.audit.details')}</summary>
+                    <Disclosure
+                      className="text-caption text-ink-muted"
+                      summary={t('admin.audit.details')}
+                    >
                       <p className="font-mono break-all">{entry.actorUserId}</p>
                       {(entry.targetUserId ?? entry.targetWorkspaceId) !== null && (
                         <p className="text-caption text-ink-muted break-all">
@@ -205,7 +230,7 @@ const AuditList = ({
                       {entry.note !== null && (
                         <p className="text-caption text-ink-muted break-words">{entry.note}</p>
                       )}
-                    </details>
+                    </Disclosure>
                   </li>
                 ))}
               </ol>

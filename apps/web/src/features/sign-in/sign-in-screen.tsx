@@ -36,7 +36,7 @@ import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
 import { GoogleButton } from './google-button';
 import { OidcButton } from './oidc-button';
-import { StandaloneScreen } from '../shell/standalone';
+import { DoorCard } from './door-card';
 
 const CompanySignIn = lazy(async () => ({
   default: (await import('./company-sign-in')).CompanySignIn,
@@ -129,110 +129,110 @@ export const SignInScreen = (): React.JSX.Element => {
   }, [me.isSuccess, me.data?.companyWorkspaceId, independent, workspace, navigate]);
 
   return (
-    <StandaloneScreen>
-      <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
-        <LogoMark />
-        <InstanceIdentity />
-        <div className="flex flex-col items-center gap-2">
-          <h1 className="text-display">{t('signIn.title')}</h1>
-          <p className="text-balance text-body text-ink-muted">{t('signIn.lede')}</p>
-          {note !== null && (
-            <p role="status" className="text-balance text-label text-warning-text">
-              {note}
-            </p>
-          )}
-          {native !== null && (
-            <p className="text-balance text-label text-ink-muted">
-              {t('signIn.native', { app: nativeAppName(native.platform) })}
-            </p>
-          )}
-        </div>
-        {methods.data === undefined && !methods.isError ? (
-          <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
-            <Skeleton className="h-touch w-full rounded-md" />
-          </LoadingStatus>
-        ) : (
-          <>
-            {!methods.isError &&
-              !github &&
-              !google &&
-              oidc === null &&
-              !mail &&
-              methods.data.company === undefined && (
-                <div className="flex w-full flex-col items-center gap-3">
-                  <h2 className="text-title">{t('signIn.notSetUp.title')}</h2>
-                  <p className="text-balance text-body text-ink-muted">
-                    {t('signIn.notSetUp.body')}
-                  </p>
-                  <a href={href('setup')} className={cn(buttonStyle('secondary', 'lg'), 'w-full')}>
-                    {t('signIn.notSetUp.action')}
-                  </a>
-                </div>
-              )}
-            {(oidc !== null || github || google || methods.isError) && (
+    <DoorCard>
+      <LogoMark />
+      <InstanceIdentity />
+      <div className="flex flex-col items-center gap-2">
+        <h1 className="text-balance text-display">{t('signIn.title')}</h1>
+        <p className="text-balance text-body text-ink-muted">{t('signIn.lede')}</p>
+        {native !== null && (
+          <p className="text-balance text-label text-ink-muted">
+            {t('signIn.native', { app: nativeAppName(native.platform) })}
+          </p>
+        )}
+      </div>
+      {/* Why the person is here again is a sentence of its own, not a line of the heading: it can run to four. */}
+      {note !== null && (
+        <p
+          role="status"
+          className="w-full text-pretty rounded-md bg-warning-subtle px-3 py-2 text-left text-label font-normal text-warning-text"
+        >
+          {note}
+        </p>
+      )}
+      {methods.data === undefined && !methods.isError ? (
+        <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
+          <Skeleton className="h-control w-full rounded-md max-narrow:h-touch" />
+        </LoadingStatus>
+      ) : (
+        <>
+          {!methods.isError &&
+            !github &&
+            !google &&
+            oidc === null &&
+            !mail &&
+            methods.data.company === undefined && (
               <div className="flex w-full flex-col items-center gap-3">
-                {oidc !== null && <OidcButton name={oidc.name} variant="secondary" />}
-                {(github || methods.isError) && (
-                  <>
-                    <GitHubButton variant="secondary" />
-                    <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
-                  </>
-                )}
-                {google && <GoogleButton variant="secondary" />}
+                <h2 className="text-title">{t('signIn.notSetUp.title')}</h2>
+                <p className="text-balance text-body text-ink-muted">{t('signIn.notSetUp.body')}</p>
+                <a href={href('setup')} className={cn(buttonStyle('secondary'), 'w-full')}>
+                  {t('signIn.notSetUp.action')}
+                </a>
               </div>
             )}
-            {/* The password unless the server turned it off (R30, D-239) — kept when the server could not be
+          {(oidc !== null || github || google || methods.isError) && (
+            <div className="flex w-full flex-col items-center gap-3">
+              {oidc !== null && <OidcButton name={oidc.name} variant="secondary" />}
+              {(github || methods.isError) && (
+                <>
+                  <GitHubButton variant="secondary" />
+                  <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
+                </>
+              )}
+              {google && <GoogleButton variant="secondary" />}
+            </div>
+          )}
+          {/* The password unless the server turned it off (R30, D-239) — kept when the server could not be
                 asked; the link only where mail is on. */}
-            <EmailSignInForm
-              alone={!github && !google && oidc === null && !methods.isError && mail}
-              withPassword={methods.data?.password !== false}
-              mail={mail}
-              {...(workspace === ''
-                ? {}
-                : {
-                    onSignedIn: (): void => {
-                      navigate(workspaceAccessHref(workspace), { replace: true });
-                    },
-                  })}
-            />
-            {methods.data?.company !== undefined && !independent && (
-              <Suspense
-                fallback={
-                  <LoadingStatus label={t('common.loading')} className="w-full">
-                    <Skeleton />
-                  </LoadingStatus>
-                }
+          <EmailSignInForm
+            alone={!github && !google && oidc === null && !methods.isError && mail}
+            withPassword={methods.data?.password !== false}
+            mail={mail}
+            {...(workspace === ''
+              ? {}
+              : {
+                  onSignedIn: (): void => {
+                    navigate(workspaceAccessHref(workspace), { replace: true });
+                  },
+                })}
+          />
+          {methods.data?.company !== undefined && !independent && (
+            <Suspense
+              fallback={
+                <LoadingStatus label={t('common.loading')} className="w-full">
+                  <Skeleton />
+                </LoadingStatus>
+              }
+            >
+              <CompanySignIn key={workspace} initialWorkspace={workspace} />
+            </Suspense>
+          )}
+          {methods.isError && (
+            <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-caption text-ink-muted">
+              {t('signIn.methods.unchecked')}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void methods.refetch();
+                }}
               >
-                <CompanySignIn key={workspace} initialWorkspace={workspace} />
-              </Suspense>
-            )}
-            {methods.isError && (
-              <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-caption text-ink-muted">
-                {t('signIn.methods.unchecked')}
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    void methods.refetch();
-                  }}
-                >
-                  {t('signIn.methods.retry')}
-                </Button>
-              </p>
-            )}
-            {methods.data?.signUp === 'open' && (
-              <p className="text-balance text-label text-ink-muted">
-                {t('signIn.createAccount.prompt')}{' '}
-                <Link to="signUp" className="text-accent-text underline">
-                  {t('signIn.createAccount.action')}
-                </Link>
-              </p>
-            )}
-            {methods.data?.signUp === 'invite-only' && (
-              <p className="text-balance text-label text-ink-muted">{t('signIn.byInvitation')}</p>
-            )}
-          </>
-        )}
-      </section>
-    </StandaloneScreen>
+                {t('signIn.methods.retry')}
+              </Button>
+            </p>
+          )}
+          {methods.data?.signUp === 'open' && (
+            <p className="text-balance text-label text-ink-muted">
+              {t('signIn.createAccount.prompt')}{' '}
+              <Link to="signUp" className="text-accent-text underline">
+                {t('signIn.createAccount.action')}
+              </Link>
+            </p>
+          )}
+          {methods.data?.signUp === 'invite-only' && (
+            <p className="text-balance text-label text-ink-muted">{t('signIn.byInvitation')}</p>
+          )}
+        </>
+      )}
+    </DoorCard>
   );
 };

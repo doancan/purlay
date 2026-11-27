@@ -193,7 +193,8 @@ export const CopyField = ({
   };
   return (
     <div className="flex w-full items-start gap-2">
-      <p className="min-w-0 flex-1 rounded-md border-hairline border-border-subtle bg-surface-050 px-3 py-2">
+      {/* As tall as Copy beside it while the value fits one line; a longer one wraps and the box grows. */}
+      <p className="flex min-h-control min-w-0 flex-1 items-center rounded-md max-narrow:min-h-touch border-hairline border-border-subtle bg-surface-050 px-3 py-1">
         <VisuallyHidden>{label}: </VisuallyHidden>
         <code className="select-all break-all font-mono text-caption text-ink">{value}</code>
       </p>

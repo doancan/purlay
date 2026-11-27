@@ -2,7 +2,8 @@ import { useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
-import { EmptyState, ErrorState } from '../../ui/states';
+import { cn } from '../../ui/cn';
+import { GlyphEmptyState, EmptyState, ErrorState } from '../../ui/states';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { isSetupFailure } from '../setup/client';
 
@@ -78,8 +79,10 @@ export const Pagination = ({
   readonly pages: ReturnType<typeof usePages>;
   readonly nextCursor: string | null;
   readonly busy: boolean;
-}): React.JSX.Element => {
+}): React.JSX.Element | null => {
   const { t } = useI18n();
+  // One page has nowhere to go: two buttons that can never be pressed are noise under a short list.
+  if (!pages.hasPrevious && nextCursor === null) return null;
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <Button disabled={!pages.hasPrevious || busy} onClick={pages.previous}>
@@ -99,24 +102,40 @@ export const Pagination = ({
 export const Empty = (): React.JSX.Element => {
   const { t } = useI18n();
   return (
-    <p role="status" className="p-6 text-body text-ink-muted">
-      {t('admin.empty')}
-    </p>
+    // Announced as it appears, as the plain line was; drawn as every empty list is, inside the card it is in.
+    <div role="status">
+      <GlyphEmptyState
+        glyph="table"
+        tone="accent"
+        title={t('admin.empty')}
+        as="h3"
+        framed={false}
+      />
+    </div>
   );
 };
 export const Facts = ({
   items,
+  flush = false,
 }: {
   readonly items: readonly (readonly [string, React.ReactNode])[];
+  /** In a dialog, whose body already has its inset: the rows start where its heading does. */
+  readonly flush?: boolean;
 }): React.JSX.Element => (
   <dl className="divide-y-hairline divide-border-subtle">
     {items.map(([label, value]) => (
       <div
         key={label}
-        className="flex justify-between gap-6 px-6 py-4 max-narrow:flex-col max-narrow:gap-1 max-narrow:px-4"
+        className={cn(
+          'flex items-baseline justify-between gap-6 max-narrow:flex-col max-narrow:gap-1',
+          flush ? 'py-3' : 'px-6 py-4 max-narrow:px-4',
+        )}
       >
-        <dt className="text-label text-ink-muted">{label}</dt>
-        <dd className="min-w-0 text-body text-ink break-words">{value}</dd>
+        <dt className="shrink-0 text-label text-ink-muted">{label}</dt>
+        {/* Counts and sizes in figures of one width, so a column of them reads down evenly. */}
+        <dd className="min-w-0 text-body text-ink tabular-nums break-words narrow:text-right">
+          {value}
+        </dd>
       </div>
     ))}
   </dl>

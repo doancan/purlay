@@ -9,7 +9,7 @@
  * The demo's front server sends everything but its login to the API, so the browser tests
  * exercise this file rather than a copy of it.
  */
-import { existsSync, statSync } from 'node:fs';
+import { statSync, type Stats } from 'node:fs';
 import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { ConfigurationError } from '../../platform/config';
 
@@ -111,16 +111,37 @@ export interface ClientFile {
   readonly etag: string;
 }
 
-const answer = (path: string, document: boolean, cacheControl: string): ClientFile => {
-  const { size, mtimeMs } = statSync(path);
-  return {
-    path,
-    document,
-    worker: !document && path.endsWith('.worker.js'),
-    cacheControl,
-    etag: `W/"${size.toString(36)}-${Math.trunc(mtimeMs).toString(36)}"`,
-  };
+/**
+ * The file at a path, or null when there is none — including one that went between two looks,
+ * as every file of a build being replaced in place does. Anything else is not a missing file.
+ */
+const fileAt = (path: string): Stats | null => {
+  try {
+    const stats = statSync(path);
+    return stats.isFile() ? stats : null;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      ['ENOENT', 'ENOTDIR'].includes(String(error.code))
+    )
+      return null;
+    throw error;
+  }
 };
+
+const answer = (
+  path: string,
+  { size, mtimeMs }: Stats,
+  document: boolean,
+  cacheControl: string,
+): ClientFile => ({
+  path,
+  document,
+  worker: !document && path.endsWith('.worker.js'),
+  cacheControl,
+  etag: `W/"${size.toString(36)}-${Math.trunc(mtimeMs).toString(36)}"`,
+});
 
 /** A file with a hash in its name never changes; everything else is asked about every time. */
 export const IMMUTABLE = 'public, max-age=31536000, immutable';
@@ -130,20 +151,38 @@ const isAssetPath = (pathname: string): boolean =>
   pathname === '/assets' || pathname.startsWith('/assets/');
 
 /**
+ * A client route asked for while the build has no shell: the moment a build replaced in place
+ * has emptied its directory and not yet written the new one. Opening refused a build without
+ * one, so this is passing, and is answered as a page that comes back by itself.
+ */
+export const SHELL_MISSING = 'shell-missing';
+
+/**
  * The file that answers a client path, or nothing. A file that is there is served; a path
  * that looks like a file (an extension) or lies in the asset directory and is not there is
  * nothing, so a stale chunk is a 404 rather than a page of HTML parsed as JavaScript; any
  * other path is a client route, and the shell decides what it means.
  */
-export const clientFileFor = (client: Client, pathname: string): ClientFile | undefined => {
+export const clientFileFor = (
+  client: Client,
+  pathname: string,
+): ClientFile | typeof SHELL_MISSING | undefined => {
   // Judged as the name it means: `/%61pi/me` is the API's path, spelled differently.
   const name = decoded(pathname);
   if (name === null || routeOf(name) !== 'client') return undefined;
   const path = fileFor(client.dist, pathname);
   if (path === null) return undefined;
-  if (existsSync(path) && statSync(path).isFile()) {
-    return answer(path, path.endsWith('.html'), isAssetPath(pathname) ? IMMUTABLE : REVALIDATE);
+  const found = fileAt(path);
+  if (found !== null) {
+    return answer(
+      path,
+      found,
+      path.endsWith('.html'),
+      isAssetPath(pathname) ? IMMUTABLE : REVALIDATE,
+    );
   }
   if (isAssetPath(pathname) || /\.[A-Za-z0-9]+$/.test(pathname)) return undefined;
-  return answer(join(client.dist, 'index.html'), true, REVALIDATE);
+  const shell = join(client.dist, 'index.html');
+  const shellFound = fileAt(shell);
+  return shellFound === null ? SHELL_MISSING : answer(shell, shellFound, true, REVALIDATE);
 };

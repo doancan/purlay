@@ -43,7 +43,8 @@ describe('what a module’s code names on the socket', () => {
     expect(chat).toContain('features/chat/module.ts');
     expect(chat).toContain('features/chat/http/messages.ts');
     expect(chat).toContain('features/chat/http/missed-mail.ts');
-    expect(chat).toContain('ingress/http/releases.ts');
+    // No door imports chat since its presence and frame checks became slots (D-352).
+    expect(chat.filter((file) => !file.startsWith('features/chat/'))).toEqual([]);
     expect(sourcesOf('issues').map(shown)).toContain('features/issues/http/routes.ts');
     for (const module of carried) {
       expect(sourcesOf(module.manifest.id).map(shown)).not.toContain('ingress/http/app.ts');

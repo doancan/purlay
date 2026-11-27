@@ -20,11 +20,14 @@ import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
+import { cn } from '../../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { ListFilter } from '../../../ui/list-column';
 import { ErrorState } from '../../../ui/states';
 import { PanelEmpty, PanelFrame, StaleBanner, usePanelFocus } from '../channel/panel-frame';
 import { useSidePanel } from '../channel/side-panel';
 import { Responders } from './responders';
+import { headingClasses, sectionClasses } from './section';
 import { WriteUp } from './writeup';
 import { useIncident, useIncidentActions, type IncidentActions } from './use-incident';
 
@@ -32,39 +35,36 @@ import { INCIDENT_PANEL_ID } from './panel-id';
 
 const SEVERITIES: readonly IncidentSeverity[] = [1, 2, 3, 4];
 
-/** Four choices, one pressed: a group of buttons, each saying which it is. */
+/**
+ * Four choices, one pressed: the segmented control the product's other either-or choices are, each
+ * named by what it shows — SEV1 — inside the group that says what SEV is (WCAG 2.5.3). The name above
+ * is the group's own label, said once.
+ */
 const SeverityChoice = ({
   value,
   onChoose,
-  disabled = false,
 }: {
   readonly value: IncidentSeverity;
   readonly onChoose: (severity: IncidentSeverity) => void;
-  readonly disabled?: boolean;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const labelId = useId();
   return (
-    <div className="flex flex-col gap-1">
-      <span id={labelId} className="text-caption text-ink-muted">
+    <div className="flex flex-col gap-2">
+      <span aria-hidden="true" className={headingClasses}>
         {t('incident.severity')}
       </span>
-      {/* Each is named by what it shows — SEV1 — inside the group that says what SEV is (WCAG 2.5.3). */}
-      <div role="group" aria-labelledby={labelId} className="flex gap-1">
-        {SEVERITIES.map((severity) => (
-          <Button
-            key={severity}
-            variant={severity === value ? 'primary' : 'secondary'}
-            aria-pressed={severity === value}
-            disabled={disabled}
-            onClick={() => {
-              onChoose(severity);
-            }}
-          >
-            {t('incident.sev', { n: severity })}
-          </Button>
-        ))}
-      </div>
+      <ListFilter
+        label={t('incident.severity')}
+        value={String(value)}
+        choices={SEVERITIES.map((severity) => ({
+          value: String(severity),
+          label: t('incident.sev', { n: severity }),
+        }))}
+        onChange={(chosen) => {
+          const severity = SEVERITIES.find((candidate) => String(candidate) === chosen);
+          if (severity !== undefined) onChoose(severity);
+        }}
+      />
     </div>
   );
 };
@@ -80,7 +80,7 @@ const Declare = ({
   const { t } = useI18n();
   const [severity, setSeverity] = useState<IncidentSeverity>(2);
   return (
-    <div className="flex flex-col gap-3 px-4 pb-4">
+    <div className="flex flex-col gap-4 px-4 pb-4">
       <SeverityChoice value={severity} onChoose={setSeverity} />
       <Button
         variant="danger"
@@ -115,40 +115,40 @@ const Controls = ({
   const { t } = useI18n();
   const [asking, setAsking] = useState(false);
   const questionId = useId();
-  const statusId = useId();
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (asking) box.current?.querySelector<HTMLElement>('[data-answer="cancel"]')?.focus();
   }, [asking]);
   return (
-    <div ref={box} className="flex flex-col gap-3 px-4 py-3">
+    <div ref={box} className={cn(sectionClasses, 'gap-4')}>
       <SeverityChoice
         value={incident.severity}
         onChoose={(severity) => {
           void actions.change(incident, { severity });
         }}
       />
-      <div className="flex flex-col gap-1">
-        <span id={statusId} className="text-caption text-ink-muted">
+      <div className="flex flex-col gap-2">
+        <span aria-hidden="true" className={headingClasses}>
           {t('incident.status')}
         </span>
-        <div role="group" aria-labelledby={statusId} className="flex flex-wrap gap-1">
-          {(['investigating', 'mitigating'] as const).map((status) => (
-            <Button
-              key={status}
-              variant={incident.status === status ? 'primary' : 'secondary'}
-              aria-pressed={incident.status === status}
-              onClick={() => {
-                void actions.change(incident, { status });
-              }}
-            >
-              {t(`incident.${status}`)}
-            </Button>
-          ))}
+        {/* Where it stands, then the way out of it: Resolve is apart, as it is no step back. */}
+        <div className="flex flex-wrap gap-2 max-narrow:flex-col">
+          <ListFilter
+            label={t('incident.status')}
+            value={incident.status}
+            choices={(['investigating', 'mitigating'] as const).map((status) => ({
+              value: status,
+              label: t(`incident.${status}`),
+            }))}
+            onChange={(status) => {
+              void actions.change(incident, { status });
+            }}
+          />
           {!asking && (
             <Button
               variant="dangerQuiet"
               data-ask="resolve"
+              className="self-center max-narrow:self-start"
               onClick={() => {
                 setAsking(true);
               }}
@@ -159,8 +159,12 @@ const Controls = ({
         </div>
       </div>
       {asking && (
-        <div role="group" aria-labelledby={questionId} className="flex flex-col gap-2">
-          <p id={questionId} className="text-label text-ink">
+        <div
+          role="group"
+          aria-labelledby={questionId}
+          className="flex flex-col gap-3 rounded-lg border-hairline border-border-subtle bg-surface-050 p-3"
+        >
+          <p id={questionId} className="text-body text-ink">
             {t('incident.resolveAsk')}
           </p>
           <div className="flex justify-end gap-2">
@@ -239,9 +243,9 @@ const Entry = ({ update }: { readonly update: IncidentUpdate }): React.JSX.Eleme
   const name = update.actor?.displayName ?? t('incident.someone');
   const said = sentenceOf(update, name, t);
   return (
-    <li className="flex flex-col gap-1 border-t-hairline border-border-subtle py-2">
+    <li className="flex flex-col gap-1 py-2 first:pt-0 not-first:border-t-hairline border-border-subtle">
       <span className="text-body text-ink">{said}</span>
-      <time dateTime={update.at} className="font-mono text-caption text-ink-muted">
+      <time dateTime={update.at} className="font-mono text-caption text-ink-subtle">
         {format.absolute(update.at)}
       </time>
     </li>
@@ -269,8 +273,8 @@ const Timeline = ({
   });
   const all = updates.data?.pages.flatMap((page) => page.data) ?? [];
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-1 px-4 pb-4">
-      <h3 id={headingId} className="text-label font-semibold text-ink">
+    <section aria-labelledby={headingId} className={sectionClasses}>
+      <h3 id={headingId} className={headingClasses}>
         {t('incident.timeline')}
       </h3>
       {updates.isError && updates.data === undefined ? (
@@ -287,8 +291,13 @@ const Timeline = ({
           </Button>
         </div>
       ) : updates.data === undefined ? (
-        <LoadingStatus label={t('incident.loading')} className="flex flex-col gap-2">
-          <Skeleton className="w-sidebar" />
+        <LoadingStatus label={t('incident.loading')} className="flex flex-col gap-4">
+          {[0, 1].map((entry) => (
+            <div key={entry} className="flex flex-col gap-2">
+              <Skeleton className="w-3/4" />
+              <Skeleton className="w-1/4" />
+            </div>
+          ))}
         </LoadingStatus>
       ) : (
         <ul className="flex flex-col">
@@ -304,7 +313,8 @@ const Timeline = ({
       )}
       {updates.hasNextPage && (
         <Button
-          variant="ghost"
+          variant="secondary"
+          className="self-start"
           busy={updates.isFetchingNextPage}
           onClick={() => {
             void updates.fetchNextPage();
@@ -350,22 +360,30 @@ const IncidentPanelView = ({
   let body: React.JSX.Element;
   if (incident.isPending) {
     body = (
-      <LoadingStatus label={t('incident.loading')} className="flex flex-col gap-3 p-4">
-        <Skeleton className="w-members" />
-        <Skeleton className="w-sidebar" />
+      <LoadingStatus label={t('incident.loading')} className="flex flex-col gap-6 p-4">
+        {/* The shape of what lands: a name above its choice, twice. */}
+        {[0, 1].map((field) => (
+          <div key={field} className="flex flex-col gap-2">
+            <Skeleton className="w-1/4" />
+            <Skeleton className="w-3/4" />
+          </div>
+        ))}
       </LoadingStatus>
     );
   } else if (current === undefined) {
     body = (
-      <ErrorState
-        title={t('incident.error.title')}
-        body={t('incident.error.body')}
-        retryLabel={t('common.retry')}
-        onRetry={() => {
-          focus.answering();
-          void incident.refetch();
-        }}
-      />
+      // Inset as the panel's rows are: unframed, the failure starts where their words do, not at the panel's edge.
+      <div className="px-4">
+        <ErrorState
+          title={t('incident.error.title')}
+          body={t('incident.error.body')}
+          retryLabel={t('common.retry')}
+          onRetry={() => {
+            focus.answering();
+            void incident.refetch();
+          }}
+        />
+      </div>
     );
   } else if (current === null || current.status === 'resolved') {
     body = (
@@ -431,7 +449,8 @@ const IncidentPanelView = ({
           }}
         />
       )}
-      {body}
+      {/* Its own box: the first section counts from here, so no hairline is drawn under the banner. */}
+      <div>{body}</div>
     </PanelFrame>
   );
 };

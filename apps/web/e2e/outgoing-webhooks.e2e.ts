@@ -15,7 +15,7 @@ test.describe('outgoing webhooks', () => {
     const dialog = page.getByRole('dialog', { name: `Details of #${made.name}` });
     await dialog.getByRole('tab', { name: 'Integrations' }).click();
     const hooks = dialog.getByRole('region', { name: 'Outgoing webhooks' });
-    await expect(hooks.getByText('No outgoing webhooks yet.')).toBeVisible();
+    await expect(hooks.getByText('No outgoing webhooks yet')).toBeVisible();
     await hooks.getByLabel('Webhook name', { exact: true }).fill('External CI İstanbul');
     await hooks.getByLabel('Destination HTTPS URL').fill('https://example.com/purlay');
     await hooks.getByLabel('Thread resolved', { exact: true }).check();
@@ -51,7 +51,7 @@ test.describe('outgoing webhooks', () => {
     }
     await hooks.getByRole('button', { name: 'Revoke', exact: true }).click();
     await hooks.getByRole('button', { name: 'Revoke', exact: true }).last().click();
-    await expect(hooks.getByText('No outgoing webhooks yet.')).toBeVisible();
+    await expect(hooks.getByText('No outgoing webhooks yet')).toBeVisible();
   });
 });
 
@@ -83,5 +83,5 @@ test('Turkish channel webhook setup, test and revocation at phone width', async 
   await expectNoAxe(dialog);
   await hooks.getByRole('button', { name: 'İptal et', exact: true }).click();
   await hooks.getByRole('button', { name: 'İptal et', exact: true }).last().click();
-  await expect(hooks.getByText('Henüz giden webhook yok.')).toBeVisible();
+  await expect(hooks.getByText('Henüz giden webhook yok')).toBeVisible();
 });

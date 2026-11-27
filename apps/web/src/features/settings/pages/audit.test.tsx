@@ -938,7 +938,7 @@ describe('the audit log', () => {
   test('empty, it says so; failing, it says why with Retry; reading, it is a status', async () => {
     const empty = await openPage({ audit: () => Promise.resolve(page([])) });
     expect(
-      within(empty.getByRole('main')).getByText('Nothing administrative has happened yet.'),
+      within(empty.getByRole('main')).getByText('Nothing administrative has happened yet'),
     ).toBeDefined();
     empty.unmount();
     let failing = true;
@@ -950,7 +950,7 @@ describe('the audit log', () => {
     await person().click(within(failed.getByRole('main')).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(
-      within(failed.getByRole('main')).getByText('Nothing administrative has happened yet.'),
+      within(failed.getByRole('main')).getByText('Nothing administrative has happened yet'),
     ).toBeDefined();
     failed.unmount();
     const reading = await openPage({ audit: () => new Promise(() => undefined) });
@@ -992,8 +992,8 @@ describe('the audit log, narrowed and downloaded', () => {
     expect(dayShown(main, 'To')).toContain('October 31, 2026');
     expect(main.getByRole('button', { name: `Person ${ALICE.displayName}` })).toBeDefined();
     // Narrowed to nothing is not "nothing has happened".
-    expect(main.getByText('No entry matches these filters.')).toBeDefined();
-    expect(main.queryByText('Nothing administrative has happened yet.')).toBeNull();
+    expect(main.getByText('No entry matches these filters')).toBeDefined();
+    expect(main.queryByText('Nothing administrative has happened yet')).toBeNull();
     await expectNoAxeViolations(view.getByRole('main'));
   });
 
@@ -1124,7 +1124,7 @@ describe('the audit log, narrowed and downloaded', () => {
     expect(main.getByText('This day is before the first one.')).toBeDefined();
     // Nothing is loading and nothing is said to be empty: there is no list until it is put right.
     expect(view.getByRole('main').querySelector('[role="status"]')).toBeNull();
-    expect(main.queryByText('No entry matches these filters.')).toBeNull();
+    expect(main.queryByText('No entry matches these filters')).toBeNull();
     expect(main.queryByRole('link', { name: /Download the filtered log/ })).toBeNull();
     const offered = main.getAllByRole('button', { name: /^(CSV|NDJSON)$/ });
     expect(offered).toHaveLength(2);
@@ -1168,7 +1168,7 @@ describe('the audit log, narrowed and downloaded', () => {
     const main = within(view.getByRole('main'));
     expect(main.getByLabelText<HTMLSelectElement>('İşlem').value).toBe('member.left');
     expect(main.getByRole('option', { name: 'Üye ayrıldı' })).toBeDefined();
-    expect(main.getByText('Bu filtrelere uyan kayıt yok.')).toBeDefined();
+    expect(main.getByText('Bu filtrelere uyan kayıt yok')).toBeDefined();
     expect(main.getByRole('link', { name: 'Filtrelenmiş kaydı CSV olarak indir' })).toBeDefined();
   });
 });

@@ -48,14 +48,15 @@ let app: HttpApplication;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-  app = createApp(
-    testDependencies({
+  app = createApp({
+    ...testDependencies({
       database: db,
       clock,
       storage: aMemoryStore(),
       config: testConfig({ APP_URL: origin }),
     }),
-  );
+    apnsScope: 'sandbox:TESTTEAM00:dev.purlay.ios',
+  });
 }, CLONE_HOOK_MS);
 
 afterAll(async () => {
@@ -147,6 +148,8 @@ const asRecord = (value: unknown): Record<string, unknown> => value as Record<st
 const STEPS: readonly Step[] = [
   // ── Before anybody is signed in
   { id: 'getClientInfo', as: 'nobody', spec: () => ({}), status: 200 },
+  { id: 'registerApnsDevice', spec: () => ({ json: { deviceToken: 'aabb0011' } }), status: 204 },
+  { id: 'removeApnsDevice', spec: () => ({ json: {} }), status: 204 },
   { id: 'getAuthMethods', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getMe', spec: () => ({}), status: 200 },
   { id: 'setAway', spec: () => ({ json: { away: true } }), status: 200 },

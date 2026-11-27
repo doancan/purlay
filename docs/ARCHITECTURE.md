@@ -930,7 +930,7 @@ made by the composition root and handed in like every other dependency; it is re
 boundaries — the HTTP edge, the socket's rate refusals, the push sender, the mail ledger — and a module is
 handed a `Counter`, never the registry. Label values are words the code spells: a route as registered, never
 a path as sent; no id, address, name or content. The jobs run in another container, so their numbers are
-read from `job_runs` per scrape, bounded, and a read that fails leaves the rest of the page. The outbox's gauges (`purlay_outbox_pending`, `purlay_outbox_oldest_age_seconds`, `purlay_outbox_dead`, by the consuming module) are read from the table the same way, and a read that fails leaves them out rather than at zero (D-288).
+read from `job_runs` per scrape, bounded, and a read that fails leaves the rest of the page. The outbox's gauges (`purlay_outbox_pending`, `purlay_outbox_oldest_age_seconds`, `purlay_outbox_held`, `purlay_outbox_dead`, by the consuming module) and the count of what `sweep:outbox` gave up on at its expiry (`purlay_outbox_expired_total`, kept in `outbox_expired` because the sweep is another process) are read from the tables the same way, and a read that fails leaves them out rather than at zero (D-288, D-353).
 
 **Executors are arguments.** Every service and repository takes its `Kysely<Database>` or
 `Transaction<Database>` as a parameter rather than reaching for a module-level handle. This is what
@@ -1093,7 +1093,8 @@ runs it against a PostgreSQL of its own on a private network in CI and checks li
 check, the absence of a shell, and that `/` is the client's shell naming a script that is served and
 cached for good; `image.yml` runs on every pull request (so it can be required), and on main builds the image once, pushes it by digest with provenance and an SBOM, smoke-tests that digest and only then tags it. The
 middle stage builds the client; only its `dist` reaches the runtime stage, which sets `CLIENT_DIST` to it
-(D-61).
+(D-61). A page asked for while that directory is being replaced gets a short 503 that refreshes itself, never the
+JSON error envelope (D-349).
 
 **Migrations on start, for any number of nodes.** With `MIGRATE_ON_START=true` the process calls the
 migrator after its listener opens. The migrator's advisory lock, polled without holding a transaction open

@@ -7,11 +7,13 @@
  * - dead or discarded: kept `deadKeptDays` (a hundred and eighty unless the operator says; D-288 §12), to be looked at, requeued or
  *   answered for. A dead fact is a business fact that was not delivered, so it is never taken silently after a month;
  *   the overview and the `purlay_outbox_dead` gauge say they are there;
- * - pending and past `expires_at`: counted as expired and deleted, a fact nobody came for in the days its declaration allows.
+ * - pending and past `expires_at`: deleted, a fact nobody came for in the days its declaration allows, and added in the same
+ *   statement to `outbox_expired` by consumer and fact type: `purlay_outbox_expired_total` and its alert say a fact was given up on,
+ *   which the log line of a job in another process would not (D-353).
  *
  * In batches of one statement each, so a long backlog is a loop and not one long lock on a table the claim reads.
  */
-import type { Executor } from '@purlay/db';
+import { sql, type Executor } from '@purlay/db';
 import { DAY_MS, type Clock } from './clock';
 
 const OUTBOX_FINISHED_KEPT_DAYS = 1;
@@ -21,6 +23,28 @@ const SWEEP_BATCH = 5_000;
 
 /** What a sweep took, by the rule that took it. */
 export type SweptOutbox = Readonly<Record<'finished' | 'dead' | 'discarded' | 'expired', number>>;
+
+/**
+ * One batch of the pending rows past their expiry, deleted and counted in one statement: a fact is in `outbox_expired` exactly when it
+ * is gone from `outbox`, whatever stops the sweep. Returns how many it took.
+ */
+const sweepExpired = async (database: Executor, now: Date): Promise<number> => {
+  const { rows } = await sql<{ taken: string }>`
+    with gone as (
+      delete from outbox where id in (
+        select id from outbox where state = 'pending' and expires_at <= ${now} limit ${SWEEP_BATCH}
+      ) returning consumer, type
+    ), counted as (
+      select consumer, type, count(*) as taken from gone group by consumer, type
+    ), added as (
+      insert into outbox_expired (consumer, type, expired, last_expired_at)
+      select consumer, type, taken, ${now} from counted
+      on conflict (consumer, type) do update
+        set expired = outbox_expired.expired + excluded.expired, last_expired_at = excluded.last_expired_at
+    )
+    select coalesce(sum(taken), 0) as taken from counted`.execute(database);
+  return Number(rows[0]?.taken ?? 0);
+};
 
 export const sweepOutbox = async (dependencies: {
   readonly database: Executor;
@@ -96,22 +120,6 @@ export const sweepOutbox = async (dependencies: {
           .executeTakeFirstOrThrow(),
       ),
     ),
-    expired: await untilShort(async () =>
-      deleted(
-        await database
-          .deleteFrom('outbox')
-          .where(
-            'id',
-            'in',
-            database
-              .selectFrom('outbox')
-              .select('id')
-              .where('state', '=', 'pending')
-              .where('expires_at', '<=', now)
-              .limit(SWEEP_BATCH),
-          )
-          .executeTakeFirstOrThrow(),
-      ),
-    ),
+    expired: await untilShort(async () => await sweepExpired(database, now)),
   };
 };
