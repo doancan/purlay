@@ -319,6 +319,27 @@ describe('the endpoints', () => {
     expect(members.calls[0]?.url).toBe(`/api/workspaces/${ID}/members`);
   });
 
+  test('writes either urgent message setting to its workspace and validates the saved result', async () => {
+    for (const enabled of [false, true]) {
+      const saved = harness({ enabled });
+      expect(await saved.api.setUrgentMessages(ID, enabled)).toEqual({ enabled });
+      expect(saved.calls).toEqual([
+        {
+          method: 'PUT',
+          url: `/api/workspaces/${ID}/urgent-messages`,
+          body: { enabled },
+        },
+      ]);
+    }
+    const malformed = harness({ enabled: 'false' });
+    expect(
+      await malformed.api.setUrgentMessages(ID, false).then(
+        () => 'accepted',
+        (error: unknown) => (error instanceof ApiError ? error.code : 'unexpected'),
+      ),
+    ).toBe('MALFORMED');
+  });
+
   test('guest paging and access edits use scoped paths and validate accepted receipts', async () => {
     const guest = {
       user,
