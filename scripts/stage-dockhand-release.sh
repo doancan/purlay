@@ -28,7 +28,16 @@ fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 lock="$receipts/$project.lock"
 mkdir -- "$lock" 2>/dev/null || fail "could not lock $project in the receipt directory"
-trap 'rm -f -- "$lock/receipt"; rmdir -- "$lock"' EXIT
+backup_dir=''
+cleanup() {
+  if [ -n "$backup_dir" ]; then
+    rm -f -- "$backup_dir/postgres.dump.partial"
+    rmdir -- "$backup_dir" 2>/dev/null || true
+  fi
+  rm -f -- "$lock/receipt"
+  rmdir -- "$lock"
+}
+trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -41,6 +50,10 @@ registry_digest() {
 }
 latest_release() {
   curl --silent --show-error --fail --max-time 20 "https://api.github.com/repos/$repository/releases/latest" | jq -er '.tag_name'
+}
+verify_release_current() {
+  [[ "$(latest_release)" = "$latest" && "$(registry_digest "$package:release")" = "$release_digest" ]] \
+    || fail "$1"
 }
 
 if [ -n "$package" ]; then
@@ -102,6 +115,12 @@ healthy() {
 }
 candidate() {
   [[ "$1" = *"|$image_id|$image|running|healthy|"* ]]
+}
+verify_old_stack() {
+  [[ "$(managed api)" = "$old_api" && "$(managed scheduler)" = "$old_scheduler" ]] \
+    || fail 'the existing API or scheduler changed during preflight'
+  [[ "$(managed postgres)" = "$postgres" && "$(managed garage)" = "$garage" ]] \
+    || fail 'the existing PostgreSQL or Garage changed during preflight'
 }
 initializer() {
   if [ -n "$1" ]; then
@@ -177,6 +196,7 @@ else
   postgres="$(managed postgres)"
   garage="$(managed garage)"
   healthy "$postgres" && healthy "$garage" || fail 'the existing PostgreSQL and Garage must both be healthy before the update'
+  dump_to_verify="$dump"
   if [ -n "$package" ]; then
     [ ! -e "$preflight" ] || fail 'an earlier rollout has a pending preflight; resolve it before scheduling another release'
     IFS='|' read -r _ api_image_id api_pin _ <<< "$old_api"
@@ -191,36 +211,41 @@ else
       git -C "$root" merge-base --is-ancestor "$baseline_revision" "$revision" \
       || fail 'the release is not a forward revision from the running baseline'
     attempt="$receipts/$project-$digest.attempted"
-    (set -o noclobber; printf 'image=%s\nrevision=%s\n' "$image" "$revision" > "$attempt") 2>/dev/null \
+    [ ! -e "$attempt" ] \
       || fail 'this digest already has an automatic attempt; inspect its state and use the explicit release command to recover'
     backup_dir="$(mktemp -d "$dump/$project-$digest.XXXXXXXXXX")" || fail 'could not reserve a protected dump location'
     dump="$backup_dir/postgres.dump"
-    "${compose[@]}" exec -T backup pg_dump --format=custom --no-owner --no-acl </dev/null > "$dump.partial" \
+    dump_to_verify="$dump.partial"
+    "${compose[@]}" exec -T backup pg_dump --format=custom --no-owner --no-acl </dev/null > "$dump_to_verify" \
       || fail 'could not take the protected pre-update database dump'
-    "${compose[@]}" exec -T backup pg_restore --file=/dev/null < "$dump.partial" \
+    "${compose[@]}" exec -T backup pg_restore --file=/dev/null < "$dump_to_verify" \
       || fail 'the protected dump payload could not be read'
-    mv -- "$dump.partial" "$dump" || fail 'could not retain the verified protected dump'
-    printf 'dockhand-release: protected pre-update database dump %s\n' "$dump"
   fi
-  [[ -f "$dump" && -r "$dump" && -s "$dump" ]] || fail 'a protected, readable pre-update PostgreSQL dump is required'
-  checksum="$(sha256sum < "$dump")" || fail 'could not hash the protected dump'
-  listing="$("${compose[@]}" exec -T backup pg_restore --list < "$dump")" || fail 'the backup service could not read the protected dump'
+  [[ -f "$dump_to_verify" && -r "$dump_to_verify" && -s "$dump_to_verify" ]] || fail 'a protected, readable pre-update PostgreSQL dump is required'
+  checksum="$(sha256sum < "$dump_to_verify")" || fail 'could not hash the protected dump'
+  listing="$("${compose[@]}" exec -T backup pg_restore --list < "$dump_to_verify")" || fail 'the backup service could not read the protected dump'
   [[ "$listing" = *' TABLE public kysely_migration '* ]] || fail 'the protected dump has no Purlay migration table'
 
   nonce="$(mktemp -d "$lock/init.XXXXXXXXXX")" || fail 'could not allocate the initializer name'
   one_off="$project-storage-preflight-${nonce##*.}"
   rmdir -- "$nonce"
+  if [ -n "$package" ]; then
+    verify_release_current 'the release could not be reverified before initialization'
+    verify_old_stack
+    printf 'image=%s\nrevision=%s\ninitializer=%s\nbackup_sha256=%s\n' "$image" "$revision" "$one_off" "${checksum%% *}" > "$lock/receipt" \
+      || fail 'could not prepare the automatic attempt receipt'
+    mv -- "$dump_to_verify" "$dump" || fail 'could not retain the verified protected dump'
+    printf 'dockhand-release: protected pre-update database dump %s\n' "$dump"
+    # From this point, an interrupted Docker command may have reached the initializer.
+    mv -- "$lock/receipt" "$attempt" || fail 'could not record the pending automatic attempt'
+  fi
   "${compose[@]}" run --no-deps --pull never -T --name "$one_off" storage-init </dev/null \
     || fail "initializer refused; readers were left in place (container: $one_off)"
   proof="$(initializer "$one_off")" || fail 'initializer completed without a verified receipt; readers were left in place'
   [[ "$(sha256sum < "$dump")" = "$checksum" ]] || fail 'the protected dump changed during preflight'
-  [[ "$(managed api)" = "$old_api" && "$(managed scheduler)" = "$old_scheduler" ]] \
-    || fail 'the existing API or scheduler changed during preflight'
-  [[ "$(managed postgres)" = "$postgres" && "$(managed garage)" = "$garage" ]] \
-    || fail 'the existing PostgreSQL or Garage changed during preflight'
+  verify_old_stack
   if [ -n "$package" ]; then
-    [[ "$(latest_release)" = "$latest" && "$(registry_digest "$package:release")" = "$release_digest" ]] \
-      || fail 'the release changed during preflight; readers were left in place'
+    verify_release_current 'the release changed during preflight; readers were left in place'
   fi
   checksum="${checksum%% *}"
   printf '%s\nimage=%s\nrevision=%s\nbackup_sha256=%s\nold_api=%s\nold_scheduler=%s\npostgres=%s\ngarage=%s\n' \

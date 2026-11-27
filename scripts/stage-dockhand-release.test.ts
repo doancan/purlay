@@ -128,17 +128,25 @@ case "$1 $2" in
       'exec -T backup pg_restore --file=/dev/null')
         printf 'read dump payload\\n' >> "$trace"
         [ "$(cat)" = 'fixture dump' ] || exit 9
-        [ "$TEST_MODE" != scheduled-unreadable ] || exit 1
+        if [[ "$TEST_MODE" = scheduled-unreadable && ! -f "$state/temporary-read-error" ]]; then
+          touch "$state/temporary-read-error"
+          exit 1
+        fi
         ;;
       'exec -T backup pg_restore --list')
         printf 'validate dump\\n' >> "$trace"
         [ "$(cat)" = 'fixture dump' ] || exit 9
         [ "$TEST_MODE" != bad-backup ] || exit 8
+        [ "$TEST_MODE" != scheduled-network ] || touch "$state/archive-listed"
         printf '1234; 1259 200 TABLE public kysely_migration purlay\\n'
         ;;
       'run --no-deps --pull never -T --name '*' storage-init')
         printf 'run initializer\\n' >> "$trace"
-        [ "$TEST_MODE" != refused ] || exit 1
+        if [[ "$TEST_MODE" = scheduled-* ]]; then
+          attempt="$TEST_DIRECTORY/$TEST_PROJECT-$TEST_DIGEST.attempted"
+          grep -Fqx -- "initializer=$7" "$attempt" || exit 9
+        fi
+        [[ "$TEST_MODE" != refused && "$TEST_MODE" != scheduled-refused ]] || exit 1
         touch "$state/$7"
         [ "$TEST_MODE" != changed-backup ] || printf 'changed' >> "$TEST_DIRECTORY/pre-update.dump"
         [ "$TEST_MODE" != scheduled-changed ] || touch "$state/new-publication"
@@ -174,6 +182,8 @@ function withFixture(
       trace: string;
       receipts: string[];
       record: string;
+      backups: string[][];
+      attempts: string[];
     },
   ) => void,
 ): void {
@@ -204,6 +214,11 @@ esac
       `#!/bin/bash
 set -eu
 [ "\${*: -1}" = https://api.github.com/repos/purlay/purlay/releases/latest ] || exit 9
+if [[ "$TEST_MODE" = scheduled-network && -f "$TEST_DIRECTORY/state/archive-listed" &&
+  ! -f "$TEST_DIRECTORY/state/temporary-network-error" ]]; then
+  touch "$TEST_DIRECTORY/state/temporary-network-error"
+  exit 1
+fi
 if [ -f "$TEST_DIRECTORY/state/new-publication" ]; then
   printf '{"tag_name":"v2.1.0"}\\n'
 else
@@ -260,7 +275,8 @@ exec /bin/mv "$@"
           timeout: 5_000,
         },
       );
-      const receipts = readdirSync(fixture).filter((entry) => entry.endsWith('.receipt'));
+      const entries = readdirSync(fixture);
+      const receipts = entries.filter((entry) => entry.endsWith('.receipt'));
       const receipt = receipts[0];
       return {
         code: result.exitCode,
@@ -269,6 +285,10 @@ exec /bin/mv "$@"
         trace: readFileSync(join(fixture, 'trace'), 'utf8'),
         receipts,
         record: receipt ? readFileSync(join(fixture, receipt), 'utf8') : '',
+        backups: readdirSync(join(fixture, 'backups')).map((entry) =>
+          readdirSync(join(fixture, 'backups', entry)),
+        ),
+        attempts: entries.filter((entry) => entry.endsWith('.attempted')),
       };
     });
   } finally {
@@ -399,7 +419,11 @@ describe('following the tested release channel', () => {
     ['scheduled-off-main', 'outside main', ''],
     ['scheduled-rollback', 'not a forward revision', ''],
     ['scheduled-pending', 'earlier rollout has a pending preflight', ''],
-    ['scheduled-unreadable', 'dump payload could not be read', 'take dump\nread dump payload\n'],
+    [
+      'scheduled-refused',
+      'initializer refused',
+      'take dump\nread dump payload\nvalidate dump\nrun initializer\n',
+    ],
     [
       'scheduled-changed',
       'release changed during preflight',
@@ -413,10 +437,38 @@ describe('following the tested release channel', () => {
       expect(result.trace).toBe(trace);
       expect(result.receipts).toEqual([]);
       if (trace) {
+        expect(result.backups).toEqual([['postgres.dump']]);
+        expect(result.attempts).toHaveLength(1);
         const next = run();
         expect(next.err).toContain('already has an automatic attempt');
         expect(next.trace).toBe(trace);
       }
+    });
+  });
+
+  test.each([
+    ['scheduled-unreadable', 'dump payload could not be read', 'take dump\nread dump payload\n'],
+    [
+      'scheduled-network',
+      'could not be reverified',
+      'take dump\nread dump payload\nvalidate dump\n',
+    ],
+  ])('retries the same digest after a temporary preparation error on %s', (mode, reason, trace) => {
+    withFixture(mode, (run) => {
+      const first = run();
+      expect(first.code).toBe(1);
+      expect(first.err).toContain(reason);
+      expect(first.trace).toBe(trace);
+      expect(first.backups).toEqual([]);
+      expect(first.attempts).toEqual([]);
+      const next = run();
+      expect(next.code).toBe(0);
+      expect(next.trace).toBe(
+        `${trace}take dump\nread dump payload\nvalidate dump\nrun initializer\nstop scheduler\nstart API\nstart scheduler\n`,
+      );
+      expect(next.backups).toEqual([['postgres.dump']]);
+      expect(next.attempts).toHaveLength(1);
+      expect(next.receipts).toHaveLength(1);
     });
   });
 });

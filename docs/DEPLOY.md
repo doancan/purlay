@@ -248,10 +248,13 @@ outside the rotating backup volume. Preserve attachment-volume backups separatel
 The command checks that `:release` resolves to the same immutable manifest as the tested `:sha-<commit>` tag
 for the latest published GitHub release on `main`. An update must also advance from the revision currently
 running on both readers. The command takes and reads through a fresh custom PostgreSQL dump before preparing
-storage. It checks the published release and registry digest again before touching the old readers. Each new
-digest gets one unattended attempt. A failed attempt leaves its evidence for the operator to inspect and
-recover with the explicit release command. A repeated healthy digest rechecks completion without taking
-another dump. Retain the automatic dumps according to the same restore policy as the manual release dumps.
+storage. Temporary backup or release metadata failures before starting the initializer can retry on the next
+tick. Unverified temporary dumps are discarded after a failed check. Once the initializer is about to start,
+the command records the single unattended attempt and retains that verified backup. A refused or interrupted
+attempt leaves its evidence for the operator to inspect and recover with the explicit release command.
+The command checks the published release and registry digest again before touching the old readers. A repeated
+healthy digest rechecks completion without taking another dump. Retain the automatic dumps according to
+the same restore policy as the manual release dumps.
 Stop this timer for recovery and planned maintenance. Resolve any pending preflight before enabling it again.
 
 For a Linux host with a systemd user manager, place these two units in the existing operator's user unit
