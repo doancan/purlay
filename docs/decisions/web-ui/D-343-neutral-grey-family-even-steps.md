@@ -1,4 +1,4 @@
-# D-342. One neutral family for every grey, light and dark, on even steps — changes D-180's light navigation tint
+# D-343. One neutral family for every grey, light and dark, on even steps — changes D-180's light navigation tint
 
 **Decided (the owner, 2026-11-26).** The segmented control's rail did not read against the page: `surface-200` was
 #f2f2f4 on a `surface-000` of #f5f5f7, 1.03:1, a smudge rather than a groove. Measured in OKLCH, the light theme also

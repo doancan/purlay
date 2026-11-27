@@ -39,7 +39,7 @@ export const parseArguments = (
 };
 
 /**
- * The number after the last decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-344): what the new
+ * The number after the last decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-345): what the new
  * module's skeleton is written under. Its own decision is one of the template's files.
  */
 const nextDecision = (root: string): number =>

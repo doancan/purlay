@@ -1,6 +1,6 @@
-# D-346. Screen conventions from the design audit — amends D-209, D-317, D-218
+# D-347. Screen conventions from the design audit — amends D-209, D-317, D-218
 
-**Decided (the owner, 2026-11-26).** The design audit of every screen (D-345) changed what several screens show, and
+**Decided (the owner, 2026-11-26).** The design audit of every screen (D-346) changed what several screens show, and
 the auditors asked for each pattern to be written down so the next screen follows it. The owner's own request among
 them: the workspace switcher at the top of the sidebar sat too tight against the edge and the row below.
 
@@ -29,7 +29,7 @@ them: the workspace switcher at the top of the sidebar sat too tight against the
 - **Doors.** A screen outside the app that asks for something (a form, a choice) is the centred card with the mark; one
   that only says something is the notice card with its glyph and no mark. Sign-in providers' buttons are a control
   tall, not the large size.
-- **Shortcuts.** The reference prints each combination as one chord (D-343); the palette's field has no Esc cap of its
+- **Shortcuts.** The reference prints each combination as one chord (D-344); the palette's field has no Esc cap of its
   own, as its footer shows it; its empty message quotes at most 32 characters of what was typed.
 
 **Rejected.**

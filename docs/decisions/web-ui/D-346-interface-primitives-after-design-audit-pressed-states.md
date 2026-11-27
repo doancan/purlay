@@ -1,4 +1,4 @@
-# D-345. Interface primitives after the design audit: pressed states, nested segment radii, tooltips, submenus, list skeletons and error states
+# D-346. Interface primitives after the design audit: pressed states, nested segment radii, tooltips, submenus, list skeletons and error states
 
 **Decided (the owner, 2026-11-26).** The owner asked for every screen and component to be brought to the standard of
 the best SaaS products, each area by one design expert and checked by an independent reviewer. The shared primitives
@@ -31,7 +31,7 @@ later screen follows it rather than re-deciding it.
 
 **Rejected.**
 
-- New colour tokens for the pressed state: the ramp already has the next step (D-342), and a new token per state is a
+- New colour tokens for the pressed state: the ramp already has the next step (D-343), and a new token per state is a
   palette nobody can hold in their head.
 - A `rounded-xl` track for segments: it is the radius of cards inside a message, and segments are controls.
 - Scrolling a phone's segmented control sideways: a choice that cannot be seen is a choice that is not offered.

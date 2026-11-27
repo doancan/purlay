@@ -1,5 +1,5 @@
 /**
- * The decision record's index and numbering (`scripts/decisions.ts`, D-344).
+ * The decision record's index and numbering (`scripts/decisions.ts`, D-345).
  */
 import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

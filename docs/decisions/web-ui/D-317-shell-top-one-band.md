@@ -1,6 +1,6 @@
 # D-317. The shell's top is one band: the rail, the sidebar and the header start on the same line — amends D-209, D-206
 
-*Amended by D-346: the workspace's row in the band is one line; the role and member count moved into the workspace menu.*
+*Amended by D-347: the workspace's row in the band is one line; the role and member count moved into the workspace menu.*
 
 **Decided by the owner, 2026-11-19**, after a live review of the shell's alignment. The rail and the sidebar began below a 28px empty strip kept for a desktop shell's window buttons (D-14), so the first place of the rail and the workspace's row sat at y≈52 while the header beside them is 48px tall with its centre at 24: the first row of the sidebar straddled the line the header ends on, and every browser paid 28px of nothing for a shell that does not exist yet.
 

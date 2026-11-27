@@ -1,4 +1,4 @@
-# D-344. The decision record is one file per decision, indexed by category, and a new one is made by a command
+# D-345. The decision record is one file per decision, indexed by category, and a new one is made by a command
 
 **Decided (the owner, 2026-11-26).** `DECISIONS.md` had grown to 16,788 lines and 343 decisions in one file. Nobody
 could read it, every pull request that recorded a decision edited the same end of the same file, and the owner asked

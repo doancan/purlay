@@ -1,7 +1,7 @@
 # Purlay — Decision record
 
 > **Status:** Approved 2026-09-07. Amended 2026-09-09 (D-25 – D-53; D-1, D-24 and D-28 rewritten when the product
-> gained a cloud offering). Binding. Split into one file per decision on 2026-11-26 (D-344); the numbers and the
+> gained a cloud offering). Binding. Split into one file per decision on 2026-11-26 (D-345); the numbers and the
 > words of every decision are the ones the single `DECISIONS.md` had.
 > This record is the SSOT for *why*. `PRD.md` says what, `ARCHITECTURE.md`/`SCHEMA.md` say how.
 
@@ -95,7 +95,7 @@ What Purlay is, who it is for, its scope, phases and non-goals
 | [D-215](product/D-215-drafts-and-sent.md) | Drafts and sent: a place for what was started, and what went | 2026-10-30 |  |
 | [D-216](product/D-216-all-unreads-view.md) | All unreads: what is new, everywhere, read only as far as it was seen | 2026-10-30 | D-282 |
 | [D-217](product/D-217-forwarding-message-link-card.md) | Forwarding is a link, and a link to a message is a card only for whoever may read it | 2026-10-30 |  |
-| [D-218](product/D-218-channel-links-under-header.md) | A channel keeps its links at hand, under its header | 2026-10-31 | D-346 |
+| [D-218](product/D-218-channel-links-under-header.md) | A channel keeps its links at hand, under its header | 2026-10-31 | D-347 |
 | [D-224](product/D-224-search-operators-typed-filters.md) | Search operators are typed filters, read on the client into the criteria search already takes | 2026-10-31 |  |
 | [D-232](product/D-232-archived-channel-restored.md) | An archived channel can be brought back, by an owner or an admin, as it was | 2026-10-31 |  |
 | [D-234](product/D-234-quiet-hours-weekly-deep-work.md) | Quiet hours: Deep Work every week, by itself, on the person's own clock | 2026-10-31 |  |
@@ -309,7 +309,7 @@ The web client: design system, layout, screens, interaction, accessibility, copy
 | [D-171](web-ui/D-171-pending-send-place-typing-scope.md) | A send waiting on its files is the place's, not the composer's; a reply box and a non-member are not heard typing |  |  |
 | [D-175](web-ui/D-175-layout-takes-desktop-width.md) | The layout takes the width a desktop window has |  |  |
 | [D-177](web-ui/D-177-main-column-full-window-width.md) | The main column is the window's width, from its left edge |  |  |
-| [D-180](web-ui/D-180-navigation-follows-theme.md) | Navigation follows the theme: a light neutral in the light theme, the dark navy in the dark | 2026-10-23 | D-342 |
+| [D-180](web-ui/D-180-navigation-follows-theme.md) | Navigation follows the theme: a light neutral in the light theme, the dark navy in the dark | 2026-10-23 | D-343 |
 | [D-181](web-ui/D-181-composer-formatting-emoji-preview.md) | The composer's formatting row, emoji picker and preview | 2026-10-23 |  |
 | [D-182](web-ui/D-182-checkbox-radio-drawn-in-tokens.md) | One check box and one radio, the browser's input drawn in tokens | 2026-10-23 |  |
 | [D-183](web-ui/D-183-dark-theme-indigo-layers.md) | The dark theme is one family: the navigation's indigo, in layers — now Midnight (D-184) | 2026-10-23 |  |
@@ -322,7 +322,7 @@ The web client: design system, layout, screens, interaction, accessibility, copy
 | [D-206](web-ui/D-206-workspace-sidebar-head-dark-greys.md) | The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black | 2026-10-30 | D-209, D-317, D-318 |
 | [D-207](web-ui/D-207-account-menu-you-are-here-tone.md) | The account door reads as a menu, the menu opens with who you are, and "you are here" has one tone | 2026-10-30 | D-318 |
 | [D-208](web-ui/D-208-inbox-categories-panel.md) | The inbox has categories and a panel, and reading in it is never painted back | 2026-10-30 |  |
-| [D-209](web-ui/D-209-reaction-pills-workspace-card.md) | Reactions are soft pills, and the workspace's door is a card over a vertical list | 2026-10-30 | D-317, D-346 |
+| [D-209](web-ui/D-209-reaction-pills-workspace-card.md) | Reactions are soft pills, and the workspace's door is a card over a vertical list | 2026-10-30 | D-317, D-347 |
 | [D-210](web-ui/D-210-paste-table-numbered-code-text-files.md) | What a paste becomes, a table from the row, numbered code, and text files read in place | 2026-10-30 |  |
 | [D-211](web-ui/D-211-opening-motion-grows-from-control.md) | What opens from a control grows out of it, and leaves faster than it came | 2026-10-30 |  |
 | [D-230](web-ui/D-230-installable-application-manifest.md) | Purlay installs as an application: a manifest, pictures drawn from the favicon, and no offline copy | 2026-10-31 | D-339 |
@@ -332,20 +332,20 @@ The web client: design system, layout, screens, interaction, accessibility, copy
 | [D-259](web-ui/D-259-composer-reads-paste-shape.md) | The composer reads what a paste is by its shape, and offers a file for what is too long |  |  |
 | [D-284](web-ui/D-284-personal-channel-groups-named-headings.md) | A person groups their own channels under named headings across devices — #1198; amends D-195 and preserves D-132 |  |  |
 | [D-314](web-ui/D-314-composer-emoji-by-name.md) | The composer offers an emoji by its name, and what is sent is the emoji | 2026-11-18 |  |
-| [D-317](web-ui/D-317-shell-top-one-band.md) | The shell's top is one band: the rail, the sidebar and the header start on the same line | 2026-11-19 | D-346 |
+| [D-317](web-ui/D-317-shell-top-one-band.md) | The shell's top is one band: the rail, the sidebar and the header start on the same line | 2026-11-19 | D-347 |
 | [D-318](web-ui/D-318-dark-theme-near-black-focus-ring.md) | The dark theme is a near-black with a cool tint, and the focus ring is one moderate blue in both themes | 2026-11-19 |  |
 | [D-319](web-ui/D-319-preset-span-shows-clock-time.md) | A preset that is a span from now says the clock time it comes to | 2026-11-19 |  |
 | [D-320](web-ui/D-320-search-result-counts-tab-counts.md) | Search says how many it found, and a tab counts only what is waiting | 2026-11-19 |  |
 | [D-321](web-ui/D-321-mention-tint-not-fill.md) | A mention of you is a tint, not a fill | 2026-11-19 |  |
 | [D-322](web-ui/D-322-toast-corner-above-account-row.md) | A toast stays in its corner, above the account row | 2026-11-19 |  |
 | [D-339](web-ui/D-339-purlay-mark-owner-artwork.md) | The Purlay mark is the owner's artwork on a white tile, and a token-built letter no more | 2026-11-26 |  |
-| [D-342](web-ui/D-342-neutral-grey-family-even-steps.md) | One neutral family for every grey, light and dark, on even steps | 2026-11-26 |  |
-| [D-343](web-ui/D-343-shortcut-printed-through-kbd.md) | A shortcut is printed once, through `Kbd`, as this keyboard prints it: the Mac's glyphs, everyone else's words | 2026-11-26 |  |
-| [D-345](web-ui/D-345-interface-primitives-after-design-audit-pressed-states.md) | Interface primitives after the design audit: pressed states, nested segment radii, tooltips, submenus, list skeletons and error states | 2026-11-26 |  |
-| [D-346](web-ui/D-346-screen-conventions-from-design-audit.md) | Screen conventions from the design audit | 2026-11-26 |  |
-| [D-347](web-ui/D-347-copy-rules-short-strings-end-without-period.md) | Copy rules: short strings end without a period, error titles say what did not load, and Turkish has one name for each thing | 2026-11-26 | D-349, D-350 |
-| [D-349](web-ui/D-349-turkish-addresses-person-as-siz.md) | Turkish addresses the person as siz | 2026-11-27 |  |
-| [D-350](web-ui/D-350-english-uses-typographic-apostrophes-british-spelling.md) | English uses typographic apostrophes and British spelling | 2026-11-27 |  |
+| [D-343](web-ui/D-343-neutral-grey-family-even-steps.md) | One neutral family for every grey, light and dark, on even steps | 2026-11-26 |  |
+| [D-344](web-ui/D-344-shortcut-printed-through-kbd.md) | A shortcut is printed once, through `Kbd`, as this keyboard prints it: the Mac's glyphs, everyone else's words | 2026-11-26 |  |
+| [D-346](web-ui/D-346-interface-primitives-after-design-audit-pressed-states.md) | Interface primitives after the design audit: pressed states, nested segment radii, tooltips, submenus, list skeletons and error states | 2026-11-26 |  |
+| [D-347](web-ui/D-347-screen-conventions-from-design-audit.md) | Screen conventions from the design audit | 2026-11-26 |  |
+| [D-348](web-ui/D-348-copy-rules-short-strings-end-without-period.md) | Copy rules: short strings end without a period, error titles say what did not load, and Turkish has one name for each thing | 2026-11-26 | D-350, D-351 |
+| [D-350](web-ui/D-350-turkish-addresses-person-as-siz.md) | Turkish addresses the person as siz | 2026-11-27 |  |
+| [D-351](web-ui/D-351-english-uses-typographic-apostrophes-british-spelling.md) | English uses typographic apostrophes and British spelling | 2026-11-27 |  |
 
 ### mobile (13)
 
@@ -398,7 +398,7 @@ Deploying, self-hosting, configuration, mail delivery, monitoring, running the c
 | [D-334](operations/D-334-operator-workspace-limit-overrides.md) | Limits an operator can move for one workspace: one gate, an override table and a command (#1306) |  |  |
 | [D-335](operations/D-335-module-delivery-ledger.md) | A ledger of deliveries between modules, opt-in and without payloads (#1305) |  |  |
 | [D-336](operations/D-336-traces-without-sdk.md) | Traces across a request, a job and a fact's delivery, without an SDK and off by default (#1307) |  |  |
-| [D-348](operations/D-348-page-asked-while-client-being-rebuilt-gets.md) | A page asked for while the client is being rebuilt gets a short self-refreshing 503, and the demo confirms what its readers need | 2026-11-26 |  |
+| [D-349](operations/D-349-page-asked-while-client-being-rebuilt-gets.md) | A page asked for while the client is being rebuilt gets a short self-refreshing 503, and the demo confirms what its readers need | 2026-11-26 |  |
 
 ### engineering (31)
 
@@ -436,7 +436,7 @@ The repository, CI, tests, coverage, tooling, how documents and decisions are ke
 | [D-332](engineering/D-332-run-proves-only-unproved.md) | A run proves only what is not already proved: a light change, and content verified before it reached main |  |  |
 | [D-333](engineering/D-333-hot-path-floor-spread-20ms.md) | A hot path timed with the others busy is allowed a floor spread of 20 ms, not 10 |  |  |
 | [D-341](engineering/D-341-suite-runs-three-areas.md) | The suite runs as three areas, side by side, and each file is held to the floor in the process of its own area | 2026-11-26 |  |
-| [D-344](engineering/D-344-one-file-per-decision.md) | The decision record is one file per decision, indexed by category, and a new one is made by a command | 2026-11-26 |  |
+| [D-345](engineering/D-345-one-file-per-decision.md) | The decision record is one file per decision, indexed by category, and a new one is made by a command | 2026-11-26 |  |
 
 ### integrations (7)
 

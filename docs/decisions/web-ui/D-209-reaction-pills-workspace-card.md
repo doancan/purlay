@@ -1,6 +1,6 @@
 # D-209. Reactions are soft pills, and the workspace's door is a card over a vertical list — amends D-150, D-206
 
-*Amended by D-346: the workspace's door is one 32px row (mark, name, chevron); the role and member count head the workspace menu.*
+*Amended by D-347: the workspace's door is one 32px row (mark, name, chevron); the role and member count head the workspace menu.*
 
 *Amended by D-317: the workspace's row lives in a band as tall as the header, without the card's frame and shadow.*
 

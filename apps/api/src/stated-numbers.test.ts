@@ -42,7 +42,7 @@ import {
 
 /** As prose: a line break in Markdown is a space, and rewrapping a paragraph changes nothing. */
 const prose = (path: string): string => readFileSync(path, 'utf8').replace(/\s+/g, ' ');
-/** The file of a decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-344). */
+/** The file of a decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-345). */
 const decisionFile = (number: number): string => {
   const name = readdirSync('docs/decisions', { recursive: true, encoding: 'utf8' }).find((path) =>
     new RegExp(`(?:^|/)D-${String(number)}-[^/]*\\.md$`).test(path),

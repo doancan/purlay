@@ -71,7 +71,7 @@ describe('the catalogues agree', () => {
     }
   });
 
-  test('Turkish addresses the person as siz, never sen (D-349)', () => {
+  test('Turkish addresses the person as siz, never sen (D-350)', () => {
     const sen =
       /(?:^|[^\p{L}])(?:sen|seni|sana|senin|sende|senden)(?=[^\p{L}]|$)|\p{L}(?:misin|mısın|musun|müsün|[ae]bilirsin|[ae]mezsin|[ıiuü]yorsun)(?=[^\p{L}]|$)/iu;
     const informal = Object.entries(tr).filter(([, message]) =>
@@ -80,7 +80,7 @@ describe('the catalogues agree', () => {
     expect(informal.map(([key]) => key)).toEqual([]);
   });
 
-  test('an apostrophe is the typographic one, and English is spelled the British way (D-350)', () => {
+  test('an apostrophe is the typographic one, and English is spelled the British way (D-351)', () => {
     const american = /\b(?:organiz|behavior|color|favorite|center|canceled|recogniz|analyz)/i;
     const wrong = Object.entries({ ...en }).filter(([, message]) =>
       text(message).some((form) => /\p{L}'\p{L}/u.test(form) || american.test(form)),

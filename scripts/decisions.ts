@@ -1,5 +1,5 @@
 /**
- * The decision record, one file per decision (D-344).
+ * The decision record, one file per decision (D-345).
  *
  * `docs/decisions/<category>/D-<n>-<slug>.md` holds one decision, headed `# D-<n>. <title>`. The index in
  * `docs/decisions/README.md` is generated from those files, between two markers, and nothing else in that

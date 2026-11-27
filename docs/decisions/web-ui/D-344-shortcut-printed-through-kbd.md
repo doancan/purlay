@@ -1,4 +1,4 @@
-# D-343. A shortcut is printed once, through `Kbd`, as this keyboard prints it: the Mac's glyphs, everyone else's words
+# D-344. A shortcut is printed once, through `Kbd`, as this keyboard prints it: the Mac's glyphs, everyone else's words
 
 **Decided (the owner, 2026-11-26).** The owner asked for the composer's hints to show the Mac's own signs (⌘ ⇧) rather
 than words. Shortcuts were spelled at each call site (`keyLabels`, string building), so the same key read differently

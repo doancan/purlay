@@ -31,7 +31,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme (every grey, the navigation's too, from one neutral family on even lightness steps: D-342), the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme (every grey, the navigation's too, from one neutral family on even lightness steps: D-343), the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size; what the person arranges about the sidebar is what it shows, not where things sit (D-195). Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -61,7 +61,7 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its first place sits in the same top band as the sidebar's workspace row and the screen's header (D-317).
 - **Sidebar (264px)** — a band as tall as the header, ending on the same line (D-317), holds the workspace's row (D-209): one line, a control tall, of its mark, its name and a chevron, your role and how many
-  are in it heading the menu it opens (D-346) — the one door to the **workspace menu** (the workspaces to switch to, as
+  are in it heading the menu it opens (D-347) — the one door to the **workspace menu** (the workspaces to switch to, as
   radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
   channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
   **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
@@ -1047,7 +1047,7 @@ is read.
 ## 7. Keyboard model
 
 Every shortcut on screen is printed by one component as the keyboard prints it: ⌘ ⇧ ⌥ ⌃ ↵ on a Mac, the modifiers in
-Apple's order, and Ctrl, Shift, Alt, Enter elsewhere, a cap per key (D-343). The table writes them in neutral words.
+Apple's order, and Ctrl, Shift, Alt, Enter elsewhere, a cap per key (D-344). The table writes them in neutral words.
 
 | Key | Action |
 |---|---|
@@ -1078,7 +1078,7 @@ ring on changes only its style and width and never fades it in from the text's o
 ## 8. Required states
 
 Every view implements all four, **and a test asserts each one renders** (D-53). A list's loading state is rows shaped
-like its loaded ones in the same card, and its error sits in that card too (D-345). An unhandled empty
+like its loaded ones in the same card, and its error sits in that card too (D-346). An unhandled empty
 state is an incomplete feature, not a polish item (`CONTRIBUTING.md` §4) — a screen missing one is
 missing specified behaviour and does not merge.
 
@@ -1149,8 +1149,8 @@ says the minutes left. A mode you can forget you are in is a mode that loses you
 ## 9. Visual system
 
 Decided here so Phase 0 does not invent one at random. The words on screen follow one set of rules in both languages:
-no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-347),
-and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-349); apostrophes are typographic and English is British (D-350).
+no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-348),
+and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-350); apostrophes are typographic and English is British (D-351).
 
 > **These values are tokens, and the tokens are the only source.** Colour, spacing, type scale,
 > radius, shadow, motion duration and easing are declared once, in `packages/tokens/tokens.json`,

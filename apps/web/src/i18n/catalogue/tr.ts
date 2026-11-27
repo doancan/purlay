@@ -7,7 +7,7 @@
  *
  * Üslup İngilizcedekiyle aynı: kısa, düz fiiller, cümle düzeni, özür dilemeyen
  * hata iletileri. Kişiye "siz" diye seslenilir: düğme ve menü komutları yalın
- * fiildir ("Kaydet"), kişiye söylenen her cümle "siz"le kurulur (D-349).
+ * fiildir ("Kaydet"), kişiye söylenen her cümle "siz"le kurulur (D-350).
  * Türkçede çoğul eki sayıdan sonra gelmez ("4 yanıt"), bu yüzden çoğul
  * iletiler yalnızca `other` biçimini taşır. Ekler yer tutucudan sonra
  * gelmesin diye iletiler, değişkenin yanında ek gerektirmeyecek biçimde yazıldı.

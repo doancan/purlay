@@ -734,7 +734,7 @@ the removal threshold, the behaviour, the hot path of `HOT_PATHS`, and the web f
 
 **1. Decide it.**
 
-- `bun run module:new` writes the module's decision as the next D-number's file in `decisions/architecture/` (D-344; the
+- `bun run module:new` writes the module's decision as the next D-number's file in `decisions/architecture/` (D-345; the
   document check refuses a gap, a repeat and a decision nothing else cites) and write the decision: what the module is, what it is **not** (D-254 §1 lists what issues left
   out, each a decision of its own), the table, who may do what, what happens to its data when it is off, and the cost
   of reversing it. A module is admitted only with this, a row and a section under §11 and a removal rule (D-250 rule 6), which the section states as a threshold or as `none, because …`.

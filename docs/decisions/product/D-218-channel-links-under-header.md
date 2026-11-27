@@ -1,6 +1,6 @@
 # D-218. A channel keeps its links at hand, under its header
 
-*Amended by D-346: the bookmark chips scroll on their own while Add a bookmark stays in view, and a chip's × takes the place of its glyph.*
+*Amended by D-347: the bookmark chips scroll on their own while Add a bookmark stays in view, and a chip's × takes the place of its glyph.*
 
 **Decided (the owner, 2026-10-31).** Eighth of the core features the owner asked for (Slack's channel
 bookmarks, Teams' tabs).

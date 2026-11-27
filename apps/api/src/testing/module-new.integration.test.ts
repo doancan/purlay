@@ -324,7 +324,7 @@ describe('integration: the paved road of a new module', () => {
         .output.split('\n')
         .filter((line) => line !== '')
         .map((line) => line.split(':')[0]);
-      // Each module's decision is a file of its own (D-344): zz takes the next number, yy the one after; the record's
+      // Each module's decision is a file of its own (D-345): zz takes the next number, yy the one after; the record's
       // index lists each by its title, which is still the placeholder until its author writes it.
       expect(owed).toEqual([
         ...Array<string>(2).fill('docs/MODULES.md'),

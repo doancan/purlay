@@ -581,7 +581,7 @@ what let it through, not who.
    **In progress** (it has an assignee), **In review** (an open pull request closes it, so write
    `Closes #N` in the pull request body) and **Done** (D-313).
 
-   A decision is a file of its own (`docs/decisions/<category>/D-<n>-….md`, D-344), so two pull requests no
+   A decision is a file of its own (`docs/decisions/<category>/D-<n>-….md`, D-345), so two pull requests no
    longer edit one file, but they can take one number: the number is taken when the pull request is ready to
    merge. Rebase on `main`, and if `D-<n>` is taken, rename the file and its heading to the next free number and
    run `bun run decisions:index`. A migration number follows the same rule, which is why only one `database` issue

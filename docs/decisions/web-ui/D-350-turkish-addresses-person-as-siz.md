@@ -1,6 +1,6 @@
-# D-349. Turkish addresses the person as siz — amends D-347
+# D-350. Turkish addresses the person as siz — amends D-348
 
-**Decided (the owner, 2026-11-27).** D-347 left open that the Turkish catalogue mixed the formal and the informal
+**Decided (the owner, 2026-11-27).** D-348 left open that the Turkish catalogue mixed the formal and the informal
 *you*: most strings said *sen* (*bağla*, *sağlayıcın*, *yapabilirsin*) and a minority *siz*. The owner chose
 *siz*.
 

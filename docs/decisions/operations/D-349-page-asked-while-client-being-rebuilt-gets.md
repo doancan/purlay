@@ -1,6 +1,6 @@
-# D-348. A page asked for while the client is being rebuilt gets a short self-refreshing 503, and the demo confirms what its readers need
+# D-349. A page asked for while the client is being rebuilt gets a short self-refreshing 503, and the demo confirms what its readers need
 
-**Decided (the owner, 2026-11-26).** During the design audit (D-345) a settings page once rendered the API's JSON error
+**Decided (the owner, 2026-11-26).** During the design audit (D-346) a settings page once rendered the API's JSON error
 envelope as the page, and the access page of the demo always said it could not refresh. Both were traced:
 
 - The API serves the client's build from `apps/web/dist`. A rebuild empties that directory for a moment; a navigation

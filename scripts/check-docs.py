@@ -68,7 +68,7 @@ for f, s in docs.items():
         else:
             resolved.append((f, doc, sec, TITLES[tgt][sec]))
 
-# ---- the decision record: one file per decision (D-344) ----------------------
+# ---- the decision record: one file per decision (D-345) ----------------------
 # `docs/decisions/<category>/D-<n>-<words>.md`, headed `# D-<n>. <title>`, and the open questions in their own file.
 # The checks below read them as the one record they were (`dec`), so each rule is the same rule it was when the
 # record was a single file: a decision is a `### D-n.` section, the open questions are `## Part D`.
