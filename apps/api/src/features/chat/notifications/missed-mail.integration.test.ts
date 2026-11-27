@@ -572,6 +572,79 @@ describe('integration: through a real relay', () => {
       await relay.stop();
     }
   });
+
+  test(
+    'a temporary refusal after DATA gives back the notification and resends the same Message-ID',
+    async () => {
+      const cloned = await cloneIntegrationDatabase();
+      try {
+        const { db } = cloned;
+        const room = await aRoomForAda(db);
+        const waiting = await told(db, room, ago(HOUR_MS));
+        const { email } = await db
+          .selectFrom('users')
+          .select('email')
+          .where('id', '=', room.ada)
+          .executeTakeFirstOrThrow();
+        const claims = db
+          .selectFrom('missed_mail_claims as claim')
+          .innerJoin('missed_mail_letters as letter', 'letter.id', 'claim.letter_id')
+          .select(['claim.letter_id', 'claim.notification_ids', 'claim.lease_until'])
+          .where('letter.user_id', '=', room.ada);
+
+        let answer = '451 4.3.0 temporary relay failure';
+        const relay = await aScriptedRelay({
+          get afterData(): string {
+            return answer;
+          },
+        });
+        const mailer = smtpMailer({
+          SMTP_URL: `smtp://127.0.0.1:${String(relay.port)}`,
+          MAIL_FROM: 'purlay@example.test',
+          SMTP_ALLOW_PLAINTEXT: false,
+        });
+        try {
+          const refused = await run(db, NOW, mailer.send).catch((error: unknown) => error);
+          expect(refused).toBeInstanceOf(Error);
+          expect(refused).toMatchObject({
+            message: '1 missed-mail letter(s) could not be completed, and will be tried again',
+          });
+          const firstId = relay.commands.find((line) => /^message-id:/i.test(line));
+          expect(firstId).toMatch(/^Message-ID: <missed-[0-9a-f]{32}@purlay\.test>$/i);
+          expect(relay.received).toEqual([]);
+          expect(await mailedAt(db, waiting.notificationId)).toBeNull();
+          const released = await claims.executeTakeFirstOrThrow();
+          expect(released).toMatchObject({
+            notification_ids: [waiting.notificationId],
+            lease_until: null,
+          });
+
+          answer = '250 2.0.0 accepted';
+          const nextTick = new Date(NOW.getTime() + 15 * MINUTE);
+          expect(await run(db, nextTick, mailer.send)).toMatchObject({ letters: 1, failed: 0 });
+          expect(await mailedAt(db, waiting.notificationId)).toEqual(nextTick);
+          expect(await claims.execute()).toEqual([released]);
+          expect(relay.received).toHaveLength(1);
+          expect(relay.received[0]?.to).toEqual([email]);
+          expect(
+            relay.received[0]?.data.split('\n').find((line) => /^message-id:/i.test(line)),
+          ).toBe(firstId);
+
+          expect(await run(db, new Date(NOW.getTime() + 2 * HOUR_MS), mailer.send)).toMatchObject({
+            letters: 0,
+          });
+          expect(relay.commands.filter((line) => line === 'DATA')).toHaveLength(2);
+          expect(relay.received).toHaveLength(1);
+        } finally {
+          mailer.close();
+          await relay.stop();
+        }
+      } finally {
+        await cloned.drop();
+      }
+    },
+    CLONE_HOOK_MS + DROP_HOOK_MS,
+  );
 });
 
 describe('integration: two runs at once', () => {
