@@ -2635,7 +2635,7 @@ describe('attaching files (D-109, #370)', () => {
       new ApiError(401, 'UNAUTHENTICATED', 'who'),
       {
         en: 'Session ended: sign in again',
-        tr: 'Oturumunuz sona erdi: tekrar giriş yapın',
+        tr: 'Oturumunuz sona erdi: tekrar oturum açın',
         retry: true,
       },
     ],

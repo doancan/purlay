@@ -260,7 +260,7 @@ describe('what the screen offers is what the server has connected', () => {
       [
         'tr',
         'Google ile devam et',
-        'Google yanıt vermedi. Biraz sonra yeniden deneyin ya da başka bir yolla girin.',
+        'Google yanıt vermedi. Biraz sonra yeniden deneyin ya da başka bir yolla oturum açın.',
       ],
     ] as const) {
       test(`its label and its unavailable sentence, in ${locale}`, async () => {
@@ -278,7 +278,7 @@ describe('what the screen offers is what the server has connected', () => {
       ],
       [
         'tr',
-        'Bu giriş adresin size ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsanız öyle girin ya da bir davet isteyin.',
+        'Bu oturum açma adresin size ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl oturum açıyorsanız öyle oturum açın ya da bir davet isteyin.',
       ],
     ] as const) {
       test(`an address it does not vouch for is said without naming a provider, in ${locale}`, async () => {
@@ -342,7 +342,7 @@ describe('what the screen offers is what the server has connected', () => {
     [
       'tr',
       'Bu sunucu henüz kurulmadı',
-      'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanızla yine de girebilirsiniz. Sunucuyu siz yönetiyorsanız kurulumu tarayıcıdan tamamlayabilirsiniz.',
+      'GitHub ile oturum açma, Google ile oturum açma, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanızla yine de oturum açabilirsiniz. Sunucuyu siz yönetiyorsanız kurulumu tarayıcıdan tamamlayabilirsiniz.',
       'Bu sunucuyu kur',
     ],
   ] as const) {
@@ -494,7 +494,7 @@ describe('signing in for the native application (D-191)', () => {
     try {
       const view = await visit('tr');
       expect(
-        view.getByText('Purlay for Mac uygulamasına devam etmek için giriş yapın.'),
+        view.getByText('Purlay for Mac uygulamasına devam etmek için oturum açın.'),
       ).toBeDefined();
     } finally {
       window.sessionStorage.clear();

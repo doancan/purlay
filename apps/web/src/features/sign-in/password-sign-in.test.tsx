@@ -157,7 +157,7 @@ describe('the password form on the sign-in card', () => {
     const user = person();
     await user.type(view.getByRole('textbox', { name: 'E-posta adresi' }), 'ada@example.test');
     await user.type(view.getByLabelText('Parola'), 'yanlis-parola');
-    await user.click(view.getByRole('button', { name: 'Giriş yap' }));
+    await user.click(view.getByRole('button', { name: 'Oturum aç' }));
     await settle();
     expect(view.getByRole('alert').textContent).toBe('E-posta ya da parola yanlış.');
   });
@@ -284,7 +284,7 @@ describe('the second step, for an account with two-step verification on (D-236)'
     const user = person();
     await user.type(view.getByRole('textbox', { name: 'E-posta adresi' }), 'ada@example.test');
     await user.type(view.getByLabelText('Parola'), 'dogru-parola-123');
-    await user.click(view.getByRole('button', { name: 'Giriş yap' }));
+    await user.click(view.getByRole('button', { name: 'Oturum aç' }));
     await settle();
     expect(view.getByText('Doğrulama uygulamanızdaki 6 haneli kodu girin.')).toBeDefined();
     await enter(view, 'Kod', '123456', 'Doğrula');

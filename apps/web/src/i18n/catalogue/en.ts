@@ -1599,18 +1599,18 @@ export const en = {
   'profile.close': 'Close profile',
   'profile.open': 'Open {name}’s profile',
   'user.erased': 'Deleted user',
-  'erase.entry': 'Erase my account…',
-  'erase.title': 'Erase your account',
+  'erase.entry': 'Delete my account…',
+  'erase.title': 'Delete your account',
   'erase.body':
     'Your name, address, profile and sessions are erased, with what you saved and what you were told. What you wrote stays for your team, shown as “deleted user”. This cannot be undone.',
   'erase.confirm': 'Type your username, {username}, to confirm',
   'erase.mismatch': 'That is not your username.',
-  'erase.submit': 'Erase my account',
+  'erase.submit': 'Delete my account',
   'erase.reauthenticate':
     'For this, sign in again first: it needs a sign-in from the last minutes.',
   'erase.signOut': 'Sign out to sign in again',
   'erase.lastOwner': 'Hand these workspaces to another owner first: {workspaces}.',
-  'erase.failed': 'Your account was not erased.',
+  'erase.failed': 'Your account was not deleted.',
   'deleteWorkspace.title': 'Delete {workspace}',
   'deleteWorkspace.entry': 'Delete workspace…',
   'deleteWorkspace.hint':

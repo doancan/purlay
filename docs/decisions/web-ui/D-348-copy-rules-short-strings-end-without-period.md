@@ -2,6 +2,8 @@
 
 *Amended by D-350: Turkish addresses the person as siz.*
 
+*Amended by D-359: one product glossary; signing in and out are *oturum aç* and *oturumu kapat*.*
+
 *Amended by D-351: English uses typographic apostrophes and British spelling.*
 
 **Decided (the owner, 2026-11-26).** The design audit (D-346) found the catalogue punctuating the same slot two ways (a

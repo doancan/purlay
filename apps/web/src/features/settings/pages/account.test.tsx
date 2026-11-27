@@ -69,7 +69,7 @@ describe('the page', () => {
       view.getByRole('link', { name: 'Sessions & account' }).getAttribute('aria-current'),
     ).toBe('page');
     // On a phone the danger zone's fill-less buttons line their words up with the words above.
-    for (const name of ['Leave workspace…', 'Erase my account…']) {
+    for (const name of ['Leave workspace…', 'Delete my account…']) {
       expect(main(view).getByRole('button', { name }).className.split(' ')).toContain(
         'max-narrow:-ml-3',
       );
@@ -178,8 +178,8 @@ describe('signing out everywhere', () => {
 describe('erasing the account (D-139 §5)', () => {
   const erasing = async (api: Partial<Api>): Promise<{ view: View; dialog: HTMLElement }> => {
     const view = await open(api);
-    await person().click(main(view).getByRole('button', { name: 'Erase my account…' }));
-    return { view, dialog: view.getByRole('dialog', { name: 'Erase your account' }) };
+    await person().click(main(view).getByRole('button', { name: 'Delete my account…' }));
+    return { view, dialog: view.getByRole('dialog', { name: 'Delete your account' }) };
   };
   const field = (dialog: HTMLElement): HTMLElement =>
     within(dialog).getByLabelText('Type your username, dogancan, to confirm');
@@ -198,7 +198,7 @@ describe('erasing the account (D-139 §5)', () => {
       },
     });
     expect(dialog.textContent).toContain('What you wrote stays for your team');
-    const erase = within(dialog).getByRole('button', { name: 'Erase my account' });
+    const erase = within(dialog).getByRole('button', { name: 'Delete my account' });
     expect(erase).toHaveProperty('disabled', true);
     await person().type(field(dialog), 'dogancaN');
     expect(erase).toHaveProperty('disabled', true);
@@ -222,8 +222,8 @@ describe('erasing the account (D-139 §5)', () => {
     await person().click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await settle();
     expect(view.queryByRole('dialog')).toBeNull();
-    await person().click(main(view).getByRole('button', { name: 'Erase my account…' }));
-    const again = view.getByRole('dialog', { name: 'Erase your account' });
+    await person().click(main(view).getByRole('button', { name: 'Delete my account…' }));
+    const again = view.getByRole('dialog', { name: 'Delete your account' });
     expect((field(again) as HTMLInputElement).value).toBe('');
   });
 
@@ -241,7 +241,7 @@ describe('erasing the account (D-139 §5)', () => {
           : Promise.resolve(aSession()),
     });
     await person().type(field(dialog), 'dogancan');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Delete my account' }));
     await settle();
     expect(within(dialog).getByRole('alert').textContent).toContain('sign in again first');
     await person().click(within(dialog).getByRole('button', { name: 'Sign out to sign in again' }));
@@ -260,7 +260,7 @@ describe('erasing the account (D-139 §5)', () => {
         ),
     });
     await person().type(field(dialog), 'dogancan');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Delete my account' }));
     await settle();
     const name = aSession().memberships[0]?.workspace.name ?? '';
     expect(within(dialog).getByRole('alert').textContent).toBe(
@@ -277,16 +277,16 @@ describe('erasing the account (D-139 §5)', () => {
       eraseAccount: () => Promise.reject(failures.shift() ?? new Error('no more')),
     });
     await person().type(field(dialog), 'dogancan');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Delete my account' }));
     await settle();
     expect(field(dialog).getAttribute('aria-invalid')).toBe('true');
-    await person().click(within(dialog).getByRole('button', { name: 'Erase my account' }));
+    await person().click(within(dialog).getByRole('button', { name: 'Delete my account' }));
     await settle();
     expect(
       within(dialog)
         .getAllByRole('alert')
         .map((alert) => alert.textContent),
-    ).toContainEqual(expect.stringContaining('Your account was not erased.') as unknown as string);
+    ).toContainEqual(expect.stringContaining('Your account was not deleted.') as unknown as string);
   });
 });
 

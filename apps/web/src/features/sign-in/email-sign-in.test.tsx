@@ -136,7 +136,7 @@ describe('the email form on the sign-in card', () => {
     const user = person();
     await user.type(view.getByRole('textbox', { name: 'E-posta adresi' }), 'ada@example.test');
     await user.click(
-      view.getByRole('button', { name: 'Bunun yerine bana giriş bağlantısı gönder' }),
+      view.getByRole('button', { name: 'Bunun yerine bana oturum açma bağlantısı gönder' }),
     );
     await settle();
     expect(asked).toEqual([{ email: 'ada@example.test', locale: 'tr', invitation: INVITATION }]);
@@ -447,14 +447,14 @@ describe('a sign-in link, opened', () => {
       },
       'tr',
     );
-    expect(view.getByText('ada@example.test olarak giriş yapıyorsunuz.')).toBeDefined();
+    expect(view.getByText('ada@example.test olarak oturum açıyorsunuz.')).toBeDefined();
     act(() => {
-      fireEvent.click(view.getByRole('button', { name: 'Giriş yap' }));
+      fireEvent.click(view.getByRole('button', { name: 'Oturum aç' }));
     });
     await settle();
-    expect(view.getByRole('alert').textContent).toContain('Giriş tamamlanamadı.');
+    expect(view.getByRole('alert').textContent).toContain('Oturum açma tamamlanamadı.');
     act(() => {
-      fireEvent.click(view.getByRole('button', { name: 'Giriş yap' }));
+      fireEvent.click(view.getByRole('button', { name: 'Oturum aç' }));
     });
     await settle();
     // Signed in, with no invitation in hand: home sends the person into their workspace.

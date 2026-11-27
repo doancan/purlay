@@ -315,9 +315,9 @@ describe('an application that asked for a fresh sign-in (prompt=login, D-356)', 
     );
     await click(view, 'Purlay for Mac uygulamasını aç');
     expect(
-      view.getByRole('heading', { name: 'Devam etmek için yeniden giriş yapın' }),
+      view.getByRole('heading', { name: 'Devam etmek için yeniden oturum açın' }),
     ).toBeDefined();
-    expect(view.getByRole('button', { name: 'Yeniden giriş yap' })).toBeDefined();
+    expect(view.getByRole('button', { name: 'Yeniden oturum aç' })).toBeDefined();
   });
 });
 

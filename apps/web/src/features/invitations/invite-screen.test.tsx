@@ -471,7 +471,7 @@ describe('an invitation, opened by somebody who is not signed in', () => {
   test('without mail there is no form; somebody with an account is pointed to sign-in, in Turkish too', async () => {
     const view = await asSignedOut({}, { github: true, email: false }, 'tr');
     expect(view.queryByRole('textbox')).toBeNull();
-    expect(view.getByRole('link', { name: 'Parolanızla giriş yap' }).getAttribute('href')).toBe(
+    expect(view.getByRole('link', { name: 'Parolanızla oturum aç' }).getAttribute('href')).toBe(
       '/sign-in',
     );
     // The invitation is still in the tab for the way back from signing in.

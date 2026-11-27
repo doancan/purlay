@@ -513,7 +513,7 @@ it. On a narrow window the navigation opens as the sidebar does.
   and nobody else's words — **Export my data**, and their exports, newest first, as an owner's export lists
   them: being made, a link that works once, downloaded, expired, failed by its reason.
   Then *Sign out everywhere…*, *Leave <workspace>…* (D-152; the last owner is told
-  to make somebody else an owner first) and *Erase my account…*, each asking first.
+  to make somebody else an owner first) and *Delete my account…*, each asking first.
 - **General** — the workspace's name, its address (which stays), the **archived channels** (D-232) — each with
   when it was archived, a private one only to its members, and **Restore**; a name taken since says to rename the
   other first — *Create workspace…*, and for an owner only a **Danger zone** with *Delete workspace…* (D-242).

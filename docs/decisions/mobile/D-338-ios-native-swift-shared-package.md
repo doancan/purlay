@@ -1,5 +1,7 @@
 # D-338. iOS gets a native Swift client in its own repository, and the Apple clients share one Swift package — supersedes D-186's "no native iOS client"
 
+*Amended by D-360: the Apple clients are one repository, `purlay-apple`; the three repositories named here are archived.*
+
 **Context.** D-186 gave macOS a native client and left mobile as the installable web application (D-51, D-230). The
 macOS client's wire types, sign-in, transport, realtime and outbox are about 36,000 lines of tested Swift with no
 AppKit in them, and a second Apple client would otherwise copy them. An Android client is expected later.

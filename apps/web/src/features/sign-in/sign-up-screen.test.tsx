@@ -200,7 +200,7 @@ describe('the sign-up screen', () => {
       'tr',
       'Hesaplar davetle açılır',
       'Bu Purlay sunucusu kendiliğinden kayıt almıyor. Sunucudaki birinden davet bağlantısı isteyin ve hesabınızı o bağlantıyı açarak oluşturun.',
-      'Giriş yap',
+      'Oturum aç',
     ],
   ] as const) {
     test(`invite-only: the notice in ${locale}, with the sign-in link and no form or button`, async () => {
