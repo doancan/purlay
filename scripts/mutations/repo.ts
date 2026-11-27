@@ -27,6 +27,23 @@ export const REPO: readonly Mutation[] = [
     tests: ['scripts/point-in-time-recovery.test.ts'],
   },
   {
+    id: 'archive-publishes-before-sync',
+    why: 'an archive name becomes visible before the barrier for the staged WAL data',
+    file: 'docker/wal-archive.sh',
+    find: '\nsync\n# Atomic, and fails if the name appeared in the meantime.',
+    replace: '\n# Atomic, and fails if the name appeared in the meantime.',
+    tests: ['scripts/point-in-time-recovery.test.ts'],
+  },
+  {
+    id: 'archive-recycles-before-sync',
+    why: 'PostgreSQL may recycle WAL before the published archive name has a durability barrier',
+    file: 'docker/wal-archive.sh',
+    find: '# The directory entry is on disk before PostgreSQL is told it may recycle the segment.\nsync\n',
+    replace:
+      '# The directory entry is on disk before PostgreSQL is told it may recycle the segment.\n',
+    tests: ['scripts/point-in-time-recovery.test.ts'],
+  },
+  {
     id: 'archive-switch-adds-settings-when-off',
     why: 'a deployment that never asked for archiving closes a segment every minute and runs a changed server',
     file: 'docker/postgres-start.sh',
