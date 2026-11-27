@@ -1,4 +1,7 @@
-/** Where a draft, a sent message or a scheduled one is: the channel, and "in a thread" for a reply. */
+/**
+ * Where a draft, a sent message or a scheduled one is: the channel, and "in a thread" for a reply. A channel
+ * is named with its `#`, a conversation without, as Saved's rows name them.
+ */
 import type { Channel } from '@purlay/types';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useChannelTitle } from '../channel/channel-header';
@@ -13,8 +16,10 @@ export const Place = ({
   const { t } = useI18n();
   const title = useChannelTitle(channel);
   return (
-    <span className="flex items-baseline gap-2 text-label text-ink-muted">
-      <span className="min-w-0 truncate font-medium text-ink">{title}</span>
+    <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
+      <span className="min-w-0 truncate font-semibold text-ink">
+        {channel.type === 'direct_message' ? title : `#${title}`}
+      </span>
       {thread && <span className="shrink-0">· {t('drafts.inThread')}</span>}
     </span>
   );

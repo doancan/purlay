@@ -9,7 +9,7 @@ body:
         early, and a permanent non-goal is not built at all (`docs/PRD.md` §4, §6).
 
         If the specification is silent on something this task needs, stop and ask. The open
-        questions are `docs/DECISIONS.md` Part D — hitting one is a decision to be made, not a
+        questions are `docs/decisions/open-questions.md` — hitting one is a decision to be made, not a
         gap to be filled quietly.
   - type: textarea
     id: context
@@ -47,7 +47,7 @@ body:
         are theatre stops being read. What is left is what only a person can
         confirm. Which tests must exist is `ARCHITECTURE.md` §10.
       options:
-        - label: 'Documentation updated **in the same change** — schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a numbered decision in `DECISIONS.md` with what was rejected'
+        - label: 'Documentation updated **in the same change** — schema → `SCHEMA.md`, protocol → `ARCHITECTURE.md`, scope → `PRD.md`, a non-obvious choice → a numbered decision in `docs/decisions/` with what was rejected'
         - label: 'The change is the minimal delta the task requires; no unrelated refactor rode along'
         - label: 'Shapes defined in `@purlay/types` **before** any implementation, if this touches a contract'
         - label: 'A violation was fixed rather than waived — no rule loosened to make this pass'

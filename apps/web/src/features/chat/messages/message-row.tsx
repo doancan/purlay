@@ -210,7 +210,9 @@ const MessageRowView = ({
         {grouped ? (
           <>
             {sending}
-            {time}
+            {/* In a box with the body's line height, so the time sits on the first line's baseline
+            rather than above it. */}
+            <span className="whitespace-nowrap text-body">{time}</span>
           </>
         ) : (
           <Avatar
@@ -249,7 +251,7 @@ const MessageRowView = ({
           {editing ? (
             <MessageEditor message={message} />
           ) : deleted ? (
-            <p>{t('message.deleted')}</p>
+            <p className="text-body">{t('message.deleted')}</p>
           ) : event !== null ? (
             <GitHubEventCard event={event} />
           ) : (

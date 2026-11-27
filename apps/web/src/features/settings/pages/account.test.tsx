@@ -169,7 +169,7 @@ describe('signing out everywhere', () => {
     await person().click(
       within(view.getByRole('dialog')).getByRole('button', { name: 'Sign out everywhere' }),
     );
-    expect(await view.findByText(/^Couldn't sign you out\./)).toBeDefined();
+    expect(await view.findByText(/^Couldn’t sign you out\./)).toBeDefined();
     expect(here(view)).not.toBe('/sign-in');
     view.unmount();
   });

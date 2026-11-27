@@ -550,7 +550,10 @@ export const AuditPage = (): React.JSX.Element => {
               </Button>
             </div>
           ) : trail.data === undefined ? (
-            <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
+            <LoadingStatus
+              label={t('common.loading')}
+              className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
+            >
               <Skeleton />
               <Skeleton />
               <Skeleton />

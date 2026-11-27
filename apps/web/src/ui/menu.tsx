@@ -14,6 +14,7 @@
  * they are.
  */
 import * as RadixMenu from '@radix-ui/react-dropdown-menu';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
@@ -24,8 +25,9 @@ import { VisuallyHidden } from './visually-hidden';
 const contentClasses =
   'z-popover min-w-sidebar rounded-2xl border-hairline border-border-subtle bg-surface-100 p-1 shadow-float data-[state=open]:animate-pop-in data-[state=closed]:animate-pop-out';
 
+// `rounded-lg` inside the menu's `rounded-2xl` and its 4px of padding: the item's corner follows the menu's.
 const itemClasses =
-  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-md px-2 text-body data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
+  'flex h-control max-narrow:h-touch cursor-pointer items-center gap-2 rounded-lg px-2 text-body data-[highlighted]:bg-surface-200 data-[disabled]:cursor-not-allowed data-[disabled]:text-ink-muted';
 
 // Whole, never one over the other: `cn` does not merge, and in the stylesheet `text-ink` came after.
 const toneClasses = {
@@ -185,30 +187,90 @@ interface MenuSubProps {
   readonly children: React.ReactNode;
 }
 
+/** How far from the window's edge a menu stays, and from the menu it opens out of. */
+const EDGE_PX = 8;
+const GAP_PX = 4;
+
+/** The part of a box a submenu's place is worked out from. */
+interface Box {
+  readonly left: number;
+  readonly right: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface SubPlacement {
+  readonly sideOffset: number;
+  readonly alignOffset: number;
+}
+
+/**
+ * Where a submenu opens: beside its menu where a menu's width fits on either side, as on a desktop; where it does
+ * not (a phone, a menu in the middle of a narrow window), over its own menu, from the item that opened it and
+ * just under it — a negative offset of the item's width brings it back across, and the item's height keeps the
+ * item in sight. Beside, on a phone, it ran off the screen's edge, as there is no side for it to flip to.
+ */
+export const subPlacement = (menu: Box, item: Box, viewportWidth: number): SubPlacement => {
+  const room = Math.max(viewportWidth - menu.right, menu.left) - EDGE_PX - GAP_PX;
+  return room >= menu.width
+    ? { sideOffset: GAP_PX, alignOffset: 0 }
+    : { sideOffset: -item.width, alignOffset: item.height };
+};
+
+const BESIDE: SubPlacement = { sideOffset: GAP_PX, alignOffset: 0 };
+
 /**
  * A menu inside a menu: a group of choices that would crowd the menu it opens from, as a
  * submenu does in every desktop app. ArrowRight or Enter opens it and ArrowLeft closes it,
  * which is Radix's; the item stays highlighted while its submenu is open, so the eye can
- * follow where it came from.
+ * follow where it came from. It never leaves the window: `subPlacement` decides, as it opens.
  */
-export const MenuSub = ({ glyph, label, children }: MenuSubProps): React.JSX.Element => (
-  <RadixMenu.Sub>
-    <RadixMenu.SubTrigger
-      className={cn(itemClasses, toneClasses.default, 'data-[state=open]:bg-surface-200')}
+export const MenuSub = ({ glyph, label, children }: MenuSubProps): React.JSX.Element => {
+  const item = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<SubPlacement>(BESIDE);
+  return (
+    <RadixMenu.Sub
+      open={open}
+      onOpenChange={(next) => {
+        const trigger = item.current;
+        const menu = trigger?.closest('[role="menu"]');
+        if (next && trigger != null && menu != null) {
+          setPlacement(
+            subPlacement(
+              menu.getBoundingClientRect(),
+              trigger.getBoundingClientRect(),
+              document.documentElement.clientWidth,
+            ),
+          );
+        }
+        setOpen(next);
+      }}
     >
-      {glyph === undefined ? null : <Icon name={glyph} />}
-      <span className="flex-1">{label}</span>
-      <span className="text-ink-subtle">
-        <Icon name="next" />
-      </span>
-    </RadixMenu.SubTrigger>
-    <RadixMenu.Portal>
-      <RadixMenu.SubContent className={contentClasses} sideOffset={4} collisionPadding={8}>
-        {children}
-      </RadixMenu.SubContent>
-    </RadixMenu.Portal>
-  </RadixMenu.Sub>
-);
+      <RadixMenu.SubTrigger
+        ref={item}
+        className={cn(itemClasses, toneClasses.default, 'data-[state=open]:bg-surface-200')}
+      >
+        {glyph === undefined ? null : <Icon name={glyph} />}
+        <span className="flex-1">{label}</span>
+        <span className="text-ink-subtle">
+          <Icon name="next" />
+        </span>
+      </RadixMenu.SubTrigger>
+      <RadixMenu.Portal>
+        <RadixMenu.SubContent
+          className={contentClasses}
+          sideOffset={placement.sideOffset}
+          alignOffset={placement.alignOffset}
+          collisionPadding={EDGE_PX}
+          sticky="always"
+        >
+          {children}
+        </RadixMenu.SubContent>
+      </RadixMenu.Portal>
+    </RadixMenu.Sub>
+  );
+};
 
 export const MenuLabel = ({
   children,
@@ -309,8 +371,11 @@ export const MenuCheckboxItem = ({
 export const MenuTiles = ({
   children,
   grid = false,
+  label,
 }: {
   readonly children: React.ReactNode;
+  /** The group's name, where the tiles are one of several groups in the menu (an emoji picker's Faces). */
+  readonly label?: string;
   /**
    * Eight to a row instead of one long row, and ↑ ↓ move a row (D-181): an emoji picker is a grid, and a
    * grid that only the sideways arrows can cross is a list in disguise. Radix's own ↑ ↓ would step one.
@@ -319,6 +384,7 @@ export const MenuTiles = ({
 }): React.JSX.Element => (
   <div
     role="group"
+    {...(label === undefined ? {} : { 'aria-label': label })}
     className={grid ? 'grid grid-cols-8 gap-1' : 'flex gap-1'}
     onKeyDown={(event) => {
       const step =

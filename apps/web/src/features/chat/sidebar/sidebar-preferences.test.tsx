@@ -178,7 +178,7 @@ describe('only what is unread', () => {
     await choose(view, 'Only unread');
     expect(rows(view, 'Channels')).toEqual([]);
     const sidebar = within(view.getByRole('complementary', { name: 'Workspace' }));
-    expect(sidebar.getByText('Nothing unread.')).toBeDefined();
+    expect(sidebar.getByText('Nothing unread')).toBeDefined();
     expect(sidebar.queryAllByRole('alert').length).toBe(0);
   });
 });
@@ -355,7 +355,7 @@ describe('the asks together, through the lists', () => {
     expect(rows(view, 'Channels')).toEqual([]);
     expect(
       within(view.getByRole('complementary', { name: 'Workspace' })).queryAllByText(
-        'Nothing to show with these options.',
+        'Nothing to show with these options',
       ).length,
     ).toBe(0);
   });
@@ -556,6 +556,6 @@ describe('Copy workspace link', () => {
     await person().click(view.getByRole('button', { name: /Switch workspace/ }));
     await person().click(view.getByRole('menuitem', { name: 'Copy workspace link' }));
     await settle();
-    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
+    expect(view.getByText('Couldn’t copy. Select the text and copy it yourself.')).toBeDefined();
   });
 });

@@ -150,29 +150,35 @@ export const CommandList = ({
         </>
       }
     >
-      {commands.map((name, index) => (
-        <div
-          key={name}
-          id={commandOptionId(listId, name)}
-          role="option"
-          aria-selected={index === current}
-          onClick={() => {
-            onChoose(name);
-          }}
-          onPointerMove={() => {
-            if (index !== current) onHover(index);
-          }}
-          className={cn(
-            'flex cursor-pointer items-baseline gap-3 rounded-md px-3 py-2',
-            index === current && 'bg-accent-subtle',
-          )}
-        >
-          <span className="shrink-0 font-mono text-label text-ink">/{name}</span>
-          <span className="min-w-0 truncate text-label text-ink-muted">
-            {t(`slash.${name}.about`)}
-          </span>
-        </div>
-      ))}
+      {/* A table's columns are as wide as their widest cell: the names make one column, so every
+          description starts at one edge down the list. */}
+      <div role="presentation" className="table w-full">
+        {commands.map((name, index) => (
+          <div
+            key={name}
+            id={commandOptionId(listId, name)}
+            role="option"
+            aria-selected={index === current}
+            onClick={() => {
+              onChoose(name);
+            }}
+            onPointerMove={() => {
+              if (index !== current) onHover(index);
+            }}
+            className={cn(
+              'table-row cursor-pointer rounded-md',
+              index === current && 'bg-accent-subtle',
+            )}
+          >
+            <span className="table-cell whitespace-nowrap py-2 pl-3 align-baseline font-mono text-label text-ink">
+              /{name}
+            </span>
+            <span className="table-cell w-full max-w-0 truncate px-3 py-2 align-baseline text-label text-ink-muted">
+              {t(`slash.${name}.about`)}
+            </span>
+          </div>
+        ))}
+      </div>
     </SuggestionPopover>
   );
 };

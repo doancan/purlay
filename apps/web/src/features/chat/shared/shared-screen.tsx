@@ -9,7 +9,8 @@ import { useChannels } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useRoute } from '../../../router/router-provider';
 import { Button } from '../../../ui/button';
-import { ListColumn, ListFilter } from '../../../ui/list-column';
+import { cn } from '../../../ui/cn';
+import { ListColumn, ListFilter, listRowClasses } from '../../../ui/list-column';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { TextField } from '../../../ui/text-field';
@@ -55,6 +56,7 @@ const SharedView = ({
   if (invalid)
     body = (
       <ErrorState
+        framed
         title={t('shared.invalid.title')}
         body={t('shared.invalid.body')}
         retryLabel={t('shared.clear')}
@@ -66,6 +68,7 @@ const SharedView = ({
   else if (query.isPaused && query.data === undefined)
     body = (
       <ErrorState
+        framed
         title={t('shared.offline')}
         body={t('failure.network')}
         retryLabel={t('common.retry')}
@@ -76,15 +79,31 @@ const SharedView = ({
     );
   else if (query.isPending)
     body = (
-      <LoadingStatus label={t('shared.loading')} className="flex flex-col gap-4 py-2">
-        {[0, 1, 2].map((row) => (
-          <Skeleton key={row} className="w-full" />
-        ))}
+      <LoadingStatus label={t('shared.loading')}>
+        {/* The rows' own shape — a mark and a name, then who, where and when — so nothing moves when they land. */}
+        <div
+          aria-hidden="true"
+          className="overflow-hidden rounded-xl border-hairline border-border-subtle bg-surface-100 shadow-card"
+        >
+          {[0, 1, 2].map((row) => (
+            <div
+              key={row}
+              className={cn(listRowClasses, 'flex flex-col gap-3 px-5 py-4 max-narrow:px-4')}
+            >
+              <span className="flex items-center gap-3">
+                <span className="block size-avatar shrink-0 rounded-md bg-surface-200" />
+                <Skeleton className="w-1/3" />
+              </span>
+              <Skeleton className="w-1/4" />
+            </div>
+          ))}
+        </div>
       </LoadingStatus>
     );
   else if (query.isError && query.data === undefined)
     body = (
       <ErrorState
+        framed
         title={t('shared.error')}
         body={describe(query.error)}
         retryLabel={t('common.retry')}
@@ -96,7 +115,7 @@ const SharedView = ({
   else if (items.length === 0)
     body = (
       <GlyphEmptyState
-        glyph="file"
+        glyph={filters.view === 'links' ? 'link' : 'file'}
         tone="accent"
         title={t(
           narrowed
@@ -137,8 +156,8 @@ const SharedView = ({
           label={t('shared.show')}
           value={filters.view}
           choices={[
-            { value: 'files', label: t('shared.files') },
-            { value: 'links', label: t('shared.links') },
+            { value: 'files', label: t('shared.files'), glyph: 'file' },
+            { value: 'links', label: t('shared.links'), glyph: 'link' },
           ]}
           onChange={(view) => {
             const { type, ...rest } = filters;
@@ -165,10 +184,7 @@ const SharedView = ({
             }}
           />
           <SharedControls value={filters} onChange={change} />
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="secondary">
-              {t('shared.apply')}
-            </Button>
+          <div className="flex flex-wrap justify-end gap-2">
             {narrowed && (
               <Button
                 variant="ghost"
@@ -179,6 +195,9 @@ const SharedView = ({
                 {t('shared.clear')}
               </Button>
             )}
+            <Button type="submit" variant="primary">
+              {t('shared.apply')}
+            </Button>
           </div>
         </form>
         {indexing && (

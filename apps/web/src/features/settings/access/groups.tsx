@@ -59,7 +59,7 @@ export const AccessGroupsPage = (): React.JSX.Element => {
       }
     >
       <SettingsCard title={t('access.groups.title')} description={t('access.groups.folderHint')}>
-        <div className="p-4">
+        <div className="px-6 py-4 max-narrow:px-4">
           <AccessSearch
             value={search}
             change={(value) => {
@@ -70,7 +70,7 @@ export const AccessGroupsPage = (): React.JSX.Element => {
         </div>
         <AccessListState
           pending={groups.isPending}
-          failed={groups.isError}
+          failure={groups.error}
           paused={groups.isPaused}
           empty={items.length === 0}
           retry={() => {
@@ -279,12 +279,12 @@ const GroupDetail = ({
           ) : undefined
         }
       >
-        <div className="p-4">
+        <div className="px-6 py-4 max-narrow:px-4">
           <AccessSearch value={search} change={setSearch} label={t('access.people.search')} />
         </div>
         <AccessListState
           pending={members.isPending}
-          failed={members.isError}
+          failure={members.error}
           paused={members.isPaused}
           empty={items.length === 0}
           retry={() => {
@@ -436,7 +436,7 @@ const GroupCandidates = ({
       />
       <AccessListState
         pending={candidates.isPending}
-        failed={candidates.isError}
+        failure={candidates.error}
         paused={candidates.isPaused}
         empty={items.length === 0}
         retry={() => {

@@ -86,6 +86,13 @@ describe('the Saved view', () => {
     expect(rows[0]).toContain('kept words 2');
     expect(rows[0]).toContain('#api');
     expect(rows[1]).toContain('kept words 1');
+    // When it was saved: in words on a wide window, the time alone on a phone's narrow line.
+    const [wide, narrow] = Array.from(
+      within(view.getByRole('main')).getAllByRole('listitem')[0]?.querySelector('time')?.children ??
+        [],
+    ).map((form) => form.textContent);
+    expect(wide).toBe(`saved ${narrow ?? ''}`);
+    expect(narrow?.length).toBeGreaterThan(0);
     expect(view.getByRole('link', { name: 'Saved' }).getAttribute('aria-current')).toBe('page');
     expect(view.getByRole('button', { name: 'In progress' }).getAttribute('aria-pressed')).toBe(
       'true',
@@ -107,6 +114,10 @@ describe('the Saved view', () => {
     expect(view.world.history.stack.at(-1)).toBe('/w/acme/saved?state=archived');
     expect(asked).toEqual(['in_progress', 'archived']);
     expect(view.getByText('Nothing archived')).toBeDefined();
+    // Says how a message comes to this tab: by archiving it, not by saving it.
+    expect(
+      view.getByText('Archive a saved message to put it away without letting it go.'),
+    ).toBeDefined();
     view.unmount();
   });
 

@@ -63,7 +63,7 @@ export const CompanyCopyValue = ({
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-label text-ink">{label}</span>
       <div className="flex min-w-0 items-start gap-2">
-        <code className="min-w-0 flex-1 select-all break-all rounded-md border-hairline border-border-subtle bg-surface-050 px-3 py-2 font-mono text-caption text-ink">
+        <code className="flex min-h-control min-w-0 flex-1 select-all items-center break-all rounded-md border-hairline border-border-subtle bg-surface-000 px-3 py-1 font-mono text-caption text-ink max-narrow:min-h-touch">
           {value}
         </code>
         <Button

@@ -30,7 +30,7 @@ which supplies their context. Shared content discovery extends that workflow.
 ## Evidence on Hand
 
 The user's accepted goal is tracked in #1372. Existing technical and product authorities are
-[OVERVIEW](../../docs/OVERVIEW.md), [UX](../../docs/UX.md), [DECISIONS](../../docs/DECISIONS.md),
+[OVERVIEW](../../docs/OVERVIEW.md), [UX](../../docs/UX.md), [decisions](../../docs/decisions/README.md),
 the chat source, and committed browser screenshots under `e2e/__snapshots__/`. This record does not
 replace those authorities or introduce new product claims.
 

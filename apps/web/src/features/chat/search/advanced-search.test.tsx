@@ -103,7 +103,10 @@ describe('advanced search', () => {
     await settle();
     await person().click(view.getByRole('button', { name: 'Saved searches' }));
     await settle();
-    await person().click(view.getByRole('button', { name: 'Retry' }));
+    // The failure is said, not only a Retry offered.
+    const failed = view.getByRole('alert');
+    expect(failed.querySelector('p')?.textContent.length ?? 0).toBeGreaterThan(0);
+    await person().click(within(failed).getByRole('button', { name: 'Retry' }));
     await settle();
     expect(view.getByText(/No saved searches yet/)).toBeDefined();
     await person().type(view.getByLabelText('Search name'), 'Questions');

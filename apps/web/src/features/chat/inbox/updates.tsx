@@ -29,8 +29,7 @@ import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { useToast } from '../../../ui/toast';
 import { cn } from '../../../ui/cn';
-import { ListCard, listButtonClasses, listRowClasses } from '../../../ui/list-column';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { ListCard, ListSkeleton, listButtonClasses, listRowClasses } from '../../../ui/list-column';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useSession } from '../../session/session';
@@ -65,21 +64,14 @@ const paintRead = (
   );
 };
 
-/** The caller's updates in the workspace, newest first, `limit` a page (the panel's glance is one short page). */
-const useUpdates = (limit?: number): UseInfiniteQueryResult<InfiniteData<InboxPage>> => {
+/** The caller's updates in the workspace, newest first, a page at a time. */
+const useUpdates = (): UseInfiniteQueryResult<InfiniteData<InboxPage>> => {
   const api = useApi();
   const { workspace } = useWorkspace();
   return useInfiniteQuery({
-    queryKey: [...keys.inbox(workspace.id), 'list', limit ?? 'page'],
+    queryKey: [...keys.inbox(workspace.id), 'list', 'page'],
     queryFn: ({ pageParam, signal }) =>
-      api.inbox(
-        workspace.id,
-        {
-          ...(pageParam === undefined ? {} : { before: pageParam }),
-          ...(limit === undefined ? {} : { limit }),
-        },
-        signal,
-      ),
+      api.inbox(workspace.id, pageParam === undefined ? {} : { before: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
@@ -122,14 +114,10 @@ const useReadUpdates = (): {
 };
 
 /** Mark all read for the updates on screen; drawn only while one waits. */
-export const UpdatesReadAll = ({
-  limit,
-}: {
-  readonly limit?: number;
-}): React.JSX.Element | null => {
+export const UpdatesReadAll = (): React.JSX.Element | null => {
   const { t } = useI18n();
   const { readAll } = useReadUpdates();
-  const first = useUpdates(limit).data?.pages[0];
+  const first = useUpdates().data?.pages[0];
   if (first === undefined || first.unreadCount === 0) return null;
   return (
     <Button variant="ghost" glyph="confirm" onClick={readAll}>
@@ -138,15 +126,7 @@ export const UpdatesReadAll = ({
   );
 };
 
-const UpdateRow = ({
-  entry,
-  density,
-  onDone,
-}: {
-  readonly entry: InboxEntry;
-  readonly density: 'page' | 'panel';
-  readonly onDone: () => void;
-}): React.JSX.Element => {
+const UpdateRow = ({ entry }: { readonly entry: InboxEntry }): React.JSX.Element => {
   const { t, format } = useI18n();
   const { workspace } = useWorkspace();
   const { navigate } = useRoute();
@@ -169,26 +149,18 @@ const UpdateRow = ({
         onClick={() => {
           if (unread) readIds([entry.id]);
           if (notice === undefined) return;
-          onDone();
           navigate(`/w/${workspace.slug}/${notice.path}`);
         }}
-        className={listButtonClasses(
-          density === 'panel' ? 'gap-2.5 px-4 py-2.5 max-narrow:px-4' : undefined,
-        )}
+        className={listButtonClasses()}
       >
         <span
           aria-hidden="true"
           className={cn(
-            density === 'panel' ? 'absolute top-4 left-1' : 'absolute top-5 left-2',
-            'size-dot rounded-pill',
+            'absolute top-5 left-2 size-dot rounded-pill',
             unread ? 'bg-accent' : 'bg-transparent',
           )}
         />
-        <Avatar
-          name={name}
-          username={actor?.username ?? name}
-          {...(density === 'panel' ? { size: 'sm' as const } : {})}
-        />
+        <Avatar name={name} username={actor?.username ?? name} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
             <Icon name="notifications" size="sm" />
@@ -207,30 +179,17 @@ const UpdateRow = ({
 };
 
 /** The updates, in the states every list has: loading, failed, empty, and the rows with the next page behind a button. */
-export const Updates = ({
-  density = 'page',
-  limit,
-  onDone = (): void => undefined,
-}: {
-  readonly density?: 'page' | 'panel';
-  readonly limit?: number;
-  readonly onDone?: () => void;
-}): React.JSX.Element => {
+export const Updates = (): React.JSX.Element => {
   const { t } = useI18n();
-  const query = useUpdates(limit);
+  const query = useUpdates();
   const rows = (query.data?.pages ?? []).flatMap((page) => page.data);
   if (query.isPending) {
-    return (
-      <LoadingStatus label={t('state.inbox.loading')} className="flex flex-col gap-3 px-4 py-3">
-        {[0, 1, 2].map((row) => (
-          <Skeleton key={row} />
-        ))}
-      </LoadingStatus>
-    );
+    return <ListSkeleton label={t('state.inbox.loading')} />;
   }
   if (query.isError && query.data === undefined) {
     return (
       <ErrorState
+        framed
         title={t('state.inbox.error.title')}
         body={t('state.inbox.error.body')}
         retryLabel={t('common.retry')}
@@ -250,22 +209,14 @@ export const Updates = ({
       />
     );
   }
-  const items = rows.map((entry) => (
-    <UpdateRow key={entry.id} entry={entry} density={density} onDone={onDone} />
-  ));
   return (
     <>
-      {density === 'page' ? (
-        <ListCard label={t('inbox.category.updates')}>{items}</ListCard>
-      ) : (
-        <ul
-          aria-label={t('inbox.category.updates')}
-          className="max-h-inbox-panel-list overflow-y-auto"
-        >
-          {items}
-        </ul>
-      )}
-      {query.hasNextPage && density === 'page' && (
+      <ListCard label={t('inbox.category.updates')}>
+        {rows.map((entry) => (
+          <UpdateRow key={entry.id} entry={entry} />
+        ))}
+      </ListCard>
+      {query.hasNextPage && (
         <div className="flex justify-center">
           <Button
             variant="secondary"

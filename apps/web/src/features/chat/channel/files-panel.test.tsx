@@ -206,7 +206,7 @@ describe('a channel’s files panel', () => {
     });
     await openFiles(view);
     const alert = within(panelOf(view)).getByRole('alert');
-    expect(alert.textContent).toContain('The files did not load.');
+    expect(alert.textContent).toContain('Couldn’t load files');
     await expectNoAxeViolations(view.container);
 
     await person().click(within(alert).getByRole('button', { name: 'Retry' }));
@@ -268,6 +268,27 @@ describe('a channel’s files panel', () => {
     await settle();
     expect(view.queryByRole('complementary', { name: /Files/ })).toBeNull();
     expectFocusOn(toggle(view));
+    view.unmountAll();
+  });
+
+  test('open beside the conversation, the header keeps the channel’s name and narrows its views to the questions', async () => {
+    const view = await mount(() => Promise.resolve(filePage([aFile(1)])));
+    const views = (): HTMLElement => view.getByRole('navigation', { name: 'Channel views' });
+    expect(within(views()).getByRole('link', { name: 'Feed' })).toBeDefined();
+    expect(within(views()).getByRole('link', { name: 'Open questions' }).textContent).toBe(
+      'Open questions',
+    );
+
+    await openFiles(view);
+    // The questions stay a link by their name; the words give way to the glyph, and the Feed is where one is.
+    expect(within(views()).queryByRole('link', { name: 'Feed' })).toBeNull();
+    const questions = within(views()).getByRole('link', { name: 'Open questions' });
+    expect(questions.textContent).toBe('');
+    expect(toggle(view).getAttribute('aria-pressed')).toBe('true');
+
+    await person().keyboard('{Escape}');
+    await settle();
+    expect(within(views()).getByRole('link', { name: 'Feed' })).toBeDefined();
     view.unmountAll();
   });
 

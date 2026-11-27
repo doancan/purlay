@@ -49,24 +49,42 @@ interface GlyphEmptyStateProps {
   readonly glyph: GlyphName;
   readonly tone: keyof typeof tileTones;
   readonly title: string;
-  readonly body: string;
+  /** What this place is for, or how something gets here; a title that says it all needs none. */
+  readonly body?: string;
+  /** The next action, if there is one: a button or a link. */
+  readonly action?: React.ReactNode;
   /** The heading level in the page's outline: `h2` on a screen, `h3` in a panel under its heading. */
   readonly as?: Exclude<Heading, 'h1'>;
+  /**
+   * Drawn in the list's own card, where the rows would stand, so an empty list keeps the shape of a full one.
+   * `false` where it already stands in a card: a card inside a card is a frame too many.
+   */
+  readonly framed?: boolean;
 }
 
 /**
- * Nothing here, centred under a glyph in a tile — a list that is empty because it is done or not
- * started (the inbox, the open questions, saved messages, a side panel). One component so each has
- * the same room above it: the screens wrote their own copy and drew it against the header (#625).
+ * Nothing here — a list that is empty because it is done or not started (the inbox, the open questions,
+ * saved messages, a side panel, an administration list): one design everywhere, a glyph in a tile, the title
+ * and the sentence under it, centred in the card the list's rows would stand in. One component so each has
+ * the same room and the same frame: the screens drew their own, and some floated on the page's ground (#625).
  */
 export const GlyphEmptyState = ({
   glyph,
   tone,
   title,
   body,
+  action,
   as: Title = 'h2',
+  framed = true,
 }: GlyphEmptyStateProps): React.JSX.Element => (
-  <section className="flex max-w-feed flex-col items-center gap-3 px-4 py-8 text-center">
+  <section
+    className={cn(
+      'flex w-full flex-col items-center gap-3 text-center',
+      framed
+        ? 'rounded-xl border-hairline border-border-subtle bg-surface-100 px-6 py-12 shadow-card max-narrow:px-4 max-narrow:py-8'
+        : 'px-4 py-8',
+    )}
+  >
     <span
       aria-hidden="true"
       className={cn(
@@ -76,8 +94,11 @@ export const GlyphEmptyState = ({
     >
       <Icon name={glyph} size="lg" />
     </span>
-    <Title className="text-title text-ink">{title}</Title>
-    <p className="text-balance text-body text-ink-muted">{body}</p>
+    <div className="flex max-w-dialog flex-col gap-1">
+      <Title className="text-title text-ink">{title}</Title>
+      {body !== undefined && <p className="text-balance text-body text-ink-muted">{body}</p>}
+    </div>
+    {action !== undefined && <div className="mt-1">{action}</div>}
   </section>
 );
 
@@ -86,6 +107,11 @@ interface ErrorStateProps {
   readonly body: string;
   readonly retryLabel: string;
   readonly onRetry: () => void;
+  /**
+   * Drawn in the list's own card, as `GlyphEmptyState` is, where a list screen's rows would stand: a failure
+   * keeps the shape of the list it replaces. Unframed, it starts at the column's edge, as the rows would.
+   */
+  readonly framed?: boolean;
 }
 
 /** `role="alert"`: a failure that replaces content is announced the moment it appears. */
@@ -94,8 +120,17 @@ export const ErrorState = ({
   body,
   retryLabel,
   onRetry,
+  framed = false,
 }: ErrorStateProps): React.JSX.Element => (
-  <section role="alert" className="flex flex-col items-start gap-3 px-4 py-8">
+  <section
+    role="alert"
+    className={cn(
+      'flex flex-col items-start gap-3',
+      framed
+        ? 'w-full rounded-xl border-hairline border-border-subtle bg-surface-100 px-6 py-8 shadow-card max-narrow:px-4'
+        : 'py-8',
+    )}
+  >
     <div className="flex items-center gap-2 text-label text-danger-text">
       <Icon name="failed" />
       <h2 className="text-label">{title}</h2>

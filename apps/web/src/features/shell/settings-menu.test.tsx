@@ -102,7 +102,7 @@ describe('SettingsMenu', () => {
       </OverlayProvider>,
     );
     await person().click(getByRole('button', { name: 'Settings' }));
-    expect(getByRole('menuitem', { name: /Keyboard shortcuts/ }).textContent).toContain('Ctrl/');
+    expect(getByRole('menuitem', { name: /Keyboard shortcuts/ }).textContent).toContain('Ctrl+/');
   });
 
   test('passes the accessibility audit', async () => {

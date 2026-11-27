@@ -254,7 +254,7 @@ test('inventory errors and clipboard refusals have recovery without enabling emp
   );
   await view.findByText('Verified');
   await person().click(view.getByRole('button', { name: 'Copy Authorized redirect URI' }));
-  await view.findByText("Couldn't copy. Select the text and copy it yourself.");
+  await view.findByText('Couldn’t copy. Select the text and copy it yourself.');
 });
 
 test('a refused domain removal reports inside its focused dialog and preserves the domain', async () => {

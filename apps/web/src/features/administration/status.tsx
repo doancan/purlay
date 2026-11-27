@@ -36,13 +36,25 @@ export const Overview = (): React.JSX.Element => {
                 </Button>
               }
             >
-              <p role="status" className="px-6 py-4 text-body text-ink">
-                {t(data.ready ? 'admin.ready' : 'admin.notReady')}
-              </p>
-              <p className="px-6 pb-4 text-caption text-ink-muted">
-                {t('admin.checked', { when: format.absolute(data.checkedAt) })}
-              </p>
-              <dl className="grid grid-cols-3 gap-4 px-6 py-4 max-narrow:grid-cols-2 max-narrow:px-4">
+              {/* The verdict and when it was reached are one statement; the counts below are another. */}
+              <div className="flex flex-col gap-1 px-6 py-4 max-narrow:px-4">
+                <p role="status" className="flex items-start gap-2 text-body text-ink">
+                  {/* A line tall and centred in it, so the glyph stays on the first line when the verdict wraps. */}
+                  <span
+                    className={cn(
+                      'inline-flex h-lh shrink-0 items-center',
+                      data.ready ? 'text-success-text' : 'text-warning-text',
+                    )}
+                  >
+                    <Icon name={data.ready ? 'confirm' : 'warning'} size="sm" />
+                  </span>
+                  {t(data.ready ? 'admin.ready' : 'admin.notReady')}
+                </p>
+                <p className="text-caption text-ink-muted">
+                  {t('admin.checked', { when: format.absolute(data.checkedAt) })}
+                </p>
+              </div>
+              <dl className="grid grid-cols-3 gap-x-6 gap-y-5 border-y-hairline border-border-subtle px-6 py-5 max-narrow:grid-cols-2 max-narrow:px-4">
                 {[
                   [t('admin.accounts'), data.users],
                   [t('admin.admins'), data.admins],
@@ -53,7 +65,7 @@ export const Overview = (): React.JSX.Element => {
                 ].map(([label, value]) => (
                   <div key={label} className="flex min-w-0 flex-col gap-1">
                     <dt className="text-caption text-ink-muted">{label}</dt>
-                    <dd className="text-title text-ink">{value}</dd>
+                    <dd className="text-title text-ink tabular-nums">{value}</dd>
                   </div>
                 ))}
               </dl>
@@ -121,7 +133,7 @@ export const Operations = (): React.JSX.Element => {
             {data.jobs.map((job) => (
               <li
                 key={job.name}
-                className="flex flex-col gap-2 not-last:border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
+                className="flex flex-col gap-1 not-last:border-b-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-mono text-label text-ink break-all">{job.name}</h3>
@@ -135,7 +147,7 @@ export const Operations = (): React.JSX.Element => {
                     {t(`admin.job.${job.status}`)}
                   </span>
                 </div>
-                <p className="text-caption text-ink-muted">
+                <p className="text-caption text-ink-muted tabular-nums">
                   {t('admin.lastSuccess')}:{' '}
                   {job.lastSuccessAt === null
                     ? t('admin.job.never')
@@ -145,7 +157,7 @@ export const Operations = (): React.JSX.Element => {
               </li>
             ))}
           </ul>
-          <p className="px-6 py-4 text-caption text-ink-muted">
+          <p className="border-t-hairline border-border-subtle px-6 py-4 text-caption text-ink-muted max-narrow:px-4">
             {t('admin.checked', { when: format.absolute(data.checkedAt) })}
           </p>
         </SettingsCard>

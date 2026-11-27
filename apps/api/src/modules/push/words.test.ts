@@ -45,6 +45,6 @@ describe('what a push says', () => {
 
   test('names who did it', () => {
     expect(pushBody('en', 'mention', 'Alice')).toBe('Alice mentioned you');
-    expect(pushBody('tr', 'direct_message', 'Ayşe')).toBe('Ayşe sana yazdı');
+    expect(pushBody('tr', 'direct_message', 'Ayşe')).toBe('Ayşe size yazdı');
   });
 });

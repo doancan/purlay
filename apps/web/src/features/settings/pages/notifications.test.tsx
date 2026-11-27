@@ -186,7 +186,7 @@ describe('notifications', () => {
 
   test('in no channel yet, it says so', async () => {
     const view = await open({ channels: () => Promise.resolve([]) });
-    expect(main(view).getByText('You are in no channels yet.')).toBeDefined();
+    expect(main(view).getByText('You are in no channels yet')).toBeDefined();
     view.unmount();
   });
 

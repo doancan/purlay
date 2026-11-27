@@ -24,4 +24,4 @@ body:
     id: risks
     attributes:
       label: Open questions this touches
-      description: 'Any of `DECISIONS.md` Part D (O-1 … O-5). An epic that touches an open question stays in Backlog, not Ready.'
+      description: 'Any open question in `docs/decisions/open-questions.md`. An epic that touches an open question stays in Backlog, not Ready.'

@@ -55,6 +55,8 @@ describe('the address link', () => {
     );
     expect(view.getByRole('heading', { name: 'This link does not open' })).toBeDefined();
     expect(view.getByText(/a link works once, for 24 hours/)).toBeDefined();
+    // Not a dead end: the way on is the sign-in page.
+    expect(view.getByRole('link', { name: 'Go to sign in' }).getAttribute('href')).toBe('/sign-in');
   });
 
   test('says an incomplete link is incomplete, and posts nothing', async () => {
@@ -64,6 +66,7 @@ describe('the address link', () => {
       return Promise.resolve({ verified: true });
     });
     expect(view.getByRole('heading', { name: 'This link is incomplete' })).toBeDefined();
+    expect(view.getByRole('link', { name: 'Go to sign in' }).getAttribute('href')).toBe('/sign-in');
     expect(posted).toBe(0);
   });
 

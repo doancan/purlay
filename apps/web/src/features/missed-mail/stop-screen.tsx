@@ -12,20 +12,18 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { Button, buttonStyle } from '../../ui/button';
 import { browserInvitationPorts } from '../invitations/pending';
-import { LogoMark, Notice } from '../shell/notice';
-import { StandaloneScreen } from '../shell/standalone';
+import { Notice } from '../shell/notice';
+import { StandaloneCard, StandaloneScreen } from '../shell/standalone';
 
 const FRAGMENT = /^#([0-9a-f]{64})$/;
 
 /** The link's token, or nothing for a fragment that is not one. */
 export const readStopLink = (hash: string): string | null => FRAGMENT.exec(hash)?.[1] ?? null;
 
+/** Every state of the page is a notice — the question, then its answer — in the notice's card (`sign-in/door-card`). */
 const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
   <StandaloneScreen>
-    <div className="flex w-full max-w-dialog flex-col items-center gap-4 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 text-center shadow-card">
-      <LogoMark />
-      {children}
-    </div>
+    <StandaloneCard>{children}</StandaloneCard>
   </StandaloneScreen>
 );
 
@@ -52,7 +50,7 @@ export const MailStopScreen = (): React.JSX.Element => {
   }, [state.kind]);
 
   const open = (
-    <a href={href('home')} className={buttonStyle('primary', 'lg')}>
+    <a href={href('home')} className={buttonStyle('primary')}>
       {t('mailStop.open')}
     </a>
   );
@@ -125,7 +123,7 @@ export const MailStopScreen = (): React.JSX.Element => {
           }
         />
       ) : (
-        <div ref={heading} tabIndex={-1} className="outline-none">
+        <div ref={heading} tabIndex={-1} className="flex flex-1 flex-col outline-none">
           {answer}
         </div>
       )}

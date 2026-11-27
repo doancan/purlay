@@ -25,7 +25,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Link } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
-import { ListCard, ListColumn } from '../../../ui/list-column';
+import { ListCard, ListColumn, ListSkeleton } from '../../../ui/list-column';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
@@ -72,7 +72,7 @@ const Line = ({
   );
   return (
     <li className="flex gap-3 px-5 py-3 not-first:border-t-hairline border-border-subtle max-narrow:px-4">
-      <Avatar size="sm" name={author.displayName} username={author.username} />
+      <Avatar name={author.displayName} username={author.username} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-label font-semibold text-ink">{author.displayName}</span>
@@ -117,7 +117,7 @@ const Line = ({
               search={new URLSearchParams({
                 message: unreadThread.firstUnreadMessageId,
               }).toString()}
-              className="font-medium text-accent-text hover:underline"
+              className="inline-flex items-center font-medium text-accent-text hover:underline max-narrow:min-h-touch"
             >
               {t('unreads.openReplies')} · {t('unreads.count', { count: unreadThread.unreadCount })}
             </Link>
@@ -127,7 +127,7 @@ const Line = ({
               to="channel"
               params={{ slug: workspace.slug, channelId: message.channelId }}
               search={new URLSearchParams({ message: message.id }).toString()}
-              className="font-medium text-accent-text hover:underline"
+              className="inline-flex items-center font-medium text-accent-text hover:underline max-narrow:min-h-touch"
             >
               {t('unreads.openMessage')}
             </Link>
@@ -139,7 +139,7 @@ const Line = ({
                 to="channel"
                 params={{ slug: workspace.slug, channelId: message.channelId }}
                 search={new URLSearchParams({ thread: message.id }).toString()}
-                className="font-medium text-accent-text hover:underline"
+                className="inline-flex items-center font-medium text-accent-text hover:underline max-narrow:min-h-touch"
               >
                 {t('thread.show')} · {t('thread.replies', { count: message.thread.replyCount })}
               </Link>
@@ -203,16 +203,24 @@ const ChannelUnreads = ({
       headingId={headingId}
       heading={
         <div className="flex flex-wrap items-center gap-3">
-          <h2
-            id={headingId}
-            className="min-w-0 flex-1 basis-16 truncate text-label font-semibold text-ink"
-          >
+          {/* Named as the open questions name a channel's group: its mark, then its name. */}
+          <h2 id={headingId} className="flex min-w-0 flex-1 basis-16 text-label text-ink-muted">
             <Link
               to="channel"
               params={{ slug: workspace.slug, channelId: channel.id }}
-              className="hover:underline"
+              className="inline-flex min-w-0 items-center gap-1 rounded-sm transition-colors duration-hover ease-standard hover:text-ink"
             >
-              {title}
+              <Icon
+                name={
+                  channel.type === 'direct_message'
+                    ? 'person'
+                    : channel.type === 'private'
+                      ? 'private-channel'
+                      : 'channel'
+                }
+                size="sm"
+              />
+              <span className="truncate">{title}</span>
             </Link>
           </h2>
           <span className="shrink-0 text-caption text-ink-muted">
@@ -243,14 +251,21 @@ const ChannelUnreads = ({
       }
     >
       {page.isPending ? (
-        <li className="px-5 py-3">
-          <LoadingStatus label={t('unreads.loading')} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
+        // The shape of the row that will land here: its avatar, its author line and its words.
+        <li className="px-5 py-3 max-narrow:px-4">
+          <LoadingStatus label={t('unreads.loading')} className="flex gap-3">
+            <span
+              aria-hidden="true"
+              className="block size-avatar shrink-0 rounded-lg bg-surface-200"
+            />
+            <span className="flex min-w-0 flex-1 flex-col gap-3 py-1">
+              <Skeleton className="w-1/3" />
+              <Skeleton className="w-3/4" />
+            </span>
           </LoadingStatus>
         </li>
       ) : failed ? (
-        <li className="flex items-center gap-3 px-5 py-3 text-label text-danger-text">
+        <li className="flex items-center gap-3 px-5 py-3 text-label text-danger-text max-narrow:px-4">
           {t('unreads.failed')}
           <Button
             variant="secondary"
@@ -322,7 +337,7 @@ const ChannelUnreads = ({
               <Link
                 to="channel"
                 params={{ slug: workspace.slug, channelId: channel.id }}
-                className="text-label font-medium text-accent-text hover:underline"
+                className="inline-flex items-center text-label font-medium text-accent-text hover:underline max-narrow:min-h-touch"
               >
                 {t('unreads.more', { channel: title })}
               </Link>
@@ -357,12 +372,10 @@ export const UnreadsScreen = (): React.JSX.Element => {
       </header>
       <ListColumn>
         {channels.isPending ? (
-          <LoadingStatus label={t('unreads.loading')} className="flex flex-col gap-4 py-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
-          </LoadingStatus>
+          <ListSkeleton label={t('unreads.loading')} />
         ) : channels.isError ? (
           <ErrorState
+            framed
             title={t('unreads.failed')}
             body={t('unreads.failedBody')}
             retryLabel={t('common.retry')}

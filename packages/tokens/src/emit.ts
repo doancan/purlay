@@ -43,6 +43,8 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-touch': ['--height-touch', '--container-touch', '--size-touch'],
   // A badge is a height and a minimum width: one digit is a circle, two are not.
   'size-badge': ['--height-badge', '--container-badge'],
+  // A key cap is the same: a height and a minimum width, square for one glyph, wider for a word.
+  'size-kbd': ['--height-kbd', '--container-kbd'],
   'size-code-clamp': '--height-code',
   'size-dialog': '--container-dialog',
   'size-dialog-lg': '--container-dialog-lg',
@@ -50,7 +52,6 @@ const SIZE_BINDING: Readonly<Record<string, string | readonly string[]>> = {
   'size-settings': '--container-settings',
   'size-field': '--container-field',
   'size-palette-list': '--height-palette-list',
-  'size-inbox-panel': '--container-inbox-panel',
   'size-inbox-panel-list': '--height-inbox-panel-list',
   'size-attachment-preview': '--height-attachment-preview',
   'size-toast': '--container-toast',

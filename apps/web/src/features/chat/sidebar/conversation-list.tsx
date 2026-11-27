@@ -80,7 +80,12 @@ export const ConversationList = (): React.JSX.Element | null => {
                     slug={workspace.slug}
                     channel={group}
                     current={current}
-                    avatar={<GroupFace peers={group.peers} surface={current ? 'current' : 'nav'} />}
+                    avatar={
+                      // Several faces are wider than any glyph, so they keep a glyph's full step to the names.
+                      <span className="inline-flex shrink-0 pr-1">
+                        <GroupFace peers={group.peers} surface={current ? 'current' : 'nav'} />
+                      </span>
+                    }
                     unread={(group.state?.unreadCount ?? 0) > 0}
                     mentions={group.state?.unreadMentionCount ?? 0}
                     muted={group.notificationLevel === 'none'}

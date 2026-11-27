@@ -197,7 +197,8 @@ export const AccountMenu = (): React.JSX.Element => {
       trigger={
         <button
           type="button"
-          className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover data-[state=open]:bg-nav-hover max-narrow:min-h-touch"
+          // 48px, two lines of words with room around them; open is the same selected tone as the workspace's door.
+          className="flex h-12 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors duration-hover ease-standard hover:bg-nav-hover data-[state=open]:bg-nav-selected"
         >
           {/* Named by what it shows, with what it is said before it: the name holds the visible text,
               so a person who says what they see reaches it (WCAG 2.5.3, label in name). */}

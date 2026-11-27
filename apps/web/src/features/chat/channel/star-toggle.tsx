@@ -100,7 +100,8 @@ export const StarToggle = ({
       label={t('star.label')}
       glyph="star"
       aria-pressed={channel.starred}
-      className={cn('max-narrow:hidden', channel.starred && 'text-ink')}
+      // Starred is a filled star, not only a darker one: a shade of grey alone did not say it.
+      className={cn('max-narrow:hidden', channel.starred && 'text-ink [&>svg]:fill-current')}
       onClick={() => {
         set(!channel.starred);
       }}

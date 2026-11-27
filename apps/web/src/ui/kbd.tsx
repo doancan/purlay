@@ -1,39 +1,87 @@
 /**
- * A key, as it is printed on the keyboard.
+ * A shortcut, as keys printed on the keyboard.
  *
  * The product is keyboard-first (`UX.md` §7), so a shortcut is shown wherever it
  * exists — in a menu item, a tooltip, a button — and it is shown the same way
- * everywhere: the mono face, a hairline edge, the muted ink. One component, so
- * "⌘K" never ends up styled three ways.
+ * everywhere: each key its own cap, as tall as every other cap, on a quiet ground with
+ * a hairline edge, the glyphs of this platform (`keys.ts`: ⌘ ⇧ ↵ on a Mac, Ctrl Shift
+ * Enter elsewhere). One component, so "⌘K" never ends up styled three ways.
+ *
+ * A chord is the HTML spec's nested `<kbd>`: one per key inside one for the whole. Off a Mac
+ * the `+` between keys is said but not drawn — a screen reader says "Ctrl plus K", the eye
+ * sees two caps — and on a Mac nothing is between them, as the Mac writes ⌘K.
  *
  * A device that is only touch has no keyboard to press it on, so there it is not shown at all
- * (`touch-only:`, the composer's own line for it, D-188).
+ * (`touch-only:`, the composer's own line for it, D-188) — except in the reference of shortcuts, which
+ * a person reads to learn them for the keyboard they will use (`touch="show"`).
  */
+import { Fragment } from 'react';
 import { cn } from './cn';
+import { currentPlatformIsMac, formatShortcut, isSingleCharacter, printsAsMac } from './keys';
+import { VisuallyHidden } from './visually-hidden';
 
-const kbdClasses =
-  'inline-flex items-center rounded-sm border-hairline px-1 font-mono text-caption touch-only:hidden';
+/** One cap, every one the same height: square for a glyph or a letter, wider for a word. */
+const capClasses =
+  'inline-flex h-kbd min-w-kbd items-center justify-center rounded-sm border-hairline font-sans text-caption font-medium tabular-nums whitespace-nowrap';
+
+/** A glyph's cap is exactly square, however wide the glyph (⇧ is wider than ⌘); a word's is padded. */
+const widthOf = (key: string): string => (isSingleCharacter(key) ? 'w-kbd' : 'px-1');
 
 /**
  * The row of key hints under a list (the commands, the `@` people, the palette). It wraps: side by
  * side where they fit, each hint a line of its own where they do not — never two narrow columns. A row
  * of nothing but keys adds `touch-only:hidden`, or a finger is left the words without their keys.
+ *
+ * One line is a control's height, its hairline included (the box is `border-box`): a cap and 8px of padding
+ * came to 37px with the line, off the 4px grid every other row is on.
  */
 export const keyHintsClasses =
-  'flex flex-wrap gap-x-4 gap-y-1 border-t-hairline border-border-subtle px-4 py-2 text-caption text-ink-muted';
+  'flex min-h-control flex-wrap items-center gap-x-4 gap-y-1 border-t-hairline border-border-subtle px-4 py-1 text-caption text-ink-muted';
 
-/** On the conversation's ground, or on the navigation's tone (D-118). */
+/**
+ * On the conversation's ground, or in the navigation (D-118). The cap is the same quiet key in both: a
+ * nav-hover fill read as a solid grey block on the jump field's ground and vanished into it on hover, so
+ * only the ink follows the navigation's tone.
+ */
 const toneClasses = {
-  page: 'border-border-subtle bg-surface-050 text-ink-subtle',
-  nav: 'border-nav-border bg-nav-hover text-nav-ink-muted',
+  page: 'border-border-subtle bg-surface-050 text-ink-muted',
+  nav: 'border-border-subtle bg-surface-050 text-nav-ink-muted',
 } as const;
 
 interface KbdProps {
   readonly className?: string;
   readonly tone?: keyof typeof toneClasses;
-  readonly children: React.ReactNode;
+  /** The shortcut, in either spelling: `Mod+K`, `Ctrl+Shift+R`, `⌘K`, `Esc`. */
+  readonly children: string;
+  /** Whose keyboard to print it for; this browser's unless a caller already knows (the reference, a test). */
+  readonly mac?: boolean;
+  /** On a device that is only touch: hidden, as a key there is nothing to press, or shown, in the reference. */
+  readonly touch?: 'hide' | 'show';
 }
 
-export const Kbd = ({ className, tone = 'page', children }: KbdProps): React.JSX.Element => (
-  <kbd className={cn(kbdClasses, toneClasses[tone], className)}>{children}</kbd>
-);
+export const Kbd = ({
+  className,
+  tone = 'page',
+  children,
+  mac = currentPlatformIsMac(),
+  touch = 'hide',
+}: KbdProps): React.JSX.Element => {
+  const asMac = printsAsMac(children, mac);
+  const touchClasses = touch === 'hide' ? 'touch-only:hidden' : undefined;
+  const caps = formatShortcut(children, asMac);
+  const cap = (key: string, extra?: string): React.JSX.Element => (
+    <kbd className={cn(capClasses, widthOf(key), toneClasses[tone], extra)}>{key}</kbd>
+  );
+  if (caps.length <= 1) return cap(caps[0] ?? children, cn(touchClasses, className));
+  return (
+    <kbd className={cn('inline-flex items-center gap-1', touchClasses, className)}>
+      {caps.map((key, at) => (
+        // A chord may name a key twice (`Ctrl++`), so a cap is keyed by its place; caps never reorder.
+        <Fragment key={at}>
+          {at > 0 && !asMac ? <VisuallyHidden>+</VisuallyHidden> : null}
+          {cap(key)}
+        </Fragment>
+      ))}
+    </kbd>
+  );
+};
