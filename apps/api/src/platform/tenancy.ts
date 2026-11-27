@@ -26,12 +26,12 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { Uuid, type GuestMembershipAccess, type UserRole } from '@purlay/types';
-import type { Executor } from '@purlay/db';
+import { sql, type Executor, type RawBuilder } from '@purlay/db';
 import { AppError, routeNotFound } from './errors';
 import { currentRequest } from './logging';
 import { asGrants, grantColumns } from './grants';
 import { inTheCore } from './module-budget';
-import { activeWorkspaceMembership } from './membership-access';
+import { activeWorkspaceMembership, liveGuestWindow } from './membership-access';
 import { requireWorkspaceContentAccess } from './workspace-content-access';
 
 export { activeWorkspaceMembership } from './membership-access';
@@ -210,6 +210,21 @@ const readWorkspaceMembership = async (
     ...(guest === undefined ? {} : { guest }),
   };
 };
+
+/**
+ * Whether the person of the joined `workspace_members` row may open `module` in the workspace, by the rule the guard applies to a
+ * request (`readWorkspaceMembership`): a full member, or a guest whose access is live and names the module. For a module that names
+ * somebody other than the caller in its record (an assignee): the caller's own fences are the guard's, and the workspace's grant of
+ * the module is the caller's request having reached it.
+ */
+export const membershipReachesModule = (module: string): RawBuilder<boolean> => sql<boolean>`(
+  workspace_members.access_kind = 'member'
+  or (
+    workspace_members.access_kind = 'guest'
+    and ${liveGuestWindow()}
+    and ${module} = any(coalesce(workspace_members.guest_modules, '{}'::text[]))
+  )
+)`;
 
 const workspaceMembership = async (
   executor: Executor,
