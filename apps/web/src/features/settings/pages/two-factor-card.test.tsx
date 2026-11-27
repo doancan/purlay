@@ -248,7 +248,7 @@ describe('two-step verification', () => {
     // Not through user-event, which puts a clipboard of its own on the page as it clicks.
     fireEvent.click(here.getByRole('button', { name: 'Copy codes' }));
     await settle();
-    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
+    expect(view.getByText('Couldn’t copy. Select the text and copy it yourself.')).toBeDefined();
     expect(here.getByText('fresh-00001')).toBeDefined();
   });
 
@@ -287,7 +287,7 @@ describe('two-step verification', () => {
     const here = within(view.getByRole('region', { name: 'İki adımlı doğrulama' }));
     expect(here.getByText('Kapalı')).toBeDefined();
     await press(here, 'Aç…');
-    expect(here.getByText('Sen olduğunu parolanla doğrula.')).toBeDefined();
-    expect(here.getByLabelText('Parolan')).toBeDefined();
+    expect(here.getByText('Siz olduğunuzu parolanızla doğrulayın.')).toBeDefined();
+    expect(here.getByLabelText('Parolanız')).toBeDefined();
   });
 });

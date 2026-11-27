@@ -41,9 +41,11 @@ interface DocumentReceipt {
   readonly at: number;
 }
 
+type DocumentBodyStage = 'body-started' | 'body-completed' | 'body-cancelled' | 'body-failed';
+
 export type DocumentEvent = DocumentReceipt &
   (
-    | { readonly stage: 'received' | 'aborted' }
+    | { readonly stage: 'received' | 'aborted' | DocumentBodyStage }
     | { readonly stage: 'responding'; readonly status: number }
   );
 
@@ -84,7 +86,33 @@ const login = (url: URL, sessions: FrontOptions['sessions']): Response => {
   });
 };
 
-const HOP_BY_HOP = ['host', 'connection', 'accept-encoding', 'content-length'] as const;
+const CONNECTION_FIELDS = [
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+] as const;
+
+/** Keep connection controls on their own hop (RFC 9110 §7.6.1). */
+const forwardedHeaders = (source: Headers): Headers => {
+  const headers = new Headers(source);
+  const options = new Set(
+    source
+      .get('connection')
+      ?.split(',')
+      .map((name) => name.trim().toLowerCase()),
+  );
+  for (const name of [...headers.keys()]) {
+    if (options.has(name)) headers.delete(name);
+  }
+  for (const name of CONNECTION_FIELDS) headers.delete(name);
+  return headers;
+};
 
 const proxy = async (
   request: Request,
@@ -92,8 +120,9 @@ const proxy = async (
   api: string,
   upstreamMs: number,
 ): Promise<Response> => {
-  const headers = new Headers(request.headers);
-  for (const name of HOP_BY_HOP) headers.delete(name);
+  const headers = forwardedHeaders(request.headers);
+  headers.delete('host');
+  headers.delete('content-length');
   // Asked for plain bytes so the answer can be passed on as it came, headers and all.
   headers.set('accept-encoding', 'identity');
   // Read before the call, so a client that went away is not blamed on the API.
@@ -129,9 +158,58 @@ const proxy = async (
   } finally {
     clearTimeout(timer);
   }
-  const answer = new Headers(upstream.headers);
+  const answer = forwardedHeaders(upstream.headers);
   answer.delete('content-length');
   return new Response(upstream.body, { status: upstream.status, headers: answer });
+};
+
+/** Record when the proxy starts and finishes reading the document stream. */
+const traceDocumentBody = (
+  response: Response,
+  note: (stage: DocumentBodyStage) => void,
+): Response => {
+  if (response.body === null) return response;
+  const reader = response.body.getReader();
+  let started = false;
+  let terminal = false;
+  const body = new ReadableStream(
+    {
+      pull: async (controller): Promise<void> => {
+        try {
+          const part = await reader.read();
+          if (terminal) return;
+          if (part.done) {
+            terminal = true;
+            note('body-completed');
+            controller.close();
+            return;
+          }
+          if (!started) {
+            started = true;
+            note('body-started');
+          }
+          controller.enqueue(part.value);
+        } catch (error) {
+          if (terminal) return;
+          terminal = true;
+          note('body-failed');
+          controller.error(error);
+        }
+      },
+      cancel: async (reason: unknown): Promise<void> => {
+        if (terminal) return;
+        terminal = true;
+        note('body-cancelled');
+        await reader.cancel(reason);
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 };
 
 interface SocketData {
@@ -203,7 +281,9 @@ export const startFront = (options: FrontOptions): ReturnType<typeof Bun.serve<S
               at: Date.now(),
               status: response.status,
             });
-            return response;
+            return traceDocumentBody(response, (stage) => {
+              documentLog({ ...receipt, stage, at: Date.now() });
+            });
           } finally {
             signal.removeEventListener('abort', aborted);
           }

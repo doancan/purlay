@@ -168,7 +168,7 @@ describe('the screen', () => {
           catchUp({ data: [aMessage(2, { content: 'Waiting update' })], nextCursor: null }),
         ),
     });
-    const notice = await view.findByText('What is new here could not be loaded.');
+    const notice = await view.findByText('What is new here could not be loaded');
     expect(view.queryByText('All caught up')).toBeNull();
     const error = notice.closest('section');
     if (error === null) throw new Error('The load failure has no recovery section');
@@ -385,11 +385,11 @@ describe('the screen', () => {
             );
       },
     });
-    expect(view.getByText('What is new here could not be loaded.')).toBeDefined();
+    expect(view.getByText('What is new here could not be loaded')).toBeDefined();
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await settle();
     expect(view.getByText('back')).toBeDefined();
-    expect(view.queryByText('What is new here could not be loaded.')).toBeNull();
+    expect(view.queryByText('What is new here could not be loaded')).toBeNull();
   });
 
   test('a failed refresh cannot mark a cached message read while that message is hidden', async () => {
@@ -413,7 +413,7 @@ describe('the screen', () => {
       });
     });
     await settle();
-    expect(view.getByText('What is new here could not be loaded.')).toBeDefined();
+    expect(view.getByText('What is new here could not be loaded')).toBeDefined();
     expect(view.queryByText('Waiting delivery update')).toBeNull();
     expect(view.queryByRole('button', { name: 'Mark read' })).toBeNull();
     offline = false;

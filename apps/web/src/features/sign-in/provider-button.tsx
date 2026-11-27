@@ -3,7 +3,8 @@
  * (`/auth/github`, `/auth/oidc`), which the browser follows by itself — unless the page has something to do
  * first (`before`), as the invitation page does: it asks for its passport, and only once the server has given
  * it (the cookie is set by that answer) does the page leave. A `before` that fails keeps the person here and
- * says why; nothing else happens. The two buttons are this and a mark, so what a click does is one thing.
+ * says why; nothing else happens. The two buttons are this and a mark, so what a click does is one thing. It is the
+ * card's control height, as the fields and **Sign in** under it are: one row of equal controls, not one taller than the rest.
  */
 import { useState } from 'react';
 import { Icon, type GlyphName } from '../../components/icon';
@@ -35,7 +36,7 @@ export const ProviderButton = ({
     <a
       href={href}
       aria-busy={busy || undefined}
-      className={cn(buttonStyle(variant, 'lg'), 'w-full', busy && 'pointer-events-none')}
+      className={cn(buttonStyle(variant), 'w-full', busy && 'pointer-events-none')}
       onClick={
         before === undefined
           ? undefined

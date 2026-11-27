@@ -18,6 +18,7 @@ export const AlertDeliveryCard = (): React.JSX.Element => {
         label={t('alerts.inApp')}
         description={t('alerts.inAppHint')}
         htmlFor={`${id}-inapp`}
+        toggle
       >
         <Checkbox
           id={`${id}-inapp`}
@@ -31,6 +32,7 @@ export const AlertDeliveryCard = (): React.JSX.Element => {
         label={t('alerts.sound')}
         description={t('alerts.soundHint')}
         htmlFor={`${id}-sound`}
+        toggle
       >
         <Checkbox
           id={`${id}-sound`}

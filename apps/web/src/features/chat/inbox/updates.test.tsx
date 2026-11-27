@@ -63,20 +63,22 @@ const visit = async (
 
 type View = Awaited<ReturnType<typeof visit>>;
 
+/** The rail's Inbox: the link to the inbox's page (D-208, amended). */
 const inboxButton = (view: View): HTMLElement =>
-  within(view.getByRole('navigation', { name: 'Places' })).getByRole('button', { name: /Inbox/ });
+  within(view.getByRole('navigation', { name: 'Places' })).getByRole('link', { name: /Inbox/ });
 
+/** The inbox's page, from the rail, on its Updates category. */
 const openUpdates = async (view: View): Promise<HTMLElement> => {
   await person().click(inboxButton(view));
   await settle();
-  const panel = view.getByRole('dialog', { name: 'Inbox' });
+  const page = view.getByRole('main');
   await person().click(
-    within(within(panel).getByRole('group', { name: 'Category' })).getByRole('button', {
+    within(within(page).getByRole('group', { name: 'Category' })).getByRole('button', {
       name: 'Updates',
     }),
   );
   await settle();
-  return panel;
+  return page;
 };
 
 describe('the Updates section', () => {
@@ -89,9 +91,7 @@ describe('the Updates section', () => {
     const alone = await visit({ inbox }, `/w/acme/c/${IDS.api}`, ['chat']);
     await person().click(inboxButton(alone));
     await settle();
-    const categories = within(
-      within(alone.getByRole('dialog', { name: 'Inbox' })).getByRole('group', { name: 'Category' }),
-    );
+    const categories = within(await alone.findByRole('group', { name: 'Category' }));
     // A count, not the element: a failed assertion on a node would print the whole page.
     expect(categories.queryAllByRole('button', { name: 'Updates' }).length).toBe(0);
     expect(asked).toBe(0);
@@ -101,11 +101,9 @@ describe('the Updates section', () => {
     await person().click(inboxButton(both));
     await settle();
     expect(
-      within(
-        within(both.getByRole('dialog', { name: 'Inbox' })).getByRole('group', {
-          name: 'Category',
-        }),
-      ).getByRole('button', { name: 'Updates' }),
+      within(both.getByRole('group', { name: 'Category' })).getByRole('button', {
+        name: 'Updates',
+      }),
     ).toBeDefined();
     both.unmount();
   });
@@ -159,7 +157,6 @@ describe('the Updates section', () => {
     await person().click(row);
     await settle();
     expect(reads).toEqual([{ ids: [id(1)] }]);
-    expect(view.queryAllByRole('dialog', { name: 'Inbox' }).length).toBe(0);
     expect(view.world.history.stack.at(-1)).toBe('/w/acme/issues');
     expect(inboxButton(view).textContent.trim()).toBe('Inbox');
     view.unmount();
@@ -202,9 +199,8 @@ describe('the Updates section', () => {
     await person().click(row);
     await settle();
     expect(reads).toEqual([{ ids: [id(7)] }]);
-    // Nothing to open: the panel and the place stay as they were.
-    expect(view.getByRole('dialog', { name: 'Inbox' })).toBeDefined();
-    expect(view.world.history.stack.at(-1)).toBe(`/w/acme/c/${IDS.api}`);
+    // Nothing to open: the person stays where they were, on the inbox's Updates.
+    expect(view.world.history.stack.at(-1)).toBe('/w/acme/inbox?category=updates');
     view.unmount();
   });
 
@@ -243,7 +239,7 @@ describe('the Updates section', () => {
       },
     });
     const panel = await openUpdates(view);
-    expect(await within(panel).findByText("Couldn't load your inbox")).toBeDefined();
+    expect(await within(panel).findByText('Couldn’t load your inbox')).toBeDefined();
     await person().click(await within(panel).findByRole('button', { name: 'Retry' }));
     await settle();
     expect(await within(panel).findByText('No updates')).toBeDefined();

@@ -406,10 +406,7 @@ export const WEB_FEATURES: readonly Mutation[] = [
     file: 'apps/web/src/features/chat/inbox/read.ts',
     find: '    void client.cancelQueries({ queryKey: prefix });\n    markLocally(client, workspace.id, marked, at);\n',
     replace: '    void client.cancelQueries({ queryKey: prefix });\n',
-    tests: [
-      'apps/web/src/features/chat/inbox/inbox-screen.test.tsx',
-      'apps/web/src/features/chat/inbox/inbox-panel.test.tsx',
-    ],
+    tests: ['apps/web/src/features/chat/inbox/inbox-screen.test.tsx'],
   },
   {
     id: 'inbox-read-painted-back',
@@ -417,7 +414,7 @@ export const WEB_FEATURES: readonly Mutation[] = [
     file: 'apps/web/src/features/chat/inbox/read.ts',
     find: '    void client.cancelQueries({ queryKey: prefix });\n',
     replace: '',
-    tests: ['apps/web/src/features/chat/inbox/inbox-panel.test.tsx'],
+    tests: ['apps/web/src/features/chat/inbox/inbox-screen.test.tsx'],
   },
   {
     id: 'inbox-reads-what-is-already-read',
@@ -1057,9 +1054,9 @@ export const WEB_FEATURES: readonly Mutation[] = [
     id: 'release-scrollbar-is-always-drawn',
     why: "the release window's scrollbar is drawn all the time again, and the quiet window is not quiet",
     file: 'apps/web/src/features/about/release-notes-dialog.tsx',
-    find: 'className="scrollbar-hover flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto"',
+    find: 'className="scrollbar-hover flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto max-narrow:max-h-none',
     replace:
-      'className="scrollbar-thin flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto"',
+      'className="scrollbar-thin flex max-h-inbox-panel-list flex-col gap-6 overflow-y-auto max-narrow:max-h-none',
     tests: ['apps/web/src/features/about/release-notes-once.test.tsx'],
   },
   {
@@ -1379,8 +1376,8 @@ export const WEB_FEATURES: readonly Mutation[] = [
     id: 'web-no-method-says-nothing',
     why: 'a server with neither way connected shows an empty card: a person is left with nothing and no word why',
     file: 'apps/web/src/features/sign-in/sign-in-screen.tsx',
-    find: '            {!methods.isError &&\n              !github &&\n              !google &&\n              oidc === null &&\n              !mail &&\n              methods.data.company === undefined && (',
-    replace: '            {false && (',
+    find: '          {!methods.isError &&\n            !github &&\n            !google &&\n            oidc === null &&\n            !mail &&\n            methods.data.company === undefined && (',
+    replace: '          {false && (',
     tests: ['apps/web/src/features/sign-in/sign-in-screen.test.tsx'],
   },
   {

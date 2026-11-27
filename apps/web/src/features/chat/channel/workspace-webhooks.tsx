@@ -24,7 +24,7 @@ export const WorkspaceWebhooks = (): React.JSX.Element => {
   const selected = targets.find((channel) => channel.id === target);
   return (
     <SettingsCard title={t('hooks.workspace.title')} description={t('hooks.workspace.description')}>
-      <SettingsRow label={t('hooks.workspace.channel')} htmlFor={id}>
+      <SettingsRow label={t('hooks.workspace.channel')} htmlFor={id} fill>
         <div className="flex w-full flex-col gap-2">
           {channels.isError && (
             <div className="flex flex-wrap items-center gap-2">
@@ -50,6 +50,7 @@ export const WorkspaceWebhooks = (): React.JSX.Element => {
           ) : (
             <Select
               id={id}
+              className="w-full"
               value={selected?.id ?? ''}
               disabled={targets.length === 0}
               onChange={(event) => {

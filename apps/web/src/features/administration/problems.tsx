@@ -3,6 +3,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { Button } from '../../ui/button';
+import { Disclosure } from '../../ui/disclosure';
 import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
 
@@ -45,12 +46,12 @@ export const ServerProblems = ({
     problems.push(
       <li
         key={key}
-        className="flex flex-col gap-2 not-first:border-t-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
+        className="flex flex-col gap-1 not-first:border-t-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
       >
         <h3 className="text-label text-ink break-words">{title}</h3>
         <div className="text-body text-ink-muted break-words">{detail}</div>
         <Link
-          className="self-start py-2 text-label text-accent-text underline"
+          className="self-start rounded-sm py-1 text-label text-accent-text hover:underline"
           to="serverSection"
           params={{ section }}
         >
@@ -66,21 +67,22 @@ export const ServerProblems = ({
     entry(
       'jobs',
       t('admin.jobs'),
-      <details>
-        <summary className="cursor-pointer py-2 text-label text-ink">
-          {t('admin.problems.jobCount', { count: jobs.length })}
-        </summary>
-        <ul className="flex flex-col gap-3 pt-3">
+      <Disclosure
+        className="text-label"
+        summary={t('admin.problems.jobCount', { count: jobs.length })}
+      >
+        {/* Drawn as Operations draws a job: its name as code, its state as the line under it. */}
+        <ul className="flex flex-col gap-3 pt-2 pb-1">
           {jobs.map((job) => (
-            <li key={job.name} className="flex flex-col gap-1">
-              <span className="text-label text-ink break-all">{job.name}</span>
-              <span>
+            <li key={job.name} className="flex flex-col">
+              <span className="font-mono text-label text-ink break-all">{job.name}</span>
+              <span className="text-caption text-ink-muted tabular-nums">
                 {t(`admin.job.${job.status}`)} · {t('admin.failures')}: {job.consecutiveFailures}
               </span>
             </li>
           ))}
         </ul>
-      </details>,
+      </Disclosure>,
       'operations',
       t('admin.problems.openOperations'),
       jobs.length,
@@ -169,7 +171,9 @@ export const ServerProblems = ({
             </div>
           ),
       )}
-      {problems.length > 0 && <ul>{problems}</ul>}
+      {problems.length > 0 && (
+        <ul className="border-t-hairline border-border-subtle">{problems}</ul>
+      )}
       <div className="flex flex-col gap-1 border-t-hairline border-border-subtle px-6 py-4 max-narrow:px-4">
         {sources.map(
           ({ name, query }) =>

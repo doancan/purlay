@@ -98,9 +98,9 @@ describe('New message', () => {
       true,
     );
     // The person themselves is not offered.
-    expect(view.queryByRole('button', { name: `Pick ${ME.displayName}` })).toBeNull();
-    await person().click(view.getByRole('button', { name: `Pick ${ALICE.displayName}` }));
-    await person().click(view.getByRole('button', { name: `Pick ${BOB.displayName}` }));
+    expect(view.queryByRole('button', { name: new RegExp(`^${ME.displayName}`) })).toBeNull();
+    await person().click(view.getByRole('button', { name: new RegExp(`^${ALICE.displayName}`) }));
+    await person().click(view.getByRole('button', { name: new RegExp(`^${BOB.displayName}`) }));
     expect(dialog.textContent).toContain(`To: ${ALICE.displayName}, ${BOB.displayName}`);
     await expectNoAxeViolations(dialog);
     await person().click(view.getByRole('button', { name: 'Start conversation' }));
@@ -131,18 +131,22 @@ describe('New message', () => {
     });
     await startNew(view);
     for (const one of crowd.slice(0, CONVERSATION_PEOPLE_MAX - 1)) {
-      await person().click(view.getByRole('button', { name: `Pick ${one.displayName}` }));
+      await person().click(view.getByRole('button', { name: new RegExp(`^${one.displayName}`) }));
     }
     expect(
       view.getByText('That is as many as a conversation holds; a channel holds more.'),
     ).toBeDefined();
     const next = crowd[CONVERSATION_PEOPLE_MAX - 1]?.displayName ?? '';
-    expect(view.getByRole('button', { name: `Pick ${next}` }).hasAttribute('disabled')).toBe(true);
+    expect(
+      view.getByRole('button', { name: new RegExp(`^${next}`) }).hasAttribute('disabled'),
+    ).toBe(true);
     // One picked can still be unpicked.
     const first = crowd[0]?.displayName ?? '';
-    expect(view.getByRole('button', { name: `Picked ${first}` }).hasAttribute('disabled')).toBe(
-      false,
-    );
+    expect(
+      view
+        .getByRole('button', { name: new RegExp(`^${first}`), pressed: true })
+        .hasAttribute('disabled'),
+    ).toBe(false);
     view.unmount();
   });
 
@@ -150,10 +154,10 @@ describe('New message', () => {
     const view = await open();
     await startNew(view);
     await person().type(view.getByLabelText('Find a person'), 'bo');
-    expect(view.queryByRole('button', { name: `Pick ${ALICE.displayName}` })).toBeNull();
-    expect(view.getByRole('button', { name: `Pick ${BOB.displayName}` })).toBeDefined();
+    expect(view.queryByRole('button', { name: new RegExp(`^${ALICE.displayName}`) })).toBeNull();
+    expect(view.getByRole('button', { name: new RegExp(`^${BOB.displayName}`) })).toBeDefined();
     await person().type(view.getByLabelText('Find a person'), 'zzz');
-    expect(view.getByText('Nobody by that name.')).toBeDefined();
+    expect(view.getByText('Nobody by that name')).toBeDefined();
     view.unmount();
   });
 
@@ -178,8 +182,8 @@ describe('New message', () => {
       const field = view.getByLabelText('Find a person');
       await person().clear(field);
       await person().type(field, typed);
-      expect(view.getByRole('button', { name: `Pick ${isik.displayName}` })).toBeDefined();
-      expect(view.queryByRole('button', { name: `Pick ${ALICE.displayName}` })).toBeNull();
+      expect(view.getByRole('button', { name: new RegExp(`^${isik.displayName}`) })).toBeDefined();
+      expect(view.queryByRole('button', { name: new RegExp(`^${ALICE.displayName}`) })).toBeNull();
     }
     view.unmount();
   });
@@ -187,9 +191,12 @@ describe('New message', () => {
   test('a person picked twice is unpicked', async () => {
     const view = await open();
     await startNew(view);
-    const pick = view.getByRole('button', { name: `Pick ${ALICE.displayName}` });
+    const pick = view.getByRole('button', { name: new RegExp(`^${ALICE.displayName}`) });
     await person().click(pick);
-    const picked = view.getByRole('button', { name: `Picked ${ALICE.displayName}` });
+    const picked = view.getByRole('button', {
+      name: new RegExp(`^${ALICE.displayName}`),
+      pressed: true,
+    });
     expect(picked.getAttribute('aria-pressed')).toBe('true');
     await person().click(picked);
     expect(view.getByRole('dialog').textContent).toContain('To: nobody yet');
@@ -199,11 +206,13 @@ describe('New message', () => {
   test('a picked person is a chip in To:, and taken off from it', async () => {
     const view = await open();
     await startNew(view);
-    await person().click(view.getByRole('button', { name: `Pick ${ALICE.displayName}` }));
+    await person().click(view.getByRole('button', { name: new RegExp(`^${ALICE.displayName}`) }));
     const off = view.getByRole('button', { name: `Take ${ALICE.displayName} off` });
     await person().click(off);
     expect(
-      view.getByRole('button', { name: `Pick ${ALICE.displayName}` }).getAttribute('aria-pressed'),
+      view
+        .getByRole('button', { name: new RegExp(`^${ALICE.displayName}`) })
+        .getAttribute('aria-pressed'),
     ).toBe('false');
     expect(view.queryByRole('button', { name: `Take ${ALICE.displayName} off` })).toBeNull();
     view.unmount();
@@ -214,11 +223,20 @@ describe('New message', () => {
       openConversation: () => Promise.reject(new ApiError(0, 'NETWORK', 'offline')),
     });
     await startNew(view);
-    await person().click(view.getByRole('button', { name: `Pick ${ALICE.displayName}` }));
+    await person().click(view.getByRole('button', { name: new RegExp(`^${ALICE.displayName}`) }));
     await person().click(view.getByRole('button', { name: 'Start conversation' }));
     await settle();
     expect(view.getByRole('alert').textContent).toMatch(/^The conversation could not be started\./);
     expect(view.getByRole('dialog').textContent).toContain(`To: ${ALICE.displayName}`);
+    view.unmount();
+  });
+
+  test('while the people load, their rows are drawn and the wait is said once', async () => {
+    const view = await open({ members: () => new Promise(() => undefined) });
+    await startNew(view);
+    const dialog = within(view.getByRole('dialog'));
+    expect(dialog.getByRole('status').textContent).toBe('Loading people…');
+    expect(dialog.queryByRole('button', { name: new RegExp(`^${ALICE.displayName}`) })).toBeNull();
     view.unmount();
   });
 
@@ -234,7 +252,7 @@ describe('New message', () => {
     fail = false;
     await person().click(view.getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(view.getByRole('button', { name: `Pick ${ALICE.displayName}` })).toBeDefined();
+    expect(view.getByRole('button', { name: new RegExp(`^${ALICE.displayName}`) })).toBeDefined();
     view.unmount();
   });
 
@@ -249,7 +267,7 @@ describe('New message', () => {
     view.getByRole('button', { name: 'New message' }).focus();
     await person().keyboard('{Enter}');
     await settle();
-    view.getByRole('button', { name: `Pick ${BOB.displayName}` }).focus();
+    view.getByRole('button', { name: new RegExp(`^${BOB.displayName}`) }).focus();
     await person().keyboard('{Enter}');
     view.getByRole('button', { name: 'Start conversation' }).focus();
     await person().keyboard('{Enter}');

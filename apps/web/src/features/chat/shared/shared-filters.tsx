@@ -6,6 +6,7 @@ import { useChannels, useMembers } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { AuthorPicker } from '../../../ui/author-picker';
 import { DateField } from '../../../ui/date-field';
+import { Disclosure } from '../../../ui/disclosure';
 import { Select } from '../../../ui/select';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
@@ -38,13 +39,11 @@ export const SharedControls = ({
       : (members.data?.find((member) => member.user.id === value.senderId)?.user.displayName ??
         t('search.someone'));
   return (
-    <details
+    <Disclosure
       className="text-label text-ink"
-      open={Object.keys(value).some((key) => key !== 'view' && key !== 'q') || undefined}
+      open={Object.keys(value).some((key) => key !== 'view' && key !== 'q')}
+      summary={t('search.filters')}
     >
-      <summary className="w-fit cursor-pointer rounded-sm py-1 text-ink-muted hover:text-ink">
-        {t('search.filters')}
-      </summary>
       <div className="mt-3 grid grid-cols-2 gap-3 max-narrow:grid-cols-1">
         <label className="flex min-w-0 flex-col gap-1">
           {t('search.where')}
@@ -119,6 +118,6 @@ export const SharedControls = ({
           }}
         />
       </div>
-    </details>
+    </Disclosure>
   );
 };

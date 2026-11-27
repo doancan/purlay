@@ -12,14 +12,15 @@ import { href } from '../../../router/routes';
 import { Link, useRoute } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
+import { cn } from '../../../ui/cn';
 import {
   ListCard,
   ListColumn,
   ListFilter,
+  ListSkeleton,
   listButtonClasses,
   listRowClasses,
 } from '../../../ui/list-column';
-import { LoadingStatus, SkeletonRow } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useMessageText } from '../../content/github-event';
 import { NavToggle } from '../../shell/nav';
@@ -56,20 +57,38 @@ const Row = ({
   const author = authorOf(root, t('user.erased'));
   const now = useFeedPorts().clock.now();
   const firstUnread = unread?.firstUnreadMessageId;
+  const replies = root.thread?.replyCount ?? 0;
+  const waiting = unread !== null && unread.count > 0;
   return (
-    <li ref={rowRef} className={listRowClasses}>
+    // Unfollow sits beside the row's link, on its first line, and the whole row tints under the pointer:
+    // below it, the button was a line of its own and every row half empty.
+    <li
+      ref={rowRef}
+      className={cn(
+        'relative flex items-start transition-colors duration-hover ease-standard hover:bg-surface-050',
+        listRowClasses,
+      )}
+    >
       <Link
         to="channel"
         params={{ slug: workspace.slug, channelId: root.channelId }}
         search={new URLSearchParams(
           firstUnread == null ? { thread: root.id } : { message: firstUnread },
         ).toString()}
-        className={listButtonClasses('rounded-lg')}
+        className={listButtonClasses('min-w-0 flex-1 rounded-lg pr-2 max-narrow:pr-2')}
       >
+        {/* Unread is a dot at the row's edge as well as full ink, as the inbox says it (#58). */}
+        {waiting && (
+          <span
+            aria-hidden="true"
+            className="absolute top-5 left-2 size-dot rounded-pill bg-accent max-narrow:left-1"
+          />
+        )}
         <Avatar name={author.displayName} username={author.username} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 text-label text-ink-muted">
             <span className="min-w-0 font-semibold text-ink break-words">{author.displayName}</span>
+            <span aria-hidden="true">·</span>
             <span className="min-w-0 break-words">
               {channel === undefined ? t('followed.conversation') : <Source channel={channel} />}
             </span>
@@ -80,22 +99,30 @@ const Row = ({
           <span className="line-clamp-2 text-body text-ink break-words">
             {root.deletedAt !== null ? t('message.deleted') : preview}
           </span>
-          <span className="flex flex-wrap gap-x-3 gap-y-1 text-label text-ink-muted">
-            <span>{t('thread.replies', { count: root.thread?.replyCount ?? 0 })}</span>
-            <span>
-              {unread === null
-                ? t('followed.unknown')
-                : unread.count === 0
-                  ? t('followed.read')
-                  : t('followed.unreadCount', { count: unread.count })}
-            </span>
+          <span className="flex flex-wrap gap-x-2 gap-y-1 text-label text-ink-muted">
+            <span>{t('thread.replies', { count: replies })}</span>
+            {/* Nothing to read in a conversation nobody answered yet: saying so again is noise. */}
+            {(unread === null || replies > 0 || waiting) && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className={cn(waiting && 'font-semibold text-ink')}>
+                  {unread === null
+                    ? t('followed.unknown')
+                    : unread.count === 0
+                      ? t('followed.read')
+                      : t('followed.unreadCount', { count: unread.count })}
+                </span>
+              </>
+            )}
           </span>
         </span>
       </Link>
-      <div className="flex justify-end px-5 pb-3 max-narrow:px-4">
+      <div className="shrink-0 pt-2 pr-3 max-narrow:pt-0 max-narrow:pr-2">
+        {/* A phone keeps the column for the conversation: the glyph alone there, its name unchanged. */}
         <Button
           variant="ghost"
           glyph="deep-work"
+          aria-label={t('followed.unfollow')}
           onClick={() => {
             // This list itself establishes the follow relation, even before the thread's toggle was opened.
             if (client.getQueryData<ThreadFollow>(keys.threadFollow(root.id)) === undefined)
@@ -104,7 +131,7 @@ const Row = ({
             setFollowing(false);
           }}
         >
-          {t('followed.unfollow')}
+          <span className="max-narrow:hidden">{t('followed.unfollow')}</span>
         </Button>
       </div>
     </li>
@@ -146,14 +173,17 @@ export const FollowedScreen = (): React.JSX.Element => {
   const heading = useRef<HTMLHeadingElement>(null);
   return (
     <>
-      <header className="flex min-h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle px-6 py-3 max-narrow:px-4">
-        <NavToggle />
-        <HeaderTile>
-          <Icon name="notifications" size="lg" />
-        </HeaderTile>
-        <h1 ref={heading} tabIndex={-1} className="min-w-0 text-heading text-ink break-words">
-          {t('followed.title')}
-        </h1>
+      {/* The list screens' one header: a band of the header's height, whatever the title's language. */}
+      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+        <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
+          <NavToggle />
+          <HeaderTile>
+            <Icon name="notifications" size="lg" />
+          </HeaderTile>
+          <h1 ref={heading} tabIndex={-1} className="min-w-0 truncate text-heading text-ink">
+            {t('followed.title')}
+          </h1>
+        </div>
       </header>
       <ListColumn>
         <ListFilter
@@ -171,6 +201,7 @@ export const FollowedScreen = (): React.JSX.Element => {
         />
         {query.isError && (
           <ErrorState
+            framed
             title={t(query.data === undefined ? 'followed.error' : 'followed.refreshError')}
             body={t('followed.errorBody')}
             retryLabel={t('common.retry')}
@@ -181,11 +212,7 @@ export const FollowedScreen = (): React.JSX.Element => {
           />
         )}
         {query.isPending ? (
-          <LoadingStatus label={t('followed.loading')}>
-            <SkeletonRow />
-            <SkeletonRow />
-            <SkeletonRow />
-          </LoadingStatus>
+          <ListSkeleton label={t('followed.loading')} />
         ) : items.length === 0 && !query.isError ? (
           <GlyphEmptyState
             glyph="notifications"

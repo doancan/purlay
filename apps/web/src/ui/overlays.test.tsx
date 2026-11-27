@@ -13,7 +13,16 @@ import { renderApp } from '../testing/render';
 import { person } from '../testing/user';
 import { Button } from './button';
 import { Dialog } from './dialog';
-import { Menu, MenuItem, MenuLabel, MenuRadioGroup, MenuRadioItem, MenuSeparator } from './menu';
+import { IconButton } from './icon-button';
+import {
+  Menu,
+  MenuItem,
+  MenuLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  subPlacement,
+} from './menu';
 import { Tooltip } from './tooltip';
 import { expectFocusOn } from '../testing/focus';
 
@@ -22,7 +31,7 @@ installDom();
 describe('Tooltip', () => {
   test('opens on keyboard focus, names itself, and shows the shortcut', async () => {
     const { getByRole, findByRole } = await renderApp(
-      <Tooltip content="Search" shortcut="⌘K">
+      <Tooltip content="Search" shortcut="Mod+K">
         <button type="button">s</button>
       </Tooltip>,
     );
@@ -31,7 +40,8 @@ describe('Tooltip', () => {
     });
     const tip = await findByRole('tooltip');
     expect(tip.textContent).toContain('Search');
-    expect(tip.textContent).toContain('⌘K');
+    // Spelled for the test's keyboard, which is not a Mac's (`kbd.test.tsx` has both).
+    expect(tip.textContent).toContain('Ctrl+K');
   });
 
   test('without a shortcut it shows only the content', async () => {
@@ -59,6 +69,53 @@ describe('Tooltip', () => {
     await person().keyboard('{Escape}');
     await waitFor(() => {
       expect(queryByRole('tooltip')).toBeNull();
+    });
+  });
+
+  test.each([
+    ['aria-expanded', 'true'],
+    ['data-state', 'open'],
+  ])('does not open over the menu its trigger has open (%s)', async (attribute, value) => {
+    const { getByRole, queryByRole } = await renderApp(
+      <Tooltip content="Options">
+        <button type="button" {...{ [attribute]: value }}>
+          o
+        </button>
+      </Tooltip>,
+    );
+    act(() => {
+      getByRole('button').focus();
+    });
+    // Long enough for the tip to have opened, had it been going to.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(queryByRole('tooltip')).toBeNull();
+  });
+
+  test('closes when its trigger is pressed to open a menu, though the menu takes the press', async () => {
+    const { getByRole, findByRole, queryByRole } = await renderApp(
+      <Menu trigger={<IconButton label="Options" glyph="preferences" />}>
+        <MenuItem onSelect={() => undefined}>Only unread</MenuItem>
+      </Menu>,
+    );
+    // Hovered, not focused: a press that opens a menu never focuses its trigger, so no blur closes the tip.
+    const options = getByRole('button', { name: 'Options' });
+    const pointer = person();
+    await pointer.hover(options);
+    await findByRole('tooltip', {}, { timeout: 1000 });
+    // As a browser delivers it: not inside `act`, so the menu is open, a layer over the tip, before the press
+    // reaches the document — where the tip would otherwise have heard it as a press outside itself.
+    options.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerType: 'mouse',
+      }),
+    );
+    await findByRole('menu');
+    // `hidden`: an open menu hides the rest of the page from the accessibility tree, the tip with it.
+    await waitFor(() => {
+      expect(queryByRole('tooltip', { hidden: true })).toBeNull();
     });
   });
 });
@@ -245,7 +302,7 @@ describe('Menu', () => {
   const Account = ({ onSelect }: { readonly onSelect: () => void }): React.JSX.Element => (
     <Menu trigger={<Button>Account</Button>}>
       <MenuLabel>alice</MenuLabel>
-      <MenuItem onSelect={onSelect} glyph="sign-out" shortcut="⇧⌘Q">
+      <MenuItem onSelect={onSelect} glyph="sign-out" shortcut="Mod+Shift+Q">
         Sign out
       </MenuItem>
       <MenuItem onSelect={onSelect} tone="danger">
@@ -266,7 +323,7 @@ describe('Menu', () => {
     await person().keyboard('{Enter}');
     expect(getByRole('menu')).toBeDefined();
     expect(getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Sign out⇧⌘Q',
+      'Sign outCtrl+Shift+Q',
       'Sign out everywhere',
       'Unavailable',
     ]);
@@ -333,5 +390,62 @@ describe('Menu', () => {
     const { getByRole } = await renderApp(<Account onSelect={() => undefined} />);
     await person().click(getByRole('button', { name: 'Account' }));
     await expectNoAxeViolations(getByRole('menu'));
+  });
+});
+
+describe('a tooltip under a dialog', () => {
+  test('does not open for a trigger outside it, so the dialog keeps its Escape', async () => {
+    const { getByRole, queryByRole } = await renderApp(
+      <>
+        <Tooltip content="More">
+          <button type="button">m</button>
+        </Tooltip>
+        <div role="dialog" aria-label="Remind me" data-state="open">
+          <Tooltip content="Inside">
+            <button type="button">i</button>
+          </Tooltip>
+        </div>
+      </>,
+    );
+    act(() => {
+      getByRole('button', { name: 'm' }).focus();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(queryByRole('tooltip')).toBeNull();
+    // One inside the dialog still names its control.
+    act(() => {
+      getByRole('button', { name: 'i' }).focus();
+    });
+    await waitFor(() => {
+      expect(queryByRole('tooltip')?.textContent).toBe('Inside');
+    });
+  });
+});
+
+describe('a submenu’s place', () => {
+  const box = (left: number, width: number, height = 32): Parameters<typeof subPlacement>[0] => ({
+    left,
+    right: left + width,
+    width,
+    height,
+  });
+
+  test('is beside its menu where a menu’s width fits on a side', () => {
+    expect(subPlacement(box(100, 264, 300), box(104, 256), 1280)).toEqual({
+      sideOffset: 4,
+      alignOffset: 0,
+    });
+    // At a wide window's right edge it fits on the left, where Radix flips it.
+    expect(subPlacement(box(1008, 264, 300), box(1012, 256), 1280)).toEqual({
+      sideOffset: 4,
+      alignOffset: 0,
+    });
+  });
+
+  test('on a phone it opens over its menu, just under the item that opened it', () => {
+    expect(subPlacement(box(118, 264, 300), box(122, 256, 44), 390)).toEqual({
+      sideOffset: -256,
+      alignOffset: 44,
+    });
   });
 });

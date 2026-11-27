@@ -131,7 +131,60 @@ export interface Latency {
   readonly issues?: Tally;
   /** In a run's summary only: each other module's hot path with the others busy, by `<module>/<metric>` (`HOT_PATHS`). */
   readonly loaded?: Loaded;
+  /** Diagnostic only. The floor and the regression verdict use the existing round trips. */
+  readonly sendTiming?: SendTiming;
 }
+
+interface SendTiming {
+  /** Longest wake-up overrun for an existing send pacing sleep in this trial. */
+  readonly maxPaceOverrunMs: number;
+  readonly fanOutP95?: {
+    readonly sendToInsertMs: number;
+    readonly insertToPublishMs: number;
+    readonly publishToReceiveMs: number;
+  };
+}
+
+interface FanOutTiming {
+  readonly sent: number;
+  readonly received: number;
+  readonly createdAt: unknown;
+  readonly publishedAt: unknown;
+}
+
+/** Use the same message as the measured p95, so the three phases refer to one round trip. */
+export const describeSendTiming = (
+  fanOutP95Ms: number,
+  timings: readonly FanOutTiming[],
+  maxPaceOverrunMs: number,
+  timeOrigin: number = performance.timeOrigin,
+): SendTiming => {
+  const timing = timings.find(({ sent, received }) => received - sent === fanOutP95Ms);
+  if (
+    timing === undefined ||
+    typeof timing.createdAt !== 'string' ||
+    typeof timing.publishedAt !== 'number'
+  ) {
+    return { maxPaceOverrunMs };
+  }
+  // The API sets createdAt when building the INSERT, before the transaction commits.
+  const insertedAt = Date.parse(timing.createdAt);
+  const phases = [
+    insertedAt - (timeOrigin + timing.sent),
+    timing.publishedAt - insertedAt,
+    timeOrigin + timing.received - timing.publishedAt,
+  ] as const;
+  // The two processes share the same host clock. Ignore inconsistent markers beyond its millisecond precision.
+  if (phases.some((phase) => !Number.isFinite(phase) || phase < -1)) return { maxPaceOverrunMs };
+  return {
+    maxPaceOverrunMs,
+    fanOutP95: {
+      sendToInsertMs: Math.max(0, phases[0]),
+      insertToPublishMs: Math.max(0, phases[1]),
+      publishToReceiveMs: Math.max(0, phases[2]),
+    },
+  };
+};
 
 /** What a request of a busy module was told: an answer, or its share's own refusal. */
 export interface Tally {
@@ -248,7 +301,7 @@ const aPerson = async (clone: ClonedDatabase, secret: string, name: string): Pro
 interface Socket {
   readonly send: (frame: unknown) => void;
   readonly frames: (
-    listener: (frame: { event: string; data: unknown; refId?: string }) => void,
+    listener: (frame: { event: string; data: unknown; ts?: unknown; refId?: string }) => void,
   ) => void;
   readonly close: () => void;
 }
@@ -272,7 +325,12 @@ const connect = async (origin: string, cookie: string): Promise<Socket> => {
     frames: (listener): void => {
       socket.addEventListener('message', (event) => {
         listener(
-          JSON.parse(String(event.data)) as { event: string; data: unknown; refId?: string },
+          JSON.parse(String(event.data)) as {
+            event: string;
+            data: unknown;
+            ts?: unknown;
+            refId?: string;
+          },
         );
       });
     },
@@ -422,6 +480,13 @@ const inAScene = async <Result>(body: (scene: Scene) => Promise<Result>): Promis
 
 /** What a module's hot path was timed to, by metric. */
 type Samples = Readonly<Record<string, readonly number[]>>;
+interface TimedPath {
+  readonly samples: Samples;
+  readonly sendEvidence?: {
+    readonly timings: readonly FanOutTiming[];
+    readonly maxPaceOverrunMs: number;
+  };
+}
 
 /** A module made busy: what its requests were told, and the way to let it go. */
 interface Busy {
@@ -540,12 +605,12 @@ type HotPath =
   | { readonly none: string }
   | {
       readonly judged: 'quiet-and-starvation' | 'baseline';
-      readonly prepare: (scene: Scene) => Promise<(count: number) => Promise<Samples>>;
+      readonly prepare: (scene: Scene) => Promise<(count: number) => Promise<TimedPath>>;
       readonly makeBusy: (scene: Scene) => Promise<Busy>;
     };
 
 /** The send path: every message timed from the frame leaving to its `ACK` on the sender's socket and to its `MESSAGE_CREATED` on the other's. */
-const timeSends = async (scene: Scene): Promise<(count: number) => Promise<Samples>> => {
+const timeSends = async (scene: Scene): Promise<(count: number) => Promise<TimedPath>> => {
   const out = await scene.connect(scene.sender);
   const into = await scene.connect(scene.listener);
   for (const socket of [out, into]) {
@@ -562,15 +627,25 @@ const timeSends = async (scene: Scene): Promise<(count: number) => Promise<Sampl
     const sentAt = new Map<string, number>();
     const acks: number[] = [];
     const fanOuts: number[] = [];
+    const timings: FanOutTiming[] = [];
+    let maxPaceOverrunMs = 0;
     out.frames((frame) => {
       const started = frame.refId === undefined ? undefined : sentAt.get(frame.refId);
       if (frame.event === 'ACK' && started !== undefined) acks.push(performance.now() - started);
     });
     into.frames((frame) => {
-      const id = (frame.data as { id?: unknown } | null)?.id;
+      const message = frame.data as { id?: unknown; createdAt?: unknown } | null;
+      const id = message?.id;
       const started = typeof id === 'string' ? sentAt.get(id) : undefined;
       if (frame.event === 'MESSAGE_CREATED' && started !== undefined) {
-        fanOuts.push(performance.now() - started);
+        const received = performance.now();
+        fanOuts.push(received - started);
+        timings.push({
+          sent: started,
+          received,
+          createdAt: message?.createdAt,
+          publishedAt: frame.ts,
+        });
       }
     });
     for (let n = 0; n < count; n += 1) {
@@ -581,14 +656,19 @@ const timeSends = async (scene: Scene): Promise<(count: number) => Promise<Sampl
         op: 'MESSAGE_SEND',
         payload: { channelId: scene.channelId, content: `latency ${String(n)}` },
       });
+      const paceDue = performance.now() + PACE_MS;
       await Bun.sleep(PACE_MS);
+      maxPaceOverrunMs = Math.max(maxPaceOverrunMs, performance.now() - paceDue);
     }
     const waitUntil = performance.now() + 10_000;
     while ((acks.length < count || fanOuts.length < count) && performance.now() < waitUntil) {
       await Bun.sleep(20);
     }
     requireAnswers(acks.length, fanOuts.length, count);
-    return { ack: acks, fanOut: fanOuts };
+    return {
+      samples: { ack: acks, fanOut: fanOuts },
+      sendEvidence: { timings, maxPaceOverrunMs },
+    };
   };
 };
 
@@ -596,7 +676,7 @@ const timeSends = async (scene: Scene): Promise<(count: number) => Promise<Sampl
  * The list of a workspace's issues, through its route, one request at a time; a request the share refuses is timed
  * at what it waited, since a module starved of its connections is what this measures, and counted by `countAnswer`.
  */
-const timeIssuesList = async (scene: Scene): Promise<(count: number) => Promise<Samples>> => {
+const timeIssuesList = async (scene: Scene): Promise<(count: number) => Promise<TimedPath>> => {
   for (let n = 0; n < ISSUES_LISTED; n += 1) {
     const response = await fetch(`${scene.origin}/api/workspaces/${scene.workspaceId}/issues`, {
       method: 'POST',
@@ -623,7 +703,7 @@ const timeIssuesList = async (scene: Scene): Promise<(count: number) => Promise<
       countAnswer(tally, response.status);
       await Bun.sleep(READ_PACE_MS);
     }
-    return { list: timed };
+    return { samples: { list: timed } };
   };
 };
 
@@ -677,7 +757,7 @@ export const measureUnder = async (
   subject: ModuleId,
   count: number,
   busy: readonly ModuleId[],
-): Promise<{ readonly samples: Samples; readonly busy: Partial<Record<ModuleId, Tally>> }> =>
+): Promise<TimedPath & { readonly busy: Partial<Record<ModuleId, Tally>> }> =>
   await inAScene(async (scene) => {
     const timed = HOT_PATHS[subject];
     if ('none' in timed) throw new Error(`${subject} has no hot path: ${timed.none}`);
@@ -688,7 +768,7 @@ export const measureUnder = async (
         const load = HOT_PATHS[id];
         if (!('none' in load)) loads.push([id, await load.makeBusy(scene)]);
       }
-      const samples = await time(count);
+      const timedPath = await time(count);
       for (const [, load] of loads) await load.stop();
       for (const [id, load] of loads) {
         if (load.tally.answered === 0) {
@@ -697,7 +777,10 @@ export const measureUnder = async (
           );
         }
       }
-      return { samples, busy: Object.fromEntries(loads.map(([id, load]) => [id, load.tally])) };
+      return {
+        ...timedPath,
+        busy: Object.fromEntries(loads.map(([id, load]) => [id, load.tally])),
+      };
     } finally {
       await Promise.all(loads.map(([, load]) => load.stop().catch(() => undefined)));
     }
@@ -705,12 +788,26 @@ export const measureUnder = async (
 
 /** Chat's latency, `count` messages; with `issuesBusy`, while people read issues' list throughout. */
 export const measureLatency = async (count: number, issuesBusy = false): Promise<Latency> => {
-  const { samples, busy } = await measureUnder('chat', count, issuesBusy ? ['issues'] : []);
+  const { samples, busy, sendEvidence } = await measureUnder(
+    'chat',
+    count,
+    issuesBusy ? ['issues'] : [],
+  );
+  const fanOutP95Ms = p95(samples['fanOut'] ?? []);
   return {
     ackP95Ms: p95(samples['ack'] ?? []),
-    fanOutP95Ms: p95(samples['fanOut'] ?? []),
+    fanOutP95Ms,
     messages: count,
     ...(busy.issues === undefined ? {} : { issues: busy.issues }),
+    ...(sendEvidence === undefined
+      ? {}
+      : {
+          sendTiming: describeSendTiming(
+            fanOutP95Ms,
+            sendEvidence.timings,
+            sendEvidence.maxPaceOverrunMs,
+          ),
+        }),
   };
 };
 
@@ -803,6 +900,10 @@ const measureLoadedPaths = async (
   return { loaded, told };
 };
 
+/** The log keeps the phase breakdown for both attempts, even when the artifact keeps the last one. */
+const sendTimingLine = (trial: Latency): string =>
+  trial.sendTiming === undefined ? '' : `; send timing ${JSON.stringify(trial.sendTiming)}`;
+
 /** The command: measure, compare with `--baseline`, keep with `--record`; answers what to print and the exit code. */
 export const main = async (
   args: readonly string[],
@@ -839,7 +940,7 @@ export const main = async (
     const verdict = judge(now, baseline);
     const detail = trials.map(
       (trial, index) =>
-        `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms (${String(trial.messages)} messages)`,
+        `trial ${String(index + 1)}/${String(LATENCY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms (${String(trial.messages)} messages)${sendTimingLine(trial)}`,
     );
     return {
       now,
@@ -911,7 +1012,7 @@ export const withIssuesBusy = async (
     const verdict = judge(lowest, quiet, STARVATION_FACTOR);
     const detail = trials.map(
       (trial, index) =>
-        `trial ${String(index + 1)}/${String(BUSY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms; issues answered ${String(trial.issues?.answered)}, refused ${String(trial.issues?.refused)}`,
+        `trial ${String(index + 1)}/${String(BUSY_TRIALS)}: ACK p95 ${trial.ackP95Ms.toFixed(1)} ms, fan-out p95 ${trial.fanOutP95Ms.toFixed(1)} ms; issues answered ${String(trial.issues?.answered)}, refused ${String(trial.issues?.refused)}${sendTimingLine(trial)}`,
     );
     const ratios = `ratio to the quiet p95: ACK ${(lowest.ackP95Ms / quiet.ackP95Ms).toFixed(1)}x, fan-out ${(lowest.fanOutP95Ms / quiet.fanOutP95Ms).toFixed(1)}x; starved past ${String(STARVATION_FACTOR)}x`;
     return { regressed: verdict.regressed, lines: [...verdict.lines, ratios, ...detail] };

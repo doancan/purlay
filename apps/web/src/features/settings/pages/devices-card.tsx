@@ -84,7 +84,10 @@ export const DevicesCard = (): React.JSX.Element => {
           </Button>
         </div>
       ) : sessions.data === undefined ? (
-        <LoadingStatus label={t('common.loading')} className="flex flex-col gap-3 px-6 py-5">
+        <LoadingStatus
+          label={t('common.loading')}
+          className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
+        >
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
@@ -99,10 +102,10 @@ export const DevicesCard = (): React.JSX.Element => {
             {sessions.data.data.map((session) => (
               <li
                 key={session.id}
-                className="flex items-center gap-4 not-first:border-t-hairline border-border-subtle px-6 py-3 max-narrow:px-4"
+                className="flex items-center gap-4 not-first:border-t-hairline border-border-subtle px-6 py-4 max-narrow:px-4"
               >
                 {/* Whole, never cut: the dates are what tell one browser's Sign out from another's. */}
-                <span id={`device-${session.id}`} className="flex min-w-0 flex-1 flex-col">
+                <span id={`device-${session.id}`} className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex flex-wrap items-center gap-2 text-label text-ink">
                     <span className="min-w-0 break-words">{nameOf(session)}</span>
                     {session.current && (

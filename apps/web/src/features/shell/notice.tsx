@@ -46,7 +46,7 @@ export const Notice = ({
       <Icon name={glyph} size="lg" />
     </span>
     <Title className="text-title text-ink">{title}</Title>
-    <p className="max-w-dialog text-body text-ink-muted">{body}</p>
+    <p className="max-w-dialog text-balance text-body text-ink-muted">{body}</p>
     {action}
   </section>
 );

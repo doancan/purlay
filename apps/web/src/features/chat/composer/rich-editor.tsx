@@ -100,6 +100,32 @@ const markRule = (
       .addMark(from, from + content.length, mark)
       .removeStoredMark(mark);
   });
+const FENCE_LINE = /^```([\w-]*)$/;
+/**
+ * Enter at the end of a line of ``` (and a language) opens the code block a space there would: the hint
+ * under the box says ``` starts one, and Enter there used to send the three backticks as a message.
+ */
+const openFenceOnEnter: Command = (state, dispatch) => {
+  const { $from, empty } = state.selection;
+  if (!empty || $from.parent.type !== richSchema.nodes.paragraph) return false;
+  if ($from.parentOffset !== $from.parent.content.size) return false;
+  const match = FENCE_LINE.exec($from.parent.textContent);
+  const index = $from.index(-1);
+  if (
+    match === null ||
+    !$from.node(-1).canReplaceWith(index, index + 1, richSchema.nodes.code_block)
+  )
+    return false;
+  if (dispatch !== undefined) {
+    const tr = state.tr
+      .delete($from.start(), $from.pos)
+      .setNodeMarkup($from.before(), richSchema.nodes.code_block, {
+        language: match[1] === '' ? null : match[1],
+      });
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+};
 export const RichEditor = (props: Props): React.JSX.Element => {
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -327,6 +353,18 @@ export const RichEditor = (props: Props): React.JSX.Element => {
           ) {
             event.preventDefault();
             event.target.click();
+            return true;
+          }
+          if (
+            event.key === 'Enter' &&
+            !event.isComposing &&
+            !event.shiftKey &&
+            !event.metaKey &&
+            !event.ctrlKey &&
+            !event.altKey &&
+            openFenceOnEnter(view.state, view.dispatch)
+          ) {
+            event.preventDefault();
             return true;
           }
           const input = current.current.input.current;

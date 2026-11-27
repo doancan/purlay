@@ -102,11 +102,14 @@ describe('the Reminders tab', () => {
     const rows = main.getAllByRole('listitem').map((row) => row.textContent);
     expect(rows[0]).toContain('remind words 1');
     expect(rows[0]).toContain('#api');
-    expect(rows[0]).toContain(when('2026-09-10T08:30:00Z'));
+    // When, as the menus say it; the full time is its tip.
+    expect(rows[0]).toContain('Tomorrow at 08:30');
     expect(rows[1]).toContain('remind words 2');
     expect(
-      view.container.querySelector('time[datetime="2026-09-10T08:30:00.000Z"]'),
-    ).not.toBeNull();
+      view.container
+        .querySelector('time[datetime="2026-09-10T08:30:00.000Z"]')
+        ?.getAttribute('title'),
+    ).toBe(when('2026-09-10T08:30:00Z'));
     await expectNoAxeViolations(view.container);
     view.unmount();
   });

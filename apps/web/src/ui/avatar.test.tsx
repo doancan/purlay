@@ -96,4 +96,12 @@ describe('one letter', () => {
     const view = render(<Avatar name="Çiğdem Öz" username="cigdem" letters={1} />);
     expect(view.container.textContent).toBe('Ç');
   });
+
+  test('is all the small size draws: two wide capitals (MW) overflow its 20px', () => {
+    const small = render(<Avatar name="Mary Wong" username="mary" size="sm" />);
+    expect(small.container.textContent).toBe('M');
+    small.unmount();
+    const medium = render(<Avatar name="Mary Wong" username="mary" />);
+    expect(medium.container.textContent).toBe('MW');
+  });
 });

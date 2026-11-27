@@ -404,7 +404,7 @@ describe('members and roles', () => {
     await person().type(search, '{Backspace}{Backspace}{Backspace}');
     expect(listed(view)).toHaveLength(3);
     await person().type(search, 'nobody');
-    expect(main(view).getByText('Nobody matches.')).toBeDefined();
+    expect(main(view).getByText('Nobody matches')).toBeDefined();
     await person().type(search, '{Backspace}'.repeat('nobody'.length));
     const filter = main(view).getByRole('combobox', { name: 'Role' });
     expect([...(filter as HTMLSelectElement).options].map((option) => option.textContent)).toEqual([

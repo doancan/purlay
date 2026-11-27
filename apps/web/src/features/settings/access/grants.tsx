@@ -71,7 +71,7 @@ export const AccessGrants = ({
       <p className="text-body text-ink-muted">{t('access.grants.membershipHint')}</p>
       <AccessListState
         pending={grants.isPending}
-        failed={grants.isError}
+        failure={grants.error}
         paused={grants.isPaused}
         empty={items.length === 0}
         retry={() => {
@@ -278,7 +278,7 @@ const GrantEditor = ({
         />
         <AccessListState
           pending={roles.isPending}
-          failed={roles.isError}
+          failure={roles.error}
           paused={roles.isPaused}
           empty={items.length === 0}
           retry={() => {

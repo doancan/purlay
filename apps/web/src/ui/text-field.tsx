@@ -17,8 +17,9 @@ import { cn } from './cn';
 /** A list longer than this gets a field to find in it; a shorter one is read at a glance. */
 export const FINDABLE_FROM = 8;
 
+// Disabled as a disabled button is: the quiet edge and the sunk ground, so it still reads as a field.
 const inputClasses =
-  'h-control max-narrow:h-touch w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted max-narrow:text-title max-narrow:font-normal';
+  'h-control max-narrow:h-touch w-full rounded-md border-hairline bg-surface-100 px-3 text-body text-ink placeholder:text-ink-muted disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted max-narrow:text-title max-narrow:font-normal';
 
 export interface TextFieldProps extends Omit<
   React.ComponentPropsWithRef<'input'>,

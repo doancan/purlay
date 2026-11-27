@@ -33,6 +33,12 @@ have it.
 - **Messages** — workspace owners and admins can turn off Urgent delivery in General settings (D-337)
 - **Operations** — server administrators can publish their own privacy policy and terms links for native clients (D-343)
 
+### Changed
+
+- **Interface** — every grey, in the light and dark themes, is one neutral family on even steps, so the navigation, the page and a segmented control read apart (D-343)
+- **Interface** — keyboard shortcuts are shown as keys the way the keyboard prints them: ⌘ ⇧ ⌥ on a Mac, Ctrl, Shift and Alt elsewhere (D-344)
+- **Documentation** — the decision record is one file per decision, indexed by category, with `bun run decision:new` to start the next one (D-345)
+
 ### Fixed
 
 - **Sign-in** — native sign-in in the browser names Purlay for Mac or Purlay for iOS (D-191)

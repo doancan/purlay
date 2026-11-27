@@ -89,7 +89,7 @@ describe('private invitation history', () => {
     expect(card.getByLabelText<HTMLInputElement>('Search email addresses').value).toBe('other');
     fail = false;
     await person().click(card.getByRole('button', { name: 'Retry' }));
-    expect(await card.findByText('No invitations match these filters.')).toBeDefined();
+    expect(await card.findByText('No invitations match these filters')).toBeDefined();
     await expectNoAxeViolations(view.container);
     view.unmount();
   });
@@ -126,8 +126,8 @@ describe('private invitation history', () => {
     await person().clear(card.getByLabelText('Search email addresses'));
     await person().type(card.getByLabelText('Search email addresses'), 'missing');
     await person().click(card.getByRole('button', { name: 'Search recipients' }));
-    expect(await card.findByText('No invitations match these filters.')).toBeDefined();
-    expect(card.queryByText('No email invitations yet.')).toBeNull();
+    expect(await card.findByText('No invitations match these filters')).toBeDefined();
+    expect(card.queryByText('No email invitations yet')).toBeNull();
     expect(asked.at(-1)).toEqual({ q: 'missing', status: 'failed' });
     expect(view.world.history.stack.at(-1)).toBe(
       '/w/acme/settings/invitations?q=missing&status=failed',
@@ -169,7 +169,7 @@ describe('private invitation history', () => {
       complete({ data: [], nextCursor: null });
       await Promise.resolve();
     });
-    expect(await card.findByText('No email invitations yet.')).toBeDefined();
+    expect(await card.findByText('No email invitations yet')).toBeDefined();
     loading.unmount();
     let fail = true;
     const view = await render({
@@ -181,7 +181,7 @@ describe('private invitation history', () => {
     expect(await view.findByText('Could not refresh invitation history.')).toBeDefined();
     fail = false;
     await person().click(view.getByRole('button', { name: 'Retry' }));
-    expect(await view.findByText('No email invitations yet.')).toBeDefined();
+    expect(await view.findByText('No email invitations yet')).toBeDefined();
     view.unmount();
   });
 

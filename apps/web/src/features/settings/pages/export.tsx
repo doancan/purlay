@@ -225,7 +225,7 @@ const ExportsCard = ({ source }: { readonly source: ExportSource }): React.JSX.E
       )}
       {list === undefined ? (
         !exports.isError && (
-          <LoadingStatus label={t('common.loading')} className="px-6 py-5">
+          <LoadingStatus label={t('common.loading')} className="px-6 py-5 max-narrow:px-4">
             <Skeleton />
           </LoadingStatus>
         )

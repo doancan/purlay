@@ -128,7 +128,7 @@ describe('the list', () => {
     );
     expect(describedBy[0]).toMatch(/^Doğan’s MacBook ProSigned in .+Last active .+/);
     expect(describedBy[1]).toMatch(/^Web browserSigned in Aug 20/);
-    expect(card.queryByText('You are not signed in anywhere else.')).toBeNull();
+    expect(card.queryByText('You are not signed in anywhere else')).toBeNull();
     await expectNoAxeViolations(view.getByRole('main'));
     view.unmount();
   });
@@ -156,7 +156,7 @@ describe('the list', () => {
 
   test('signed in here alone, it says nowhere else is', async () => {
     const { view, card } = await open({ mySessions: () => Promise.resolve({ data: [HERE] }) });
-    expect(await card.findByText('You are not signed in anywhere else.')).toBeDefined();
+    expect(await card.findByText('You are not signed in anywhere else')).toBeDefined();
     expect(rows(card)).toHaveLength(1);
     expect(card.queryByRole('button')).toBeNull();
     view.unmount();
@@ -164,7 +164,7 @@ describe('the list', () => {
 
   test('an answer with no session at all still says so, and offers nothing', async () => {
     const { view, card } = await open({ mySessions: () => Promise.resolve({ data: [] }) });
-    expect(await card.findByText('You are not signed in anywhere else.')).toBeDefined();
+    expect(await card.findByText('You are not signed in anywhere else')).toBeDefined();
     expect(card.queryByRole('button')).toBeNull();
     view.unmount();
   });
@@ -263,10 +263,10 @@ describe('signing another device out', () => {
     const fake = pending(held(HERE, OTHER_BROWSER));
     const { view, card } = await open(fake.api);
     await person().click(await card.findByRole('button', { name: 'Sign out' }));
-    expect(card.getByText('You are not signed in anywhere else.')).toBeDefined();
+    expect(card.getByText('You are not signed in anywhere else')).toBeDefined();
     await fake.answer('ok');
     expect(view.getByText('Web browser was signed out.')).toBeDefined();
-    expect(card.getByText('You are not signed in anywhere else.')).toBeDefined();
+    expect(card.getByText('You are not signed in anywhere else')).toBeDefined();
     view.unmount();
   });
 
@@ -303,7 +303,7 @@ describe('signing another device out', () => {
     await fake.answer(new ApiError(404, 'SESSION_NOT_FOUND', 'gone'));
     expect(card.queryByText('Doğan’s MacBook Pro')).toBeNull();
     expect(view.queryByText(/was not signed out/)).toBeNull();
-    expect(card.getByText('You are not signed in anywhere else.')).toBeDefined();
+    expect(card.getByText('You are not signed in anywhere else')).toBeDefined();
     view.unmount();
   });
 });

@@ -108,7 +108,7 @@ describe('invite people', () => {
     const dialog = await invite(view);
     await expectNoAxeViolations(dialog);
     // The open links are the Invitations page's: the quick dialog does not read them.
-    expect(view.queryByText('No links are open.')).toBeNull();
+    expect(view.queryByText('No open links')).toBeNull();
 
     await person().click(view.getByRole('button', { name: 'Make a link' }));
     await settle();
@@ -175,7 +175,7 @@ describe('invite people', () => {
     expect([link.selectionStart, link.selectionEnd]).toEqual([0, link.value.length]);
     await person().click(view.getByRole('button', { name: 'Copy' }));
     await settle();
-    expect(view.getByText(/Couldn't copy/)).toBeDefined();
+    expect(view.getByText(/Couldn’t copy/)).toBeDefined();
   });
 
   test('the open links are a press away: the dialog closes on the Invitations page', async () => {

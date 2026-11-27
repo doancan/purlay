@@ -190,10 +190,10 @@ describe('the list', () => {
     ]);
     await openTab(view);
     expect(within(view.getByRole('main')).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(rowAt(view, 0)).getByText('api')).toBeDefined();
+    expect(within(rowAt(view, 0)).getByText('#api')).toBeDefined();
     expect(within(rowAt(view, 0)).getByText('Today at 14:30')).toBeDefined();
     expect(within(rowAt(view, 0)).getByText('Today’s words')).toBeDefined();
-    expect(within(rowAt(view, 1)).getByText('deploys')).toBeDefined();
+    expect(within(rowAt(view, 1)).getByText('#deploys')).toBeDefined();
     expect(within(rowAt(view, 1)).getByText('· in a thread')).toBeDefined();
     expect(within(rowAt(view, 1)).getByText('Fri, Sep 11 at 06:00')).toBeDefined();
     expect(within(rowAt(view, 1)).getByText('2 files')).toBeDefined();
@@ -240,7 +240,7 @@ describe('the list', () => {
       { locale: 'tr' },
     );
     await openTab(view);
-    expect(view.getByText('Gönderilemedi: artık kanalda değilsin')).toBeDefined();
+    expect(view.getByText('Gönderilemedi: artık kanalda değilsiniz')).toBeDefined();
   });
 
   test('a pending one says nothing of failure', async () => {
@@ -465,7 +465,7 @@ describe('editing', () => {
     await person().click(view.getByRole('button', { name: 'Zamanlanmış mesajı düzenle' }));
     await settle();
     expect(
-      view.getByText('api içindeki taslağına geri taşındı, artık zamanlanmış değil.'),
+      view.getByText('api içindeki taslağınıza geri taşındı, artık zamanlanmış değil.'),
     ).toBeDefined();
   });
 

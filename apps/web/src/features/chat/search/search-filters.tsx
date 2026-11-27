@@ -6,10 +6,10 @@
 import { Value } from '@sinclair/typebox/value';
 import { useState } from 'react';
 import { SearchFilters } from '@purlay/types';
-import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Select } from '../../../ui/select';
 import { Button } from '../../../ui/button';
+import { Disclosure } from '../../../ui/disclosure';
 import { DateField } from '../../../ui/date-field';
 import { TextField } from '../../../ui/text-field';
 
@@ -30,19 +30,11 @@ export const AdvancedFilters = ({
     if (Value.Check(SearchFilters, updated)) onChange(updated);
   };
   return (
-    <details
-      open={Object.keys(value).length > 0 || undefined}
-      className="group text-label text-ink"
+    <Disclosure
+      open={Object.keys(value).length > 0}
+      className="text-label text-ink"
+      summary={t('search.filters')}
     >
-      <summary className="flex w-fit cursor-pointer disclosure-summary items-center gap-1 rounded-sm py-1 text-ink-muted hover:text-ink">
-        <span aria-hidden="true" className="inline-flex group-open:hidden">
-          <Icon name="expand" size="sm" />
-        </span>
-        <span aria-hidden="true" className="hidden group-open:inline-flex">
-          <Icon name="collapse" size="sm" />
-        </span>
-        {t('search.filters')}
-      </summary>
       <div className="mt-3 grid grid-cols-2 gap-3 max-narrow:grid-cols-1">
         <label className="flex flex-col gap-1">
           {t('search.status')}
@@ -124,14 +116,16 @@ export const AdvancedFilters = ({
           }}
         />
       </div>
+      {/* Its words in line with the labels above: the ghost's padding is drawn only under the pointer. */}
       <Button
         variant="ghost"
+        className="mt-2 -ml-3"
         onClick={() => {
           onChange({});
         }}
       >
         {t('search.clear')}
       </Button>
-    </details>
+    </Disclosure>
   );
 };

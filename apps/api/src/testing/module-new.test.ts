@@ -209,7 +209,10 @@ describe('against the repository as it is', () => {
     );
     expect(edited('apps/api/src/composition.ts')).toContain('  issuesModule,\n  zzModule,\n');
     expect(edited('packages/db/src/migrator.ts')).toContain("id: 'zz'");
-    expect(edited('docs/DECISIONS.md')).toContain(`### D-${String(OPTIONS.decision)}.`);
+    const decision = templateFiles(names, OPTIONS).find((file) =>
+      file.path.startsWith(`docs/decisions/architecture/D-${String(OPTIONS.decision)}-zz-`),
+    );
+    expect(decision?.content).toStartWith(`# D-${String(OPTIONS.decision)}. `);
   });
 
   test('the pool-share test is made for the module, and names it among the modules it needs', () => {

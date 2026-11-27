@@ -40,7 +40,7 @@ describe('outgoing channel webhook management', () => {
       api: { incomingWebhooks: () => Promise.resolve([]) },
     });
     const region = await open(view);
-    expect(within(region).getByText('No outgoing webhooks yet.')).toBeDefined();
+    expect(within(region).getByText('No outgoing webhooks yet')).toBeDefined();
     expect(within(region).getByText(/Message content from this channel/)).toBeDefined();
     await expectNoAxeViolations(region);
     view.unmountAll();
@@ -167,7 +167,7 @@ describe('outgoing channel webhook management', () => {
     await person().click(confirmButton);
     await settle();
     expect(actions).toEqual(['true', 'false', 'test', 'revoke']);
-    expect(within(region).getByText('No outgoing webhooks yet.')).toBeDefined();
+    expect(within(region).getByText('No outgoing webhooks yet')).toBeDefined();
     view.unmountAll();
   });
   test('delivery history shows failures and attempts and retries only failed deliveries', async () => {
@@ -396,7 +396,7 @@ test('delivery and attempt errors can be retried, failures remain visible, and o
   if (attemptsRetry === undefined) throw new Error('no attempt retry');
   await person().click(attemptsRetry);
   await settle();
-  expect(within(region).getByText('No attempts yet.')).toBeDefined();
+  expect(within(region).getByText('No attempts yet')).toBeDefined();
   await person().click(within(region).getByRole('button', { name: 'Retry' }));
   await settle();
   expect(within(region).getByRole('alert')).toBeDefined();
