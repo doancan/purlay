@@ -16,6 +16,10 @@
  *
  * Neither value is a secret: the challenge is a hash of one, and the state is the application's own word.
  * That is why they may be in a query at all, where an invitation's token must be in a fragment.
+ *
+ * `prompt=login` rides with them (D-356): the application wants the credential checked now, and the server,
+ * not this page, decides whether the browser's sign-in is recent enough. An emailed link does not carry it:
+ * whoever follows one has just signed in.
  */
 import {
   NATIVE_CHALLENGE_PATTERN,
@@ -23,6 +27,7 @@ import {
   isNativeSignInPlatform,
   type NativeSignInHandoff,
   type NativeSignInPlatform,
+  type NativeSignInPrompt,
 } from '@purlay/types';
 import { systemClock } from '../../system-clock';
 
@@ -31,6 +36,9 @@ const PATH = '/sign-in/native';
 
 /** How long a tab remembers a question the application asked. */
 export const HANDOFF_TTL_MS = 10 * 60 * 1000;
+
+/** What the application asked: the pair, which application it is, and whether to check the credential now. */
+export type NativeQuestion = NativeSignInHandoff & { readonly prompt?: NativeSignInPrompt };
 
 const CHALLENGE = new RegExp(NATIVE_CHALLENGE_PATTERN);
 const STATE = new RegExp(NATIVE_STATE_PATTERN);
@@ -58,17 +66,25 @@ export const nativePlatformIn = (params: URLSearchParams): NativeSignInPlatform 
   return extra.length === 0 && isNativeSignInPlatform(platform) ? platform : undefined;
 };
 
+/** `prompt=login`, once; anything else asks for nothing more than an ordinary handoff. */
+const promptIn = (params: URLSearchParams): NativeSignInPrompt | undefined => {
+  const [prompt, ...extra] = params.getAll('prompt');
+  return extra.length === 0 && prompt === 'login' ? prompt : undefined;
+};
+
 /** The pair an address carries: each name once, each the shape, and nothing else read. */
-const fromSearch = (search: string): NativeSignInHandoff | null => {
+const fromSearch = (search: string): NativeQuestion | null => {
   const params = new URLSearchParams(search);
   const challenge = params.getAll('challenge');
   const state = params.getAll('state');
   if (challenge.length !== 1 || state.length !== 1) return null;
   const platform = nativePlatformIn(params);
+  const prompt = promptIn(params);
   const pair = {
     challenge: challenge[0],
     state: state[0],
     ...(platform === undefined ? {} : { platform }),
+    ...(prompt === undefined ? {} : { prompt }),
   };
   return shaped(pair) ? pair : null;
 };
@@ -87,9 +103,9 @@ export const captureNativeHandoff = (
 };
 
 /** Keep a valid question that arrived in a sign-in link or in the application's opening URL. */
-export const keepNativeHandoff = (pair: NativeSignInHandoff, ports: NativePorts): boolean => {
+export const keepNativeHandoff = (pair: NativeQuestion, ports: NativePorts): boolean => {
   if (!shaped(pair) || ports.storage === null) return false;
-  const { challenge, state, platform } = pair;
+  const { challenge, state, platform, prompt } = pair;
   try {
     ports.storage.setItem(
       KEY,
@@ -97,6 +113,7 @@ export const keepNativeHandoff = (pair: NativeSignInHandoff, ports: NativePorts)
         challenge,
         state,
         ...(isNativeSignInPlatform(platform) ? { platform } : {}),
+        ...(prompt === 'login' ? { prompt } : {}),
         at: ports.now(),
       }),
     );
@@ -122,7 +139,7 @@ export const forgetNativeHandoff = (ports: NativePorts): void => {
 export const pendingNativeHandoff = (
   ports: NativePorts,
   location: Pick<Location, 'search'>,
-): NativeSignInHandoff | null => {
+): NativeQuestion | null => {
   let kept: string | null;
   try {
     if (ports.storage === null) return fromSearch(location.search);
@@ -154,6 +171,7 @@ export const pendingNativeHandoff = (
     challenge: record['challenge'],
     state: record['state'],
     ...(isNativeSignInPlatform(platform) ? { platform } : {}),
+    ...(record['prompt'] === 'login' ? { prompt: 'login' as const } : {}),
   };
   return shaped(pair) ? pair : null;
 };

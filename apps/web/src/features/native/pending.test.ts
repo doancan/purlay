@@ -86,6 +86,39 @@ describe('the native application’s challenge and state, as the page is opened 
     },
   );
 
+  test('keeps prompt=login with the pair, in the tab and in the address alike (D-356)', () => {
+    const p = ports();
+    captureNativeHandoff(at(`?challenge=${CHALLENGE}&state=${STATE}&prompt=login`), p);
+    const asked = { challenge: CHALLENGE, state: STATE, prompt: 'login' as const };
+    expect(pendingNativeHandoff(p, { search: '' })).toEqual(asked);
+    expect(
+      pendingNativeHandoff(ports({ noStorage: true }), {
+        search: `?challenge=${CHALLENGE}&state=${STATE}&prompt=login`,
+      }),
+    ).toEqual(asked);
+  });
+
+  test.each(['prompt=none', 'prompt=LOGIN', 'prompt=login&prompt=login', 'prompt='])(
+    'asks for nothing more than an ordinary handoff for any other prompt (%s)',
+    (prompt) => {
+      const p = ports();
+      captureNativeHandoff(at(`?challenge=${CHALLENGE}&state=${STATE}&${prompt}`), p);
+      expect(pendingNativeHandoff(p, { search: '' })).toEqual({
+        challenge: CHALLENGE,
+        state: STATE,
+      });
+    },
+  );
+
+  test('a kept prompt that is not login is not read back as one', () => {
+    const p = ports();
+    p.kept.set(
+      'purlay.native',
+      JSON.stringify({ challenge: CHALLENGE, state: STATE, prompt: 'none', at: NOW }),
+    );
+    expect(pendingNativeHandoff(p, { search: '' })).toEqual({ challenge: CHALLENGE, state: STATE });
+  });
+
   test('are kept as the page was given them and nothing else: an extra parameter is dropped', () => {
     const p = ports();
     captureNativeHandoff(

@@ -11,7 +11,8 @@ import {
   type Selectable,
   type SessionAuthenticationEvidence,
 } from '@purlay/db';
-import { systemClock } from '../../platform/clock';
+import { NATIVE_FRESH_SIGN_IN_MINUTES } from '@purlay/types';
+import { fixedClock, systemClock } from '../../platform/clock';
 import { tokenDigest } from '../../platform/tokens';
 import { aSession, TEST_AUTH_SECRET } from '../../testing/signed-in';
 import { aUserRow, aUniqueSlug } from '../../testing/users';
@@ -306,7 +307,12 @@ describe('integration: authentication-preserving native handoff', () => {
         verifier: pair.verifier,
       });
       expect(issued).toBeDefined();
-      expect(await evidenceFor(issued?.sessionId ?? '')).toBeUndefined();
+      // Unknown, never absent: a session with no evidence would be judged by its issuance, which is now (D-356).
+      expect(await evidenceFor(issued?.sessionId ?? '')).toMatchObject({
+        method: null,
+        authenticated_at: null,
+        global_mfa_factor_id: null,
+      });
       expect(
         await clone.db
           .selectFrom('workspace_session_assurances')
@@ -315,6 +321,57 @@ describe('integration: authentication-preserving native handoff', () => {
           .execute(),
       ).toEqual([]);
     }
+  });
+
+  test('prompt=login asks the source for a primary sign-in inside the window, and refuses unknown, old or missing proof', async () => {
+    const user = await aUserRow(clone.db, 'prompt-login-source');
+    const now = new Date();
+    const clock = fixedClock(now);
+    const windowMs = NATIVE_FRESH_SIGN_IN_MINUTES * 60_000;
+    const sourceSignedInAt = async (at: Date | undefined): Promise<string> => {
+      const source = await aSession(clone.db, systemClock, user.userId);
+      if (at !== undefined)
+        await recordPrimaryAuthentication(clone.db, source.sessionId, user.userId, {
+          method: 'password',
+          authenticatedAt: at,
+        });
+      return source.sessionId;
+    };
+    const attempt = async (sourceSessionId: string | undefined): Promise<unknown> =>
+      await authorizeNative(clone.db, clock, {
+        userId: user.userId,
+        challenge: verifierPair().challenge,
+        prompt: 'login',
+        ...(sourceSessionId === undefined ? {} : { sourceSessionId }),
+      }).catch((error: unknown) => error);
+    const grants = async (): Promise<number> =>
+      (
+        await clone.db
+          .selectFrom('native_authorizations')
+          .select('id')
+          .where('user_id', '=', user.userId)
+          .execute()
+      ).length;
+
+    const refusals = [
+      await sourceSignedInAt(new Date(now.getTime() - windowMs - 1_000)),
+      await sourceSignedInAt(undefined),
+      undefined,
+    ];
+    for (const source of refusals)
+      expect(await attempt(source)).toMatchObject({ body: { code: 'REAUTHENTICATION_REQUIRED' } });
+    expect(await grants()).toBe(0);
+
+    // The edge of the window is inside it; the same old source is accepted when the application did not ask.
+    const atTheEdge = await attempt(await sourceSignedInAt(new Date(now.getTime() - windowMs)));
+    expect(typeof (atTheEdge as { readonly code?: unknown }).code).toBe('string');
+    const old = await sourceSignedInAt(new Date(now.getTime() - windowMs - 1_000));
+    await authorizeNative(clone.db, clock, {
+      userId: user.userId,
+      challenge: verifierPair().challenge,
+      sourceSessionId: old,
+    });
+    expect(await grants()).toBe(2);
   });
 
   test('company native handoff preserves issuer provenance but copies assurance only for that company', async () => {

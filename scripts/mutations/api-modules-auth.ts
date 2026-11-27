@@ -312,6 +312,14 @@ export const API_MODULES_AUTH: readonly Mutation[] = [
     tests: ['apps/api/src/modules/auth/authentication-evidence-handoff.integration.test.ts'],
   },
   {
+    id: 'evidence-handoff-unknown-not-retained',
+    why: 'A handoff from a source with no evidence leaves the new session with none, so erasure judges it by its issuance, which is now (D-356).',
+    file: 'apps/api/src/modules/auth/native-handoff.ts',
+    find: '    await retainUnknownAuthentication(transaction, issued.sessionId, found.user_id);\n',
+    replace: '',
+    tests: ['apps/api/src/modules/auth/authentication-evidence-handoff.integration.test.ts'],
+  },
+  {
     id: 'evidence-native-admission-occupies-pool',
     why: 'Committed password admission must finish before native SQL takes a pool connection, otherwise concurrent guesses deadlock the bounded pool.',
     file: 'apps/api/src/modules/auth/authentication-evidence-native.ts',
@@ -537,6 +545,36 @@ export const API_MODULES_AUTH: readonly Mutation[] = [
     find: '      found.expires_at.getTime() > now.getTime() &&\n',
     replace: '',
     tests: ['apps/api/src/modules/auth/native-handoff.integration.test.ts'],
+  },
+  {
+    id: 'native-fresh-prompt-ignored',
+    why: 'prompt=login is accepted from a browser that signed in long ago: the application asked for a fresh check and got a one-click handoff (D-356)',
+    file: 'apps/api/src/modules/auth/native-handoff.ts',
+    find: "    if (prompt === 'login') {\n",
+    replace: '    if (prompt !== prompt) {\n',
+    tests: [
+      'apps/api/src/modules/auth/authentication-evidence-handoff.integration.test.ts',
+      'apps/api/src/ingress/http/native-fresh-sign-in.integration.test.ts',
+    ],
+  },
+  {
+    id: 'native-fresh-unknown-counts-as-recent',
+    why: 'a session with no recorded sign-in time counts as freshly signed in (D-356)',
+    file: 'apps/api/src/modules/auth/authentication-evidence.ts',
+    find: '  if (authenticatedAt === null) return false;\n',
+    replace: '  if (authenticatedAt === null) return true;\n',
+    tests: ['apps/api/src/modules/auth/authentication-evidence-handoff.integration.test.ts'],
+  },
+  {
+    id: 'native-fresh-window-unbounded',
+    why: 'any recorded sign-in counts as recent, however old (D-356)',
+    file: 'apps/api/src/modules/auth/authentication-evidence.ts',
+    find: '  return Number.isFinite(age) && age <= windowMs;\n',
+    replace: '  return Number.isFinite(age);\n',
+    tests: [
+      'apps/api/src/modules/auth/authentication-evidence-handoff.integration.test.ts',
+      'apps/api/src/ingress/http/native-fresh-sign-in.integration.test.ts',
+    ],
   },
   {
     id: 'native-handoff-for-a-suspended-account',

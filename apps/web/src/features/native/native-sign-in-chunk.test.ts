@@ -36,7 +36,7 @@ test('the consent passes when the screen’s chunk arrives late, as it does on a
     timeout: 60_000,
   });
   const output = `${done.stdout}${done.stderr}`;
-  expect(output).toMatch(/\b19 pass\b/);
+  expect(output).toMatch(/\b21 pass\b/);
   expect(output).toContain(' 0 fail');
   expect(done.status).toBe(0);
 }, 70_000);
