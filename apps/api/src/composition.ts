@@ -9,7 +9,14 @@
  * tables, the exports hold the core's.
  */
 import { PRODUCT_MIGRATION_SETS, type Executor, type MigrationSet } from '@purlay/db';
-import { FACTS, isModuleId, type FactDeclaration, type ModuleId } from '@purlay/types';
+import {
+  FACT_SHAPE_FIRST,
+  FACTS,
+  factOwnerProblems,
+  isModuleId,
+  type FactDeclaration,
+  type ModuleId,
+} from '@purlay/types';
 import { chatModule } from './features/chat/module';
 import { entitledNotices, entitledReader, entitledStart } from './modules/entitlements/hooks';
 import { requireOwnUpload, type AttachmentReader } from './modules/attachments/readable';
@@ -37,6 +44,7 @@ import type { WorkspaceCreated } from './modules/workspaces/workspaces';
 import type { KindOwners } from './modules/inbox/sink';
 import type { FactConsumers } from './platform/fact-consumers';
 import { outboxConsumerWorkers } from './modules/workers/outbox-consumer';
+import type { Handled } from './platform/outbox-drain';
 import type { ModuleSearchSource, SearchSource } from './platform/ports/search-source';
 import type { PresenceAnnouncer } from './platform/ports/presence';
 import type { FrameProjection } from './platform/ports/channel-delivery';
@@ -369,6 +377,16 @@ export interface Composition {
   /** The modules a workspace may use, from the grants read for it: the modules this process runs less those it is not granted (D-289). */
   readonly effectiveModules: (rows: readonly EntitlementRow[], now: Date) => ReadonlySet<string>;
   /**
+   * The modules a workspace is granted, from the grants read for it, over every module the build carries whether this process runs it
+   * or the administrator stopped it: what a publish judges a fact's consumers by, so every node writes the same rows (D-353).
+   */
+  readonly grantedModules: (rows: readonly EntitlementRow[], now: Date) => ReadonlySet<string>;
+  /**
+   * What this process can deliver now: each fact type a module it runs and has not stopped handles, with the newest shape of its
+   * declaration. A pending row of anything else waits on purpose here, which the outbox's report says apart from a late one (D-353).
+   */
+  readonly outboxHandles: () => readonly Handled[];
+  /**
    * The modules the administrator stopped at run time, which every answer below leaves out as it leaves out a module that is not
    * run, and which this process reads again within `SUSPENSION_TTL_MS` (D-296). The lists above are of the process; this is of the moment.
    */
@@ -431,6 +449,13 @@ export const compose = (
       `more than one module checks the socket's frames: ${projecting.map((module) => module.manifest.id).join(', ')}`,
     );
   }
+  // The declarations' own rules (a name of its owner's, declared once, a hold and a shape in range, strings no longer than a label:
+  // D-283 §3, D-353) stop the build here, where a test would only say so in CI. Whether the owner is a module of the build is the CI
+  // check's (`fact-owners.test.ts`): a composition of some of the modules is still handed every declaration.
+  const declarationProblems = factOwnerProblems(facts, [
+    ...new Set(facts.map(({ owner }) => owner)),
+  ]);
+  if (declarationProblems.length > 0) throw new Error(declarationProblems.join('; '));
   for (const module of holding) {
     const problem =
       jobWorkProblem(module) ??
@@ -488,6 +513,13 @@ export const compose = (
         .flatMap((module) => Object.entries(module.ports ?? {})),
     );
   };
+  const handled: readonly Handled[] = modules.flatMap((module) =>
+    Object.keys(module.factConsumers ?? {}).map((type) => ({
+      consumer: module.manifest.id,
+      type,
+      shape: facts.find((fact) => fact.type === type)?.shape ?? FACT_SHAPE_FIRST,
+    })),
+  );
   const providers = new Map(
     modules.flatMap((module) =>
       module.manifest.provides.map((capability): [string, string] => [
@@ -601,6 +633,17 @@ export const compose = (
     collatedColumns: holding.flatMap((module) => module.collatedColumns ?? []),
     entitlementMode,
     effectiveModules: effectiveOfThisProcess,
+    grantedModules: (rows, now) =>
+      effectiveModules({
+        running: holding.map((module) => module.manifest),
+        rows,
+        mode: entitlementMode,
+        now,
+      }),
+    outboxHandles: (): readonly Handled[] => {
+      const held = suspension.current();
+      return handled.filter(({ consumer }) => !held.has(consumer));
+    },
     suspension,
     migrationSets: PRODUCT_MIGRATION_SETS.filter((set) =>
       modules.some((module) => module.manifest.id === set.id),

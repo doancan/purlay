@@ -2,6 +2,10 @@
 
 *Amended by D-352: §1's hint uses the socket `EventBus` alone; the in-process `DomainBus` is removed.*
 
+*Amended by D-288 §12 and D-325: §2's dead rows are kept `OUTBOX_DEAD_KEPT_DAYS` (180 unless set), not thirty days, and §10's "a dead row is seen and not retried" is reversed: an administrator requeues or discards it from the console or the command line.*
+
+*Amended by D-353: §2's `absent` is judged after the grant, which every node reads the same (a consumer the workspace is not granted gets no row); a consumed fact is of a partner the module requires or lists as optional; §3's checks of the declarations (`factOwnerProblems`: the owner's prefix, a type declared once, the hold and the shape) run in `compose`, so the build does refuse them, while a published type declared nowhere in `FACTS` is refused by `fact-owners.test.ts` in CI and not by the build; §6's label of at most 200 characters is held by `factOwnerProblems`.*
+
 **Context.** Two modules run and neither can say anything to the other or to a person's inbox except through the core's
 slots. `MODULES.md` §4 kept the means D-250 rule 4 promised (a fact with a durable row, ports for notifications and search,
 a question whether a capability exists) as design intent, because nothing needed them (D-272). Issues now does: an

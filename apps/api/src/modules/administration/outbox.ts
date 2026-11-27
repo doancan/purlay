@@ -20,6 +20,7 @@ import {
   readOutboxFact,
   type OutboxChange,
 } from '../../platform/outbox-operate';
+import type { OutboxView } from '../../platform/outbox-report';
 import { recordServerAudit } from '../audit/server-audit';
 import type { ServerAdminSession } from '../setup/setup';
 import { lockServerAdministrator } from './changes';
@@ -28,7 +29,8 @@ export const listServerOutbox = async (
   database: Executor,
   clock: Clock,
   query: ServerOutboxQuery,
-): Promise<ServerOutboxPage> => await listOutboxFacts(database, query, clock.now());
+  view: Pick<OutboxView, 'consumers' | 'granted'>,
+): Promise<ServerOutboxPage> => await listOutboxFacts(database, query, clock.now(), view);
 
 export const inspectServerOutboxFact = async (
   tx: Transaction,

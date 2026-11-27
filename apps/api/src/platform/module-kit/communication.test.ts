@@ -75,10 +75,29 @@ describe('the facts a module consumes', () => {
       problemsOf(
         [
           module('notes', { publishes: ['notes.created'] }),
-          module('wiki', { consumes: ['notes.created', 'core.moved'] }),
+          module('wiki', { optional: ['notes'], consumes: ['notes.created', 'core.moved'] }),
         ],
         { facts: ['core.moved'] },
       ),
+    ).toEqual([]);
+  });
+
+  test('are published by the module itself, or by a partner it requires or lists as optional', () => {
+    const notes = module('notes', { publishes: ['notes.created'] });
+    expect(
+      problemsOf([notes, module('wiki', { requires: ['notes'], consumes: ['notes.created'] })]),
+    ).toEqual([]);
+    expect(
+      problemsOf([module('notes', { publishes: ['notes.created'], consumes: ['notes.created'] })]),
+    ).toEqual([]);
+    expect(problemsOf([notes, module('wiki', { consumes: ['notes.created'] })])).toEqual([
+      '"wiki" consumes "notes.created", published by "notes", which it neither requires nor lists as optional',
+    ]);
+  });
+
+  test('of the core need no partner', () => {
+    expect(
+      problemsOf([module('wiki', { consumes: ['core.moved'] })], { facts: ['core.moved'] }),
     ).toEqual([]);
   });
 

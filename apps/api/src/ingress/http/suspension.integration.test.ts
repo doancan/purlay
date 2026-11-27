@@ -630,13 +630,13 @@ describe('integration: what the application hands a module while it is stopped',
     type: 'issues.dropped',
     owner: 'issues',
     absent: 'drop',
-    schema: Type.Object({ id: Type.String() }),
+    schema: Type.Object({ id: Type.String({ maxLength: 36 }) }),
   });
   const HELD = defineFact({
     type: 'issues.held',
     owner: 'issues',
     absent: { holdDays: 3 },
-    schema: Type.Object({ id: Type.String() }),
+    schema: Type.Object({ id: Type.String({ maxLength: 36 }) }),
   });
   let handed: ModuleRouteDependencies<Executor> | undefined;
   const publisher: BundledModule = {
