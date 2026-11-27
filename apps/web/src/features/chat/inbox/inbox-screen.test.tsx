@@ -4,7 +4,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { within } from '@testing-library/react';
-import type { Notification, NotificationPage, ReadNotificationsRequest } from '@purlay/types';
+import type {
+  Channel,
+  Notification,
+  NotificationPage,
+  ReadNotificationsRequest,
+} from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import { ApiError } from '../../../data/errors';
 import type { Api } from '../../../data/api';
@@ -118,15 +123,19 @@ describe('the list', () => {
       [undefined, 'Bob wrote to the conversation'],
       ['tr', 'Bob konuşmaya yazdı'],
     ] as const) {
+      const channels = Promise.withResolvers<Channel[]>();
       const view = await visit(
         {
-          channels: () => Promise.resolve([group]),
+          channels: () => channels.promise,
           notifications: () => Promise.resolve(page([told(3, 'direct_message')])),
         },
         locale,
       );
-      const [row] = view.getAllByRole('button', { name: /words/ }).map((b) => b.textContent);
-      expect(row).toContain(words);
+      // The inbox can display a notification before it knows who is in the conversation.
+      const row = await view.findByRole('button', { name: /words 3/ });
+      expect(within(row).queryByText(words)).toBeNull();
+      channels.resolve([group]);
+      expect(await within(row).findByText(words)).toBeDefined();
       view.unmount();
     }
   });
