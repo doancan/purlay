@@ -81,7 +81,7 @@ describe('the screen that turns on two-step verification for a person the server
     const { api } = anEnrolmentApi(() => true);
     const view = await open(api, 'tr');
     expect(
-      await view.findByRole('heading', { level: 1, name: 'İki adımlı doğrulamayı aç' }),
+      await view.findByRole('heading', { level: 1, name: 'İki adımlı doğrulamayı açın' }),
     ).toBeDefined();
     expect(view.getByRole('button', { name: 'Çıkış yap' })).toBeDefined();
     view.unmount();

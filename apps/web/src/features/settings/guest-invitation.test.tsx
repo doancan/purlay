@@ -170,7 +170,7 @@ test('search and paging retain the selected scope, exclude DMs and enforce the t
     await user.click(view.getByRole('checkbox', { name: `#${last.name ?? ''}` }));
     const search = view.getByRole('textbox', { name: 'Find a channel' });
     await user.type(search, 'missing');
-    await view.findByText('No matching channels.');
+    await view.findByText('No matching channels');
     await user.clear(search);
     await user.type(search, 'supplier');
     await user.click(view.getByRole('checkbox', { name: '#supplier-000' }));
@@ -239,7 +239,7 @@ test('a failed list refresh can recover and clipboard refusal preserves the conf
         null,
     ).toBe(true);
     await user.click(view.getByRole('button', { name: 'Copy' }));
-    await view.findByText("Couldn't copy. Select the text and copy it yourself.");
+    await view.findByText('Couldn’t copy. Select the text and copy it yourself.');
     await user.click(view.getByRole('button', { name: 'Copy' }));
     await view.findByText('Copied');
     expect(copied).toEqual([

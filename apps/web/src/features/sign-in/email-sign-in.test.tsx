@@ -447,7 +447,7 @@ describe('a sign-in link, opened', () => {
       },
       'tr',
     );
-    expect(view.getByText('ada@example.test olarak giriş yapıyorsun.')).toBeDefined();
+    expect(view.getByText('ada@example.test olarak giriş yapıyorsunuz.')).toBeDefined();
     act(() => {
       fireEvent.click(view.getByRole('button', { name: 'Giriş yap' }));
     });

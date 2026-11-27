@@ -18,6 +18,9 @@ import { useSidePanel } from './side-panel';
 import { useStar } from './star-toggle';
 import type { Channel } from '@purlay/types';
 
+/** A panel's button while its panel is open: pressed, as a toolbar's toggle is. */
+const toggleClasses = 'aria-pressed:bg-surface-200 aria-pressed:text-ink max-narrow:hidden';
+
 export const PanelControls = ({
   direct,
   channel,
@@ -47,7 +50,7 @@ export const PanelControls = ({
         label={filesLabel}
         glyph="file"
         data-panel-toggle="files"
-        className="max-narrow:hidden"
+        className={toggleClasses}
         aria-pressed={filesOpen}
         aria-controls={filesOpen ? FILES_PANEL_ID : undefined}
         onClick={() => {
@@ -59,7 +62,7 @@ export const PanelControls = ({
         label={t('pins.open')}
         glyph="pin"
         data-panel-toggle="pins"
-        className="max-narrow:hidden"
+        className={toggleClasses}
         aria-pressed={pinsOpen}
         aria-controls={pinsOpen ? PINS_PANEL_ID : undefined}
         onClick={() => {
@@ -73,7 +76,7 @@ export const PanelControls = ({
           label={t('incident.open')}
           glyph="warning"
           data-panel-toggle="incident"
-          className="max-narrow:hidden"
+          className={toggleClasses}
           aria-pressed={incidentOpen}
           aria-controls={incidentOpen ? INCIDENT_PANEL_ID : undefined}
           onClick={() => {

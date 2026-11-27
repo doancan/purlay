@@ -2,7 +2,8 @@
  * The track of a side-by-side group (D-247) — the header's Feed | Open questions, the dialog's tabs — with the
  * mark that shows which one is chosen sliding from the old segment to the new, instead of jumping.
  *
- * The chosen segment says so in the markup (`aria-current` or `aria-selected`), and that is all this
+ * The chosen segment says so in the markup (`aria-current`, `aria-selected` or, in a group of toggle buttons,
+ * `aria-pressed`), and that is all this
  * reads: it measures that element and moves one absolutely placed mark under the children. When the
  * choice is a route, the track is a new element on the next screen, so where the mark last stood is kept
  * per `memory` name and the new mark starts there. The slide is the `duration-slide` token: 0ms under
@@ -21,12 +22,15 @@ interface Place {
 /** Where each named track's mark was last drawn. */
 const lastPlace = new Map<string, Place>();
 
+// The pill is `rounded-sm` inside the tracks' `rounded-lg` and their 4px of padding, so the two corners are
+// one curve (4 + 4 = 8), as a menu's item follows the menu's. The pill's edge is what says "chosen" in a dark theme: there the conversation's ground is darker than the
+// sunk track, so a fill and a shadow alone read as a hole, not a raised chip.
 const markClasses: Record<Mark, string> = {
-  pill: 'left-0 rounded-md bg-surface-100 shadow-card max-narrow:hidden',
+  pill: 'left-0 rounded-sm border-hairline border-border-default bg-surface-100 shadow-card max-narrow:hidden',
   underline: 'bottom-0 left-0 border-b-marker border-accent',
 };
 
-const CHOSEN = '[aria-current="page"], [aria-selected="true"]';
+const CHOSEN = '[aria-current="page"], [aria-selected="true"], [aria-pressed="true"]';
 
 export interface SlideTrackProps extends Omit<React.ComponentPropsWithoutRef<'div'>, 'ref'> {
   /** The track's element, for a caller that moves focus among its segments. */

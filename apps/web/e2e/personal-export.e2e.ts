@@ -35,7 +35,7 @@ test.describe('exporting one’s own data', () => {
     await shellReady(page);
     await page.goto(`/w/${workspace.slug}/settings/account`);
     const card = page.getByRole('region', { name: 'Your data' });
-    await expect(card.getByText('You have not exported your data yet.')).toBeVisible();
+    await expect(card.getByText('You have not exported your data yet')).toBeVisible();
     await expectNoAxe(card);
     await card.getByRole('button', { name: 'Export my data' }).click();
 

@@ -294,10 +294,10 @@ describe('the members', () => {
     const before = asked;
     await person().click(within(dialog).getByRole('button', { name: 'Add people' }));
     await settle();
-    expect(view.getByRole('dialog', { name: 'Add people to api' })).toBeDefined();
+    expect(view.getByRole('dialog', { name: 'Add people to #api' })).toBeDefined();
     await person().keyboard('{Escape}');
     await settle();
-    expect(view.queryByRole('dialog', { name: 'Add people to api' })).toBeNull();
+    expect(view.queryByRole('dialog', { name: 'Add people to #api' })).toBeNull();
     expect(asked).toBeGreaterThan(before);
     view.unmountAll();
   });
@@ -352,7 +352,7 @@ describe('the members', () => {
     expect(within(dialog).getByText('Işık Yılmaz')).toBeDefined();
     await person().clear(find);
     await person().type(find, 'nobody');
-    expect(within(dialog).getByText('Nobody in this channel matches “nobody”.')).toBeDefined();
+    expect(within(dialog).getByText('Nobody in this channel matches “nobody”')).toBeDefined();
     view.unmountAll();
   });
 

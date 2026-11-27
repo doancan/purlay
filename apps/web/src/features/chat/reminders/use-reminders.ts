@@ -28,6 +28,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { useToast } from '../../../ui/toast';
 import { useRunsIfAny } from '../../session/session';
 import { useFeedPorts } from '../channel/feed-ports';
+import { describeWhen } from '../scheduled/presets';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 
 /** Whether this server can remind: it can wherever chat runs (see above). */
@@ -160,7 +161,11 @@ export const useReminderActions = (): ReminderActions | null => {
           actions.set(message, remindAt);
         },
         () => {
-          show({ message: t('reminders.set', { when: format.absolute(remindAt) }) });
+          show({
+            message: t('reminders.set', {
+              when: describeWhen(new Date(remindAt), clock.now(), format, t),
+            }),
+          });
         },
       );
     },

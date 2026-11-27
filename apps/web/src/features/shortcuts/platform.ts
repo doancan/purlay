@@ -7,14 +7,9 @@
  * reaching into `window` (D-46).
  */
 
-/** The part of `navigator` the check reads; `userAgentData` is the modern spelling. */
-export interface PlatformSource {
-  readonly userAgentData?: { readonly platform?: string };
-  readonly platform?: string;
-}
-
-export const isMacPlatform = (source: PlatformSource): boolean =>
-  /mac|iphone|ipad|ipod/i.test(source.userAgentData?.platform ?? source.platform ?? '');
+// The check itself is the key cap's (`ui/keys.ts`), so the words a feature builds and the caps `Kbd` draws
+// are spelled for one keyboard.
+export { isMacPlatform, type PlatformSource } from '../../ui/keys';
 
 /** The names of the keys a shortcut uses, as printed on this platform. */
 export interface KeyLabels {

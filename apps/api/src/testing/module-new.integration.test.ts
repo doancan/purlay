@@ -19,6 +19,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -38,6 +39,17 @@ import {
 
 const ROOT = join(import.meta.dir, '../../../..');
 const COPY = mkdtempSync(join(tmpdir(), 'module-new-'));
+/** The number the first module's decision is made under: one past the last decision in the record before the run. */
+const NEXT_DECISION =
+  Math.max(
+    0,
+    ...readdirSync(join(ROOT, 'docs/decisions'), { recursive: true, encoding: 'utf8' }).flatMap(
+      (path) => {
+        const number = /(?:^|\/)D-(\d+)-[^/]*\.md$/.exec(path)?.[1];
+        return number === undefined ? [] : [Number(number)];
+      },
+    ),
+  ) + 1;
 const SLOW_MS = 900_000;
 
 let own: ClonedDatabase;
@@ -312,9 +324,17 @@ describe('integration: the paved road of a new module', () => {
         .output.split('\n')
         .filter((line) => line !== '')
         .map((line) => line.split(':')[0]);
+      // Each module's decision is a file of its own (D-345): zz takes the next number, yy the one after; the record's
+      // index lists each by its title, which is still the placeholder until its author writes it.
       expect(owed).toEqual([
-        ...Array<string>(10).fill('docs/DECISIONS.md'),
         ...Array<string>(2).fill('docs/MODULES.md'),
+        ...Array<string>(2).fill('docs/decisions/README.md'),
+        ...Array<string>(5).fill(
+          `docs/decisions/architecture/D-${String(NEXT_DECISION)}-zz-module.md`,
+        ),
+        ...Array<string>(5).fill(
+          `docs/decisions/architecture/D-${String(NEXT_DECISION + 1)}-yy-module.md`,
+        ),
       ]);
     },
     SLOW_MS,

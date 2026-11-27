@@ -148,7 +148,7 @@ export const PeopleList = (): React.JSX.Element | null => {
           <SectionLoading label={t('common.loading')} />
         ) : failed ? (
           <SectionError
-            title={t('state.channels.error.title')}
+            title={t('state.people.error.title')}
             body={t('state.channels.error.body')}
             retryLabel={t('common.retry')}
             onRetry={() => {

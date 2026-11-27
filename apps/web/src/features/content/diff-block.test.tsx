@@ -136,7 +136,7 @@ describe('a diff in a message', () => {
     });
     await person().click(view.getByRole('button', { name: 'Copy code' }));
     expect(
-      await view.findByText("Couldn't copy. Select the text and copy it yourself."),
+      await view.findByText('Couldn’t copy. Select the text and copy it yourself.'),
     ).toBeDefined();
     view.unmount();
   });

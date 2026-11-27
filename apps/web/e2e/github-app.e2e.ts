@@ -229,11 +229,11 @@ test('the administrator connects the App, an owner installs it, a person allows 
   ).toBeVisible();
 
   await tr.goto('/w/acme-engineering/settings/account');
-  const benim = tr.getByRole('region', { name: 'Senin adına issue aç' });
+  const benim = tr.getByRole('region', { name: 'Sizin adınıza issue aç' });
   await expect(benim.getByText('İzin verildi: ayse.')).toBeVisible();
   await benim.getByRole('button', { name: 'İzni kaldır' }).click();
   await expect(
-    benim.getByText('İzin verilmedi. Purlay GitHub’a senin adına hiçbir şey yazmaz.'),
+    benim.getByText('İzin verilmedi. Purlay GitHub’a sizin adınıza hiçbir şey yazmaz.'),
   ).toBeVisible();
   await turkish.close();
 

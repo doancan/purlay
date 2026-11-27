@@ -239,7 +239,7 @@ const ThreadPanelView = ({
       data-thread-root={rootId}
       aria-labelledby={headingId}
       onKeyDown={onKeyDown}
-      className="flex w-thread shrink-0 flex-col border-l-hairline border-border-subtle bg-surface-100 max-narrow:absolute max-narrow:inset-0 max-narrow:z-sticky max-narrow:w-full"
+      className="flex w-thread shrink-0 flex-col border-l-hairline border-border-subtle bg-surface-100 max-narrow:absolute max-narrow:inset-0 max-narrow:z-sticky max-narrow:w-full max-narrow:border-transparent"
     >
       <div className="flex h-header shrink-0 items-center justify-between gap-2 border-b-hairline border-border-subtle px-4">
         <h2

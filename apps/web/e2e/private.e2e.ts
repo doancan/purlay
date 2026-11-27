@@ -27,7 +27,7 @@ test('a private channel is made, a member brings Alice in, and it appears in her
   await expect(page.getByRole('heading', { name })).toBeVisible();
 
   await page.getByRole('button', { name: 'Add people' }).click();
-  const dialog = page.getByRole('dialog', { name: `Add people to ${name}` });
+  const dialog = page.getByRole('dialog', { name: `Add people to #${name}` });
   await dialog.getByLabel('Find a person').fill(world.personas.alice.username);
   await dialog.getByRole('button', { name: 'Add' }).click();
   await expect(dialog.getByRole('button', { name: 'Added' })).toBeDisabled();

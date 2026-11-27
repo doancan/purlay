@@ -293,7 +293,7 @@ describe('an owner’s export of the workspace', () => {
       },
     });
     const dialog = cardOf(view);
-    expect(within(dialog).getByText('You have not exported this workspace yet.')).toBeDefined();
+    expect(within(dialog).getByText('You have not exported this workspace yet')).toBeDefined();
     await expectNoAxeViolations(dialog);
 
     await person().click(within(dialog).getByRole('button', { name: 'Export' }));
@@ -466,7 +466,7 @@ describe('an owner’s export of the workspace', () => {
     expect(within(dialog).getByRole('button', { name: 'Export' })).toHaveProperty('disabled', true);
     await person().click(within(dialog).getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(within(dialog).getByText('You have not exported this workspace yet.')).toBeDefined();
+    expect(within(dialog).getByText('You have not exported this workspace yet')).toBeDefined();
     view.unmount();
 
     const pending = await open({ exports: () => new Promise(() => undefined) });

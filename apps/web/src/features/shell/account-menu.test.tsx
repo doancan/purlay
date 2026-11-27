@@ -363,7 +363,7 @@ describe('signing out', () => {
     await person().click(view.getByRole('menuitem', { name: 'Sign out' }));
     await settle();
     expect(
-      view.getByText("Couldn't sign you out. Check your connection and try again."),
+      view.getByText('Couldn’t sign you out. Check your connection and try again.'),
     ).toBeDefined();
     expect(here(view)).not.toBe('/sign-in');
     view.unmount();

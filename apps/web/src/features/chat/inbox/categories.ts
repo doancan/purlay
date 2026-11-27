@@ -13,7 +13,7 @@ const INBOX_CATEGORIES = ['all', 'mentions', 'direct', 'threads', 'updates'] as 
 export type InboxCategory = (typeof INBOX_CATEGORIES)[number];
 
 /** Updates are not notifications: the core's inbox is its own list (D-286), so no `types` ask for it. */
-export type ConversationCategory = Exclude<InboxCategory, 'updates'>;
+type ConversationCategory = Exclude<InboxCategory, 'updates'>;
 type NotificationCategory = Exclude<ConversationCategory, 'all'>;
 
 const TYPES = {

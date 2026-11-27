@@ -20,7 +20,7 @@ test.describe('exporting a workspace', () => {
     await signIn();
     const main = await openSettings(page, tenant.slug, 'data', 'Data & retention');
     const card = main.getByRole('region', { name: 'Export' });
-    await expect(card.getByText('You have not exported this workspace yet.')).toBeVisible();
+    await expect(card.getByText('You have not exported this workspace yet')).toBeVisible();
     await expectNoAxe();
     await card.getByRole('button', { name: 'Export' }).click();
 

@@ -8,6 +8,7 @@
  */
 import { Icon, type GlyphName } from '../../components/icon';
 import { cn } from '../../ui/cn';
+import { navMarkerShapeClasses } from '../../ui/nav-row';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 
 /** The classes of a rail place, at rest or as the current page. */
@@ -15,8 +16,10 @@ export const railItemClasses = (current: boolean): string =>
   cn(
     'relative inline-flex size-rail-item shrink-0 items-center justify-center rounded-lg transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:w-touch',
     // The glyph is drawn in the full navigation ink at rest, as a rail is a row of marks with no words beside them:
-    // the muted ink read as faint at 20px. The current place takes the accent and the selected fill.
-    current ? 'bg-nav-selected text-accent-text' : 'text-nav-ink hover:bg-nav-hover',
+    // the muted ink read as faint at 20px. The current place takes the accent, the selected fill and the bar, which
+    // sits on the rail's own edge, a step outside the square, as the rail's inset is two steps.
+    current ? 'bg-nav-selected text-accent-text before:-left-2' : 'text-nav-ink hover:bg-nav-hover',
+    current && navMarkerShapeClasses,
   );
 
 interface RailItemContentProps {

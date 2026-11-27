@@ -27,13 +27,29 @@ export const SectionLoading = ({
   readonly label: string;
   readonly rows?: number;
   readonly flush?: boolean;
-}): React.JSX.Element => (
-  <LoadingStatus label={label} className={cn('flex flex-col gap-3', edge(flush))}>
-    {Array.from({ length: rows }, (_, index) => (
-      <Skeleton key={index} className={index % 2 === 0 ? 'w-members' : 'w-1/2'} />
-    ))}
-  </LoadingStatus>
-);
+}): React.JSX.Element =>
+  flush ? (
+    <LoadingStatus label={label} className={cn('flex flex-col gap-3', edge(flush))}>
+      {Array.from({ length: rows }, (_, index) => (
+        <Skeleton key={index} className={index % 2 === 0 ? 'w-members' : 'w-1/2'} />
+      ))}
+    </LoadingStatus>
+  ) : (
+    // In the column, the outline of its rows: a row's height and step, a glyph's square and the words' line, so
+    // nothing below moves when the list lands.
+    <LoadingStatus label={label} className="flex flex-col gap-1">
+      {Array.from({ length: rows }, (_, index) => (
+        <span
+          key={index}
+          aria-hidden="true"
+          className="flex h-row items-center gap-2 px-2 max-narrow:h-touch"
+        >
+          <span className="block size-icon-md shrink-0 rounded-sm bg-surface-200" />
+          <Skeleton className={index % 2 === 0 ? 'w-members' : 'w-1/2'} />
+        </span>
+      ))}
+    </LoadingStatus>
+  );
 
 export const SectionError = ({
   title,

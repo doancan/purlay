@@ -63,7 +63,7 @@ export const WorkspaceDirectoriesPage = (): React.JSX.Element => {
       <SettingsCard title={t('directory.title')} description={t('directory.providerHint')}>
         <AccessListState
           pending={list.isPending}
-          failed={list.isError}
+          failure={list.error}
           paused={list.isPaused}
           empty={items.length === 0}
           retry={() => {
@@ -208,7 +208,7 @@ const DirectoryEditor = ({
           <>
             <AccessListState
               pending={providers.isPending}
-              failed={providers.isError}
+              failure={providers.error}
               paused={providers.isPaused}
               empty={false}
               retry={() => {

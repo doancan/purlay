@@ -574,13 +574,16 @@ export const GuestAdministration = (): React.JSX.Element => {
         )}
         {list.data === undefined ? (
           !list.isError && (
-            <LoadingStatus label={t('common.loading')} className="px-6 py-4">
+            <LoadingStatus
+              label={t('common.loading')}
+              className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
+            >
               <Skeleton />
               <Skeleton />
             </LoadingStatus>
           )
         ) : rows.length === 0 ? (
-          <p className="px-6 py-5 text-label text-ink-muted max-narrow:px-4">{t('guests.none')}</p>
+          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{t('guests.none')}</p>
         ) : (
           <ul aria-label={t('guests.title')} className="flex min-w-0 flex-col">
             {rows.map((guest) => (

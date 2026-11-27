@@ -50,6 +50,8 @@ describe('classes in the vocabulary', () => {
     'rounded-md',
     'rounded-pill',
     'shadow-float',
+    'shadow-none',
+    'ring-0',
     'z-popover',
     'duration-collapse',
     'ease-standard',
@@ -114,7 +116,7 @@ describe('classes around the vocabulary', () => {
 });
 
 describe('judging many classes at once (#385)', () => {
-  test('one raw class is reported once, against itself; the clean classes after it are not', async () => {
+  test('each raw or unknown class is reported against itself, with no findings for clean classes', async () => {
     const found = await checkVocabulary({
       entry,
       resolve: resolveStylesheet,
@@ -123,11 +125,13 @@ describe('judging many classes at once (#385)', () => {
         { file: 'b.tsx', line: 2, candidate: 'flex' },
         { file: 'c.tsx', line: 3, candidate: 'items-center' },
         { file: 'd.tsx', line: 4, candidate: 'text-ink' },
+        { file: 'e.tsx', line: 5, candidate: 'bg-not-a-token' },
       ],
     });
-    expect(found).toHaveLength(1);
+    expect(found).toHaveLength(2);
     expect(found[0]).toContain('a.tsx:1');
     expect(found[0]).toContain('border');
+    expect(found[1]).toContain('e.tsx:5  bg-not-a-token  builds to nothing');
   });
 });
 

@@ -18,7 +18,7 @@ import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
 import { GoogleButton } from './google-button';
 import { OidcButton } from './oidc-button';
-import { StandaloneScreen } from '../shell/standalone';
+import { DoorCard } from './door-card';
 
 export const SignUpScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -45,75 +45,73 @@ export const SignUpScreen = (): React.JSX.Element => {
   );
 
   return (
-    <StandaloneScreen>
-      <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
-        <LogoMark />
-        <InstanceIdentity />
-        {methods.isError ? (
-          <>
-            <h1 className="text-display">{t('signUp.title')}</h1>
-            <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-body text-ink-muted">
-              {t('signIn.methods.unchecked')}
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  void methods.refetch();
-                }}
-              >
-                {t('signIn.methods.retry')}
-              </Button>
-            </p>
-          </>
-        ) : methods.data === undefined ? (
-          <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
-            <Skeleton className="h-touch w-full rounded-md" />
-          </LoadingStatus>
-        ) : !open ? (
-          <>
-            <div className="flex flex-col items-center gap-2">
-              <h1 className="text-display">{t('signUp.closed.title')}</h1>
-              <p className="text-balance text-body text-ink-muted">{t('signUp.closed.body')}</p>
+    <DoorCard>
+      <LogoMark />
+      <InstanceIdentity />
+      {methods.isError ? (
+        <>
+          <h1 className="text-balance text-display">{t('signUp.title')}</h1>
+          <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-body text-ink-muted">
+            {t('signIn.methods.unchecked')}
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void methods.refetch();
+              }}
+            >
+              {t('signIn.methods.retry')}
+            </Button>
+          </p>
+        </>
+      ) : methods.data === undefined ? (
+        <LoadingStatus label={t('common.loading')} className="flex w-full flex-col gap-3">
+          <Skeleton className="h-control w-full rounded-md max-narrow:h-touch" />
+        </LoadingStatus>
+      ) : !open ? (
+        <>
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="text-balance text-display">{t('signUp.closed.title')}</h1>
+            <p className="text-balance text-body text-ink-muted">{t('signUp.closed.body')}</p>
+          </div>
+          {signIn}
+        </>
+      ) : !github && !google && oidc === null && !mail ? (
+        <>
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="text-balance text-display">{t('signUp.title')}</h1>
+            <p className="text-balance text-body text-ink-muted">{t('signUp.nothing')}</p>
+          </div>
+          {signIn}
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="text-balance text-display">{t('signUp.title')}</h1>
+            <p className="text-balance text-body text-ink-muted">{t('signUp.lede')}</p>
+          </div>
+          {oidc !== null && (
+            <div className="flex w-full flex-col items-center gap-3">
+              <OidcButton
+                name={oidc.name}
+                variant={mail || github || google ? 'secondary' : 'primary'}
+              />
             </div>
-            {signIn}
-          </>
-        ) : !github && !google && oidc === null && !mail ? (
-          <>
-            <div className="flex flex-col items-center gap-2">
-              <h1 className="text-display">{t('signUp.title')}</h1>
-              <p className="text-balance text-body text-ink-muted">{t('signUp.nothing')}</p>
+          )}
+          {github && (
+            <div className="flex w-full flex-col items-center gap-3">
+              <GitHubButton variant={mail || google || oidc !== null ? 'secondary' : 'primary'} />
+              <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
             </div>
-            {signIn}
-          </>
-        ) : (
-          <>
-            <div className="flex flex-col items-center gap-2">
-              <h1 className="text-display">{t('signUp.title')}</h1>
-              <p className="text-balance text-body text-ink-muted">{t('signUp.lede')}</p>
+          )}
+          {google && (
+            <div className="flex w-full flex-col items-center gap-3">
+              <GoogleButton variant={mail || github || oidc !== null ? 'secondary' : 'primary'} />
             </div>
-            {oidc !== null && (
-              <div className="flex w-full flex-col items-center gap-3">
-                <OidcButton
-                  name={oidc.name}
-                  variant={mail || github || google ? 'secondary' : 'primary'}
-                />
-              </div>
-            )}
-            {github && (
-              <div className="flex w-full flex-col items-center gap-3">
-                <GitHubButton variant={mail || google || oidc !== null ? 'secondary' : 'primary'} />
-                <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
-              </div>
-            )}
-            {google && (
-              <div className="flex w-full flex-col items-center gap-3">
-                <GoogleButton variant={mail || github || oidc !== null ? 'secondary' : 'primary'} />
-              </div>
-            )}
-            <EmailSignInForm alone={!github && !google && oidc === null} mail={mail} />
-            {signIn}
-          </>
-        )}
-      </section>
-    </StandaloneScreen>
+          )}
+          <EmailSignInForm alone={!github && !google && oidc === null} mail={mail} />
+          {signIn}
+        </>
+      )}
+    </DoorCard>
   );
 };
