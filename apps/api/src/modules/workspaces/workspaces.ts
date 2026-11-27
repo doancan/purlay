@@ -153,6 +153,7 @@ export const membershipsOf = async (
       'workspaces.name',
       'workspaces.slug',
       'workspaces.avatar_url',
+      'workspaces.urgent_messages_enabled',
       'workspace_members.role',
       'workspace_members.joined_at',
       'workspace_members.is_deep_work_active',
@@ -218,6 +219,7 @@ export const membershipsOf = async (
     return {
       workspace: asWorkspace(row),
       role: row.role,
+      urgentMessagesEnabled: row.urgent_messages_enabled,
       workspaceCapabilities: capabilities.get(row.id) ?? [],
       channelCapabilities: [...(channelCapabilities.get(row.id) ?? [])],
       joinedAt: new Date(row.joined_at).toISOString(),
