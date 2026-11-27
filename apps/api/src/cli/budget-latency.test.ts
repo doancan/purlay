@@ -15,6 +15,7 @@ import {
   gate,
   countAnswer,
   countSendAnswer,
+  describeSendTiming,
   busyWith,
   lowestOf,
   REGRESSION_FACTOR,
@@ -37,6 +38,37 @@ const run = (ack: number, fanOut: number): Latency => ({
 });
 
 describe('the latency budget', () => {
+  test('the p95 fan-out phase lengths belong to its actual timed message', () => {
+    const reported = describeSendTiming(
+      120,
+      [
+        { sent: 0, received: 20, createdAt: new Date(1002).toISOString(), publishedAt: 1015 },
+        { sent: 30, received: 150, createdAt: new Date(1035).toISOString(), publishedAt: 1140 },
+        { sent: 160, received: 290, createdAt: new Date(1170).toISOString(), publishedAt: 1175 },
+      ],
+      15,
+      1000,
+    );
+    expect(reported).toEqual({
+      maxPaceOverrunMs: 15,
+      fanOutP95: { sendToInsertMs: 5, insertToPublishMs: 105, publishToReceiveMs: 10 },
+    });
+  });
+
+  test('a missing, invalid or out-of-order server marker only omits the phase split', () => {
+    for (const [createdAt, publishedAt] of [
+      [undefined, 1100],
+      ['unreadable', 1100],
+      [new Date(1040).toISOString(), 1035],
+      [new Date(1040).toISOString(), 1200],
+    ] as const) {
+      expect(
+        describeSendTiming(120, [{ sent: 20, received: 140, createdAt, publishedAt }], 15, 1000),
+      ).toEqual({ maxPaceOverrunMs: 15 });
+    }
+    expect(describeSendTiming(120, [], 15, 1000)).toEqual({ maxPaceOverrunMs: 15 });
+  });
+
   test('p95 is the nearest rank, and nothing measured is an error rather than a number', () => {
     expect(p95(Array.from({ length: 100 }, (_, n) => n + 1))).toBe(95);
     expect(p95([7])).toBe(7);
@@ -245,7 +277,16 @@ describe('a regression, measured again (D-227)', () => {
     const file = join(tmpdir(), `latency-${crypto.randomUUID()}.json`);
     const record = `${file}.current`;
     await Bun.write(file, JSON.stringify(run(30, 30)));
-    const { measure, calls } = measuring([slow, slow, slow, steady, steady, steady]);
+    const firstAttempt = { ...slow, sendTiming: { maxPaceOverrunMs: 10 } };
+    const confirmation = { ...steady, sendTiming: { maxPaceOverrunMs: 1 } };
+    const { measure, calls } = measuring([
+      firstAttempt,
+      firstAttempt,
+      firstAttempt,
+      confirmation,
+      confirmation,
+      confirmation,
+    ]);
     const result = await main(['--keep', file, '--record', record], measure);
     expect(calls()).toBe(6);
     expect(result.code).toBe(0);
@@ -254,11 +295,14 @@ describe('a regression, measured again (D-227)', () => {
       'ACK round-trip p95: 100.0 ms of 120 ms (60 messages, was 30.0 ms, limit 45.0 ms) — REGRESSED',
     );
     expect(result.lines).toContain('first measurement regressed; measured again:');
+    expect(said).toContain('send timing {"maxPaceOverrunMs":10}');
+    expect(said).toContain('send timing {"maxPaceOverrunMs":1}');
     expect(said).toContain(
       'ACK round-trip p95: 31.0 ms of 120 ms (60 messages, was 30.0 ms, limit 45.0 ms)\n',
     );
-    expect(await Bun.file(file).json()).toEqual(summarizeTrials([steady, steady, steady]));
-    expect(await Bun.file(record).json()).toEqual(summarizeTrials([steady, steady, steady]));
+    const expected = summarizeTrials([confirmation, confirmation, confirmation]);
+    expect(await Bun.file(file).json()).toEqual(expected);
+    expect(await Bun.file(record).json()).toEqual(expected);
   });
 
   test('fails a regression that repeats, records the second, and keeps nothing', async () => {
