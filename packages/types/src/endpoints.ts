@@ -38,6 +38,7 @@ import {
   DeepWorkResponse,
   DeviceSessionList,
   EditMessageRequest,
+  EraseAccountRequest,
   ExternalImageQuery,
   FilePage,
   FileQuery,
@@ -234,6 +235,16 @@ export const ENDPOINTS = [
     auth: 'session',
     body: UpdateProfileRequest,
     responses: { 200: Profile },
+  }),
+  // The person's own erasure (D-139 §5): from a session signed in within `ERASURE_SIGN_IN_MINUTES`, the cookie
+  // cleared on success. The last owner of a workspace with others in it is `LAST_OWNER`, naming each to hand over.
+  read({
+    id: 'eraseMyAccount',
+    method: 'POST',
+    path: '/api/me/erase',
+    auth: 'session',
+    body: EraseAccountRequest,
+    responses: { 204: null },
   }),
   read({
     id: 'listWorkspaces',
