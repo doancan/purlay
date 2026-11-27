@@ -126,6 +126,7 @@ const aRoom = async (): Promise<{
   aliceId: string;
   bob: string;
   bobId: string;
+  workspaceId: string;
   channelId: string;
 }> => {
   const alice = await aUser('alice');
@@ -142,7 +143,14 @@ const aRoom = async (): Promise<{
   });
   const channelId = ((await channel.json()) as { id: string }).id;
   expect((await http('POST', `/api/channels/${channelId}/join`, bob.cookie)).ok).toBe(true);
-  return { alice: alice.cookie, aliceId: alice.id, bob: bob.cookie, bobId: bob.id, channelId };
+  return {
+    alice: alice.cookie,
+    aliceId: alice.id,
+    bob: bob.cookie,
+    bobId: bob.id,
+    workspaceId,
+    channelId,
+  };
 };
 
 interface Client {
@@ -425,6 +433,49 @@ describe('integration: two real sockets', () => {
     expect(new Set(createdIds(bob.frames))).toEqual(new Set([id]));
     await alice.close();
     await bob.close();
+  });
+
+  test('a workspace disabling urgent sends takes effect on an already connected socket', async () => {
+    const room = await aRoom();
+    const alice = await connect(room.alice);
+    try {
+      expect(
+        (
+          await http('PUT', `/api/workspaces/${room.workspaceId}/urgent-messages`, room.alice, {
+            enabled: false,
+          })
+        ).status,
+      ).toBe(200);
+      const bob = await db
+        .selectFrom('users')
+        .select('username')
+        .where('id', '=', room.bobId)
+        .executeTakeFirstOrThrow();
+      const id = messageId(NOW);
+      alice.send({
+        id,
+        op: 'MESSAGE_SEND',
+        payload: {
+          channelId: room.channelId,
+          content: `@${bob.username} look`,
+          priority: 'urgent',
+        },
+      });
+      await alice.until(
+        (frames) => frames.some((frame) => frame.refId === id),
+        'the priority refusal',
+      );
+      expect(alice.frames.find((frame) => frame.refId === id)).toMatchObject({
+        event: 'ERROR',
+        data: {
+          code: 'VALIDATION_FAILED',
+          details: { fields: { priority: 'urgent messages are disabled in this workspace' } },
+        },
+      });
+      expect(await history(room.alice, room.channelId)).toEqual([]);
+    } finally {
+      await alice.close();
+    }
   });
 
   /**

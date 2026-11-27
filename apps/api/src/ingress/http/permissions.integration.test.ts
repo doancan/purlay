@@ -406,6 +406,10 @@ const ACTIONS: Readonly<Record<string, (world: World, as: SignedInUser) => Promi
     await call(world, 'PATCH', `/api/workspaces/${world.workspaceId}`, as, {
       name: `renamed by ${as.username}`,
     }),
+  'change whether urgent messages are allowed': async (world, as) =>
+    await call(world, 'PUT', `/api/workspaces/${world.workspaceId}/urgent-messages`, as, {
+      enabled: false,
+    }),
   'read how long the history is kept': async (world, as) =>
     await call(world, 'GET', `/api/workspaces/${world.workspaceId}/retention`, as),
   'set how long the history is kept': async (world, as) =>

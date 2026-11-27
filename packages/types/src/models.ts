@@ -199,6 +199,8 @@ export type ChannelAccessAction = Static<typeof ChannelAccessAction>;
 export const Membership = Type.Object({
   workspace: Workspace,
   role: UserRole,
+  /** An older server omits this and allows urgent messages. */
+  urgentMessagesEnabled: Type.Optional(Type.Boolean()),
   /** Workspace-scoped delegation only. An older server omits this and grants no custom actions. */
   workspaceCapabilities: Type.Optional(
     Type.Array(WorkspaceAccessAction, { maxItems: 3, uniqueItems: true }),
