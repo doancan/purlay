@@ -168,35 +168,72 @@ To check the client address, sign in, then in the `postgres` container
 `psql -U purlay -c 'SELECT ip_address FROM sessions ORDER BY created_at DESC LIMIT 1'` must be your address,
 not Nginx Proxy Manager's or Cloudflare's.
 
-**Updating to each release, by itself** (D-262). Every release's image is also named `:release` (and
-`:vX.Y.Z`) by the `release-image` workflow, and nothing else ever is. Set `PURLAY_IMAGE` to
-`ghcr.io/<owner>/<repo>-api:release`, redeploy, then turn on Dockhand's auto-update for the `api` and `scheduler`
-containers with a short schedule (`*/15 * * * *`): Dockhand compares the digest and pulls
-only when a new release is out, so the server runs it within a quarter of an hour. Leave `storage-init`
-out of per-container schedules. From Dockhand 1.0.27, the `dockhand.update=false` label excludes it
-even when environment-wide updates are enabled. Per-container updates left this one-shot in
-`created` on several releases. Docker can report exit code 0 in that state before the job has run.
-[Dockhand container labels](https://dockhand.pro/manual/#container-labels)
+The `release-image` workflow promotes the tested image to `:release` and `:vX.Y.Z` (D-262).
+Existing Dockhand stacks that follow `:release` can keep their `*/15 * * * *` per-container
+schedule for API and scheduler. Keep `storage-init` excluded with its `dockhand.update=false`
+label. Per-container updates can leave the initializer in `created`, and Docker can report
+exit code 0 in that state before the command has run. Verify completion by exact digest
+before recording the rollout. Use the staged command below for a release whose initializer
+must finish before the readers change. [Dockhand container labels](https://dockhand.pro/manual/#container-labels)
 
-For a fresh object store or a release that changes its preparation, redeploy the stack from Dockhand
-so Compose applies `service_completed_successfully` before starting the API. The stack-level
-**Redeploy** action operates on the Compose stack. Leave **Force recreate** off for an ordinary
-redeploy. Keep the protected backup from before the change and use the tested release digest when
-redeploying by hand. [Dockhand stack controls](https://dockhand.pro/manual/#stacks-redeploy-options)
-[Compose dependency ordering](https://docs.docker.com/compose/how-tos/startup-order/)
+### Stage a tested release
 
-Check the selected Compose project on the Docker host after the redeploy. Pass the exact digest from
-the tested release.
+Use the staged command for an application-only image update to the existing, unmodified Dockhand Compose
+stack. Give one operator exclusive deployment control for this project. Turn off Dockhand per-container
+updates for the API and scheduler, scheduled Git redeploys, and deployment webhooks for this stack before
+using the command. Leave the initializer's `dockhand.update=false` label in place. Run the command on
+the Docker host using the same Docker context and Compose project as the installed stack. Use a supported
+Docker Compose version with `up --wait` and `run --pull never`.
+
+Use the digest **and its full commit** from a successful `image` run on `main`. The host's Docker CLI needs
+its existing authorized pull access if this exact digest is absent locally. Put the stack's current
+variables in a private operator environment file, including its existing secrets and storage settings.
+Run from a shell without conflicting exported Compose or stack settings. The command supplies
+`PURLAY_IMAGE` for this invocation. It writes its lock and release receipts to an existing private directory
+shared by the operators of this project. Keep the saved Dockhand image pin in sync with the successful
+release before any later manual Dockhand redeploy.
+
+Supply a recent protected custom PostgreSQL dump from this stack, copied out of the rolling backup
+directory. Keep the attachment volume's separate backup. The command checks the dump's archive listing
+and records its SHA-256. The operator is responsible for the source, freshness and restore verification
+of the backups.
 
 ```bash
-scripts/check-storage-init.sh <compose-project> 'ghcr.io/<owner>/<repo>-api@sha256:<tested-digest>'
+export PURLAY_DOCKHAND_RECEIPTS=/absolute/path/to/private/release-receipts
+scripts/stage-dockhand-release.sh "$COMPOSE_PROJECT" "$PRIVATE_STACK_ENV" \
+  "$TESTED_GHCR_DIGEST" "$TESTED_GIT_COMMIT" "$PROTECTED_POSTGRES_DUMP"
 ```
 
-The command reads the matching container's labels, image ID, command and completion state from
-Docker. It requires an exited initializer with recorded start and finish times and exit code 0.
-A failure means the preparation is still unverified. Check the initializer in Dockhand and confirm
-API and scheduler readiness at the target revision before declaring the release deployed. A digest
-pin is updated by setting a newer digest by hand.
+The command resolves the digest and verifies its OCI revision label, then starts a one-off initializer
+with its normal Compose permissions. It verifies the command, exact image ID, timestamps and exit code
+from Docker before replacing readers. A refused initializer leaves the old API and scheduler in place
+and preserves the existing PostgreSQL, Garage and backup containers and the protected dump. The
+initializer can change Garage as it works, so keep the attachment backup even when staging fails.
+
+After preflight succeeds, the command stops the old scheduler, starts the new API and waits for it to
+pass readiness after migrations, then starts the scheduler. It writes a completion receipt only once
+both readers are healthy at the tested digest. Keep the successful one-off container with its receipt
+to allow a subsequent invocation of the same release to verify completion without recreating readers.
+If interrupted after both replacement readers are healthy, rerun the exact command. The retained
+preflight checkpoint lets the command recheck the initializer and recover the completion receipt
+without recreating services. After a killed process, move its stale `<project>.lock` directory aside
+only after confirming the operator command and its Docker subprocesses have exited.
+
+The command exits on a partial rollout. If API readiness fails after the switch, inspect the API's
+migration and readiness logs before deciding how to recover. The command leaves the scheduler stopped
+in that case.
+
+For an empty project, pass `--fresh` in place of the dump. Compose brings up PostgreSQL and Garage,
+waits for the managed initializer to succeed, then starts API and scheduler in dependency order. To
+verify the managed initializer for a manually deployed stack, use:
+
+```bash
+scripts/check-storage-init.sh "$COMPOSE_PROJECT" "$TESTED_GHCR_DIGEST"
+```
+
+For Compose, infrastructure or credential changes, plan the full stack rollout independently and use
+the stack-level **Redeploy** action intentionally. [Dockhand stack controls](https://dockhand.pro/manual/#stacks-redeploy-options)
+[Compose dependency ordering](https://docs.docker.com/compose/how-tos/startup-order/)
 
 Dockhand does not do what `scripts/deploy.sh` does: there is **no backup taken at the switch and no automatic
 way back**, and the database migrates as the new API starts. The stack's `backup` service is the answer: it
