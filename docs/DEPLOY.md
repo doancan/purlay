@@ -228,6 +228,15 @@ The command exits on a partial rollout. If API readiness fails after the switch,
 migration and readiness logs before deciding how to recover. The command leaves the scheduler stopped
 in that case.
 
+To confirm a completed staged release, use the same Docker context and `PURLAY_DOCKHAND_RECEIPTS`
+directory. The command compares both healthy readers, their tested image revision, and the retained
+initializer completion with the recorded receipt. It refuses missing or mismatched evidence without
+pulling an image, running a container, or writing a receipt. Verify the protected backup separately.
+
+```bash
+scripts/stage-dockhand-release.sh "$COMPOSE_PROJECT" --verify "$TESTED_GHCR_DIGEST" "$TESTED_GIT_COMMIT"
+```
+
 For an empty project, pass `--fresh` in place of the dump. Compose brings up PostgreSQL and Garage,
 waits for the managed initializer to succeed, then starts API and scheduler in dependency order. To
 verify the managed initializer for a manually deployed stack, use:
