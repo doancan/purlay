@@ -12,7 +12,7 @@ import {
   CLONE_HOOK_MS,
   DROP_HOOK_MS,
 } from '@purlay/db';
-import { ServerFrame } from '@purlay/types';
+import { messageId, ServerFrame, type ClientFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { compose } from '../composition';
 import { createApp, type HttpApplication } from '../ingress/http/app';
@@ -101,6 +101,7 @@ const aRoom = async (): Promise<{ alice: SignedInUser; bob: SignedInUser }> => {
 
 interface Client {
   readonly frames: ServerFrame[];
+  readonly send: (frame: ClientFrame) => void;
   readonly until: (
     done: (frames: readonly ServerFrame[]) => boolean,
     what: string,
@@ -130,6 +131,9 @@ const connect = async (at: Node, cookie: string): Promise<Client> => {
   });
   return {
     frames,
+    send: (frame): void => {
+      socket.send(JSON.stringify(frame));
+    },
     until: async (done, what): Promise<void> => {
       const deadline = Date.now() + 5_000;
       while (!done(frames)) {
@@ -204,6 +208,13 @@ describe('integration: the socket of a process that does not run chat, and who i
     const { alice, bob } = await aRoom();
     const alone = node('none');
     const watching = await connect(alone, bob.cookie);
+    // The browser can see the upgrade before the hub has joined Bob's topics. A PONG waits for that identity.
+    const ping = messageId(NOW);
+    watching.send({ id: ping, op: 'PING', payload: {} });
+    await watching.until(
+      (f) => f.some((frame) => frame.event === 'PONG' && frame.refId === ping),
+      'pong',
+    );
     const changed = await http(alone, 'PATCH', '/api/me/profile', alice.cookie, {
       title: 'Captain',
     });
