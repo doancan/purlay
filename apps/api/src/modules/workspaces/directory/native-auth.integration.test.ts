@@ -194,6 +194,42 @@ describe('integration: native directory provisioning', () => {
     ]);
   });
 
+  test('a SCIM delete rolls back when the departure callback is missing (D-355)', async () => {
+    const f = await setup();
+    const externalId = crypto.randomUUID();
+    const email = `${externalId}@company.example`;
+    const created = await call(f, 'POST', 'Users', user(externalId, email));
+    expect(created.status).toBe(201);
+    const path = `Users/${await resourceId(created)}`;
+    const membership = async (): Promise<{ id: string } | undefined> =>
+      await clone.db
+        .selectFrom('workspace_members as member')
+        .innerJoin('users as person', 'person.id', 'member.user_id')
+        .select('member.id')
+        .where('member.workspace_id', '=', f.configured.fixture.actor.context.workspaceId)
+        .where('person.email', '=', email)
+        .executeTakeFirst();
+    const originalMembership = await membership();
+    expect(originalMembership).toBeDefined();
+
+    const directory = {
+      channels: noWorkspaceChannels,
+      departures: noDepartures,
+      readersReady: f.dependencies.readersReady,
+    };
+    // Simulate incomplete runtime wiring despite the typed auth configuration.
+    Reflect.deleteProperty(directory, 'departures');
+    const auth = aTestAuth(clone.db, { directory });
+    const unwired = { ...f, configured: { ...f.configured, auth } };
+
+    expect((await call(unwired, 'DELETE', path)).status).toBe(500);
+    expect((await call(f, 'GET', path)).status).toBe(200);
+    expect(await membership()).toEqual(originalMembership);
+
+    expect((await call(f, 'DELETE', path)).status).toBe(204);
+    expect(await membership()).toBeUndefined();
+  });
+
   test('preview keeps actual manual, directory and mixed sources live', async () => {
     const f = await setup();
     const external = crypto.randomUUID();
