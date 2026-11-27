@@ -441,7 +441,7 @@ describe('Copy link', () => {
     const view = await open({ copy: () => Promise.reject(new Error('denied')) });
     await rightClick(rowOf(view, 'incidents'));
     await choose(view, 'Copy link');
-    expect(view.getByText("Couldn't copy. Select the text and copy it yourself.")).toBeDefined();
+    expect(view.getByText('Couldn’t copy. Select the text and copy it yourself.')).toBeDefined();
     view.unmount();
   });
 });

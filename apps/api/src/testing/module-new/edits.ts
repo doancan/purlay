@@ -7,8 +7,7 @@ import { fill, type Edit, type Names, type Options } from './plan';
 const ISSUES_MODULE_IMPORT = "import { issuesModule } from './features/issues/module';\n";
 /** Every list of modules takes the new one after issues, so that all of them are in the same order. */
 const ISSUES_IN_THE_BUNDLE = '  issuesModule,\n';
-const FACTS_IMPORT =
-  "import { FACT_HOLD_DAYS_MAX, FACT_SHAPE_FIRST, type FactDeclaration } from './fact-declaration';\n";
+const FACTS_IMPORT = "  type FactDeclaration,\n} from './fact-declaration';\n";
 const FACTS_LIST = '...CORE_FACTS';
 const ISSUES_ID = "Type.Literal('issues')";
 const ISSUES_EXPORT = "export * from './issues';\n";
@@ -309,21 +308,6 @@ Made by \`bun run module:new __ID__\` (D-__DECISION__, \`docs/MODULE-GUIDE.md\`)
 - **Removal threshold.** <<FILL>> say when this module is removed from the build, or \`none, because …\` (D-250 rule 6).
 
 ${MODULES_GLOSSARY}`,
-  },
-  {
-    file: 'docs/DECISIONS.md',
-    text: `
-### D-__DECISION__. <<FILL>> the title of the decision: what __ID__ is — builds on D-250
-
-**Context.** <<FILL>> why the module exists.
-
-**Decision.** <<FILL>> what it is, what it is not, the table, who may do what, what becomes of its data when it is off.
-The module is described in \`MODULES.md\` §11 and was made by \`bun run module:new __ID__\`.
-
-**Rejected.** <<FILL>>
-
-**Cost of reversing.** <<FILL>>
-`,
   },
 ];
 

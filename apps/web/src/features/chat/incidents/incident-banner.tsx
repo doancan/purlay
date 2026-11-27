@@ -57,7 +57,7 @@ export const IncidentBanner = ({
       <span aria-hidden="true">·</span>
       <span>{t(`incident.${incident.status}`)}</span>
       <span aria-hidden="true">·</span>
-      <time dateTime={incident.declaredAt} className="min-w-0 truncate font-mono">
+      <time dateTime={incident.declaredAt} className="min-w-0 truncate tabular-nums">
         {t('incident.since', { when: format.time(incident.declaredAt, now) })}
       </time>
       {incident.responders.length > 0 && (
@@ -73,7 +73,7 @@ export const IncidentBanner = ({
           {incident.responders.length > 3 && (
             <span
               aria-hidden="true"
-              className="font-mono"
+              className="tabular-nums"
             >{`+${String(incident.responders.length - 3)}`}</span>
           )}
           <VisuallyHidden>

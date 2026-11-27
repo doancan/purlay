@@ -18,7 +18,7 @@ import {
   type UseInfiniteQueryResult,
 } from '@tanstack/react-query';
 import type { Channel, SavedItem, SavedPage, SavedState } from '@purlay/types';
-import { Icon } from '../../../components/icon';
+import { Icon, type GlyphName } from '../../../components/icon';
 import { useApi } from '../../../data/api-provider';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
@@ -29,16 +29,16 @@ import { useRoute } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
-import { HeaderTile, useChannelTitle } from '../channel/channel-header';
+import { ChannelName, HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../../shell/nav';
 import {
   ListCard,
   ListColumn,
   ListFilter,
+  ListSkeleton,
   listButtonClasses,
   listRowClasses,
 } from '../../../ui/list-column';
@@ -49,6 +49,20 @@ import { authorOf } from '../../../lib/author';
 import { useMessageText } from '../../content/github-event';
 
 const STATES = ['in_progress', 'archived', 'completed'] as const satisfies readonly SavedState[];
+
+/** Each tab's mark: what a saved message is waiting for, put away, done, and what comes back at a time. */
+const TAB_GLYPH = {
+  in_progress: 'save',
+  archived: 'archive',
+  completed: 'resolved',
+  reminders: 'reminder',
+} as const satisfies Record<(typeof STATES)[number] | 'reminders', GlyphName>;
+
+const EMPTY_BODY = {
+  in_progress: 'saved.empty.body',
+  archived: 'saved.empty.archivedBody',
+  completed: 'saved.empty.completedBody',
+} as const satisfies Record<SavedState, string>;
 
 /** The tab an address names; In progress for anything else. */
 export const stateIn = (search: string): SavedState => {
@@ -84,11 +98,6 @@ const useSaved = (
   });
 };
 
-const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
-  const title = useChannelTitle(channel);
-  return <span>{channel.type === 'direct_message' ? title : `#${title}`}</span>;
-};
-
 /** What a saved message can be moved to from where it is. */
 const MOVES: Readonly<Record<SavedState, readonly SavedState[]>> = {
   in_progress: ['completed', 'archived'],
@@ -114,7 +123,13 @@ const Row = ({
   const { message } = item;
   const now = useFeedPorts().clock.now();
   return (
-    <li className={cn('group relative', listRowClasses)}>
+    // Tinted as one: under the pointer or a focus on its actions, the row and the actions over it share a tone.
+    <li
+      className={cn(
+        'group relative transition-colors duration-hover ease-standard hover:bg-surface-050 focus-within:bg-surface-050',
+        listRowClasses,
+      )}
+    >
       <button type="button" className={listButtonClasses('pr-5')} onClick={onOpen}>
         <Avatar
           name={authorOf(message, t('user.erased')).displayName}
@@ -129,8 +144,13 @@ const Row = ({
             <span className="min-w-0 truncate">
               {channel === undefined ? t('questions.unnamed') : <ChannelName channel={channel} />}
             </span>
+            {/* A phone's line has room for the time alone: with "saved" it crowded the author and
+                channel down to an ellipsis, the longer Turkish words most. */}
             <time dateTime={item.savedAt} className="ml-auto shrink-0 font-mono text-caption">
-              {t('saved.when', { when: format.time(item.savedAt, now) })}
+              <span className="max-narrow:hidden">
+                {t('saved.when', { when: format.time(item.savedAt, now) })}
+              </span>
+              <span className="hidden max-narrow:inline">{format.time(item.savedAt, now)}</span>
             </time>
           </span>
           <span className="line-clamp-2 block text-body text-ink">{textOf(message)}</span>
@@ -149,6 +169,8 @@ const Row = ({
           <Button
             key={to}
             variant="ghost"
+            // The mark of the tab it goes to: each button says where, and they line up as the tabs do.
+            glyph={TAB_GLYPH[to]}
             onClick={() => {
               onMove(to);
             }}
@@ -156,12 +178,7 @@ const Row = ({
             {t(`saved.move.${to}`)}
           </Button>
         ))}
-        <Button
-          variant="dangerQuiet"
-          glyph="delete"
-          aria-label={t('saved.remove')}
-          onClick={onRemove}
-        >
+        <Button variant="ghost" glyph="delete" aria-label={t('saved.remove')} onClick={onRemove}>
           {/* A phone's row has room for the short word beside Complete and Archive. */}
           <span className="max-narrow:hidden">{t('saved.remove')}</span>
           <span className="hidden max-narrow:inline">{t('saved.removeShort')}</span>
@@ -214,19 +231,11 @@ const SavedList = ({ state }: { readonly state: SavedState }): React.JSX.Element
 
   let body: React.JSX.Element;
   if (query.isPending) {
-    body = (
-      <LoadingStatus label={t('saved.loading')} className="flex flex-col gap-4 py-2">
-        {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-feed" />
-          </div>
-        ))}
-      </LoadingStatus>
-    );
+    body = <ListSkeleton label={t('saved.loading')} />;
   } else if (query.isError && query.data === undefined) {
     body = (
       <ErrorState
+        framed
         title={t('saved.error.title')}
         body={t('saved.error.body')}
         retryLabel={t('common.retry')}
@@ -237,11 +246,12 @@ const SavedList = ({ state }: { readonly state: SavedState }): React.JSX.Element
     );
   } else if (items.length === 0) {
     body = (
+      // Each tab's own mark, and how a message comes to it: only In progress is reached by saving.
       <GlyphEmptyState
-        glyph="saved"
+        glyph={TAB_GLYPH[state]}
         tone="accent"
         title={t(`saved.empty.${state}`)}
-        body={t('saved.empty.body')}
+        body={t(EMPTY_BODY[state])}
       />
     );
   } else {
@@ -293,13 +303,19 @@ export const SavedScreen = (): React.JSX.Element => {
   const tab = tabIn(search, remindersOn);
   const reminders = useReminders(workspace.id, { enabled: remindersOn });
   const choices = [
-    ...STATES.map((state) => ({ value: state, label: t(`saved.tab.${state}`) })),
+    ...STATES.map((state) => ({
+      value: state,
+      label: t(`saved.tab.${state}`),
+      glyph: TAB_GLYPH[state],
+    })),
     ...(remindersOn
       ? [
           {
             value: 'reminders' as const,
+            glyph: TAB_GLYPH.reminders,
             label:
-              reminders.data === undefined
+              // A count of nothing is noise beside a tab that says the same thing when opened.
+              reminders.data === undefined || reminders.data.length === 0
                 ? t('saved.tab.reminders')
                 : t('saved.tab.remindersCount', { count: reminders.data.length }),
           },

@@ -76,6 +76,11 @@ export const TABLE_LIFECYCLE: Readonly<Record<keyof DB, TableLifecycle>> = {
     { nobody: 'ids, a type and a time; no payload, and no column names a person' },
     'swept',
   ),
+  // A count for each pair of a consumer and a fact type the sweep ever gave up on; it only grows, as a counter does (D-353).
+  outbox_expired: decided(
+    { nobody: 'a module, a fact type and a count' },
+    { kept: 'one row per consumer and fact type, a counter that only grows' },
+  ),
   personal_exports: decided('anonymised', {
     kept: 'the row, ids and times only, is the record that it was made',
   }),

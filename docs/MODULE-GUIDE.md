@@ -30,7 +30,7 @@ needs to edit that has moved stops the run before anything is written.
 
 | Where | What |
 |---|---|
-| `apps/api/src/features/acme/` | `module.ts` (the manifest: `budget`, `routes`, `degrades`), `budget.ts`, `schema.ts` (the tables it may name), `items.ts` (a list and a create), `export.ts` and `personal-export.ts` (the data hooks), `workers.ts` (none yet), `testing.ts` (the lifecycle seed), `degradation.testing.ts` with `--optional` |
+| `apps/api/src/features/acme/` | `module.ts` (the manifest: `budget`, `routes`, `degrades`), `budget.ts`, `schema.ts` (the tables it may name), `items.ts` (a list and a create), `export.ts` and `personal-export.ts` (the data hooks), `workers.ts` (none yet), `facts.ts` (the handlers of the facts it consumes: none yet, §5), `testing.ts` (the lifecycle seed), `degradation.testing.ts` with `--optional` |
 | `apps/api/src/features/acme/http/` | `routes.ts` (the plugin), `handlers.ts`, the pool-share test `budget.integration.test.ts` and the route test |
 | `packages/db/migrations/acme/0001_acme.sql` | the table: `workspace_id` with a cascade, bounds in `CHECK`s, the list's index |
 | `packages/types/src/acme.ts` | the wire types and `ACME_FACTS`, an empty list already joined to `FACTS` in `facts.ts`; the two endpoints are in `endpoints.ts`, the id in `modules.ts` |
@@ -58,7 +58,7 @@ module, and run `bun run verify`.
 | a read that shapes your request (is this person in that channel) | a port you `use`, provided by the other module (`apps/api/src/platform/ports/`) | `undefined`: you say in code what you do instead |
 | to tell the core's inbox something in your transaction | the `NotificationSink` port (`notifyMany` for many people at once: one batch, not a loop) | the sink refuses a kind no running module declares |
 | an effect on a module that may be absent or slow | a fact you `publish` and the other `consume`s, delivered by the outbox | the fact's `absent` policy |
-| a hint that may be lost (read again, presence) | the domain bus or the socket event bus | nobody listening is not an error |
+| a hint that may be lost (read again, presence) | the socket event bus (D-352) | nobody listening is not an error |
 | a reference to another module's record | an opaque `(module, type, id)` and the label it had when linked (D-291) | a "not available here" view, never an error |
 
 `uses` never makes a requirement: a partner you `use` is listed `optional` (or `requires` if you truly cannot run without it).
@@ -93,47 +93,47 @@ the scenario it comments for a linked partner asks `composition.portsFor('<id>',
 
 ## 5. Publish a fact
 
-Name it `<id>.<what>` and declare it with `defineFact` in the `<ID>_FACTS` of `packages/types/src/<id>.ts`, which the generator made and
-already joined to `FACTS` in `packages/types/src/facts.ts`. Import `defineFact` from `./fact-declaration`, never from `./facts`: that file
-imports your list, so a value taken from it is a cycle that fails at load. List the type in the manifest's `publishes`; a consumer lists it
-in `consumes` and supplies a handler in `factConsumers` of its slot (`MODULES.md` §4, `fact-owners.test.ts`,
-`module-communication.test.ts`). A route publishes with `publishFact` of the dependencies it is handed (`ModuleRouteDependencies`), inside
-`atomicallyOn(database)`: `publishFact(transaction, workspaceContext, FACT, payload)` writes the rows in that transaction, as the module whose
-route it is and for no other (`platform/ports/fact-publisher.ts`). The contract is built; the delivery by the outbox is the part of D-283 §1
-that `MODULES.md` §10 says whether it has landed.
+Name it `<id>.<what>` and declare it with `defineFact` in the `<ID>_FACTS` of `packages/types/src/<id>.ts`, which the generator made and already joined to `FACTS` in `packages/types/src/facts.ts`. Import `defineFact` from `./fact-declaration`, never from `./facts`: that file imports your list, so a value taken from it is a cycle that fails at load. A fact carries ids and a short label: every string of its schema has a `maxLength` of at most 200 (`FACT_STRING_LENGTH_MAX`) or is a `uuid` or a `date-time`, and `compose` stops a build that has one that is not (`factOwnerProblems`, D-353). List the type in the manifest's `publishes`; a consumer lists it in `consumes`, names the publisher under `requires` or `optional` with its `degrades` (the registry refuses a fact of a module it does not name, D-353) and supplies a handler in `factConsumers` of its slot (`MODULES.md` §4, `fact-owners.test.ts`, `module-communication.test.ts`). A route publishes with `publishFact` of the dependencies it is handed (`ModuleRouteDependencies`), inside `atomicallyOn(database)`: `publishFact(transaction, workspaceContext, FACT, payload)` writes the rows in that transaction, as the module whose route it is and for no other (`platform/ports/fact-publisher.ts`). It writes a row for each consumer the workspace is granted then, whichever node publishes; a grant given later does not bring back what was said before it (D-353). The consumer's `outbox:consume` worker delivers it (D-288).
 
-**From a consumer.** A handler is given the delivery's `seam` (fourth argument): `seam.publishFact(FACT, payload)` writes a follow-up
-fact in its transaction as your module, caused by the fact being delivered, and `seam.notify(notice)` writes an inbox notice (§6). A throw
-undoes both; notices are announced after the commit. A chain of facts that answer each other ends at its ninth link (`FACT_CHAIN_DEPTH_MAX`).
-
-**Evolving a fact.** During a rolling deploy nodes of two releases share the outbox, so a row may be read by a release that did not
-write it. Adding an optional field changes nothing for the nodes. Anything an older node would refuse (a new required field, a value more in an
-enum, a narrower bound) is a new shape: set `shape: 2` and keep the old schema as a reader, which makes the old payload the new one
-before your handler sees it:
+**A worked consumer.** `module:new` made `features/<id>/facts.ts` with none; `consumerOf` keys a handler by the type and types the payload by the declaration, so the module has no cast:
 
 ```ts
-const ACME_CREATED_V1 = Type.Object({ recordId: Type.String(), title: Type.String() });
+export const acmeFactConsumers: FactConsumers = {
+  ...consumerOf(ISSUES_CLOSED, async (fact, transaction) => {
+    // At least once and in no order: key the work on `fact.factId`, and read the state now, in `fact.workspaceId` alone.
+    const item = await itemOfIssue(transaction, fact.workspaceId, fact.payload.issueId);
+    if (item === undefined || item.closedBy === fact.factId) return 'skipped';
+    await closeItem(transaction, item.id, { closedBy: fact.factId });
+    return 'done';
+  }),
+};
+```
+
+A real one is issues' handler of the core's `core.member-left` (`apps/api/src/features/issues/facts.ts`, D-355): it reads the person's membership as it is now, skips one who came back, and takes whoever did not off the workspace's open issues, writing `fact.deliveredAt` as the time, since a handler is handed no clock. A fact of the core needs no partner under `requires` or `optional`.
+
+The handler's database effects commit with the delivery's mark, so only an effect outside the database (a mail, a call) can happen twice: key it on `fact.factId`. A later fact may arrive first, so compare a version or read the state, never the sequence. A throw is tried again (from five seconds to an hour) and is dead at the eighth try; `'skipped'` ends it. `ports.of(fact)` (the third argument) has the ports the manifest `uses` for that workspace.
+**Prove it** in the module's integration test: `publishAndDeliver(database, compose([issues, acme], [issues, acme]), { workspaceId, fact, payload })` (`apps/api/src/testing/fact-delivery.ts`) publishes the fact as its owner, runs every `outbox:consume` worker once and answers what became of it for each consumer: `{ acme: 'delivered' }`, `'skipped'`, `'pending'` after a throw, nothing where the workspace is not granted it.
+
+**From a consumer.** A handler is given the delivery's `seam` (fourth argument): `seam.publishFact(FACT, payload)` writes a follow-up fact in its transaction as your module, caused by the fact being delivered, and `seam.notify(notice)` writes an inbox notice (§6). A throw undoes both; notices are announced after the commit. A chain of facts that answer each other ends at its ninth link (`FACT_CHAIN_DEPTH_MAX`).
+
+**Evolving a fact.** During a rolling deploy nodes of two releases share the outbox, so a row may be read by a release that did not write it. Adding an optional field changes nothing for the nodes. Anything an older node would refuse (a new required field, a value more in an enum, a narrower bound) is a new shape: set `shape: 2` and keep the old schema as a reader, which makes the old payload the new one before your handler sees it:
+
+```ts
+const ACME_CREATED_V1 = Type.Object({ recordId: Uuid, title: Type.String({ maxLength: 200 }) });
 
 export const ACME_CREATED = defineFact({
   type: 'acme.created',
   owner: 'acme',
   absent: 'drop',
   shape: 2,
-  schema: Type.Object({ recordId: Type.String(), title: Type.String(), folder: Type.String() }),
+  schema: Type.Object({ ...ACME_CREATED_V1.properties, folder: Type.String({ maxLength: 64 }) }),
   reads: { 1: readsEarlierShape(ACME_CREATED_V1, (record) => ({ ...record, folder: 'unfiled' })) },
 });
 ```
 
-A row is checked against the schema of the shape it was written in; one that fits no reader, or whose upgrade the current schema
-refuses, is dead. Your handler only ever sees the current shape. Keep a reader for every shape the last release wrote:
-`module-compat.test.ts` fails for a new shape without the reader of the one before it, and a reader is dropped only by a dated exception
-in `released-manifests.json` (D-288 §5).
+A row is checked against the schema of the shape it was written in; one that fits no reader, or whose upgrade the current schema refuses, is dead. Your handler only ever sees the current shape. Keep a reader for every shape the last release wrote: `module-compat.test.ts` fails for a new shape without the reader of the one before it, and a reader is dropped only by a dated exception in `released-manifests.json` (D-288 §5).
 
-The release keeps a fingerprint of the schema of every shape a fact writes or reads, and the same test fails when a schema changed
-under the same `shape` (the new required field, the narrower bound, the value more in an enum with `shape` left alone) or when a reader's
-schema changed: `the fact 'acme.created' changed the schema of shape 1 without a new shape`. Raise `shape` and keep the old schema as the
-reader. An added optional field changes the fingerprint as well, though it changes nothing for a node: say so with a dated exception
-(`{ change, on, reason }` in `released-manifests.json`, `change` being the sentence the test prints), which the next release clears.
+The release keeps a fingerprint of the schema of every shape a fact writes or reads, and the same test fails when a schema changed under the same `shape` (the new required field, the narrower bound, the value more in an enum with `shape` left alone) or when a reader's schema changed: `the fact 'acme.created' changed the schema of shape 1 without a new shape`. Raise `shape` and keep the old schema as the reader. An added optional field changes the fingerprint as well, though it changes nothing for a node: say so with a dated exception (`{ change, on, reason }` in `released-manifests.json`, `change` being the sentence the test prints), which the next release clears.
 
 ## 6. Add a worker
 

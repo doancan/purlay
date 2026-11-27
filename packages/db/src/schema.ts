@@ -597,6 +597,13 @@ export interface Outbox {
   workspace_id: string;
 }
 
+export interface OutboxExpired {
+  consumer: string;
+  expired: Int8;
+  last_expired_at: Timestamp;
+  type: string;
+}
+
 export interface OutboxLedger {
   consumer: string;
   delivered_at: Timestamp;
@@ -804,6 +811,7 @@ export interface ServerSettings {
   oidc_issuer: string | null;
   oidc_name: string | null;
   password_sign_in: Generated<boolean>;
+  privacy_url: string | null;
   push_enabled: Generated<boolean>;
   push_imported_from_env_at: Timestamp | null;
   push_private_key_encrypted: string | null;
@@ -818,6 +826,7 @@ export interface ServerSettings {
   smtp_allow_plaintext: Generated<boolean>;
   smtp_url_encrypted: string | null;
   support_url: string | null;
+  terms_url: string | null;
   updated_at: Generated<Timestamp>;
   workspace_creator_logins: Generated<string[]>;
   workspace_creators: Generated<string>;
@@ -1550,6 +1559,7 @@ export interface DB {
   notifications: Notifications;
   object_deletions: ObjectDeletions;
   outbox: Outbox;
+  outbox_expired: OutboxExpired;
   outbox_ledger: OutboxLedger;
   outgoing_webhooks: OutgoingWebhooks;
   personal_exports: PersonalExports;

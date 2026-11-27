@@ -2,11 +2,17 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ServerUsersQuery, type ServerUser } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
+import { Icon } from '../../components/icon';
 import { Button } from '../../ui/button';
+import { cn } from '../../ui/cn';
 import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useAdministrationClient } from './context';
 import { Empty, Pagination, QueryState, usePages } from './parts';
+
+/** A choice in the chooser. Its list is drawn out by the row's padding, so the text sits on the field's edge and the hover wash in the dialog's gutter. */
+const personRowClasses =
+  'flex min-w-0 cursor-pointer items-start rounded-md px-3 py-2 text-left text-body text-ink transition-colors duration-hover ease-standard hover:bg-surface-200';
 
 export const AuditPersonPicker = ({
   name,
@@ -23,17 +29,25 @@ export const AuditPersonPicker = ({
   };
   return (
     <>
-      <Button
-        className="w-full max-w-full justify-start"
-        title={t('admin.audit.personChoice', { name: name ?? t('search.anyone') })}
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        <span className="truncate">
-          {t('admin.audit.personChoice', { name: name ?? t('search.anyone') })}
+      {/* Labelled above and drawn as the action's select beside it, so the filters read as one row of fields. */}
+      <div className="flex min-w-0 flex-col gap-1">
+        <span aria-hidden="true" className="text-label text-ink">
+          {t('admin.audit.person')}
         </span>
-      </Button>
+        <button
+          type="button"
+          aria-label={t('admin.audit.personChoice', { name: name ?? t('search.anyone') })}
+          className="relative flex h-control w-full min-w-0 cursor-pointer items-center rounded-md border-hairline border-border-strong bg-surface-100 pr-8 pl-3 text-left text-label text-ink transition-colors duration-hover ease-standard hover:bg-surface-050 max-narrow:h-touch max-narrow:text-title max-narrow:font-normal"
+          onClick={() => {
+            setOpen(true);
+          }}
+        >
+          <span className="truncate">{name ?? t('search.anyone')}</span>
+          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-ink-muted">
+            <Icon name="collapse" size="sm" />
+          </span>
+        </button>
+      </div>
       <Dialog
         open={open}
         onOpenChange={setOpen}
@@ -77,14 +91,16 @@ const Directory = ({
         </div>
         <Button type="submit">{t('admin.find')}</Button>
       </form>
-      <Button
-        variant="ghost"
+      {/* Anyone is one more choice in the list, drawn as the people are, not a button of its own in the middle. */}
+      <button
+        type="button"
+        className={cn(personRowClasses, '-mx-3 -mb-3')}
         onClick={() => {
           choose(null);
         }}
       >
         {t('search.anyone')}
-      </Button>
+      </button>
       <People key={filter} filter={filter} choose={choose} />
     </div>
   );
@@ -116,12 +132,12 @@ const People = ({
           {data.data.length === 0 ? (
             <Empty />
           ) : (
-            <ul className="flex max-h-palette-list flex-col gap-2 overflow-y-auto">
+            <ul className="-mx-3 flex max-h-palette-list flex-col gap-1 overflow-y-auto">
               {data.data.map((user) => (
                 <li key={user.id}>
                   <button
                     type="button"
-                    className="flex w-full min-w-0 cursor-pointer items-start rounded-md px-3 py-3 text-left text-body text-ink hover:bg-surface-200"
+                    className={cn(personRowClasses, 'w-full')}
                     aria-label={t('admin.audit.selectPerson', {
                       name: `${user.displayName} · ${user.email}`,
                     })}
@@ -129,7 +145,7 @@ const People = ({
                       choose(user);
                     }}
                   >
-                    <span className="flex min-w-0 flex-col gap-1">
+                    <span className="flex min-w-0 flex-col">
                       <span className="break-words">{user.displayName}</span>
                       <span className="text-caption text-ink-muted break-all">
                         @{user.username} · {user.email}

@@ -182,7 +182,7 @@ describe('integration: the shared push queue delivers to APNs', () => {
       await worker.flush(10_000);
       expect(alerts).toHaveLength(1);
       expect(alerts[0]).toMatchObject({
-        aps: { alert: { body: 'Acil · writer senden bahsetti' } },
+        aps: { alert: { body: 'Acil · writer sizden bahsetti' } },
       });
       expect(JSON.stringify(alerts)).not.toContain('private message');
     });

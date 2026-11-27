@@ -18,7 +18,8 @@ import {
   type Selectable,
   type Transaction,
 } from '@purlay/db';
-import { messageId, messageIdTime } from '@purlay/types';
+import { Type } from '@sinclair/typebox';
+import { defineFact, messageId, messageIdTime, type FactDeclaration } from '@purlay/types';
 import { aMovableClock, NOW, passingAsItsClass } from '../testing/doubles';
 import {
   anOutboxRow,
@@ -138,7 +139,7 @@ describe('integration: publishing a fact', () => {
       await aGrant(tx, lapsed, 'wiki', 'off', new Date(NOW.getTime() - 1000));
       for (const workspaceId of [barred, granted, lapsed]) {
         const { context } = aPublishWorld(workspaceId, clock);
-        await publishFact(tx, { ...context, effective: theGrants() }, NOTE_CREATED, {
+        await publishFact(tx, { ...context, granted: theGrants() }, NOTE_CREATED, {
           noteId: 'n',
           title: 't',
         });
@@ -160,7 +161,7 @@ describe('integration: publishing a fact', () => {
         const { context } = aPublishWorld(workspaceId, clock);
         await publishFact(
           tx,
-          { ...context, effective: theGrants(undefined, 'managed') },
+          { ...context, granted: theGrants(undefined, 'managed') },
           NOTE_CREATED,
           { noteId: 'n', title: 't' },
         );
@@ -170,15 +171,48 @@ describe('integration: publishing a fact', () => {
     }, cloned.db);
   });
 
-  test('leaves a consumer this process does not run to be judged where it is run', async () => {
+  test('judges a consumer by the workspace’s grants whether the publishing process runs it or not (D-353)', async () => {
     await withRollback(async (tx) => {
-      const workspaceId = await aWorkspaceRow(tx);
-      await aGrant(tx, workspaceId, 'wiki', 'off');
-      const { context } = aPublishWorld(workspaceId, clock, [NOTES]);
-      await publishFact(tx, { ...context, effective: theGrants([NOTES]) }, NOTE_PINNED, {
+      const barred = await aWorkspaceRow(tx);
+      const granted = await aWorkspaceRow(tx);
+      await aGrant(tx, barred, 'wiki', 'off');
+      // The same two workspaces, published to from a node that runs every module and from one that runs the publisher alone.
+      for (const running of [[NOTES, WIKI], [NOTES]]) {
+        for (const workspaceId of [barred, granted]) {
+          const { context } = aPublishWorld(workspaceId, clock, running);
+          await publishFact(tx, { ...context, granted: theGrants() }, NOTE_PINNED, {
+            noteId: 'n',
+          });
+        }
+      }
+      const consumers = async (workspaceId: string): Promise<string[]> =>
+        (await rowsOf(tx, workspaceId)).map((row) => row.consumer);
+      expect(await consumers(barred)).toEqual([]);
+      // A held fact is written for a granted consumer this node does not run, for a node that runs it.
+      expect(await consumers(granted)).toEqual(['wiki', 'wiki']);
+    }, cloned.db);
+  });
+
+  test('counts a dropped fact only for a consumer the workspace is granted', async () => {
+    await withRollback(async (tx) => {
+      const barred = await aWorkspaceRow(tx);
+      const granted = await aWorkspaceRow(tx);
+      await aGrant(tx, barred, 'wiki', 'off');
+      await aGrant(tx, barred, 'shelf', 'off');
+      const world = aPublishWorld(barred, clock, [NOTES]);
+      await publishFact(tx, { ...world.context, granted: theGrants() }, NOTE_CREATED, {
         noteId: 'n',
+        title: 't',
       });
-      expect((await rowsOf(tx, workspaceId)).map((row) => row.consumer)).toEqual(['wiki']);
+      expect(world.droppedCount('wiki')).toBe(0);
+      const other = aPublishWorld(granted, clock, [NOTES]);
+      await publishFact(tx, { ...other.context, granted: theGrants() }, NOTE_CREATED, {
+        noteId: 'n',
+        title: 't',
+      });
+      expect(other.droppedCount('wiki')).toBe(1);
+      expect(await rowsOf(tx, barred)).toEqual([]);
+      expect(await rowsOf(tx, granted)).toEqual([]);
     }, cloned.db);
   });
 
@@ -277,14 +311,26 @@ describe('integration: a consumer that this process does not run', () => {
 });
 
 describe('integration: what a publish refuses, ending the publisher’s transaction', () => {
-  const publish = async (payload: unknown, producer = 'notes'): Promise<unknown> => {
+  /**
+   * `notes.created` with its title unbounded: a declaration the build refuses (a string longer than a label, D-353), so the byte
+   * ceiling is tried as the backstop it is for a payload of many short strings.
+   */
+  const UNBOUNDED = defineFact({
+    ...NOTE_CREATED,
+    schema: Type.Object({ noteId: Type.String(), title: Type.String() }),
+  });
+  const publish = async (
+    payload: unknown,
+    producer = 'notes',
+    fact: FactDeclaration = NOTE_CREATED,
+  ): Promise<unknown> => {
     let thrown: unknown;
     await withRollback(async (tx) => {
       const workspaceId = await aWorkspaceRow(tx);
       const { context } = aPublishWorld(workspaceId, clock, [NOTES, WIKI], producer);
       try {
-        // @ts-expect-error the payload is unchecked on purpose: refusing the wrong ones is the test
-        await publishFact(tx, context, NOTE_CREATED, payload);
+        // The payload is unchecked on purpose (the declaration is the wide type): refusing the wrong ones is the test.
+        await publishFact(tx, context, fact, payload);
       } catch (error) {
         thrown = error;
       }
@@ -306,19 +352,23 @@ describe('integration: what a publish refuses, ending the publisher’s transact
     const compact = (title: string): number =>
       new TextEncoder().encode(JSON.stringify({ noteId: 'n', title })).length;
     const room = OUTBOX_PAYLOAD_BYTES_MAX - compact('');
-    expect(await publish({ noteId: 'n', title: 'x'.repeat(room + 1) })).toBeInstanceOf(
-      FactPublishError,
-    );
-    expect(await publish({ noteId: 'n', title: 'x'.repeat(room) })).toBeUndefined();
+    expect(
+      await publish({ noteId: 'n', title: 'x'.repeat(room + 1) }, 'notes', UNBOUNDED),
+    ).toBeInstanceOf(FactPublishError);
+    expect(
+      await publish({ noteId: 'n', title: 'x'.repeat(room) }, 'notes', UNBOUNDED),
+    ).toBeUndefined();
   });
 
   test('a payload of Unicode that is longer in bytes than in characters', async () => {
     const room =
       OUTBOX_PAYLOAD_BYTES_MAX - new TextEncoder().encode('{"noteId":"n","title":""}').length;
-    expect(await publish({ noteId: 'n', title: 'ş'.repeat(room / 2 + 1) })).toBeInstanceOf(
-      FactPublishError,
-    );
-    expect(await publish({ noteId: 'n', title: 'ş'.repeat(room / 2) })).toBeUndefined();
+    expect(
+      await publish({ noteId: 'n', title: 'ş'.repeat(room / 2 + 1) }, 'notes', UNBOUNDED),
+    ).toBeInstanceOf(FactPublishError);
+    expect(
+      await publish({ noteId: 'n', title: 'ş'.repeat(room / 2) }, 'notes', UNBOUNDED),
+    ).toBeUndefined();
   });
 
   test('a module that does not own the fact', async () => {

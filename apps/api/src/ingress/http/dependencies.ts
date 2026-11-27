@@ -10,6 +10,7 @@ import type { CompanyTxtLookup } from '../../modules/workspaces/identity/domains
 import type { ServicesPin, SettingsChange } from '../../modules/setup/runtime';
 import type { WorkspaceCreators } from '../../modules/workspaces/creators';
 import type { WorkspaceChannels } from '../../modules/workspaces/channels-port';
+import type { MemberDepartures } from '../../modules/workspaces/member-departures';
 import type { UserErased } from '../../modules/users/erasure';
 import type { WorkspaceCreated } from '../../modules/workspaces/workspaces';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
@@ -158,6 +159,8 @@ export type LeasedDependencies = HandlerDependencies & {
   readonly readAttachment: Composition['readAttachment'];
   readonly workspaceCreated: WorkspaceCreated;
   readonly workspaceChannels: WorkspaceChannels;
+  /** Tells the modules `core.member-left` in the transaction of a departure (D-355), with the application's one publishing context. */
+  readonly memberDepartures: MemberDepartures;
   readonly auditAccess: Composition['auditAccess'];
   readonly userErased: UserErased;
   readonly collatedColumns: readonly CollatedColumn[];

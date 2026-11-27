@@ -61,7 +61,7 @@ interface World {
   readonly room: Room;
   readonly store: MemoryStore;
   readonly clock: ReturnType<typeof aMovableClock>;
-  readonly as: (name: string) => Promise<Caller>;
+  readonly as: (name: string, origin?: string | null) => Promise<Caller>;
   readonly settled: () => Promise<void>;
   /** The exports asked for and held back, when the world holds them. */
   readonly waiting: string[];
@@ -106,7 +106,7 @@ const aWorld = async (options: { readonly held?: boolean } = {}): Promise<World>
     release: (): void => {
       for (const id of waiting.splice(0)) queue.startPersonal(id);
     },
-    as: async (name): Promise<Caller> => {
+    as: async (name, origin = ORIGIN): Promise<Caller> => {
       const person = room.members[name];
       if (person === undefined) throw new Error(`no ${name}`);
       const { token } = await aSession(cloned.db, clock, person.userId, 30);
@@ -116,7 +116,7 @@ const aWorld = async (options: { readonly held?: boolean } = {}): Promise<World>
             method,
             headers: {
               cookie: `${SESSION_COOKIE}=${token}`,
-              origin: ORIGIN,
+              ...(origin === null ? {} : { origin }),
               ...(body === undefined ? {} : { 'content-type': 'application/json' }),
             },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -215,6 +215,7 @@ describe('integration: a person’s export of their own data', () => {
 
     // Once: the second is not found, the archive left the store, and the list says downloaded.
     expect(await codeOf(await ask('GET', path))).toEqual([404, 'EXPORT_NOT_FOUND']);
+    expect(await codeOf(await ask('POST', path))).toEqual([404, 'EXPORT_NOT_FOUND']);
     expect(world.store.keys()).toEqual([]);
     expect((await listOf(ask)).find((each) => each.id === ready.id)?.status).toBe('downloaded');
     expect(
@@ -234,6 +235,32 @@ describe('integration: a person’s export of their own data', () => {
     ]);
   });
 
+  test('native POST claims only the owner’s archive, once across both methods', async () => {
+    const world = await aWorld();
+    const native = await world.as('ada', null);
+    const ready = await made(native, world);
+    const path = `${MINE}/${ready.id}/download`;
+    const other = await world.as('bob', null);
+    const crossSite = await world.as('ada', 'https://elsewhere.test');
+
+    expect(await codeOf(await other('POST', path))).toEqual([404, 'EXPORT_NOT_FOUND']);
+    expect(await codeOf(await crossSite('POST', path))).toEqual([403, 'FORBIDDEN']);
+    expect((await listOf(native)).find((each) => each.id === ready.id)?.status).toBe('ready');
+
+    const concurrent = await Promise.all([native('POST', path), native('POST', path)]);
+    const [download, refusal] = concurrent.sort((left, right) => left.status - right.status);
+    expect(download.status).toBe(200);
+    expect(download.headers.get('content-type')).toBe('application/x-tar');
+    expect(download.headers.get('cache-control')).toBe('no-store');
+    expect(await codeOf(refusal)).toEqual([404, 'EXPORT_NOT_FOUND']);
+    const tar = await download.arrayBuffer();
+    expect(tar.byteLength).toBe(ready.sizeBytes ?? -1);
+    expect(new TextDecoder().decode(tar.slice(257, 262))).toBe('ustar');
+    expect(await codeOf(await native('GET', path))).toEqual([404, 'EXPORT_NOT_FOUND']);
+    expect(world.store.keys()).toEqual([]);
+    expect((await listOf(native)).find((each) => each.id === ready.id)?.status).toBe('downloaded');
+  });
+
   test('signed out: refused, and nothing asked for', async () => {
     const world = await aWorld();
     const app = createApp(testDependencies({ database: cloned.db }));
@@ -241,6 +268,7 @@ describe('integration: a person’s export of their own data', () => {
       ['POST', MINE],
       ['GET', MINE],
       ['GET', `${MINE}/${messageId(NOW)}/download`],
+      ['POST', `${MINE}/${messageId(NOW)}/download`],
     ] as const) {
       const response = await app.handle(
         new Request(`${ORIGIN}${path}`, { method, headers: { origin: ORIGIN } }),

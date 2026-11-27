@@ -31,7 +31,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme, the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme (every grey, the navigation's too, from one neutral family on even lightness steps: D-343), the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size; what the person arranges about the sidebar is what it shows, not where things sit (D-195). Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -60,8 +60,8 @@ for no benefit at this size; what the person arranges about the sidebar is what 
   later (D-316). A tab carries a count only when it lists what is *waiting for a moment* — Reminders and Scheduled — and not for what is kept or done (Drafts, Sent, Saved's In progress, Archived and Completed): a count there would be a number to keep at zero. Every entry is a route
   or a menu that exists without the rail; it adds no destination. At its foot a gear opens
   **Settings** (D-146). Its first place sits in the same top band as the sidebar's workspace row and the screen's header (D-317).
-- **Sidebar (264px)** — a band as tall as the header, ending on the same line (D-317), holds the workspace's row (D-209): its mark, its name and, under it, your role and how many
-  are in it, with a chevron — the one door to the **workspace menu** (the workspaces to switch to, as
+- **Sidebar (264px)** — a band as tall as the header, ending on the same line (D-317), holds the workspace's row (D-209): one line, a control tall, of its mark, its name and a chevron, your role and how many
+  are in it heading the menu it opens (D-347) — the one door to the **workspace menu** (the workspaces to switch to, as
   radios with their marks, the current one checked, **Create workspace…**, **Copy workspace link**, **Mark all
   channels read** with its key, `Shift+Esc` (D-238), and for an owner or an admin **Invite people…** and
   **Workspace settings**, D-146), and beside it **Sidebar options** — how the person arranges the column (D-195, below) — the jump
@@ -231,13 +231,9 @@ your thread* when the person started it, *replied in a thread you're in* when th
 in “…”*, the newest replier's avatar, who replied (*Alice, Bob and 1 other*), the newest one's time and
 words, unread while any of them is. Opening it, or its **Mark read**, reads every reply it gathers.
 
-**The inbox panel** (D-208). On a wide window the rail's Inbox opens a panel beside it rather than the
-page: the inbox's title and **Mark all read**, the four categories, the newest ten of the one chosen in
-rows a line shorter than the page's — the message in one line, **Mark read** as an icon — and **See all**
-at its foot, which opens the page on the same category. Opening a row reads it, closes the panel and goes
-to the message; the panel remembers its category while closed. It carries no count of its own (D-110).
-In a category, **Mark all read** reads the rows shown — "up to the newest" is the whole inbox's, and would
-read what the other categories hold. Below the narrow breakpoint the rail's Inbox is the link to the page.
+**The rail's Inbox** (D-208, amended). On every width it is the link to the inbox's page; no panel opens
+over the screen. It carries no count of its own (D-110). In a category, **Mark all read** reads the rows
+shown — "up to the newest" is the whole inbox's, and would read what the other categories hold.
 
 **The Reminders tab of Saved** (D-315). The messages the person asked to be reminded of, the soonest first,
 each row saying when (the absolute time, in the viewer's zone), who wrote it, where, and its words in two
@@ -966,7 +962,7 @@ workspace switch within the same account still preserves waiting uploads and dra
 switch is unforgivable in a tool people live in.
 
 **Delivery** (D-337). Where the message may ask more of its recipient — in a direct message, or once the words name somebody — a native *Delivery* choice (*Standard*, *Important*, *Urgent*) appears beside Send; it goes back to *Standard* after each send and is not offered, nor sent, where the words no longer name anybody. In a workspace with Urgent delivery disabled, the composer offers *Standard* and *Important* and resets an unsent Urgent selection to *Standard*. An important or urgent message is drawn with its word and a bell glyph (never colour alone) on the line under its words; a deleted one is not. It waits in Deep Work like any message.
-An unread Urgent direct message or mention can re-alert a registered device every two minutes during its first twenty minutes (D-343). Reading it on any device stops the repeats.
+An unread Urgent direct message or mention can re-alert a registered device every two minutes during its first twenty minutes (D-358). Reading it on any device stops the repeats.
 
 **Send later** (D-316). Beside Send, in a channel's box and in a thread's, an icon button opens a menu of times:
 *In 1 hour (14:00)* (the clock time said, D-319), *Tomorrow at 09:00*, *Monday at 09:00* — left out on a Sunday, when it is tomorrow, and on a Monday,
@@ -1053,6 +1049,9 @@ is read.
 
 ## 7. Keyboard model
 
+Every shortcut on screen is printed by one component as the keyboard prints it: ⌘ ⇧ ⌥ ⌃ ↵ on a Mac, the modifiers in
+Apple's order, and Ctrl, Shift, Alt, Enter elsewhere, a cap per key (D-344). The table writes them in neutral words.
+
 | Key | Action |
 |---|---|
 | `Cmd/Ctrl+K` | Command palette — the views (open questions, inbox, saved, search), channels (public ones not joined, marked so), group conversations, people, every settings page the person may open, the theme and language; and, whatever was typed, **Search messages for “…”** as its last row, so a query never ends in nothing (D-157) |
@@ -1081,7 +1080,8 @@ ring on changes only its style and width and never fades it in from the text's o
 
 ## 8. Required states
 
-Every view implements all four, **and a test asserts each one renders** (D-53). An unhandled empty
+Every view implements all four, **and a test asserts each one renders** (D-53). A list's loading state is rows shaped
+like its loaded ones in the same card, and its error sits in that card too (D-346). An unhandled empty
 state is an incomplete feature, not a polish item (`CONTRIBUTING.md` §4) — a screen missing one is
 missing specified behaviour and does not merge.
 
@@ -1108,7 +1108,7 @@ missing specified behaviour and does not merge.
 | Administration → Server (Settings → Server) | Each way in not connected says what that stops and offers to connect it; the two policies always have a value | Skeleton cards | A failed try as in the wizard, nothing kept and what was typed still there; the settings that could not be read, with Retry; a secret the key could not open, on its card; a setup still open, said in a sentence; anybody who is not the administrator is *not found* |
 | Administration → Modules | *This server carries no modules*: the core always runs | Skeleton cards; the chunk's own skeleton while it loads | The list that could not be read, with Retry; a stop with no reason, said on the field; a stop that takes the product down cannot be sent until it is ticked as meant; a cluster not ready for a stop, in one sentence with what to do, the dialog and the reason kept; a resume that failed, on the module's card, which stays stopped; anybody who is not the administrator is *not found* (D-323) |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
-| Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191) |
+| Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191); a browser too long signed in for `prompt=login` is asked to sign in again, the pair kept (D-356) |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
 | Your data (Sessions & account) | "You have not exported your data yet." | Skeleton in the card; one being made says so, and the list is read again until it is not | Retry in the card; one already being made is said, and the list read again; past the day's limit, how many a day; any other refusal beside the button. An account suspended or erased before it was made is said as such; the rest as an owner's export (D-241) |
@@ -1118,7 +1118,6 @@ missing specified behaviour and does not merge.
 | Quiet hours (Notifications) | Off, with the profile's zone named; without a zone, a link to Profile | Skeleton in the card | A save refused or failed is said beside Save, and what was set stays (D-234) |
 | Email (Notifications) | Not drawn where the server cannot send mail or the address is not verified | Not drawn until the server has said whether it can be offered | Whether it can be offered could not be read: said in the card, with Retry; a change refused is put back and said in a toast (D-240) |
 | Stop link (`/mail/stop`) | n/a — a link always asks, or says it is not complete | The button busy while it asks | "This link does not open" for one too old or unknown, with the way to Purlay; any other failure said above the button, which tries again (D-240) |
-| Accounts (Settings → Server) | "No account matches." | Skeleton rows | Retry in the card; a change refused is said in the card (D-233) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
@@ -1151,7 +1150,9 @@ says the minutes left. A mode you can forget you are in is a mode that loses you
 
 ## 9. Visual system
 
-Decided here so Phase 0 does not invent one at random.
+Decided here so Phase 0 does not invent one at random. The words on screen follow one set of rules in both languages:
+no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-348),
+and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-350); apostrophes are typographic and English is British (D-351).
 
 > **These values are tokens, and the tokens are the only source.** Colour, spacing, type scale,
 > radius, shadow, motion duration and easing are declared once, in `packages/tokens/tokens.json`,
@@ -1171,11 +1172,13 @@ Decided here so Phase 0 does not invent one at random.
   and colour-blindness both.
 - **Contrast:** WCAG AA minimum, including code syntax tokens, which are the usual casualty.
 - **Motion:** quiet. Hover and focus ease in 120ms, the palette opens in 150ms, the thread folds
-  on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, the
-  inbox panel, a tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
+  on resolve (§4.3) and the reconnect bar slides. What opens from a control — a menu, a submenu, a
+  tip — grows out of the control in 150ms and leaves in 100ms; a dialog's backdrop
   fades as the dialog opens like the palette; a toast rises into its corner (D-211), above the sidebar's account row and not over it (D-322). No message entry
-  animation — at conversational speed it reads as lag. The selected tab of a side-by-side group slides to
-  its new place in 200ms. The one longer motion is a celebration: sending 🎉 (in a message or as a
+  animation — at conversational speed it reads as lag. The selected tab of a side-by-side group, and of every list's filter, slides to
+  its new place in 200ms. What the person adds to a list — an issue, a bookmark, a reaction — rises into its
+  place in 200ms over a fill of the accent that fades in four times that, so the eye finds it without a toast;
+  a message never does. The one longer motion is a celebration: sending 🎉 (in a message or as a
   reaction) sets off a one-shot SVG firework show over the screen (about 3s, one of five shows, never looping, the token gate's single
   exception). Everything is instant under reduced motion, and the firework is not drawn.
 - **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
@@ -1289,10 +1292,7 @@ the page's data fails; that failure offers **Retry** alongside the last known se
 view of a connection is cached, never its credentials. Cancelling a connection form forgets its secrets
 and unsaved fields; opening a replacement starts from the latest public settings. Each disconnect
 question starts afresh, including after a last-channel refusal was cancelled. The workspace-creator
-choices follow refreshed settings until an unsaved edit is made. Accounts kept from a previous search
-cannot be suspended while the new results are loading, and an account change holds the other account
-actions until it finishes. A failed account-list read asks to retry reading, without claiming a preceding
-account change was undone.
+choices follow refreshed settings until an unsaved edit is made.
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
   sentence on what that stops), the callback address with **Copy**, **Replace credentials** (or **Connect
@@ -1333,11 +1333,8 @@ account change was undone.
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
-- **Accounts** (D-233) — a search by name, username or address over the server's accounts, each row with its
-  name, `@handle` and address, *Administers this server* where it does, and *Suspended* with its date where it
-  is. **Suspend** asks once more on the row, in words that say the person is signed out on every device and
-  cannot sign in until it is lifted; **Lift suspension** asks nothing. An administrator's row, the caller's
-  own among them, has no button.
+- **Accounts** are not here: suspending and lifting an account is the console's Users page (D-233, D-278); the card
+  this page had is removed (D-354).
 
 **Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
 remain — the page knows from which of GitHub, single sign-on and the mail server serve — it says so **before** the button
@@ -1473,7 +1470,10 @@ a recognized platform uses the Mac wording that older clients expect. The consen
 application, the signed-in account and the server. Its focused button asks the server for a code,
 opens the fixed `purlay://…` callback and shows how to reopen the same code. **Cancel** returns to
 Purlay, and **Sign out of this browser and use another account** keeps the question for the next
-sign-in. An expired or missing question offers **Go to Purlay**.
+sign-in. An expired or missing question offers **Go to Purlay**. An application that asked for a
+fresh sign-in (`&prompt=login`, D-356) and meets a browser that signed in too long ago gets a card,
+*Sign in again to continue*, whose focused **Sign in again** signs this browser out with the question
+kept; the person signs in as usual, second step included, and is asked again.
 
 An emailed link can open in another browser. It carries the challenge and state with the token in
 the fragment, and the display platform in the query. The browser keeps all three together for

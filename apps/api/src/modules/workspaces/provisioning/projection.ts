@@ -9,6 +9,7 @@ import {
 import type { Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { WorkspaceChannels } from '../channels-port';
+import type { MemberDepartures } from '../member-departures';
 import { provisioningChanged, provisioningNotReady } from './authority';
 import { initializeWorkspaceAdmissions } from './native-state';
 import {
@@ -29,12 +30,18 @@ const highestRole = (sources: readonly Source[]): UserRole =>
       ? 'admin'
       : 'member';
 
+/** What a projection is handed: the clock, chat's channels, and who tells the modules of a membership it deletes (D-355). */
+interface WorkspaceProjectionDependencies {
+  readonly clock: Clock;
+  readonly channels: WorkspaceChannels;
+  readonly departures: MemberDepartures;
+}
+
 const projectBatch = async (
   transaction: Transaction,
-  clock: Clock,
+  { clock, channels, departures }: WorkspaceProjectionDependencies,
   scope: WorkspaceProjectionScope,
   userIds: readonly string[],
-  channels: WorkspaceChannels,
 ): Promise<readonly string[]> => {
   if (channels.access === undefined) throw provisioningNotReady();
   const controls = await initializeWorkspaceAdmissions(transaction, clock, scope, userIds);
@@ -143,12 +150,21 @@ const projectBatch = async (
       )
       .execute();
   const channelIds = await channels.access.project(transaction, clock, scope, userIds);
-  if (removed.length !== 0)
-    await transaction
+  if (removed.length !== 0) {
+    const gone = await transaction
       .deleteFrom('workspace_members')
       .where('workspace_id', '=', scope.workspaceId)
       .where('user_id', 'in', removed)
+      .returning('user_id')
       .execute();
+    // Of the rows this delete took: a person in `removed` who was never a member left nothing (D-355).
+    await departures(
+      transaction,
+      scope.workspaceId,
+      gone.map((row) => row.user_id).sort(),
+      'provisioning',
+    );
+  }
 
   const capabilities = await sql<{
     readonly user_id: string;
@@ -207,10 +223,9 @@ const projectBatch = async (
 
 export const projectWorkspaceAccess = async (
   transaction: Transaction,
-  clock: Clock,
+  dependencies: WorkspaceProjectionDependencies,
   scope: WorkspaceProjectionScope,
   userIds: readonly string[],
-  channels: WorkspaceChannels,
 ): Promise<readonly string[]> => {
   requireWorkspaceProjectionScope(transaction, scope);
   const ids = [...new Set(userIds)].sort();
@@ -219,10 +234,9 @@ export const projectWorkspaceAccess = async (
   for (let start = 0; start < ids.length; start += WORKSPACE_ACCESS_BATCH_MAX) {
     for (const id of await projectBatch(
       transaction,
-      clock,
+      dependencies,
       scope,
       ids.slice(start, start + WORKSPACE_ACCESS_BATCH_MAX),
-      channels,
     ))
       changedChannels.add(id);
   }

@@ -1,5 +1,8 @@
 /** A module's current live subscription authority, enforced before any payload is written. */
 import type { ServerFrame } from '@purlay/types';
+import type { Executor } from '@purlay/db';
+import type { Clock } from '../clock';
+import type { readonlyWorkspaceAccess } from '../tenancy';
 
 /** Hidden content, current authority denial and a changed active policy have different cache/draft effects. */
 export type ChannelDeliveryVerdict = boolean | 'revoked' | 'resync';
@@ -60,3 +63,17 @@ export type WorkspaceFrameProjector = (
       readonly changed?: true;
     }
 >;
+
+/** What the module that owns channel content checks each live frame by before a socket writes it (`realtime/hub.ts`). */
+interface FrameProjectors {
+  readonly companyFrame: CompanyFrameProjector;
+  readonly workspaceFrame: WorkspaceFrameProjector;
+}
+
+/** Makes a node's projectors once, for its socket hub (D-352). */
+export type FrameProjection = (source: {
+  readonly database: Executor;
+  readonly clock: Clock;
+  /** How long a session lives, read as each frame is checked. */
+  readonly lifetime: Parameters<typeof readonlyWorkspaceAccess>[2];
+}) => FrameProjectors;

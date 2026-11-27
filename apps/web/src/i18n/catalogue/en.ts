@@ -113,10 +113,13 @@ export const en = {
   'access.loadFailed':
     'Couldn’t refresh access. The last known details are shown; changes are paused until you retry.',
   'access.offline': 'You’re offline. Reconnect and retry before changing access.',
+  'access.notReady.title': 'Access management is not turned on on this server yet',
+  'access.notReady.body':
+    'A server operator turns it on by setting WORKSPACE_PROVISIONING_READY to true, once every Purlay process on the server runs this version. Until then, everyone keeps the access they have now.',
   'access.groups.title': 'Access groups',
   'access.groups.description': 'Assign shared operational roles to a group of admission sources.',
   'access.groups.folderHint':
-    'These groups control permissions. Personal folders in your sidebar only organize your channels.',
+    'These groups control permissions. Personal folders in your sidebar only organise your channels.',
   'access.groups.create': 'Create access group',
   'access.groups.edit': 'Rename access group',
   'access.groups.invalid': 'Enter a name of up to 64 characters.',
@@ -169,7 +172,7 @@ export const en = {
   'access.people.sources': 'Admission sources',
   'access.people.sourceHint':
     'Each source contributes access independently. Company directory sources admit people as members only.',
-  'access.people.noSources': 'No admission sources.',
+  'access.people.noSources': 'No admission sources',
   'access.people.effective': 'Contributes to current access',
   'access.people.ineffective': 'Does not contribute to current access',
   'access.people.revoke': 'Revoke source',
@@ -293,7 +296,6 @@ export const en = {
   'security.access.return': 'Return to workspace',
   'security.access.other': 'Choose another workspace',
   'security.signIn': 'Sign in again',
-  'security.independent': 'Sign in with your own account',
   'security.independentHint':
     'An owner needs a recent independent sign-in to create or use workspace recovery. Company sign-in cannot change account credentials.',
   'security.factor.title': 'Authenticator for this workspace',
@@ -318,7 +320,6 @@ export const en = {
   'security.factor.qr': 'Workspace authenticator QR code',
   'security.factor.key': 'Setup key',
   'security.factor.once': 'This setup key is shown only now. If you leave, start setup again.',
-  'security.factor.confirm': 'Confirm authenticator',
   'security.factor.confirmed': 'Verification completed.',
   'security.code': 'Authenticator code',
   'security.code.invalid': 'Enter the six digits from your authenticator app.',
@@ -559,6 +560,7 @@ export const en = {
   'questions.oldest': 'Longest waiting first',
   'questions.newest': 'Newest first',
   'questions.waiting': { one: 'Waiting {count} day', other: 'Waiting {count} days' },
+  'questions.waitingToday': 'Waiting less than a day',
   'search.clear': 'Clear advanced filters',
   'search.filters': 'Advanced filters',
   'search.status': 'Thread status',
@@ -611,7 +613,6 @@ export const en = {
   // ── Common ──────────────────────────────────────────────────────────────
   'common.close': 'Close',
   'common.cancel': 'Cancel',
-  'common.create': 'Create',
   'common.copy': 'Copy',
   'common.copied': 'Copied',
   'common.retry': 'Retry',
@@ -621,8 +622,6 @@ export const en = {
   // ── The application ─────────────────────────────────────────────────────
   'app.skip': 'Skip to the conversation',
   'app.skipContent': 'Skip to the content',
-  'app.placeholder.title': 'This screen is not built yet',
-  'app.placeholder.body': 'The frame around it is final; the screen arrives with its backend.',
   'app.notFound.title': 'Nothing here',
   'app.notFound.body': 'This address does not lead anywhere in Purlay.',
   'app.notFound.home': 'Go to your channels',
@@ -701,6 +700,10 @@ export const en = {
   'native.body': '{app} will be signed in as {name}, {email}, on {host}.',
   'native.hint':
     'It gets a session of its own. To end it, sign out in the app, or choose Sign out everywhere in Settings.',
+  'native.again.title': 'Sign in again to continue',
+  'native.again.body':
+    '{app} asked for your sign-in to be checked again. Sign out of this browser, then sign back in.',
+  'native.again.action': 'Sign in again',
   'native.authorize': 'Open {app}',
   'native.other': 'Sign out of this browser and use another account',
   'native.failed': '{app} was not opened.',
@@ -769,8 +772,8 @@ export const en = {
   'sidebar.options.sections': 'Sections',
   'sidebar.options.hideMuted': 'Hide muted channels',
   'sidebar.options.reset': 'Reset sidebar',
-  'sidebar.filtered': 'Nothing to show with these options.',
-  'sidebar.caughtUp': 'Nothing unread.',
+  'sidebar.filtered': 'Nothing to show with these options',
+  'sidebar.caughtUp': 'Nothing unread',
   'sidebar.workspace.copyLink': 'Copy workspace link',
   'star.unstar': 'Remove from starred',
   'star.label': 'Star this channel',
@@ -800,7 +803,6 @@ export const en = {
   'sidebar.people': 'People',
   'sidebar.newChannel': 'New channel',
   'sidebar.jump': 'Jump to…',
-  'sidebar.private': 'private',
   'sidebar.you': 'you',
   'sidebar.mentions': {
     one: '{count} unread mention',
@@ -814,7 +816,7 @@ export const en = {
   'sidebar.muted': 'muted',
   'sidebar.unread': 'unread',
   'sidebar.dm.failed': 'The conversation could not be opened.',
-  'sidebar.people.empty': 'Nobody else is here yet.',
+  'sidebar.people.empty': 'Nobody else is here yet',
   'sidebar.people.emptyBody':
     'Everyone who joins is listed here, and a message to one of them starts here.',
 
@@ -832,11 +834,11 @@ export const en = {
     other: '{count} members',
   },
   'browse.find': 'Find a channel',
-  'browse.noMatch': 'No channel matches “{query}”.',
+  'browse.noMatch': 'No channel matches “{query}”',
   'browse.loading': 'Loading channels',
   'browse.empty.title': 'Nothing to join',
   'browse.empty.body': 'You are in every public channel there is.',
-  'browse.error.title': "Couldn't load channels",
+  'browse.error.title': 'Couldn’t load channels',
   'browse.error.body': 'The server did not answer. Try again.',
   'workspace.none.title': 'You are not in a workspace yet',
   'invite.title': 'Join {workspace}',
@@ -881,7 +883,7 @@ export const en = {
   'invite.delivery.status': 'Invitation status',
   'invite.delivery.find': 'Search recipients',
   'invite.delivery.clear': 'Clear filters',
-  'invite.delivery.noMatches': 'No invitations match these filters.',
+  'invite.delivery.noMatches': 'No invitations match these filters',
   'invite.delivery.note':
     'Each recipient has a separate link. Resending replaces their previous link. Relay acceptance does not confirm inbox delivery.',
   'invite.delivery.queued': 'Sending',
@@ -898,7 +900,7 @@ export const en = {
   'invite.delivery.resend': 'Resend',
   'invite.delivery.history': 'Send history',
   'invite.delivery.failedRead': 'Could not refresh invitation history.',
-  'invite.delivery.empty': 'No email invitations yet.',
+  'invite.delivery.empty': 'No email invitations yet',
   'invite.delivery.failure.connection': 'The mail server could not be reached.',
   'invite.delivery.failure.authentication':
     'The mail server refused authentication. Ask the server administrator to check email settings.',
@@ -917,7 +919,7 @@ export const en = {
   'invite.admin.makeFailed': 'Could not make a link.',
   'invite.admin.link': 'Invitation link',
   'invite.admin.open': 'Links still open',
-  'invite.admin.none': 'No links are open.',
+  'invite.admin.none': 'No open links',
   'invite.admin.row': 'Made by {name}, open until {until}',
   'invite.admin.someone': 'someone',
   'invite.admin.revoke': 'Revoke',
@@ -950,8 +952,6 @@ export const en = {
   'invite.mail.unavailable': 'This server cannot send email, so these were not sent: {addresses}.',
   'invite.mail.failed': 'Could not send the invitations.',
   'invite.mail.or': 'Or share the link yourself',
-  'members.entry': 'Members…',
-  'members.title': 'Members of {workspace}',
   'members.description':
     'An admin manages members and admins; making someone an owner, or changing an owner, is an owner’s.',
   'members.roleOf': 'Role of {name}',
@@ -972,11 +972,9 @@ export const en = {
     '{name}: could not confirm the result. Refresh the member list before retrying.',
   'members.refreshFailed': 'Could not refresh members. The last received list is shown.',
   'members.removeFailed': '{name} was not removed.',
-  'audit.entry': 'Audit log…',
-  'audit.title': 'Audit log of {workspace}',
   'audit.description':
     'Who did which administrative thing, newest first. Never what anybody wrote.',
-  'audit.empty': 'Nothing administrative has happened yet.',
+  'audit.empty': 'Nothing administrative has happened yet',
   'audit.refreshFailed': 'The audit log could not be refreshed.',
   'audit.olderFailed': 'Older entries did not load.',
   'audit.older': 'Load older',
@@ -997,8 +995,7 @@ export const en = {
   'audit.filter.dateHint': 'Days in your time zone; both days are included.',
   'audit.filter.backwards': 'This day is before the first one.',
   'audit.filter.clear': 'Clear filters',
-  'audit.emptyFiltered': 'No entry matches these filters.',
-  'audit.download': 'Download',
+  'audit.emptyFiltered': 'No entry matches these filters',
   'audit.download.description':
     'Every entry the filters keep, not only those shown, newest first. A download is on the log itself.',
   'audit.download.csv': 'CSV',
@@ -1052,7 +1049,7 @@ export const en = {
   'guests.description': 'Restricted to assigned conversations and content shared after joining.',
   'guests.search': 'Find a guest',
   'guests.searchAction': 'Search guests',
-  'guests.none': 'No guests match this search.',
+  'guests.none': 'No guests match this search',
   'guests.loadFailed': 'Guest access could not be loaded.',
   'guests.convert': 'Make full member',
   'guests.convertFor': 'Make full member: {name}',
@@ -1087,7 +1084,7 @@ export const en = {
   'guests.preserveHidden': 'Hidden and unavailable assignments are kept automatically.',
   'guests.channelsFailed': 'Channels could not be loaded. Retry before changing the selection.',
   'guests.findChannel': 'Find a channel',
-  'guests.noChannelMatch': 'No matching channels.',
+  'guests.noChannelMatch': 'No matching channels',
   'guests.moreChannels': 'Show more channels',
   'guests.noSelection': 'No visible channels are selected. Any hidden assignments remain.',
   'guests.changed':
@@ -1247,8 +1244,6 @@ export const en = {
   'audit.operator': 'The server’s operator',
   'retention.forever': 'forever',
   'retention.days': '{days} days',
-  'retention.entry': 'Keep history…',
-  'retention.title': 'How long {workspace} keeps its history',
   'retention.description':
     'Messages and files older than this are deleted every night, for good. Keeping everything is the default.',
   'retention.label': 'Keep history',
@@ -1282,13 +1277,11 @@ export const en = {
   'storage.left': '{left} left',
   'storage.full':
     'No room is left: files are refused until the server’s operator raises the quota.',
-  'export.entry': 'Export workspace…',
-  'export.title': 'Export {workspace}',
   'export.description':
     'One archive of every channel you can see — public channels, and the private channels and direct messages you are in — with their files, and nobody’s email address. It is made in the background and can be downloaded once, within a day.',
   'export.request': 'Export',
   'export.list': 'Your exports',
-  'export.empty': 'You have not exported this workspace yet.',
+  'export.empty': 'You have not exported this workspace yet',
   'export.asked': 'Asked for {when}',
   'export.status.pending': 'Being made…',
   'export.status.checking': 'Checking download status…',
@@ -1306,7 +1299,7 @@ export const en = {
   'myData.description':
     'One archive of what this server holds about you: your account and settings, the workspaces you are in, every message you wrote that you have not deleted — in every workspace, channels you left included — your reactions, saved items and the files you sent. Nobody else’s words are in it. It is made in the background and can be downloaded once, within a day.',
   'myData.request': 'Export my data',
-  'myData.empty': 'You have not exported your data yet.',
+  'myData.empty': 'You have not exported your data yet',
   'myData.inProgress': 'An export of your data is already being made.',
   'myData.requesterGone': 'Your account was no longer in use when it was to be made.',
   'myData.limited': {
@@ -1318,8 +1311,6 @@ export const en = {
   'audit.quota.default': 'the default',
   'audit.action.retention.purged':
     'History older than {days} days was cleared: {messages} messages, {files} files',
-  'github.entry': 'GitHub connection…',
-  'github.title': 'GitHub for {workspace}',
   'github.description':
     'With a token, a link to a pull request or an issue shows as a card: its state, CI and review. The token is kept encrypted and never shown again.',
   'github.connected': 'Connected since {when}.',
@@ -1427,9 +1418,6 @@ export const en = {
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
-  'workspace.settings.title': 'Workspace settings',
-  'workspace.settings.description':
-    'The name everyone sees. The address stays /w/{slug}, so links already shared keep working.',
   'workspace.settings.save': 'Save',
   'workspace.settings.empty': 'A workspace needs a name.',
   'workspace.nameInvalid':
@@ -1452,7 +1440,7 @@ export const en = {
   'workspace.closed.title': 'Ask for an invitation',
   'workspace.closed.body':
     'You are signed in, but not in a workspace, and this server lets only the people its operator chose make one. Ask someone in your team for an invitation link, and open it.',
-  'state.session.error.title': "Couldn't reach Purlay",
+  'state.session.error.title': 'Couldn’t reach Purlay',
   'state.session.error.body': 'The server did not answer. You are still signed in; try again.',
   'state.channel.missing.title': 'That channel is not here',
   'state.channel.missing.body': 'It does not exist, or you cannot see it.',
@@ -1482,17 +1470,17 @@ export const en = {
   'newChannel.private': 'Private',
   'newChannel.privateHint': 'Only the people in it can see it. A member brings others in.',
   'people.add': 'Add people',
-  'people.title': 'Add people to {name}',
+  'people.title': 'Add people to #{name}',
   'people.description': 'They see the channel at once, with what was said in it.',
   'people.filter': 'Find a person',
   'people.addOne': 'Add',
   'people.added': 'Added',
   'people.member': 'Member',
-  'people.allIn': 'Everybody in the workspace is in this channel.',
+  'people.allIn': 'Everybody in the workspace is in this channel',
   'people.loading': 'Loading people…',
   'people.failed': 'The people of this workspace could not be loaded.',
-  'people.none': 'Nobody else is in this workspace yet.',
-  'people.noMatch': 'Nobody by that name.',
+  'people.none': 'Nobody else is in this workspace yet',
+  'people.noMatch': 'Nobody by that name',
   'people.addFailed': '{name} was not added.',
 
   // ── Group conversations (D-127) ────────────────────────────────────────
@@ -1506,8 +1494,6 @@ export const en = {
   'conversations.nobody': 'Pick people below',
   'conversations.unpick': 'Take {name} off',
   'conversations.toNobody': 'To: nobody yet',
-  'conversations.pick': 'Pick',
-  'conversations.picked': 'Picked',
   'conversations.full': 'That is as many as a conversation holds; a channel holds more.',
   'conversations.start': 'Start conversation',
   'conversations.failed': 'The conversation could not be started.',
@@ -1550,7 +1536,7 @@ export const en = {
   'details.tab.members': 'Members',
   'details.tab.integrations': 'Integrations',
   'details.find': 'Find a member',
-  'details.noMatch': 'Nobody in this channel matches “{query}”.',
+  'details.noMatch': 'Nobody in this channel matches “{query}”',
   'details.danger': 'Danger zone',
   'details.leaveHint': 'Stop seeing its messages and being told about them.',
   'details.archiveHint': 'Hide it and its history from everyone. Its name becomes free again.',
@@ -1576,15 +1562,8 @@ export const en = {
   'details.removeForbidden': 'Only an owner or an admin can remove {name}.',
 
   // ── Messages ────────────────────────────────────────────────────────────
-  'message.react': 'React',
-  'message.reacted': 'Reacted',
-  'message.reply': 'Reply',
   'message.edited': 'edited',
   'panels.menu': 'Channel menu',
-  'profile.menu': 'Your profile…',
-  'profile.title': 'Your profile',
-  'profile.description':
-    'What the people you work with see beside your name. Your name and picture are GitHub’s.',
   'profile.titleLabel': 'Title',
   'profile.titleHint': 'What you do, in a few words.',
   'profile.statusLabel': 'Status',
@@ -1652,7 +1631,7 @@ export const en = {
   'signIn.erased': 'Your account was erased.',
   'profile.localTime': '{time} local time',
   'profile.zone': 'Time zone',
-  'profile.noProfile': 'Nothing here yet.',
+  'profile.noProfile': 'Nothing here yet',
   'incident.open': 'Incident',
   'incident.unknown': 'Whether an incident is open here could not be read.',
   'incident.staleFailed': 'The incident could not be brought up to date.',
@@ -1660,7 +1639,7 @@ export const en = {
   'incident.close': 'Close the incident',
   'incident.title': 'Incident',
   'incident.loading': 'Loading the incident',
-  'incident.error.title': 'The incident did not load.',
+  'incident.error.title': 'Couldn’t load the incident',
   'incident.error.body': 'Nothing is lost; try again.',
   'incident.none.title': 'No incident',
   'incident.none.body':
@@ -1690,7 +1669,7 @@ export const en = {
     one: '{count} responding',
     other: '{count} responding',
   },
-  'incident.nobodyResponding': 'Nobody is responding yet.',
+  'incident.nobodyResponding': 'Nobody is responding yet',
   'incident.you': '{name} (you)',
   'incident.takeOff': 'Remove {name} from responders',
   'incident.takeOffShort': 'Remove',
@@ -1705,12 +1684,12 @@ export const en = {
   'incident.postmortemSaved': '{name} saved the postmortem',
   'incident.runbook': 'Runbook',
   'incident.runbookLink': 'Runbook link',
-  'incident.noRunbook': 'No runbook linked.',
+  'incident.noRunbook': 'No runbook linked',
   'incident.addRunbook': 'Link the runbook',
   'incident.changeRunbook': 'Change',
   'incident.removeRunbook': 'Remove',
   'incident.postmortem': 'Postmortem',
-  'incident.noPostmortem': 'Not written yet.',
+  'incident.noPostmortem': 'Not written yet',
   'incident.writePostmortem': 'Write the postmortem',
   'incident.editPostmortem': 'Edit',
   'incident.savedMeanwhile': 'Saved by somebody else meanwhile',
@@ -1732,7 +1711,7 @@ export const en = {
   'pins.open': 'Pinned messages',
   'pins.close': 'Close pinned messages',
   'pins.loading': 'Loading pinned messages',
-  'pins.error.title': 'The pinned messages did not load.',
+  'pins.error.title': 'Couldn’t load pinned messages',
   'pins.error.body': 'Nothing is lost; try again.',
   'pins.staleFailed': 'The list could not be brought up to date.',
   'pins.empty.title': 'Nothing pinned yet',
@@ -1753,11 +1732,12 @@ export const en = {
   'bookmarks.removeOf': 'Remove the bookmark {name}',
   'bookmarks.removed': 'Removed {name}.',
   'bookmarks.removeFailed': 'The bookmark was not removed.',
+  'bookmarks.loadFailed': 'The bookmarks could not be loaded.',
   'files.title': 'Files',
   'files.open': 'Files in this channel',
   'files.close': 'Close files',
   'files.loading': 'Loading files',
-  'files.error.title': 'The files did not load.',
+  'files.error.title': 'Couldn’t load files',
   'files.error.body': 'Nothing is lost; try again.',
   'files.empty.title': 'No files yet',
   'files.empty.body': 'What is shared here, pictures and files, gathers in this list.',
@@ -1774,7 +1754,7 @@ export const en = {
   'attachment.preview.hide': 'Hide the preview of {name}',
   'attachment.preview.label': 'Preview of {name}',
   'attachment.preview.loading': 'Reading the file',
-  'attachment.preview.failed': 'The file could not be read.',
+  'attachment.preview.failed': 'Couldn’t read the file',
   'attachment.preview.failedBody': 'Try again, or download it to read it.',
   'attachment.preview.rows': {
     one: '{count} more row is in the file',
@@ -1824,7 +1804,7 @@ export const en = {
     'Pick the channels to start in. The busiest are picked already; Browse finds the rest later.',
   'welcome.ledeQuiet': 'Pick the channels to start in; Browse finds the rest later.',
   'welcome.loading': 'Loading the channels',
-  'welcome.error.title': 'The channels did not load.',
+  'welcome.error.title': 'Couldn’t load channels',
   'welcome.error.body': 'You are in the workspace; try again, or skip and pick them later.',
   'welcome.allJoined': 'You are already in every public channel.',
   'welcome.none': 'There are no public channels to join yet.',
@@ -1873,6 +1853,9 @@ export const en = {
   'saved.empty.archived': 'Nothing archived',
   'saved.empty.completed': 'Nothing completed yet',
   'saved.empty.body': 'Choose Save for later on any message, and it waits for you here.',
+  'saved.empty.archivedBody': 'Archive a saved message to put it away without letting it go.',
+  'saved.empty.completedBody':
+    'Complete a saved message when you are done with it, and it is kept here.',
   'saved.more': 'Load more',
   'saved.tab.reminders': 'Reminders',
   'saved.tab.remindersCount': 'Reminders ({count})',
@@ -1930,7 +1913,7 @@ export const en = {
   'issues.delete': 'Delete',
   'issues.editTitle': 'Title',
   'issues.editBody': 'Details',
-  'issues.editBodyHint': 'Markdown, up to {max} characters.',
+  'issues.editBodyHint': 'Up to {max} characters',
   'issues.editAssignee': 'Assignee',
   'issues.nobody': 'Nobody',
   'issues.assignedTo': 'Assigned to {name}',
@@ -1963,7 +1946,7 @@ export const en = {
     'Send it on with a note. Whoever cannot see the original sees only that it is not available to them.',
   'forward.find': 'Find a channel or a person',
   'forward.to': 'Forward to',
-  'forward.none': 'Nothing by that name that you are in.',
+  'forward.none': 'Nothing by that name that you are in',
   'forward.note': 'Add a note (optional)',
   'forward.send': 'Forward',
   'forward.sent': 'Forwarded',
@@ -1979,15 +1962,9 @@ export const en = {
     one: '{count} new message',
     other: '{count} new messages',
   },
-  'message.jumpToNew': 'Jump to new messages',
   'message.today': 'Today',
   'message.yesterday': 'Yesterday',
-  'message.reactions': {
-    one: '{count} reaction',
-    other: '{count} reactions',
-  },
   'message.addReaction': 'Add reaction',
-  'message.removeReaction': 'Remove your reaction',
   // ── A repository's feed (D-134) ─────────────────────────────────────────
   'github.push.pushed': {
     one: '{actor} pushed {count} commit to {ref}',
@@ -2077,7 +2054,7 @@ export const en = {
   'outHooks.title': 'Outgoing webhooks',
   'outHooks.body':
     'Send selected channel events to your HTTPS endpoint. Deliveries may repeat; deduplicate the event ID.',
-  'outHooks.empty': 'No outgoing webhooks yet.',
+  'outHooks.empty': 'No outgoing webhooks yet',
   'outHooks.url': 'Destination HTTPS URL',
   'outHooks.events': 'Events',
   'outHooks.disclosure': 'Message content from this channel will be sent to this external address.',
@@ -2101,7 +2078,7 @@ export const en = {
   'outHooks.deliveries': 'Deliveries',
   'outHooks.emptyDeliveries': 'No deliveries yet. Send a test event to check the connection.',
   'outHooks.attempts': 'Attempts',
-  'outHooks.noAttempts': 'No attempts yet.',
+  'outHooks.noAttempts': 'No attempts yet',
   'outHooks.attemptCount': '{count} attempts',
   'outHooks.more': 'Load older deliveries',
   'outHooks.state.pending': 'Waiting',
@@ -2190,15 +2167,14 @@ export const en = {
   // ── The feed (D-98) ─────────────────────────────────────────────────────
   'feed.label': 'Messages in {channel}',
   'feed.row': '{name}, {when}',
-  'feed.dmTitle': 'Direct message with {name}',
   'feed.selfDm': '{name} (you)',
   'feed.olderLoading': 'Loading older messages',
-  'feed.olderError': "Couldn't load older messages",
+  'feed.olderError': 'Couldn’t load older messages',
   'feed.olderRetry': 'Try again',
   'feed.newerLoading': 'Loading newer messages',
-  'feed.newerError': "Couldn't load newer messages",
+  'feed.newerError': 'Couldn’t load newer messages',
   'feed.jumpToRecent': 'Jump to recent',
-  'feed.linkMissing': "That message no longer exists, or you can't see it.",
+  'feed.linkMissing': 'That message no longer exists, or you can’t see it.',
   'feed.start': 'This is the beginning of the channel',
   'feed.startConversation': 'This is the beginning of the conversation',
   'channel.join.notice': 'You are reading #{name} without being a member.',
@@ -2206,13 +2182,11 @@ export const en = {
   'channel.join.failed': 'Could not join the channel.',
   'channel.announcement.notice':
     'Only owners and admins post in this channel. You can still reply in a thread.',
-  'message.reactWith': 'React with {emoji}',
   'message.quickReactions': 'Quick reactions',
   'message.reactionOf': {
     one: '{emoji}, {count} reaction',
     other: '{emoji}, {count} reactions',
   },
-  'message.code.language': 'Language: {language}',
   'message.code.plain': 'text',
   'message.link.external': 'Opens in a new tab',
   'message.table': 'Table',
@@ -2237,7 +2211,6 @@ export const en = {
 
   // ── Delivery (UX §3.1) ──────────────────────────────────────────────────
   'delivery.sending': 'Sending',
-  'delivery.sent': 'Sent',
   'delivery.failed': 'Failed to send',
   'delivery.unreached': 'It goes on its own when you are back online.',
   'delivery.retry': 'Retry',
@@ -2263,11 +2236,9 @@ export const en = {
   'thread.close': 'Close thread',
   'thread.resolve': 'Resolve',
   'thread.reopen': 'Reopen',
-  'thread.replyPlaceholder': 'Reply to thread…',
-  'thread.replyLabel': 'Reply to thread',
   'thread.loading': 'Loading replies…',
-  'thread.error': "Couldn't load replies",
-  'thread.rootError': "Couldn't load this thread",
+  'thread.error': 'Couldn’t load replies',
+  'thread.rootError': 'Couldn’t load this thread',
   'thread.notHere': 'This thread is not in this channel.',
   'thread.announce.resolved': 'Thread resolved',
   'thread.announce.reopened': 'Thread reopened',
@@ -2284,7 +2255,7 @@ export const en = {
   'thread.follow.label': 'Follow',
   'thread.follow.on': 'Get notified about new replies',
   'thread.follow.off': 'Turn off notifications for replies',
-  'thread.follow.error': "Couldn't tell whether you follow this thread. Try again.",
+  'thread.follow.error': 'Couldn’t tell whether you follow this thread. Try again.',
   'thread.follow.failed': 'You are still not following this thread.',
   'thread.follow.unfollowFailed': 'You are still following this thread.',
 
@@ -2295,7 +2266,6 @@ export const en = {
   'composer.italic': 'Italic',
   'composer.strike': 'Strikethrough',
   'composer.inlineCode': 'Code',
-  'composer.write': 'Write',
   'composer.link.title': 'Add a link',
   'composer.link.description': 'Choose the text and address to insert into your message.',
   'composer.link.address': 'Link address',
@@ -2313,8 +2283,6 @@ export const en = {
   'emoji.hands': 'Hands and people',
   'emoji.work': 'Work',
   'emoji.symbols': 'Symbols',
-  'composer.preview': 'Preview',
-  'composer.previewEmpty': 'Nothing to preview yet',
   'composer.formatActive': 'Current format',
   'composer.clearFormatting': 'Clear formatting',
   'composer.clearFormattingHint':
@@ -2459,7 +2427,6 @@ export const en = {
 
   // ── Connection (UX §8) ──────────────────────────────────────────────────
   'connection.reconnecting': 'Reconnecting… messages will send when you are back',
-  'connection.ended': 'Your session ended',
 
   // ── States (UX §8) ──────────────────────────────────────────────────────
   'state.feed.empty.title': 'No messages yet',
@@ -2468,17 +2435,18 @@ export const en = {
   'state.feed.empty.conversation':
     'Only the people in this conversation see what is written here. The composer below is ready.',
   'state.feed.loading': 'Loading messages',
-  'state.feed.error.title': "Couldn't load messages",
+  'state.feed.error.title': 'Couldn’t load messages',
   'state.feed.error.body': 'The server did not answer. Your draft is safe.',
   'state.questions.empty.title': 'Every thread is resolved',
   'state.questions.empty.body':
     'A thread appears here the moment it has a reply and no resolution.',
   'state.questions.loading': 'Loading open questions',
-  'state.questions.error.title': "Couldn't load open questions",
+  'state.questions.error.title': 'Couldn’t load open questions',
   'state.questions.error.body': 'The server did not answer. Try again.',
   'state.channels.loading': 'Loading channels',
-  'state.channels.error.title': "Couldn't load channels",
+  'state.channels.error.title': 'Couldn’t load channels',
   'state.channels.error.body': 'The server did not answer. Try again.',
+  'state.people.error.title': 'Couldn’t load people',
   'state.channels.empty.title': 'No channels yet',
   'state.channels.empty.body': 'Create the first one; it takes a name and nothing else.',
   'state.channels.unjoined.title': 'You are not in a channel yet',
@@ -2516,7 +2484,7 @@ export const en = {
     'Searched what {person} wrote, in every channel you can see. A deleted message is never found.',
   'state.search.empty.bodyInFrom':
     'Searched what {person} wrote in {channel}. A deleted message is never found.',
-  'state.search.error.title': "Couldn't search",
+  'state.search.error.title': 'Couldn’t search',
   'state.search.error.body': 'The server did not answer. Your words are kept; try again.',
 
   // ── Deep Work (D-108) ──────────────────────────────────────────────────
@@ -2660,8 +2628,6 @@ export const en = {
   'inbox.category.empty.direct': 'No direct messages',
   'inbox.category.empty.threads': 'Nothing in your threads',
   'inbox.category.empty.body': 'Everything else you were told is under All.',
-  'inbox.panel.label': 'Inbox',
-  'inbox.panel.seeAll': 'See all',
   'drafts.title': 'Drafts and sent',
   'drafts.tabs': 'Show',
   'drafts.tab.drafts': 'Drafts',
@@ -2740,7 +2706,7 @@ export const en = {
   'unreads.markRead': 'Mark read',
   'unreads.readFailed': 'It could not be marked read.',
   'unreads.loading': 'Loading what is new',
-  'unreads.failed': 'What is new here could not be loaded.',
+  'unreads.failed': 'What is new here could not be loaded',
   'unreads.failedBody': 'Try again to check which conversations are waiting.',
   'unreads.openMessage': 'Open message',
   'unreads.openReplies': 'Read unread replies',
@@ -2751,7 +2717,7 @@ export const en = {
   'unreads.empty.title': 'All caught up',
   'unreads.empty.body': 'Every channel you are in is read. Quiet channels are left out.',
   'state.inbox.loading': 'Loading your inbox',
-  'state.inbox.error.title': "Couldn't load your inbox",
+  'state.inbox.error.title': 'Couldn’t load your inbox',
   'state.inbox.error.body': 'The server did not answer. Try again.',
   'state.inbox.empty.title': 'Nothing needs you',
   'state.inbox.empty.body':
@@ -2766,7 +2732,6 @@ export const en = {
   },
   'questions.footer':
     'These are the questions your team has not finished answering. Resolve a thread and it leaves this list.',
-  'questions.back': 'Back to {channel}',
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
@@ -2814,8 +2779,8 @@ export const en = {
     'Too late: the workspace is already being erased, and its deletion can no longer be taken back.',
   'failure.issuesLimit': 'This workspace holds as many issues as it may. Delete some first.',
   'failure.generic': 'Something went wrong on our side. Try again in a moment.',
-  'failure.signOut': "Couldn't sign you out.",
-  'failure.copy': "Couldn't copy. Select the text and copy it yourself.",
+  'failure.signOut': 'Couldn’t sign you out.',
+  'failure.copy': 'Couldn’t copy. Select the text and copy it yourself.',
   'connection.degraded': {
     one: 'Live updates are paused for {count} channel',
     other: 'Live updates are paused for {count} channels',
@@ -2913,8 +2878,6 @@ export const en = {
   'settings.notifications.deepWorkOn': 'Deep Work is on',
   'settings.notifications.deviceHint':
     'What reaches this device when Purlay is not open in front of you.',
-  'settings.notifications.closedTabAsk':
-    'Turn on to be told on this device even when Purlay is closed. Your browser will ask first.',
   'settings.notifications.away': 'When Purlay is not in front of you',
   'settings.notifications.onBoth':
     'This device is told, with Purlay in a background tab or closed.',
@@ -2936,7 +2899,7 @@ export const en = {
   'settings.notifications.channelsHint':
     'Each channel you are in, and what it may tell you. The bell in a channel’s header sets the same.',
   'settings.notifications.levelOf': 'Notifications for #{channel}',
-  'settings.notifications.noChannels': 'You are in no channels yet.',
+  'settings.notifications.noChannels': 'You are in no channels yet',
   'settings.account.title': 'Sessions & account',
   'settings.account.description': 'Where you are signed in, and your account itself.',
   'settings.account.signIn': 'How you sign in',
@@ -3026,7 +2989,7 @@ export const en = {
   'settings.devices.current': 'This device',
   'settings.devices.signedIn': 'Signed in {when}',
   'settings.devices.lastUsed': 'Last active {when}',
-  'settings.devices.none': 'You are not signed in anywhere else.',
+  'settings.devices.none': 'You are not signed in anywhere else',
   'settings.devices.failed': 'Could not read where you are signed in.',
   'settings.devices.signedOut': '{device} was signed out.',
   'settings.devices.signOutFailed': '{device} was not signed out.',
@@ -3057,7 +3020,7 @@ export const en = {
   'settings.archived.title': 'Archived channels',
   'settings.archived.description':
     'Archived channels are hidden from everyone, with their messages and members kept. Restore one to bring it back as it was.',
-  'settings.archived.none': 'No channel is archived.',
+  'settings.archived.none': 'No archived channels',
   'settings.archived.row': '{channel}, archived {when}',
   'settings.archived.rowPrivate': '{channel} (private), archived {when}',
   'settings.archived.restore': 'Restore',
@@ -3073,7 +3036,7 @@ export const en = {
   'settings.members.search': 'Search by name or handle',
   'settings.members.filter': 'Role',
   'settings.members.everyRole': 'Every role',
-  'settings.members.noMatch': 'Nobody matches.',
+  'settings.members.noMatch': 'Nobody matches',
   'settings.members.count.total': 'Total',
   'settings.members.count.owner': 'Owners',
   'settings.members.count.admin': 'Admins',
@@ -3118,7 +3081,6 @@ export const en = {
   'language.tr': 'Türkçe',
 
   // ── Account ─────────────────────────────────────────────────────────────
-  'user.menu': 'Account',
   'user.setAway': 'Set yourself as away',
   'user.setActive': 'Set yourself as active',
   'user.awayFailed': 'Your status was not changed.',
@@ -3560,7 +3522,6 @@ export const en = {
   'setup.verify.error.title': 'Could not verify the address',
   'settings.group.server': 'Server',
   'settings.server.nav': 'Server',
-  'settings.server.title': 'Server',
   'settings.server.description':
     'How this server lets people in. Only you, its administrator, see this page.',
   'settings.server.loadError.title': 'Could not read the server settings',
@@ -3701,19 +3662,9 @@ export const en = {
   'settings.server.policy.open': 'Anyone',
   'settings.server.policy.open.body': 'Anyone who can reach this server can create an account.',
   'settings.server.policy.saved': 'Saved. This applies from the next sign-up.',
-  'settings.server.accounts.title': 'Accounts',
-  'settings.server.accounts.loadFailed':
-    'Could not read the accounts. Retry to get the current list.',
-  'settings.server.accounts.description':
-    'Suspend the account of somebody who has left: they are signed out everywhere and cannot sign in, and their messages and name stay. Lift it to let them back in as they were.',
-  'settings.server.accounts.find': 'Find by name, username or address',
-  'settings.server.accounts.none': 'No account matches.',
   'settings.server.accounts.admin': 'Administers this server',
-  'settings.server.accounts.suspendedOn': 'Suspended {when}',
   'settings.server.accounts.suspend': 'Suspend',
   'settings.server.accounts.lift': 'Lift suspension',
-  'settings.server.accounts.ask':
-    'Suspend {name}? They are signed out on every device and cannot sign in until you lift it.',
   'settings.server.signIn.title': 'How people sign in',
   'settings.server.signIn.description':
     'Rules for accounts that sign in with a password. GitHub, Google, single sign-on and emailed links keep their own security.',
@@ -3791,7 +3742,7 @@ export const en = {
   'admin.security': 'Identity and security',
   'admin.email': 'Notifications',
   'admin.data': 'Storage and data',
-  'admin.integrations': 'Integrations and notifications',
+  'admin.integrations': 'Integrations',
   'admin.operations': 'Operations and maintenance',
   'admin.audit.action.server.github_connected': 'GitHub sign-in connected',
   'admin.audit.action.server.github_disconnected': 'GitHub sign-in disconnected',
@@ -3830,10 +3781,11 @@ export const en = {
   'admin.audit.action.server.fact_discarded': 'Fact between modules discarded',
   'admin.audit.action.server.smtp_tested': 'Email connection tested',
   'admin.audit.action.server.admission_policy_changed': 'Account admission policy changed',
-  'admin.audit.action.server.identity_changed': 'Server name or support details changed',
+  'admin.audit.action.server.identity_changed': 'Server identity changed',
   'admin.audit.action.server.account_approved': 'Account approved',
   'admin.audit.action.server.account_denied': 'Account approval denied',
   'admin.audit.action.server.audit_export_requested': 'Audit log export requested',
+  'admin.audit.person': 'Person',
   'admin.audit.personChoice': 'Person: {name}',
   'admin.audit.choosePerson': 'Choose a person',
   'admin.audit.choosePerson.body':
@@ -3857,7 +3809,7 @@ export const en = {
   'admin.data.body':
     'Storage includes uploads waiting to be sent. Retention remains each workspace owner’s policy.',
   'admin.integrations.body':
-    'Server integrations and notification infrastructure. Personal notification preferences belong to each account.',
+    'The GitHub App that workspaces connect through, and the deployment configuration this server runs with.',
   'admin.operations.body':
     'Scheduled maintenance and deployment configuration. A job with no successful run needs an operator’s attention.',
   'admin.audit.body':
@@ -4011,7 +3963,7 @@ export const en = {
   'admin.mailTest.body':
     'Send a test to your own verified address, {email}, using the saved credentials. Relay acceptance does not confirm inbox delivery.',
   'admin.mailTest.send': 'Send test email',
-  'admin.mailTest.none': 'No saved-configuration test has been recorded.',
+  'admin.mailTest.none': 'No saved-configuration test has been recorded',
   'admin.mailTest.accepted':
     'The relay accepted this test message. Check your inbox and spam folder.',
   'admin.mailTest.failed': 'The relay did not accept the test. Review the connection settings.',
@@ -4043,6 +3995,9 @@ export const en = {
   'admin.identity.name': 'Server display name',
   'admin.identity.support': 'Support address',
   'admin.identity.supportHint': 'An HTTPS link or mailto address; leave blank to hide it.',
+  'admin.identity.privacy': 'Privacy policy address',
+  'admin.identity.terms': 'Terms of service address',
+  'admin.identity.legalHint': 'An HTTPS link. Leave blank to hide it.',
   'admin.admissionPolicy': 'New account admission',
   'admin.admissionPolicy.body':
     'Applies to new accounts, including invited accounts and sign-in providers. Existing accounts stay admitted. Turning approval off does not approve the waiting list.',
@@ -4069,7 +4024,6 @@ export const en = {
     'Could not confirm the approval results. Refresh accounts before retrying.',
   'admin.bulk.refresh': 'Refresh accounts',
   'admin.bulk.select': 'Select {name}',
-  'admin.bulk.selectAccount': 'Select',
   'admin.bulk.outcome.approved': 'Approved',
   'admin.bulk.outcome.refused': 'Not approved; status or permissions changed.',
   'admin.bulk.outcome.unconfirmed': 'Result unconfirmed; refresh before retrying.',
@@ -4100,13 +4054,13 @@ export const en = {
   'admin.backup.size': 'Database archive size',
   'admin.backup.source': 'Reporting source',
   'admin.backup.hash': 'Database archive SHA-256',
-  'admin.backup.restoreNone': 'No completed restore check has been reported.',
+  'admin.backup.restoreNone': 'No completed restore check has been reported',
   'admin.backup.restoreMatches':
     'A restore of this reported artifact and its included data completed with archive checks.',
   'admin.backup.restoreOther':
     'The last restore check covers a different artifact or a smaller data scope.',
   'admin.backup.restoreLimit':
-    'Archive checks verify checksums, SQL restoration and table counts. Rehearse application behavior and off-site recovery separately.',
+    'Archive checks verify checksums, SQL restoration and table counts. Rehearse application behaviour and off-site recovery separately.',
   'admin.backup.guide': 'Operator backup and recovery guide',
   'channelGroups.create': 'New channel group',
   'channelGroups.rename': 'Rename group',

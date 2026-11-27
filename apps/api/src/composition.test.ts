@@ -30,6 +30,11 @@ import { aDatabaseThatMustNotBeTouched, aTransactionThatMustNotBeTouched } from 
 import { inStartOrder, moduleCells } from './testing/module-cells';
 import { concretePath } from './testing/module-smoke';
 import { noSuspension, type Suspension } from './platform/suspended-modules';
+import { NO_SESSION_LIFETIME } from './modules/auth/session-lifetime';
+import { Type } from '@sinclair/typebox';
+import { defineFact } from '@purlay/types';
+import type { FactConsumers } from './platform/fact-consumers';
+import { NOTE_CREATED, NOTE_CREATED_V2, NOTE_PINNED, NOTES, WIKI } from './testing/facts';
 
 const bundle: readonly BundledModule[] = bundledModules;
 
@@ -155,6 +160,40 @@ describe('the application as its modules make it', () => {
     expect(() => compose([chatModule, another, second])).toThrow(
       "more than one module answers for a workspace's channels: chat, other, second",
     );
+  });
+
+  describe('what the socket is handed (D-352)', () => {
+    test('tells who is online through chat while it runs, and counts nobody where chat is carried and off', () => {
+      expect(composition.announcePresence).toBe(chatModule.announcePresence);
+      expect(compose([]).announcePresence).toBeUndefined();
+      expect(compose([], []).announcePresence).toBeUndefined();
+    });
+
+    test('checks live frames by chat’s projection whether or not chat runs, and by none in a build without chat', () => {
+      expect(composition.frameProjection).toBe(chatModule.frameProjection);
+      expect(compose([]).frameProjection).toBe(chatModule.frameProjection);
+      expect(compose([], []).frameProjection).toBeUndefined();
+    });
+
+    test('refuses two modules that both check the socket’s frames', () => {
+      const second: BundledModule = {
+        manifest: { ...another.manifest, id: 'second' },
+        frameProjection: chatModule.frameProjection,
+      };
+      expect(() => compose([chatModule, second])).toThrow(
+        "more than one module checks the socket's frames: chat, second",
+      );
+    });
+
+    test('chat’s projection makes a company and a workspace projector without reading anything yet', () => {
+      const projectors = chatModule.frameProjection({
+        database: aDatabaseThatMustNotBeTouched(),
+        clock: { now: () => new Date(0) },
+        lifetime: () => NO_SESSION_LIFETIME,
+      });
+      expect(typeof projectors.companyFrame).toBe('function');
+      expect(typeof projectors.workspaceFrame).toBe('function');
+    });
   });
 
   describe('who may read an attachment', () => {
@@ -537,7 +576,7 @@ describe('the workers of the modules a process runs', () => {
   const namesOf = (running: readonly BundledModule[]): string[] =>
     compose(running, carried).workers.map(({ module, name }) => `${module}/${name}`);
 
-  test('are chat’s Shared index and delivery loops where chat runs, and nothing where it is carried and off or not carried at all', () => {
+  test('are chat’s Shared index and delivery loops where chat runs, issues’ delivery of the facts it consumes where it runs (D-355), and nothing where a module is carried and off or not carried at all', () => {
     expect(namesOf([chatModule])).toEqual([
       'chat/index:shared-links',
       'chat/deliver:scheduled',
@@ -549,8 +588,9 @@ describe('the workers of the modules a process runs', () => {
       'chat/deliver:scheduled',
       'chat/deliver:reminders',
       'chat/deliver:urgent-repeats',
+      'issues/outbox:consume',
     ]);
-    expect(namesOf([issuesModule])).toEqual([]);
+    expect(namesOf([issuesModule])).toEqual(['issues/outbox:consume']);
     expect(namesOf([])).toEqual([]);
     expect(compose([], []).workers).toEqual([]);
   });
@@ -843,5 +883,46 @@ describe('what a process that does not run a module offers of it', () => {
     expect(compositionFor('none').pushedKinds.size).toBe(0);
     expect(compositionFor('issues').searchSources).toEqual(['issues']);
     expect(compositionFor('none').searchSources).toEqual([]);
+  });
+});
+
+describe('what a process can deliver of the outbox, and what a workspace is granted over the build (D-353)', () => {
+  const notes: BundledModule = { manifest: NOTES };
+  const consumerOfBoth: FactConsumers = {
+    'notes.created': () => Promise.resolve('done'),
+    'notes.pinned': () => Promise.resolve('done'),
+  };
+  const wiki: BundledModule = { manifest: WIKI, factConsumers: consumerOfBoth };
+  const facts = [NOTE_CREATED_V2, NOTE_PINNED];
+
+  test('is each fact a module it runs and has not stopped handles, at the newest shape it reads', () => {
+    let stopped: ReadonlySet<string> = new Set();
+    const suspension: Suspension = { ...noSuspension, current: () => stopped };
+    const running = compose([notes, wiki], [notes, wiki], 'open', facts, suspension);
+    expect(running.outboxHandles()).toEqual([
+      { consumer: 'wiki', type: 'notes.created', shape: 2 },
+      { consumer: 'wiki', type: 'notes.pinned', shape: 1 },
+    ]);
+    stopped = new Set(['wiki']);
+    expect(running.outboxHandles()).toEqual([]);
+    expect(compose([notes], [notes, wiki], 'open', facts).outboxHandles()).toEqual([]);
+  });
+
+  test('judges a grant over every module the build carries, run here or not', () => {
+    const publisherAlone = compose([notes], [notes, wiki], 'managed', facts);
+    const granted = [{ module: 'wiki', state: 'on' as const, validUntil: null }];
+    expect([...publisherAlone.grantedModules(granted, new Date(0))].sort()).toEqual(['wiki']);
+    expect([...publisherAlone.effectiveModules(granted, new Date(0))]).toEqual([]);
+    expect([...publisherAlone.grantedModules([], new Date(0))]).toEqual([]);
+  });
+
+  test('stops a build whose declarations break their rules, as the CI check would', () => {
+    const unbounded = defineFact({
+      ...NOTE_PINNED,
+      schema: Type.Object({ noteId: Type.String() }),
+    });
+    expect(() => compose([notes, wiki], [notes, wiki], 'open', [NOTE_CREATED, unbounded])).toThrow(
+      'the fact "notes.pinned" has a string at /noteId that may be longer than 200 characters',
+    );
   });
 });

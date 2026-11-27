@@ -15,6 +15,7 @@ import { aRoom } from '../../testing/rooms';
 import { createApp } from './app';
 import { updateMyProfile } from './profile';
 import { chatWorkspaceChannels } from '../../features/chat/channels/workspace-channels';
+import { noDepartures } from '../../testing/departures';
 
 afterAll(async () => {
   await closeIntegrationDatabase();
@@ -46,6 +47,7 @@ describe('integration: PATCH /api/me/profile', () => {
         bus,
         log: NO_LOG,
         workspaceChannels: chatWorkspaceChannels,
+        memberDepartures: noDepartures,
       };
       const request = (): Request =>
         new Request('https://purlay.test/api/me/profile', {

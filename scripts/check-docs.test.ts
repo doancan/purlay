@@ -9,7 +9,16 @@
  * nothing either.
  */
 import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -32,15 +41,32 @@ afterAll(() => {
 });
 
 /**
- * Every tracked file. Not only the documents: a link may point at any file, and a
- * copy missing one would fail the check for a reason no test here is about.
+ * Every file of the working tree git would commit: the tracked ones that are still there and the new ones it does
+ * not ignore. Not only the documents: a link may point at any file, and a copy missing one would fail the check for
+ * a reason no test here is about. A file deleted but not yet committed is not copied, as the check does not see it.
  */
 const aCopy = (): string => {
   const root = mkdtempSync(join(tmpdir(), 'check-docs-'));
   copies.push(root);
-  const tracked = Bun.spawnSync(['git', 'ls-files']).stdout.toString().trim().split('\n');
-  for (const file of tracked) cpSync(file, join(root, file));
+  const files = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard'])
+    .stdout.toString()
+    .trim()
+    .split('\n');
+  for (const file of files) if (existsSync(file)) cpSync(file, join(root, file));
   return root;
+};
+
+/** The decision record's file for a number, found by its name (`docs/decisions/<category>/D-<n>-….md`). */
+const decisionFile = (root: string, number: number): string => {
+  const record = join(root, 'docs/decisions');
+  for (const category of readdirSync(record, { withFileTypes: true })) {
+    if (!category.isDirectory()) continue;
+    const name = readdirSync(join(record, category.name)).find((file) =>
+      file.startsWith(`${DECISION}${String(number)}-`),
+    );
+    if (name !== undefined) return `docs/decisions/${category.name}/${name}`;
+  }
+  throw new Error(`no file for ${DECISION}${String(number)}`);
 };
 
 const edit = (root: string, file: string, change: (text: string) => string): void => {
@@ -124,7 +150,7 @@ describe('the document check', () => {
 
   test('fails on a gap in decision numbering', () => {
     const root = aCopy();
-    edit(root, 'docs/DECISIONS.md', (text) => text.replace(/^### D-2\. /m, '### Formerly D-2. '));
+    rmSync(join(root, decisionFile(root, 2)));
     const { status, output } = run(root);
     expect(status).toBe(1);
     expect(output).toContain('D-numbering has a gap');
@@ -141,14 +167,21 @@ describe('the document check', () => {
     expect(output).toContain('docs/CONFIG.md');
   });
 
-  test('fails when decisions are out of order, which the count cannot see', () => {
-    const root = aCopy();
-    edit(root, 'docs/DECISIONS.md', (text) =>
-      text.replace(/^## Part D/m, '### D-1. A late copy\n\n## Part D'),
-    );
-    const { status, output } = run(root);
+  test('fails when a decision file’s name and heading disagree, or a file is not a decision’s, or two hold one number', () => {
+    const renamed = aCopy();
+    const file = decisionFile(renamed, 3);
+    edit(renamed, file, (text) => text.replace(/^# D-3\. /, `# ${DECISION}4. `));
+    expect(run(renamed).output).toContain("a decision's file name and its heading disagree");
+
+    const stray = aCopy();
+    writeFileSync(join(stray, 'docs/decisions/product/notes.md'), '# Notes\n');
+    expect(run(stray).output).toContain('is not named D-<n>-<words>.md');
+
+    const twice = aCopy();
+    cpSync(join(twice, file), join(twice, 'docs/decisions/data', `${DECISION}3-a-second-copy.md`));
+    const { status, output } = run(twice);
     expect(status).toBe(1);
-    expect(output).toContain('decisions are out of order');
+    expect(output).toContain('two files hold the same decision');
   });
 
   test('fails when a migration file is missing from SCHEMA.md', () => {
@@ -183,15 +216,21 @@ describe('the document check', () => {
   });
 
   describe('the decision record', () => {
-    // One past the last decision, spelled so that the source citation check does not read it as a citation of one that is not there.
-    const NEXT = 296;
+    // A number no decision has, spelled so that the source citation check does not read it as a citation of one that is not there.
+    const NEXT = 9000;
+    const decision = (header: string, body = '**Cost of reversing.** None.'): string =>
+      `# ${DECISION}${String(NEXT)}. ${header}\n\n${body}\n`;
+    const add = (root: string, text: string): void => {
+      writeFileSync(
+        join(root, 'docs/decisions/engineering', `${DECISION}${String(NEXT)}-a-test.md`),
+        text,
+      );
+    };
     const append = (text: string): ReturnType<typeof run> => {
       const root = aCopy();
-      edit(root, 'docs/DECISIONS.md', (before) => `${before}\n${text}\n`);
+      add(root, text);
       return run(root);
     };
-    const decision = (header: string, body = '**Cost of reversing.** None.'): string =>
-      `### D-${String(NEXT)}. ${header}\n\n${body}`;
 
     test('fails when a decision amends another that does not point back', () => {
       const { status, output } = append(decision('A change — amends D-5'));
@@ -201,12 +240,10 @@ describe('the document check', () => {
 
     test('passes an amendment the amended decision names', () => {
       const root = aCopy();
-      edit(
-        root,
-        'docs/DECISIONS.md',
-        (text) =>
-          `${text.replace(/(^### D-5\. .*$)/m, `$1\n\n*Amended by D-${String(NEXT)}: x.*`)}\n${decision('A change — amends D-5')}\n`,
+      edit(root, decisionFile(root, 5), (text) =>
+        text.replace(/(^# D-5\. .*$)/m, `$1\n\n*Amended by ${DECISION}${String(NEXT)}: x.*`),
       );
+      add(root, decision('A change — amends D-5'));
       expect(run(root).output).not.toContain('does not name it');
     });
 
@@ -218,9 +255,7 @@ describe('the document check', () => {
 
     test('fails when a decision sits under the open questions', () => {
       const root = aCopy();
-      edit(root, 'docs/DECISIONS.md', (text) =>
-        text.replace('## Part E — ', `${decision('Misplaced')}\n\n## Part E — `),
-      );
+      edit(root, 'docs/decisions/open-questions.md', (text) => `${text}\n${decision('Misplaced')}`);
       const { status, output } = run(root);
       expect(status).toBe(1);
       expect(output).toContain('a decision is filed under the open questions');

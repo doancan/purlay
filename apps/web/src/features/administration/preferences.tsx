@@ -41,6 +41,8 @@ const PreferencesForm = ({
   const [dirty, setDirty] = useState(false);
   const [name, setName] = useState(current.displayName);
   const [support, setSupport] = useState(current.supportUrl ?? '');
+  const [privacy, setPrivacy] = useState(current.privacyUrl ?? '');
+  const [terms, setTerms] = useState(current.termsUrl ?? '');
   const [domains, setDomains] = useState(current.allowedEmailDomains.join(', '));
   const [approval, setApproval] = useState(current.requireAccountApproval);
   const [busy, setBusy] = useState(false);
@@ -51,13 +53,22 @@ const PreferencesForm = ({
     if (dirty) return;
     setName(current.displayName);
     setSupport(current.supportUrl ?? '');
+    setPrivacy(current.privacyUrl ?? '');
+    setTerms(current.termsUrl ?? '');
     setDomains(current.allowedEmailDomains.join(', '));
     setApproval(current.requireAccountApproval);
   }, [current, dirty]);
   const save = async (): Promise<void> => {
     if (busy) return;
     const input = identity
-      ? { displayName: name.trim(), supportUrl: support.trim() || null }
+      ? {
+          displayName: name.trim(),
+          supportUrl: support.trim() || null,
+          ...(privacy.trim() === (current.privacyUrl ?? '')
+            ? {}
+            : { privacyUrl: privacy.trim() || null }),
+          ...(terms.trim() === (current.termsUrl ?? '') ? {} : { termsUrl: terms.trim() || null }),
+        }
       : {
           allowedEmailDomains: [
             ...new Set(
@@ -129,6 +140,30 @@ const PreferencesForm = ({
                   setDirty(true);
                   setSaved(false);
                   setSupport(event.target.value);
+                }}
+              />
+              <TextField
+                label={t('admin.identity.privacy')}
+                hint={t('admin.identity.legalHint')}
+                value={privacy}
+                readOnly={busy}
+                maxLength={2048}
+                onChange={(event) => {
+                  setDirty(true);
+                  setSaved(false);
+                  setPrivacy(event.target.value);
+                }}
+              />
+              <TextField
+                label={t('admin.identity.terms')}
+                hint={t('admin.identity.legalHint')}
+                value={terms}
+                readOnly={busy}
+                maxLength={2048}
+                onChange={(event) => {
+                  setDirty(true);
+                  setSaved(false);
+                  setTerms(event.target.value);
                 }}
               />
             </>

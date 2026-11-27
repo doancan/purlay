@@ -15,16 +15,10 @@ import { GoogleCard } from './server-google';
 import { OidcCard } from './server-oidc';
 import { GitHubAppCard } from './server-github-app';
 import { CreatorsCard, PolicyCard, SignInPolicyCard, SessionLifetimeCard } from './server-policies';
-import { AccountsCard } from './server-accounts';
 import { describe, expect, test } from 'bun:test';
 import { act, within } from '@testing-library/react';
 import type { BoundFunctions, queries } from '@testing-library/react';
-import {
-  PROBE_REASONS,
-  type ProbeResult,
-  type ServerAccount,
-  type ServerSettingsAnswer,
-} from '@purlay/types';
+import { PROBE_REASONS, type ProbeResult, type ServerSettingsAnswer } from '@purlay/types';
 import { en } from '../../../i18n/catalogue/en';
 import { tr } from '../../../i18n/catalogue/tr';
 import { expectNoAxeViolations } from '../../../testing/axe';
@@ -114,8 +108,6 @@ const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
   disconnect: unexpected('disconnect'),
   policy: unexpected('policy'),
   creators: unexpected('creators'),
-  // The Accounts card asks on every visit: nobody, unless a test says.
-  accounts: () => Promise.resolve([]),
   suspend: unexpected('suspend'),
   lift: unexpected('lift'),
   ...over,
@@ -137,7 +129,6 @@ const ProviderCards = (): React.JSX.Element =>
             <SignInPolicyCard view={view} />
             <SessionLifetimeCard view={view} />
             <CreatorsCard view={view} />
-            <AccountsCard />
           </>
         )}
       </ServerSettingsState>
@@ -1170,7 +1161,7 @@ describe('Settings → Server — Google (D-251)', () => {
       'Google refused this client ID and secret. Check both against the Google Cloud console.',
     );
     expect(tr[words.what]).toBe(
-      'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştır.',
+      'Google bu istemci kimliğini ve gizli anahtarını reddetti. İkisini de Google Cloud konsolundakilerle karşılaştırın.',
     );
     for (const key of [words.what, ...words.fix]) expect(tr[key]).not.toBe(en[key]);
   });
@@ -1255,181 +1246,6 @@ describe('Settings → Server — Google (D-251)', () => {
   test('has no axe violations connected or not', async () => {
     const view = await render(aClient({ settings: () => Promise.resolve(WITH_GOOGLE) }));
     await expectNoAxeViolations(view.getByRole('main'));
-    view.unmount();
-  });
-});
-
-describe('Settings → Server → Accounts (D-233)', () => {
-  const ADA: ServerAccount = {
-    id: '00000000-0000-4000-8000-00000000a0a1',
-    username: 'ada',
-    displayName: 'Ada Lovelace',
-    email: 'ada@example.test',
-    isServerAdmin: false,
-    suspendedAt: null,
-  };
-  const GRACE: ServerAccount = {
-    ...ADA,
-    id: '00000000-0000-4000-8000-00000000a0a2',
-    username: 'grace',
-    displayName: 'Grace Hopper',
-    email: null,
-    suspendedAt: '2026-10-30T08:00:00.000Z',
-  };
-  const ROOT: ServerAccount = {
-    ...ADA,
-    id: '00000000-0000-4000-8000-00000000a0a3',
-    username: 'root',
-    displayName: 'The administrator',
-    isServerAdmin: true,
-  };
-  const rowOf = (view: View, name: string): Scope =>
-    within(
-      card(view, 'Accounts')
-        .getAllByRole('listitem')
-        .find((row) => row.textContent.includes(name)) ?? document.body,
-    );
-
-  test('lists each account with what it is: an administrator has no button, a suspended one says since when', async () => {
-    const view = await render(aClient({ accounts: () => Promise.resolve([ADA, GRACE, ROOT]) }));
-    expect(rowOf(view, 'Ada Lovelace').getByText('@ada · ada@example.test')).toBeDefined();
-    expect(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' })).toBeDefined();
-    expect(rowOf(view, 'Grace Hopper').getByText(/^Suspended /)).toBeDefined();
-    expect(
-      rowOf(view, 'Grace Hopper').getByRole('button', { name: 'Lift suspension' }),
-    ).toBeDefined();
-    expect(rowOf(view, 'The administrator').getByText('Administers this server')).toBeDefined();
-    expect(rowOf(view, 'The administrator').queryByRole('button')).toBeNull();
-    await expectNoAxeViolations(
-      card(view, 'Accounts').getByRole('list').parentElement ?? document.body,
-    );
-    view.unmount();
-  });
-
-  test('suspending asks once more, in words; Cancel suspends nobody, Suspend does and reads the list again', async () => {
-    let accounts = [ADA];
-    const suspended: string[] = [];
-    const view = await render(
-      aClient({
-        accounts: () => Promise.resolve(accounts),
-        suspend: (userId) => {
-          suspended.push(userId);
-          accounts = [{ ...ADA, suspendedAt: '2026-10-31T08:00:00.000Z' }];
-          return Promise.resolve();
-        },
-      }),
-    );
-    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
-    expect(
-      rowOf(view, 'Ada Lovelace').getByText(
-        'Suspend Ada Lovelace? They are signed out on every device and cannot sign in until you lift it.',
-      ),
-    ).toBeDefined();
-    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Cancel' }));
-    expect(suspended).toEqual([]);
-    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
-    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
-    await settle();
-    expect(suspended).toEqual([ADA.id]);
-    expect(
-      rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Lift suspension' }),
-    ).toBeDefined();
-    view.unmount();
-  });
-
-  test('an account suspension cannot be cancelled or overlap another account action while pending', async () => {
-    const view = await render(
-      aClient({
-        accounts: () => Promise.resolve([ADA, GRACE]),
-        suspend: () => new Promise(() => undefined),
-      }),
-    );
-    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
-    await person().click(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' }));
-    expect(
-      rowOf(view, 'Ada Lovelace').getByRole<HTMLButtonElement>('button', { name: 'Cancel' })
-        .disabled,
-    ).toBe(true);
-    expect(
-      rowOf(view, 'Grace Hopper').getByRole<HTMLButtonElement>('button', {
-        name: 'Lift suspension',
-      }).disabled,
-    ).toBe(true);
-    view.unmount();
-  });
-
-  test('accounts left over from a previous search cannot be suspended while new results are pending', async () => {
-    const view = await render(
-      aClient({
-        accounts: (words) => (words === '' ? Promise.resolve([ADA]) : new Promise(() => undefined)),
-      }),
-    );
-    await person().type(card(view, 'Accounts').getByRole('searchbox'), 'grace');
-    await settle();
-    expect(
-      rowOf(view, 'Ada Lovelace').getByRole<HTMLButtonElement>('button', { name: 'Suspend' })
-        .disabled,
-    ).toBe(true);
-    view.unmount();
-  });
-
-  test('lifting asks nothing; a refusal is said on the card', async () => {
-    const lifted: string[] = [];
-    const view = await render(
-      aClient({
-        accounts: () => Promise.resolve([GRACE]),
-        lift: (userId) => {
-          lifted.push(userId);
-          return Promise.reject(new SetupFailure(500, 'INTERNAL', 'no'));
-        },
-      }),
-    );
-    await person().click(
-      rowOf(view, 'Grace Hopper').getByRole('button', { name: 'Lift suspension' }),
-    );
-    await settle();
-    expect(lifted).toEqual([GRACE.id]);
-    expect(card(view, 'Accounts').getAllByRole('alert').length).toBeGreaterThan(0);
-    view.unmount();
-  });
-
-  test('a list that fails to load is said, with a Retry that reads it again', async () => {
-    let asks = 0;
-    const view = await render(
-      aClient({
-        accounts: () => {
-          asks += 1;
-          return asks === 1
-            ? Promise.reject(new SetupFailure(500, 'INTERNAL', 'no'))
-            : Promise.resolve([ADA]);
-        },
-      }),
-    );
-    expect(card(view, 'Accounts').getAllByRole('alert').length).toBeGreaterThan(0);
-    await person().click(card(view, 'Accounts').getByRole('button', { name: 'Retry' }));
-    await settle();
-    expect(rowOf(view, 'Ada Lovelace').getByRole('button', { name: 'Suspend' })).toBeDefined();
-    view.unmount();
-  });
-
-  test('what is typed is what is searched for; nothing found is said', async () => {
-    const asked: string[] = [];
-    const view = await render(
-      aClient({
-        accounts: (words) => {
-          asked.push(words);
-          return Promise.resolve(words === '' ? [ADA] : []);
-        },
-      }),
-    );
-    await person().type(
-      card(view, 'Accounts').getByLabelText('Find by name, username or address'),
-      'zzz',
-    );
-    await settle();
-    expect(asked[0]).toBe('');
-    expect(asked.at(-1)).toBe('zzz');
-    expect(card(view, 'Accounts').getByText('No account matches.')).toBeDefined();
     view.unmount();
   });
 });
@@ -1980,18 +1796,6 @@ describe('Settings → Server confirmed changes and dismissed forms', () => {
     await person().click(section.getByRole('button', { name: 'Save' }));
     await settle();
     expect(section.getByRole<HTMLButtonElement>('button', { name: 'Save' }).disabled).toBe(true);
-    view.unmount();
-  });
-
-  test('an account read failure explains that it could not load the list', async () => {
-    const view = await render(
-      aClient({ accounts: () => Promise.reject(new SetupFailure(503, 'NETWORK', 'offline')) }),
-    );
-    const section = card(view, 'Accounts');
-    expect(section.queryByText('Nothing was changed. Try again.') === null).toBe(true);
-    expect(
-      section.queryByText('Could not read the accounts. Retry to get the current list.') !== null,
-    ).toBe(true);
     view.unmount();
   });
 });

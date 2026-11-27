@@ -348,7 +348,7 @@ entity · magic-link auth in MVP · GitHub webhook feeds in MVP · Tauri in MVP 
 One question is deliberately unresolved, O-4; it is closed by measuring Phase 1 under load.
 Each is recorded with its context, its candidate answers and the phase it must be decided in.
 
-> **Single source of truth:** `DECISIONS.md` Part D. Summarised here only as a pointer —
+> **Single source of truth:** [`decisions/open-questions.md`](decisions/open-questions.md). Summarised here only as a pointer —
 > ~~O-1 message editing~~ (closed by D-103) · ~~O-2 invitations~~ (closed by D-115) · ~~O-3 retention & export~~ (closed by D-27) ·
 > ~~O-6 the markdown packages~~ (closed by D-101) · ~~O-7 the palette's base~~ (closed by D-98 §7) ·
 > ~~O-5 list virtualization~~ (closed by D-199) · O-4 rate limiting.

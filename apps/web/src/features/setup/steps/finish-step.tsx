@@ -38,8 +38,10 @@ const Row = ({
     <span className={ok ? 'text-success-text' : 'text-ink-muted'}>
       <Icon name={ok ? 'confirm' : 'close'} size="md" />
     </span>
-    <span className={cn(ok ? 'text-ink' : 'text-ink-muted')}>{label}</span>
-    {value !== undefined && <span className="text-label text-ink-muted">· {value}</span>}
+    <span className={cn(ok ? 'text-ink' : 'text-ink-muted')}>
+      {label}
+      {value !== undefined && <span className="text-ink-muted"> · {value}</span>}
+    </span>
   </li>
 );
 

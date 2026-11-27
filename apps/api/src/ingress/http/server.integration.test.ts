@@ -33,6 +33,8 @@ import {
   cloneIntegrationDatabase,
   closeIntegrationDatabase,
   type Executor,
+  type Selectable,
+  type ServerAuditLog,
   DROP_HOOK_MS,
 } from '@purlay/db';
 import {
@@ -3210,7 +3212,108 @@ describe('integration — admission and server identity', () => {
     );
     expect((await trail(server)).map((row) => row.action)).toContain('server.account_approved');
     const publicInfo = await call(server, 'GET', '/api/instance');
-    expect(await publicInfo.json()).toEqual(preferences);
+    expect(await publicInfo.json()).toEqual({ ...preferences, privacyUrl: null, termsUrl: null });
+  });
+
+  test('only a server administrator may publish or clear the HTTPS legal addresses', async () => {
+    const server = await aServer();
+    const cookie = server.admin.cookie;
+    const path = '/api/server/preferences';
+    const privacyUrl = 'https://operator.example.test/privacy?lang=en#cookies';
+    const termsUrl = 'https://operator.example.test/terms';
+    const publicInfo = async (): Promise<unknown> => {
+      const response = await call(server, 'GET', '/api/instance');
+      expect(response.status).toBe(200);
+      return await response.json();
+    };
+    const identityAudit = async (): Promise<Selectable<ServerAuditLog>[]> =>
+      await server.db
+        .selectFrom('server_audit_log')
+        .selectAll()
+        .where('action', '=', 'server.identity_changed')
+        .orderBy('id')
+        .execute();
+
+    const defaults = await publicInfo();
+    expect(defaults).toMatchObject({ privacyUrl: null, termsUrl: null });
+    const before = (await identityAudit()).length;
+    for (const refusedCookie of [undefined, server.member.cookie, server.owner.cookie]) {
+      expect((await call(server, 'GET', path, { cookie: refusedCookie })).status).toBe(404);
+      expect(
+        (
+          await call(server, 'POST', path, {
+            cookie: refusedCookie,
+            body: { privacyUrl, termsUrl },
+          })
+        ).status,
+      ).toBe(404);
+    }
+    expect(await publicInfo()).toEqual(defaults);
+    expect(await identityAudit()).toHaveLength(before);
+
+    const refused = await call(server, 'POST', path, {
+      cookie,
+      body: { privacyUrl, termsUrl: 'mailto:help@example.test' },
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: { details: { fields: { termsUrl: 'Use an HTTPS address.' } } },
+    });
+    for (const invalid of [
+      'http://operator.example.test/privacy',
+      'https://name:secret@operator.example.test/privacy',
+      '//operator.example.test/privacy',
+      'https:operator.example.test/privacy',
+      'https://operator.example.test/pri vacy',
+      'https://',
+    ]) {
+      const answer = await call(server, 'POST', path, { cookie, body: { privacyUrl: invalid } });
+      expect(answer.status).toBe(400);
+      expect(await answer.json()).toMatchObject({
+        error: { details: { fields: { privacyUrl: 'Use an HTTPS address.' } } },
+      });
+    }
+    expect(await publicInfo()).toEqual(defaults);
+    expect(await identityAudit()).toHaveLength(before);
+
+    expect(
+      (
+        await call(server, 'POST', path, {
+          cookie,
+          body: { privacyUrl: ` ${privacyUrl} `, termsUrl },
+        })
+      ).status,
+    ).toBe(204);
+    expect(
+      (await call(server, 'POST', path, { cookie, body: { privacyUrl, termsUrl } })).status,
+    ).toBe(204);
+    const identity = await publicInfo();
+    expect(identity).toMatchObject({ privacyUrl, termsUrl });
+    expect(await (await call(server, 'GET', path, { cookie })).json()).toEqual(identity);
+    const edited = await identityAudit();
+    expect(edited).toHaveLength(before + 1);
+    expect(edited.at(-1)?.actor_user_id).toBe(server.admin.userId);
+    expect(JSON.stringify(edited)).not.toContain(privacyUrl);
+    expect(JSON.stringify(edited)).not.toContain(termsUrl);
+
+    expect(
+      (
+        await call(server, 'POST', path, {
+          cookie,
+          body: { supportUrl: 'mailto:help@example.test' },
+        })
+      ).status,
+    ).toBe(204);
+    expect(await publicInfo()).toMatchObject({
+      privacyUrl,
+      termsUrl,
+      supportUrl: 'mailto:help@example.test',
+    });
+    expect((await call(server, 'POST', path, { cookie, body: { privacyUrl: null } })).status).toBe(
+      204,
+    );
+    expect(await publicInfo()).toMatchObject({ privacyUrl: null, termsUrl });
+    expect(await identityAudit()).toHaveLength(before + 3);
   });
 
   test('a domain restriction is enforced at account creation, cannot be bypassed by a client, and matches exact domains', async () => {

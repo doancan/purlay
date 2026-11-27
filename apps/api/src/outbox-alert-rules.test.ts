@@ -54,6 +54,14 @@ describe('the outbox and find alert rules', () => {
     expect(stale?.expr).toContain(`> ${String(OUTBOX_STALE_AFTER_SECONDS)}`);
   });
 
+  test('a fact held on purpose pages nobody, and one that expired undelivered is a warning (D-353)', () => {
+    for (const rule of rules().filter(({ labels }) => labels.severity === 'page'))
+      expect(rule.expr).not.toContain('purlay_outbox_held');
+    const expired = rules().find(({ alert }) => alert === 'PurlayOutboxFactsExpired');
+    expect(expired?.labels.severity).toBe('warning');
+    expect(expired?.expr).toContain('max by (module, fact) (increase(purlay_outbox_expired_total');
+  });
+
   test('the find’s rule watches the sources that were asked and failed them, never one that is off', () => {
     const find = rules().find(({ alert }) => alert === 'PurlaySearchSourceSkipped');
     // Every reading of the counter, with whatever selector follows it: each must leave `off` out.

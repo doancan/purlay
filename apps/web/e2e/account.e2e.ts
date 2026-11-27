@@ -81,7 +81,7 @@ test.describe('where you are signed in', () => {
     await card.getByRole('button', { name: 'Sign out' }).click();
     await expect(rows).toHaveCount(1);
     await expect(here.getByText('Web browser was signed out.')).toBeVisible();
-    await expect(card.getByText('You are not signed in anywhere else.')).toBeVisible();
+    await expect(card.getByText('You are not signed in anywhere else')).toBeVisible();
 
     // The other browser was told its session ended; this one is still signed in, read again.
     await expect(there).toHaveURL(/\/sign-in\?reason=ended$/);

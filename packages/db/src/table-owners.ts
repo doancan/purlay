@@ -82,6 +82,8 @@ export const TABLE_OWNERS = {
   workspace_modules: 'core',
   // Which fact was delivered to which consumer, kept after the outbox's row is swept, where the operator turned it on (#1305).
   outbox_ledger: 'core',
+  // How many facts the sweep gave up on at their expiry, by consumer and type: the counter the scheduler's process cannot keep (D-353).
+  outbox_expired: 'core',
   // What the operator lets one workspace do beyond or short of the build's defaults: a limit's override (#1306).
   workspace_quotas: 'core',
   workspaces: 'core',

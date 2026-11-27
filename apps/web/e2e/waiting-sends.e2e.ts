@@ -7,18 +7,15 @@
  * The upload is held at the network (`page.route`) until the person has left, so "after they left"
  * is a fact of the test and not a race it hopes to win.
  */
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { navLink } from './support';
+import { navLink, rowWith } from './support';
 
 /** A 2×2 PNG: small, and a real image the API decodes. */
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==',
   'base64',
 );
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
 
 /** Holds every upload the page starts until `release` is called; says when one has been asked for. */
 const holdUploads = async (

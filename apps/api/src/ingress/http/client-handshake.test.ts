@@ -10,6 +10,7 @@ import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { unconnectedDatabase } from '@purlay/db';
 import { CONTRACT_VERSION, ClientInfo, ErrorResponse } from '@purlay/types';
+import { compositionFor } from '../../composition';
 import { createApp } from './app';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import type { Config } from '../../platform/config';
@@ -49,6 +50,7 @@ describe('GET /api/client', () => {
       expect(Value.Check(ClientInfo, body)).toBe(true);
       expect(body).toMatchObject({
         capabilities: {
+          personalExportDownload: true,
           notificationTypeFilters: true,
           scheduledMessages: true,
           messageReminders: true,
@@ -60,6 +62,17 @@ describe('GET /api/client', () => {
     }
   });
 
+  test('the native personal archive claim is offered by the core server', async () => {
+    const app = createApp(
+      testDependencies({ database: unconnectedDatabase(), composition: compositionFor('none') }),
+    );
+    const response = await app.handle(new Request('https://purlay.test/api/client'));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      capabilities: { personalExportDownload: true, scheduledMessages: false },
+    });
+  });
+
   test('the new schema accepts old handshakes and unknown capabilities; old response readers accept the addition', async () => {
     const body = (await (await server()('/api/client')).json()) as ClientInfo;
     const legacy = { ...body };
@@ -69,6 +82,7 @@ describe('GET /api/client', () => {
     for (const capabilities of [
       {},
       { notificationTypeFilters: false },
+      { personalExportDownload: false },
       { futureFeature: true },
       { futureFeature: { version: 2 } },
     ]) {
@@ -80,6 +94,7 @@ describe('GET /api/client', () => {
       'enabled',
       { notificationTypeFilters: 'true' },
       { notificationTypeFilters: 1 },
+      { personalExportDownload: 'true' },
     ]) {
       expect(Value.Check(ClientInfo, { ...legacy, capabilities })).toBe(false);
     }

@@ -16,7 +16,7 @@ import { Icon } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
-import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
+import { LoadingStatus, SkeletonRow } from '../../../ui/skeleton';
 import { ErrorState } from '../../../ui/states';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useNowMinute } from '../channel/now-minute';
@@ -65,7 +65,8 @@ const PinRow = ({
   const { message } = pin;
   const name = authorOf(message, t('user.erased')).displayName;
   return (
-    <li className="flex flex-col gap-2 rounded-lg px-2 py-2 hover:bg-surface-200">
+    // A pin is a message: it answers the pointer as a message does, so the ghost buttons on it still show theirs.
+    <li className="flex flex-col gap-2 rounded-lg px-2 py-2 transition-colors duration-hover ease-standard hover:bg-surface-050">
       <div className="flex min-w-0 items-start gap-2">
         <Avatar name={name} username={authorOf(message, t('user.erased')).username} size="sm" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -87,7 +88,8 @@ const PinRow = ({
           </span>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2 pl-8">
+      {/* Inset by the avatar and its gap less a ghost button's own padding: the labels start on the message's text edge. */}
+      <div className="flex flex-wrap gap-1 pl-4">
         {/* The message's own address (D-149): the feed opens around it, or its thread does. */}
         <Button
           variant="ghost"
@@ -139,23 +141,23 @@ const PinsPanelView = ({
   let body: React.JSX.Element;
   if (query.isPending && pins.length === 0) {
     body = (
-      <LoadingStatus label={t('pins.loading')} className="flex flex-col gap-3 p-4">
+      <LoadingStatus label={t('pins.loading')} className="flex flex-col gap-1 px-2 py-2">
         {[0, 1, 2].map((row) => (
-          <div key={row} className="flex flex-col gap-2">
-            <Skeleton className="w-members" />
-            <Skeleton className="w-sidebar" />
-          </div>
+          <SkeletonRow key={row} />
         ))}
       </LoadingStatus>
     );
   } else if (query.isError && query.data === undefined) {
     body = (
-      <ErrorState
-        title={t('pins.error.title')}
-        body={t('pins.error.body')}
-        retryLabel={t('common.retry')}
-        onRetry={readAgain}
-      />
+      // Inset as the panel's rows are: unframed, the failure starts where their words do, not at the panel's edge.
+      <div className="px-4">
+        <ErrorState
+          title={t('pins.error.title')}
+          body={t('pins.error.body')}
+          retryLabel={t('common.retry')}
+          onRetry={readAgain}
+        />
+      </div>
     );
   } else if (pins.length === 0) {
     body = <PanelEmpty glyph="pin" title={t('pins.empty.title')} body={t('pins.empty.body')} />;

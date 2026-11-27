@@ -2,12 +2,12 @@
 
 Rules for anyone working in this repository, human or AI.
 
-**Read before writing code.** `docs/OVERVIEW.md` orients you; `docs/DECISIONS.md` is the
+**Read before writing code.** `docs/OVERVIEW.md` orients you; the decision record, `docs/decisions/`, is the
 authority on *why*; `docs/PRD.md` fixes scope; `docs/ARCHITECTURE.md` and `docs/SCHEMA.md` fix
 structure and data. What is next lives in GitHub Issues and the project board, not in a file
 (D-32).
 
-**Conflict rule:** if two documents disagree, `DECISIONS.md` wins and the other is a bug. Fix
+**Conflict rule:** if two documents disagree, the decision record wins and the other is a bug. Fix
 it in the same change. Never work around a documentation contradiction silently — that is how
 the first four drafts of this project ended up contradicting each other at the schema level.
 
@@ -581,14 +581,15 @@ what let it through, not who.
    **In progress** (it has an assignee), **In review** (an open pull request closes it, so write
    `Closes #N` in the pull request body) and **Done** (D-313).
 
-   Two shared files collide on every rebase. A `D-` number in `docs/DECISIONS.md` is taken when the pull
-   request is ready to merge: rebase on `main` and use the next free number, keeping the other pull
-   request's entry. A migration number follows the same rule, which is why only one `database` issue
+   A decision is a file of its own (`docs/decisions/<category>/D-<n>-….md`, D-345), so two pull requests no
+   longer edit one file, but they can take one number: the number is taken when the pull request is ready to
+   merge. Rebase on `main`, and if `D-<n>` is taken, rename the file and its heading to the next free number and
+   run `bun run decisions:index`. A migration number follows the same rule, which is why only one `database` issue
    is under way at a time.
 3. **Minimal delta.** Only the code the task requires. Do not refactor unrelated files.
 4. **Update the documents in the same change.** Schema change → `SCHEMA.md`. Protocol change →
-   `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision in
-   `DECISIONS.md`, with what you rejected and why.
+   `ARCHITECTURE.md`. Scope change → `PRD.md`. A non-obvious choice → a new decision,
+   `bun run decision:new <category> <title>` (`docs/decisions/README.md`), with what you rejected and why.
 5. **Verify.** `bun run verify`, with the database (§2). Paste real output.
 6. **Log it.** Notable changes go under *Unreleased* in `docs/changelog/changes.md`, in the shape its header describes.
 
@@ -604,7 +605,7 @@ people to sign in as. Set both and the same command signs in through GitHub.
 — not when it runs. A milestone is done when its exit criterion is *demonstrated*, not when the
 issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issues replaced.)
 7. **When the spec is silent, stop and ask.** Do not invent behaviour and do not guess at an
-   undefined edge case. The open questions are listed in `DECISIONS.md` Part D — if your task
+   undefined edge case. The open questions are listed in `docs/decisions/open-questions.md` — if your task
    hits one, that is a decision to be made, not a gap to be filled quietly.
 
 ---
@@ -672,7 +673,7 @@ issue list is empty. (Inherited from the retired `ROADMAP.md`, which GitHub Issu
 
 ## 9. Reminders
 
-1. `DECISIONS.md` wins every documentation conflict.
+1. The decision record (`docs/decisions/`) wins every documentation conflict.
 2. Tenant isolation is checked on every endpoint, and returns 404.
 3. Documentation is updated in the same change as the code.
 4. Scope is the current phase — nothing from a later one.

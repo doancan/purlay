@@ -5,6 +5,7 @@
  * in a rolling deploy: two older nodes never run a fact twice, they leave the newer shape pending with no try spent, and the
  * newer node takes it when it arrives.
  */
+import { CORE_FACTS } from '@purlay/types';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import {
   CLONE_HOOK_MS,
@@ -89,8 +90,8 @@ const runWorkers = async (
 };
 
 describe('integration: nodes of two releases run the same consumer', () => {
-  const OLDER_FACTS = [NOTE_CREATED, NOTE_PINNED];
-  const NEWER_FACTS = [NOTE_CREATED_V2, NOTE_PINNED];
+  const OLDER_FACTS = [...CORE_FACTS, NOTE_CREATED, NOTE_PINNED];
+  const NEWER_FACTS = [...CORE_FACTS, NOTE_CREATED_V2, NOTE_PINNED];
   const PER_SHAPE = 25;
 
   test('deliver every fact once, the newer shape only by the node that knows it, and an older node leaves it pending until then', async () => {

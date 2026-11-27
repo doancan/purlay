@@ -19,6 +19,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -38,6 +39,17 @@ import {
 
 const ROOT = join(import.meta.dir, '../../../..');
 const COPY = mkdtempSync(join(tmpdir(), 'module-new-'));
+/** The number the first module's decision is made under: one past the last decision in the record before the run. */
+const NEXT_DECISION =
+  Math.max(
+    0,
+    ...readdirSync(join(ROOT, 'docs/decisions'), { recursive: true, encoding: 'utf8' }).flatMap(
+      (path) => {
+        const number = /(?:^|\/)D-(\d+)-[^/]*\.md$/.exec(path)?.[1];
+        return number === undefined ? [] : [Number(number)];
+      },
+    ),
+  ) + 1;
 const SLOW_MS = 900_000;
 
 let own: ClonedDatabase;
@@ -115,9 +127,14 @@ const writeDeclarations = (): void => {
   authorEdit(
     'packages/types/src/zz.ts',
     'export const ZZ_FACTS: readonly FactDeclaration[] = [];',
-    `export const ZZ_FACTS: readonly FactDeclaration[] = [
-  defineFact({ type: 'zz.made', owner: 'zz', absent: 'drop', schema: Type.Object({ id: Uuid }) }),
-];
+    `export const ZZ_MADE = defineFact({
+  type: 'zz.made',
+  owner: 'zz',
+  absent: 'drop',
+  schema: Type.Object({ id: Uuid, label: Type.String({ maxLength: 80 }) }),
+});
+
+export const ZZ_FACTS: readonly FactDeclaration[] = [ZZ_MADE];
 
 export const ZZ_NOTIFICATION_KINDS = [
   { type: 'zz_noticed', needsYou: true, pushed: true, mailed: false },
@@ -143,34 +160,35 @@ export const zzModule = {`,
   );
   authorEdit(
     'apps/api/src/features/zz/module.ts',
-    '    jobs: [],\n  },',
-    `    jobs: [],
-    publishes: ['zz.made'],
+    '    publishes: [],\n    consumes: [],\n  },',
+    `    publishes: ['zz.made'],
+    consumes: [],
     notifications: ZZ_NOTIFICATION_KINDS,
     searchSources: ['zz'],
   },
   noticeWords: zzNoticeWords,
   searchSources: [zzSearchSource],`,
   );
+  // The consumer as the scaffold's `facts.ts` shows it: a handler typed by the declaration, with no cast.
   authorEdit(
-    'apps/api/src/features/yy/module.ts',
-    "import { yyBudget } from './budget';",
-    `import type { FactConsumer } from '../../platform/fact-consumers';
-import { yyBudget } from './budget';`,
+    'apps/api/src/features/yy/facts.ts',
+    "import type { FactConsumers } from '../../platform/fact-consumers';",
+    `import { ZZ_MADE } from '@purlay/types';
+import { consumerOf, type FactConsumers } from '../../platform/fact-consumers';`,
+  );
+  authorEdit(
+    'apps/api/src/features/yy/facts.ts',
+    'export const yyFactConsumers: FactConsumers = {};',
+    `export const yyFactConsumers: FactConsumers = {
+  ...consumerOf(ZZ_MADE, (fact) =>
+    Promise.resolve(fact.payload.label.length > 0 && fact.payload.id !== fact.workspaceId ? 'done' : 'skipped'),
+  ),
+};`,
   );
   authorEdit(
     'apps/api/src/features/yy/module.ts',
-    'export const yyModule = {',
-    `const yyFactConsumers: Readonly<Record<string, FactConsumer>> = {
-  'zz.made': () => Promise.resolve('done'),
-};
-
-export const yyModule = {`,
-  );
-  authorEdit(
-    'apps/api/src/features/yy/module.ts',
-    '    jobs: [],\n  },',
-    "    jobs: [],\n    consumes: ['zz.made'],\n  },\n  factConsumers: yyFactConsumers,",
+    '    consumes: [],\n',
+    "    consumes: ['zz.made'],\n",
   );
 };
 
@@ -312,9 +330,17 @@ describe('integration: the paved road of a new module', () => {
         .output.split('\n')
         .filter((line) => line !== '')
         .map((line) => line.split(':')[0]);
+      // Each module's decision is a file of its own (D-345): zz takes the next number, yy the one after; the record's
+      // index lists each by its title, which is still the placeholder until its author writes it.
       expect(owed).toEqual([
-        ...Array<string>(10).fill('docs/DECISIONS.md'),
         ...Array<string>(2).fill('docs/MODULES.md'),
+        ...Array<string>(2).fill('docs/decisions/README.md'),
+        ...Array<string>(5).fill(
+          `docs/decisions/architecture/D-${String(NEXT_DECISION)}-zz-module.md`,
+        ),
+        ...Array<string>(5).fill(
+          `docs/decisions/architecture/D-${String(NEXT_DECISION + 1)}-yy-module.md`,
+        ),
       ]);
     },
     SLOW_MS,

@@ -239,7 +239,7 @@ describe('general', () => {
     });
     await person().click(main(view).getByRole('button', { name: 'Copy' }));
     await settle();
-    expect(view.getByText(/Couldn't copy/)).toBeDefined();
+    expect(view.getByText(/Couldn’t copy/)).toBeDefined();
     view.unmount();
   });
 
@@ -385,7 +385,7 @@ describe('archived channels (D-232)', () => {
     await settle();
     expect(restored).toEqual([OLD.id]);
     expect(view.getByText('#old-launch is back.')).toBeDefined();
-    expect(card(view).getByText('No channel is archived.')).toBeDefined();
+    expect(card(view).getByText('No archived channels')).toBeDefined();
     view.unmount();
   });
 
@@ -408,7 +408,7 @@ describe('archived channels (D-232)', () => {
 
   test('none is said plainly; a list that fails to load offers a retry that reads it again', async () => {
     const empty = await openPage({ archivedChannels: () => Promise.resolve([]) });
-    expect(card(empty).getByText('No channel is archived.')).toBeDefined();
+    expect(card(empty).getByText('No archived channels')).toBeDefined();
     empty.unmount();
 
     let asks = 0;

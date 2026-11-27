@@ -303,6 +303,11 @@ export const ServerMailStatus = Type.Object({
 });
 export type ServerMailStatus = Static<typeof ServerMailStatus>;
 
+const serverAddress = Type.Union([Type.String({ minLength: 1, maxLength: 2048 }), Type.Null()]);
+const legalAddresses = {
+  privacyUrl: Type.Optional(serverAddress),
+  termsUrl: Type.Optional(serverAddress),
+};
 const preferences = {
   allowedEmailDomains: Type.Array(
     Type.String({
@@ -315,7 +320,8 @@ const preferences = {
   ),
   requireAccountApproval: Type.Boolean(),
   displayName: Type.String({ minLength: 1, maxLength: 100 }),
-  supportUrl: Type.Union([Type.String({ minLength: 1, maxLength: 2048 }), Type.Null()]),
+  supportUrl: serverAddress,
+  ...legalAddresses,
 };
 export const ServerPreferencesRequest = FromClient(
   {
@@ -323,6 +329,7 @@ export const ServerPreferencesRequest = FromClient(
     requireAccountApproval: Type.Optional(preferences.requireAccountApproval),
     displayName: Type.Optional(preferences.displayName),
     supportUrl: Type.Optional(preferences.supportUrl),
+    ...legalAddresses,
   },
   { minProperties: 1 },
 );
@@ -399,7 +406,10 @@ export const ServerBackupStatus = Type.Object({
 });
 export type ServerBackupStatus = Static<typeof ServerBackupStatus>;
 
-/** What the operator's list of the outbox can be asked for (D-288 §12): `stuck` is pending past the overview's fifteen minutes. */
+/**
+ * What the operator's list of the outbox can be asked for (D-288 §12): `stuck` is pending past the overview's fifteen minutes, not
+ * past its expiry and not held for a workspace that is not granted its consumer (D-353).
+ */
 export const ServerOutboxState = Type.Union([
   Type.Literal('dead'),
   Type.Literal('stuck'),

@@ -26,7 +26,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { useSession } from '../session/session';
-import { LogoMark, Notice } from '../shell/notice';
+import { LogoMark } from '../shell/notice';
 import { useSignOut } from '../shell/sign-out';
 import { leave } from '../sign-in/leave';
 import {
@@ -35,15 +35,7 @@ import {
   nativeAppName,
   pendingNativeHandoff,
 } from './pending';
-import { StandaloneScreen } from '../shell/standalone';
-
-const Card = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => (
-  <StandaloneScreen>
-    <div className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 p-8 text-center shadow-card">
-      {children}
-    </div>
-  </StandaloneScreen>
-);
+import { DoorCard, DoorNotice } from '../sign-in/door-card';
 
 export const NativeSignInScreen = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -61,7 +53,9 @@ export const NativeSignInScreen = (): React.JSX.Element => {
   const [failed, setFailed] = useState<unknown>(null);
   const [redirect, setRedirect] = useState<string | null>(null);
   const action = useRef<HTMLButtonElement>(null);
-  const card = redirect !== null ? 'done' : pair === null ? 'gone' : 'ask';
+  // The server would not hand over this browser's sign-in as a fresh one (`prompt=login`, D-356).
+  const [stale, setStale] = useState(false);
+  const card = redirect !== null ? 'done' : pair === null ? 'gone' : stale ? 'again' : 'ask';
 
   useEffect(() => {
     action.current?.focus();
@@ -73,42 +67,58 @@ export const NativeSignInScreen = (): React.JSX.Element => {
 
   if (card === 'gone') {
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="warning"
-          title={t('native.gone.title')}
-          body={t('native.gone.body')}
-          action={
-            <Button ref={action} variant="primary" onClick={home}>
-              {t('native.gone.back')}
-            </Button>
-          }
-        />
-      </Card>
+      <DoorNotice
+        glyph="warning"
+        title={t('native.gone.title')}
+        body={t('native.gone.body')}
+        action={
+          <Button ref={action} variant="primary" onClick={home}>
+            {t('native.gone.back')}
+          </Button>
+        }
+      />
     );
   }
 
   if (card === 'done') {
     return (
-      <Card>
-        <Notice
-          as="h1"
-          glyph="resolved"
-          title={t('native.done.title', { app })}
-          body={t('native.done.body')}
-          action={
-            <Button
-              ref={action}
-              onClick={() => {
-                leave.to(redirect ?? '');
-              }}
-            >
-              {t('native.done.again', { app })}
-            </Button>
-          }
-        />
-      </Card>
+      <DoorNotice
+        glyph="resolved"
+        title={t('native.done.title', { app })}
+        body={t('native.done.body')}
+        action={
+          <Button
+            ref={action}
+            onClick={() => {
+              leave.to(redirect ?? '');
+            }}
+          >
+            {t('native.done.again', { app })}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (card === 'again') {
+    return (
+      <DoorNotice
+        glyph="warning"
+        title={t('native.again.title')}
+        body={t('native.again.body', { app })}
+        action={
+          <Button
+            ref={action}
+            variant="primary"
+            onClick={() => {
+              // The question waits in the tab through the sign-in, and is asked again after it.
+              signOut('here');
+            }}
+          >
+            {t('native.again.action')}
+          </Button>
+        }
+      />
     );
   }
 
@@ -118,7 +128,11 @@ export const NativeSignInScreen = (): React.JSX.Element => {
     setBusy(true);
     setFailed(null);
     try {
-      const answer = await api.authorizeNative({ challenge: pair.challenge, state: pair.state });
+      const answer = await api.authorizeNative({
+        challenge: pair.challenge,
+        state: pair.state,
+        ...(pair.prompt === undefined ? {} : { prompt: pair.prompt }),
+      });
       // Spent: asking again would make a second code for a question that has been answered.
       forgetNativeHandoff(ports);
       setRedirect(answer.redirect);
@@ -131,16 +145,20 @@ export const NativeSignInScreen = (): React.JSX.Element => {
         void client.invalidateQueries({ queryKey: keys.me });
         return;
       }
+      if (isApiError(failure) && failure.code === 'REAUTHENTICATION_REQUIRED') {
+        setStale(true);
+        return;
+      }
       setFailed(failure);
     }
   };
 
   return (
-    <Card>
+    <DoorCard>
       <LogoMark />
       <div className="flex flex-col items-center gap-2">
-        <h1 className="text-display">{t('native.title', { app })}</h1>
-        <p className="text-body text-ink-muted">
+        <h1 className="text-balance text-display">{t('native.title', { app })}</h1>
+        <p className="text-balance text-body text-ink-muted">
           {t('native.body', {
             app,
             name: user.displayName,
@@ -148,10 +166,10 @@ export const NativeSignInScreen = (): React.JSX.Element => {
             host: window.location.host,
           })}
         </p>
-        <p className="text-label text-ink-muted">{t('native.hint')}</p>
+        <p className="text-balance text-caption text-ink-muted">{t('native.hint')}</p>
       </div>
       {failed !== null && (
-        <p role="alert" className="text-label text-danger-text">
+        <p role="alert" className="text-balance text-label text-danger-text">
           {`${t('native.failed', { app })} ${describe(failed)}`}
         </p>
       )}
@@ -186,6 +204,6 @@ export const NativeSignInScreen = (): React.JSX.Element => {
           {t('native.other')}
         </Button>
       </div>
-    </Card>
+    </DoorCard>
   );
 };

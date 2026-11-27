@@ -25,6 +25,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Link } from '../../../router/router-provider';
 import { buttonStyle, Button } from '../../../ui/button';
 import { Avatar } from '../../../ui/avatar';
+import { ListFilter } from '../../../ui/list-column';
 import { Select } from '../../../ui/select';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
@@ -257,26 +258,17 @@ export const MembersPage = (): React.JSX.Element => {
         </div>
       )}
       {hasChat && nativeAdmin && (
-        <div role="group" aria-label={t('guests.view')} className="flex flex-wrap gap-2">
-          <Button
-            className="aria-pressed:border-accent aria-pressed:bg-accent-subtle aria-pressed:text-accent-text"
-            aria-pressed={!guestView}
-            onClick={() => {
-              setGuestView(false);
-            }}
-          >
-            {t('guests.members')}
-          </Button>
-          <Button
-            className="aria-pressed:border-accent aria-pressed:bg-accent-subtle aria-pressed:text-accent-text"
-            aria-pressed={guestView}
-            onClick={() => {
-              setGuestView(true);
-            }}
-          >
-            {t('guests.title')}
-          </Button>
-        </div>
+        <ListFilter
+          label={t('guests.view')}
+          value={guestView ? 'guests' : 'members'}
+          choices={[
+            { value: 'members', label: t('guests.members') },
+            { value: 'guests', label: t('guests.title') },
+          ]}
+          onChange={(view) => {
+            setGuestView(view === 'guests');
+          }}
+        />
       )}
       {guestView && hasChat ? (
         <GuestAdministration key={workspace.id} />
@@ -366,7 +358,7 @@ export const MembersPage = (): React.JSX.Element => {
               !members.isError && (
                 <LoadingStatus
                   label={t('common.loading')}
-                  className="flex flex-col gap-3 px-6 py-5"
+                  className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
                 >
                   <Skeleton />
                   <Skeleton />

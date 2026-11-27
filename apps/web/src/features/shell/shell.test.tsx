@@ -64,7 +64,14 @@ describe('the session gate', () => {
       '/w/acme',
       aSignedInApi({ me: () => answer, channels: () => Promise.resolve([]) }),
     );
-    expect(view.getByRole('alert').textContent).toContain("Couldn't reach Purlay");
+    expect(view.getByRole('alert').textContent).toContain('Couldn’t reach Purlay');
+    // A page of its own, as the other screens without the shell are: its heading in the one main landmark.
+    expect(
+      within(view.getByRole('main')).getByRole('heading', {
+        level: 1,
+        name: 'Couldn’t reach Purlay',
+      }),
+    ).toBeDefined();
     expect(here(view)).toBe('/w/acme');
     answer = Promise.resolve(aSession());
     await person().click(view.getByRole('button', { name: 'Retry' }));
@@ -170,7 +177,7 @@ describe('the session read again', () => {
       await view.world.client.refetchQueries({ queryKey: keys.me });
     });
     await settle();
-    expect(view.queryByText("Couldn't reach Purlay")).toBeNull();
+    expect(view.queryByText('Couldn’t reach Purlay')).toBeNull();
     expect(view.getByRole('heading', { level: 1, name: 'api' })).toBeDefined();
   });
 });
@@ -479,7 +486,7 @@ describe('the sign-in screen', () => {
   test('says what Purlay is in Turkish as a Turkish reader says it: the question stays open', async () => {
     const view = await renderApp(<Outlet />, { path: '/sign-in', api: out(), locale: 'tr' });
     await settle();
-    expect(view.getByRole('heading', { level: 1, name: 'Purlay’e giriş yap' })).toBeDefined();
+    expect(view.getByRole('heading', { level: 1, name: 'Purlay’e giriş yapın' })).toBeDefined();
     expect(
       view.getByText('Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.'),
     ).toBeDefined();

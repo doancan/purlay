@@ -10,6 +10,7 @@ import {
   type UserRole,
 } from '@purlay/db';
 import { WorkspaceDirectory, IssuedDirectoryCredential } from '@purlay/types/workspace-directory';
+import { WorkspaceAccessRole, WorkspaceMemberAccess } from '@purlay/types/workspace-provisioning';
 import { compose } from '../../composition';
 import { systemClock } from '../../platform/clock';
 import { SESSION_COOKIE } from '../../platform/cookies';
@@ -18,6 +19,7 @@ import { aUserRow, aUniqueSlug } from '../../testing/users';
 import { testConfig, testDependencies } from '../../testing/doubles';
 import { noWorkspaceChannels } from '../../modules/workspaces/channels-port';
 import { createApp } from './app';
+import { noDepartures } from '../../testing/departures';
 let clone: ClonedDatabase;
 beforeAll(async () => {
   clone = await cloneIntegrationDatabase();
@@ -63,9 +65,32 @@ const resourcesOf = (list: unknown): readonly unknown[] => {
   return list.Resources;
 };
 
+type DirectoryCall = (
+  method: string,
+  path: string,
+  body?: unknown,
+  bearer?: string,
+  media?: string,
+  cookie?: string,
+) => Promise<Response>;
+
+interface MountedDirectory extends AsyncDisposable {
+  readonly workspace: { readonly id: string };
+  readonly domainName: string;
+  readonly directoryCredential: (name: string) => Promise<IssuedDirectoryCredential>;
+  readonly call: DirectoryCall;
+}
+
+interface RemoveOperation {
+  readonly op: 'remove' | 'Remove';
+  readonly path: string;
+  readonly value?: readonly { readonly $ref: null; readonly value: string }[];
+}
+
 describe('integration: mounted native directory protocol', () => {
-  test('a core-only directory supports provider connection tests, filtered reads and provisioning through its issued bearer', async () => {
+  const mountedDirectory = async (): Promise<MountedDirectory> => {
     const owner = await aUserRow(clone.db, 'directory-http-owner');
+    const domainName = `directory-${crypto.randomUUID()}.example`;
     const workspace = await clone.db
       .insertInto('workspaces')
       .values({ name: 'Directory HTTP', slug: aUniqueSlug('directory-http') })
@@ -81,7 +106,7 @@ describe('integration: mounted native directory protocol', () => {
       .insertInto('workspace_identity_domains')
       .values({
         workspace_id: workspace.id,
-        domain: 'directory.example',
+        domain: domainName,
         challenge_issued_at: now,
         challenge_expires_at: new Date(now.getTime() + 86_400_000),
         verified_at: now,
@@ -89,7 +114,11 @@ describe('integration: mounted native directory protocol', () => {
       .returning('id')
       .executeTakeFirstOrThrow();
     const auth = aTestAuth(clone.db, {
-      directory: { channels: noWorkspaceChannels, readersReady: () => Promise.resolve(true) },
+      directory: {
+        channels: noWorkspaceChannels,
+        departures: noDepartures,
+        readersReady: () => Promise.resolve(true),
+      },
     });
     const app = createApp(
       testDependencies({
@@ -100,25 +129,25 @@ describe('integration: mounted native directory protocol', () => {
         config: testConfig({ WORKSPACE_PROVISIONING_READY: true }),
       }),
     );
+    const listener = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: app.handle });
     const call = async (
       method: string,
       path: string,
       body?: unknown,
       bearer?: string,
       media = 'application/json',
+      cookie = session.token,
     ): Promise<Response> =>
-      await app.handle(
-        new Request(`https://purlay.test${path}`, {
-          method,
-          headers: {
-            ...(bearer === undefined
-              ? { origin: 'https://purlay.test', cookie: `${SESSION_COOKIE}=${session.token}` }
-              : { authorization: `Bearer ${bearer}` }),
-            ...(body === undefined ? {} : { 'content-type': media }),
-          },
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        }),
-      );
+      await fetch(new URL(path, listener.url), {
+        method,
+        headers: {
+          ...(bearer === undefined
+            ? { origin: 'https://purlay.test', cookie: `${SESSION_COOKIE}=${cookie}` }
+            : { authorization: `Bearer ${bearer}` }),
+          ...(body === undefined ? {} : { 'content-type': media }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
     const root = `/api/workspaces/${workspace.id}/directories`;
     const directoryCredential = async (name: string): Promise<IssuedDirectoryCredential> => {
       const revision = crypto.randomUUID();
@@ -128,7 +157,7 @@ describe('integration: mounted native directory protocol', () => {
           workspace_id: workspace.id,
           domain_id: domain.id,
           name,
-          issuer: 'https://directory.example',
+          issuer: `https://${domainName}`,
           client_id: 'fixture',
           client_secret_encrypted: Buffer.alloc(32, 1),
           enabled: true,
@@ -168,6 +197,20 @@ describe('integration: mounted native directory protocol', () => {
         throw new Error('Invalid issued credential contract.');
       return credential;
     };
+    return {
+      workspace,
+      domainName,
+      directoryCredential,
+      call,
+      async [Symbol.asyncDispose](): Promise<void> {
+        await listener.stop(true);
+      },
+    };
+  };
+
+  test('a core-only directory supports provider connection tests, filtered reads and provisioning through its issued bearer', async () => {
+    await using directory = await mountedDirectory();
+    const { workspace, domainName, directoryCredential, call } = directory;
     const credential = await directoryCredential('Corporate directory');
     const discovery = await scimList(
       await call('GET', `${scim}/Schemas`, undefined, credential.token),
@@ -193,7 +236,7 @@ describe('integration: mounted native directory protocol', () => {
     const body = {
       schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
       externalId: external,
-      userName: `${external}@directory.example`,
+      userName: `${external}@${domainName}`,
       displayName: 'Employee',
       active: true,
     };
@@ -359,4 +402,144 @@ describe('integration: mounted native directory protocol', () => {
       (await call('POST', '/api/workspaces', {}, credential.token, 'application/scim+json')).status,
     ).toBe(415);
   });
+
+  test.each([
+    [
+      'RFC 7644 member value path',
+      (id: string): RemoveOperation => ({
+        op: 'remove',
+        path: `members[value eq "${id}"]`,
+      }),
+    ],
+    [
+      'Entra outbound member array',
+      (id: string): RemoveOperation => ({
+        op: 'Remove',
+        path: 'members',
+        value: [{ $ref: null, value: id }],
+      }),
+    ],
+  ])(
+    'incremental Group PATCH removes only the intended group contribution via %s',
+    async (_case, removal) => {
+      await using directory = await mountedDirectory();
+      const { workspace, domainName, directoryCredential, call } = directory;
+      const credential = await directoryCredential('Finance directory');
+      const scimCall = (method: string, path: string, body?: unknown): Promise<Response> =>
+        call(method, `${scim}/${path}`, body, credential.token, 'application/scim+json');
+      const [removed, sibling] = await Promise.all(
+        ['removed', 'sibling'].map(async (name) => {
+          const created = await scimCall('POST', 'Users', {
+            schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
+            externalId: crypto.randomUUID(),
+            userName: `${name}@${domainName}`,
+            active: true,
+          });
+          expect(created.status).toBe(201);
+          const resourceId = idOf(await created.json());
+          const { user_id: userId } = await clone.db
+            .selectFrom('workspace_directory_scim_users')
+            .select('user_id')
+            .where('id', '=', resourceId)
+            .executeTakeFirstOrThrow();
+          const session = await aSession(clone.db, systemClock, userId);
+          return { resourceId, userId, cookie: session.token };
+        }),
+      );
+      if (removed === undefined || sibling === undefined) throw new Error('Two SCIM users needed.');
+      const created = await scimCall('POST', 'Groups', {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+        displayName: 'Finance',
+        members: [{ value: removed.resourceId }, { value: sibling.resourceId }],
+      });
+      expect(created.status).toBe(201);
+      const groupId = idOf(await created.json());
+      const group = async (): Promise<{ id: string; revision: string }> =>
+        await clone.db
+          .selectFrom('workspace_access_groups')
+          .select(['id', 'revision'])
+          .where('workspace_id', '=', workspace.id)
+          .where('directory_group_reference', '=', groupId)
+          .executeTakeFirstOrThrow();
+      const root = `/api/workspaces/${workspace.id}`;
+      const removedAccess = `${root}/access/people/${removed.userId}`;
+      const beforeManual: unknown = await (await call('GET', removedAccess)).json();
+      if (!Value.Check(WorkspaceMemberAccess, beforeManual))
+        throw new Error('Invalid member access.');
+      const manual: unknown = await (
+        await call('POST', `${removedAccess}/manual`, {
+          revision: beforeManual.revision,
+          role: 'member',
+        })
+      ).json();
+      if (!Value.Check(WorkspaceMemberAccess, manual)) throw new Error('Invalid manual access.');
+      const manualSource = manual.sources.find((source) => source.kind === 'manual');
+      if (manualSource === undefined) throw new Error('Missing independent manual access.');
+      const roleResponse = await call('POST', `${root}/access/roles`, {
+        name: 'Finance audit reader',
+        capabilities: ['audit.read'],
+      });
+      expect(roleResponse.status).toBe(201);
+      const role: unknown = await roleResponse.json();
+      if (!Value.Check(WorkspaceAccessRole, role)) throw new Error('Invalid audit role.');
+      const target = await group();
+      expect(
+        (
+          await call('POST', `${root}/access/grants`, {
+            roleId: role.id,
+            roleRevision: role.revision,
+            subjectRevision: target.revision,
+            subject: { kind: 'group', groupId: target.id },
+            scope: { kind: 'workspace' },
+          })
+        ).status,
+      ).toBe(201);
+      const auditAccess = async (cookie: string): Promise<number> =>
+        (await call('GET', `${root}/audit`, undefined, undefined, undefined, cookie)).status;
+      expect(await auditAccess(removed.cookie)).toBe(200);
+      expect(await auditAccess(sibling.cookie)).toBe(200);
+      const changes = async (): Promise<number> =>
+        (
+          await clone.db
+            .selectFrom('audit_log')
+            .select('id')
+            .where('workspace_id', '=', workspace.id)
+            .where('action', '=', 'workspace.access.group_updated')
+            .execute()
+        ).length;
+      const priorChanges = await changes();
+      const patch = {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+        Operations: [removal(removed.resourceId)],
+      };
+      const response = await scimCall('PATCH', `Groups/${groupId}`, patch);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/scim+json');
+      expect(await response.json()).toMatchObject({
+        id: groupId,
+        members: [{ value: sibling.resourceId }],
+      });
+      expect(await auditAccess(removed.cookie)).toBe(403);
+      expect(await auditAccess(sibling.cookie)).toBe(200);
+      const remaining: unknown = await (await call('GET', removedAccess)).json();
+      if (!Value.Check(WorkspaceMemberAccess, remaining))
+        throw new Error('Invalid remaining access.');
+      expect(remaining).toMatchObject({
+        state: 'active',
+        workspaceCapabilities: [],
+        groupCount: 0,
+      });
+      expect(remaining.sources.find((source) => source.id === manualSource.id)).toEqual({
+        ...manualSource,
+        effective: true,
+      });
+      const changed = await group();
+      expect(changed.revision).not.toBe(target.revision);
+      expect(await changes()).toBe(priorChanges + 1);
+
+      expect((await scimCall('PATCH', `Groups/${groupId}`, patch)).status).toBe(200);
+      expect(await group()).toEqual(changed);
+      expect(await changes()).toBe(priorChanges + 1);
+    },
+  );
 });

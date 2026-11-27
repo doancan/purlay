@@ -6,7 +6,7 @@
  * composer inserts it as the key that does the same would.
  */
 import { useState } from 'react';
-import { Icon, type GlyphName } from '../../../components/icon';
+import type { GlyphName } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { IconButton } from '../../../ui/icon-button';
 import { Tooltip } from '../../../ui/tooltip';
@@ -112,12 +112,16 @@ export const FormatToolbar = ({
       role="toolbar"
       aria-label={t('composer.format')}
       aria-orientation="horizontal"
-      className="flex min-w-0 items-center gap-1 border-b-hairline border-border-subtle px-2 py-1"
+      // The scroller's own p-1 (room for a focus ring) makes the first button's inset 8, as in the row of
+      // buttons under the box, so each glyph column starts where the words do.
+      className="flex min-w-0 items-center gap-1 border-b-hairline border-border-subtle py-1 pl-1 pr-2"
       onKeyDown={onToolbarKey}
     >
       {/* One row on every width: on a phone it scrolls sideways instead of breaking into two, and
-          the preview toggle stays where it is. */}
-      <div className="flex min-w-0 flex-1 items-center overflow-x-auto p-1 scrollbar-thin">
+          the preview toggle stays where it is. Where the row is cut, its last space fades out instead of
+          slicing a glyph in half beside the toggle. The row only overflows below about 440px, so the fade is
+          never wider than the end padding and scroll padding: the last button and a focused one stand clear. */}
+      <div className="flex min-w-0 flex-1 items-center overflow-x-auto py-1 pl-1 pr-12 scrollbar-thin scroll-pr-12 mask-r-from-90%">
         {tool(0, 'bold', t('composer.bold'), 'bold', chord(labels.mod, 'B'))}
         {tool(1, 'italic', t('composer.italic'), 'italic', chord(labels.mod, 'I'))}
         {tool(2, 'strike', t('composer.strike'), 'strike', chord(labels.mod, labels.shift, 'X'))}
@@ -174,11 +178,11 @@ export const FormatToolbar = ({
           onFocus={() => {
             setStopAt(PREVIEW_STOP);
           }}
-          className="inline-flex h-control shrink-0 items-center gap-2 rounded-md px-2 text-label text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink aria-pressed:bg-accent-subtle aria-pressed:text-accent-text max-narrow:h-touch"
+          // A word and no glyph: the braces it carried were the inline-code button's, two buttons apart.
+          className="inline-flex h-control shrink-0 items-center rounded-md px-2 text-label text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink aria-pressed:bg-accent-subtle aria-pressed:text-accent-text max-narrow:h-touch"
           onClick={onTogglePreview}
         >
-          <Icon name="inline-code" size="sm" />
-          <span>Markdown</span>
+          Markdown
         </button>
       </Tooltip>
     </div>

@@ -114,6 +114,16 @@ interface Client {
   readonly ended: Promise<number>;
 }
 
+/** Waits for an answer to a PING: anything delivered to the socket before it has arrived. */
+const settle = async (client: Client): Promise<void> => {
+  const id = messageId(new Date(NOW.getTime() + 500));
+  client.send({ id, op: 'PING', payload: {} });
+  await client.until(
+    (frames) => frames.some((f) => f.event === 'PONG' && f.refId === id),
+    'the PONG',
+  );
+};
+
 /** A socket held by node B. */
 const connect = async (cookie: string): Promise<Client> => {
   const socket = new WebSocket(`ws://localhost:${String(portB)}/ws`, {
@@ -138,7 +148,7 @@ const connect = async (cookie: string): Promise<Client> => {
       reject(new Error('the socket did not open'));
     });
   });
-  return {
+  const client: Client = {
     frames,
     send: (frame): void => {
       socket.send(JSON.stringify(frame));
@@ -160,6 +170,14 @@ const connect = async (cookie: string): Promise<Client> => {
     },
     ended,
   };
+  // An upgrade can finish before the hub joins the person's topics. Its PONG waits for that identity.
+  try {
+    await settle(client);
+    return client;
+  } catch (error) {
+    await client.close();
+    throw error;
+  }
 };
 
 const subscribe = async (client: Client, channelId: string): Promise<void> => {
@@ -173,13 +191,6 @@ const subscribe = async (client: Client, channelId: string): Promise<void> => {
     (frames) => frames.some((f) => f.refId === id),
     'the subscription to be answered',
   );
-};
-
-/** Waits for an answer to a PING: anything delivered to the socket before it has arrived. */
-const settle = async (client: Client): Promise<void> => {
-  const id = messageId(new Date(NOW.getTime() + 500));
-  client.send({ id, op: 'PING', payload: {} });
-  await client.until((frames) => frames.some((f) => f.refId === id), 'the PONG');
 };
 
 const post = async (cookie: string, channelId: string, at: number): Promise<string> => {

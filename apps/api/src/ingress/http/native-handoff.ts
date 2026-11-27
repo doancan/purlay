@@ -47,11 +47,12 @@ export const authorizeNativeClient = async (
   body: unknown,
 ): Promise<NativeAuthorizeResponse> => {
   const { userId, sessionId } = await requireSession(dependencies.auth, request);
-  const { challenge, state } = validated(NativeAuthorizeRequest, body);
+  const { challenge, state, prompt } = validated(NativeAuthorizeRequest, body);
   const { code } = await authorizeNative(dependencies.database, dependencies.clock, {
     userId,
     challenge,
     sourceSessionId: sessionId,
+    ...(prompt === undefined ? {} : { prompt }),
   });
   // Every character of `code` is hex and of `state` base64url (the contract's patterns), so nothing here
   // can end a parameter or begin another.

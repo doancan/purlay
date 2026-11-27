@@ -99,9 +99,13 @@ export const EmojiChoices = ({
   return (
     <>
       {GROUPS.map((group) => (
-        <section key={group.name} aria-label={t(group.name)} className="flex flex-col gap-1 pb-1">
-          <h3 className="px-2 pt-1 text-caption text-ink-muted">{t(group.name)}</h3>
-          <MenuTiles grid>
+        // Inside a menu only groups and items may stand, so the group carries the name and the caption is seen,
+        // not read: a region or a heading here broke the menu's structure for a screen reader.
+        <div key={group.name} className="flex flex-col gap-1 pb-1">
+          <span aria-hidden="true" className="px-2 pt-1 text-caption text-ink-muted">
+            {t(group.name)}
+          </span>
+          <MenuTiles grid label={t(group.name)}>
             {group.emoji.map((emoji) => (
               <MenuTile
                 key={emoji}
@@ -116,7 +120,7 @@ export const EmojiChoices = ({
               </MenuTile>
             ))}
           </MenuTiles>
-        </section>
+        </div>
       ))}
     </>
   );

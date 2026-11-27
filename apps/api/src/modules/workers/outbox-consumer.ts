@@ -12,7 +12,8 @@ import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
 import { drainOnce, type Handled, type FactHandling } from '../../platform/outbox-drain';
 import type { ModuleWorker } from './module-workers';
 
-const OUTBOX_CONSUME_WORKER = 'outbox:consume';
+/** The name of the worker that delivers a module's facts. */
+export const OUTBOX_CONSUME_WORKER = 'outbox:consume';
 
 /** Between the end of one drain and the start of the next: a fact waits this and the time of the work (measured, D-288 §8). */
 export const OUTBOX_CONSUME_INTERVAL_MS = 2_000;

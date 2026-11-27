@@ -9,6 +9,7 @@ import {
   ApnsDeviceRequest,
   PushSubscribeRequest,
   PushUnsubscribeRequest,
+  RemoveApnsDeviceRequest,
   SetLocaleRequest,
   type PushKeyResponse,
 } from '@purlay/types';
@@ -58,7 +59,7 @@ export const unsubscribeApnsDevice = async (
   body: unknown,
 ): Promise<void> => {
   const subscriber = await requireSession(auth, request);
-  const { deviceToken } = validated(ApnsDeviceRequest, body);
+  const { deviceToken } = validated(RemoveApnsDeviceRequest, body);
   await atomicallyOn(database)((transaction) =>
     removeApnsDevice(transaction, clock, subscriber, deviceToken),
   );

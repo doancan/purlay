@@ -3,7 +3,7 @@
  * lines it adds to the ones that exist (`docs/MODULE-GUIDE.md`, `docs/MODULES.md` §9). Every anchor is looked for before
  * anything is written, a module that exists is left alone, and `--dry-run` says what would be made and changed.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { PRODUCT_MODULE_IDS } from '@purlay/db';
 import { RESERVED_MODULE_IDS } from '../platform/module-kit/registry';
@@ -38,11 +38,18 @@ export const parseArguments = (
   };
 };
 
-/** The number after the last decision in `DECISIONS.md`: what the new module's skeleton is written under. */
+/**
+ * The number after the last decision in the record (`docs/decisions/<category>/D-<n>-….md`, D-345): what the new
+ * module's skeleton is written under. Its own decision is one of the template's files.
+ */
 const nextDecision = (root: string): number =>
   Math.max(
-    ...[...readFileSync(join(root, 'docs/DECISIONS.md'), 'utf8').matchAll(/^### D-(\d+)\./gm)].map(
-      (match) => Number(match[1]),
+    0,
+    ...readdirSync(join(root, 'docs/decisions'), { recursive: true, encoding: 'utf8' }).flatMap(
+      (path) => {
+        const number = /(?:^|\/)D-(\d+)-[^/]*\.md$/.exec(path)?.[1];
+        return number === undefined ? [] : [Number(number)];
+      },
     ),
   ) + 1;
 
@@ -147,6 +154,13 @@ export const main = (
   });
   if (formatted.exitCode !== 0)
     say('prettier could not format what was written: run bun run format');
+  // The record's index lists every decision, the skeleton's among them; `check:docs` holds it.
+  const indexed = Bun.spawnSync(['bun', '--no-env-file', 'run', 'scripts/decisions.ts', 'index'], {
+    cwd: root,
+    stdout: 'ignore',
+  });
+  if (indexed.exitCode !== 0)
+    say('the decision index could not be rewritten: run bun run decisions:index');
   regenerateSchema(root, say);
   say(
     'next: fill what scaffold-leftovers.test.ts lists, then bun run check:docs and bun run verify',

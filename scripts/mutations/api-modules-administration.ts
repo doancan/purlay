@@ -3,6 +3,23 @@ import type { Mutation } from '../mutate';
 
 export const API_MODULES_ADMINISTRATION: readonly Mutation[] = [
   {
+    id: 'legal-address-accepts-mailto',
+    why: 'an administrator can publish a mailto address in place of an HTTPS legal page',
+    file: 'apps/api/src/modules/administration/admission.ts',
+    find: '  if (value === null) return true;\n',
+    replace: "  if (value === null || value.startsWith('mailto:')) return true;\n",
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
+    id: 'legal-address-change-not-audited',
+    why: 'editing the public legal addresses leaves no server identity audit entry',
+    file: 'apps/api/src/modules/administration/admission.ts',
+    find: '  if (identityChanged)\n    await recordServerAudit(tx, clock, {',
+    replace:
+      '  if (identityChanged && before.privacyUrl === privacy && before.termsUrl === terms)\n    await recordServerAudit(tx, clock, {',
+    tests: ['apps/api/src/ingress/http/server.integration.test.ts'],
+  },
+  {
     id: 'outbox-change-drops-the-reason',
     why: 'an entry says that a fact was discarded and not why (D-288 §12)',
     file: 'apps/api/src/modules/administration/outbox.ts',

@@ -19,6 +19,7 @@ import { respond } from '../route-answers';
 export const signInRoutes = (
   context: RouteContext,
   later: SignInLinkDependencies['later'],
+  hasApns: boolean,
 ): AnyElysia => {
   const { dependencies, moduleIds, modules, sockets } = context;
   /** The same, less those the administrator has stopped at run time (D-296): what a client may draw. */
@@ -49,7 +50,9 @@ export const signInRoutes = (
         respond(set, await startSignIn(dependencies, 'google')),
       )
       .get('/api/auth/methods', () => authMethods(dependencies.auth))
-      .get('/api/client', () => clientInfo(dependencies.config, dependencies.auth, runningNow()))
+      .get('/api/client', () =>
+        clientInfo(dependencies.config, dependencies.auth, runningNow(), hasApns),
+      )
       // The native application's way in (D-191): the browser's page says yes, the application spends the code.
       .post(
         '/api/native/authorize',

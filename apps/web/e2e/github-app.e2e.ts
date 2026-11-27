@@ -11,12 +11,10 @@
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { messageId } from '@purlay/types';
 import { expect, test } from '@playwright/test';
-import { skipReleaseNotes } from './support';
+import { skipReleaseNotes, wallClock } from './support';
 import { portFor, startFresh, type FreshServer } from './fresh';
 
 const PORT = portFor(120);
-/** Wall-clock time without `Date.now()`: the e2e tests take their clock from one place. */
-const wallClock = (): Date => new Date(performance.timeOrigin + performance.now());
 /** What a key is written as: GitHub's PEM. */
 const PEM = 'pem';
 
@@ -229,11 +227,11 @@ test('the administrator connects the App, an owner installs it, a person allows 
   ).toBeVisible();
 
   await tr.goto('/w/acme-engineering/settings/account');
-  const benim = tr.getByRole('region', { name: 'Senin adına issue aç' });
+  const benim = tr.getByRole('region', { name: 'Sizin adınıza issue aç' });
   await expect(benim.getByText('İzin verildi: ayse.')).toBeVisible();
   await benim.getByRole('button', { name: 'İzni kaldır' }).click();
   await expect(
-    benim.getByText('İzin verilmedi. Purlay GitHub’a senin adına hiçbir şey yazmaz.'),
+    benim.getByText('İzin verilmedi. Purlay GitHub’a sizin adınıza hiçbir şey yazmaz.'),
   ).toBeVisible();
   await turkish.close();
 

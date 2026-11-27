@@ -107,11 +107,10 @@ describe('a message with no reminder', () => {
       await person().click(view.getByRole('menuitem', { name: /^In 1 hour/ }));
       await settle();
       expect(server.set).toEqual([`${first.id} 2026-09-09T13:00:00.000Z`]);
-      expect(markOf(view, 'remember this one')?.textContent).toBe(
-        `Reminder: ${when('2026-09-09T13:00:00Z')}`,
-      );
+      // Said on the 24-hour clock the presets use, as Send later says its times.
+      expect(markOf(view, 'remember this one')?.textContent).toBe('Reminder: Today at 13:00');
       expect(markOf(view, 'and not this one')).toBeNull();
-      expect(view.getByText(`Reminder set for ${when('2026-09-09T13:00:00Z')}.`)).toBeDefined();
+      expect(view.getByText('Reminder set for Today at 13:00.')).toBeDefined();
     } finally {
       view.unmountAll();
     }
@@ -144,9 +143,7 @@ describe('a message with no reminder', () => {
       await openReminder(view, 'remember this one', 'Remind me…');
       await person().click(view.getByRole('menuitem', { name: /^In 3 hours/ }));
       await settle();
-      expect(markOf(view, 'remember this one')?.textContent).toBe(
-        `Reminder: ${when('2026-09-09T15:00:00Z')}`,
-      );
+      expect(markOf(view, 'remember this one')?.textContent).toBe('Reminder: Today at 15:00');
       answer.reject(new ApiError(403, 'FORBIDDEN', 'No'));
       await settle();
       expect(markOf(view, 'remember this one')).toBeNull();
@@ -194,13 +191,12 @@ describe('a message that has a reminder', () => {
     const view = await mountChannel({ messages: page([first, second]), api: server.api });
     try {
       await settle();
-      expect(markOf(view, 'remember this one')?.textContent).toBe(
-        `Reminder: ${when('2026-09-10T08:30:00Z')}`,
-      );
+      expect(markOf(view, 'remember this one')?.textContent).toBe('Reminder: Tomorrow at 08:30');
+      // The full time is the mark's tip.
       expect(markOf(view, 'remember this one')?.getAttribute('title')).toBe(
         `Reminder: ${when('2026-09-10T08:30:00Z')}`,
       );
-      await openReminder(view, 'remember this one', `Reminder: ${when('2026-09-10T08:30:00Z')}`);
+      await openReminder(view, 'remember this one', 'Reminder: Tomorrow at 08:30');
       expect(view.getByRole('menuitem', { name: 'Change…' })).toBeDefined();
       expect(view.getByRole('menuitem', { name: 'Remove reminder' })).toBeDefined();
       expect(view.queryByRole('menuitem', { name: /^In 1 hour/ })).toBeNull();
@@ -350,9 +346,7 @@ describe('Pick date and time…', () => {
       await person().click(within(dialog).getByRole('button', { name: 'Save' }));
       await settle();
       expect(server.set).toEqual([`${first.id} 2026-09-11T07:15:00.000Z`]);
-      expect(markOf(view, 'remember this one')?.textContent).toBe(
-        `Reminder: ${when('2026-09-11T07:15:00Z')}`,
-      );
+      expect(markOf(view, 'remember this one')?.textContent).toBe('Reminder: Fri, Sep 11 at 07:15');
     } finally {
       view.unmountAll();
     }

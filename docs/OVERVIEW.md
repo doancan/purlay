@@ -15,7 +15,7 @@ a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 | # | Document | Answers | Binding on |
 |---|---|---|---|
 | 1 | **`PRD.md`** | Who it is for, what problem it solves, what ships in which phase | Scope |
-| 2 | **`DECISIONS.md`** | Why every non-obvious choice was made, and what was rejected | **Everything — it wins any conflict** |
+| 2 | **[`decisions/`](decisions/README.md)** | Why every non-obvious choice was made, and what was rejected: one file per decision, indexed by category | **Everything — it wins any conflict** |
 | 3 | **`ARCHITECTURE.md`** | How the parts fit: layers, transport, protocol, isolation | Structure |
 | — | **`MODULES.md`** | How a module is declared, loaded, kept apart and removed, and the checklist for adding one (D-250, D-254, D-255; built for chat and issues, not complete: §10 ends with what is not built) | Modularity |
 | — | **`MODULES-HISTORY.md`** | How the modules were built, step by step, and what was measured on the way; a record, never a rule (the rule is in `MODULES.md`) | Modularity, history |
@@ -29,7 +29,7 @@ a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 | — | **`../README.md`** | The public front door for self-hosters | Positioning |
 | — | **`../CONTRIBUTING.md`** | The rules any contributor — human or AI — works under | Practice |
 
-**Conflict rule:** if two documents disagree, `DECISIONS.md` is authoritative and the other one
+**Conflict rule:** if two documents disagree, the decision record is authoritative and the other one
 is a bug. Fix it in the same change, do not work around it.
 
 **Ownership rule.** Every fact has exactly one home; everywhere else links to it. When a
@@ -95,7 +95,7 @@ looking for the error codes to a file that does not have them.
 | What the supply chain is held to: pinned Actions, the audit gate, licences | `scripts/workflow-pins.test.ts`, `scripts/audit-gate.ts`, `scripts/licenses.ts` (D-91) |
 | The deployable image: bases, user, health check | `Dockerfile`, held by `scripts/dockerfile.test.ts` and `scripts/image-smoke.sh` (D-92) |
 | The production stack: what is published, what it needs | `docker-compose.production.yml`, held by `scripts/production-compose.integration.test.ts` (D-94) |
-| Which release is newest, and whether the check is on | `apps/api/src/features/chat/integrations/latest-release.ts` (cache, validation, single flight), `UPDATE_CHECK` in `platform/config.ts`, the route in `ingress/http/releases.ts`; the repository and the tag's shape are `packages/types/src/releases.ts` (D-248). The interface is `API.md` §2 (`/api/releases/latest`), the page `UX.md` §2, the variable `CONFIG.md` |
+| Which release is newest, and whether the check is on | `apps/api/src/platform/latest-release.ts` (cache, validation, single flight), `UPDATE_CHECK` in `platform/config.ts`, the route in `ingress/http/releases.ts`; the repository and the tag's shape are `packages/types/src/releases.ts` (D-248). The interface is `API.md` §2 (`/api/releases/latest`), the page `UX.md` §2, the variable `CONFIG.md` |
 | What a release's notes are, and when the window with them opens | The files `docs/changelog/v{x.y.z}.md`, read by `readReleaseNotes` in `packages/types/src/releases.ts` and bundled by `apps/web/src/features/about/release-notes-files.ts`; shown once per version per browser by `release-notes-once.tsx` (D-248). Judged by `scripts/changelog.ts`, held to the client's reading by `scripts/changelog.test.ts` |
 | What changed, and how an entry is written | `docs/changelog/changes.md` (its header is the rule), held by `scripts/changelog.test.ts` (D-185) |
 | How a merge reaches the server, and what a release is | `.github/workflows/deploy.yml`, `scripts/deploy.sh`, `scripts/release.ts` (starts `scripts/release-prepare.ts`), `scripts/release-publish.sh`, held by `scripts/deploy.test.ts`, `scripts/deploy-workflow.test.ts`, `scripts/release.test.ts` and `scripts/release-publish.test.ts` (D-185); the version is the root `package.json`'s |

@@ -262,7 +262,7 @@ const MoreMenu = ({
         )}
         {member && message.deletedAt === null && (
           <MenuItem
-            glyph="reply"
+            glyph="forward"
             onSelect={() => {
               setForwarding(true);
             }}

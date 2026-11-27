@@ -48,14 +48,15 @@ let app: HttpApplication;
 beforeAll(async () => {
   cloned = await cloneIntegrationDatabase();
   db = cloned.db;
-  app = createApp(
-    testDependencies({
+  app = createApp({
+    ...testDependencies({
       database: db,
       clock,
       storage: aMemoryStore(),
       config: testConfig({ APP_URL: origin }),
     }),
-  );
+    apnsScope: 'sandbox:TESTTEAM00:dev.purlay.ios',
+  });
 }, CLONE_HOOK_MS);
 
 afterAll(async () => {
@@ -81,6 +82,16 @@ const HELD_ELSEWHERE: Readonly<
     file: 'apps/api/src/features/chat/http/integrations.integration.test.ts',
     schema: 'UnfurlResponse',
   },
+  downloadMyExport: {
+    why: 'needs an export the queue has finished, and is single-use; the personal-export test makes one and downloads it',
+    file: 'apps/api/src/ingress/http/personal-exports.integration.test.ts',
+    schema: 'content-type',
+  },
+  claimMyExportDownload: {
+    why: 'needs a finished export; the personal-export test claims it using the native method and verifies the shared single-use claim',
+    file: 'apps/api/src/ingress/http/personal-exports.integration.test.ts',
+    schema: 'content-type',
+  },
   fetchExternalImage: {
     why: 'fetches a page from another server, which needs the image proxy’s own stand-in',
     file: 'apps/api/src/ingress/http/images.integration.test.ts',
@@ -95,6 +106,8 @@ interface Context {
   aliceElsewhere: SignedInUser;
   /** The id of a third session of Alice's, which the device list ends. */
   aliceDeviceId: string;
+  /** Somebody in no workspace, freshly signed in, so erasing their account touches nobody the other steps need. */
+  leaver: SignedInUser;
   workspaceId: string;
   guestId: string;
   channelId: string;
@@ -126,7 +139,7 @@ interface Spec {
 interface Step {
   readonly id: string;
   /** Who calls; `nobody` is a request with no session. */
-  readonly as?: 'alice' | 'bob' | 'aliceElsewhere' | 'nobody';
+  readonly as?: 'alice' | 'bob' | 'aliceElsewhere' | 'leaver' | 'nobody';
   readonly spec: (c: Context) => Spec;
   readonly status: number;
   readonly then?: (c: Context, body: unknown, response: Response) => void;
@@ -137,6 +150,9 @@ const asRecord = (value: unknown): Record<string, unknown> => value as Record<st
 const STEPS: readonly Step[] = [
   // ── Before anybody is signed in
   { id: 'getClientInfo', as: 'nobody', spec: () => ({}), status: 200 },
+  { id: 'getInstanceInfo', as: 'nobody', spec: () => ({}), status: 200 },
+  { id: 'registerApnsDevice', spec: () => ({ json: { deviceToken: 'aabb0011' } }), status: 204 },
+  { id: 'removeApnsDevice', spec: () => ({ json: {} }), status: 204 },
   { id: 'getAuthMethods', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getMe', spec: () => ({}), status: 200 },
   { id: 'setAway', spec: () => ({ json: { away: true } }), status: 200 },
@@ -613,6 +629,23 @@ const STEPS: readonly Step[] = [
     status: 204,
   },
 
+  // ── The person's settings and their exports
+  { id: 'getMySignIn', spec: () => ({}), status: 200 },
+  { id: 'setMyLocale', spec: () => ({ json: { locale: 'tr' } }), status: 204 },
+  { id: 'getMyQuietHours', spec: () => ({}), status: 200 },
+  // A window is read on the profile's clock, so the profile names one first.
+  { id: 'updateProfile', spec: () => ({ json: { timeZone: 'Europe/Istanbul' } }), status: 200 },
+  {
+    id: 'setMyQuietHours',
+    spec: () => ({ json: { quietHours: { from: 19 * 60, to: 9 * 60, days: [1, 2, 3, 4, 5] } } }),
+    status: 200,
+  },
+  { id: 'getMyMissedMail', spec: () => ({}), status: 200 },
+  // Off: on needs a mail relay, which this server has not.
+  { id: 'setMyMissedMail', spec: () => ({ json: { on: false } }), status: 200 },
+  { id: 'requestMyExport', spec: () => ({}), status: 202 },
+  { id: 'listMyExports', spec: () => ({}), status: 200 },
+
   // ── The native application's way in, and the ends of sessions
   {
     id: 'nativeAuthorize',
@@ -638,6 +671,12 @@ const STEPS: readonly Step[] = [
   { id: 'hideMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 200 },
   { id: 'deleteMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 204 },
   { id: 'logoutEverywhere', as: 'bob', spec: () => ({}), status: 204 },
+  {
+    id: 'eraseMyAccount',
+    as: 'leaver',
+    spec: (c) => ({ json: { confirm: c.leaver.username } }),
+    status: 204,
+  },
 ];
 
 const entryOf = (id: string): EndpointSpec => {
@@ -727,6 +766,7 @@ const world = async (): Promise<Context> => {
     bob,
     aliceElsewhere,
     aliceDeviceId: device.sessionId,
+    leaver: await aSignedInUser(db, clock, 'contract-leaver'),
     workspaceId,
     guestId: guest.userId,
     channelId: channel.id,

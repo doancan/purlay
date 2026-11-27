@@ -120,7 +120,12 @@ describe('the endpoint table', () => {
 
   test('a route that needs no session is one of the few that is public, and says so', () => {
     const publicIds = ENDPOINTS.filter((e) => e.auth === 'none').map((e) => e.id);
-    expect(publicIds.sort()).toEqual(['getAuthMethods', 'getClientInfo', 'nativeToken']);
+    expect(publicIds.sort()).toEqual([
+      'getAuthMethods',
+      'getClientInfo',
+      'getInstanceInfo',
+      'nativeToken',
+    ]);
   });
 
   test('every response is a success: the failures are the one envelope, and are not repeated per route', () => {

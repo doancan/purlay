@@ -31,7 +31,7 @@ import {
   type IncomingWebhookList,
 } from '@purlay/types';
 import { channelNotFound, requireChannelById, type ChannelContext } from '../channels/guard';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import type { EventBus } from '../../../platform/events';
 import type { Logger } from '../../../platform/logging';
@@ -112,8 +112,6 @@ interface HookRow {
   readonly creator_avatar_url: string | null;
 }
 
-const iso = (at: Date | string): string => new Date(at).toISOString();
-
 const webhookOf = (row: HookRow): IncomingWebhook => ({
   id: row.id,
   channelId: row.channel_id,
@@ -127,12 +125,12 @@ const webhookOf = (row: HookRow): IncomingWebhook => ({
           displayName: row.creator_display_name,
           avatarUrl: row.creator_avatar_url,
         },
-  createdAt: iso(row.created_at),
-  lastUsedAt: row.last_used_at === null ? null : iso(row.last_used_at),
+  createdAt: isoInstant(row.created_at),
+  lastUsedAt: row.last_used_at === null ? null : isoInstant(row.last_used_at),
   ...(row.last_request_at === null || row.last_status === null
     ? {}
     : {
-        lastRequestAt: iso(row.last_request_at),
+        lastRequestAt: isoInstant(row.last_request_at),
         lastStatus: row.last_status,
         lastError: row.last_error,
       }),

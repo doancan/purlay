@@ -28,6 +28,8 @@ import { SlideTrack } from '../../../ui/slide-track';
 import { NotificationLevelMenu } from './notification-level-menu';
 import { PanelControls } from './panel-controls';
 import { PeerHeading } from '../profile/peer-heading';
+import { useOpenThread } from '../threads/thread-context';
+import { useSidePanel } from './side-panel';
 import { StarToggle } from './star-toggle';
 import { usePresence } from '../../../realtime/realtime-provider';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
@@ -41,14 +43,22 @@ const ChannelDetailsDialog = lazy(async () => ({
   default: (await import('./channel-details')).ChannelDetailsDialog,
 }));
 
-/** One segment of the header's two-way control: the feed, or the open questions. */
+/**
+ * One segment of the header's two-way control: the feed, or the open questions. `rounded-sm`, as the track's mark is
+ * inside its `rounded-lg` and `p-1`, so a segment's focus ring follows the mark's corners.
+ */
 export const segmentClasses =
-  'relative inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-md px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
+  'relative inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-sm px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
 /** The segment the person is on: raised out of the track by a one-pixel card shadow (D-110). */
 export const activeSegmentClasses = 'text-ink max-narrow:hidden';
 /** The track the two segments sit in; the title before it takes the room, so it sits at the right. */
 export const segmentTrackClasses =
   'flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
+/** The track beside a panel: the questions alone, as on a narrow window. */
+const compactTrackClasses = 'flex shrink-0';
+/** The questions beside a panel: a glyph and its count, a control as tall as the actions beside it. */
+const compactQuestionsClasses =
+  'inline-flex h-control items-center gap-1 whitespace-nowrap rounded-md px-2 text-label text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink max-narrow:h-touch';
 
 /** The glyph at the head of a header: what this screen is, quiet beside its name (D-110). */
 export const HeaderTile = ({
@@ -78,6 +88,17 @@ export const useChannelTitle = (channel: Channel): string => {
   return peer.id === user.id ? t('feed.selfDm', { name }) : name;
 };
 
+/** How a list of items from many places names one: a channel with its `#`, a conversation without. */
+export const useChannelLabel = (channel: Channel): string => {
+  const title = useChannelTitle(channel);
+  return channel.type === 'direct_message' ? title : `#${title}`;
+};
+
+/** That name on its own, beside an item in such a list. */
+export const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
+  <span>{useChannelLabel(channel)}</span>
+);
+
 export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t, format } = useI18n();
   const { workspace } = useWorkspace();
@@ -104,6 +125,12 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
   const views = !direct || openText !== null;
   const questionsName =
     openText === null ? t('header.questions') : `${t('header.questions')} ${openText}`;
+  // With a panel or a thread beside it the conversation is about half as wide, and a track of words
+  // centred between the name and the actions left the name no room at all: the views drop to the
+  // narrow window's glyph, and the track gives up its centre to the name.
+  const { panel } = useSidePanel();
+  const { openId } = useOpenThread();
+  const beside = panel !== null || openId !== null;
 
   return (
     <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline max-narrow:gap-1 border-border-subtle pr-4 pl-6 max-narrow:pl-4">
@@ -132,7 +159,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             <h1 className="min-w-0 truncate text-title text-ink">
               <button
                 type="button"
-                className="max-w-full truncate rounded-sm hover:text-ink"
+                className="max-w-full truncate rounded-sm transition-colors duration-hover ease-standard hover:text-accent-text"
                 onClick={() => {
                   setDetails(true);
                 }}
@@ -167,7 +194,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
             <h1 className="min-w-0 truncate text-title text-ink">
               <button
                 type="button"
-                className="max-w-full truncate rounded-sm hover:text-ink"
+                className="max-w-full truncate rounded-sm transition-colors duration-hover ease-standard hover:text-accent-text"
                 onClick={() => {
                   setDetails(true);
                 }}
@@ -215,29 +242,34 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
           as="nav"
           memory="views"
           aria-label={t('header.views')}
-          className={segmentTrackClasses}
+          className={beside ? compactTrackClasses : segmentTrackClasses}
         >
-          <Link
-            to="channel"
-            params={{ slug: workspace.slug, channelId: channel.id }}
-            aria-current="page"
-            className={cn(segmentClasses, activeSegmentClasses)}
-          >
-            {t('header.feed')}
-          </Link>
+          {!beside && (
+            <Link
+              to="channel"
+              params={{ slug: workspace.slug, channelId: channel.id }}
+              aria-current="page"
+              className={cn(segmentClasses, activeSegmentClasses)}
+            >
+              {t('header.feed')}
+            </Link>
+          )}
           <Link
             to="questions"
             params={{ slug: workspace.slug }}
             search={narrowedTo(channel.id)}
             aria-label={questionsName}
-            className={cn(segmentClasses, 'text-ink-muted')}
+            className={beside ? compactQuestionsClasses : cn(segmentClasses, 'text-ink-muted')}
           >
             {/* On a narrow window the glyph stands for the words, which the link's name still says:
           a phone's width cannot give them room and keep the channel's name readable (#624). */}
-            <span aria-hidden="true" className="hidden max-narrow:inline-flex">
+            <span
+              aria-hidden="true"
+              className={beside ? 'inline-flex' : 'hidden max-narrow:inline-flex'}
+            >
               <Icon name="open-question" />
             </span>
-            <span className="max-narrow:hidden">{t('header.questions')}</span>
+            {!beside && <span className="max-narrow:hidden">{t('header.questions')}</span>}
             {/* A space the eye does not need but the text does: what is shown reads as its name. */}
             {openText !== null && ' '}
             {openText !== null && (
@@ -253,7 +285,7 @@ export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React
       <div
         className={cn(
           'flex items-center justify-end gap-1 max-narrow:gap-0',
-          views ? 'flex-1 basis-0 max-narrow:flex-none' : 'shrink-0',
+          views && !beside ? 'flex-1 basis-0 max-narrow:flex-none' : 'shrink-0',
         )}
       >
         <PanelControls direct={direct} channel={channel} />

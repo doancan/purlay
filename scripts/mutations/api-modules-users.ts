@@ -12,12 +12,19 @@ export const API_MODULES_USERS: readonly Mutation[] = [
     tests: ['apps/api/src/modules/workspaces/identity/connections.integration.test.ts'],
   },
   {
+    id: 'erasure-from-a-handoff-of-an-old-sign-in',
+    why: 'a session the native handoff minted now erases the account although the browser signed in long ago (D-356)',
+    file: 'apps/api/src/modules/users/erasure.ts',
+    find: '    (evidence !== undefined && !authenticatedWithin(evidence.authenticated_at, now, recent))\n',
+    replace: '    false\n',
+    tests: ['apps/api/src/ingress/http/native-fresh-sign-in.integration.test.ts'],
+  },
+  {
     id: 'erasure-from-any-old-session',
     why: 'a forgotten session from last month erases the account (D-139 §5)',
     file: 'apps/api/src/modules/users/erasure.ts',
-    find: '  if (now.getTime() - new Date(session.created_at).getTime() > ERASURE_SIGN_IN_MINUTES * 60_000) {\n',
-    replace:
-      '  if (now.getTime() - new Date(session.created_at).getTime() > ERASURE_SIGN_IN_MINUTES * 60_000 * 10_000) {\n',
+    find: '    now.getTime() - new Date(session.created_at).getTime() > recent ||\n',
+    replace: '    now.getTime() - new Date(session.created_at).getTime() > recent * 10_000 ||\n',
     tests: ['apps/api/src/modules/users/erasure.integration.test.ts'],
   },
   {

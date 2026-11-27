@@ -12,13 +12,10 @@
 import type { Locator, Page } from '@playwright/test';
 import { DEFAULT_CHANNEL_NAME } from '@purlay/types';
 import { expect, test } from './fixtures';
-import { isNarrow, openNav } from './support';
+import { isNarrow, openNav, rowWith } from './support';
 
 const composer = (page: Page): Locator =>
   page.getByRole('textbox', { name: `Message ${DEFAULT_CHANNEL_NAME}` });
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
 
 test.describe('the first run', () => {
   test('a workspace made, a person invited by a link, and the first words between them', async ({
@@ -96,7 +93,7 @@ test.describe('the first run', () => {
     await first.getByRole('button', { name: 'Create channel' }).click();
     await expect(first.getByRole('heading', { name: channelName, exact: true })).toBeVisible();
     await first.getByRole('button', { name: 'Add people' }).click();
-    const people = first.getByRole('dialog', { name: `Add people to ${channelName}` });
+    const people = first.getByRole('dialog', { name: `Add people to #${channelName}` });
     await people.getByLabel('Find a person').fill(joiner.username);
     await people.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(people.getByRole('button', { name: 'Added' })).toBeDisabled();

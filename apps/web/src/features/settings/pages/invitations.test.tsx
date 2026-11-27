@@ -129,7 +129,7 @@ describe('invitations', () => {
         return Promise.resolve({ invitation: anInvitation(FIRST), token: TOKEN });
       },
     });
-    expect(main(view).getByText('No links are open.')).toBeDefined();
+    expect(main(view).getByText('No open links')).toBeDefined();
     await expectNoAxeViolations(view.getByRole('main'));
 
     await person().click(main(view).getByRole('button', { name: 'Make a link' }));
@@ -172,7 +172,7 @@ describe('invitations', () => {
     await person().click(main(view).getByRole('button', { name: 'Revoke' }));
     await settle();
     expect(revoked).toEqual([`${IDS.workspace}/${FIRST}`]);
-    expect(main(view).getByText('No links are open.')).toBeDefined();
+    expect(main(view).getByText('No open links')).toBeDefined();
   });
 
   test('each Revoke says which link it ends: the row it stands in is its description, whole', async () => {
@@ -216,7 +216,7 @@ describe('invitations', () => {
     expect(main(view).getByText('The open links did not load.')).toBeDefined();
     await person().click(main(view).getByRole('button', { name: 'Retry' }));
     await settle();
-    expect(main(view).getByText('No links are open.')).toBeDefined();
+    expect(main(view).getByText('No open links')).toBeDefined();
     await person().click(main(view).getByRole('button', { name: 'Make a link' }));
     await settle();
     expect(main(view).getByRole('alert').textContent).toContain('Could not make a link.');
@@ -363,7 +363,7 @@ describe('invitation management regressions', () => {
     await settle();
     await person().click(main(view).getByRole('button', { name: 'Revoke' }));
     await settle();
-    expect(main(view).getByText('No links are open.')).toBeDefined();
+    expect(main(view).getByText('No open links')).toBeDefined();
     expect(main(view).queryByRole('textbox', { name: 'Invitation link' })).toBeNull();
     expect(main(view).getByRole('button', { name: 'Make a link' })).toBeDefined();
   });

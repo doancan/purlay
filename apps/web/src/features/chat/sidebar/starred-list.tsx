@@ -40,7 +40,7 @@ export const StarredList = (): React.JSX.Element | null => {
       >
         {t('sidebar.starred')}
       </SectionHeading>
-      <ul id="sidebar-list-starred" className="flex flex-col">
+      <ul id="sidebar-list-starred" className="flex flex-col gap-1">
         {shown.map(({ channel }) => (
           <li key={channel.id}>
             <ChannelRow

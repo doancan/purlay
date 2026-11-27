@@ -38,6 +38,21 @@ export const meRoutes = (
   const sending = sendingOf(context);
   const pushDependencies = { ...dependencies, pushConfiguration: own.browserPush };
   const apnsDependencies = { ...dependencies, apnsScope: own.apnsScope };
+  const serveMyExport = async ({
+    request,
+    params,
+  }: {
+    request: Request;
+    params: { exportId: string };
+  }): Promise<Response> => {
+    const { body, headers } = await downloadMyExport(
+      { ...dependencies, personalCatalogue: context.modules.personalExportCatalogue },
+      request,
+      params.exportId,
+    );
+    // A cancel must reach the archive's stream so the spent archive is removed.
+    return new Response(body, { headers });
+  };
 
   return (
     new Elysia()
@@ -61,15 +76,8 @@ export const meRoutes = (
         return asked;
       })
       .get('/api/me/exports', async ({ request }) => await readMyExports(dependencies, request))
-      .get('/api/me/exports/:exportId/download', async ({ request, params }) => {
-        const { body, headers } = await downloadMyExport(
-          { ...dependencies, personalCatalogue: context.modules.personalExportCatalogue },
-          request,
-          params.exportId,
-        );
-        // Our own Response, as an owner's export's download is: a cancel must reach the archive's.
-        return new Response(body, { headers });
-      })
+      .get('/api/me/exports/:exportId/download', serveMyExport)
+      .post('/api/me/exports/:exportId/download', serveMyExport)
       .get('/api/me', async ({ request }) => await readMe(creating, request))
       .get(
         '/api/releases/latest',
