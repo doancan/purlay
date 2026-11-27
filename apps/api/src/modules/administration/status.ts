@@ -8,6 +8,7 @@ import {
   OUTBOX_STALE_AFTER_SECONDS,
   outboxOverview,
   readOutbox,
+  type OutboxView,
 } from '../../platform/outbox-report';
 
 export const serverOperations = async (
@@ -52,7 +53,7 @@ export const serverOverview = async (
   ready: boolean,
   now: Date,
   pushConfigured: boolean,
-  outboxConsumers: readonly string[] = [],
+  outbox: OutboxView,
 ): Promise<ServerOverview> => {
   const users = await db
     .selectFrom('users')
@@ -80,7 +81,7 @@ export const serverOverview = async (
     .select((eb) => eb.fn.countAll<string>().as('count'))
     .where('status', '=', 'failed')
     .executeTakeFirstOrThrow();
-  const outbox = outboxOverview(await readOutbox(db, outboxConsumers, now));
+  const facts = outboxOverview(await readOutbox(db, outbox, now));
   return {
     checkedAt: now.toISOString(),
     version: SERVER_VERSION,
@@ -102,8 +103,8 @@ export const serverOverview = async (
     pushConfigured,
     sharedStateConfigured: config.REDIS_URL !== undefined,
     exportFailures: Number(failedExports.count),
-    outboxDeadFacts: outbox.deadFacts,
-    outboxOldestPendingSeconds: outbox.oldestPendingSeconds,
+    outboxDeadFacts: facts.deadFacts,
+    outboxOldestPendingSeconds: facts.oldestPendingSeconds,
     outboxStaleAfterSeconds: OUTBOX_STALE_AFTER_SECONDS,
   };
 };

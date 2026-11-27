@@ -165,8 +165,9 @@ describe('metrics, switched on', () => {
     const { app, lines } = anApp();
     expect(sampleOf(await pageOf(app), 'purlay_jobs_status_readable')).toBe(0);
     expect(sampleOf(await pageOf(app), 'purlay_jobs_status_readable')).toBe(0);
+    // The jobs' line alone: the outbox, read for its own families where a module consumes a fact, says its own once too.
     const said = lines.filter((line) =>
-      String(line['msg']).includes('could not be read for metrics'),
+      String(line['msg']).includes('jobs’ record could not be read for metrics'),
     );
     expect(said).toHaveLength(1);
   });

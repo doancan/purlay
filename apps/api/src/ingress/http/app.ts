@@ -30,10 +30,11 @@ import { sessionAuthOf } from '../../modules/auth/sessions';
 import { httpLimits, WRITE_BUDGET } from './rate-limit';
 import { inProcessLimiters } from '../../realtime/rate-limiter';
 import type { EntitlementPolicy } from '../../platform/module-kit/entitlement';
+import type { OutboxView } from '../../platform/outbox-report';
 import { responseHeaders } from './edge';
 import { type SetupDependencies } from './setup';
 import { githubAppApi, githubAppCaller, platformAppFetch } from '../../platform/github-app-api';
-import { latestReleaseCheck } from '../../features/chat/integrations/latest-release';
+import { latestReleaseCheck } from '../../platform/latest-release';
 import type { GitHubAppSettings } from '../../modules/setup/settings';
 import { serverMetrics, WEBSOCKET_CONNECTIONS } from '../../platform/metrics';
 import { CORE_OWNER, NO_OWNER } from '../../platform/module-kit/ownership';
@@ -45,6 +46,7 @@ import { moduleConnections } from '../../platform/module-budget';
 import { deadlinesOf } from '../../platform/request-deadline';
 import { runningModuleIds } from '../../composition';
 import { factContextOf, sinkOfModule } from '../../module-seams-wiring';
+import { memberDeparturesOf } from '../../modules/workspaces/member-departures';
 import { factPublisherOf } from '../../platform/ports/fact-publisher';
 import type { HandlerDependencies, LeasedDependencies } from './dependencies';
 import { requestObservation } from './request-observation';
@@ -107,6 +109,16 @@ export interface HttpApplication {
 export const createApp = (given: Dependencies): HttpApplication => {
   // The modules this process runs (`composition.ts`).
   const modules = given.composition;
+  const metrics = given.metrics ?? serverMetrics();
+  // Who consumes which fact over the whole build, what this process runs, and the outbox's limits: one context for every
+  // publish this application makes, a module route's and the core's (D-288, D-355).
+  const factContext = factContextOf({
+    composition: modules,
+    clock: given.clock,
+    metrics,
+    outboxPendingMax: given.config.OUTBOX_PENDING_MAX,
+    deliveriesPerMinuteMax: given.config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
+  });
   const dependencies = {
     ...given,
     // The one database a handler can reach, leased by the module the request belongs to: the module's share of the
@@ -122,12 +134,12 @@ export const createApp = (given: Dependencies): HttpApplication => {
     readAttachment: modules.readAttachment,
     workspaceCreated: given.workspaceCreated ?? modules.workspaceCreated,
     workspaceChannels: given.workspaceChannels ?? modules.workspaceChannels,
+    memberDepartures: memberDeparturesOf(factContext),
     auditAccess: modules.auditAccess,
     userErased: given.userErased ?? modules.userErased,
     collatedColumns: given.collatedColumns ?? modules.collatedColumns,
   } satisfies LeasedDependencies;
   const { log } = dependencies;
-  const metrics = dependencies.metrics ?? serverMetrics();
   /** How a request reads its workspace's grants (D-289): the composition's set, and the count of a request turned away for one. */
   const entitlements: EntitlementPolicy = {
     effective: modules.effectiveModules,
@@ -158,16 +170,27 @@ export const createApp = (given: Dependencies): HttpApplication => {
       return owner === CORE_OWNER || owner === NO_OWNER ? undefined : owner;
     },
     closedEvent: modules.closedEvent,
+    announcePresence: modules.announcePresence,
+    frameProjection: modules.frameProjection,
   });
   metrics.registry.gauge(
     WEBSOCKET_CONNECTIONS.name,
     WEBSOCKET_CONNECTIONS.help,
     () => sockets.held().connections,
   );
-  // The modules the build carries that consume a fact, whether this process runs them or not: the rows wait for any node that does.
-  const outboxConsumers = modules.bundled
-    .filter((module) => (module.manifest.consumes ?? []).length > 0)
-    .map((module) => module.manifest.id);
+  // What the outbox is read by (D-353): the modules the build carries that consume a fact, whether this process runs them or not (the
+  // rows wait for any node that does), and what this node can deliver of them.
+  const outbox: OutboxView = {
+    consumers: modules.bundled
+      .filter((module) => (module.manifest.consumes ?? []).length > 0)
+      .map((module) => module.manifest.id),
+    consumed: modules.bundled.flatMap(({ manifest }) =>
+      (manifest.consumes ?? []).map((type) => ({ consumer: manifest.id, type })),
+    ),
+    handles: modules.outboxHandles,
+    effective: modules.effectiveModules,
+    granted: modules.grantedModules,
+  };
   // The inbox lists the notices of the modules this process runs and no others (D-286). Made here, beside the
   // composition it is read from, since the guard on it (`scripts/mutations/api-ingress-http.ts`) names this line.
   const inbox = {
@@ -182,7 +205,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     inbox,
     metrics,
   };
-  const probes = probeRoutes(context, { metrics, outboxConsumers });
+  const probes = probeRoutes(context, { metrics, outbox });
   // The one cipher for stored credentials, its key derived from the root on first use (D-39 §6).
   const cipher = credentialCipher(dependencies.config.ENCRYPTION_KEY);
   const browserPush = pushConfiguration(
@@ -231,7 +254,6 @@ export const createApp = (given: Dependencies): HttpApplication => {
     deliveriesPerMinuteMax: dependencies.config.WORKSPACE_DELIVERIES_PER_MINUTE ?? null,
     ...(dependencies.push === undefined ? {} : { push: dependencies.push }),
   };
-  const factContext = factContextOf(seamInputs);
   // Each bundled module's own routes (D-280), made from what they are handed: a module that is not run is closed by its
   // manifest, as the rest of the surface is (D-255 §2).
   const moduleRoutes = modules.bundled.flatMap((module) =>
@@ -294,7 +316,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
     peersBehind: dependencies.peersBehind,
     suspensionPeersBehind: dependencies.suspensionPeersBehind,
     suspension: modules.suspension,
-    outboxConsumers,
+    outbox,
     jobs: [
       ...CORE_JOBS,
       ...Object.keys(modules.jobWork).filter((name) => !modules.closedJob(name)),
@@ -309,7 +331,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
    */
   const routes: AnyElysia[] = [
     probes.routes,
-    signInRoutes(context, afterSignInAnswers.run),
+    signInRoutes(context, afterSignInAnswers.run, given.apnsScope !== undefined),
     setupRoutes(context, setup),
     serverRoutes(context, setup, administration),
     meRoutes(context, {

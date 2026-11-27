@@ -1,5 +1,7 @@
 # D-272. What `MODULES.md` described and nothing built is design intent, labelled so, and built with the first module that needs it — amends `MODULES.md` §3, §4, §7, §8, §10 and §12; builds on D-250, D-254
 
+*Amended by D-352: the domain bus, built with no consumer, is removed.*
+
 **Context.** An audit of `MODULES.md` against `main` found sentences that read as built or enforced and are not: a domain
 event that the manifest calls a hint or a fact, with a fact also written as a row in the same transaction and drained by a
 sweeper; the ports `NotificationSink`, `SearchSource`, `SystemMessagePort` and `AttachmentOwner`; a `register` call a module

@@ -359,7 +359,8 @@ describe('integration: upgrading from the previous release', () => {
         '0131_backfill_push_delivery_subscriptions',
         '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
-        '0134_server_legal_addresses',
+        '0134_outbox_expired',
+        '0135_server_legal_addresses',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -871,7 +872,8 @@ describe('integration: APNs joins the durable push queue', () => {
       expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
         '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
-        '0134_server_legal_addresses',
+        '0134_outbox_expired',
+        '0135_server_legal_addresses',
       ]);
       expect(await heap()).toBe(originalHeap);
       const deliveries = async (): Promise<
@@ -1034,7 +1036,7 @@ describe('integration — server legal addresses on upgrade', () => {
     async () => {
       const db = open(await emptyDatabase());
       try {
-        const oldCore = copiedBelow(MIGRATIONS_DIRECTORY, '0134_server_legal_addresses.sql');
+        const oldCore = copiedBelow(MIGRATIONS_DIRECTORY, '0135_server_legal_addresses.sql');
         expect((await migrateToLatest(db, oldCore)).error).toBeUndefined();
         await sql`insert into server_settings
         (id, display_name, support_url, allowed_email_domains, require_account_approval)
@@ -1056,7 +1058,7 @@ describe('integration — server legal addresses on upgrade', () => {
         const upgraded = await migrateToLatest(db);
         expect(upgraded.error).toBeUndefined();
         expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
-          '0134_server_legal_addresses',
+          '0135_server_legal_addresses',
         ]);
         expect(await preferences()).toEqual({ ...older, privacy_url: null, terms_url: null });
       } finally {

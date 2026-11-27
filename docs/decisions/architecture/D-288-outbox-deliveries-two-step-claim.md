@@ -2,6 +2,8 @@
 
 *Amended by D-325: §12's "no command-line twin" is reversed; `bun run outbox:requeue` and `outbox:discard` write through the console's writer.*
 
+*Amended by D-353: §2's grant is judged on every node over the whole build, so a consumer not granted gets no row whichever node publishes; §9's age of the oldest and §12's `stuck` leave out a fact held on purpose (`purlay_outbox_held`), and an expired fact is counted in `outbox_expired` (`purlay_outbox_expired_total`, with an alert).*
+
 **Context.** D-283 decided that a fact between modules is an outbox row and left the details to the step that builds it: what the
 row is, what `publishFact` refuses, what a claim and a delivery do when two nodes run at once, a node dies, a handler throws or a
 payload no longer fits. Step 14c of `MODULES.md` §10 builds the table and the publishing (§1 to §3, §6 and §7 below); the claim

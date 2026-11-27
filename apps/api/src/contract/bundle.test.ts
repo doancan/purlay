@@ -113,6 +113,28 @@ describe('the contract', () => {
     expect(contract.format).toBe(CONTRACT_BUNDLE_FORMAT);
   });
 
+  test('exports the optional APNs capability and session-owned typed routes', () => {
+    expect(contract.schemas['ClientInfo']).toMatchObject({
+      properties: {
+        capabilities: { properties: { apnsNotifications: { type: 'boolean' } } },
+      },
+    });
+    const register = contract.endpoints.find((entry) => entry.id === 'registerApnsDevice');
+    const remove = contract.endpoints.find((entry) => entry.id === 'removeApnsDevice');
+    expect(register).toMatchObject({
+      method: 'POST',
+      path: '/api/push/apns/subscriptions',
+      auth: 'session',
+    });
+    expect(remove).toMatchObject({
+      method: 'POST',
+      path: '/api/push/apns/subscriptions/remove',
+      auth: 'session',
+    });
+    expect(contract.schemas['ApnsDeviceRequest']).toMatchObject({ required: ['deviceToken'] });
+    expect(contract.schemas['RemoveApnsDeviceRequest']).not.toHaveProperty('required');
+  });
+
   test('exports an optional iOS minimum beside the existing macOS minimum', () => {
     expect(contract.schemas['ClientInfo']).toMatchObject({
       properties: {

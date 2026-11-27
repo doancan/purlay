@@ -296,7 +296,6 @@ export const en = {
   'security.access.return': 'Return to workspace',
   'security.access.other': 'Choose another workspace',
   'security.signIn': 'Sign in again',
-  'security.independent': 'Sign in with your own account',
   'security.independentHint':
     'An owner needs a recent independent sign-in to create or use workspace recovery. Company sign-in cannot change account credentials.',
   'security.factor.title': 'Authenticator for this workspace',
@@ -321,7 +320,6 @@ export const en = {
   'security.factor.qr': 'Workspace authenticator QR code',
   'security.factor.key': 'Setup key',
   'security.factor.once': 'This setup key is shown only now. If you leave, start setup again.',
-  'security.factor.confirm': 'Confirm authenticator',
   'security.factor.confirmed': 'Verification completed.',
   'security.code': 'Authenticator code',
   'security.code.invalid': 'Enter the six digits from your authenticator app.',
@@ -615,7 +613,6 @@ export const en = {
   // ── Common ──────────────────────────────────────────────────────────────
   'common.close': 'Close',
   'common.cancel': 'Cancel',
-  'common.create': 'Create',
   'common.copy': 'Copy',
   'common.copied': 'Copied',
   'common.retry': 'Retry',
@@ -625,8 +622,6 @@ export const en = {
   // ── The application ─────────────────────────────────────────────────────
   'app.skip': 'Skip to the conversation',
   'app.skipContent': 'Skip to the content',
-  'app.placeholder.title': 'This screen is not built yet',
-  'app.placeholder.body': 'The frame around it is final; the screen arrives with its backend.',
   'app.notFound.title': 'Nothing here',
   'app.notFound.body': 'This address does not lead anywhere in Purlay.',
   'app.notFound.home': 'Go to your channels',
@@ -705,6 +700,10 @@ export const en = {
   'native.body': '{app} will be signed in as {name}, {email}, on {host}.',
   'native.hint':
     'It gets a session of its own. To end it, sign out in the app, or choose Sign out everywhere in Settings.',
+  'native.again.title': 'Sign in again to continue',
+  'native.again.body':
+    '{app} asked for your sign-in to be checked again. Sign out of this browser, then sign back in.',
+  'native.again.action': 'Sign in again',
   'native.authorize': 'Open {app}',
   'native.other': 'Sign out of this browser and use another account',
   'native.failed': '{app} was not opened.',
@@ -804,7 +803,6 @@ export const en = {
   'sidebar.people': 'People',
   'sidebar.newChannel': 'New channel',
   'sidebar.jump': 'Jump to…',
-  'sidebar.private': 'private',
   'sidebar.you': 'you',
   'sidebar.mentions': {
     one: '{count} unread mention',
@@ -954,8 +952,6 @@ export const en = {
   'invite.mail.unavailable': 'This server cannot send email, so these were not sent: {addresses}.',
   'invite.mail.failed': 'Could not send the invitations.',
   'invite.mail.or': 'Or share the link yourself',
-  'members.entry': 'Members…',
-  'members.title': 'Members of {workspace}',
   'members.description':
     'An admin manages members and admins; making someone an owner, or changing an owner, is an owner’s.',
   'members.roleOf': 'Role of {name}',
@@ -976,8 +972,6 @@ export const en = {
     '{name}: could not confirm the result. Refresh the member list before retrying.',
   'members.refreshFailed': 'Could not refresh members. The last received list is shown.',
   'members.removeFailed': '{name} was not removed.',
-  'audit.entry': 'Audit log…',
-  'audit.title': 'Audit log of {workspace}',
   'audit.description':
     'Who did which administrative thing, newest first. Never what anybody wrote.',
   'audit.empty': 'Nothing administrative has happened yet',
@@ -1002,7 +996,6 @@ export const en = {
   'audit.filter.backwards': 'This day is before the first one.',
   'audit.filter.clear': 'Clear filters',
   'audit.emptyFiltered': 'No entry matches these filters',
-  'audit.download': 'Download',
   'audit.download.description':
     'Every entry the filters keep, not only those shown, newest first. A download is on the log itself.',
   'audit.download.csv': 'CSV',
@@ -1251,8 +1244,6 @@ export const en = {
   'audit.operator': 'The server’s operator',
   'retention.forever': 'forever',
   'retention.days': '{days} days',
-  'retention.entry': 'Keep history…',
-  'retention.title': 'How long {workspace} keeps its history',
   'retention.description':
     'Messages and files older than this are deleted every night, for good. Keeping everything is the default.',
   'retention.label': 'Keep history',
@@ -1286,8 +1277,6 @@ export const en = {
   'storage.left': '{left} left',
   'storage.full':
     'No room is left: files are refused until the server’s operator raises the quota.',
-  'export.entry': 'Export workspace…',
-  'export.title': 'Export {workspace}',
   'export.description':
     'One archive of every channel you can see — public channels, and the private channels and direct messages you are in — with their files, and nobody’s email address. It is made in the background and can be downloaded once, within a day.',
   'export.request': 'Export',
@@ -1322,8 +1311,6 @@ export const en = {
   'audit.quota.default': 'the default',
   'audit.action.retention.purged':
     'History older than {days} days was cleared: {messages} messages, {files} files',
-  'github.entry': 'GitHub connection…',
-  'github.title': 'GitHub for {workspace}',
   'github.description':
     'With a token, a link to a pull request or an issue shows as a card: its state, CI and review. The token is kept encrypted and never shown again.',
   'github.connected': 'Connected since {when}.',
@@ -1431,9 +1418,6 @@ export const en = {
   'workspace.none.body':
     'Ask an owner to add you, or sign in with the account that already belongs to one.',
   'workspace.settings.entry': 'Workspace settings',
-  'workspace.settings.title': 'Workspace settings',
-  'workspace.settings.description':
-    'The name everyone sees. The address stays /w/{slug}, so links already shared keep working.',
   'workspace.settings.save': 'Save',
   'workspace.settings.empty': 'A workspace needs a name.',
   'workspace.nameInvalid':
@@ -1578,15 +1562,8 @@ export const en = {
   'details.removeForbidden': 'Only an owner or an admin can remove {name}.',
 
   // ── Messages ────────────────────────────────────────────────────────────
-  'message.react': 'React',
-  'message.reacted': 'Reacted',
-  'message.reply': 'Reply',
   'message.edited': 'edited',
   'panels.menu': 'Channel menu',
-  'profile.menu': 'Your profile…',
-  'profile.title': 'Your profile',
-  'profile.description':
-    'What the people you work with see beside your name. Your name and picture are GitHub’s.',
   'profile.titleLabel': 'Title',
   'profile.titleHint': 'What you do, in a few words.',
   'profile.statusLabel': 'Status',
@@ -1985,15 +1962,9 @@ export const en = {
     one: '{count} new message',
     other: '{count} new messages',
   },
-  'message.jumpToNew': 'Jump to new messages',
   'message.today': 'Today',
   'message.yesterday': 'Yesterday',
-  'message.reactions': {
-    one: '{count} reaction',
-    other: '{count} reactions',
-  },
   'message.addReaction': 'Add reaction',
-  'message.removeReaction': 'Remove your reaction',
   // ── A repository's feed (D-134) ─────────────────────────────────────────
   'github.push.pushed': {
     one: '{actor} pushed {count} commit to {ref}',
@@ -2196,7 +2167,6 @@ export const en = {
   // ── The feed (D-98) ─────────────────────────────────────────────────────
   'feed.label': 'Messages in {channel}',
   'feed.row': '{name}, {when}',
-  'feed.dmTitle': 'Direct message with {name}',
   'feed.selfDm': '{name} (you)',
   'feed.olderLoading': 'Loading older messages',
   'feed.olderError': 'Couldn’t load older messages',
@@ -2212,13 +2182,11 @@ export const en = {
   'channel.join.failed': 'Could not join the channel.',
   'channel.announcement.notice':
     'Only owners and admins post in this channel. You can still reply in a thread.',
-  'message.reactWith': 'React with {emoji}',
   'message.quickReactions': 'Quick reactions',
   'message.reactionOf': {
     one: '{emoji}, {count} reaction',
     other: '{emoji}, {count} reactions',
   },
-  'message.code.language': 'Language: {language}',
   'message.code.plain': 'text',
   'message.link.external': 'Opens in a new tab',
   'message.table': 'Table',
@@ -2243,7 +2211,6 @@ export const en = {
 
   // ── Delivery (UX §3.1) ──────────────────────────────────────────────────
   'delivery.sending': 'Sending',
-  'delivery.sent': 'Sent',
   'delivery.failed': 'Failed to send',
   'delivery.unreached': 'It goes on its own when you are back online.',
   'delivery.retry': 'Retry',
@@ -2269,8 +2236,6 @@ export const en = {
   'thread.close': 'Close thread',
   'thread.resolve': 'Resolve',
   'thread.reopen': 'Reopen',
-  'thread.replyPlaceholder': 'Reply to thread…',
-  'thread.replyLabel': 'Reply to thread',
   'thread.loading': 'Loading replies…',
   'thread.error': 'Couldn’t load replies',
   'thread.rootError': 'Couldn’t load this thread',
@@ -2301,7 +2266,6 @@ export const en = {
   'composer.italic': 'Italic',
   'composer.strike': 'Strikethrough',
   'composer.inlineCode': 'Code',
-  'composer.write': 'Write',
   'composer.link.title': 'Add a link',
   'composer.link.description': 'Choose the text and address to insert into your message.',
   'composer.link.address': 'Link address',
@@ -2319,8 +2283,6 @@ export const en = {
   'emoji.hands': 'Hands and people',
   'emoji.work': 'Work',
   'emoji.symbols': 'Symbols',
-  'composer.preview': 'Preview',
-  'composer.previewEmpty': 'Nothing to preview yet',
   'composer.formatActive': 'Current format',
   'composer.clearFormatting': 'Clear formatting',
   'composer.clearFormattingHint':
@@ -2465,7 +2427,6 @@ export const en = {
 
   // ── Connection (UX §8) ──────────────────────────────────────────────────
   'connection.reconnecting': 'Reconnecting… messages will send when you are back',
-  'connection.ended': 'Your session ended',
 
   // ── States (UX §8) ──────────────────────────────────────────────────────
   'state.feed.empty.title': 'No messages yet',
@@ -2667,8 +2628,6 @@ export const en = {
   'inbox.category.empty.direct': 'No direct messages',
   'inbox.category.empty.threads': 'Nothing in your threads',
   'inbox.category.empty.body': 'Everything else you were told is under All.',
-  'inbox.panel.label': 'Inbox',
-  'inbox.panel.seeAll': 'See all',
   'drafts.title': 'Drafts and sent',
   'drafts.tabs': 'Show',
   'drafts.tab.drafts': 'Drafts',
@@ -2773,7 +2732,6 @@ export const en = {
   },
   'questions.footer':
     'These are the questions your team has not finished answering. Resolve a thread and it leaves this list.',
-  'questions.back': 'Back to {channel}',
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
@@ -2920,8 +2878,6 @@ export const en = {
   'settings.notifications.deepWorkOn': 'Deep Work is on',
   'settings.notifications.deviceHint':
     'What reaches this device when Purlay is not open in front of you.',
-  'settings.notifications.closedTabAsk':
-    'Turn on to be told on this device even when Purlay is closed. Your browser will ask first.',
   'settings.notifications.away': 'When Purlay is not in front of you',
   'settings.notifications.onBoth':
     'This device is told, with Purlay in a background tab or closed.',
@@ -3125,7 +3081,6 @@ export const en = {
   'language.tr': 'Türkçe',
 
   // ── Account ─────────────────────────────────────────────────────────────
-  'user.menu': 'Account',
   'user.setAway': 'Set yourself as away',
   'user.setActive': 'Set yourself as active',
   'user.awayFailed': 'Your status was not changed.',
@@ -3567,7 +3522,6 @@ export const en = {
   'setup.verify.error.title': 'Could not verify the address',
   'settings.group.server': 'Server',
   'settings.server.nav': 'Server',
-  'settings.server.title': 'Server',
   'settings.server.description':
     'How this server lets people in. Only you, its administrator, see this page.',
   'settings.server.loadError.title': 'Could not read the server settings',
@@ -3708,19 +3662,9 @@ export const en = {
   'settings.server.policy.open': 'Anyone',
   'settings.server.policy.open.body': 'Anyone who can reach this server can create an account.',
   'settings.server.policy.saved': 'Saved. This applies from the next sign-up.',
-  'settings.server.accounts.title': 'Accounts',
-  'settings.server.accounts.loadFailed':
-    'Could not read the accounts. Retry to get the current list.',
-  'settings.server.accounts.description':
-    'Suspend the account of somebody who has left: they are signed out everywhere and cannot sign in, and their messages and name stay. Lift it to let them back in as they were.',
-  'settings.server.accounts.find': 'Find by name, username or address',
-  'settings.server.accounts.none': 'No account matches',
   'settings.server.accounts.admin': 'Administers this server',
-  'settings.server.accounts.suspendedOn': 'Suspended {when}',
   'settings.server.accounts.suspend': 'Suspend',
   'settings.server.accounts.lift': 'Lift suspension',
-  'settings.server.accounts.ask':
-    'Suspend {name}? They are signed out on every device and cannot sign in until you lift it.',
   'settings.server.signIn.title': 'How people sign in',
   'settings.server.signIn.description':
     'Rules for accounts that sign in with a password. GitHub, Google, single sign-on and emailed links keep their own security.',

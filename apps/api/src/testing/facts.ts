@@ -4,7 +4,7 @@
  */
 import type { Executor } from '@purlay/db';
 import { Type } from '@sinclair/typebox';
-import { defineFact, messageId, readsEarlierShape } from '@purlay/types';
+import { FACT_STRING_LENGTH_MAX, defineFact, messageId, readsEarlierShape } from '@purlay/types';
 import {
   effectiveModules,
   type EntitlementMode,
@@ -23,7 +23,7 @@ export const NOTE_CREATED = defineFact({
   absent: 'drop',
   schema: Type.Object({
     noteId: Type.String({ maxLength: 36 }),
-    title: Type.String({ maxLength: 9000 }),
+    title: Type.String({ maxLength: FACT_STRING_LENGTH_MAX }),
   }),
 });
 
@@ -45,7 +45,7 @@ export const NOTE_CREATED_V2 = defineFact({
   shape: 2,
   schema: Type.Object({
     noteId: Type.String({ maxLength: 36 }),
-    title: Type.String({ maxLength: 9000 }),
+    title: Type.String({ maxLength: FACT_STRING_LENGTH_MAX }),
     folder: Type.String({ maxLength: 64 }),
   }),
   reads: {
@@ -174,6 +174,7 @@ export const anOutboxRow = async (
     readonly attempts?: number;
     readonly lastError?: string;
     readonly payload?: unknown;
+    readonly shape?: number;
   },
 ): Promise<{ readonly id: string; readonly factId: string }> => {
   const state = row.state ?? 'pending';
@@ -196,6 +197,7 @@ export const anOutboxRow = async (
       created_at: row.at,
       finished_at: state === 'pending' ? null : (row.finishedAt ?? row.at),
       expires_at: row.expiresAt ?? new Date(row.at.getTime() + 86_400_000),
+      ...(row.shape === undefined ? {} : { shape: row.shape }),
     })
     .execute();
   return { id, factId };

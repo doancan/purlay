@@ -526,7 +526,9 @@ from `mfa_expires_at`, along with workspace activity and terminal state. Only an
 MFA event may refresh the MFA deadline, while the base lifetime is still live. Relaxing a policy
 does not revive expired/ended evidence; only still-live proof may extend its idle deadline.
 Native handoff copies both deadlines and the original evidence and assurance
-state, including ended/expired state, rather than manufacturing fresh authentication.
+state, including ended/expired state, rather than manufacturing fresh authentication. A source with
+no evidence hands over an unknown row (null method and time), never none, so the new session is not
+judged by its issuance (D-356).
 
 Policy tests and MFA challenges are short-lived, purpose-bound, hashed bearer receipts. Their
 workspace/session/user/authentication tuple must agree; test challenges additionally reference
@@ -3058,8 +3060,8 @@ CREATE INDEX idx_hidden_messages_changes   ON hidden_messages (user_id, channel_
 
 A workspace's issue (the issues module's set, `issues/0001`): a title, a markdown body, open or done, who it is
 assigned to and who made it. Both people outlive their rows as `NULL`, as a channel's creator does. That the
-assignee is a member of the workspace is the service's check and not a key, so a member who leaves does not
-rewrite their issues. The keys run to the core only (D-250): the table exists where the module's set was applied, and
+assignee is a member of the workspace is the service's check and not a key; a member who leaves is taken off
+the open issues by the module, told through the outbox (D-355). The keys run to the core only (D-250): the table exists where the module's set was applied, and
 a database that never ran it has none.
 
 ```sql
@@ -3928,7 +3930,7 @@ CREATE TABLE server_settings (
 );
 ```
 
-The additive admission and identity columns (D-278) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. The additive `privacy_url` and `terms_url` (D-352) are nullable `text` with no default and a 1–2048 character bound when set. The administrator can set an HTTPS address without embedded credentials or clear either field. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
+The additive admission and identity columns (D-278) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. The additive `privacy_url` and `terms_url` (D-357) are nullable `text` with no default and a 1–2048 character bound when set. The administrator can set an HTTPS address without embedded credentials or clear either field. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
 
 ### 9.5a. `server_operational_status`
 
@@ -4372,6 +4374,26 @@ CREATE INDEX idx_outbox_ledger_workspace ON outbox_ledger (workspace_id, deliver
 CREATE INDEX idx_outbox_ledger_delivered ON outbox_ledger (delivered_at);
 ```
 
+### 9.16. `outbox_expired`
+
+How many facts `sweep:outbox` gave up on because nobody came for them before their expiry, by consumer and fact type (D-353): the
+counter `purlay_outbox_expired_total{module,fact}`, kept in a table because the sweep is a process of its own in the scheduler's
+container and a count in its memory is never scraped. The sweep adds what it took in the statement that deletes the rows, so a fact is
+counted exactly when it goes; every node reads the totals for `/metrics`.
+
+- **A closed set of rows.** One for each pair a sweep ever took, from the manifests, so it does not grow with the facts; nothing deletes
+  them, as a counter does not go down. Names no person or workspace, in no export, and not purged with a workspace.
+
+```sql
+CREATE TABLE outbox_expired (
+    consumer        TEXT NOT NULL CHECK (char_length(consumer) BETWEEN 1 AND 48),
+    type            TEXT NOT NULL CHECK (char_length(type) BETWEEN 1 AND 96),
+    expired         BIGINT NOT NULL CHECK (expired >= 0),
+    last_expired_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (consumer, type)
+);
+```
+
 ## 10. Kysely Types (`packages/db/src/schema.ts`)
 
 **Generated** by `kysely-codegen` from a database with every migration applied, and committed so
@@ -4601,7 +4623,8 @@ file that leaves its transaction runs statement by statement and must be safe to
 0131_backfill_push_delivery_subscriptions.sql  backfill the Web references in batches, build provider indexes concurrently, and validate the identity check (D-342)
 0132_push_delivery_provider_foreign_keys.sql  install and validate the provider foreign keys, then drop the original Web-only key (D-342)
 0133_workspace_urgent_messages.sql  workspaces.urgent_messages_enabled: whether the workspace allows new Urgent sends (D-337)
-0134_server_legal_addresses.sql  Nullable server_settings privacy and terms addresses (D-352)
+0134_outbox_expired.sql      outbox_expired: how many facts the sweep gave up on at their expiry, by consumer and type  (D-353)
+0135_server_legal_addresses.sql  Nullable server_settings privacy and terms addresses (D-357)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

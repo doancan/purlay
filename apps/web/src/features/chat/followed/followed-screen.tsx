@@ -25,14 +25,9 @@ import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useMessageText } from '../../content/github-event';
 import { NavToggle } from '../../shell/nav';
 import { useWorkspace } from '../../shell/workspace';
-import { HeaderTile, useChannelTitle } from '../channel/channel-header';
+import { ChannelName, HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useSetThreadFollow } from '../threads/follow-toggle';
-
-const Source = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
-  const title = useChannelTitle(channel);
-  return <span>{channel.type === 'direct_message' ? title : `#${title}`}</span>;
-};
 
 const Row = ({
   item,
@@ -90,7 +85,11 @@ const Row = ({
             <span className="min-w-0 font-semibold text-ink break-words">{author.displayName}</span>
             <span aria-hidden="true">·</span>
             <span className="min-w-0 break-words">
-              {channel === undefined ? t('followed.conversation') : <Source channel={channel} />}
+              {channel === undefined ? (
+                t('followed.conversation')
+              ) : (
+                <ChannelName channel={channel} />
+              )}
             </span>
             <time dateTime={item.activityAt} className="ml-auto font-mono text-caption">
               {format.time(item.activityAt, now)}

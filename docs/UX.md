@@ -1107,7 +1107,7 @@ missing specified behaviour and does not merge.
 | Administration → Server (Settings → Server) | Each way in not connected says what that stops and offers to connect it; the two policies always have a value | Skeleton cards | A failed try as in the wizard, nothing kept and what was typed still there; the settings that could not be read, with Retry; a secret the key could not open, on its card; a setup still open, said in a sentence; anybody who is not the administrator is *not found* |
 | Administration → Modules | *This server carries no modules*: the core always runs | Skeleton cards; the chunk's own skeleton while it loads | The list that could not be read, with Retry; a stop with no reason, said on the field; a stop that takes the product down cannot be sent until it is ticked as meant; a cluster not ready for a stop, in one sentence with what to do, the dialog and the reason kept; a resume that failed, on the module's card, which stays stopped; anybody who is not the administrator is *not found* (D-323) |
 | Sign-in link | n/a — a link always names its address or says it does not open | Skeleton card | "Not complete" for a fragment that is not a link, "used or expired" for one that does not open — each with the way back to sign-in; any other failure to show it, Retry; a failure to sign in, said above **Sign in**, which stays |
-| Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191) |
+| Native sign-in (`/sign-in/native`) | n/a — a pair the tab holds always asks; without one it says the sign-in has expired | Skeleton card while the session is read, and the button busy while the code is asked for | *Purlay for Mac was not opened* above the button, which becomes **Retry**, the pair kept; a session that ended meanwhile goes to sign-in saying so, the pair kept for after (D-191); a browser too long signed in for `prompt=login` is asked to sign in again, the pair kept (D-356) |
 | How long history is kept (owner) | n/a — always a window, forever by default | Skeleton in the dialog | Retry in the dialog; a save refused is said above the buttons and the choice stays. A shorter window is said in full and its button is red and names what it deletes (D-139 §4) |
 | Exporting the workspace (owner) | "You have not exported this workspace yet." | Skeleton in the dialog; one being made says so, and the list is read again until it is not | Retry in the dialog; one already being made is said, and the list read again; any other refusal above the buttons. A failed export says why by its code; a ready one is a link that works once; once followed it reads "Downloaded", says to export again if no file arrived, and the list is read again so what the server holds replaces the guess (D-140) |
 | Your data (Sessions & account) | "You have not exported your data yet." | Skeleton in the card; one being made says so, and the list is read again until it is not | Retry in the card; one already being made is said, and the list read again; past the day's limit, how many a day; any other refusal beside the button. An account suspended or erased before it was made is said as such; the rest as an owner's export (D-241) |
@@ -1117,7 +1117,6 @@ missing specified behaviour and does not merge.
 | Quiet hours (Notifications) | Off, with the profile's zone named; without a zone, a link to Profile | Skeleton in the card | A save refused or failed is said beside Save, and what was set stays (D-234) |
 | Email (Notifications) | Not drawn where the server cannot send mail or the address is not verified | Not drawn until the server has said whether it can be offered | Whether it can be offered could not be read: said in the card, with Retry; a change refused is put back and said in a toast (D-240) |
 | Stop link (`/mail/stop`) | n/a — a link always asks, or says it is not complete | The button busy while it asks | "This link does not open" for one too old or unknown, with the way to Purlay; any other failure said above the button, which tries again (D-240) |
-| Accounts (Settings → Server) | "No account matches." | Skeleton rows | Retry in the card; a change refused is said in the card (D-233) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
@@ -1292,10 +1291,7 @@ the page's data fails; that failure offers **Retry** alongside the last known se
 view of a connection is cached, never its credentials. Cancelling a connection form forgets its secrets
 and unsaved fields; opening a replacement starts from the latest public settings. Each disconnect
 question starts afresh, including after a last-channel refusal was cancelled. The workspace-creator
-choices follow refreshed settings until an unsaved edit is made. Accounts kept from a previous search
-cannot be suspended while the new results are loading, and an account change holds the other account
-actions until it finishes. A failed account-list read asks to retry reading, without claiming a preceding
-account change was undone.
+choices follow refreshed settings until an unsaved edit is made.
 
 - **Sign in with GitHub** — the status (*Connected* with the app's Client ID, or *Not connected* and one
   sentence on what that stops), the callback address with **Copy**, **Replace credentials** (or **Connect
@@ -1336,11 +1332,8 @@ account change was undone.
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
-- **Accounts** (D-233) — a search by name, username or address over the server's accounts, each row with its
-  name, `@handle` and address, *Administers this server* where it does, and *Suspended* with its date where it
-  is. **Suspend** asks once more on the row, in words that say the person is signed out on every device and
-  cannot sign in until it is lifted; **Lift suspension** asks nothing. An administrator's row, the caller's
-  own among them, has no button.
+- **Accounts** are not here: suspending and lifting an account is the console's Users page (D-233, D-278); the card
+  this page had is removed (D-354).
 
 **Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
 remain — the page knows from which of GitHub, single sign-on and the mail server serve — it says so **before** the button
@@ -1476,7 +1469,10 @@ a recognized platform uses the Mac wording that older clients expect. The consen
 application, the signed-in account and the server. Its focused button asks the server for a code,
 opens the fixed `purlay://…` callback and shows how to reopen the same code. **Cancel** returns to
 Purlay, and **Sign out of this browser and use another account** keeps the question for the next
-sign-in. An expired or missing question offers **Go to Purlay**.
+sign-in. An expired or missing question offers **Go to Purlay**. An application that asked for a
+fresh sign-in (`&prompt=login`, D-356) and meets a browser that signed in too long ago gets a card,
+*Sign in again to continue*, whose focused **Sign in again** signs this browser out with the question
+kept; the person signs in as usual, second step included, and is asked again.
 
 An emailed link can open in another browser. It carries the challenge and state with the token in
 the fragment, and the display platform in the query. The browser keeps all three together for

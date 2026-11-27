@@ -597,6 +597,13 @@ export interface Outbox {
   workspace_id: string;
 }
 
+export interface OutboxExpired {
+  consumer: string;
+  expired: Int8;
+  last_expired_at: Timestamp;
+  type: string;
+}
+
 export interface OutboxLedger {
   consumer: string;
   delivered_at: Timestamp;
@@ -1546,6 +1553,7 @@ export interface DB {
   notifications: Notifications;
   object_deletions: ObjectDeletions;
   outbox: Outbox;
+  outbox_expired: OutboxExpired;
   outbox_ledger: OutboxLedger;
   outgoing_webhooks: OutgoingWebhooks;
   personal_exports: PersonalExports;

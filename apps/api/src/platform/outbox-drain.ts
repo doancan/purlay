@@ -398,6 +398,7 @@ export const deliver = async (
                 modules,
                 correlationId,
                 payload: read.payload,
+                deliveredAt: clock.now(),
               },
               transaction,
               ports,

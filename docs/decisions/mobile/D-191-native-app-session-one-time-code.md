@@ -1,5 +1,7 @@
 # D-191. The native application is handed a session of its own by a one-time code bound to a secret it keeps — builds on D-186, D-179
 
+*Amended by D-356: the application may ask for `prompt=login`, a sign-in the browser made within `NATIVE_FRESH_SIGN_IN_MINUTES`.*
+
 **Amended 2026-11-25.** The session's label names the application by the platform `X-Purlay-Client` says: `ios` is
 `Purlay for iOS/<version> (<device>)`, `macos` and any header that is not the shape stay `Purlay for macOS/…`. Only a
 platform this server has a name for is read from the header; nothing else of it is copied (D-190).

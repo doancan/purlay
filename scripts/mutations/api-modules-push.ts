@@ -43,6 +43,14 @@ export const API_MODULES_PUSH: readonly Mutation[] = [
     tests: ['apps/api/src/modules/push/apns-subscriptions.integration.test.ts'],
   },
   {
+    id: 'apns-removal-targets-different-session',
+    why: 'Removal without a device token may touch only the authenticated session’s own registration.',
+    file: 'apps/api/src/modules/push/apns-subscriptions.ts',
+    find: "    .deleteFrom('apns_subscriptions')\n    .where('session_id', '=', subscriber.sessionId);",
+    replace: "    .deleteFrom('apns_subscriptions');",
+    tests: ['apps/api/src/ingress/http/apns.integration.test.ts'],
+  },
+  {
     id: 'company-device-claims-independent-session',
     why: 'A company credential must prove the existing browser keys before taking an independently registered endpoint.',
     file: 'apps/api/src/modules/push/subscriptions.ts',

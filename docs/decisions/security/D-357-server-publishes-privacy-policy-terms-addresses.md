@@ -1,4 +1,4 @@
-# D-352. The server publishes its own privacy policy and terms addresses (#1615)
+# D-357. The server publishes its own privacy policy and terms addresses (#1615)
 
 **Decided.** Build on D-278's server identity. The server administrator can set a privacy policy and
 terms of service address separately in the server identity card. Both take an absolute HTTPS address

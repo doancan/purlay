@@ -7,8 +7,7 @@ import { fill, type Edit, type Names, type Options } from './plan';
 const ISSUES_MODULE_IMPORT = "import { issuesModule } from './features/issues/module';\n";
 /** Every list of modules takes the new one after issues, so that all of them are in the same order. */
 const ISSUES_IN_THE_BUNDLE = '  issuesModule,\n';
-const FACTS_IMPORT =
-  "import { FACT_HOLD_DAYS_MAX, FACT_SHAPE_FIRST, type FactDeclaration } from './fact-declaration';\n";
+const FACTS_IMPORT = "  type FactDeclaration,\n} from './fact-declaration';\n";
 const FACTS_LIST = '...CORE_FACTS';
 const ISSUES_ID = "Type.Literal('issues')";
 const ISSUES_EXPORT = "export * from './issues';\n";

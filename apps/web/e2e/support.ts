@@ -78,6 +78,10 @@ type Json = Readonly<Record<string, unknown>>;
 /** Wall-clock time without `Date.now()`: the e2e tests, like the client, take their clock from one place. */
 export const wallClock = (): Date => new Date(performance.timeOrigin + performance.now());
 
+/** The message row that says `text`, wherever in the feed it is. */
+export const rowWith = (page: Page, text: string): Locator =>
+  page.locator('[data-message-row]', { hasText: text });
+
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);

@@ -17,6 +17,9 @@
  */
 import type { TSchema } from '@sinclair/typebox';
 import { CatchUpQuery, ChannelCatchUp } from './catch-up';
+import { WorkspaceExport, WorkspaceExportList } from './export';
+import { MissedMailSetting, SetMissedMailRequest } from './missed-mail';
+import { QuietHoursSetting, SetQuietHoursRequest } from './quiet-hours';
 import {
   ChannelGroup,
   ChannelGroupPage,
@@ -27,6 +30,7 @@ import {
 } from './channel-groups';
 import {
   AddChannelMemberRequest,
+  ApnsDeviceRequest,
   AuthMethods,
   ChannelList,
   ChangesQuery,
@@ -38,6 +42,7 @@ import {
   DeepWorkResponse,
   DeviceSessionList,
   EditMessageRequest,
+  EraseAccountRequest,
   ExternalImageQuery,
   FilePage,
   FileQuery,
@@ -65,6 +70,7 @@ import {
   ReadChannelResponse,
   ReadAllChannelsResponse,
   ReadNotificationsRequest,
+  RemoveApnsDeviceRequest,
   ReadThreadRequest,
   SaveMessageRequest,
   SetMessageReminderRequest,
@@ -97,6 +103,8 @@ import {
   UrgentMessagesSetting,
   UpdateProfileRequest,
   UploadQuery,
+  MySignIn,
+  SetLocaleRequest,
   WorkspaceMember,
   WorkspaceMemberList,
 } from './api';
@@ -208,6 +216,23 @@ export const ENDPOINTS = [
     responses: { 200: AuthMethods },
   }),
 
+  read({
+    id: 'registerApnsDevice',
+    method: 'POST',
+    path: '/api/push/apns/subscriptions',
+    auth: 'session',
+    body: ApnsDeviceRequest,
+    responses: { 204: null },
+  }),
+  read({
+    id: 'removeApnsDevice',
+    method: 'POST',
+    path: '/api/push/apns/subscriptions/remove',
+    auth: 'session',
+    body: RemoveApnsDeviceRequest,
+    responses: { 204: null },
+  }),
+
   // ── What this server runs, and what is newest
   read({
     id: 'getLatestRelease',
@@ -242,6 +267,16 @@ export const ENDPOINTS = [
     auth: 'session',
     body: UpdateProfileRequest,
     responses: { 200: Profile },
+  }),
+  // The person's own erasure (D-139 §5): from a session signed in within `ERASURE_SIGN_IN_MINUTES`, the cookie
+  // cleared on success. The last owner of a workspace with others in it is `LAST_OWNER`, naming each to hand over.
+  read({
+    id: 'eraseMyAccount',
+    method: 'POST',
+    path: '/api/me/erase',
+    auth: 'session',
+    body: EraseAccountRequest,
+    responses: { 204: null },
   }),
   read({
     id: 'listWorkspaces',
@@ -342,6 +377,75 @@ export const ENDPOINTS = [
     auth: 'session',
     body: MarkInboxReadRequest,
     responses: { 204: null },
+  }),
+
+  // ── The person's settings and their exports
+  read({
+    id: 'getMySignIn',
+    method: 'GET',
+    path: '/api/me/sign-in',
+    auth: 'session',
+    responses: { 200: MySignIn },
+  }),
+  read({
+    id: 'setMyLocale',
+    method: 'PUT',
+    path: '/api/me/locale',
+    auth: 'session',
+    body: SetLocaleRequest,
+    responses: { 204: null },
+  }),
+  read({
+    id: 'getMyQuietHours',
+    method: 'GET',
+    path: '/api/me/quiet-hours',
+    auth: 'session',
+    responses: { 200: QuietHoursSetting },
+  }),
+  read({
+    id: 'setMyQuietHours',
+    method: 'PUT',
+    path: '/api/me/quiet-hours',
+    auth: 'session',
+    body: SetQuietHoursRequest,
+    responses: { 200: QuietHoursSetting },
+  }),
+  // Chat's (D-240): a server that does not run it answers each as a path nobody has.
+  read({
+    id: 'getMyMissedMail',
+    method: 'GET',
+    path: '/api/me/missed-mail',
+    auth: 'session',
+    responses: { 200: MissedMailSetting },
+  }),
+  read({
+    id: 'setMyMissedMail',
+    method: 'PUT',
+    path: '/api/me/missed-mail',
+    auth: 'session',
+    body: SetMissedMailRequest,
+    responses: { 200: MissedMailSetting },
+  }),
+  read({
+    id: 'requestMyExport',
+    method: 'POST',
+    path: '/api/me/exports',
+    auth: 'session',
+    responses: { 202: WorkspaceExport },
+  }),
+  read({
+    id: 'listMyExports',
+    method: 'GET',
+    path: '/api/me/exports',
+    auth: 'session',
+    responses: { 200: WorkspaceExportList },
+  }),
+  read({
+    id: 'downloadMyExport',
+    method: 'GET',
+    path: '/api/me/exports/:exportId/download',
+    auth: 'session',
+    responses: { 200: 'binary' },
   }),
 
   // ── Channels and conversations
@@ -928,5 +1032,3 @@ export const ENDPOINTS = [
     responses: { 204: null },
   }),
 ] as const satisfies readonly EndpointSpec[];
-
-export type EndpointId = (typeof ENDPOINTS)[number]['id'];

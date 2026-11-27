@@ -30,6 +30,7 @@ import { membershipsOf } from '../workspaces';
 import { readRetention } from '../retention';
 import { removeMember } from '../members';
 import { askToDelete } from '../deletion';
+import { noDepartures } from '../../../testing/departures';
 
 const now = new Date('2026-11-12T18:00:00Z');
 const clock = fixedClock(now);
@@ -96,6 +97,7 @@ const fixture = async (
       lifetime: () => NO_SESSION_LIFETIME,
       readersReady: () => Promise.resolve(true),
       channels: noWorkspaceChannels,
+      departures: noDepartures,
       afterCommit: (_transaction, effect): void => {
         effects.push(effect);
       },
@@ -233,7 +235,14 @@ describe('integration: exclusive scoped access grants', () => {
         .values({ workspace_id: workspaceId, user_id: native.userId, role: 'member' })
         .execute();
       expect(
-        await removeMember(db, clock, f.actor.context, native.userId, noWorkspaceChannels),
+        await removeMember(
+          db,
+          clock,
+          f.actor.context,
+          native.userId,
+          noWorkspaceChannels,
+          noDepartures,
+        ),
       ).toMatchObject({ channelIds: [] });
       expect(
         await db

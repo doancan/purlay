@@ -104,6 +104,7 @@ import type { CredentialCipher } from '../../platform/crypto';
 import { companyIdentityPlugin } from '../workspaces/identity/native-auth';
 import { workspaceDirectoryNative } from '../workspaces/directory/native-auth';
 import type { WorkspaceChannels } from '../workspaces/channels-port';
+import type { MemberDepartures } from '../workspaces/member-departures';
 import { COMPANY_PROVIDER_PREFIX } from '../workspaces/identity/catalogue';
 import {
   nativeAuthenticationEvidence,
@@ -154,6 +155,8 @@ export interface AuthDependencies {
   /** Native SCIM is fail-closed until every source-aware reader is attested. */
   readonly directory?: {
     readonly channels: WorkspaceChannels;
+    /** Tells the modules of a membership a directory change ends, in its transaction (D-355). */
+    readonly departures: MemberDepartures;
     readonly readersReady: () => Promise<boolean>;
   };
   /** Native workspace identity uses the installation's credential cipher; only tests replace its external provider. */

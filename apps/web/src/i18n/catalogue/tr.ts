@@ -302,7 +302,6 @@ export const tr = {
   'security.access.return': 'Çalışma alanına dön',
   'security.access.other': 'Başka bir çalışma alanı seç',
   'security.signIn': 'Yeniden giriş yap',
-  'security.independent': 'Kendi hesabınızla giriş yapın',
   'security.independentHint':
     'Çalışma alanı kurtarması oluşturmak veya kullanmak için alan sahibinin yakın zamanda bağımsız giriş yapması gerekir. Şirket girişi hesap kimlik bilgilerini değiştiremez.',
   'security.factor.title': 'Bu çalışma alanı için doğrulayıcı',
@@ -327,7 +326,6 @@ export const tr = {
   'security.factor.key': 'Kurulum anahtarı',
   'security.factor.once':
     'Bu kurulum anahtarı yalnızca şimdi gösterilir. Ayrılırsanız kuruluma yeniden başlayın.',
-  'security.factor.confirm': 'Doğrulayıcıyı onayla',
   'security.factor.confirmed': 'Doğrulama tamamlandı.',
   'security.code': 'Doğrulayıcı kodu',
   'security.code.invalid': 'Doğrulayıcı uygulamanızdaki altı haneyi yazın.',
@@ -631,7 +629,6 @@ export const tr = {
   // ── Ortak ───────────────────────────────────────────────────────────────
   'common.close': 'Kapat',
   'common.cancel': 'Vazgeç',
-  'common.create': 'Oluştur',
   'common.copy': 'Kopyala',
   'common.copied': 'Kopyalandı',
   'common.retry': 'Yeniden dene',
@@ -641,9 +638,6 @@ export const tr = {
   // ── Uygulama ────────────────────────────────────────────────────────────
   'app.skip': 'Konuşmaya atla',
   'app.skipContent': 'İçeriğe atla',
-  'app.placeholder.title': 'Bu ekran henüz yapılmadı',
-  'app.placeholder.body':
-    'Çevresindeki çerçeve son hâlinde; ekran kendi backend’iyle birlikte gelecek.',
   'app.notFound.title': 'Burada bir şey yok',
   'app.notFound.body': 'Bu adres Purlay içinde hiçbir yere çıkmıyor.',
   'app.notFound.home': 'Kanallarınıza git',
@@ -720,6 +714,10 @@ export const tr = {
   'native.body': '{app}, {host} üzerinde {name}, {email} olarak oturum açacak.',
   'native.hint':
     'Uygulama kendi oturumunu alır. Bitirmek için uygulamadan çıkış yapın ya da Ayarlar’da Her yerden çıkış yap’ı seçin.',
+  'native.again.title': 'Devam etmek için yeniden giriş yapın',
+  'native.again.body':
+    '{app} giriş bilgilerinizin yeniden doğrulanmasını istedi. Bu tarayıcıdan çıkış yapın, ardından yeniden giriş yapın.',
+  'native.again.action': 'Yeniden giriş yap',
   'native.authorize': '{app} uygulamasını aç',
   'native.other': 'Bu tarayıcıdan çıkış yap ve başka bir hesap kullan',
   'native.failed': '{app} açılamadı.',
@@ -817,7 +815,6 @@ export const tr = {
   'sidebar.people': 'Kişiler',
   'sidebar.newChannel': 'Yeni kanal',
   'sidebar.jump': 'Şuraya geç…',
-  'sidebar.private': 'özel',
   'sidebar.you': 'siz',
   'sidebar.mentions': {
     other: '{count} okunmamış bahsetme',
@@ -963,8 +960,6 @@ export const tr = {
     'Bu sunucu e-posta gönderemiyor, bu yüzden şunlar gönderilmedi: {addresses}.',
   'invite.mail.failed': 'Davetler gönderilemedi.',
   'invite.mail.or': 'Ya da bağlantıyı kendiniz paylaşın',
-  'members.entry': 'Üyeler…',
-  'members.title': '{workspace} üyeleri',
   'members.description':
     'Bir yönetici üyeleri ve yöneticileri yönetir; birini sahip yapmak ya da bir sahibi değiştirmek sahibin işidir.',
   'members.roleOf': '{name} rolü',
@@ -986,8 +981,6 @@ export const tr = {
     '{name}: işlem sonucu doğrulanamadı. Yeniden denemeden önce üye listesini yenileyin.',
   'members.refreshFailed': 'Üyeler yenilenemedi. Son alınan liste gösteriliyor.',
   'members.removeFailed': '{name} çıkarılmadı.',
-  'audit.entry': 'Denetim kaydı…',
-  'audit.title': '{workspace} denetim kaydı',
   'audit.description':
     'Kim, hangi yönetim işini yaptı; en yenisi önce. Kimsenin yazdıkları burada görünmez.',
   'audit.empty': 'Henüz yönetimsel bir şey olmadı',
@@ -1012,7 +1005,6 @@ export const tr = {
   'audit.filter.backwards': 'Bu gün başlangıç gününden önce.',
   'audit.filter.clear': 'Filtreleri temizle',
   'audit.emptyFiltered': 'Bu filtrelere uyan kayıt yok',
-  'audit.download': 'İndir',
   'audit.download.description':
     'Filtrelerin tuttuğu her kayıt, yalnızca gösterilenler değil, en yenisi önce. İndirme de kayda geçer.',
   'audit.download.csv': 'CSV',
@@ -1266,8 +1258,6 @@ export const tr = {
   'audit.operator': 'Sunucunun yöneticisi',
   'retention.forever': 'süresiz',
   'retention.days': '{days} gün',
-  'retention.entry': 'Geçmişi sakla…',
-  'retention.title': '{workspace} geçmişini ne kadar saklar',
   'retention.description':
     'Bundan eski mesajlar ve dosyalar her gece kalıcı olarak silinir. Varsayılan, her şeyi saklamaktır.',
   'retention.label': 'Geçmişi sakla',
@@ -1300,8 +1290,6 @@ export const tr = {
   'storage.used': '{used} / {quota}',
   'storage.left': 'Kalan: {left}',
   'storage.full': 'Yer kalmadı: sunucunun yöneticisi kotayı artırana kadar dosya yüklenemez.',
-  'export.entry': 'Çalışma alanını dışa aktar…',
-  'export.title': '{workspace} çalışma alanını dışa aktar',
   'export.description':
     'Görebildiğiniz her kanalın tek bir arşivi — açık kanallar, içinde olduğunuz özel kanallar ve direkt mesajlar — dosyalarıyla birlikte; kimsenin e-posta adresi olmadan. Arka planda hazırlanır ve bir gün içinde bir kez indirilebilir.',
   'export.request': 'Dışa aktar',
@@ -1336,8 +1324,6 @@ export const tr = {
   'audit.quota.default': 'varsayılan',
   'audit.action.retention.purged':
     '{days} günden eski geçmiş temizlendi: {messages} mesaj, {files} dosya',
-  'github.entry': 'GitHub bağlantısı…',
-  'github.title': '{workspace} için GitHub',
   'github.description':
     'Bir token ile pull request ve issue bağlantıları kart olarak görünür: durumu, CI ve inceleme. Token şifreli saklanır ve bir daha gösterilmez.',
   'github.connected': '{when} tarihinden beri bağlı.',
@@ -1444,9 +1430,6 @@ export const tr = {
   'workspace.none.body':
     'Bir sahibinden sizi eklemesini isteyin ya da zaten bir çalışma alanına ait hesapla giriş yapın.',
   'workspace.settings.entry': 'Çalışma alanı ayarları',
-  'workspace.settings.title': 'Çalışma alanı ayarları',
-  'workspace.settings.description':
-    'Herkesin gördüğü ad. Adres /w/{slug} olarak kalır, paylaşılmış bağlantılar çalışmaya devam eder.',
   'workspace.settings.save': 'Kaydet',
   'workspace.settings.empty': 'Çalışma alanının bir adı olmalı.',
   'workspace.nameInvalid':
@@ -1590,15 +1573,8 @@ export const tr = {
   'details.removeForbidden': '{name} kişisini yalnızca bir sahip ya da yönetici çıkarabilir.',
 
   // ── Mesajlar ────────────────────────────────────────────────────────────
-  'message.react': 'Tepki ver',
-  'message.reacted': 'Tepki verildi',
-  'message.reply': 'Yanıtla',
   'message.edited': 'düzenlendi',
   'panels.menu': 'Kanal menüsü',
-  'profile.menu': 'Profiliniz…',
-  'profile.title': 'Profiliniz',
-  'profile.description':
-    'Birlikte çalıştığınız kişilerin adınızın yanında gördüğü bilgiler. Adınız ve resminiz GitHub’dan gelir.',
   'profile.titleLabel': 'Unvan',
   'profile.titleHint': 'Ne yaptığınız, birkaç kelimeyle.',
   'profile.statusLabel': 'Durum',
@@ -1992,14 +1968,9 @@ export const tr = {
   'message.newMessages': {
     other: '{count} yeni mesaj',
   },
-  'message.jumpToNew': 'Yeni mesajlara git',
   'message.today': 'Bugün',
   'message.yesterday': 'Dün',
-  'message.reactions': {
-    other: '{count} tepki',
-  },
   'message.addReaction': 'Tepki ekle',
-  'message.removeReaction': 'Tepkinizi kaldır',
   // ── Bir deponun akışı (D-134) ───────────────────────────────────────────
   'github.push.pushed': {
     other: '{actor}, {ref} üzerine {count} commit gönderdi',
@@ -2202,7 +2173,6 @@ export const tr = {
   // ── Akış (D-98) ─────────────────────────────────────────────────────────
   'feed.label': '{channel} kanalındaki mesajlar',
   'feed.row': '{name}, {when}',
-  'feed.dmTitle': '{name} ile doğrudan mesaj',
   'feed.selfDm': '{name} (siz)',
   'feed.olderLoading': 'Eski mesajlar yükleniyor',
   'feed.olderError': 'Eski mesajlar yüklenemedi',
@@ -2218,12 +2188,10 @@ export const tr = {
   'channel.join.failed': 'Kanala katılınamadı.',
   'channel.announcement.notice':
     'Bu kanala yalnızca sahipler ve yöneticiler yazar. Yine de bir thread’e yanıt yazabilirsiniz.',
-  'message.reactWith': '{emoji} ile tepki ver',
   'message.quickReactions': 'Hızlı tepkiler',
   'message.reactionOf': {
     other: '{emoji}, {count} tepki',
   },
-  'message.code.language': 'Dil: {language}',
   'message.code.plain': 'metin',
   'message.link.external': 'Yeni sekmede açılır',
   'message.table': 'Tablo',
@@ -2247,7 +2215,6 @@ export const tr = {
 
   // ── Teslimat (UX §3.1) ──────────────────────────────────────────────────
   'delivery.sending': 'Gönderiliyor',
-  'delivery.sent': 'Gönderildi',
   'delivery.failed': 'Gönderilemedi',
   'delivery.unreached': 'Bağlantı gelince kendiliğinden gidecek.',
   'delivery.retry': 'Yeniden dene',
@@ -2271,8 +2238,6 @@ export const tr = {
   'thread.close': 'Thread’i kapat',
   'thread.resolve': 'Çöz',
   'thread.reopen': 'Yeniden aç',
-  'thread.replyPlaceholder': 'Thread’e yanıt yazın…',
-  'thread.replyLabel': 'Thread’e yanıt',
   'thread.loading': 'Yanıtlar yükleniyor…',
   'thread.error': 'Yanıtlar yüklenemedi',
   'thread.rootError': 'Bu thread yüklenemedi',
@@ -2303,7 +2268,6 @@ export const tr = {
   'composer.italic': 'İtalik',
   'composer.strike': 'Üstü çizili',
   'composer.inlineCode': 'Kod',
-  'composer.write': 'Yaz',
   'composer.link.title': 'Bağlantı ekle',
   'composer.link.description': 'Mesajınıza eklenecek metni ve adresi belirleyin.',
   'composer.link.address': 'Bağlantı adresi',
@@ -2321,8 +2285,6 @@ export const tr = {
   'emoji.hands': 'Eller ve insanlar',
   'emoji.work': 'İş',
   'emoji.symbols': 'Semboller',
-  'composer.preview': 'Önizleme',
-  'composer.previewEmpty': 'Önizlenecek bir şey yok',
   'composer.formatActive': 'Geçerli biçim',
   'composer.clearFormatting': 'Biçimi temizle',
   'composer.clearFormattingHint':
@@ -2465,7 +2427,6 @@ export const tr = {
 
   // ── Bağlantı (UX §8) ────────────────────────────────────────────────────
   'connection.reconnecting': 'Yeniden bağlanılıyor… geri döndüğünde mesajlar gönderilecek',
-  'connection.ended': 'Oturumunuz sona erdi',
 
   // ── Durumlar (UX §8) ────────────────────────────────────────────────────
   'state.feed.empty.title': 'Henüz mesaj yok',
@@ -2651,8 +2612,6 @@ export const tr = {
   'inbox.category.empty.direct': 'Doğrudan mesaj yok',
   'inbox.category.empty.threads': 'Thread’lerinizde yeni bir şey yok',
   'inbox.category.empty.body': 'Size söylenen diğer her şey Tümü altında.',
-  'inbox.panel.label': 'Gelen kutusu',
-  'inbox.panel.seeAll': 'Tümünü gör',
   'drafts.title': 'Taslaklar ve gönderilenler',
   'drafts.tabs': 'Göster',
   'drafts.tab.drafts': 'Taslaklar',
@@ -2757,7 +2716,6 @@ export const tr = {
   },
   'questions.footer':
     'Bunlar ekibinizin henüz cevaplamayı bitirmediği sorular. Bir thread’i çözdüğünüzde bu listeden çıkar.',
-  'questions.back': '{channel} kanalına dön',
 
   // ── Open questions, the list (D-98) ─────────────────────────────────────
   'questions.replies': '{replies} · {when}',
@@ -2907,8 +2865,6 @@ export const tr = {
   'settings.notifications.deepWorkStart': 'Deep Work’ü başlat',
   'settings.notifications.deepWorkOn': 'Deep Work açık',
   'settings.notifications.deviceHint': 'Purlay önünüzde açık değilken bu cihaza ne ulaşır.',
-  'settings.notifications.closedTabAsk':
-    'Purlay kapalıyken de bu cihazda haber almak için açın. Önce tarayıcınız izin isteyecek.',
   'settings.notifications.away': 'Purlay önünüzde değilken',
   'settings.notifications.onBoth':
     'Purlay arka planda bir sekmedeyken de kapalıyken de bu cihaza haber verilir.',
@@ -3111,7 +3067,6 @@ export const tr = {
   'language.tr': 'Türkçe',
 
   // ── Hesap ───────────────────────────────────────────────────────────────
-  'user.menu': 'Hesap',
   'user.setAway': 'Uzakta görün',
   'user.setActive': 'Etkin görün',
   'user.awayFailed': 'Durumunuz değiştirilemedi.',
@@ -3554,7 +3509,6 @@ export const tr = {
   'setup.verify.error.title': 'Adres doğrulanamadı',
   'settings.group.server': 'Sunucu',
   'settings.server.nav': 'Sunucu',
-  'settings.server.title': 'Sunucu',
   'settings.server.description':
     'Bu sunucunun insanları nasıl içeri aldığı. Bu sayfayı yalnızca siz, sunucunun yöneticisi, görürsünüz.',
   'settings.server.loadError.title': 'Sunucu ayarları okunamadı',
@@ -3695,19 +3649,9 @@ export const tr = {
   'settings.server.policy.open': 'Herkes',
   'settings.server.policy.open.body': 'Bu sunucuya ulaşabilen herkes hesap açabilir.',
   'settings.server.policy.saved': 'Kaydedildi. Bu bir sonraki kayıttan itibaren geçerli.',
-  'settings.server.accounts.title': 'Hesaplar',
-  'settings.server.accounts.loadFailed':
-    'Hesaplar okunamadı. Güncel listeyi almak için yeniden deneyin.',
-  'settings.server.accounts.description':
-    'Ayrılan birinin hesabını askıya alın: her yerden çıkış yapılır ve giriş yapamaz; mesajları ve adı kalır. Askıyı kaldırınca eskisi gibi geri döner.',
-  'settings.server.accounts.find': 'Ad, kullanıcı adı veya adresle bul',
-  'settings.server.accounts.none': 'Eşleşen hesap yok',
   'settings.server.accounts.admin': 'Bu sunucunun yöneticisi',
-  'settings.server.accounts.suspendedOn': '{when} tarihinde askıya alındı',
   'settings.server.accounts.suspend': 'Askıya al',
   'settings.server.accounts.lift': 'Askıyı kaldır',
-  'settings.server.accounts.ask':
-    '{name} askıya alınsın mı? Bütün cihazlarda oturumu kapanır ve siz askıyı kaldırana kadar giriş yapamaz.',
   'settings.server.signIn.title': 'Giriş yöntemi',
   'settings.server.signIn.description':
     'Parolayla giriş yapan hesaplar için kurallar. GitHub, Google, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',

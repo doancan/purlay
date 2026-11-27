@@ -1,5 +1,7 @@
 # D-233. The server's administrator suspends an account, and lifts it — builds on D-139 §5, D-179 §4.8, D-193; closes #848
 
+*Amended by D-354: the Accounts card of Settings → Server is removed; suspending and lifting are the console's Users page (D-278).*
+
 **Decided (the owner gave the decision to the maintainer, 2026-10-31).** When somebody left, the only ways to keep
 them out were erasing their account (which tombstones their name in every conversation, D-139 §5) or removing them
 from each workspace, which left them signed in to the server with every session they had. A security review named it;
