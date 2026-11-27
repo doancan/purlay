@@ -72,6 +72,7 @@ export const chatPushNotices: PushNotices = {
       .select([
         'n.user_id as userId',
         'n.type',
+        'm.priority',
         'n.channel_id as channelId',
         'n.workspace_id as workspaceId',
         'c.name as channelName',
@@ -98,6 +99,9 @@ export const chatPushNotices: PushNotices = {
       .where('n.suppressed_by_deep_work', '=', false)
       .where('m.deleted_at', 'is', null)
       .execute();
-    return rows;
+    return rows.map(({ priority, ...notice }) => ({
+      ...notice,
+      ...(priority === 'important' || priority === 'urgent' ? { priority } : {}),
+    }));
   },
 };

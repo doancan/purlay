@@ -1,6 +1,5 @@
 /**
- * A push says what the inbox says: the words are the web catalogue's `inbox.why.*`, in both
- * languages, read from the catalogue's own source.
+ * A push uses the web catalogue's words for the reason and priority, in both languages.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -20,17 +19,27 @@ const CATALOGUE_KEY = {
 const catalogue = (locale: 'en' | 'tr'): string =>
   readFileSync(join(import.meta.dir, `../../../../web/src/i18n/catalogue/${locale}.ts`), 'utf8');
 
+const wordsAt = (source: string, key: string): string | undefined =>
+  new RegExp(`'${key.replaceAll('.', '\\.')}': '([^']*)'`).exec(source)?.[1];
+
 describe('what a push says', () => {
   test.each(['en', 'tr'] as const)('is the inbox’s own words, in %s', (locale) => {
     const source = catalogue(locale);
     for (const [reason, key] of Object.entries(CATALOGUE_KEY)) {
-      const line = new RegExp(`'${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}': '([^']*)'`).exec(
-        source,
-      );
-      expect({ key, words: line?.[1] }).toEqual({
+      expect({ key, words: wordsAt(source, key) }).toEqual({
         key,
         words: PUSH_WORDS[locale][reason as keyof typeof CATALOGUE_KEY],
       });
+    }
+  });
+
+  test.each(['en', 'tr'] as const)('marks priority in the catalogue’s words, in %s', (locale) => {
+    const source = catalogue(locale);
+    const body = pushBody(locale, 'mention', 'Alice');
+    for (const priority of ['important', 'urgent'] as const) {
+      const label = wordsAt(source, `priority.${priority}`);
+      if (label === undefined) throw new Error(`Missing priority.${priority} in ${locale}`);
+      expect(pushBody(locale, 'mention', 'Alice', priority)).toBe(`${label} · ${body}`);
     }
   });
 

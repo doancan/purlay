@@ -3,7 +3,7 @@
  * inbox's own words, never what was written. `words.test.ts` holds them to the web catalogue's
  * `inbox.why.*`, so a device and the inbox cannot say a thing two ways.
  */
-import type { NEEDS_YOU, PushLocale } from '@purlay/types';
+import type { Message, NEEDS_YOU, PushLocale } from '@purlay/types';
 
 /**
  * Why the person was told — and, for a group conversation, that it was written to several (D-127);
@@ -32,9 +32,23 @@ export const PUSH_WORDS: Readonly<Record<PushLocale, Readonly<Record<Said, strin
   },
 };
 
-/** The reason, in the person's language, with who did it. */
-export const pushBody = (locale: PushLocale, reason: Said, name: string): string =>
-  PUSH_WORDS[locale][reason].replace('{name}', name);
+type MarkedPriority = NonNullable<Message['priority']>;
+
+const PRIORITY_WORDS: Readonly<Record<PushLocale, Readonly<Record<MarkedPriority, string>>>> = {
+  en: { important: 'Important', urgent: 'Urgent' },
+  tr: { important: 'Önemli', urgent: 'Acil' },
+};
+
+/** The reason and any priority marker, in the person's language, with who did it. */
+export const pushBody = (
+  locale: PushLocale,
+  reason: Said,
+  name: string,
+  priority?: MarkedPriority,
+): string => {
+  const body = PUSH_WORDS[locale][reason].replace('{name}', name);
+  return priority === undefined ? body : `${PRIORITY_WORDS[locale][priority]} · ${body}`;
+};
 
 /**
  * Which words a reason is said in: a direct message in a group was written to several; a reply is in
