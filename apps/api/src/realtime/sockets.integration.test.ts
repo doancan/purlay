@@ -537,41 +537,52 @@ describe('integration: two real sockets', () => {
   /** Regression: a replay longer than a page used to end without saying so. */
   test('a reconnect that missed more than a page is told where to continue', async () => {
     const room = await aRoom();
-    // Written over HTTP: a hundred and fifty frames from one socket would be
-    // refused by the rate limiter, which is a different test.
-    const post = async (content: string, offset: number): Promise<string> => {
-      const id = messageId(at(offset));
-      const response = await http('POST', `/api/channels/${room.channelId}/messages`, room.alice, {
-        id,
-        content,
-      });
-      expect(response.status).toBe(201);
-      return id;
-    };
-    const seen = await post('before', 0);
-    const missed: string[] = [];
-    for (let i = 0; i < 150; i += 1) missed.push(await post(`m${String(i)}`, i + 1));
+    const seen = messageId(NOW);
+    const missed = Array.from({ length: 150 }, (_, index) => messageId(at(index + 1)));
+    // Seed committed history in one write. The regression starts at reconnect.
+    await db
+      .insertInto('messages')
+      .values(
+        [seen, ...missed].map((id, index) => ({
+          id,
+          workspace_id: room.workspaceId,
+          channel_id: room.channelId,
+          sender_id: room.aliceId,
+          content: `m${String(index)}`,
+          created_at: NOW,
+        })),
+      )
+      .execute();
 
     const bob = await connect(room.bob);
-    const nextCursor = await subscribe(bob, room.channelId, seen);
-    expect(nextCursor).not.toBeNull();
-    await bob.until((frames) => createdIds(frames).includes(nextCursor ?? ''), 'the first page');
+    try {
+      const nextCursor = await subscribe(bob, room.channelId, seen);
+      const firstPage = [seen, ...missed].slice(0, 100);
+      expect(nextCursor).toBe(firstPage.at(-1));
+      await bob.until((frames) => createdIds(frames).includes(nextCursor ?? ''), 'the first page');
+      const recovered = [...createdIds(bob.frames)];
+      expect(recovered).toEqual(firstPage);
 
-    // The rest, the way the client is told to fetch it: HTTP, from that cursor.
-    const recovered = [...createdIds(bob.frames)];
-    let cursor = nextCursor;
-    while (cursor !== null) {
-      const response = await http(
-        'GET',
-        `/api/channels/${room.channelId}/messages?after=${cursor}&limit=100`,
-        room.bob,
-      );
-      const page = (await response.json()) as { data: { id: string }[]; nextCursor: string | null };
-      recovered.push(...page.data.map((m) => m.id));
-      cursor = page.nextCursor;
+      // The rest, the way the client is told to fetch it: HTTP, from that cursor.
+      let cursor = nextCursor;
+      while (cursor !== null) {
+        const response = await http(
+          'GET',
+          `/api/channels/${room.channelId}/messages?after=${cursor}&limit=100`,
+          room.bob,
+        );
+        expect(response.status).toBe(200);
+        const page = (await response.json()) as {
+          data: { id: string }[];
+          nextCursor: string | null;
+        };
+        recovered.push(...page.data.map((message) => message.id));
+        cursor = page.nextCursor;
+      }
+      expect(missedOnly(recovered, [seen])).toEqual(missed);
+    } finally {
+      await bob.close();
     }
-    expect(missedOnly(recovered, [seen])).toEqual(missed);
-    await bob.close();
   });
 
   /**
