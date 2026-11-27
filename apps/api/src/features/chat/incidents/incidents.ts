@@ -35,7 +35,7 @@ import {
   type SavePostmortemRequest,
   erasedPerson,
 } from '@purlay/types';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import {
   channelContentVisible,
   channelNotFound,
@@ -45,8 +45,6 @@ import {
 } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { limitOf } from '../../../platform/pagination';
-
-const at = (value: Date | string): string => new Date(value).toISOString();
 
 export const incidentNotFound = (): AppError =>
   new AppError({ code: 'INCIDENT_NOT_FOUND', message: 'Incident not found.' });
@@ -129,7 +127,7 @@ const asIncident = (row: IncidentRow, responders: readonly User[]): Incident => 
       avatarUrl: row.declarer_avatar_url,
       deletedAt: row.declarer_deleted_at,
     }),
-    declaredAt: at(row.declared_at),
+    declaredAt: isoInstant(row.declared_at),
     responders: [...responders],
     runbookUrl: row.runbook_url,
     postmortem: row.postmortem,
@@ -138,7 +136,7 @@ const asIncident = (row: IncidentRow, responders: readonly User[]): Incident => 
   // One fact, read as one: the table holds status and instant together (`incidents_resolved_at`).
   if (row.status === 'resolved') {
     if (row.resolved_at === null) throw new Error(`incident ${row.id} is resolved with no instant`);
-    return { ...fields, status: 'resolved', resolvedAt: at(row.resolved_at) };
+    return { ...fields, status: 'resolved', resolvedAt: isoInstant(row.resolved_at) };
   }
   if (row.resolved_at !== null) throw new Error(`incident ${row.id} is open with an instant`);
   return { ...fields, status: openStatusOf(row.status), resolvedAt: null };
@@ -607,7 +605,7 @@ export const incidentUpdates = async (
   return {
     data: page.map((row) => ({
       id: row.id,
-      at: at(row.at),
+      at: isoInstant(row.at),
       actor: personOf({
         id: row.actor_id,
         username: row.actor_username,

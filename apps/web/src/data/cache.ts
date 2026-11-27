@@ -637,26 +637,6 @@ export const channelLevelChanged = (
 };
 
 /**
- * A channel starred or let go (D-132), as asked; `undo` puts it back only while it is still as this
- * asked, so a later change — the same person's, from another tab — is never taken back by it.
- */
-export const channelStarred = (
-  client: QueryClient,
-  channelId: string,
-  starred: boolean,
-  undo = false,
-  previousGroup: string | null = null,
-): void => {
-  editChannels(client, channelId, (c) =>
-    undo
-      ? c.starred === starred
-        ? { ...c, starred: !starred, sidebarGroupId: previousGroup }
-        : c
-      : { ...c, starred, sidebarGroupId: starred ? null : c.sidebarGroupId },
-  );
-};
-
-/**
  * A channel's name, topic or who posts in it changed (D-123, D-243): what every screen showing it
  * reads from.
  */

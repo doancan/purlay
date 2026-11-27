@@ -10,13 +10,10 @@ import type { Locator, Page } from '@playwright/test';
 import { ClientFrame } from '@purlay/types';
 import { Value } from '@sinclair/typebox/value';
 import { expect, test } from './fixtures';
-import { navLink } from './support';
+import { navLink, rowWith } from './support';
 
 const composer = (page: Page, name: string): Locator =>
   page.getByRole('textbox', { name: `Message ${name}` });
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
 
 test.describe('a message', () => {
   test('sent by one person appears for the other within a second, in the same place for both', async ({

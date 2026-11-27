@@ -3,18 +3,14 @@
  * sent with the words, and seen as an image by the other person — through the real API, its edge, its
  * re-encoding and the directory store the harness runs on.
  */
-import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { openPanel } from './support';
+import { openPanel, rowWith } from './support';
 
 /** A 2×2 PNG, red and blue: small, and a real image the API decodes and re-encodes. */
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP4z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==',
   'base64',
 );
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
 
 test.describe('an attachment', () => {
   test('picked, uploaded, sent with the words, and seen by the other person as an image', async ({

@@ -28,7 +28,7 @@ import type {
 } from '@purlay/types';
 import { excerptOf } from '@purlay/markdown';
 import { NEEDS_YOU, THREAD_EXCERPT_MAX, NotificationType } from '@purlay/types';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
 import {
   requireThreadContextById,
@@ -47,8 +47,6 @@ export interface Told {
   readonly state: ChannelState;
   readonly version: number;
 }
-
-const at = (value: Date | string): string => new Date(value).toISOString();
 
 /**
  * A root's first line as the inbox quotes it (D-162): plain, as every excerpt is (#651), and cut to
@@ -182,8 +180,8 @@ export const inboxOf = async (
                 excerpt: row.root_deleted_at === null ? quoted(row.root_content ?? '') : null,
                 authorId: row.root_sender_id,
               },
-        createdAt: at(row.notified_at),
-        readAt: row.notification_read_at === null ? null : at(row.notification_read_at),
+        createdAt: isoInstant(row.notified_at),
+        readAt: row.notification_read_at === null ? null : isoInstant(row.notification_read_at),
       };
     }),
     nextCursor: rows.length > limit ? (page.at(-1)?.notification_id ?? null) : null,

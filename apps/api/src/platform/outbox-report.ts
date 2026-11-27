@@ -24,8 +24,8 @@ export const OUTBOX_STALE_AFTER_SECONDS = 900;
 const READ_TIMEOUT_MS = 2_000;
 
 /** Why a pending row waits on purpose: its workspace is not granted the consumer, this node does not run it, or it is of a newer shape. */
-export const OUTBOX_HOLDS = ['not_granted', 'not_run', 'newer_shape'] as const;
-export type OutboxHold = (typeof OUTBOX_HOLDS)[number];
+const OUTBOX_HOLDS = ['not_granted', 'not_run', 'newer_shape'] as const;
+type OutboxHold = (typeof OUTBOX_HOLDS)[number];
 
 /** What a node knows of the outbox's consumers, which a pending row is judged by: held on purpose, or due to be delivered. */
 export interface OutboxView {

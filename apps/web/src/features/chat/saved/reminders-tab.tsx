@@ -20,15 +20,10 @@ import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { authorOf } from '../../../lib/author';
 import { useMessageText } from '../../content/github-event';
 import { useWorkspace } from '../../shell/workspace';
-import { useChannelTitle } from '../channel/channel-header';
+import { ChannelName } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { useReminderActions, useReminders } from '../reminders/use-reminders';
 import { describeWhen } from '../scheduled/presets';
-
-const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
-  const title = useChannelTitle(channel);
-  return <span>{channel.type === 'direct_message' ? title : `#${title}`}</span>;
-};
 
 const Row = ({
   reminder,

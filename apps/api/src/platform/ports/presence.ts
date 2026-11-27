@@ -10,7 +10,7 @@ import type { Clock } from '../clock';
 import type { EventBus } from '../events';
 import type { Logger } from '../logging';
 
-export interface PresenceAnnouncerDependencies {
+interface PresenceAnnouncerDependencies {
   readonly database: Executor;
   /** The node's bus the change is published on, to each listener's own topic. */
   readonly bus: EventBus;

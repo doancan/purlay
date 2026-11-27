@@ -65,7 +65,7 @@ export type WorkspaceFrameProjector = (
 >;
 
 /** What the module that owns channel content checks each live frame by before a socket writes it (`realtime/hub.ts`). */
-export interface FrameProjectors {
+interface FrameProjectors {
   readonly companyFrame: CompanyFrameProjector;
   readonly workspaceFrame: WorkspaceFrameProjector;
 }
