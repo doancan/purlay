@@ -1166,6 +1166,7 @@ export const tr = {
   'audit.kind.identity.unlinked': 'Şirket hesabının bağlantısı kaldırıldı',
   'audit.action.identity.unlinked': '{actor} şirket hesabının bağlantısını kaldırdı',
   'audit.kind.workspace.renamed': 'Çalışma alanının adı değişti',
+  'audit.kind.workspace.urgent_messages_changed': 'Acil mesaj teslimi değişti',
   'audit.kind.retention.changed': 'Saklama süresi değişti',
   'audit.kind.account.erased': 'Hesap silindi',
   'audit.kind.content.erased': 'Yazılanlar istek üzerine silindi',
@@ -1233,6 +1234,9 @@ export const tr = {
   'audit.action.invitation.revoked': '{actor} bir davet bağlantısını iptal etti',
   'audit.action.message.removed_by_moderator': '{actor}, {author} kişisinin bir mesajını sildi',
   'audit.action.workspace.renamed': '{actor} çalışma alanının adını {from} yerine {to} yaptı',
+  'audit.action.workspace.urgent_messages_changed': '{actor} acil mesaj teslimini değiştirdi',
+  'audit.action.workspace.urgent_messages_enabled': '{actor} acil mesajlara izin verdi',
+  'audit.action.workspace.urgent_messages_disabled': '{actor} acil mesajları kapattı',
   'audit.action.retention.changed': '{actor} geçmişin saklanma süresini {from} yerine {to} yaptı',
   'audit.workspaceWindow': 'çalışma alanının süresi',
   'audit.action.channel.retention_changed':
@@ -2378,6 +2382,10 @@ export const tr = {
   'priority.normal': 'Standart',
   'priority.important': 'Önemli',
   'priority.urgent': 'Acil',
+  'priority.unavailable':
+    'Bu çalışma alanı acil mesajları kapattı. Bir teslim seçeneği belirleyip tekrar gönder.',
+  'priority.notSent':
+    '{channel} için yazdığın mesaj taslakta kaldı. Bu çalışma alanı acil mesajları kapattı.',
   'composer.pasted': 'Yapıştırılan metin kod bloğuna dönüştü',
   'composer.pasteChanged': 'Yapıştırılan blok değişti. Düzenlemelerin korundu.',
   'composer.pasted.table': 'Yapıştırılan satırlar tabloya dönüştü',
@@ -3012,6 +3020,11 @@ export const tr = {
   'settings.general.title': 'Genel',
   'settings.general.description': 'Çalışma alanının adı ve adresi.',
   'settings.general.workspace': 'Çalışma alanı',
+  'settings.general.urgentMessages.title': 'Mesaj teslimi',
+  'settings.general.urgentMessages.allow': 'Acil mesajlara izin ver',
+  'settings.general.urgentMessages.hint':
+    'Üyeler doğrudan mesajlarda veya birinden bahsettiklerinde Acil seçeneğini kullanabilir.',
+  'settings.general.urgentMessages.failed': 'Acil mesaj teslimi ayarı değiştirilemedi.',
   'settings.general.nameHint': 'Çalışma alanındaki herkesin gördüğü ad.',
   'settings.general.address': 'Adres',
   'settings.general.addressHint':

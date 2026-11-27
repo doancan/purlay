@@ -323,6 +323,14 @@ export const AuditPage = (): React.JSX.Element => {
           from: entry.metadata['from'] ?? '',
           to: entry.metadata['to'] ?? '',
         });
+      case 'workspace.urgent_messages_changed': {
+        const enabled = entry.metadata['to'];
+        if (enabled === 'true')
+          return t('audit.action.workspace.urgent_messages_enabled', { actor });
+        if (enabled === 'false')
+          return t('audit.action.workspace.urgent_messages_disabled', { actor });
+        return t('audit.action.workspace.urgent_messages_changed', { actor });
+      }
       case 'retention.changed':
         return t('audit.action.retention.changed', {
           actor,

@@ -18,6 +18,7 @@ import {
   updateMemberRole,
   readWorkspace,
   updateWorkspace,
+  updateUrgentMessages,
   readRetentionSetting,
   readStorageUsage,
   updateRetentionSetting,
@@ -80,6 +81,11 @@ export const workspaceRoutes = (
       '/api/workspaces/:workspaceId',
       async ({ request, params, body }) =>
         await updateWorkspace(sending, request, params.workspaceId, body),
+    )
+    .put(
+      '/api/workspaces/:workspaceId/urgent-messages',
+      async ({ request, params, body }) =>
+        await updateUrgentMessages(sending, request, params.workspaceId, body),
     )
     .get(
       '/api/workspaces/:workspaceId/members',

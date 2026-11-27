@@ -162,6 +162,11 @@ const STEPS: readonly Step[] = [
   { id: 'listWorkspaces', spec: () => ({}), status: 200 },
   { id: 'getWorkspace', spec: (c) => ({ params: { workspaceId: c.workspaceId } }), status: 200 },
   {
+    id: 'setUrgentMessages',
+    spec: (c) => ({ params: { workspaceId: c.workspaceId }, json: { enabled: false } }),
+    status: 200,
+  },
+  {
     id: 'listWorkspaceMembers',
     spec: (c) => ({ params: { workspaceId: c.workspaceId } }),
     status: 200,

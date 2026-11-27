@@ -17,6 +17,7 @@ import {
   CreateWorkspaceRequest,
   DeleteWorkspaceRequest,
   SetDeepWorkRequest,
+  SetUrgentMessagesRequest,
   type AuditPage,
   UpdateMemberRoleRequest,
   UpdateWorkspaceRequest,
@@ -25,6 +26,7 @@ import {
   type ModuleId,
   type Membership,
   type Workspace,
+  type UrgentMessagesSetting,
   type WorkspaceDeletion,
   type WorkspaceMember,
   type RetentionSetting,
@@ -43,6 +45,8 @@ import {
   renameWorkspace,
   workspaceIn,
 } from '../../modules/workspaces/workspaces';
+import { setUrgentMessages } from '../../modules/workspaces/urgent-messages';
+import { requireLiveSession } from '../../modules/auth/sessions';
 import { setDeepWork } from '../../modules/workspaces/deep-work';
 import {
   requireMayCreateWorkspace,
@@ -264,6 +268,32 @@ export const updateWorkspace = async (
     ],
   ]);
   return workspace;
+};
+
+/** Updates which priorities members may use and refreshes their workspace memberships. */
+export const updateUrgentMessages = async (
+  dependencies: MemberWriteDependencies,
+  request: Request,
+  workspaceId: string,
+  body: unknown,
+): Promise<UrgentMessagesSetting> => {
+  const { database, clock, bus, log = NO_LOG } = dependencies;
+  const { userId, sessionId } = await requireSession(dependencies.auth, request);
+  const context = await requireWorkspaceMembership(database, userId, workspaceId);
+  const { enabled } = validated(SetUrgentMessagesRequest, body);
+  const memberIds = await atomicallyOn(database)(async (transaction) => {
+    await requireLiveSession(transaction, clock, sessionId);
+    return await setUrgentMessages(transaction, clock, context, enabled);
+  });
+  if (memberIds.length > 0)
+    await publishAfterCommit(log, [
+      [
+        publication('WORKSPACE_UPDATED', () =>
+          publishWorkspaceUpdated(bus, clock, memberIds, workspaceId),
+        ),
+      ],
+    ]);
+  return { enabled };
 };
 
 /** `PATCH /api/workspaces/:workspaceId/members/:userId` — a member's new role (§7.4, I-2). */
