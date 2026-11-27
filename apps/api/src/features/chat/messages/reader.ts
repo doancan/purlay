@@ -28,6 +28,7 @@ import {
 import { knowledgeFor } from './knowledge-reader';
 import { githubWorkFor } from '../integrations/github-work';
 import { attachmentSets, mentionSets, reactionSets } from './sets';
+import { isoInstant } from '../../../platform/clock';
 
 /** What every query that returns messages selects. Kept beside `MessageRow` so they cannot drift. */
 export const MESSAGE_COLUMNS = [
@@ -83,10 +84,8 @@ export interface ThreadColumns {
   readonly resolved_by: string | null;
 }
 
-const at = (value: Date | string): string => new Date(value).toISOString();
-
 const atOrNull = (value: Date | string | null): string | null =>
-  value === null ? null : at(value);
+  value === null ? null : isoInstant(value);
 
 /** The people with these ids, as the contract's `User` — one query, none when there are no ids. */
 const usersByIds = async (
@@ -254,7 +253,7 @@ export const buildMessages = async (
         content: row.content,
         editedAt: atOrNull(row.edited_at),
         deletedAt: atOrNull(row.deleted_at),
-        createdAt: at(row.created_at),
+        createdAt: isoInstant(row.created_at),
         parentId: row.parent_id,
         // A reply has no summary of its own; a root always has one, with zero replies until it has some.
         thread:

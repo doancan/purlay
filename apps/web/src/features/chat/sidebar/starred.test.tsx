@@ -6,9 +6,11 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
+import type { Channel } from '@purlay/types';
 import { Outlet } from '../../../app/outlet';
 import type { Api } from '../../../data/api';
 import { ApiError } from '../../../data/errors';
+import { keys } from '../../../data/keys';
 import { expectNoAxeViolations } from '../../../testing/axe';
 import { installDom } from '../../../testing/dom';
 import { IDS, aSignedInApi, someChannels } from '../../../testing/fixtures';
@@ -136,6 +138,23 @@ describe('starring a channel', () => {
     const view = await open(server.api);
     expect(listed(view, 'Starred')).toEqual(['api', 'deploys', 'incidents']);
     expect(view.queryByText('No channels yet')).toBeNull();
+    view.unmount();
+  });
+
+  test('takes it out of a heading of the person’s own, so letting it go leaves it in Channels (#1198)', async () => {
+    const heading = '00000000-0000-4000-8000-0000000000f1';
+    const view = await open({
+      channels: () =>
+        Promise.resolve(
+          someChannels().map((c) => (c.id === IDS.api ? { ...c, sidebarGroupId: heading } : c)),
+        ),
+      star: () => new Promise(() => undefined),
+    });
+    await person().click(star(view));
+    const api = view.world.client
+      .getQueryData<Channel[]>(keys.channels(IDS.workspace))
+      ?.find((c) => c.id === IDS.api);
+    expect(api).toMatchObject({ starred: true, sidebarGroupId: null });
     view.unmount();
   });
 

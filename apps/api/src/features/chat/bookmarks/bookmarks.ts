@@ -25,10 +25,8 @@ import {
   requireChannelMember,
   type ChannelContext,
 } from '../channels/guard';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import { AppError } from '../../../platform/errors';
-
-const at = (value: Date | string): string => new Date(value).toISOString();
 
 export interface BookmarkChange {
   readonly channelId: string;
@@ -82,7 +80,7 @@ const bookmarkOf = (row: Row): ChannelBookmark => ({
           displayName: row.display_name,
           avatarUrl: row.avatar_url,
         },
-  addedAt: at(row.added_at),
+  addedAt: isoInstant(row.added_at),
 });
 
 /** `http:` or `https:`, parsed as a browser would; anything else is refused with the field named. */

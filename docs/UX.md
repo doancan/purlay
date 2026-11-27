@@ -1117,7 +1117,6 @@ missing specified behaviour and does not merge.
 | Quiet hours (Notifications) | Off, with the profile's zone named; without a zone, a link to Profile | Skeleton in the card | A save refused or failed is said beside Save, and what was set stays (D-234) |
 | Email (Notifications) | Not drawn where the server cannot send mail or the address is not verified | Not drawn until the server has said whether it can be offered | Whether it can be offered could not be read: said in the card, with Retry; a change refused is put back and said in a toast (D-240) |
 | Stop link (`/mail/stop`) | n/a — a link always asks, or says it is not complete | The button busy while it asks | "This link does not open" for one too old or unknown, with the way to Purlay; any other failure said above the button, which tries again (D-240) |
-| Accounts (Settings → Server) | "No account matches." | Skeleton rows | Retry in the card; a change refused is said in the card (D-233) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
 | People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
@@ -1336,11 +1335,8 @@ account change was undone.
 - **Who can create workspaces** — *Only the first person*, *Anyone who signs in*, or *Only these GitHub
   accounts* with the logins typed, comma-separated, held to GitHub's login rule before they are sent and
   by the server after; **Save** is enabled only when something changed.
-- **Accounts** (D-233) — a search by name, username or address over the server's accounts, each row with its
-  name, `@handle` and address, *Administers this server* where it does, and *Suspended* with its date where it
-  is. **Suspend** asks once more on the row, in words that say the person is signed out on every device and
-  cannot sign in until it is lifted; **Lift suspension** asks nothing. An administrator's row, the caller's
-  own among them, has no button.
+- **Accounts** are not here: suspending and lifting an account is the console's Users page (D-233, D-278); the card
+  this page had is removed (D-354).
 
 **Disconnecting asks first.** The dialog names what stops. When no other way for people to sign in would
 remain — the page knows from which of GitHub, single sign-on and the mail server serve — it says so **before** the button

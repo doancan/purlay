@@ -2,7 +2,7 @@
  * The two clocks: the one production reads, and the one tests pin.
  */
 import { describe, expect, test } from 'bun:test';
-import { fixedClock, systemClock } from './clock';
+import { fixedClock, isoInstant, systemClock } from './clock';
 
 describe('the clock', () => {
   test('the system clock is the current time, read afresh each call', () => {
@@ -20,5 +20,11 @@ describe('the clock', () => {
     const first = clock.now();
     first.setFullYear(2000);
     expect(clock.now().toISOString()).toBe('2026-09-09T12:00:00.000Z');
+  });
+
+  test('an instant reads the same on the wire whether the row held a Date or text', () => {
+    const instant = '2026-09-09T12:00:00.000Z';
+    expect(isoInstant(new Date(instant))).toBe(instant);
+    expect(isoInstant('2026-09-09 15:00:00+03')).toBe(instant);
   });
 });

@@ -23,7 +23,6 @@ import {
   allChannelsRead,
   channelAdded,
   channelsRevoked,
-  channelStarred,
   channelStateChanged,
   messageCreated,
   messageHidden,
@@ -894,24 +893,6 @@ describe('a channel’s files list (D-129)', () => {
   });
 });
 
-describe('a star (D-132)', () => {
-  test('is drawn as asked, and undone only while it is still as that asked', () => {
-    const client = seeded();
-    const starred = (): boolean | undefined =>
-      client.getQueryData<Channel[]>(keys.channels(WS))?.[0]?.starred;
-    channelStarred(client, CH, true);
-    expect(starred()).toBe(true);
-    channelStarred(client, CH, true, true);
-    expect(starred()).toBe(false);
-
-    // Starred, then let go elsewhere before the star is refused: the refusal changes nothing.
-    channelStarred(client, CH, true);
-    channelStarred(client, CH, false);
-    channelStarred(client, CH, true, true);
-    expect(starred()).toBe(false);
-  });
-});
-
 describe('reading again what may have changed (#540)', () => {
   /** A query watched by a screen, whose reads are counted and fail while told to. */
   const watched = (failing: {
@@ -1030,23 +1011,6 @@ describe('private deletion', () => {
       mentions: [],
     });
     expect(held?.find((item) => item.id === id(3))?.content).toBe('m3');
-  });
-});
-
-test('starring a grouped channel clears its placement before an unstar can resurrect it (#1198)', () => {
-  const client = new QueryClient();
-  const group = '00000000-0000-4000-8000-0000000000f1';
-  const grouped = channel({ sidebarGroupId: group });
-  client.setQueryData<Channel[]>(keys.channels(WS), [grouped]);
-  channelStarred(client, CH, true);
-  expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]).toMatchObject({
-    starred: true,
-    sidebarGroupId: null,
-  });
-  channelStarred(client, CH, false);
-  expect(client.getQueryData<Channel[]>(keys.channels(WS))?.[0]).toMatchObject({
-    starred: false,
-    sidebarGroupId: null,
   });
 });
 

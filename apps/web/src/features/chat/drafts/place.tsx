@@ -4,7 +4,7 @@
  */
 import type { Channel } from '@purlay/types';
 import { useI18n } from '../../../i18n/i18n-provider';
-import { useChannelTitle } from '../channel/channel-header';
+import { useChannelLabel } from '../channel/channel-header';
 
 export const Place = ({
   channel,
@@ -14,12 +14,10 @@ export const Place = ({
   readonly thread: boolean;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const title = useChannelTitle(channel);
+  const label = useChannelLabel(channel);
   return (
     <span className="flex min-w-0 items-baseline gap-2 whitespace-nowrap text-label text-ink-muted">
-      <span className="min-w-0 truncate font-semibold text-ink">
-        {channel.type === 'direct_message' ? title : `#${title}`}
-      </span>
+      <span className="min-w-0 truncate font-semibold text-ink">{label}</span>
       {thread && <span className="shrink-0">· {t('drafts.inThread')}</span>}
     </span>
   );
