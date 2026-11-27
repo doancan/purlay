@@ -6,16 +6,22 @@ import {
   type Transaction,
 } from '@purlay/db';
 import { exportPKCS8, generateKeyPair } from 'jose';
+import { messageId } from '@purlay/types';
+import { send } from '../../features/chat/messages/messages';
+import { chatPushNotices } from '../../features/chat/notifications/push-notices';
 import { apnsScopeOf } from '../../platform/apns-credentials';
 import { DEVELOPMENT_ENCRYPTION_KEY } from '../../platform/config';
 import { credentialCipher } from '../../platform/crypto';
 import { nobodyActive } from '../../platform/attention';
 import { NO_LOG } from '../../platform/events';
 import { enqueuePush } from '../../platform/push-work';
+import { atomicallyOn } from '../../platform/transactions';
 import { testConfig } from '../../testing/doubles';
+import { PUSH_QUIET_BUS } from '../../testing/pending-push';
 import { TEST_PUSH_POLICY } from '../../testing/push-config';
 import { aBrowser, KEYS } from '../../testing/push-service';
 import { aWorld, subscribe, words, type World } from '../../testing/push-world';
+import { aRoom } from '../../testing/rooms';
 import { aSession, aSignedInUser, aTestAuth } from '../../testing/signed-in';
 import { requireServerAdmin } from '../setup/setup';
 import { noPushNotices } from './notices';
@@ -72,6 +78,51 @@ const queueInbox = async (db: Transaction, world: World, sender: PushSender): Pr
 };
 
 describe('integration: the shared push queue delivers to APNs', () => {
+  test('an urgent chat mention adds its localized marker without including the message text', async () => {
+    await withRollback(async (db) => {
+      const world = await aWorld(db);
+      const room = await aRoom(db, ['writer', 'reader'], { type: 'private' });
+      const writer = room.members['writer'];
+      const reader = room.members['reader'];
+      if (writer === undefined || reader === undefined) throw new Error('Incomplete chat fixture');
+      await db.updateTable('users').set({ locale: 'tr' }).where('id', '=', reader.userId).execute();
+      const { sessionId } = await aSession(db, world.clock, reader.userId);
+      await registerApnsDevice(
+        db,
+        world.clock,
+        { userId: reader.userId, sessionId },
+        deviceToken,
+        scope,
+      );
+      const alerts: unknown[] = [];
+      const provider = await createApnsProvider(credentials, world.clock, (_url, options) => {
+        if (typeof options.body !== 'string') throw new Error('Missing APNs JSON body');
+        alerts.push(JSON.parse(options.body) as unknown);
+        return Promise.resolve(new Response(null, { status: 200 }));
+      });
+      const worker = await createPushSender({
+        ...base(db, world),
+        notices: chatPushNotices,
+        apns: { scope, send: provider },
+      });
+      await send(
+        { atomically: atomicallyOn(db), clock: world.clock, bus: PUSH_QUIET_BUS, push: worker },
+        writer.context,
+        {
+          id: messageId(world.clock.now()),
+          content: `@${reader.username} private message`,
+          priority: 'urgent',
+        },
+      );
+      await worker.flush(10_000);
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toMatchObject({
+        aps: { alert: { body: 'Acil · writer senden bahsetti' } },
+      });
+      expect(JSON.stringify(alerts)).not.toContain('private message');
+    });
+  });
+
   test('a native-only notice waits through Deep Work and quiet hours, then posts once', async () => {
     await withRollback(async (db) => {
       const world = await aWorld(db);
