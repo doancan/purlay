@@ -1,8 +1,8 @@
 /**
  * The decision record's index and numbering (`scripts/decisions.ts`, D-345).
  */
-import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -10,6 +10,7 @@ import {
   draft,
   fileName,
   isCategory,
+  main,
   nextNumber,
   withCount,
   parseDecision,
@@ -152,5 +153,85 @@ describe("the repository's own record", () => {
   test('has an index that is what its files say', () => {
     const readme = readFileSync(join(RECORD, 'README.md'), 'utf8');
     expect(withIndex(readme, renderIndex(readRecord(RECORD)))).toBe(readme);
+  });
+});
+
+describe('the decision commands', () => {
+  const repositoryReadme = '# Purlay\n\nWhy — 1 decisions, one file each.\n';
+  const document = (index: string): string => `# Decision record\n\n${index}\n\nKeep this prose.\n`;
+  const repository = (): string =>
+    aRecord({
+      'README.md': repositoryReadme,
+      [`${RECORD}/README.md`]: document(renderIndex([])),
+      [`${RECORD}/_template.md`]: readFileSync(join(RECORD, '_template.md'), 'utf8'),
+      [`${RECORD}/product/${D}1-first.md`]: `# ${D}1. First\n`,
+    });
+
+  test('index check refuses a stale index without writing, and regenerating it keeps the surrounding prose', () => {
+    const root = repository();
+    const readme = join(root, RECORD, 'README.md');
+    const error = spyOn(console, 'error').mockImplementation(() => undefined);
+    const out = spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      expect(main(['index', '--check'], root)).toBe(1);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('is out of date'));
+      expect(readFileSync(readme, 'utf8')).toBe(document(renderIndex([])));
+
+      expect(main(['index'], root)).toBe(0);
+      expect(out).toHaveBeenCalledWith('decisions index: wrote 1 decisions');
+      const checked = readFileSync(readme, 'utf8');
+      expect(checked).toBe(document(renderIndex(readRecord(join(root, RECORD)))));
+      expect(checked).toContain(`| [${D}1](product/${D}1-first.md) | First |`);
+      expect(main(['index', '--check'], root)).toBe(0);
+      expect(out).toHaveBeenCalledWith('decisions index: 1 decisions, up to date');
+      expect(readFileSync(join(root, 'README.md'), 'utf8')).toBe(repositoryReadme);
+    } finally {
+      error.mockRestore();
+      out.mockRestore();
+    }
+  });
+
+  test('new writes the next decision from the repository template and updates the index and root count', () => {
+    const root = repository();
+    const destination = join(RECORD, 'data', `${D}2-second-record.md`);
+    const out = spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      expect(main(['new', 'data', '  Second', 'record  '], root)).toBe(0);
+      expect(out).toHaveBeenCalledWith(destination);
+      const made = readFileSync(join(root, destination), 'utf8');
+      expect(made).toStartWith(`# ${D}2. Second record\n`);
+      expect(made).toMatch(/\*\*Decided \(the owner, \d{4}-\d{2}-\d{2}\)\.\*\*/);
+      expect(readFileSync(join(root, RECORD, 'README.md'), 'utf8')).toContain(
+        `| [${D}2](data/${D}2-second-record.md) | Second record |`,
+      );
+      expect(readFileSync(join(root, 'README.md'), 'utf8')).toBe(
+        repositoryReadme.replace('1 decisions', '2 decisions'),
+      );
+    } finally {
+      out.mockRestore();
+    }
+  });
+
+  test('refuses an unknown command, category or missing title without touching the record', () => {
+    const root = repository();
+    const record = join(root, RECORD);
+    const error = spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(main(['publish'], root)).toBe(1);
+      expect(error).toHaveBeenCalledWith(
+        expect.stringContaining('usage: bun scripts/decisions.ts'),
+      );
+      for (const argv of [['new'], ['new', 'misc', 'Second'], ['new', 'data', '   ']]) {
+        expect(main(argv, root)).toBe(1);
+      }
+      expect(error).toHaveBeenLastCalledWith(
+        expect.stringContaining('usage: bun run decision:new'),
+      );
+      expect(readdirSync(record).sort()).toEqual(['README.md', '_template.md', 'product']);
+      expect(readFileSync(join(record, 'README.md'), 'utf8')).toBe(document(renderIndex([])));
+      expect(readFileSync(join(root, 'README.md'), 'utf8')).toBe(repositoryReadme);
+    } finally {
+      error.mockRestore();
+    }
   });
 });

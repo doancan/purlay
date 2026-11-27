@@ -180,16 +180,17 @@ export const nextNumber = (decisions: readonly Decision[]): number =>
   decisions.reduce((highest, decision) => Math.max(highest, decision.number), 0) + 1;
 
 /** A new decision's file, from the template, with what `check-docs.py` holds every decision to. */
-export const draft = (number: number, title: string, today: string): string =>
-  readFileSync(join(RECORD, '_template.md'), 'utf8')
+export const draft = (number: number, title: string, today: string, record = RECORD): string =>
+  readFileSync(join(record, '_template.md'), 'utf8')
     .replace('D-NNN', `D-${String(number)}`)
     .replace('TITLE', title)
     .replace('YYYY-MM-DD', today);
 
-if (import.meta.main) {
-  const [command, ...rest] = process.argv.slice(2);
-  const decisions = readRecord(RECORD);
-  const readmePath = join(RECORD, 'README.md');
+export const main = (argv: readonly string[], root = '.'): number => {
+  const [command, ...rest] = argv;
+  const record = join(root, RECORD);
+  const decisions = readRecord(record);
+  const readmePath = join(record, 'README.md');
   if (command === 'index') {
     const readme = readFileSync(readmePath, 'utf8');
     const updated = withIndex(readme, renderIndex(decisions));
@@ -198,7 +199,7 @@ if (import.meta.main) {
         console.error(
           `${readmePath} is out of date: run \`bun run decisions:index\` and commit it.`,
         );
-        process.exit(1);
+        return 1;
       }
       console.log(`decisions index: ${String(decisions.length)} decisions, up to date`);
     } else {
@@ -212,18 +213,28 @@ if (import.meta.main) {
       console.error(
         `usage: bun run decision:new <${CATEGORIES.map(([name]) => name).join('|')}> <title…>`,
       );
-      process.exit(1);
+      return 1;
     }
     const number = nextNumber(decisions);
     const path = join(RECORD, category, fileName(number, slugOf(title)));
-    mkdirSync(join(RECORD, category), { recursive: true });
-    writeFileSync(path, draft(number, title, new Date().toISOString().slice(0, 10)));
-    const record = readRecord(RECORD);
-    writeFileSync(readmePath, withIndex(readFileSync(readmePath, 'utf8'), renderIndex(record)));
-    writeFileSync('README.md', withCount(readFileSync('README.md', 'utf8'), record.length));
+    mkdirSync(join(record, category), { recursive: true });
+    writeFileSync(
+      join(root, path),
+      draft(number, title, new Date().toISOString().slice(0, 10), record),
+    );
+    const updated = readRecord(record);
+    writeFileSync(readmePath, withIndex(readFileSync(readmePath, 'utf8'), renderIndex(updated)));
+    const repositoryReadme = join(root, 'README.md');
+    writeFileSync(
+      repositoryReadme,
+      withCount(readFileSync(repositoryReadme, 'utf8'), updated.length),
+    );
     console.log(path);
   } else {
     console.error('usage: bun scripts/decisions.ts index [--check] | new <category> <title…>');
-    process.exit(1);
+    return 1;
   }
-}
+  return 0;
+};
+
+if (import.meta.main) process.exitCode = main(process.argv.slice(2));
