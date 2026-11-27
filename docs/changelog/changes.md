@@ -27,13 +27,6 @@ have it.
 
 ## Unreleased
 
-### Added
-
-- **Operations** — set a minimum iOS app version and wire contract independently of macOS, with an optional HTTPS update address (D-340)
-- **Messages** — workspace owners and admins can turn off Urgent delivery in General settings (D-337)
-
-### Fixed
-
-- **Sign-in** — native sign-in in the browser names Purlay for Mac or Purlay for iOS (D-191)
+_Nothing yet._
 
 ---
