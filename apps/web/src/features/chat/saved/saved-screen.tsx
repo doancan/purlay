@@ -31,7 +31,7 @@ import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
-import { HeaderTile, useChannelTitle } from '../channel/channel-header';
+import { ChannelName, HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../../shell/nav';
 import {
@@ -96,11 +96,6 @@ const useSaved = (
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
-};
-
-const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
-  const title = useChannelTitle(channel);
-  return <span>{channel.type === 'direct_message' ? title : `#${title}`}</span>;
 };
 
 /** What a saved message can be moved to from where it is. */

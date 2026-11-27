@@ -25,9 +25,8 @@ import { inProcessBackplane, type Backplane } from '../../realtime/bus';
 import { createSocketHub, systemTimers, type Timers } from '../../realtime/hub';
 import { startLivenessSweep } from '../../realtime/liveness';
 import { offlinePresence, onlinePresence, type OnlinePresence } from '../../realtime/online';
-import { announcePresence } from '../../features/chat/presence/presence';
-import { companyFrameProjector } from '../../features/chat/channels/company-delivery';
-import { workspaceFrameProjector } from '../../features/chat/channels/workspace-delivery';
+import type { PresenceAnnouncer } from '../../platform/ports/presence';
+import type { FrameProjection } from '../../platform/ports/channel-delivery';
 import { readonlyWorkspaceAccess } from '../../platform/tenancy';
 import {
   inProcessRateLimiter,
@@ -75,6 +74,13 @@ export interface SocketDependencies {
   readonly deadlineOf?: (module: string) => number | undefined;
   /** The events of a module this process does not run (`composition.ts`); absent, none is closed. */
   readonly closedEvent?: (event: string) => boolean;
+  /** How a change of who is online is told (`composition.ts`, D-352); absent, nobody is counted. */
+  readonly announcePresence?: PresenceAnnouncer | undefined;
+  /**
+   * What each live frame of a module's content is checked by (`composition.ts`, D-352); `undefined` only in a build that
+   * carries no such module. Never optional: a caller that forgot it would write every frame unchecked, and must say so.
+   */
+  readonly frameProjection: FrameProjection | undefined;
   /** Defaults to `SOCKET_CONNECTION_LIMITS.perUser` and the configuration's `SOCKET_MAX_CONNECTIONS`; a test passes less. */
   readonly connectionLimits?: ConnectionLimits | undefined;
   /** Devices told of what a send needs them for; absent where push is off (D-126). */
@@ -176,10 +182,11 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
   };
   // One for the node: what limits the replays is every socket's together, not one connection's.
   const replayGate = createReplayGate(dependencies.config.SOCKET_REPLAY_CONCURRENCY, log);
-  // Who is online on this node (D-136): told by the hub's own count of each person's sockets. It is chat's news
-  // (`PRESENCE` is in its manifest): a process that does not run chat counts nobody, shares nothing and tells nobody.
+  // Who is online on this node (D-136): told by the hub's own count of each person's sockets. It is a module's news
+  // (`PRESENCE` is in chat's manifest): a process that does not run it counts nobody, shares nothing and tells nobody.
+  const announcePresence = dependencies.announcePresence;
   const online =
-    dependencies.closedEvent?.('PRESENCE') === true
+    announcePresence === undefined || dependencies.closedEvent?.('PRESENCE') === true
       ? offlinePresence
       : onlinePresence({
           clock,
@@ -193,15 +200,11 @@ export const createSocketLifecycle = (dependencies: SocketDependencies): SocketL
             : { directory: dependencies.shared.directory }),
         });
   const hub = createSocketHub(dependencies.auth, clock, {
-    companyFrame: companyFrameProjector(database, {
+    ...dependencies.frameProjection?.({
+      database,
       clock,
       lifetime: () => dependencies.auth.sessionLifetime,
     }),
-    workspaceFrame: workspaceFrameProjector(
-      database,
-      clock,
-      () => dependencies.auth.sessionLifetime,
-    ),
     log,
     presence: online,
     ...(dependencies.closedEvent === undefined ? {} : { closedEvent: dependencies.closedEvent }),

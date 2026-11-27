@@ -213,13 +213,7 @@ export const updateWorkspaceAccessRole = async (
         .returningAll()
         .executeTakeFirstOrThrow();
       noteWorkspaceAccessChange(transaction, scope);
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        users,
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, users);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,
@@ -260,13 +254,7 @@ export const retireWorkspaceAccessRole = async (
         .where('workspace_id', '=', scope.workspaceId)
         .where('role_id', '=', roleId)
         .execute();
-      await projectWorkspaceAccess(
-        transaction,
-        dependencies.clock,
-        scope,
-        users,
-        dependencies.channels,
-      );
+      await projectWorkspaceAccess(transaction, dependencies, scope, users);
       await recordAudit(transaction, dependencies.clock, {
         workspaceId: scope.workspaceId,
         actorUserId: context.userId,

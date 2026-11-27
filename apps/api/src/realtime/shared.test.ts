@@ -41,6 +41,7 @@ describe('without REDIS_URL', () => {
     createSocketLifecycle({
       ...dependencies,
       userWrites: { consume: () => Promise.resolve(true), forget: () => undefined },
+      frameProjection: undefined,
     });
     const health = await app.handle(new Request('http://localhost/health'));
     expect(health.status).toBe(200);

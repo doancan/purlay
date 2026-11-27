@@ -17,7 +17,7 @@
 import { notHiddenBy } from '../messages/hidden';
 import type { ChatDb, ChatTx } from '../schema';
 import { PINS_MAX, type PinList } from '@purlay/types';
-import type { Clock } from '../../../platform/clock';
+import { isoInstant, type Clock } from '../../../platform/clock';
 import {
   messageNotFound,
   requireChannelMember,
@@ -27,8 +27,6 @@ import {
 } from '../channels/guard';
 import { AppError } from '../../../platform/errors';
 import { buildMessages, MESSAGE_COLUMNS } from '../messages/reader';
-
-const at = (value: Date | string): string => new Date(value).toISOString();
 
 /** What a pin or an unpin did: the channel it is in, and whether anything changed there. */
 export interface PinChange {
@@ -152,7 +150,7 @@ export const channelPins = async (executor: ChatDb, context: ChannelContext): Pr
               displayName: row.pinner_display_name,
               avatarUrl: row.pinner_avatar_url,
             },
-      pinnedAt: at(row.pinned_at),
+      pinnedAt: isoInstant(row.pinned_at),
     };
   });
 };

@@ -1,5 +1,7 @@
 # D-254. Issues, the second module, as small as it can be — builds on D-250
 
+*Amended by D-355: §3's "a member who leaves does not rewrite their issues" is reversed: a person who stops being a member is taken off the workspace's open issues, told by the core's `core.member-left` through the outbox.*
+
 **Context.** D-250 made the architecture and chat its first module, and a rule written for one module is a guess until
 a second one lives by it: chat's tables are the core's own migrations, so every seam that matters for a module with a
 set of its own — its tables absent, its hooks, its routes, its chunk — has so far been argued and never exercised.

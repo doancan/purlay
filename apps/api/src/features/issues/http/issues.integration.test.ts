@@ -485,6 +485,65 @@ describe('integration: who an issue may be given to', () => {
       }
     });
   });
+
+  test('a guest is assignable only while their access is live and lets them into issues, as the guard lets them open it', async () => {
+    await withRollback(async (db) => {
+      const call = caller(db);
+      const w = await aWorkspace(db, {
+        ada: 'owner',
+        chatOnly: 'member',
+        expired: 'member',
+        invited: 'member',
+      });
+      const ada = person(w, 'ada');
+      const asGuest = async (
+        name: string,
+        modules: readonly string[],
+        expiresAt: Date | null,
+      ): Promise<void> => {
+        await db
+          .updateTable('workspace_members')
+          .set({
+            access_kind: 'guest',
+            guest_since: new Date(0),
+            guest_expires_at: expiresAt,
+            guest_modules: [...modules],
+          })
+          .where('workspace_id', '=', w.id)
+          .where('user_id', '=', person(w, name).userId)
+          .execute();
+      };
+      await asGuest('chatOnly', ['chat'], null);
+      await asGuest('expired', ['chat', 'issues'], new Date(1_000));
+      await asGuest('invited', ['issues'], null);
+      const made = (await call('POST', w.path, ada, { title: 'Open' })).body as Issue;
+      for (const name of ['chatOnly', 'expired']) {
+        const assigneeId = person(w, name).userId;
+        const refused = [
+          await call('POST', w.path, ada, { title: 'x', assigneeId }),
+          await call('PATCH', `${w.path}/${made.id}`, ada, { assigneeId }),
+        ];
+        for (const answer of refused) {
+          expect({ name, status: answer.status, code: code(answer) }).toEqual({
+            name,
+            status: 400,
+            code: 'VALIDATION_FAILED',
+          });
+        }
+        const told = await db
+          .selectFrom('inbox_entries')
+          .select('id')
+          .where('user_id', '=', assigneeId)
+          .execute();
+        expect({ name, told: told.length }).toEqual({ name, told: 0 });
+      }
+      const given = await call('PATCH', `${w.path}/${made.id}`, ada, {
+        assigneeId: person(w, 'invited').userId,
+      });
+      expect(given.status).toBe(200);
+      expect((given.body as Issue).assigneeId).toBe(person(w, 'invited').userId);
+    });
+  });
 });
 
 describe('integration: what a title and a body may hold', () => {

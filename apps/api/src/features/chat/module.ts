@@ -14,6 +14,10 @@ import { startWithTheDefaultChannel } from './channels/workspace-hooks';
 import { forgetWhatChatKeeps } from './channels/user-hooks';
 import { requireAttachmentById } from './channels/guard';
 import { chatWorkspaceChannels } from './channels/workspace-channels';
+import { companyFrameProjector } from './channels/company-delivery';
+import { workspaceFrameProjector } from './channels/workspace-delivery';
+import { announcePresence } from './presence/presence';
+import type { FrameProjection } from '../../platform/ports/channel-delivery';
 import { CHAT_COLLATED_COLUMNS } from './collated-columns';
 import { chatRoutes } from './http/routes';
 import { chatJobWork } from './jobs';
@@ -21,6 +25,12 @@ import { chatWorkers } from './workers';
 import { chatPushNotices } from './notifications/push-notices';
 import { chatWorkspacePurge } from './messages/workspace-purge';
 import { chatMessagesSource } from './search/source';
+
+/** What a socket checks each live frame of a channel by, on every node (D-352). */
+const chatFrameProjection: FrameProjection = ({ database, clock, lifetime }) => ({
+  companyFrame: companyFrameProjector(database, { clock, lifetime }),
+  workspaceFrame: workspaceFrameProjector(database, clock, lifetime),
+});
 
 export const chatModule = {
   manifest: {
@@ -117,6 +127,9 @@ export const chatModule = {
   workspaceCreated: startWithTheDefaultChannel,
   userErased: forgetWhatChatKeeps,
   workspaceChannels: chatWorkspaceChannels,
+  frameProjection: chatFrameProjection,
+  // Who is online is chat's news (`PRESENCE` above): the socket counts, and chat says who hears it (D-352).
+  announcePresence,
   workspacePurge: chatWorkspacePurge,
   export: chatExport,
   personalExport: chatPersonalExport,

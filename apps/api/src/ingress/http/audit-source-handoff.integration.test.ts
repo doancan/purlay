@@ -30,6 +30,7 @@ import {
 import { testDependencies } from '../../testing/doubles';
 import { PUSH_QUIET_BUS } from '../../testing/pending-push';
 import { createApp } from './app';
+import { noDepartures } from '../../testing/departures';
 
 let clone: ClonedDatabase;
 beforeAll(async () => {
@@ -47,6 +48,7 @@ const grantAudit = async (
   const dependencies = {
     ...configured.fixture.dependencies,
     channels: noWorkspaceChannels,
+    departures: noDepartures,
     bus: PUSH_QUIET_BUS,
     readersReady: (): Promise<boolean> => Promise.resolve(true),
   };

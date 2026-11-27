@@ -19,6 +19,7 @@ import { NO_SESSION_LIFETIME } from '../auth/session-lifetime';
 import { noWorkspaceChannels } from './channels-port';
 import { purgeWorkspaces, type WorkspacePurge } from './deletion-purge';
 import { createWorkspaceDirectory } from './directory/service';
+import { noDepartures } from '../../testing/departures';
 
 let clone: ClonedDatabase;
 beforeAll(async () => {
@@ -109,6 +110,7 @@ describe('integration: configured directory workspace purge', () => {
           clock,
           lifetime: () => NO_SESSION_LIFETIME,
           channels: noWorkspaceChannels,
+          departures: noDepartures,
           readersReady: () => Promise.resolve(true),
           bus: PUSH_QUIET_BUS,
           baseUrl: 'https://purlay.test',

@@ -88,6 +88,17 @@ export const useChannelTitle = (channel: Channel): string => {
   return peer.id === user.id ? t('feed.selfDm', { name }) : name;
 };
 
+/** How a list of items from many places names one: a channel with its `#`, a conversation without. */
+export const useChannelLabel = (channel: Channel): string => {
+  const title = useChannelTitle(channel);
+  return channel.type === 'direct_message' ? title : `#${title}`;
+};
+
+/** That name on its own, beside an item in such a list. */
+export const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
+  <span>{useChannelLabel(channel)}</span>
+);
+
 export const ChannelHeader = ({ channel }: { readonly channel: Channel }): React.JSX.Element => {
   const { t, format } = useI18n();
   const { workspace } = useWorkspace();

@@ -12,6 +12,13 @@ import { Value } from '@sinclair/typebox/value';
  */
 export const FACT_HOLD_DAYS_MAX = 14;
 
+/**
+ * The longest string a fact's payload may hold (D-283 §2 and §6, D-353): a fact names ids and a short label, never a person's words,
+ * so every string of a schema says how long it may be, and no more than this. An id in a format that bounds it (`uuid`, `date-time`)
+ * says so by its format.
+ */
+export const FACT_STRING_LENGTH_MAX = 200;
+
 /** The shape a declaration has until it says another. */
 export const FACT_SHAPE_FIRST = 1;
 

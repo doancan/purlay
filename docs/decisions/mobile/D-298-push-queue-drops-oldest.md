@@ -1,5 +1,7 @@
 # D-298. A full queue of pushes lets go of its oldest, and says how many — builds on D-143, D-25, D-126
 
+*Amended by D-354: §3's map half (`dropOldest`) is removed, its caller having moved to PostgreSQL with D-307; the line's half stays.*
+
 **Context.** The push sender keeps two queues in memory: the devices waiting for their turn (at most `POSTS_AT_ONCE` in flight, a thousand
 waiting) and the notices held while their person is in Deep Work or quiet hours (a thousand, each for at most a day, which is how long a
 push service keeps a push for a device that is off). Past the bound a push was dropped and counted, but the one dropped was the one that

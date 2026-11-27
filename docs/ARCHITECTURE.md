@@ -930,7 +930,7 @@ made by the composition root and handed in like every other dependency; it is re
 boundaries — the HTTP edge, the socket's rate refusals, the push sender, the mail ledger — and a module is
 handed a `Counter`, never the registry. Label values are words the code spells: a route as registered, never
 a path as sent; no id, address, name or content. The jobs run in another container, so their numbers are
-read from `job_runs` per scrape, bounded, and a read that fails leaves the rest of the page. The outbox's gauges (`purlay_outbox_pending`, `purlay_outbox_oldest_age_seconds`, `purlay_outbox_dead`, by the consuming module) are read from the table the same way, and a read that fails leaves them out rather than at zero (D-288).
+read from `job_runs` per scrape, bounded, and a read that fails leaves the rest of the page. The outbox's gauges (`purlay_outbox_pending`, `purlay_outbox_oldest_age_seconds`, `purlay_outbox_held`, `purlay_outbox_dead`, by the consuming module) and the count of what `sweep:outbox` gave up on at its expiry (`purlay_outbox_expired_total`, kept in `outbox_expired` because the sweep is another process) are read from the tables the same way, and a read that fails leaves them out rather than at zero (D-288, D-353).
 
 **Executors are arguments.** Every service and repository takes its `Kysely<Database>` or
 `Transaction<Database>` as a parameter rather than reaching for a module-level handle. This is what

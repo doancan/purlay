@@ -6,10 +6,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { expect, test, type Persona, type Room } from './fixtures';
-import { history, writeInParallel, type ApiClient, skipReleaseNotes } from './support';
-
-const rowWith = (page: Page, text: string): Locator =>
-  page.locator('[data-message-row]', { hasText: text });
+import { history, writeInParallel, type ApiClient, skipReleaseNotes, rowWith } from './support';
 
 interface Question extends Room {
   readonly rootId: string;
