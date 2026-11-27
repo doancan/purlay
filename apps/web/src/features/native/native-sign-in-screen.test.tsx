@@ -265,6 +265,62 @@ describe('the other ways out', () => {
   });
 });
 
+describe('an application that asked for a fresh sign-in (prompt=login, D-356)', () => {
+  test('asks with the prompt, and a browser that signed in too long ago is sent to sign in again, keeping the question', async () => {
+    window.sessionStorage.setItem(KEY, JSON.stringify({ ...PAIR, prompt: 'login', at: NOW() }));
+    const asked: NativeAuthorizeRequest[] = [];
+    let signedOut = 0;
+    const view = await visit({
+      authorizeNative: (input) => {
+        asked.push(input);
+        return Promise.reject(
+          new ApiError(
+            403,
+            'REAUTHENTICATION_REQUIRED',
+            'Sign in again in this browser to continue.',
+          ),
+        );
+      },
+      signOut: () => {
+        signedOut += 1;
+        return Promise.resolve();
+      },
+      me: () =>
+        signedOut === 0
+          ? Promise.resolve(aSession())
+          : Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'Sign in first.')),
+    });
+    await click(view, 'Open Purlay for Mac');
+    expect(asked).toEqual([{ ...PAIR, prompt: 'login' }]);
+    expect(view.getByRole('heading', { name: 'Sign in again to continue' })).toBeDefined();
+    expect(view.queryByRole('alert')).toBeNull();
+    expectFocusOn(view.getByRole('button', { name: 'Sign in again' }));
+    await expectNoAxeViolations(view.container);
+    await click(view, 'Sign in again');
+    expect(signedOut).toBe(1);
+    expect(JSON.parse(window.sessionStorage.getItem(KEY) ?? '{}')).toMatchObject({
+      prompt: 'login',
+    });
+    expect(here(view)).toBe('/sign-in');
+  });
+
+  test('says so in Turkish', async () => {
+    window.sessionStorage.setItem(KEY, JSON.stringify({ ...PAIR, prompt: 'login', at: NOW() }));
+    const view = await visit(
+      {
+        authorizeNative: () =>
+          Promise.reject(new ApiError(403, 'REAUTHENTICATION_REQUIRED', 'Sign in again.')),
+      },
+      { locale: 'tr' },
+    );
+    await click(view, 'Purlay for Mac uygulamasını aç');
+    expect(
+      view.getByRole('heading', { name: 'Devam etmek için yeniden giriş yapın' }),
+    ).toBeDefined();
+    expect(view.getByRole('button', { name: 'Yeniden giriş yap' })).toBeDefined();
+  });
+});
+
 describe('a page with nothing to answer', () => {
   test('without a pair, says the sign-in is not there, with the way home', async () => {
     const view = await visit();

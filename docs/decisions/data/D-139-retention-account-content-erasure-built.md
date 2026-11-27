@@ -1,5 +1,7 @@
 # D-139. Retention, account erasure and content erasure, as built — #83
 
+*Amended by D-356: §5's sign-in is the session's recorded authentication as well as its issuance, so a native handoff keeps its browser's age.*
+
 *Amended by D-225: A channel may keep its history longer than its workspace, never shorter.*
 
 **Context.** D-27 decided the three pieces; building them met edges it is silent on — a thread whose root

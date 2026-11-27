@@ -106,6 +106,8 @@ interface Context {
   aliceElsewhere: SignedInUser;
   /** The id of a third session of Alice's, which the device list ends. */
   aliceDeviceId: string;
+  /** Somebody in no workspace, freshly signed in, so erasing their account touches nobody the other steps need. */
+  leaver: SignedInUser;
   workspaceId: string;
   guestId: string;
   channelId: string;
@@ -137,7 +139,7 @@ interface Spec {
 interface Step {
   readonly id: string;
   /** Who calls; `nobody` is a request with no session. */
-  readonly as?: 'alice' | 'bob' | 'aliceElsewhere' | 'nobody';
+  readonly as?: 'alice' | 'bob' | 'aliceElsewhere' | 'leaver' | 'nobody';
   readonly spec: (c: Context) => Spec;
   readonly status: number;
   readonly then?: (c: Context, body: unknown, response: Response) => void;
@@ -668,6 +670,12 @@ const STEPS: readonly Step[] = [
   { id: 'hideMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 200 },
   { id: 'deleteMessage', spec: (c) => ({ params: { messageId: c.replyId } }), status: 204 },
   { id: 'logoutEverywhere', as: 'bob', spec: () => ({}), status: 204 },
+  {
+    id: 'eraseMyAccount',
+    as: 'leaver',
+    spec: (c) => ({ json: { confirm: c.leaver.username } }),
+    status: 204,
+  },
 ];
 
 const entryOf = (id: string): EndpointSpec => {
@@ -757,6 +765,7 @@ const world = async (): Promise<Context> => {
     bob,
     aliceElsewhere,
     aliceDeviceId: device.sessionId,
+    leaver: await aSignedInUser(db, clock, 'contract-leaver'),
     workspaceId,
     guestId: guest.userId,
     channelId: channel.id,

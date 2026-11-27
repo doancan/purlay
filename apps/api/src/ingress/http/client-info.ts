@@ -40,6 +40,7 @@ export const clientInfo = (
       personalExportDownload: true,
       notificationTypeFilters: true,
       ...(hasApns ? { apnsNotifications: true } : {}),
+      nativeFreshSignIn: true,
       scheduledMessages: modules.includes('chat'),
       messageReminders: modules.includes('chat'),
       personalMessageDeletion: modules.includes('chat'),

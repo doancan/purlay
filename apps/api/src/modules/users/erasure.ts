@@ -35,6 +35,7 @@ import { addressCounterKey } from '../auth/magic-link';
 import { passportAddressDigest } from '../workspaces/invitation-passport';
 import { addressAttemptsPrefix } from '../auth/password-attempts';
 import { revokeAllSessions } from '../auth/sessions';
+import { authenticatedWithin } from '../auth/authentication-evidence';
 import { eraseDirectoryUser } from '../workspaces/directory/erasure';
 import type { Hooks } from '../../platform/hooks';
 import { PUSH_PERSON_LOCK } from '../../platform/push-policy';
@@ -126,7 +127,19 @@ export const eraseAccount = async (
   if (session === undefined) {
     throw new AppError({ code: 'UNAUTHENTICATED', message: 'Sign in first.' });
   }
-  if (now.getTime() - new Date(session.created_at).getTime() > ERASURE_SIGN_IN_MINUTES * 60_000) {
+  // Issued recently is not enough: a session the native handoff minted now carries the browser's sign-in, which
+  // may be old. Where the session records when it was signed in, that time must be recent too (D-356).
+  const recent = ERASURE_SIGN_IN_MINUTES * 60_000;
+  const evidence = await executor
+    .selectFrom('session_authentication_evidence')
+    .select('authenticated_at')
+    .where('session_id', '=', caller.sessionId)
+    .where('user_id', '=', caller.userId)
+    .executeTakeFirst();
+  if (
+    now.getTime() - new Date(session.created_at).getTime() > recent ||
+    (evidence !== undefined && !authenticatedWithin(evidence.authenticated_at, now, recent))
+  ) {
     throw new AppError({
       code: 'REAUTHENTICATION_REQUIRED',
       message: 'Sign in again to erase your account: this session is not recent enough.',

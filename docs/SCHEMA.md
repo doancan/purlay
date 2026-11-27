@@ -526,7 +526,9 @@ from `mfa_expires_at`, along with workspace activity and terminal state. Only an
 MFA event may refresh the MFA deadline, while the base lifetime is still live. Relaxing a policy
 does not revive expired/ended evidence; only still-live proof may extend its idle deadline.
 Native handoff copies both deadlines and the original evidence and assurance
-state, including ended/expired state, rather than manufacturing fresh authentication.
+state, including ended/expired state, rather than manufacturing fresh authentication. A source with
+no evidence hands over an unknown row (null method and time), never none, so the new session is not
+judged by its issuance (D-356).
 
 Policy tests and MFA challenges are short-lived, purpose-bound, hashed bearer receipts. Their
 workspace/session/user/authentication tuple must agree; test challenges additionally reference
