@@ -26,7 +26,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { compile } from 'tailwindcss';
+import { __unstable__loadDesignSystem } from 'tailwindcss';
 import ts from 'typescript';
 
 /** Variables whose strings are class lists: `iconClasses`, `buttonClasses`. */
@@ -173,29 +173,15 @@ const ALLOWED = /#0000\b/g;
 
 const isVar = (value: string): boolean => /^var\(--[\w-]+(?:,.*)?\)$/.test(value);
 
-/** Declarations inside the `utilities` layer, which is where classes land. */
+/** Declarations in the CSS Tailwind emits for one utility, including its nested variants. */
 const utilityDeclarations = (css: string): readonly (readonly [string, string])[] => {
-  const found: (readonly [string, string])[] = [];
-  // `@layer utilities;` with no body is what a build with no match leaves behind.
-  for (const start of css.matchAll(/@layer utilities\s*\{/g)) {
-    const open = start.index + start[0].length - 1;
-    let depth = 0;
-    let end = open;
-    for (let index = open; index < css.length; index += 1) {
-      if (css[index] === '{') depth += 1;
-      if (css[index] === '}') {
-        depth -= 1;
-        if (depth === 0) {
-          end = index;
-          break;
-        }
-      }
-    }
-    for (const match of css.slice(open + 1, end).matchAll(/^\s*([a-z-]+)\s*:\s*([^;{}]+);/gm)) {
-      found.push([match[1] ?? '', (match[2] ?? '').trim()]);
-    }
-  }
-  return found;
+  // The pinned emitter appends detached registrations and keyframes after the utility's rules.
+  // A full build puts them outside `@layer utilities`, where their initial values are not judged.
+  const rules = css.replace(/^@(?:property|keyframes) [^\n]*\{\n[\s\S]*?^}\n?/gm, '');
+  return [...rules.matchAll(/^\s*([a-z-]+)\s*:\s*([^;{}]+);/gm)].map((match) => [
+    match[1] ?? '',
+    (match[2] ?? '').trim(),
+  ]);
 };
 
 export const rawValueIn = (property: string, value: string): string | undefined => {
@@ -232,34 +218,27 @@ export interface VocabularyInput {
 }
 
 export const checkVocabulary = async (input: VocabularyInput): Promise<readonly string[]> => {
-  // The stylesheets are read once; each candidate gets a compiler of its own. Tailwind's `build` is
-  // incremental — it answers with every utility built so far — so on one shared compiler a single raw
-  // class was reported again against every class judged after it (#385).
-  const sheets = new Map<string, string>();
-  const read = (path: string): string => {
-    const known = sheets.get(path);
-    if (known !== undefined) return known;
-    const content = readFileSync(path, 'utf8');
-    sheets.set(path, content);
-    return content;
-  };
-  const freshCompiler = async (): ReturnType<typeof compile> =>
-    await compile(read(input.entry), {
+  // The pinned Tailwind API loads the stylesheet once and emits CSS separately for each candidate.
+  // Its incremental `build` carries earlier utilities forward and misattributes their diagnostics (#385).
+  const loadDesignSystem = async (): ReturnType<typeof __unstable__loadDesignSystem> =>
+    await __unstable__loadDesignSystem(readFileSync(input.entry, 'utf8'), {
       base: input.entry.slice(0, input.entry.lastIndexOf('/')),
       loadStylesheet: (id) => {
         const path = input.resolve(id);
         return Promise.resolve({
           path,
           base: path.slice(0, path.lastIndexOf('/')),
-          content: read(path),
+          content: readFileSync(path, 'utf8'),
         });
       },
     });
   const problems: string[] = [];
   const judged = new Map<string, string | undefined>();
+  let design: Awaited<ReturnType<typeof loadDesignSystem>> | undefined;
   const judge = async (candidate: string): Promise<string | undefined> => {
-    const css = (await freshCompiler()).build([candidate]);
-    const declarations = utilityDeclarations(css);
+    design ??= await loadDesignSystem();
+    const [css] = design.candidatesToCss([candidate]);
+    const declarations = utilityDeclarations(css ?? '');
     if (declarations.length === 0)
       return 'builds to nothing: not in the token vocabulary, or a typo';
     for (const [property, value] of declarations) {
