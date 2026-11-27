@@ -26,6 +26,12 @@ stamp='2026-11-26T12:00:00.003Z'
 entrypoint='["/usr/local/bin/bun"]'
 state="$TEST_DIRECTORY/state"
 trace="$TEST_DIRECTORY/trace"
+if [ "$TEST_VERIFY" = true ]; then
+  case "$1 $2" in
+    "image inspect"|"container ls"|"container inspect") ;;
+    *) printf 'unexpected Docker operation during verification: %s %s\\n' "$1" "$2" >&2; exit 9 ;;
+  esac
+fi
 case "$1 $2" in
   "buildx imagetools")
     [ "$3 $4" = 'inspect --format' ] && [ "$5" = '{{.Manifest.Digest}}' ] || exit 9
@@ -39,6 +45,7 @@ case "$1 $2" in
     printf '%s\\n' "$image_id"
     ;;
   "image inspect")
+    [ ! -f "$state/image-missing" ] || exit 9
     detail="$TEST_REVISION"
     if [ "$5" = "$TEST_REGISTRY@sha256:$TEST_OLD_DIGEST" ]; then
       detail="$TEST_OLD_REVISION"
@@ -94,6 +101,10 @@ case "$1 $2" in
           [ -f "$state/$5" ] || exit 9
           label=True
           [ "$TEST_MODE" != bad-receipt ] || code=1
+          [ ! -f "$state/initializer-replaced" ] || stamp='2026-11-26T12:05:00.003Z'
+          if [[ "$TEST_VERIFY" = true && "$TEST_MODE" = verify-race-* ]]; then
+            touch "$state/initializer-read"
+          fi
         elif [[ "$TEST_MODE" = interrupted* && "$TEST_MODE" != interrupted-fresh ]]; then
           image_id='sha256:old'
         fi
@@ -101,6 +112,12 @@ case "$1 $2" in
           "$TEST_PROJECT" "$label" "$image_id" "$code" "$stamp" "$stamp" "$entrypoint"
         ;;
       *)
+        if [[ "$TEST_VERIFY" = true && "$service" = scheduler && -f "$state/initializer-read" ]]; then
+          case "$TEST_MODE" in
+            verify-race-lock) mkdir "$TEST_DIRECTORY/$TEST_PROJECT.lock" ;;
+            verify-race-receipt) printf 'another operator changed the receipt\\n' >> "$TEST_DIRECTORY/$TEST_PROJECT-$TEST_DIGEST.receipt" ;;
+          esac
+        fi
         selected='ghcr.io/doancan/purlay-api:release'
         actual='sha256:old'
         if [[ "$TEST_MODE" = scheduled-* ]]; then
@@ -175,7 +192,7 @@ esac
 function withFixture(
   mode: string,
   check: (
-    run: (fresh?: boolean) => {
+    run: (fresh?: boolean | 'verify') => {
       code: number;
       out: string;
       err: string;
@@ -185,6 +202,7 @@ function withFixture(
       backups: string[][];
       attempts: string[];
     },
+    fixture: string,
   ) => void,
 ): void {
   const fixture = mkdtempSync(join(tmpdir(), 'stage-dockhand-'));
@@ -246,16 +264,17 @@ exec /bin/mv "$@"
     mkdirSync(join(fixture, 'backups'));
     if (mode === 'scheduled-pending') writeFileSync(join(fixture, `${project}.preflight`), '');
     check((fresh) => {
-      const args = mode.startsWith('scheduled-')
-        ? ['--follow-release', registry, join(fixture, 'backups')]
-        : [image, revision, fresh ? '--fresh' : join(fixture, 'pre-update.dump')];
+      const verify = fresh === 'verify';
+      const args = verify
+        ? ['--verify', image, revision]
+        : [
+            join(fixture, 'stack.env'),
+            ...(mode.startsWith('scheduled-')
+              ? ['--follow-release', registry, join(fixture, 'backups')]
+              : [image, revision, fresh ? '--fresh' : join(fixture, 'pre-update.dump')]),
+          ];
       const result = Bun.spawnSync(
-        [
-          join(directory, 'scripts/stage-dockhand-release.sh'),
-          project,
-          join(fixture, 'stack.env'),
-          ...args,
-        ],
+        [join(directory, 'scripts/stage-dockhand-release.sh'), project, ...args],
         {
           env: {
             ...process.env,
@@ -271,6 +290,7 @@ exec /bin/mv "$@"
             TEST_REVISION: revision,
             TEST_IMAGE: image,
             TEST_MODE: mode,
+            TEST_VERIFY: String(verify),
           },
           timeout: 5_000,
         },
@@ -290,13 +310,73 @@ exec /bin/mv "$@"
         ),
         attempts: entries.filter((entry) => entry.endsWith('.attempted')),
       };
-    });
+    }, fixture);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
 }
 
 describe('staging the existing Dockhand stack', () => {
+  test('verifies the recorded release without staging when readers or local evidence differ', () => {
+    withFixture('normal', (run, fixture) => {
+      const before = run('verify');
+      expect(before.code).toBe(1);
+      expect(before.err).toContain('both readers must be healthy at the tested digest');
+      expect(before.trace).toBe('');
+
+      const staged = run();
+      expect(staged.code).toBe(0);
+      const verified = run('verify');
+      expect(verified.code).toBe(0);
+      expect(verified.out).toContain('verified at');
+      expect(verified.trace).toBe(staged.trace);
+      expect(verified.record).toBe(staged.record);
+
+      const receipt = join(fixture, `${project}-${digest}.receipt`);
+      const wrongImage = staged.record.replace(`image=${image}`, `image=${registry}:release`);
+      writeFileSync(receipt, wrongImage);
+      const mismatched = run('verify');
+      expect(mismatched.code).toBe(1);
+      expect(mismatched.err).toContain('do not match a completed release receipt');
+      expect(mismatched.record).toBe(wrongImage);
+      expect(mismatched.trace).toBe(staged.trace);
+
+      writeFileSync(receipt, staged.record);
+      writeFileSync(join(fixture, 'state', 'initializer-replaced'), '');
+      const replaced = run('verify');
+      expect(replaced.code).toBe(1);
+      expect(replaced.err).toContain('initializer completion differs');
+      expect(replaced.record).toBe(staged.record);
+      expect(replaced.trace).toBe(staged.trace);
+
+      writeFileSync(join(fixture, 'state', 'image-missing'), '');
+      const missingImage = run('verify');
+      expect(missingImage.code).toBe(1);
+      expect(missingImage.err).toContain('tested image is unavailable locally');
+      expect(missingImage.trace).toBe(staged.trace);
+    });
+  });
+
+  test.each(['verify-race-lock', 'verify-race-receipt'])(
+    'refuses a concurrent %s change during the final reader inspection',
+    (mode) => {
+      withFixture(mode, (run, fixture) => {
+        const staged = run();
+        expect(staged.code).toBe(0);
+        const verified = run('verify');
+        expect(verified.code).toBe(1);
+        expect(verified.err).toContain('readers, receipt or project lock changed');
+        expect(verified.trace).toBe(staged.trace);
+        if (mode === 'verify-race-lock') {
+          expect(readdirSync(fixture)).toContain(`${project}.lock`);
+          expect(verified.record).toBe(staged.record);
+        } else {
+          expect(verified.record).toBe(`${staged.record}another operator changed the receipt\n`);
+        }
+      });
+    },
+  );
+
   test('verifies one-off preparation and orders reader replacement, then verifies an unchanged release', () => {
     withFixture('normal', (run) => {
       const first = run();
@@ -345,6 +425,10 @@ describe('staging the existing Dockhand stack', () => {
       expect(result.code).toBe(0);
       expect(result.trace).toBe('start empty project\n');
       expect(result.record).toContain('backup_sha256=\n');
+      const verified = run('verify');
+      expect(verified.code).toBe(0);
+      expect(verified.trace).toBe(result.trace);
+      expect(verified.record).toBe(result.record);
       const second = run(true);
       expect(second.code).toBe(0);
       expect(second.trace).toBe(result.trace);
@@ -365,6 +449,11 @@ describe('staging the existing Dockhand stack', () => {
       expect(first.code).toBe(1);
       expect(first.receipts).toEqual([]);
       expect(first.trace.endsWith('start scheduler\n')).toBe(true);
+      const inspected = run('verify');
+      expect(inspected.code).toBe(1);
+      expect(inspected.err).toContain('do not match a completed release receipt');
+      expect(inspected.receipts).toEqual([]);
+      expect(inspected.trace).toBe(first.trace);
       const recovered = run();
       expect(recovered.code).toBe(0);
       expect(recovered.trace).toBe(first.trace);

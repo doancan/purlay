@@ -4,17 +4,22 @@ set -euo pipefail
 umask 077
 
 fail() { printf 'dockhand-release: %s\n' "$*" >&2; exit 1; }
-[ "$#" -eq 5 ] || fail 'usage: scripts/stage-dockhand-release.sh <compose-project> <env-file> <tested-GHCR-image@sha256:digest> <tested-commit> <protected-dump|--fresh> | <compose-project> <env-file> --follow-release <GHCR-package> <protected-backup-directory>'
+verify_only=false
+if [ "$#" -eq 4 ] && [ "$2" = --verify ]; then
+  verify_only=true
+elif [ "$#" -ne 5 ] || [ "$2" = --verify ]; then
+  fail 'usage: scripts/stage-dockhand-release.sh <compose-project> <env-file> <tested-GHCR-image@sha256:digest> <tested-commit> <protected-dump|--fresh> | <compose-project> <env-file> --follow-release <GHCR-package> <protected-backup-directory> | <compose-project> --verify <tested-GHCR-image@sha256:digest> <tested-commit>'
+fi
 project="$1"
 env_file="$2"
 image="$3"
 revision="$4"
-dump="$5"
+dump="${5:-}"
 receipts="${PURLAY_DOCKHAND_RECEIPTS:-}"
 
 [[ "$project" =~ ^[a-z0-9][a-z0-9_-]*$ && "${#project}" -le 63 ]] || fail 'give the existing Compose project name (up to 63 characters)'
 package=''
-if [ "$image" = --follow-release ]; then
+if ! "$verify_only" && [ "$image" = --follow-release ]; then
   package="$revision"
   [[ "$package" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+-api$ ]] || fail 'give the release GHCR package, without its tag'
   [[ "$dump" = /* && -d "$dump" && -w "$dump" ]] || fail 'give an existing private protected-backup directory by absolute path'
@@ -22,12 +27,15 @@ else
   [[ "$image" =~ ^ghcr\.io/[a-z0-9._-]+/[a-z0-9._-]+@sha256:[0-9a-f]{64}$ ]] || fail 'give the tested GHCR image by digest'
   [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || fail 'give the full tested Git commit'
 fi
-[[ -f "$env_file" && -r "$env_file" ]] || fail 'the stack environment file is unavailable'
-[[ "$receipts" = /* && -d "$receipts" && -w "$receipts" ]] || fail 'set PURLAY_DOCKHAND_RECEIPTS to an existing private writable absolute directory'
+if "$verify_only"; then
+  [[ "$receipts" = /* && -d "$receipts" && -r "$receipts" && -x "$receipts" ]] || fail 'set PURLAY_DOCKHAND_RECEIPTS to the existing private readable absolute directory'
+else
+  [[ -f "$env_file" && -r "$env_file" ]] || fail 'the stack environment file is unavailable'
+  [[ "$receipts" = /* && -d "$receipts" && -w "$receipts" ]] || fail 'set PURLAY_DOCKHAND_RECEIPTS to an existing private writable absolute directory'
+fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 lock="$receipts/$project.lock"
-mkdir -- "$lock" 2>/dev/null || fail "could not lock $project in the receipt directory"
 backup_dir=''
 cleanup() {
   if [ -n "$backup_dir" ]; then
@@ -37,10 +45,15 @@ cleanup() {
   rm -f -- "$lock/receipt"
   rmdir -- "$lock"
 }
-trap cleanup EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
+if "$verify_only"; then
+  [ ! -e "$lock" ] || fail 'a staged release is locked; verify after the operator resolves it'
+else
+  mkdir -- "$lock" 2>/dev/null || fail "could not lock $project in the receipt directory"
+  trap cleanup EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+fi
 
 registry_digest() {
   local value
@@ -77,7 +90,9 @@ fi
 export COMPOSE_REMOVE_ORPHANS=false
 export PURLAY_IMAGE="$image"
 compose=(docker compose --project-name "$project" --env-file "$env_file" -f "$root/docker-compose.dockhand.yml")
-"${compose[@]}" config --quiet || fail 'the Dockhand Compose configuration is invalid'
+if ! "$verify_only"; then
+  "${compose[@]}" config --quiet || fail 'the Dockhand Compose configuration is invalid'
+fi
 
 digest="${image##*:}"
 receipt="$receipts/$project-$digest.receipt"
@@ -86,6 +101,7 @@ inspect_image() {
   docker image inspect --format '{{.Id}}|{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image"
 }
 if ! tested="$(inspect_image 2>/dev/null)"; then
+  if "$verify_only"; then fail 'the tested image is unavailable locally'; fi
   docker pull "$image" || fail 'could not pull the tested digest'
   tested="$(inspect_image)" || fail 'could not inspect the tested digest'
 fi
@@ -140,6 +156,30 @@ old_api="$(managed api)"
 old_scheduler="$(managed scheduler)"
 one_off=''
 checksum=''
+if "$verify_only"; then
+  candidate "$old_api" && candidate "$old_scheduler" || fail 'both readers must be healthy at the tested digest'
+  # A trailing sentinel preserves the receipt's exact line breaks through command substitution.
+  [ -f "$receipt" ] && receipt_snapshot="$(cat -- "$receipt" && printf .)" \
+    || fail 'the running readers do not match a completed release receipt'
+  receipt_text="${receipt_snapshot%.}"
+  grep -Fqx -- "project=$project" <<< "$receipt_text" &&
+    grep -Fqx -- "image=$image" <<< "$receipt_text" &&
+    grep -Fqx -- "revision=$revision" <<< "$receipt_text" &&
+    grep -Fqx -- "api=${old_api%%|*}" <<< "$receipt_text" &&
+    grep -Fqx -- "scheduler=${old_scheduler%%|*}" <<< "$receipt_text" \
+    || fail 'the running readers do not match a completed release receipt'
+  IFS= read -r one_off <<< "$receipt_text"
+  proof="$(initializer "$one_off")" || fail 'the running digest has no verified initializer receipt'
+  grep -Fqx -- "$proof" <<< "$receipt_text" || fail 'the initializer completion differs from the recorded receipt'
+  api_after="$(managed api)"
+  scheduler_after="$(managed scheduler)"
+  receipt_after="$(cat -- "$receipt" && printf .)" || fail 'the release receipt changed during verification'
+  [[ "$api_after" = "$old_api" && "$scheduler_after" = "$old_scheduler" &&
+    "$receipt_after" = "$receipt_snapshot" && ! -e "$lock" ]] \
+    || fail 'the readers, receipt or project lock changed during verification'
+  printf '%s\ndockhand-release: %s verified at %s (%s); receipt %s\n' "$proof" "$project" "$image" "$revision" "$receipt"
+  exit 0
+fi
 if candidate "$old_api" && candidate "$old_scheduler"; then
   if [ -f "$receipt" ] && grep -Fqx -- "api=${old_api%%|*}" "$receipt" &&
     grep -Fqx -- "scheduler=${old_scheduler%%|*}" "$receipt"; then
