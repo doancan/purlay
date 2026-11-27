@@ -1424,9 +1424,14 @@ export const PushUnsubscribeRequest = /* @__PURE__ */ FromClient({
 });
 export type PushUnsubscribeRequest = Static<typeof PushUnsubscribeRequest>;
 
-/** APNs registration and removal take the device's token as hexadecimal bytes (D-342). */
+/** APNs registration takes the device's token as hexadecimal bytes (D-342). */
 export const ApnsDeviceRequest = /* @__PURE__ */ FromClient({
   deviceToken: /* @__PURE__ */ Type.String({ minLength: 2, maxLength: 512 }),
+});
+
+/** A signed-in app can remove its own registration without persisting the APNs token. */
+export const RemoveApnsDeviceRequest = /* @__PURE__ */ FromClient({
+  deviceToken: Type.Optional(Type.String({ minLength: 2, maxLength: 512 })),
 });
 
 /**
@@ -2028,6 +2033,7 @@ export type ClientMinimum = Static<typeof ClientMinimum>;
  * an older client can ignore capability names introduced later (D-58).
  */
 export const ClientCapabilities = Type.Object({
+  apnsNotifications: Type.Optional(Type.Boolean()),
   scheduledMessages: Type.Optional(Type.Boolean()),
   messageReminders: Type.Optional(Type.Boolean()),
   personalMessageDeletion: Type.Optional(Type.Boolean()),

@@ -331,7 +331,7 @@ export const createApp = (given: Dependencies): HttpApplication => {
    */
   const routes: AnyElysia[] = [
     probes.routes,
-    signInRoutes(context, afterSignInAnswers.run),
+    signInRoutes(context, afterSignInAnswers.run, given.apnsScope !== undefined),
     setupRoutes(context, setup),
     serverRoutes(context, setup, administration),
     meRoutes(context, {
