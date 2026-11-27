@@ -486,7 +486,7 @@ describe('the sign-in screen', () => {
   test('says what Purlay is in Turkish as a Turkish reader says it: the question stays open', async () => {
     const view = await renderApp(<Outlet />, { path: '/sign-in', api: out(), locale: 'tr' });
     await settle();
-    expect(view.getByRole('heading', { level: 1, name: 'Purlay’e giriş yapın' })).toBeDefined();
+    expect(view.getByRole('heading', { level: 1, name: 'Purlay’e oturum açın' })).toBeDefined();
     expect(
       view.getByText('Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.'),
     ).toBeDefined();

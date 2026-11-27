@@ -18,9 +18,9 @@ test.describe('erasing an account', () => {
     const workspace = await workspaceOf('gwen');
     const page = await asOutsider('gwen', 'fresh');
     const main = await openSettings(page, workspace.slug, 'account', 'Sessions & account');
-    await main.getByRole('button', { name: 'Erase my account…' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Erase your account' });
-    const erase = dialog.getByRole('button', { name: 'Erase my account' });
+    await main.getByRole('button', { name: 'Delete my account…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete your account' });
+    const erase = dialog.getByRole('button', { name: 'Delete my account' });
     await expect(erase).toBeDisabled();
     const field = dialog.getByRole('textbox');
     const label = (await field.getAttribute('aria-label')) ?? '';

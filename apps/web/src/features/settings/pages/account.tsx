@@ -14,7 +14,7 @@
  * as an owner's export of the workspace is (`export.tsx`) — just before the card that erases it.
  *
  * *Sign out everywhere* ends every session the person holds, this one with them (D-11); it asks first,
- * because it signs out devices that are not in front of them. *Erase my account* is the dialog it has
+ * because it signs out devices that are not in front of them. *Delete my account* is the dialog it has
  * always been (D-139 §5) — typing the username is the confirmation — opened from a card drawn in the
  * danger tone, so what cannot be undone looks it and sits apart from what can. *Leave <workspace>*
  * (D-152) sits there too: it asks first, and the last owner is told to hand the workspace on.

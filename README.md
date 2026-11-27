@@ -83,14 +83,12 @@ are [`docs/MODULES.md`](docs/MODULES.md).
 ## Clients and repositories
 
 The server and web client are this repository, and it owns the API contract every client is generated from. The native
-clients live beside it in the [`purlay` organisation](https://github.com/purlay) (D-186, D-338):
+clients live beside it in the [`purlay` organisation](https://github.com/purlay) (D-186, D-338, D-360):
 
 | Repository | What it is |
 |---|---|
 | [`purlay`](https://github.com/purlay/purlay) | The server, the web client and the contract's source of truth (this repository) |
-| [`purlay-macos`](https://github.com/purlay/purlay-macos) | The native macOS client (released) |
-| [`purlay-ios`](https://github.com/purlay/purlay-ios) | The native iPhone and iPad client (in development) |
-| [`purlay-swift`](https://github.com/purlay/purlay-swift) | The Swift both Apple clients share: wire types, tokens and the client engine, generated from this repository's contract bundle |
+| [`purlay-apple`](https://github.com/purlay/purlay-apple) | The native Apple clients: iPhone and iPad, and the Mac, in one repository with the Swift they share (wire types, tokens and the client engine, generated from this repository's contract bundle). It replaces `purlay-ios`, `purlay-macos` and `purlay-swift`, now archived (D-360) |
 
 An Android client is expected later and will generate its own types from the same bundle.
 
@@ -156,7 +154,7 @@ documents.
 |---|---|
 | [`docs/OVERVIEW.md`](docs/OVERVIEW.md) | Start here: orientation and how the documents relate |
 | [`docs/PRD.md`](docs/PRD.md) | Who it is for, what problem it solves, what ships when, non-goals |
-| [`docs/decisions/`](docs/decisions/README.md) | **Why** — 358 decisions, one file each, with their rejected alternatives |
+| [`docs/decisions/`](docs/decisions/README.md) | **Why** — 360 decisions, one file each, with their rejected alternatives |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layers, transport, protocol, tenant isolation |
 | [`docs/MODULES.md`](docs/MODULES.md) | How a module is declared, loaded, kept apart and removed |
 | [`docs/MODULE-GUIDE.md`](docs/MODULE-GUIDE.md) | What to run and write to add a module |
@@ -178,7 +176,7 @@ startable now. The honest gaps, kept current in [`docs/MODULES.md`](docs/MODULES
 - No module of the product publishes a fact yet; the outbox is built and proved with fake modules.
 - The web does not yet draw the search groups; the route answers them.
 - A new module's web feature is written by hand; `module:new` generates the server side only.
-- The tasks module is not started. Native clients: macOS is released, iOS is being built (D-338).
+- The tasks module is not started. Native clients, both in `purlay-apple`: the Mac app is released, the iPhone and iPad app is being built (D-338, D-360).
 
 ## Contributing
 

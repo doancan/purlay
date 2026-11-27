@@ -83,7 +83,7 @@ describe('the screen that turns on two-step verification for a person the server
     expect(
       await view.findByRole('heading', { level: 1, name: 'İki adımlı doğrulamayı açın' }),
     ).toBeDefined();
-    expect(view.getByRole('button', { name: 'Çıkış yap' })).toBeDefined();
+    expect(view.getByRole('button', { name: 'Oturumu kapat' })).toBeDefined();
     view.unmount();
   });
 

@@ -150,7 +150,7 @@ describe('the list', () => {
     expect(card.getByText('Bu cihaz')).toBeDefined();
     expect(card.getByText('Web tarayıcısı')).toBeDefined();
     expect(card.getAllByText(/^Oturum açılışı: /)).toHaveLength(2);
-    expect(card.getByRole('button', { name: 'Çıkış yap' })).toBeDefined();
+    expect(card.getByRole('button', { name: 'Oturumu kapat' })).toBeDefined();
     view.unmount();
   });
 

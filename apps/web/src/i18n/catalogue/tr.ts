@@ -19,7 +19,7 @@ export const tr = {
   'settings.directory.nav': 'Şirket dizini',
   'directory.title': 'Şirket dizini',
   'directory.description':
-    'SCIM üzerinden çalışma alanına girişi yönetmek için bir şirket dizini bağlayın.',
+    'SCIM üzerinden çalışma alanına oturum açmayı yönetmek için bir şirket dizini bağlayın.',
   'directory.providerHint':
     'Kimlik sağlayıcınız giden SCIM sağlamayı desteklemelidir. Kullanılabilirlik sağlayıcınıza ve planınıza bağlıdır.',
   'directory.create': 'Dizin ekle',
@@ -28,10 +28,10 @@ export const tr = {
   'directory.disabled': 'Devre dışı',
   'directory.edit': 'Dizini düzenle',
   'directory.mappingHint':
-    'Her dizin, doğrulanmış şirketle giriş bilgisindeki tam bir alanla eşleşir. Oluşturulduktan sonra bağlantı ve alan değiştirilemez; e-posta adresleri kimlikleri bağlamaz.',
-  'directory.connection': 'Şirketle giriş bağlantısı',
+    'Her dizin, doğrulanmış şirketle oturum açma bilgisindeki tam bir alanla eşleşir. Oluşturulduktan sonra bağlantı ve alan değiştirilemez; e-posta adresleri kimlikleri bağlamaz.',
+  'directory.connection': 'Şirketle oturum açma bağlantısı',
   'directory.chooseConnection': 'Doğrulanmış bir bağlantı seçin',
-  'directory.configureCompany': 'Şirketle girişi kur ve dene',
+  'directory.configureCompany': 'Şirketle oturum açmayı kur ve dene',
   'directory.claim': 'Değişmez kimlik alanı',
   'directory.claim.sub': 'Özne (sub)',
   'directory.claim.oid': 'Nesne kimliği (oid)',
@@ -71,11 +71,11 @@ export const tr = {
   'directory.disable': 'Dizini devre dışı bırak',
   'directory.enable': 'Dizini etkinleştir',
   'directory.toggleHint':
-    'Bu dizini devre dışı bırakmak giriş kaynaklarını ve bu kaynaklarla açılan oturumları kapatır. Elle verilen ve diğer dizin kaynakları korunur. Yeniden etkinleştirmek yeni bir şirketle giriş gerektirir.',
+    'Bu dizini devre dışı bırakmak oturum açma kaynaklarını ve bu kaynaklarla açılan oturumları kapatır. Elle verilen ve diğer dizin kaynakları korunur. Yeniden etkinleştirmek yeni bir şirketle oturum açma gerektirir.',
   'directory.remove': 'Dizini kaldır',
   'directory.removeTitle': '{name} kaldırılsın mı?',
   'directory.removeHint':
-    'Bu, dizinin giriş kaynaklarını ve bu kaynaklarla açılan oturumları kalıcı olarak kapatır. Elle verilen ve diğer dizin kaynakları korunur. Şirketle giriş bağlantısı dizin tarafından yönetilmeye devam eder.',
+    'Bu, dizinin oturum açma kaynaklarını ve bu kaynaklarla açılan oturumları kalıcı olarak kapatır. Elle verilen ve diğer dizin kaynakları korunur. Şirketle oturum açma bağlantısı dizin tarafından yönetilmeye devam eder.',
 
   'access.roles.title': 'Roller',
   'access.roles.description':
@@ -119,7 +119,7 @@ export const tr = {
   'access.notReady.body':
     'Sunucudaki her Purlay süreci bu sürümü çalıştırdığında, bir sunucu yöneticisi WORKSPACE_PROVISIONING_READY değerini true yaparak açar. O zamana kadar herkes şimdiki erişimini korur.',
   'access.groups.title': 'Erişim grupları',
-  'access.groups.description': 'Bir giriş kaynağı grubuna ortak işlem rolleri atayın.',
+  'access.groups.description': 'Bir oturum açma kaynağı grubuna ortak işlem rolleri atayın.',
   'access.groups.folderHint':
     'Bu gruplar yetkileri yönetir. Kenar çubuğundaki kişisel klasörler yalnızca kanallarınızı düzenler.',
   'access.groups.create': 'Erişim grubu oluştur',
@@ -135,12 +135,12 @@ export const tr = {
   'access.groups.sourceHint':
     'Her kişi için tam kaynağı seçin. Aynı kişinin diğer kaynağı bağımsız kalır.',
   'access.groups.add': 'Kişi kaynakları ekle',
-  'access.groups.chooseSources': 'Giriş kaynakları',
+  'access.groups.chooseSources': 'Oturum açma kaynakları',
   'access.groups.addSelected': 'Seçilenleri ekle ({count})',
   'access.groups.remove': 'Kaynağı gruptan çıkar',
   'access.groups.removeTitle': '{name} bu gruptan çıkarılsın mı?',
   'access.groups.removeHint':
-    'Yalnızca seçilen kaynak bu gruptan çıkar. Diğer kaynaklar, gruplar ve çalışma alanına giriş korunur.',
+    'Yalnızca seçilen kaynak bu gruptan çıkar. Diğer kaynaklar, gruplar ve çalışma alanında oturum açma korunur.',
   'access.grants.title': 'Rol yetkileri',
   'access.grants.assign': 'Rol ata',
   'access.grants.membershipHint':
@@ -171,10 +171,10 @@ export const tr = {
     'Açık bir elle verilen kaynak ekleyin. Dizin güncellemeleri bu bağımsız kaynağı kaldırmaz. Yerleşik rol sınırları geçerlidir.',
   'access.people.addManual': 'Elle verilen erişimi kaydet',
   'access.people.nativeRole': 'Yerleşik çalışma alanı rolü',
-  'access.people.sources': 'Giriş kaynakları',
+  'access.people.sources': 'Oturum açma kaynakları',
   'access.people.sourceHint':
     'Her kaynak erişime bağımsız katkıda bulunur. Şirket dizini kaynakları kişileri yalnızca üye olarak alır.',
-  'access.people.noSources': 'Giriş kaynağı yok',
+  'access.people.noSources': 'Oturum açma kaynağı yok',
   'access.people.effective': 'Güncel erişime katkıda bulunuyor',
   'access.people.ineffective': 'Güncel erişime katkıda bulunmuyor',
   'access.people.revoke': 'Kaynağı geri al',
@@ -190,19 +190,19 @@ export const tr = {
   'access.people.lastOwner': 'Son sahibin erişimini kapatmadan önce başka bir sahip ekleyin.',
   'access.people.protected': 'Yerleşik rolünüz bu kişinin erişimini kapatamaz.',
   'access.people.blockedHint':
-    'Yerel engel, dizin güncellemelerinin girişi geri getirmesini önler. Yeniden kabul açıkça yapılmalıdır.',
+    'Yerel engel, dizin güncellemelerinin oturum açmayı geri getirmesini önler. Yeniden kabul açıkça yapılmalıdır.',
   'access.people.readmit': 'Yeniden kabule izin ver',
   'access.people.readmitTitle': '{name} geri dönebilsin mi?',
   'access.people.readmitHint':
-    'Bu yalnızca yerel engeli temizler. Elle verilen erişim oluşturmaz. Giriş, uygun bir dizin kaynağıyla geri gelebilir; gerekirse elle verilen erişimi ayrıca ekleyin.',
+    'Bu yalnızca yerel engeli temizler. Elle verilen erişim oluşturmaz. Oturum açma, uygun bir dizin kaynağıyla geri gelebilir; gerekirse elle verilen erişimi ayrıca ekleyin.',
   'settings.access-people.nav': 'Kişi erişimi',
   'settings.access-roles.nav': 'Roller',
   'settings.access-groups.nav': 'Erişim grupları',
   'audit.kind.workspace.access.manual_added': 'Elle verilen erişim eklendi',
   'audit.action.workspace.access.manual_added':
     '{actor} elle verilen çalışma alanı erişimi ekledi.',
-  'audit.kind.workspace.access.source_revoked': 'Giriş kaynağı geri alındı',
-  'audit.action.workspace.access.source_revoked': '{actor} bir giriş kaynağını geri aldı.',
+  'audit.kind.workspace.access.source_revoked': 'Oturum açma kaynağı geri alındı',
+  'audit.action.workspace.access.source_revoked': '{actor} bir oturum açma kaynağını geri aldı.',
   'audit.kind.workspace.access.role_created': 'Rol oluşturuldu',
   'audit.action.workspace.access.role_created': '{actor} bir erişim rolü oluşturdu.',
   'audit.kind.workspace.access.role_updated': 'Rol güncellendi',
@@ -217,17 +217,17 @@ export const tr = {
   'audit.action.workspace.access.group_retired': '{actor} bir erişim grubunu kullanımdan kaldırdı.',
   'audit.kind.workspace.access.group_members_changed': 'Erişim grubu üyeleri değişti',
   'audit.action.workspace.access.group_members_changed':
-    '{actor} bir erişim grubunun giriş kaynaklarını değiştirdi.',
+    '{actor} bir erişim grubunun oturum açma kaynaklarını değiştirdi.',
   'audit.kind.workspace.access.grant_assigned': 'Rol atandı',
   'audit.action.workspace.access.grant_assigned': '{actor} kapsamlı bir erişim rolü atadı.',
   'audit.kind.workspace.access.grant_revoked': 'Rol geri alındı',
   'audit.action.workspace.access.grant_revoked': '{actor} kapsamlı bir erişim rolünü geri aldı.',
   'audit.kind.workspace.access.member_offboarded': 'Kişinin erişimi kapatıldı',
   'audit.action.workspace.access.member_offboarded':
-    '{actor} bir kişinin erişimini kapattı ve yerel giriş engeli tuttu.',
+    '{actor} bir kişinin erişimini kapattı ve yerel oturum açma engeli tuttu.',
   'audit.kind.workspace.access.member_readmitted': 'Yeniden kabule izin verildi',
   'audit.action.workspace.access.member_readmitted':
-    '{actor} bir kişinin yerel giriş engelini temizledi.',
+    '{actor} bir kişinin yerel oturum açma engelini temizledi.',
   'audit.kind.directory.created': 'Dizin oluşturuldu',
   'audit.action.directory.created': '{actor} bir şirket dizini oluşturdu.',
   'audit.kind.directory.updated': 'Dizin güncellendi',
@@ -258,21 +258,21 @@ export const tr = {
     '{actor} çalışma alanı doğrulayıcısının kurtarma kodunu kullandı',
   'audit.kind.workspace.security.policy_tested': 'Çalışma alanı gereksinimleri test edildi',
   'audit.action.workspace.security.policy_tested':
-    '{actor} çalışma alanı giriş gereksinimlerini test etti',
+    '{actor} çalışma alanı oturum açma gereksinimlerini test etti',
   'audit.kind.workspace.security.policy_updated': 'Çalışma alanı gereksinimleri değiştirildi',
   'audit.action.workspace.security.policy_updated':
-    '{actor} çalışma alanı giriş gereksinimlerini değiştirdi',
+    '{actor} çalışma alanı oturum açma gereksinimlerini değiştirdi',
   'audit.kind.workspace.security.recovery_created': 'Alan sahibi kurtarması oluşturuldu',
   'audit.action.workspace.security.recovery_created':
     '{actor} bu çalışma alanı için alan sahibi kurtarması oluşturdu',
   'audit.kind.workspace.security.policy_recovered': 'Çalışma alanı gereksinimleri kurtarıldı',
   'audit.action.workspace.security.policy_recovered':
-    '{actor} çalışma alanı giriş gereksinimlerini kurtardı',
+    '{actor} çalışma alanı oturum açma gereksinimlerini kurtardı',
   'security.recovery.prepare': 'Yeni kurtarma kodu hazırla',
   'security.recovery.keepOpen':
-    'Bu sekmeyi açık tutun. Yeni sekmede kendi hesabınızla giriş yapın, ardından kurtarma kodunu oluşturmak için buraya dönün. Gereksinimler bu sırada uygulanmaya devam eder.',
-  'security.recovery.signInTab': 'Yeni sekmede giriş yap',
-  'security.recovery.continue': 'Giriş yaptım — kurtarma kodu oluştur',
+    'Bu sekmeyi açık tutun. Yeni sekmede kendi hesabınızla oturum açın, ardından kurtarma kodunu oluşturmak için buraya dönün. Gereksinimler bu sırada uygulanmaya devam eder.',
+  'security.recovery.signInTab': 'Yeni sekmede oturum aç',
+  'security.recovery.continue': 'Oturum açtım — kurtarma kodu oluştur',
   'settings.security.nav': 'Çalışma alanı güvenliği',
   'settings.workspace-mfa.nav': 'Çalışma alanı doğrulayıcınız',
   'security.title': 'Çalışma alanı güvenliği',
@@ -285,25 +285,25 @@ export const tr = {
   'security.refresh': 'Güvenlik durumunu yenile',
   'security.saved': 'Çalışma alanı güvenliği güncellendi.',
   'security.status.allowed': 'Erişim doğrulandı',
-  'security.status.sign_in_required': 'Şirket hesabıyla giriş gerekli',
+  'security.status.sign_in_required': 'Şirket hesabıyla oturum açma gerekli',
   'security.status.mfa_enrollment_required': 'Bir doğrulayıcı kurun',
   'security.status.mfa_required': 'Doğrulayıcınızla doğrulayın',
-  'security.status.expired': 'Yeniden giriş yapın',
+  'security.status.expired': 'Yeniden oturum açın',
   'security.access.title': 'Çalışma alanı erişimini doğrulayın',
   'security.access.description': 'Konuşmalarınıza dönmek için gerekli doğrulamayı tamamlayın.',
   'security.access.workspace': 'Çalışma alanı adresi',
   'security.access.find': 'Çalışma alanına devam et',
   'security.access.invalid': 'Çalışma alanının acme gibi kısa adresini yazın.',
   'security.access.company':
-    'Bu çalışma alanının izin verdiği bir şirket sağlayıcısıyla giriş yapın. Misafirler kendi giriş yöntemini kullanabilir.',
+    'Bu çalışma alanının izin verdiği bir şirket sağlayıcısıyla oturum açın. Misafirler kendi oturum açma yöntemini kullanabilir.',
   'security.access.expired':
-    'Giriş veya boşta kalma süreniz doldu. Doğrulayıcı kodu bu süreyi uzatmaz; önce yeniden giriş yapın.',
+    'Oturumunuzun süresi ya da boşta kalma süreniz doldu. Doğrulayıcı kodu bu süreyi uzatmaz; önce yeniden oturum açın.',
   'security.access.allowed': 'Erişiminiz doğrulandı. Çalışma alanına dönebilirsiniz.',
   'security.access.return': 'Çalışma alanına dön',
   'security.access.other': 'Başka bir çalışma alanı seç',
-  'security.signIn': 'Yeniden giriş yap',
+  'security.signIn': 'Yeniden oturum aç',
   'security.independentHint':
-    'Çalışma alanı kurtarması oluşturmak veya kullanmak için alan sahibinin yakın zamanda bağımsız giriş yapması gerekir. Şirket girişi hesap kimlik bilgilerini değiştiremez.',
+    'Çalışma alanı kurtarması oluşturmak veya kullanmak için alan sahibinin yakın zamanda bağımsız oturum açması gerekir. Şirketle oturum açma hesap kimlik bilgilerini değiştiremez.',
   'security.factor.title': 'Bu çalışma alanı için doğrulayıcı',
   'security.factor.scope': 'Bu doğrulayıcı yalnızca bu çalışma alanına aittir.',
   'security.factor.on': 'Bağlı',
@@ -348,24 +348,24 @@ export const tr = {
   'security.global.hint':
     'Mevcut hesap doğrulayıcınız bu bağımsız oturumu doğrulayabilir. Çalışma alanı yöneticileri onu yönetemez.',
   'security.global.action': 'Hesap doğrulayıcısıyla doğrula',
-  'security.policy.title': 'Giriş gereksinimleri',
+  'security.policy.title': 'Oturum açma gereksinimleri',
   'security.policy.mode': 'Gereksinimleri uygula',
   'security.policy.off': 'Kapalı',
   'security.policy.enforced': 'Zorunlu',
-  'security.policy.signIn': 'Üyelerin giriş yöntemi',
+  'security.policy.signIn': 'Üyelerin oturum açma yöntemi',
   'security.policy.any': 'Desteklenen herhangi bir yöntem',
   'security.policy.company': 'İzin verilen şirket sağlayıcıları',
   'security.policy.guests':
-    'Yalnızca şirket girişi tam üyeler için geçerlidir. Misafirler bağımsız giriş yapar; doğrulayıcı ve süre sınırları herkese uygulanır.',
+    'Yalnızca şirketle oturum açma tam üyeler için geçerlidir. Misafirler bağımsız oturum açar; doğrulayıcı ve süre sınırları herkese uygulanır.',
   'security.policy.providers': 'İzin verilen şirket sağlayıcıları',
-  'security.policy.providersHint': 'Girişi test edilmiş en fazla 16 etkin sağlayıcı seçin.',
+  'security.policy.providersHint': 'Oturum açması test edilmiş en fazla 16 etkin sağlayıcı seçin.',
   'security.policy.unavailable': 'Kullanılamıyor — başka sağlayıcı seçin',
   'security.policy.noProviders':
-    'Test edilmiş sağlayıcı yok. Önce şirket girişini yapılandırıp test edin.',
-  'security.policy.configure': 'Şirket girişini yapılandır',
+    'Test edilmiş sağlayıcı yok. Önce şirketle oturum açmayı yapılandırıp test edin.',
+  'security.policy.configure': 'Şirketle oturum açmayı yapılandır',
   'security.policy.requireMfa': 'Doğrulayıcı zorunlu olsun',
   'security.policy.idle': 'Hareketsizlikten sonra erişimi bitir (dakika)',
-  'security.policy.maxAge': 'Şu kadar sonra yeniden giriş iste (saat)',
+  'security.policy.maxAge': 'Şu kadar sonra yeniden oturum açılmasını iste (saat)',
   'security.policy.mfaAge': 'Şu kadar sonra yeni doğrulayıcı kodu iste (dakika)',
   'security.policy.noLimit': 'Mevcut oturum süresini kullanmak için boş bırakın.',
   'security.policy.invalid':
@@ -385,11 +385,11 @@ export const tr = {
   'security.policy.confirm':
     'Etkilenen kişilerin çalışma alanına dönmeden önce doğrulama yapması gerektiğini anlıyorum.',
   'security.policy.recoveryNeeded':
-    'Zorunlu uygulama için erişimi kurtarabilecek bir alan sahibi gerekir. Bağımsız girişle kurtarma kodu oluşturun veya önce kurtarabilecek bir alan sahibi ekleyin.',
+    'Zorunlu uygulama için erişimi kurtarabilecek bir alan sahibi gerekir. Bağımsız oturum açmayla kurtarma kodu oluşturun veya önce kurtarabilecek bir alan sahibi ekleyin.',
   'security.policy.owners': 'Çalışma alanı sahiplerini yönet',
   'security.recovery.title': 'Alan sahibi kurtarması',
   'security.recovery.hint':
-    'Yakın zamanda yapılan bağımsız giriş ve saklanan kurtarma kodu çalışma alanı gereksinimlerini kapatabilir. Bu işlem üyelik veya konuşmalara erişim sağlamaz.',
+    'Yakın zamanda yapılan bağımsız oturum açma ve saklanan kurtarma kodu çalışma alanı gereksinimlerini kapatabilir. Bu işlem üyelik veya konuşmalara erişim sağlamaz.',
   'security.recovery.create': 'Alan sahibi kurtarma kodu oluştur',
   'security.recovery.value': 'Alan sahibi kurtarma kodu',
   'security.recovery.once':
@@ -430,26 +430,26 @@ export const tr = {
   'company.links.removeTitle': '{name} bağlantısı kaldırılsın mı?',
   'company.links.removeDescription':
     'Bu şirket kimliğiyle açılmış oturumlar kapanır. Bağımsız hesap oturumları açık kalır.',
-  'company.signIn.title': 'Şirketinizle giriş yapın',
+  'company.signIn.title': 'Şirketinizle oturum açın',
   'company.signIn.description':
     'Zaten üyesi olduğunuz çalışma alanının kısa adresini girin. Bu işlem hesap oluşturmaz.',
   'company.signIn.workspace': 'Çalışma alanı adresi',
-  'company.signIn.find': 'Şirket girişini bul',
+  'company.signIn.find': 'Şirketle oturum açmayı bul',
   'company.signIn.invalid':
     'Küçük harf, rakam ve tire kullanarak çalışma alanının kısa adresini girin.',
   'company.signIn.empty':
     'Bu çalışma alanı için etkin şirket sağlayıcısı bulunamadı. Adresi kontrol edin veya yöneticinize başvurun.',
   'company.signIn.with': '{name} ile devam et',
 
-  'settings.company.nav': 'Şirket girişi',
-  'company.title': 'Şirket hesabıyla giriş',
+  'settings.company.nav': 'Şirketle oturum açma',
+  'company.title': 'Şirket hesabıyla oturum açma',
   'company.description':
     'Kimlik sağlayıcınızı bu çalışma alanına bağlayın. Üyeler, kabul edilmiş kendi hesaplarını eşleştirir.',
-  'company.unavailable': 'Bu sunucuda şirket hesabıyla giriş kullanılamıyor.',
+  'company.unavailable': 'Bu sunucuda şirket hesabıyla oturum açma kullanılamıyor.',
   'company.domains.title': 'Doğrulanmış alan adları',
   'company.domains.description':
     'DNS TXT kaydıyla alan adının kontrolünü doğrulayın. Alan adı, üyelik vermez veya kişileri e-postayla otomatik eşleştirmez.',
-  'company.domains.empty': 'Girişi yapılandırmak için şirketinizin alan adını ekleyin.',
+  'company.domains.empty': 'Oturum açmayı yapılandırmak için şirketinizin alan adını ekleyin.',
   'company.domain': 'Alan adı',
   'company.domain.add': 'Alan adı ekle',
   'company.domain.pending': 'DNS doğrulaması bekleniyor',
@@ -464,7 +464,7 @@ export const tr = {
   'company.domain.remove': 'Alan adı doğrulamasını kaldır',
   'company.connections.title': 'Kimlik sağlayıcıları',
   'company.connections.description':
-    'Bağlantıyı kaydedin, gerçek bir giriş testi yapın ve ardından etkinleştirin.',
+    'Bağlantıyı kaydedin, gerçek bir oturum açma testi yapın ve ardından etkinleştirin.',
   'company.connections.empty':
     'Bağlı sağlayıcı yok. Önce alan adını doğrulayın, ardından sağlayıcınızı ekleyin.',
   'company.connection.add': 'Sağlayıcı ekle',
@@ -479,12 +479,12 @@ export const tr = {
     'Güvenli saklanır ve tekrar gösterilmez. Düzenlerken kayıtlı sırrı korumak için boş bırakın.',
   'company.connection.callback': 'Yetkili yönlendirme adresi',
   'company.connection.callbackHint': 'Sağlayıcınıza bu yönlendirme adresini aynen kaydedin.',
-  'company.connection.needsTest': 'Giriş testi gerekli',
-  'company.connection.ready': 'Test başarılı; giriş kapalı',
-  'company.connection.enabled': 'Giriş açık',
-  'company.connection.test': 'Girişi test et',
-  'company.connection.enable': 'Girişi etkinleştir',
-  'company.connection.disable': 'Girişi kapat',
+  'company.connection.needsTest': 'Oturum açma testi gerekli',
+  'company.connection.ready': 'Test başarılı; oturum açma kapalı',
+  'company.connection.enabled': 'Oturum açma etkin',
+  'company.connection.test': 'Oturum açmayı test et',
+  'company.connection.enable': 'Oturum açmayı etkinleştir',
+  'company.connection.disable': 'Oturum açmayı kapat',
   'company.connection.remove': 'Sağlayıcıyı kaldır',
   'company.connection.verifiedDomain': 'Doğrulanmış alan adı',
   'company.connection.chooseDomain': 'Doğrulanmış alan adı seçin',
@@ -492,24 +492,24 @@ export const tr = {
     'Düzenleme sırasında bağlantı değişti. Kaydetmeden önce güncel halini yükleyin.',
   'company.connection.reload': 'Bağlantıyı yeniden yükle',
   'company.connection.secretChange':
-    'Sağlayıcı bilgilerini değiştirmek, yeni bir test başarılı olana kadar girişi kapatır.',
+    'Sağlayıcı bilgilerini değiştirmek, yeni bir test başarılı olana kadar oturum açmayı kapatır.',
   'company.save': 'Bağlantıyı kaydet',
   'company.refresh': 'Yenile',
   'company.loadFailed':
-    'Şirket girişi ayarları yüklenemedi. Güncel durumu okumak için tekrar deneyin.',
-  'company.saved': 'Şirket girişi ayarları güncellendi.',
+    'Şirketle oturum açma ayarları yüklenemedi. Güncel durumu okumak için tekrar deneyin.',
+  'company.saved': 'Şirketle oturum açma ayarları güncellendi.',
   'company.remove.title': '{name} kaldırılsın mı?',
   'company.remove.description':
-    'Bu bağlantı üzerinden giriş durur. Mevcut şirket oturumları erişimini kaybeder. Bağımsız hesap oturumları korunur.',
+    'Bu bağlantı üzerinden oturum açma durur. Mevcut şirket oturumları erişimini kaybeder. Bağımsız hesap oturumları korunur.',
   'company.remove.confirm': 'Kaldır',
   'company.copyNamed': '{label} kopyala',
-  'company.entry.title': 'Giriş adresi',
+  'company.entry.title': 'Oturum açma adresi',
   'company.entry.description':
     'Test edilmiş sağlayıcıyı açtıktan sonra bu adresi paylaşın. Bu adres üyelik vermez.',
-  'company.session.title': 'Şirket kimliğiyle giriş yapıldı',
+  'company.session.title': 'Şirket kimliğiyle oturum açıldı',
   'company.session.description':
-    'Bu oturum kendi çalışma alanıyla sınırlıdır. Hesap giriş bilgilerinizi ve diğer çalışma alanlarını yönetmek için bağımsız giriş yapın.',
-  'company.session.signIn': 'Hesabınıza giriş yapın',
+    'Bu oturum kendi çalışma alanıyla sınırlıdır. Hesap oturum açma bilgilerinizi ve diğer çalışma alanlarını yönetmek için bağımsız oturum açın.',
+  'company.session.signIn': 'Hesabınıza oturum açın',
 
   'shared.title': 'Paylaşılanlar',
   'shared.files': 'Dosyalar',
@@ -652,74 +652,76 @@ export const tr = {
   'app.failed.reload': 'Yeniden yükle',
   'app.failed.home': 'Ana sayfaya dön',
 
-  // ── Giriş ───────────────────────────────────────────────────────────────
+  // ── Oturum açma ─────────────────────────────────────────────────────────
   'enrolTwoFactor.title': 'İki adımlı doğrulamayı açın',
   'enrolTwoFactor.lede':
-    'Bu sunucu parolayla giriş yapan her hesapta bunu zorunlu tutuyor. Devam etmek için açın; oturumunuz açık kalır.',
-  'enrolTwoFactor.signOut': 'Çıkış yap',
-  'signIn.title': 'Purlay’e giriş yapın',
+    'Bu sunucu parolayla oturum açan her hesapta bunu zorunlu tutuyor. Devam etmek için açın; oturumunuz açık kalır.',
+  'enrolTwoFactor.signOut': 'Oturumu kapat',
+  'signIn.title': 'Purlay’e oturum açın',
   'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
   'signIn.google': 'Google ile devam et',
   // Tek oturum açma (D-200). `{name}` düğmenin işletmece verilen adı ya da aşağıdaki varsayılandır.
   'signIn.oidc': '{name} ile devam et',
   'signIn.oidc.default': 'tek oturum açma',
-  'signIn.cancelled': 'GitHub’da girişi iptal ettiniz — hazır olduğunuzda GitHub ile devam edin.',
+  'signIn.cancelled':
+    'GitHub’da oturum açmayı iptal ettiniz — hazır olduğunuzda GitHub ile devam edin.',
   'signIn.expired':
-    'Bu girişin süresi doldu ya da başka bir tarayıcıda başlatıldı — buradan yeniden başlayın.',
+    'Bu oturum açma işleminin süresi doldu ya da başka bir tarayıcıda başlatıldı — buradan yeniden başlayın.',
   'signIn.emailRequired':
-    'GitHub hesabınızda doğrulanmış birincil e-posta yok — GitHub’da birini doğrulayın, sonra yeniden giriş yapın.',
+    'GitHub hesabınızda doğrulanmış birincil e-posta yok — GitHub’da birini doğrulayın, sonra yeniden oturum açın.',
   'signIn.emailTaken':
-    'Bu e-postayla bir hesap var ama adresi henüz doğrulanmamış; bu yüzden GitHub ile giriş yapılamıyor. Bunun yerine o hesabın parolasıyla giriş yapın; adres doğrulanınca GitHub de aynı hesaba giriş yapar.',
+    'Bu e-postayla bir hesap var ama adresi henüz doğrulanmamış; bu yüzden GitHub ile oturum açılamıyor. Bunun yerine o hesabın parolasıyla oturum açın; adres doğrulanınca GitHub de aynı hesaba oturum açar.',
   'signIn.emailTakenNoMail':
-    'Bu e-postayla bir hesap var ama adresi henüz doğrulanmamış; bu yüzden GitHub ile giriş yapılamıyor. Bu, sunucu kurulurken açılan bir parola hesabı: parolasıyla giriş yapın. Bu sunucu e-posta göndermiyor; adres doğrulanmış olmayacağı için GitHub bu hesaba giriş yapmaz.',
+    'Bu e-postayla bir hesap var ama adresi henüz doğrulanmamış; bu yüzden GitHub ile oturum açılamıyor. Bu, sunucu kurulurken açılan bir parola hesabı: parolasıyla oturum açın. Bu sunucu e-posta göndermiyor; adres doğrulanmış olmayacağı için GitHub bu hesaba oturum açmaz.',
   'signIn.signupClosed':
     'Bu Purlay sunucusunda hesap yalnızca davetle açılır — sunucudaki birinden davet bağlantısı isteyin.',
   'signIn.githubUnavailable': 'GitHub’a ulaşılamadı — biraz bekleyip yeniden deneyin.',
   'signIn.oidcUnavailable':
     'Tek oturum açma hizmetine ulaşılamadı ya da bu sunucunun güvendiği bir kimlik vermedi — biraz bekleyip yeniden deneyin; sürerse sunucuyu yönetene haber verin.',
   'signIn.googleUnavailable':
-    'Google yanıt vermedi. Biraz sonra yeniden deneyin ya da başka bir yolla girin.',
+    'Google yanıt vermedi. Biraz sonra yeniden deneyin ya da başka bir yolla oturum açın.',
   'signIn.emailUnverified':
-    'Bu giriş adresin size ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl giriyorsanız öyle girin ya da bir davet isteyin.',
+    'Bu oturum açma adresin size ait olduğunu kanıtlamadı; bu yüzden o adresi kullanan hesabı açamaz. Daha önce nasıl oturum açıyorsanız öyle oturum açın ya da bir davet isteyin.',
   'signIn.busy': 'Purlay şu an yoğun — bir dakika bekleyip yeniden deneyin.',
-  'signIn.failed': 'Giriş tamamlanamadı — yeniden deneyin.',
-  'signIn.ended': 'Oturumunuz sona erdi. Devam etmek için yeniden giriş yapın.',
-  'signIn.methods.unchecked': 'Bu sunucunun hangi giriş seçeneklerini sunduğunu denetleyemedik.',
+  'signIn.failed': 'Oturum açma tamamlanamadı — yeniden deneyin.',
+  'signIn.ended': 'Oturumunuz sona erdi. Devam etmek için yeniden oturum açın.',
+  'signIn.methods.unchecked':
+    'Bu sunucunun hangi oturum açma seçeneklerini sunduğunu denetleyemedik.',
   'signIn.methods.retry': 'Yeniden dene',
   'signIn.notSetUp.title': 'Bu sunucu henüz kurulmadı',
   'signIn.notSetUp.body':
-    'GitHub ile giriş, Google ile giriş, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanızla yine de girebilirsiniz. Sunucuyu siz yönetiyorsanız kurulumu tarayıcıdan tamamlayabilirsiniz.',
+    'GitHub ile oturum açma, Google ile oturum açma, tek oturum açma ve e-posta bağlantısı henüz bağlanmamış, ama parolanızla yine de oturum açabilirsiniz. Sunucuyu siz yönetiyorsanız kurulumu tarayıcıdan tamamlayabilirsiniz.',
   'signIn.notSetUp.action': 'Bu sunucuyu kur',
   'signIn.scope': 'Purlay GitHub’dan yalnızca adınızı, kullanıcı adınızı ve e-postanızı ister.',
   'signIn.email.label': 'E-posta adresi',
-  'signIn.email.submit': 'Bana giriş bağlantısı gönder',
-  'signIn.email.linkInstead': 'Bunun yerine bana giriş bağlantısı gönder',
+  'signIn.email.submit': 'Bana oturum açma bağlantısı gönder',
+  'signIn.email.linkInstead': 'Bunun yerine bana oturum açma bağlantısı gönder',
   'signIn.email.sent':
-    '{email} e-postayla giriş yapabiliyorsa bağlantı yolda. Bir kez ve {minutes} dakika boyunca çalışır.',
+    '{email} e-postayla oturum açabiliyorsa bağlantı yolda. Bir kez ve {minutes} dakika boyunca çalışır.',
   'signIn.email.another': 'Başka bir adres kullan',
   'signIn.email.invalid': 'Bu bir e-posta adresi değil.',
-  'signIn.email.unavailable': 'Bu sunucu e-postayla giriş yapmıyor.',
+  'signIn.email.unavailable': 'Bu sunucuda e-postayla oturum açılamıyor.',
   'signIn.email.failed': 'Bağlantı istenemedi.',
-  'signIn.link.as': '{email} olarak giriş yapıyorsunuz.',
+  'signIn.link.as': '{email} olarak oturum açıyorsunuz.',
   'signIn.link.replaces':
-    'Bu sayfada {current} olarak girişlisiniz; bu bağlantı onun yerine sizinle giriş yapar.',
-  'signIn.link.submit': 'Giriş yap',
+    'Bu sayfada {current} olarak oturum açmış durumdasınız; bu bağlantı onun yerine sizinle oturum açar.',
+  'signIn.link.submit': 'Oturum aç',
   'signIn.link.missing': 'Bu bağlantı eksik — e-postanızdan yeniden açın ya da yenisini isteyin.',
   'signIn.link.notFound': 'Bu bağlantı kullanılmış ya da süresi dolmuş — yenisini isteyin.',
-  'signIn.link.failed': 'Giriş tamamlanamadı.',
-  'signIn.link.back': 'Girişe dön',
-  'signIn.native': '{app} uygulamasına devam etmek için giriş yapın.',
+  'signIn.link.failed': 'Oturum açma tamamlanamadı.',
+  'signIn.link.back': 'Oturum açmaya dön',
+  'signIn.native': '{app} uygulamasına devam etmek için oturum açın.',
   'native.title': '{app} açılsın mı?',
   'native.body': '{app}, {host} üzerinde {name}, {email} olarak oturum açacak.',
   'native.hint':
-    'Uygulama kendi oturumunu alır. Bitirmek için uygulamadan çıkış yapın ya da Ayarlar’da Her yerden çıkış yap’ı seçin.',
-  'native.again.title': 'Devam etmek için yeniden giriş yapın',
+    'Uygulama kendi oturumunu alır. Bitirmek için uygulamadan oturumu kapatın ya da Ayarlar’da Her yerde oturumu kapat’ı seçin.',
+  'native.again.title': 'Devam etmek için yeniden oturum açın',
   'native.again.body':
-    '{app} giriş bilgilerinizin yeniden doğrulanmasını istedi. Bu tarayıcıdan çıkış yapın, ardından yeniden giriş yapın.',
-  'native.again.action': 'Yeniden giriş yap',
+    '{app} oturum açma bilgilerinizin yeniden doğrulanmasını istedi. Bu tarayıcıdan oturumu kapatın, ardından yeniden oturum açın.',
+  'native.again.action': 'Yeniden oturum aç',
   'native.authorize': '{app} uygulamasını aç',
-  'native.other': 'Bu tarayıcıdan çıkış yap ve başka bir hesap kullan',
+  'native.other': 'Bu tarayıcıdan oturumu kapat ve başka bir hesap kullan',
   'native.failed': '{app} açılamadı.',
   'native.done.title': '{app} uygulamasına dönün',
   'native.done.body': 'Uygulama açıldıktan sonra bu sekmeyi kapatabilirsiniz.',
@@ -727,17 +729,17 @@ export const tr = {
   'native.gone.title': 'Bu oturum açma isteğinin süresi doldu',
   'native.gone.body': 'Purlay uygulamasından yeniden başlayın.',
   'native.gone.back': 'Purlay’a git',
-  'signIn.password.form': 'Parolayla giriş yap',
+  'signIn.password.form': 'Parolayla oturum aç',
   'signIn.password.label': 'Parola',
-  'signIn.password.submit': 'Giriş yap',
+  'signIn.password.submit': 'Oturum aç',
   'signIn.password.wrong': 'E-posta ya da parola yanlış.',
   'signIn.password.tooMany': {
     other: 'Çok fazla deneme yapıldı. {count} dakika sonra yeniden deneyin.',
   },
   'signIn.password.unreachable': 'Purlay’e ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.',
   'signIn.password.off':
-    'Bu sunucu artık parolayla giriş kabul etmiyor. Yukarıdaki yollardan birini kullanın.',
-  'signIn.password.failed': 'Giriş tamamlanamadı. Biraz sonra yeniden deneyin.',
+    'Bu sunucu artık parolayla oturum açmayı kabul etmiyor. Yukarıdaki yollardan birini kullanın.',
+  'signIn.password.failed': 'Oturum açma tamamlanamadı. Biraz sonra yeniden deneyin.',
   'signIn.code.form': 'İki adımlı doğrulama',
   'signIn.code.appHint': 'Doğrulama uygulamanızdaki {digits} haneli kodu girin.',
   'signIn.code.backupHint':
@@ -759,10 +761,10 @@ export const tr = {
   'signIn.byInvitation': 'Hesaplar davetle açılır.',
   'signUp.title': 'Hesabınızı oluşturun',
   'signUp.lede':
-    'GitHub ile devam edin ya da e-postanıza giriş bağlantısı gönderilsin. Açtığınız ilk bağlantı hesabınızı oluşturur.',
+    'GitHub ile devam edin ya da e-postanıza oturum açma bağlantısı gönderilsin. Açtığınız ilk bağlantı hesabınızı oluşturur.',
   'signUp.nothing': 'Bu sunucuda henüz hesap açmanın bir yolu bağlanmamış.',
   'signUp.haveAccount': 'Zaten hesabınız var mı?',
-  'signUp.signIn': 'Giriş yap',
+  'signUp.signIn': 'Oturum aç',
   'signUp.closed.title': 'Hesaplar davetle açılır',
   'signUp.closed.body':
     'Bu Purlay sunucusu kendiliğinden kayıt almıyor. Sunucudaki birinden davet bağlantısı isteyin ve hesabınızı o bağlantıyı açarak oluşturun.',
@@ -862,9 +864,9 @@ export const tr = {
   'invite.failed.title': 'Davet okunamadı',
   'invite.home': 'Ana sayfaya dön',
   'invite.signedOut.title': 'Davet edildiniz',
-  'invite.signedOut.body': 'Katılmak için giriş yapın ya da hesap oluşturun. Davet sizde kalır.',
+  'invite.signedOut.body': 'Katılmak için oturum açın ya da hesap oluşturun. Davet sizde kalır.',
   'invite.signedOut.haveAccount': 'Zaten hesabınız var mı?',
-  'invite.signedOut.signIn': 'Parolanızla giriş yap',
+  'invite.signedOut.signIn': 'Parolanızla oturum aç',
   'invite.passport.tooMany': 'Bu davet şu an çok sık açılıyor. Biraz sonra yeniden deneyin.',
   'invite.passport.failed': 'Davet denetlenemedi.',
   'message.imageFrom': '{host} adresinden bir görsel',
@@ -1148,18 +1150,22 @@ export const tr = {
   'audit.action.identity.domain_verified': '{actor} bir şirket alan adını doğruladı',
   'audit.kind.identity.domain_revoked': 'Şirket alan adı kaldırıldı',
   'audit.action.identity.domain_revoked': '{actor} bir şirket alan adını kaldırdı',
-  'audit.kind.identity.connection_created': 'Şirket girişi yapılandırıldı',
-  'audit.action.identity.connection_created': '{actor} bir şirket giriş bağlantısı yapılandırdı',
-  'audit.kind.identity.connection_updated': 'Şirket girişi değiştirildi',
-  'audit.action.identity.connection_updated': '{actor} bir şirket giriş bağlantısını değiştirdi',
-  'audit.kind.identity.connection_enabled': 'Şirket girişi açıldı',
-  'audit.action.identity.connection_enabled': '{actor} bir şirket giriş bağlantısını açtı',
-  'audit.kind.identity.connection_disabled': 'Şirket girişi kapatıldı',
-  'audit.action.identity.connection_disabled': '{actor} bir şirket giriş bağlantısını kapattı',
-  'audit.kind.identity.connection_deleted': 'Şirket girişi kaldırıldı',
-  'audit.action.identity.connection_deleted': '{actor} bir şirket giriş bağlantısını kaldırdı',
-  'audit.kind.identity.connection_tested': 'Şirket girişi test edildi',
-  'audit.action.identity.connection_tested': '{actor} bir şirket girişi testini tamamladı',
+  'audit.kind.identity.connection_created': 'Şirketle oturum açma yapılandırıldı',
+  'audit.action.identity.connection_created':
+    '{actor} bir şirket oturum açma bağlantısı yapılandırdı',
+  'audit.kind.identity.connection_updated': 'Şirketle oturum açma değiştirildi',
+  'audit.action.identity.connection_updated':
+    '{actor} bir şirket oturum açma bağlantısını değiştirdi',
+  'audit.kind.identity.connection_enabled': 'Şirketle oturum açma açıldı',
+  'audit.action.identity.connection_enabled': '{actor} bir şirket oturum açma bağlantısını açtı',
+  'audit.kind.identity.connection_disabled': 'Şirketle oturum açma kapatıldı',
+  'audit.action.identity.connection_disabled':
+    '{actor} bir şirket oturum açma bağlantısını kapattı',
+  'audit.kind.identity.connection_deleted': 'Şirketle oturum açma kaldırıldı',
+  'audit.action.identity.connection_deleted':
+    '{actor} bir şirket oturum açma bağlantısını kaldırdı',
+  'audit.kind.identity.connection_tested': 'Şirketle oturum açma test edildi',
+  'audit.action.identity.connection_tested': '{actor} bir şirketle oturum açma testini tamamladı',
   'audit.kind.identity.linked': 'Şirket hesabı bağlandı',
   'audit.action.identity.linked': '{actor} şirket hesabını bağladı',
   'audit.kind.identity.unlinked': 'Şirket hesabının bağlantısı kaldırıldı',
@@ -1428,7 +1434,7 @@ export const tr = {
     'Bu, repo yetkisi olan klasik bir token gibi görünüyor: sahibinin erişebildiği her depoyu okuyabilir ve yazabilir. Kartlar için seçili depolarda ince ayarlı, salt okunur bir token yeterli ve daha güvenlidir.',
   'invite.admin.revokeFailed': 'Bağlantı iptal edilemedi.',
   'workspace.none.body':
-    'Bir sahibinden sizi eklemesini isteyin ya da zaten bir çalışma alanına ait hesapla giriş yapın.',
+    'Bir sahibinden sizi eklemesini isteyin ya da zaten bir çalışma alanına ait hesapla oturum açın.',
   'workspace.settings.entry': 'Çalışma alanı ayarları',
   'workspace.settings.save': 'Kaydet',
   'workspace.settings.empty': 'Çalışma alanının bir adı olmalı.',
@@ -1451,7 +1457,7 @@ export const tr = {
     'Bu sunucu sizin çalışma alanı oluşturmanıza izin vermiyor. Ekibinizden birinden davet isteyin.',
   'workspace.closed.title': 'Davet isteyin',
   'workspace.closed.body':
-    'Giriş yaptınız ama bir çalışma alanında değilsiniz ve bu sunucuda yalnızca yöneticisinin seçtiği kişiler çalışma alanı oluşturabiliyor. Ekibinizden birinden bir davet bağlantısı isteyin ve onu açın.',
+    'Oturum açtınız ama bir çalışma alanında değilsiniz ve bu sunucuda yalnızca yöneticisinin seçtiği kişiler çalışma alanı oluşturabiliyor. Ekibinizden birinden bir davet bağlantısı isteyin ve onu açın.',
   'state.session.error.title': 'Purlay’e ulaşılamadı',
   'state.session.error.body': 'Sunucu yanıt vermedi. Oturumunuz açık; tekrar deneyin.',
   'state.channel.missing.title': 'Bu kanal burada değil',
@@ -1618,8 +1624,8 @@ export const tr = {
   'erase.mismatch': 'Bu sizin kullanıcı adınız değil.',
   'erase.submit': 'Hesabımı sil',
   'erase.reauthenticate':
-    'Bunun için önce yeniden giriş yapın: son birkaç dakika içinde yapılmış bir giriş gerekir.',
-  'erase.signOut': 'Yeniden giriş için çıkış yap',
+    'Bunun için önce yeniden oturum açın: son birkaç dakika içinde oturum açmış olmanız gerekir.',
+  'erase.signOut': 'Yeniden oturum açmak için oturumu kapat',
   'erase.lastOwner': 'Önce bu çalışma alanlarını başka bir sahibe devredin: {workspaces}.',
   'erase.failed': 'Hesabınız silinmedi.',
   'deleteWorkspace.title': '{workspace} çalışma alanını sil',
@@ -2326,7 +2332,7 @@ export const tr = {
   'upload.why.network': 'Bağlantı yok',
   'upload.why.busy': 'Sunucu meşgul',
   'upload.why.storage': 'Dosya deposuna ulaşılamıyor',
-  'upload.why.session': 'Oturumunuz sona erdi: tekrar giriş yapın',
+  'upload.why.session': 'Oturumunuz sona erdi: tekrar oturum açın',
   'upload.why.notInWorkspace': 'Bu çalışma alanına artık erişiminiz yok',
   'upload.uploadingPercent': 'Yükleniyor… %{percent}',
   'upload.progressOf': '{name} yükleniyor',
@@ -2726,10 +2732,10 @@ export const tr = {
 
   // ── Hatalar: her neden için bir cümle, bütün ekranlarda ortak ──────────
   'failure.network': 'Bağlantınızı kontrol edip tekrar deneyin.',
-  'failure.session': 'Oturumunuz sona erdi. Devam etmek için tekrar giriş yapın.',
+  'failure.session': 'Oturumunuz sona erdi. Devam etmek için tekrar oturum açın.',
   'failure.twoFactor': 'Bu sunucu önce iki adımlı doğrulamayı açmanızı istiyor.',
   'failure.reauthenticate':
-    'Çıkış yapıp yeniden giriş yapın, sonra tekrar deneyin: bu işlem yeni bir giriş ister.',
+    'Oturumu kapatıp yeniden oturum açın, sonra tekrar deneyin: bu işlem yeniden oturum açılmasını ister.',
   'failure.notAMember': 'Bu kanalda değilsiniz. Buraya yazmak için katılın, sonra tekrar deneyin.',
   'failure.onlyAdminsPost':
     'Bu kanala yalnızca sahipler ve yöneticiler yazar. Bunun yerine bir thread’e yanıt yazın.',
@@ -2765,7 +2771,7 @@ export const tr = {
   'failure.issuesLimit':
     'Bu çalışma alanı alabileceği en çok sorunu taşıyor. Önce bazılarını silin.',
   'failure.generic': 'Bizim tarafta bir şey ters gitti. Birazdan tekrar deneyin.',
-  'failure.signOut': 'Çıkış yapılamadı.',
+  'failure.signOut': 'Oturum kapatılamadı.',
   'failure.copy': 'Kopyalanamadı. Metni seçip kendiniz kopyalayın.',
   'connection.degraded': {
     other: '{count} kanal için canlı güncellemeler durdu',
@@ -2797,7 +2803,7 @@ export const tr = {
   'settings.profile.identity': 'Kimlik',
   'settings.profile.identityHint': 'Adınız ve fotoğrafınız GitHub’dan gelir; orada değişir.',
   'settings.profile.identityHintOwn':
-    'Adınızı siz belirlersiniz; GitHub ile giriş yapana kadar fotoğrafınız adınızdan çizilir.',
+    'Adınızı siz belirlersiniz; GitHub ile oturum açana kadar fotoğrafınız adınızdan çizilir.',
   'settings.profile.who': 'Oturum açan',
   'settings.profile.about': 'Hakkında',
   'settings.profile.aboutHint': 'Profilinizde ve kişi seçilen her yerde görünür.',
@@ -2822,7 +2828,7 @@ export const tr = {
   'quietHours.loadFailed': 'Sessiz saatler yüklenemedi.',
   'quietHours.timeRequired': 'Başlangıç ve bitiş saatlerini girin.',
   'settings.account.emailOidc': 'Bu adres kurumunuzun tek oturum açma hesabına bağlı.',
-  'settings.account.emailUnavailable': 'Bu hesaba e-posta bağlantısıyla giriş yapılamıyor.',
+  'settings.account.emailUnavailable': 'Bu hesaba e-posta bağlantısıyla oturum açılamıyor.',
   'quietHours.title': 'Sessiz saatler',
   'quietHours.description':
     'Her hafta sizi hiçbir şeyin bölmediği saatler: gelenler saklanır ve sayılır, ama saatler bitene kadar hiçbir şey açılmaz ya da çalmaz — kendiliğinden Deep Work.',
@@ -2889,24 +2895,24 @@ export const tr = {
   'settings.notifications.noChannels': 'Henüz hiçbir kanalda değilsiniz',
   'settings.account.title': 'Oturumlar ve hesap',
   'settings.account.description': 'Nerelerde oturum açık olduğu ve hesabınızın kendisi.',
-  'settings.account.signIn': 'Nasıl giriş yapıyorsunuz',
+  'settings.account.signIn': 'Nasıl oturum açıyorsunuz',
   'settings.account.email': 'E-posta',
-  'settings.account.emailLinks': 'Bu adrese gönderilen giriş bağlantısıyla giriş yaparsınız.',
-  'settings.account.emailGitHub': 'GitHub hesabınızın adresi. GitHub ile giriş yaparsınız.',
+  'settings.account.emailLinks': 'Bu adrese gönderilen oturum açma bağlantısıyla oturum açarsınız.',
+  'settings.account.emailGitHub': 'GitHub hesabınızın adresi. GitHub ile oturum açarsınız.',
   'settings.account.github': 'GitHub',
-  'settings.account.githubSignsIn': 'Bu GitHub hesabıyla giriş yapabilirsiniz.',
+  'settings.account.githubSignsIn': 'Bu GitHub hesabıyla oturum açabilirsiniz.',
   'settings.account.githubLinked': 'Bağlı',
-  'settings.account.emailGoogle': 'Google hesabınızın adresi. Google ile giriş yaparsınız.',
+  'settings.account.emailGoogle': 'Google hesabınızın adresi. Google ile oturum açarsınız.',
   'settings.account.google': 'Google',
-  'settings.account.googleSignsIn': 'Bu Google hesabıyla giriş yapabilirsiniz.',
+  'settings.account.googleSignsIn': 'Bu Google hesabıyla oturum açabilirsiniz.',
   'settings.account.googleLinked': 'Bağlı',
   'settings.account.oidc': 'Tek oturum açma',
   'settings.account.oidcSignsIn':
-    'Kuruluşunuzun oturum açma sistemi bu hesaba bağlı; e-postayla gelen bağlantı artık bu hesaba giriş yaptırmaz.',
+    'Kuruluşunuzun oturum açma sistemi bu hesaba bağlı; e-postayla gelen bağlantı artık bu hesaba oturum açtırmaz.',
   'settings.account.oidcLinked': 'Bağlı',
   'settings.account.password.title': 'Parola',
   'settings.account.password.description':
-    'Giriş yaptığınız parolayı değiştirin. Diğer oturumlarınız kapatılır.',
+    'Oturum açtığınız parolayı değiştirin. Diğer oturumlarınız kapatılır.',
   'settings.account.password.current': 'Mevcut parola',
   'settings.account.password.new': 'Yeni parola',
   'settings.account.password.submit': 'Parolayı değiştir',
@@ -2918,13 +2924,13 @@ export const tr = {
   'settings.account.password.unreachable':
     'Purlay’e ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.',
   'settings.account.password.othersStay':
-    'Parolanız değişti ama diğer oturumlarınız kapatılamadı. "Her yerden çıkış yap"ı kullanın.',
+    'Parolanız değişti ama diğer oturumlarınız kapatılamadı. "Her yerde oturumu kapat"ı kullanın.',
   'settings.account.password.failed': 'Parola değiştirilmedi. Biraz sonra yeniden deneyin.',
   'settings.account.twoFactor.title': 'İki adımlı doğrulama',
   'settings.account.twoFactor.description':
-    'Parolanızdan sonra, giriş yaparken telefonunuzdaki bir doğrulama uygulamasının kodu da istenir.',
+    'Parolanızdan sonra, oturum açarken telefonunuzdaki bir doğrulama uygulamasının kodu da istenir.',
   'settings.account.twoFactor.otherWays':
-    'Parolanızı korur. GitHub, Google, tek oturum açma ya da e-postayla gelen bağlantıyla girişte o sağlayıcının kendi güvenliği geçerlidir.',
+    'Parolanızı korur. GitHub, Google, tek oturum açma ya da e-postayla gelen bağlantıyla oturum açmada o sağlayıcının kendi güvenliği geçerlidir.',
   'settings.account.twoFactor.required':
     'Bu sunucu parolası olan hesaplarda bunu zorunlu tutuyor; bu yüzden açık kalır.',
   'settings.account.twoFactor.status': 'Durum',
@@ -2936,7 +2942,7 @@ export const tr = {
   'settings.account.twoFactor.password': 'Parolanız',
   'settings.account.twoFactor.startHint': 'Siz olduğunuzu parolanızla doğrulayın.',
   'settings.account.twoFactor.stopHint':
-    'Parolanızla doğrulayın. Bundan sonra yalnızca parolanızla giriş yapabilirsiniz.',
+    'Parolanızla doğrulayın. Bundan sonra yalnızca parolanızla oturum açabilirsiniz.',
   'settings.account.twoFactor.newCodesHint':
     'Parolanızla doğrulayın. Eski yedek kodlarınız artık işe yaramaz.',
   'settings.account.twoFactor.continue': 'Devam et',
@@ -2949,7 +2955,7 @@ export const tr = {
   'settings.account.twoFactor.confirm': 'Aç',
   'settings.account.twoFactor.codesTitle': 'Yedek kodlar',
   'settings.account.twoFactor.codesHint':
-    'Telefonunuzu kaybederseniz her kod bir kez giriş yapmanızı sağlar. Yalnızca şimdi gösteriliyor: güvenli bir yere kopyalayın.',
+    'Telefonunuzu kaybederseniz her kod bir kez oturum açmanızı sağlar. Yalnızca şimdi gösteriliyor: güvenli bir yere kopyalayın.',
   'settings.account.twoFactor.copyCodes': 'Kodları kopyala',
   'settings.account.twoFactor.done': 'Tamam',
   'settings.account.twoFactor.onNow': 'İki adımlı doğrulama açık.',
@@ -3070,12 +3076,12 @@ export const tr = {
   'user.setAway': 'Uzakta görün',
   'user.setActive': 'Etkin görün',
   'user.awayFailed': 'Durumunuz değiştirilemedi.',
-  'user.signOut': 'Çıkış yap',
-  'user.signOutEverywhere': 'Her yerden çıkış yap',
-  'user.signOutEverywhere.entry': 'Her yerden çıkış yap…',
-  'user.signOutEverywhere.title': 'Her yerden çıkış yapılsın mı?',
+  'user.signOut': 'Oturumu kapat',
+  'user.signOutEverywhere': 'Her yerde oturumu kapat',
+  'user.signOutEverywhere.entry': 'Her yerde oturumu kapat…',
+  'user.signOutEverywhere.title': 'Her yerde oturum kapatılsın mı?',
   'user.signOutEverywhere.body':
-    'Sizin adınızla giriş yapılmış her tarayıcı ve cihazdan, bu da dahil, çıkış yapılır. Sonra her zamanki yolunuzla yeniden giriş yaparsınız.',
+    'Sizin adınızla oturum açılmış her tarayıcı ve cihazdan, bu da dahil, oturum kapatılır. Sonra her zamanki yolunuzla yeniden oturum açarsınız.',
   'user.menuFor': 'Hesap:',
 
   // ── Komut paleti (D-98) ─────────────────────────────────────────────────
@@ -3186,10 +3192,10 @@ export const tr = {
   'setup.step.admin.line': 'Ad, adres ve parola',
   'setup.step.address.name': 'Sunucu adresi',
   'setup.step.address.line': 'Ve kimler hesap açabilir',
-  'setup.step.github.name': 'GitHub ile giriş',
+  'setup.step.github.name': 'GitHub ile oturum açma',
   'setup.step.github.line': 'Bir OAuth uygulaması',
   'setup.step.email.name': 'E-posta',
-  'setup.step.email.line': 'Giriş bağlantıları ve davetler',
+  'setup.step.email.line': 'Oturum açma bağlantıları ve davetler',
   'setup.step.workspace.name': 'İlk çalışma alanı',
   'setup.step.workspace.line': 'Ad ve adres',
   'setup.step.invite.name': 'Ekibi davet et',
@@ -3202,8 +3208,8 @@ export const tr = {
   'setup.state.error.title': 'Kurulum okunamadı',
   'setup.state.error.body': 'Sunucu yanıt vermedi. İlerlemeniz kayıtlı; yeniden deneyin.',
   'setup.closed.title': 'Bu sunucu kurulu',
-  'setup.closed.body': 'Kurulum bitti. Devam etmek için giriş yapın.',
-  'setup.closed.action': 'Girişe git',
+  'setup.closed.body': 'Kurulum bitti. Devam etmek için oturum açın.',
+  'setup.closed.action': 'Oturum açmaya git',
   'setup.closed.bodySignedIn': 'Kurulum bitti.',
   'setup.closed.open': 'Purlay’ı aç',
   'setup.mismatch.title': 'Farklı bir adrestesiniz',
@@ -3237,7 +3243,7 @@ export const tr = {
     'Sunucu kodu bu adresten reddetti. {address} adresini açıp kodu orada girin.',
   'setup.admin.title': 'Yönetici hesabını oluşturun',
   'setup.admin.lede':
-    'Sunucuyu bu hesapla yöneteceksiniz. Parolası olan tek hesap bu; diğer herkes GitHub ile ya da e-posta bağlantısıyla girer.',
+    'Sunucuyu bu hesapla yöneteceksiniz. Parolası olan tek hesap bu; diğer herkes GitHub ile ya da e-posta bağlantısıyla oturum açar.',
   'setup.admin.name': 'Ad',
   'setup.admin.email': 'E-posta adresi',
   'setup.admin.password': 'Parola',
@@ -3253,7 +3259,7 @@ export const tr = {
   'setup.admin.rule.met': 'sağlandı',
   'setup.admin.rule.broken': 'sağlanmadı',
   'setup.admin.unverified':
-    'Bu adres henüz doğrulanmadı. E-posta adımı adrese bir ileti gönderir; iletideki bağlantıyı açmak adresi doğrular. O zamana kadar GitHub bu hesaba bağlanmaz; parolayla giriş yaparsınız.',
+    'Bu adres henüz doğrulanmadı. E-posta adımı adrese bir ileti gönderir; iletideki bağlantıyı açmak adresi doğrular. O zamana kadar GitHub bu hesaba bağlanmaz; parolayla oturum açarsınız.',
   'setup.admin.submit': 'Hesabı oluştur',
   'setup.admin.nameBlank': 'Bir ad girin.',
   'setup.admin.emailInvalid': 'Bu bir e-posta adresi değil.',
@@ -3267,7 +3273,7 @@ export const tr = {
   'setup.admin.problem.repetitive': 'Bu parola aynı birkaç karakteri tekrar ediyor.',
   'setup.admin.conflict': 'Bu adresle bir hesap zaten var.',
   'setup.admin.notSignedIn':
-    'Hesap oluşturuldu ama bu tarayıcıda oturum açılmadı. Kurulumdan sonra parolayla giriş yapın.',
+    'Hesap oluşturuldu ama bu tarayıcıda oturum açılmadı. Kurulumdan sonra parolayla oturum açın.',
   'setup.admin.done': 'Yönetici: {name}, {email}.',
   'setup.address.title': 'Sunucu adresini onaylayın',
   'setup.address.lede':
@@ -3277,14 +3283,15 @@ export const tr = {
   'setup.address.callbackHint': 'Bunu bir sonraki adımda GitHub’a yapıştıracaksınız.',
   'setup.policy.legend': 'Kimler hesap açabilir',
   'setup.policy.invite': 'Yalnızca davet edilenler',
-  'setup.policy.inviteNote': 'Hesaplar yalnızca davet bağlantısıyla açılır; başka kimse giremez.',
+  'setup.policy.inviteNote':
+    'Hesaplar yalnızca davet bağlantısıyla açılır; başka kimse oturum açamaz.',
   'setup.policy.open': 'Herkes hesap açabilir',
   'setup.policy.openNote':
     'Bu sunucuya ulaşabilen herkes kaydolup kendi çalışma alanını başlatabilir.',
   'setup.address.submit': 'Onayla ve devam et',
-  'setup.github.title': 'GitHub ile giriş',
+  'setup.github.title': 'GitHub ile oturum açma',
   'setup.github.lede':
-    'Ekibiniz sahip olduğu GitHub hesabıyla tek tıkla girebilsin. GitHub’da bir OAuth uygulaması oluşturun, aşağıdaki adresi ona verin, sonra iki değerini buraya yapıştırın.',
+    'Ekibiniz sahip olduğu GitHub hesabıyla tek tıkla oturum açabilsin. GitHub’da bir OAuth uygulaması oluşturun, aşağıdaki adresi ona verin, sonra iki değerini buraya yapıştırın.',
   'setup.github.part1': '1 · GitHub’da bir OAuth uygulaması oluşturun',
   'setup.github.part1Body':
     'GitHub’da Settings → Developer settings → OAuth Apps → New OAuth App yolunu izleyin ve bunu “Authorization callback URL” alanına yapıştırın.',
@@ -3301,12 +3308,12 @@ export const tr = {
   'setup.github.okNote': 'Henüz kaydedilmedi. Kaydet ve devam et onları saklar.',
   'setup.github.connected': 'GitHub bağlı. Secret saklanıyor ve gösterilmiyor.',
   'setup.github.untried':
-    'GitHub bu sunucunun ortamında tanımlı ve denenmemiş. Bir giriş yolu, kurulum için ancak denendikten sonra sayılır: değerlerini girip denemek için “Yeniden dene”yi kullanın, olduğu gibi bırakmak için Devam’a basın.',
+    'GitHub bu sunucunun ortamında tanımlı ve denenmemiş. Bir oturum açma yolu, kurulum için ancak denendikten sonra sayılır: değerlerini girip denemek için “Yeniden dene”yi kullanın, olduğu gibi bırakmak için Devam’a basın.',
   'setup.github.skipNote':
-    'Atlarsanız kimse GitHub ile giremez. E-postayı bağlarsanız insanlar yine de girebilir.',
+    'Atlarsanız kimse GitHub ile oturum açamaz. E-postayı bağlarsanız insanlar yine de oturum açabilir.',
   'setup.email.title': 'E-postayı bağlayın',
   'setup.email.lede':
-    'E-posta giriş bağlantılarını ve davetleri taşır. Deneme gerçek bir ileti gönderir; yöneticinin adresini doğrulayan ileti de odur.',
+    'E-posta oturum açma bağlantılarını ve davetleri taşır. Deneme gerçek bir ileti gönderir; yöneticinin adresini doğrulayan ileti de odur.',
   'setup.email.showLabel': 'Posta sunucusu adresini göster',
   'setup.email.hideLabel': 'Posta sunucusu adresini gizle',
   'setup.email.url': 'Posta sunucusu',
@@ -3346,9 +3353,9 @@ export const tr = {
     'Posta sunucusunu ya da göndereni değiştirmek için aşağıdaki “Yeniden dene”yi kullanın.',
   'setup.email.connected': 'E-posta bağlı.',
   'setup.email.untried':
-    'Bir posta sunucusu bu sunucunun ortamında tanımlı ve denenmemiş. Bir giriş yolu, kurulum için ancak denendikten sonra sayılır: adresini girip denemek için “Yeniden dene”yi kullanın, olduğu gibi bırakmak için Devam’a basın.',
+    'Bir posta sunucusu bu sunucunun ortamında tanımlı ve denenmemiş. Bir oturum açma yolu, kurulum için ancak denendikten sonra sayılır: adresini girip denemek için “Yeniden dene”yi kullanın, olduğu gibi bırakmak için Devam’a basın.',
   'setup.email.skipNote':
-    'Atlarsanız davet bağlantıları gönderilmez, yalnızca kopyalanır; e-postayla giriş ve e-postayla hesap açma gizlenir. GitHub bağlıysa herkes yine de girer. Adresiniz doğrulanmamış kalır.',
+    'Atlarsanız davet bağlantıları gönderilmez, yalnızca kopyalanır; e-postayla oturum açma ve e-postayla hesap açma gizlenir. GitHub bağlıysa herkes yine de oturum açabilir. Adresiniz doğrulanmamış kalır.',
   'setup.workspace.title': 'İlk çalışma alanını oluşturun',
   'setup.workspace.lede': 'Çalışma alanı, bir ekibin konuştuğu yerdir. #general kanalıyla başlar.',
   'setup.workspace.preview': 'Ekibiniz onu şu adreste açacak: {url}',
@@ -3361,10 +3368,10 @@ export const tr = {
   'setup.invite.notSent': 'Gönderilmedi: {addresses}.',
   'setup.invite.failed': 'Bağlantı üretilemedi.',
   'setup.finish.title': 'Kurulumu bitirin',
-  'setup.finish.lede': 'İnsanların girebildiğinden emin olun, sonra Purlay’ı açın.',
+  'setup.finish.lede': 'İnsanların oturum açabildiğinden emin olun, sonra Purlay’ı açın.',
   'setup.finish.admin': 'Yönetici hesabı',
   'setup.finish.workspace': 'İlk çalışma alanı',
-  'setup.finish.channel': 'Başkalarının giriş yapabileceği bir yol',
+  'setup.finish.channel': 'Başkalarının oturum açabileceği bir yol',
   'setup.finish.github': 'GitHub',
   'setup.finish.email': 'E-posta',
   'setup.finish.connected': 'bağlı',
@@ -3372,7 +3379,7 @@ export const tr = {
   'setup.finish.problem.out-of-order': 'Önceki bir adım henüz bitmedi.',
   'setup.finish.problem.no-workspace': 'İlk çalışma alanı henüz oluşturulmadı.',
   'setup.finish.problem.no-channel':
-    'Başka kimse giremez. Şimdi bitirirseniz yalnızca siz, parolanızla girebilirsiniz; davet ettikleriniz giremez.',
+    'Başka kimse oturum açamaz. Şimdi bitirirseniz yalnızca siz, parolanızla oturum açabilirsiniz; davet ettikleriniz oturum açamaz.',
   'setup.finish.toGithub': 'GitHub’a dön',
   'setup.finish.toEmail': 'E-postaya dön',
   'setup.finish.submit': 'Kurulumu bitir',
@@ -3436,7 +3443,7 @@ export const tr = {
   'setup.reason.issuer-mismatch.fix2':
     'Ortak bir adres yerine kuruluşunuzun adını taşıyan kiracıya özel adresi kullanın.',
   'setup.reason.discovery-invalid.what':
-    'Bu, sunucunun giriş yapabileceği bir OpenID Connect sağlayıcısı değil.',
+    'Bu, sunucunun oturum açabileceği bir OpenID Connect sağlayıcısı değil.',
   'setup.reason.discovery-invalid.fix1':
     'Adreste https üzerinden bir /.well-known/openid-configuration belgesi olmalı.',
   'setup.reason.discovery-invalid.fix2':
@@ -3499,8 +3506,8 @@ export const tr = {
   'setup.failed.generic': 'Sunucu bunu reddetti. Yeniden deneyin.',
   'setup.verify.loading': 'Adresiniz doğrulanıyor',
   'setup.verify.done.title': 'Adresiniz doğrulandı',
-  'setup.verify.done.body': 'Bu sayfayı kapatabilir ya da girişe geçebilirsiniz.',
-  'setup.verify.done.action': 'Girişe git',
+  'setup.verify.done.body': 'Bu sayfayı kapatabilir ya da oturum açmaya geçebilirsiniz.',
+  'setup.verify.done.action': 'Oturum açmaya git',
   'setup.verify.refused.title': 'Bu bağlantı açılmıyor',
   'setup.verify.refused.body':
     'Daha önce kullanılmış ya da süresi dolmuş olabilir; bir bağlantı bir kez, 24 saat boyunca çalışır.',
@@ -3524,12 +3531,12 @@ export const tr = {
   'settings.server.disconnect': 'Bağlantıyı kes',
   'settings.server.disconnectAnyway': 'Yine de bağlantıyı kes',
   'settings.server.lastWay':
-    'Bu, başkalarının giriş yapabileceği son yol. Sonrasında yalnızca sizin parolanız giriş yapar; başka kimse giremez ya da davet kabul edemez.',
-  'settings.server.github.title': 'GitHub ile giriş',
+    'Bu, başkalarının oturum açabileceği son yol. Sonrasında yalnızca sizin parolanız oturum açar; başka kimse oturum açamaz ya da davet kabul edemez.',
+  'settings.server.github.title': 'GitHub ile oturum açma',
   'settings.server.github.description':
-    'İnsanlar, sizin sahip olduğunuz bir OAuth uygulaması üzerinden GitHub hesabıyla giriş yapar.',
+    'İnsanlar, sizin sahip olduğunuz bir OAuth uygulaması üzerinden GitHub hesabıyla oturum açar.',
   'settings.server.github.clientId': 'Client ID {id}',
-  'settings.server.github.empty': 'Bir uygulama bağlanana kadar kimse GitHub ile giriş yapamaz.',
+  'settings.server.github.empty': 'Bir uygulama bağlanana kadar kimse GitHub ile oturum açamaz.',
   'settings.server.github.callback': 'Geri dönüş adresi',
   'settings.server.github.callbackHint':
     'Bunu GitHub’da uygulamanın Authorization callback URL alanına yapıştırın.',
@@ -3538,14 +3545,15 @@ export const tr = {
   'settings.server.github.hint':
     'Bir şey kaydedilmeden önce uygulama GitHub’a sorulur. Gizli değer şifreli saklanır ve bir daha gösterilmez.',
   'settings.server.github.save': 'Bağlantıyı dene ve kaydet',
-  'settings.server.github.saved': 'Kaydedildi. GitHub girişi bundan sonra bu uygulamayı kullanır.',
-  'settings.server.github.disconnectTitle': 'GitHub girişinin bağlantısı kesilsin mi?',
+  'settings.server.github.saved':
+    'Kaydedildi. GitHub ile oturum açma bundan sonra bu uygulamayı kullanır.',
+  'settings.server.github.disconnectTitle': 'GitHub ile oturum açmanın bağlantısı kesilsin mi?',
   'settings.server.github.disconnectBody':
-    'İnsanlar artık GitHub ile giriş yapamaz. Açık oturumlar açık kalır.',
+    'İnsanlar artık GitHub ile oturum açamaz. Açık oturumlar açık kalır.',
   'settings.server.github.disconnected': 'GitHub’ın bağlantısı kesildi.',
   'settings.server.githubApp.title': 'Issue’lar için GitHub App',
   'settings.server.githubApp.description':
-    'Tek bir GitHub App, çalışma alanlarının bir konuşmadan issue açmasını ve takip etmesini sağlar. Giriş, yukarıdaki OAuth uygulamasıyla sürer.',
+    'Tek bir GitHub App, çalışma alanlarının bir konuşmadan issue açmasını ve takip etmesini sağlar. Oturum açma, yukarıdaki OAuth uygulamasıyla sürer.',
   'settings.server.githubApp.empty':
     'Bir App bağlanana kadar hiçbir çalışma alanında GitHub issue özelliği görünmez.',
   'settings.server.githubApp.which': '{slug} · App {id}',
@@ -3572,9 +3580,9 @@ export const tr = {
   'settings.server.githubApp.disconnected': 'GitHub App’in bağlantısı kesildi.',
   'settings.server.oidc.title': 'Tek oturum açma',
   'settings.server.oidc.description':
-    'İnsanlar kuruluşunun OpenID Connect sağlayıcısıyla giriş yapar — Okta, Entra ID, Google Workspace, Keycloak, Authentik gibi.',
+    'İnsanlar kuruluşunun OpenID Connect sağlayıcısıyla oturum açar — Okta, Entra ID, Google Workspace, Keycloak, Authentik gibi.',
   'settings.server.oidc.empty':
-    'Bir sağlayıcı bağlanana kadar kimse tek oturum açmayla giriş yapamaz.',
+    'Bir sağlayıcı bağlanana kadar kimse tek oturum açmayla oturum açamaz.',
   'settings.server.oidc.issuer': 'Yayıncı {issuer}',
   'settings.server.oidc.clientId': 'İstemci kimliği {id}',
   'settings.server.oidc.callback': 'Yönlendirme adresi',
@@ -3589,7 +3597,7 @@ export const tr = {
   'settings.server.oidc.clientSecretLabel': 'İstemci gizli anahtarı',
   'settings.server.oidc.nameLabel': 'Düğme adı',
   'settings.server.oidc.nameHint':
-    'İsteğe bağlı. Giriş düğmesinde görünür: bu adla devam et. Boşsa tek oturum açma yazar.',
+    'İsteğe bağlı. Oturum açma düğmesinde görünür: bu adla devam et. Boşsa tek oturum açma yazar.',
   'settings.server.oidc.hint':
     'Kaydetmeden önce sağlayıcıya istemci sorulur. Gizli anahtar şifreli saklanır ve bir daha gösterilmez.',
   'settings.server.oidc.verifiedNote':
@@ -3598,12 +3606,12 @@ export const tr = {
   'settings.server.oidc.saved': 'Kaydedildi. Tek oturum açma bundan sonra bu sağlayıcıyı kullanır.',
   'settings.server.oidc.disconnectTitle': 'Tek oturum açma bağlantısı kesilsin mi?',
   'settings.server.oidc.disconnectBody':
-    'İnsanlar artık sağlayıcıyla giriş yapamaz. Açık oturumlar açık kalır; sağlayıcının oluşturduğu hesaplar diğer giriş yollarıyla çalışmaya devam eder.',
+    'İnsanlar artık sağlayıcıyla oturum açamaz. Açık oturumlar açık kalır; sağlayıcının oluşturduğu hesaplar diğer oturum açma yollarıyla çalışmaya devam eder.',
   'settings.server.oidc.disconnected': 'Tek oturum açma bağlantısı kesildi.',
-  'settings.server.google.title': 'Google ile giriş',
+  'settings.server.google.title': 'Google ile oturum açma',
   'settings.server.google.description':
-    'İnsanlar Google hesaplarıyla, Google Cloud’da sahibi olduğunuz bir OAuth istemcisi üzerinden giriş yapar.',
-  'settings.server.google.empty': 'Bir istemci bağlanana kadar kimse Google ile giriş yapamaz.',
+    'İnsanlar Google hesaplarıyla, Google Cloud’da sahibi olduğunuz bir OAuth istemcisi üzerinden oturum açar.',
+  'settings.server.google.empty': 'Bir istemci bağlanana kadar kimse Google ile oturum açamaz.',
   'settings.server.google.clientId': 'İstemci kimliği {id}',
   'settings.server.google.callback': 'Yönlendirme adresi',
   'settings.server.google.callbackHint':
@@ -3618,18 +3626,18 @@ export const tr = {
     'Mevcut bir hesaba yalnızca Google adresin doğrulandığını söylediğinde, hesabın adresi de doğrulanmışsa ve adres bir Gmail adresiyse ya da kişinin girdiği Google Workspace alanına aitse bağlanılır.',
   'settings.server.google.save': 'Bağlantıyı dene ve kaydet',
   'settings.server.google.saved':
-    'Kaydedildi. Google ile giriş bundan sonra bu istemciyi kullanır.',
-  'settings.server.google.disconnectTitle': 'Google ile giriş bağlantısı kesilsin mi?',
+    'Kaydedildi. Google ile oturum açma bundan sonra bu istemciyi kullanır.',
+  'settings.server.google.disconnectTitle': 'Google ile oturum açma bağlantısı kesilsin mi?',
   'settings.server.google.disconnectBody':
-    'İnsanlar artık Google ile giriş yapamaz. Açık oturumlar açık kalır; Google’ın oluşturduğu hesaplar diğer giriş yollarıyla çalışmaya devam eder.',
-  'settings.server.google.disconnected': 'Google ile giriş bağlantısı kesildi.',
+    'İnsanlar artık Google ile oturum açamaz. Açık oturumlar açık kalır; Google’ın oluşturduğu hesaplar diğer oturum açma yollarıyla çalışmaya devam eder.',
+  'settings.server.google.disconnected': 'Google ile oturum açma bağlantısı kesildi.',
   'settings.server.email.title': 'E-posta',
   'settings.server.email.description':
-    'Giriş bağlantıları ve davetler bu e-posta sunucusundan gönderilir.',
+    'Oturum açma bağlantıları ve davetler bu e-posta sunucusundan gönderilir.',
   'settings.server.email.relay': 'E-posta sunucusu {host}',
   'settings.server.email.sender': 'Gönderen',
   'settings.server.email.empty':
-    'E-posta sunucusu olmadan giriş bağlantısı yok; davetler yalnızca bağlantı olarak paylaşılabilir.',
+    'E-posta sunucusu olmadan oturum açma bağlantısı yok; davetler yalnızca bağlantı olarak paylaşılabilir.',
   'settings.server.email.connect': 'E-posta sunucusu bağla',
   'settings.server.email.replace': 'Sunucuyu değiştir',
   'settings.server.email.testNote': '{email} adresine bir deneme iletisi göndereceğiz.',
@@ -3637,7 +3645,7 @@ export const tr = {
   'settings.server.email.saved': 'Deneme iletisi gönderildi ve e-posta sunucusu kaydedildi.',
   'settings.server.email.disconnectTitle': 'E-posta sunucusunun bağlantısı kesilsin mi?',
   'settings.server.email.disconnectBody':
-    'Giriş bağlantıları ve davet iletileri durur. Davet bağlantıları elle paylaşılabilir.',
+    'Oturum açma bağlantıları ve davet iletileri durur. Davet bağlantıları elle paylaşılabilir.',
   'settings.server.email.disconnected': 'E-posta sunucusunun bağlantısı kesildi.',
   'settings.server.policy.title': 'Kimler hesap açabilir',
   'settings.server.policy.description':
@@ -3652,23 +3660,23 @@ export const tr = {
   'settings.server.accounts.admin': 'Bu sunucunun yöneticisi',
   'settings.server.accounts.suspend': 'Askıya al',
   'settings.server.accounts.lift': 'Askıyı kaldır',
-  'settings.server.signIn.title': 'Giriş yöntemi',
+  'settings.server.signIn.title': 'Oturum açma yöntemi',
   'settings.server.signIn.description':
-    'Parolayla giriş yapan hesaplar için kurallar. GitHub, Google, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',
+    'Parolayla oturum açan hesaplar için kurallar. GitHub, Google, tek oturum açma ve e-postayla gelen bağlantılar kendi güvenliklerini korur.',
   'settings.server.signIn.twoFactor': 'İki adımlı doğrulama',
   'settings.server.signIn.twoFactor.off': 'İsteğe bağlı',
   'settings.server.signIn.twoFactor.off.body': 'Parolası olan herkes kendisi karar verir.',
   'settings.server.signIn.twoFactor.on': 'Zorunlu',
   'settings.server.signIn.twoFactor.on.body':
     'Parolası olan herkes, siz de dahil, başka bir şey yapmadan önce bunu açmalı.',
-  'settings.server.signIn.passwords': 'Parolayla giriş',
+  'settings.server.signIn.passwords': 'Parolayla oturum açma',
   'settings.server.signIn.passwords.on': 'Açık',
-  'settings.server.signIn.passwords.on.body': 'E-posta adresi ve parolayla giriş yapılır.',
+  'settings.server.signIn.passwords.on.body': 'E-posta adresi ve parolayla oturum açılır.',
   'settings.server.signIn.passwords.off': 'Kapalı',
   'settings.server.signIn.passwords.off.body':
     'Yalnızca GitHub, Google ya da tek oturum açma. Bunlar çalışmazsa sunucu yöneticisi admin:reset-password ile parolaları yeniden açar.',
   'settings.server.signIn.passwords.needsProvider':
-    'Önce GitHub’ı, Google’ı ya da tek oturum açmayı bağlayın: parolayla giriş ancak bunlardan biri çalışırken kapatılabilir.',
+    'Önce GitHub’ı, Google’ı ya da tek oturum açmayı bağlayın: parolayla oturum açma ancak bunlardan biri çalışırken kapatılabilir.',
   'settings.server.signIn.saved': 'Kaydedildi. Bir sonraki istekten itibaren geçerli.',
   'settings.server.lifetime.title': 'Bir oturum ne kadar sürer',
   'settings.server.lifetime.description':
@@ -3677,7 +3685,7 @@ export const tr = {
   'settings.server.lifetime.idle.hint':
     'Açık bir pencerede Purlay’i kullanmak sayılır; açık bırakılmış bir pencere sayılmaz.',
   'settings.server.lifetime.idle.off': 'Hiçbir zaman',
-  'settings.server.lifetime.maxAge': 'Şu kadar sonra yeniden giriş istensin',
+  'settings.server.lifetime.maxAge': 'Şu kadar sonra yeniden oturum açılması istensin',
   'settings.server.lifetime.maxAge.hint':
     'Ne kadar kullanılırsa kullanılsın. Oturum, sunucunun kendi süresi (SESSION_TTL_DAYS) dolunca da kapanır; hangisi önce gelirse.',
   'settings.server.lifetime.maxAge.off': 'Yalnızca sunucunun kendi süresi',
@@ -3685,15 +3693,15 @@ export const tr = {
   'settings.server.lifetime.days': { other: '{count} gün' },
   'settings.server.lifetime.weeks': { other: '{count} hafta' },
   'settings.server.passwordsOffLast':
-    'Parolayla giriş kapalı ve bu, GitHub, Google ve tek oturum açmanın sonuncusu: kimse giriş yapamaz. Önce parolaları açın.',
+    'Parolayla oturum açma kapalı ve bu, GitHub, Google ve tek oturum açmanın sonuncusu: kimse oturum açamaz. Önce parolaları açın.',
   'settings.server.creators.title': 'Kimler çalışma alanı açabilir',
   'settings.server.creators.description':
-    'Giriş açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',
+    'Oturum açma açık kalır: davet edilen biri bir çalışma alanına her zaman katılabilir.',
   'settings.server.creators.label': 'Çalışma alanı açanlar',
   'settings.server.creators.first': 'Yalnızca ilk kişi',
   'settings.server.creators.first.body':
-    'Sunucuda çalışma alanı yokken giriş yapan ilk kişi bir tane açabilir. Sonrasında başkası açamaz.',
-  'settings.server.creators.anyone': 'Giriş yapan herkes',
+    'Sunucuda çalışma alanı yokken oturum açan ilk kişi bir tane açabilir. Sonrasında başkası açamaz.',
+  'settings.server.creators.anyone': 'Oturum açan herkes',
   'settings.server.creators.anyone.body': 'Bu sunucudaki her hesap çalışma alanı açabilir.',
   'settings.server.creators.listed': 'Yalnızca bu GitHub hesapları',
   'settings.server.creators.listed.body': 'GitHub kullanıcı adı listede olanlar açabilir.',
@@ -3731,12 +3739,12 @@ export const tr = {
   'admin.data': 'Depolama ve veri',
   'admin.integrations': 'Entegrasyonlar',
   'admin.operations': 'İşletim ve bakım',
-  'admin.audit.action.server.github_connected': 'GitHub ile giriş bağlandı',
-  'admin.audit.action.server.github_disconnected': 'GitHub ile giriş bağlantısı kesildi',
-  'admin.audit.action.server.oidc_connected': 'Kurumsal giriş bağlandı',
-  'admin.audit.action.server.oidc_disconnected': 'Kurumsal giriş bağlantısı kesildi',
-  'admin.audit.action.server.google_connected': 'Google ile giriş bağlandı',
-  'admin.audit.action.server.google_disconnected': 'Google ile giriş bağlantısı kesildi',
+  'admin.audit.action.server.github_connected': 'GitHub ile oturum açma bağlandı',
+  'admin.audit.action.server.github_disconnected': 'GitHub ile oturum açma bağlantısı kesildi',
+  'admin.audit.action.server.oidc_connected': 'Kurumsal oturum açma bağlandı',
+  'admin.audit.action.server.oidc_disconnected': 'Kurumsal oturum açma bağlantısı kesildi',
+  'admin.audit.action.server.google_connected': 'Google ile oturum açma bağlandı',
+  'admin.audit.action.server.google_disconnected': 'Google ile oturum açma bağlantısı kesildi',
   'admin.audit.action.server.github_app_connected': 'GitHub App bağlandı',
   'admin.audit.action.server.github_app_disconnected': 'GitHub App bağlantısı kesildi',
   'admin.audit.action.server.smtp_connected': 'E-posta sunucusu bağlandı',
@@ -3744,7 +3752,8 @@ export const tr = {
   'admin.audit.action.server.sign_up_changed': 'Hesap kayıt politikası değiştirildi',
   'admin.audit.action.server.two_factor_requirement_changed':
     'İki adımlı doğrulama zorunluluğu değiştirildi',
-  'admin.audit.action.server.password_sign_in_changed': 'Parolayla giriş politikası değiştirildi',
+  'admin.audit.action.server.password_sign_in_changed':
+    'Parolayla oturum açma politikası değiştirildi',
   'admin.audit.action.server.session_idle_timeout_changed':
     'Oturum hareketsizlik sınırı değiştirildi',
   'admin.audit.action.server.session_max_age_changed': 'En uzun oturum süresi değiştirildi',
@@ -3791,9 +3800,9 @@ export const tr = {
   'admin.workspaces.body':
     'Sahipleri, depolama kullanımını ve alan durumunu inceleyin. Kota değişikliği mevcut içeriği korur.',
   'admin.security.body':
-    'Giriş sağlayıcılarını, katılım kurallarını ve oturum politikalarını ayarlayın.',
+    'Oturum açma sağlayıcılarını, katılım kurallarını ve oturum politikalarını ayarlayın.',
   'admin.email.body':
-    'Tarayıcı bildirimlerini ve davet, doğrulama ve giriş iletileri için posta sunucusunu yönetin.',
+    'Tarayıcı bildirimlerini ve davet, doğrulama ve oturum açma iletileri için posta sunucusunu yönetin.',
   'admin.data.body':
     'Kullanıma henüz gönderilmemiş dosyalar dahildir. Saklama süresini çalışma alanı sahipleri belirler.',
   'admin.integrations.body':
@@ -3875,9 +3884,9 @@ export const tr = {
   'admin.confirmGrant': '{name}, sunucudaki hesapları, ayarları ve kotaları yönetebilecek.',
   'admin.confirmRevoke':
     '{name}, sunucu yönetimine erişimini kaybedecek. Çalışma alanı rolleri korunur.',
-  'admin.confirmSessions': '{name} için tüm açık oturumlar kapatılacak. Yeniden giriş yapabilir.',
+  'admin.confirmSessions': '{name} için tüm açık oturumlar kapatılacak. Yeniden oturum açabilir.',
   'admin.confirmSuspend':
-    '{name} için tüm oturumlar kapanacak ve askı kaldırılana kadar giriş yapamayacak.',
+    '{name} için tüm oturumlar kapanacak ve askı kaldırılana kadar oturum açamayacak.',
   'admin.saved': 'Değişiklik kaydedildi',
   'admin.verified': 'E-posta doğrulanmış',
   'admin.unverified': 'E-posta doğrulanmamış',
@@ -3977,11 +3986,11 @@ export const tr = {
   'admission.denied.body': 'Erişiminizin incelenmesi için sunucu yöneticisiyle iletişim kurun.',
   'admission.verify-email.title': 'E-posta adresinizi doğrulayın',
   'admission.verify-email.body':
-    'Bu sunucu, giriş sağlayıcınızın e-posta adresinizi doğrulamasını gerektiriyor. Sağlayıcınızda adresinizi doğrulayıp çıkış yaparak yeniden girin. Doğrulama seçeneği yoksa sunucu yöneticisine başvurun.',
+    'Bu sunucu, oturum açma sağlayıcınızın e-posta adresinizi doğrulamasını gerektiriyor. Sağlayıcınızda adresinizi doğrulayın, oturumu kapatın ve yeniden oturum açın. Doğrulama seçeneği yoksa sunucu yöneticisine başvurun.',
   'admission.signOutFailed': 'Oturum kapatılamadı. Yeniden deneyin.',
   'admin.identity': 'Sunucu kimliği',
   'admin.identity.body':
-    'Giriş ve hesap kabul ekranlarında gösterilir. Kurulum adresini operatör yönetir.',
+    'Oturum açma ve hesap kabul ekranlarında gösterilir. Kurulum adresini operatör yönetir.',
   'admin.identity.name': 'Sunucu görünen adı',
   'admin.identity.support': 'Destek adresi',
   'admin.identity.supportHint': 'HTTPS bağlantısı veya mailto adresi; gizlemek için boş bırakın.',
@@ -3990,7 +3999,7 @@ export const tr = {
   'admin.identity.legalHint': 'HTTPS bağlantısı. Gizlemek için boş bırakın.',
   'admin.admissionPolicy': 'Yeni hesap kabulü',
   'admin.admissionPolicy.body':
-    'Davetle ve giriş sağlayıcılarıyla açılanlar dahil yeni hesaplara uygulanır. Mevcut hesapların erişimi korunur. Onayı kapatmak bekleyen hesapları kendiliğinden onaylamaz.',
+    'Davetle ve oturum açma sağlayıcılarıyla açılanlar dahil yeni hesaplara uygulanır. Mevcut hesapların erişimi korunur. Onayı kapatmak bekleyen hesapları kendiliğinden onaylamaz.',
   'admin.domains': 'İzin verilen e-posta alanları',
   'admin.domainsHint':
     'Virgülle ayrılmış tam alan adları. Joker veya alt alan mirası kullanılmaz. Boş bırakılırsa tüm alanlara izin verilir; kısıtlama varsa adresin doğrulanması gerekir.',

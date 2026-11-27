@@ -265,8 +265,8 @@ subprocessor list (D-28) · retention as a plan attribute (D-27)
 progressive web application** — one client, not a second codebase (D-51), installable since D-230 · multi-node scale-out via a Redis-backed event
 bus (D-7, D-25) · **OIDC single sign-on, built** (D-31, D-200)
 
-> **Native Swift exists for macOS and iOS** (D-186, D-338, which supersede D-51 here). Each has its own repository and
-> its own track and does not wait for this phase; they share one Swift package. The installable web application stays
+> **Native Swift exists for macOS and iOS** (D-186, D-338, which supersede D-51 here). Both live in one repository,
+> `purlay-apple` (D-360), on a track of their own that does not wait for this phase. The installable web application stays
 > for everything else, and Windows and Linux use the web client.
 
 ---

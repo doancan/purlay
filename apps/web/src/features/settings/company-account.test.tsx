@@ -146,7 +146,7 @@ test('a company session shows its scope and an independent route, without queryi
       ((await view.findByRole('button', { name: 'Link identity' })) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(reads).toEqual([]);
-    expect(view.queryByRole('button', { name: 'Erase my account…' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Delete my account…' })).toBeNull();
     await person().click(view.getByRole('button', { name: 'Sign in to your account' }));
     expect(navigation.mock.calls).toEqual([['/sign-in?independent=1']]);
     await expectNoAxeViolations(view.getByRole('main'));

@@ -24,6 +24,7 @@ a growth-stage SaaS. (`DECISIONS.md` D-1, D-24, D-43)
 | 5 | **`UX.md`** | How it behaves: layout, thread interaction, keyboard, states | Interaction |
 | 6 | **`API.md`** | The HTTP endpoint contract, per phase | Interface |
 | 7 | **`CONFIG.md`** | Every environment variable, validated at boot | Deployment |
+| — | **[`GLOSSARY.md`](GLOSSARY.md)** | The words the product uses for its own things, in English and Turkish, for every client (D-359) | Interface wording |
 | — | **`DATA.md`** | What personal data an instance holds, why and for how long; the retention and erasure runbooks | An operator's own records (D-28) |
 | 8 | **GitHub Issues & board** | The ordered task list, one issue per task, milestone per version | Execution |
 | — | **`../README.md`** | The public front door for self-hosters | Positioning |
@@ -44,6 +45,7 @@ second file is a number that will eventually disagree with itself.
 | Security posture: origin checks, CSP, attachment serving, the image proxy | `DECISIONS.md` D-39 |
 | Collation and identifier text handling | `DECISIONS.md` D-40 |
 | Interface languages and the i18n mechanism | `DECISIONS.md` D-41 |
+| The product's own words in English and Turkish, and the Turkish address form | `GLOSSARY.md` (D-359, D-350) |
 | Retention, erasure and export semantics | `DECISIONS.md` D-27 |
 | Who owns identity — users, sessions, accounts, verifications and sign-in limits — and what stays the `workspaces` module's; how a server is set up in the browser; sign-up and account-linking policy; what stays in `.env` | `DECISIONS.md` D-179 (the interface is `API.md` §2, the screens `UX.md` §11, the variables `CONFIG.md`) |
 | Which tables hold personal data, why and for how long, for an operator | `DATA.md` §2, bound to the generated tables by `scripts/data-map.test.ts` |
@@ -149,9 +151,11 @@ alone; unset, nothing connects anywhere. (`DECISIONS.md` D-7, D-201)
 Owned by `ARCHITECTURE.md` §4, with the dependency direction lint enforces. Not drawn twice: a
 tree copied into a second file is a tree that will describe a directory somebody moved.
 
-The macOS client is a native Swift application in its own repository, `purlay-macos`, and is not in this
-tree; it consumes the contract this repository exports. Mobile is the same web client installed from the
-browser, not a second codebase. (`DECISIONS.md` D-51, D-186)
+The Apple clients — the native iPhone and iPad app and the native macOS app, with watchOS to follow — are Swift
+applications in one repository, [`purlay/purlay-apple`](https://github.com/purlay/purlay-apple), and are not in this
+tree; they consume the contract this repository exports. On a phone the product is that native app; the web client
+is what browsers, Windows and Linux use, and it can still be installed from the browser. (`DECISIONS.md` D-186,
+D-338, D-360)
 
 ## Current status
 

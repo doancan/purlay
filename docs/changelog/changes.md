@@ -27,6 +27,8 @@ have it.
 
 ## Unreleased
 
-_Nothing yet._
+### Changed
+
+- **Sign-in** — Turkish says *oturum aç* and *oturumu kapat* wherever it signs in and out, as the Apple apps do, and English says *Delete my account* in place of *Erase my account*; one glossary lists every product term (D-359)
 
 ---
