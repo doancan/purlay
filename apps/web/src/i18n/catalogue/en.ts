@@ -3830,7 +3830,7 @@ export const en = {
   'admin.audit.action.server.fact_discarded': 'Fact between modules discarded',
   'admin.audit.action.server.smtp_tested': 'Email connection tested',
   'admin.audit.action.server.admission_policy_changed': 'Account admission policy changed',
-  'admin.audit.action.server.identity_changed': 'Server name or support details changed',
+  'admin.audit.action.server.identity_changed': 'Server identity changed',
   'admin.audit.action.server.account_approved': 'Account approved',
   'admin.audit.action.server.account_denied': 'Account approval denied',
   'admin.audit.action.server.audit_export_requested': 'Audit log export requested',
@@ -4043,6 +4043,9 @@ export const en = {
   'admin.identity.name': 'Server display name',
   'admin.identity.support': 'Support address',
   'admin.identity.supportHint': 'An HTTPS link or mailto address; leave blank to hide it.',
+  'admin.identity.privacy': 'Privacy policy address',
+  'admin.identity.terms': 'Terms of service address',
+  'admin.identity.legalHint': 'An HTTPS link. Leave blank to hide it.',
   'admin.admissionPolicy': 'New account admission',
   'admin.admissionPolicy.body':
     'Applies to new accounts, including invited accounts and sign-in providers. Existing accounts stay admitted. Turning approval off does not approve the waiting list.',

@@ -23,6 +23,7 @@ import {
 } from './models';
 import { ClientFrame, MessageSendFrame, ServerFrame } from './events';
 import { messageId } from './message-id';
+import { InstanceInfo, ServerPreferencesRequest } from './server-administration';
 import {
   CreateDirectMessageRequest,
   MeResponse,
@@ -55,6 +56,25 @@ import { Type } from '@sinclair/typebox';
 const id = '0199155c-6200-7b7f-8c11-2a4d3f9e1b70';
 const when = '2026-09-09T08:00:00.000Z';
 const user = { id, username: 'alice', displayName: 'Alice', avatarUrl: null };
+
+test('public instance identity accepts older servers and optional legal addresses', () => {
+  const older = {
+    displayName: 'Purlay',
+    supportUrl: null,
+    allowedEmailDomains: [],
+    requireAccountApproval: false,
+  };
+  expect(Value.Check(InstanceInfo, older)).toBe(true);
+  expect(
+    Value.Check(InstanceInfo, { ...older, privacyUrl: 'https://purlay.example/privacy' }),
+  ).toBe(true);
+  expect(Value.Check(InstanceInfo, { ...older, privacyUrl: null, termsUrl: null })).toBe(true);
+  expect(Value.Check(InstanceInfo, { ...older, termsUrl: 42 })).toBe(false);
+  expect(Value.Check(ServerPreferencesRequest, { termsUrl: null })).toBe(true);
+  expect(Value.Check(ServerPreferencesRequest, { privacyUrl: 'x'.repeat(2049) })).toBe(false);
+  expect(Value.Check(ServerPreferencesRequest, { privacyURL: null })).toBe(false);
+  expect(Value.Check(ServerPreferencesRequest, {})).toBe(false);
+});
 
 describe('models', () => {
   test('a user validates', () => {

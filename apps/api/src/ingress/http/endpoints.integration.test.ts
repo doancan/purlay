@@ -137,6 +137,7 @@ const asRecord = (value: unknown): Record<string, unknown> => value as Record<st
 const STEPS: readonly Step[] = [
   // ── Before anybody is signed in
   { id: 'getClientInfo', as: 'nobody', spec: () => ({}), status: 200 },
+  { id: 'getInstanceInfo', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getAuthMethods', as: 'nobody', spec: () => ({}), status: 200 },
   { id: 'getMe', spec: () => ({}), status: 200 },
   { id: 'setAway', spec: () => ({ json: { away: true } }), status: 200 },

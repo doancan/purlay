@@ -69,6 +69,34 @@ describe('server identity and admission forms', () => {
     });
     security.unmount();
   });
+  test('saves and clears the server legal addresses in the identity card', async () => {
+    const privacyUrl = 'https://operator.example.test/privacy';
+    const termsUrl = 'https://operator.example.test/terms';
+    const view = await renderAdministration('overview', (call) =>
+      call.path === '/api/server/preferences' && call.method === 'GET'
+        ? adminJson({ ...ADMIN_PREFERENCES, privacyUrl, termsUrl: null })
+        : undefined,
+    );
+    const card = within(await view.findByRole('region', { name: 'Server identity' }));
+    const privacy = card.getByRole('textbox', { name: 'Privacy policy address' });
+    const terms = card.getByRole('textbox', { name: 'Terms of service address' });
+    expect((privacy as HTMLInputElement).value).toBe(privacyUrl);
+    expect((terms as HTMLInputElement).value).toBe('');
+    await person().clear(privacy);
+    await person().keyboard('{Backspace}');
+    await person().type(terms, ` ${termsUrl} `);
+    await person().click(card.getByRole('button', { name: 'Save settings' }));
+    expect(await card.findByText('Change saved')).toBeDefined();
+    expect(view.calls.find((call) => call.method === 'POST')?.body).toEqual({
+      displayName: 'Purlay',
+      supportUrl: null,
+      privacyUrl: null,
+      termsUrl,
+    });
+    expect((privacy as HTMLInputElement).value).toBe('');
+    expect((terms as HTMLInputElement).value).toBe(termsUrl);
+    view.unmount();
+  });
   test('clearing support removes it without altering joining rules', async () => {
     const view = await renderAdministration('overview', (call) =>
       call.path === '/api/server/preferences' && call.method === 'GET'

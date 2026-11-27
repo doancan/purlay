@@ -3843,6 +3843,8 @@ CREATE TABLE server_settings (
     require_account_approval boolean NOT NULL DEFAULT false,
     display_name text CHECK (char_length(display_name) BETWEEN 1 AND 100),
     support_url text CHECK (char_length(support_url) BETWEEN 1 AND 2048),
+    privacy_url text CHECK (char_length(privacy_url) BETWEEN 1 AND 2048),
+    terms_url text CHECK (char_length(terms_url) BETWEEN 1 AND 2048),
     id                        BOOLEAN PRIMARY KEY DEFAULT TRUE,
     sign_up                   TEXT NOT NULL DEFAULT 'invite-only',
     github_client_id          TEXT,
@@ -3926,7 +3928,7 @@ CREATE TABLE server_settings (
 );
 ```
 
-The additive admission and identity columns (D-278) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
+The additive admission and identity columns (D-278) are `allowed_email_domains text[] NOT NULL DEFAULT '{}'`, `require_account_approval boolean NOT NULL DEFAULT false`, `display_name text` (1–100 characters when set) and `support_url text` (1–2048 when set). The public name defaults to Purlay. The additive `privacy_url` and `terms_url` (D-343) are nullable `text` with no default and a 1–2048 character bound when set. The administrator can set an HTTPS address without embedded credentials or clear either field. New account creation reads policy directly; provider runtime swaps preserve these columns. Users carry `admission_state` (`approved`, `pending`, `denied`, default approved for existing accounts) and `admission_requires_verified_email` (default false). Common HTTP/realtime guards enforce these fields. A partial admin patch, state decision and its audit records commit together.
 
 ### 9.5a. `server_operational_status`
 
@@ -4599,6 +4601,7 @@ file that leaves its transaction runs statement by statement and must be safe to
 0131_backfill_push_delivery_subscriptions.sql  backfill the Web references in batches, build provider indexes concurrently, and validate the identity check (D-342)
 0132_push_delivery_provider_foreign_keys.sql  install and validate the provider foreign keys, then drop the original Web-only key (D-342)
 0133_workspace_urgent_messages.sql  workspaces.urgent_messages_enabled: whether the workspace allows new Urgent sends (D-337)
+0134_server_legal_addresses.sql  Nullable server_settings privacy and terms addresses (D-343)
 chat/0001_message_attachments.sql  chat's set: message_attachments, the link of a file to its message  (D-250)
 chat/0002_scheduled_messages.sql  scheduled_messages, scheduled_message_attachments: durable personal scheduled messages and the files they reserve
 chat/0003_message_reminders.sql   message_reminders; notification_type gains reminder

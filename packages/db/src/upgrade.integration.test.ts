@@ -359,6 +359,7 @@ describe('integration: upgrading from the previous release', () => {
         '0131_backfill_push_delivery_subscriptions',
         '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
+        '0134_server_legal_addresses',
         'chat/0001_message_attachments',
         'chat/0002_scheduled_messages',
         'chat/0003_message_reminders',
@@ -870,6 +871,7 @@ describe('integration: APNs joins the durable push queue', () => {
       expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
         '0132_push_delivery_provider_foreign_keys',
         '0133_workspace_urgent_messages',
+        '0134_server_legal_addresses',
       ]);
       expect(await heap()).toBe(originalHeap);
       const deliveries = async (): Promise<
@@ -1018,6 +1020,45 @@ describe('integration: moving development read scopes into chat’s own table', 
         );
         expect((await sql`select * from channel_read_scopes`.execute(db)).rows).toEqual([]);
         expect((await sql`select * from thread_reads`.execute(db)).rows).toEqual([]);
+      } finally {
+        await db.destroy();
+      }
+    },
+    CLONE_HOOK_MS,
+  );
+});
+
+describe('integration — server legal addresses on upgrade', () => {
+  test(
+    'adds two unset addresses while preserving existing server identity and admission',
+    async () => {
+      const db = open(await emptyDatabase());
+      try {
+        const oldCore = copiedBelow(MIGRATIONS_DIRECTORY, '0134_server_legal_addresses.sql');
+        expect((await migrateToLatest(db, oldCore)).error).toBeUndefined();
+        await sql`insert into server_settings
+        (id, display_name, support_url, allowed_email_domains, require_account_approval)
+        values (true, 'Older server', 'mailto:support@example.test', ARRAY['example.test'], true)`.execute(
+          db,
+        );
+        const preferences = async (): Promise<Record<string, unknown> | undefined> =>
+          (
+            await sql<{ row: Record<string, unknown> }>`
+          select to_jsonb(settings) as row from server_settings as settings where id`.execute(db)
+          ).rows[0]?.row;
+        const older = await preferences();
+        expect(older).toMatchObject({
+          display_name: 'Older server',
+          require_account_approval: true,
+        });
+        expect(older).not.toHaveProperty('privacy_url');
+        expect(older).not.toHaveProperty('terms_url');
+        const upgraded = await migrateToLatest(db);
+        expect(upgraded.error).toBeUndefined();
+        expect(upgraded.results?.map(({ migrationName }) => migrationName)).toEqual([
+          '0134_server_legal_addresses',
+        ]);
+        expect(await preferences()).toEqual({ ...older, privacy_url: null, terms_url: null });
       } finally {
         await db.destroy();
       }
