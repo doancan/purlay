@@ -20,6 +20,7 @@ import {
   ListSkeleton,
   listButtonClasses,
   listRowClasses,
+  ListHeader,
 } from '../../../ui/list-column';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useMessageText } from '../../content/github-event';
@@ -173,7 +174,7 @@ export const FollowedScreen = (): React.JSX.Element => {
   return (
     <>
       {/* The list screens' one header: a band of the header's height, whatever the title's language. */}
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader>
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
@@ -183,7 +184,7 @@ export const FollowedScreen = (): React.JSX.Element => {
             {t('followed.title')}
           </h1>
         </div>
-      </header>
+      </ListHeader>
       <ListColumn>
         <ListFilter
           label={t('followed.filters')}

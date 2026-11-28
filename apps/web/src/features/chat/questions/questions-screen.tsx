@@ -46,6 +46,7 @@ import {
   ListSkeleton,
   listButtonClasses,
   listRowClasses,
+  ListHeader,
 } from '../../../ui/list-column';
 import { SlideTrack } from '../../../ui/slide-track';
 import { useWorkspace } from '../../shell/workspace';
@@ -110,7 +111,7 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
   );
 
   return (
-    <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+    <ListHeader>
       <div data-header-title="" className="flex min-w-0 flex-1 basis-0 items-center gap-2">
         <NavToggle />
         <HeaderTile>
@@ -163,7 +164,7 @@ const Header = ({ narrowed }: { readonly narrowed: string | null }): React.JSX.E
       </SlideTrack>
       {/* The room the channel's controls take there, so the views sit where they sit in a channel. */}
       <div aria-hidden="true" className="flex-1 basis-0 max-narrow:hidden" />
-    </header>
+    </ListHeader>
   );
 };
 

@@ -10,7 +10,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { useRoute } from '../../../router/router-provider';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
-import { ListColumn, ListFilter, listRowClasses } from '../../../ui/list-column';
+import { ListColumn, ListFilter, listRowClasses, ListHeader } from '../../../ui/list-column';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { TextField } from '../../../ui/text-field';
@@ -144,13 +144,13 @@ const SharedView = ({
     );
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-2 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader gap="sm">
         <NavToggle />
         <HeaderTile>
           <Icon name="file" size="lg" />
         </HeaderTile>
         <h1 className="text-heading text-ink">{t('shared.title')}</h1>
-      </header>
+      </ListHeader>
       <ListColumn>
         <ListFilter
           label={t('shared.show')}
