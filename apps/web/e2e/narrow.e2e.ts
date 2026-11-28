@@ -293,7 +293,7 @@ test.describe('at a phone width', () => {
     // The focused state is React's to draw: measured after two frames, not in the same one.
     await frames();
     expect(await feed.evaluate((element) => element.clientHeight)).toBe(before);
-    await expect(page.locator('kbd').filter({ hasText: 'Shift+Enter' })).toBeHidden();
+    // The keys are not printed anywhere (D-362); the field's description still names them.
     await expect(box).toHaveAccessibleDescription(/Enter sends/);
   });
 

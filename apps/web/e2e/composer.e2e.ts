@@ -1061,7 +1061,7 @@ test.describe('writing tools', () => {
     await box.fill('`**literal**`');
     await select(6);
     await expect(bold).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Inline code', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );

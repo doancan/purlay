@@ -26,8 +26,10 @@ test.describe('the keyboard', () => {
   }) => {
     test.skip(onEngine(test.info(), 'webkit'), WEBKIT_TAB);
     await page.goto('/sign-in');
+    // The address and password lead, so the single sign-on link is behind the form: the skip link, the two
+    // fields, Sign in and the link by email are the presses before it.
     const presses = await tabTo(page, page.getByRole('link', { name: 'Continue with GitHub' }));
-    expect(presses).toBeLessThanOrEqual(3);
+    expect(presses).toBeLessThanOrEqual(6);
   });
 
   test('a navigation moves focus to the new page, not to where the old link was', async ({

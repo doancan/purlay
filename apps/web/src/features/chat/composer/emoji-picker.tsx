@@ -8,15 +8,15 @@
  */
 import { useI18n } from '../../../i18n/i18n-provider';
 import { lazy, Suspense } from 'react';
+import { prefetch } from '../../../lib/prefetch';
 import { IconButton } from '../../../ui/icon-button';
 import { Menu } from '../../../ui/menu';
 import type * as EmojiChoiceModule from './emoji-choices';
 
 const choices = (): Promise<typeof EmojiChoiceModule> => import('./emoji-choices');
 const EmojiChoices = lazy(() => choices().then((module) => ({ default: module.EmojiChoices })));
-/** Reads the list ahead of the click; a failed read is the click's to say, so it is not an unhandled rejection here. */
 const warm = (): void => {
-  choices().catch(() => undefined);
+  prefetch(choices);
 };
 
 export const EmojiPicker = ({

@@ -26,9 +26,11 @@ test.describe('who is online', () => {
     const made = await room();
     await signIn();
     await page.goto(made.path);
-    // The person themselves, once connected.
+    // The person themselves, once connected: on their account menu's button, not as a row among the others (D-361).
     const section = await people(page);
-    await expect(section.locator('li', { hasText: 'you' }).locator('[data-online]')).toHaveCount(1);
+    await expect(
+      (await openNav(page)).getByRole('button', { name: /^Account:/ }).locator('[data-online]'),
+    ).toHaveCount(1);
 
     const alice = await asPerson('alice');
     await alice.goto(made.path);

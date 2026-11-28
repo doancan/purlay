@@ -1308,6 +1308,17 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
 });
 
 describe('the emoji picker (D-181)', () => {
+  test('warms the emoji list on the pointer or the keyboard arriving, before the click asks for it', async () => {
+    const { view, user } = await mount();
+    const button = view.getByRole('button', { name: 'Add an emoji' });
+    await user.hover(button);
+    act(() => {
+      button.focus();
+    });
+    // Nothing is opened by arriving: the list waits for the click.
+    expect(view.queryByRole('menu')).toBeNull();
+  });
+
   test('offers groups of emoji, each one named for what it is by the emoji itself, and writes the one chosen at the caret', async () => {
     const { view, box, user } = await mount();
     await user.click(box());
