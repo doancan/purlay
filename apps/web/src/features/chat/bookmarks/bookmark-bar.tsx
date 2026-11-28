@@ -191,7 +191,7 @@ const Chip = ({
           type="button"
           aria-label={t('bookmarks.removeOf', { name: bookmark.title })}
           onClick={onRemove}
-          className="absolute inset-y-0 left-3 my-auto hidden size-icon-md items-center justify-center rounded-pill text-ink-muted hover:text-ink focus-visible:flex group-hover/chip:flex group-focus-within/chip:flex"
+          className="absolute inset-y-0 left-3 my-auto hidden size-icon-md items-center justify-center rounded-pill text-ink-muted hover:text-ink focus-visible:flex group-hover/chip:flex group-focus-within/chip:flex touch-only:flex"
         >
           <Icon name="close" size="sm" />
         </button>

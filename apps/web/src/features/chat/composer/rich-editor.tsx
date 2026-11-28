@@ -34,7 +34,7 @@ import {
 } from './rich-document';
 import type { ComposerInput, ComposerKeyEvent, ComposerPasteEvent } from './composer-input';
 import { editorValue } from './rich-document';
-import type { MarkdownKind, Selection } from './composer-text';
+import { composerBounds, type MarkdownKind, type Selection } from './composer-text';
 import { emoticonEndingAt } from './emoticons';
 import { formattingRanges } from '@purlay/markdown';
 import { activeFormatting } from './active-formatting';
@@ -672,8 +672,9 @@ export const RichEditor = (props: Props): React.JSX.Element => {
     const fit = (): void => {
       const line = parseFloat(getComputedStyle(element).lineHeight) || 24;
       const viewport = window.visualViewport?.height ?? window.innerHeight;
-      element.style.minHeight = `${String(line * 2)}px`;
-      element.style.maxHeight = `${String(Math.max(line * 2, Math.min(line * 12, viewport * 0.4)))}px`;
+      const { minimum, maximum } = composerBounds(line, viewport);
+      element.style.minHeight = `${String(minimum)}px`;
+      element.style.maxHeight = `${String(maximum)}px`;
     };
     fit();
     window.addEventListener('resize', fit);

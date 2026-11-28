@@ -95,8 +95,24 @@ export const placeBlock = (
   };
 };
 
+const MIN_LINES = 2;
+const MAX_LINES = 12;
+const VIEWPORT_SHARE = 0.4;
+
+/** The height range of a composer's field, in pixels, for a line height and the viewport it sits in. */
+export const composerBounds = (
+  line: number,
+  viewport: number,
+): { readonly minimum: number; readonly maximum: number } => {
+  const minimum = line * MIN_LINES;
+  return {
+    minimum,
+    maximum: Math.max(minimum, Math.min(line * MAX_LINES, viewport * VIEWPORT_SHARE)),
+  };
+};
+
 /** Rows to show: as many as the lines, within the bounds that keep the composer a line and not a page. */
-export const rowsFor = (text: string, min = 2, max = 12): number =>
+export const rowsFor = (text: string, min = MIN_LINES, max = MAX_LINES): number =>
   Math.min(max, Math.max(min, text.split('\n').length));
 
 /** What the caret covers: a point when `start` and `end` are equal. */

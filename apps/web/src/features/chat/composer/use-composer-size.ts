@@ -1,9 +1,6 @@
 /** Fit wrapped lines as well as explicit newlines, without letting a draft consume the feed. */
 import { useCallback, useLayoutEffect, type RefObject } from 'react';
-
-const MIN_LINES = 2;
-const MAX_LINES = 12;
-const VIEWPORT_SHARE = 0.4;
+import { composerBounds } from './composer-text';
 
 export const useComposerSize = (
   field: RefObject<HTMLTextAreaElement | null>,
@@ -17,8 +14,7 @@ export const useComposerSize = (
     const line = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
     if (!Number.isFinite(line)) return;
     const viewport = window.visualViewport?.height ?? window.innerHeight;
-    const minimum = line * MIN_LINES;
-    const maximum = Math.max(minimum, Math.min(line * MAX_LINES, viewport * VIEWPORT_SHARE));
+    const { minimum, maximum } = composerBounds(line, viewport);
     if (box.hidden) return;
     const previousScroll = box.scrollTop;
     const atBottom = previousScroll + box.clientHeight >= box.scrollHeight - 1;
