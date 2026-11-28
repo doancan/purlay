@@ -45,6 +45,7 @@ import { TwoFactorCard } from './two-factor-card';
 import { useSession } from '../../session/session';
 import { CompanyIdentitiesCard } from './company-identities';
 import { CompanySessionNotice } from './company-parts';
+import { ConfirmDialog } from '../../../ui/confirm-dialog';
 
 const SignInCard = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -333,37 +334,17 @@ const IndependentAccountPage = (): React.JSX.Element => {
           leave('here');
         }}
       />
-      <Dialog
+      <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
         title={t('user.signOutEverywhere.title')}
         description={t('user.signOutEverywhere.body')}
-        closeLabel={t('common.close')}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setConfirming(false);
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="danger"
-              glyph="sign-out"
-              onClick={() => {
-                setConfirming(false);
-                leave('everywhere');
-              }}
-            >
-              {t('user.signOutEverywhere')}
-            </Button>
-          </>
-        }
-      >
-        {null}
-      </Dialog>
+        confirmLabel={t('user.signOutEverywhere')}
+        confirmGlyph="sign-out"
+        onConfirm={() => {
+          leave('everywhere');
+        }}
+      />
     </SettingsPage>
   );
 };

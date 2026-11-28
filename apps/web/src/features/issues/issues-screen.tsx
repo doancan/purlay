@@ -40,7 +40,6 @@ import { useRoute } from '../../router/router-provider';
 import { useArrivals, type ArrivalProps } from '../../ui/arrival';
 import { Button } from '../../ui/button';
 import { cn } from '../../ui/cn';
-import { Dialog } from '../../ui/dialog';
 import {
   ListCard,
   ListColumn,
@@ -58,6 +57,7 @@ import { useWorkspaceRole } from '../settings/role';
 import { NavToggle } from '../shell/nav';
 import { useWorkspace } from '../shell/workspace';
 import type { IssuesScreens } from './manifest';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
 
 /** What `budget:web` looks for in the initial chunks: this screen's code must never be among them. */
 export const ISSUES_SCREEN = 'screen-of-the-issues-module';
@@ -385,40 +385,17 @@ const Row = ({ issue, members, canDelete, arrival }: RowProps): React.JSX.Elemen
           )}
         </div>
       </div>
-      <Dialog
+      <ConfirmDialog
         open={asking}
         onOpenChange={setAsking}
         title={t('issues.deleteTitle')}
         description={t('issues.deleteBody')}
-        closeLabel={t('common.close')}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setAsking(false);
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="danger"
-              glyph="delete"
-              onClick={() => {
-                setAsking(false);
-                void change(
-                  () => api.deleteIssue(workspace.id, issue.id),
-                  t('issues.deleteFailed'),
-                );
-              }}
-            >
-              {t('issues.delete')}
-            </Button>
-          </>
-        }
-      >
-        {null}
-      </Dialog>
+        confirmLabel={t('issues.delete')}
+        confirmGlyph="delete"
+        onConfirm={() => {
+          void change(() => api.deleteIssue(workspace.id, issue.id), t('issues.deleteFailed'));
+        }}
+      />
     </li>
   );
 };
