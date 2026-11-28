@@ -138,7 +138,12 @@ export const PAIRS: readonly Pair[] = [
   ]),
   ...cross(['border-strong'], READING, CONTROL_EDGE, 'the edge of a control'),
   ...cross(['focus-ring'], READING, BOUNDARY, 'the keyboard focus ring (UX §8)'),
-  ...cross(['composer-edge'], SURFACES, BOUNDARY, 'the edge of a chosen option card (Preferences, the setup wizard)'),
+  ...cross(
+    ['composer-edge'],
+    SURFACES,
+    BOUNDARY,
+    'the edge of a chosen option card (Preferences, the setup wizard)',
+  ),
   ...cross(
     ['composer-focus'],
     SURFACES,
