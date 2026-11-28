@@ -305,6 +305,11 @@ describe('what it shows', () => {
     expect(description?.querySelector('.touch-only\\:hidden')).toBeNull();
   });
 
+  test('the formatting row is drawn on an empty box that has not been focused', async () => {
+    const { view } = await mount({ props: { autoFocus: false } });
+    expect(view.getByRole('toolbar', { name: 'Formatting' })).toBeDefined();
+  });
+
   test('pressing a formatting tool keeps the focus in the box, so the row stays for the click', async () => {
     const { view, box } = await mount();
     act(() => {
