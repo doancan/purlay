@@ -7,6 +7,7 @@
  * the panel, closes the panel first (`features/threads`, which also owns T, R and ⌘⇧R on the
  * focused row). Visible focus is the global ring, which a row never hides.
  */
+import { rowStamp } from './now-minute';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useThreads } from '../threads/thread-context';
 import { ThreadedMessageRow } from '../threads/threaded-row';
@@ -139,7 +140,7 @@ export const FeedList = ({
             failure={item.failure}
             grouped={item.grouped}
             meId={meId}
-            nowMinute={nowMinute}
+            nowMinute={rowStamp(item.message.createdAt, nowMinute)}
             members={members}
             tabIndex={item.key === tabbable ? 0 : -1}
             landed={item.key === landed}
