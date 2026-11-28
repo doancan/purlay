@@ -82,7 +82,8 @@ import { shortcodeQuery } from './emoji-shortcodes';
 import { useEmojiNames } from './use-emoji-names';
 import { insertMention, mentionQuery, suggest } from './mention-suggest';
 import { duringComposition, useComposition } from './composition';
-import { FileOfferBar, useFileOffer } from './file-offer';
+import { ComposerNotices } from './composer-notices';
+import { useFileOffer } from './file-offer';
 import { usePasteHandler } from './paste-handler';
 import { composerKey, useComposerInbox } from './quote';
 import { SLASH_COMMANDS, commandsFor, parseSlash, slashQuery, type SlashName } from './slash';
@@ -1200,50 +1201,19 @@ const Inner = ({
             </RenderBoundary>
           )}
         </div>
-        {draft.failed && (
-          <div
-            role="status"
-            className="flex flex-wrap items-center gap-2 px-1 text-label text-danger-text"
-          >
-            <Icon name="failed" size="sm" />
-            <span>{t(text === '' ? 'composer.draftClearFailed' : 'composer.draftFailed')}</span>
-            <button
-              type="button"
-              className="inline-flex min-h-control items-center rounded-md underline max-narrow:min-h-touch"
-              onClick={() => {
-                draft.retry();
-                field.current?.focus();
-              }}
-            >
-              {t('common.retry')}
-            </button>
-          </div>
-        )}
-        {waiting && (
-          <p role="status" className="flex items-center gap-2 px-1 text-label text-ink-muted">
-            <Icon name="sending" size="sm" />
-            {t('composer.waiting')}
-          </p>
-        )}
-        {/* A live region that is there before its content, or most screen readers say nothing of it. */}
-        <div role="status" className="empty:hidden">
-          {pendingOffer !== null && (
-            <FileOfferBar
-              offer={pendingOffer.file}
-              table={pendingOffer.table}
-              onKeep={fileOffer.keep}
-              onAccept={() => {
-                fileOffer.accept(pendingOffer);
-              }}
-            />
-          )}
-        </div>
-        {error !== null && (
-          <p role="alert" className="flex items-center gap-2 px-1 text-label text-danger-text">
-            <Icon name="failed" size="sm" />
-            {error}
-          </p>
-        )}
+        <ComposerNotices
+          draftFailed={draft.failed}
+          boxIsEmpty={text === ''}
+          onRetryDraft={() => {
+            draft.retry();
+            field.current?.focus();
+          }}
+          waiting={waiting !== null}
+          offer={pendingOffer}
+          onKeepOffer={fileOffer.keep}
+          onAcceptOffer={fileOffer.accept}
+          error={error}
+        />
       </div>
     </div>
   );
