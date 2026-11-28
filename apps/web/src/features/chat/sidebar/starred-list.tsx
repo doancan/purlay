@@ -9,7 +9,7 @@ import { useChannels } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useRoute } from '../../../router/router-provider';
 import { useWorkspace } from '../../shell/workspace';
-import { ChannelRow } from './channel-row';
+import { ChannelRows } from './channel-row';
 import { starredChannels } from '../../../lib/channel-lists';
 import { useSidebarPreferences } from './preferences-context';
 import { rowOf, shownRows, withToggled } from './preferences';
@@ -40,24 +40,12 @@ export const StarredList = (): React.JSX.Element | null => {
       >
         {t('sidebar.starred')}
       </SectionHeading>
-      <ul id="sidebar-list-starred" className="flex flex-col gap-1">
-        {shown.map(({ channel }) => (
-          <li key={channel.id}>
-            <ChannelRow
-              slug={workspace.slug}
-              channel={channel}
-              glyph={channel.type === 'private' ? 'private-channel' : 'channel'}
-              current={channel.id === currentId}
-              unread={(channel.state?.unreadCount ?? 0) > 0}
-              mentions={channel.state?.unreadMentionCount ?? 0}
-              incident={channel.incident}
-              muted={channel.notificationLevel === 'none'}
-            >
-              {channel.name}
-            </ChannelRow>
-          </li>
-        ))}
-      </ul>
+      <ChannelRows
+        slug={workspace.slug}
+        channels={shown.map((row) => row.channel)}
+        currentId={currentId}
+        id="sidebar-list-starred"
+      />
     </nav>
   );
 };
