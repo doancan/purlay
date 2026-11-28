@@ -89,7 +89,7 @@ describe('the missed-mail letter', () => {
         ],
       }),
     );
-    expect(subject).toBe('Purlay’da seni bekleyen mesajlar var');
+    expect(subject).toBe('Purlay’da sizi bekleyen mesajlar var');
     expect(text).toContain('Bir çalışma alanı\n\n#x — 1 mesaj');
     expect(text).toContain('Purlay’ı aç:');
   });

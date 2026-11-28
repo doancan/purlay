@@ -38,7 +38,7 @@ describe('the administrator’s verification letter', () => {
       token: TOKEN,
       locale: 'tr',
     });
-    expect(letter.subject).toBe('Purlay için adresini doğrula');
+    expect(letter.subject).toBe('Purlay için adresinizi doğrulayın');
     expect(letter.text).toContain('24 saat');
     expect(letter.text).toContain(`https://chat.example.com/setup/verify#${TOKEN}`);
   });
@@ -82,7 +82,7 @@ describe('the letter a relay is tried with when the address is verified already'
       appUrl: 'https://purlay.test',
       locale: 'tr',
     });
-    expect(letter.subject).toBe('Purlay sunucundan bir deneme');
+    expect(letter.subject).toBe('Purlay sunucunuzdan bir deneme');
     expect(letter.text).toContain('https://purlay.test adresindeki Purlay sunucusundan');
     expect(letter.html).toContain('https://purlay.test');
   });

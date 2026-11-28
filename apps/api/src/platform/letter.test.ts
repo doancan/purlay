@@ -59,7 +59,7 @@ describe('a letter', () => {
         ],
       }),
     );
-    expect(html).toContain('Düğme çalışmazsa bu adresi tarayıcına yapıştır:');
+    expect(html).toContain('Düğme çalışmazsa bu adresi tarayıcınıza yapıştırın:');
     expect(html).toContain('Ayşe: “selam” · <a href="https://purlay.test/m1"');
     expect(html).toContain('>Aç</a>');
     expect(text).toContain(

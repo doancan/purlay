@@ -206,7 +206,7 @@ describe('integration: asking for a sign-in link', () => {
         locale: 'tr',
         invitation,
       });
-      expect(mail.posted[0]?.subject).toBe('Purlay giriş bağlantın');
+      expect(mail.posted[0]?.subject).toBe('Purlay oturum açma bağlantınız');
       const token = tokenIn(mail.posted[0]);
       expect(linkIn(mail.posted[0]).hash).toBe(`#${token}.${invitation}`);
     });

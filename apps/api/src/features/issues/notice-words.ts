@@ -6,7 +6,7 @@ import type { NoticeWords } from '../../modules/push/notices';
 
 const ASSIGNED = {
   en: '{name} assigned an issue to you',
-  tr: '{name} sana bir sorun atadı',
+  tr: '{name} size bir sorun atadı',
 } as const;
 
 export const issuesNoticeWords: NoticeWords = (kind, locale, actor) =>

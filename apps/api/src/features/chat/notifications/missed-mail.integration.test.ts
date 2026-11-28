@@ -277,10 +277,10 @@ describe('integration: what a letter is about', () => {
       const postbox = aPostbox();
       await run(db, NOW, postbox.send);
       const [letter] = postbox.letters;
-      expect(letter?.subject).toBe('Purlay’da seni bekleyen mesajlar var');
+      expect(letter?.subject).toBe('Purlay’da sizi bekleyen mesajlar var');
       expect(letter?.text).toContain('#general — 5 mesaj');
       expect(letter?.text).toContain('ve 2 tane daha');
-      expect(letter?.text).toContain('Bu e-postaları durdurmak için bu bağlantıyı aç:');
+      expect(letter?.text).toContain('Bu e-postaları durdurmak için bu bağlantıyı açın:');
       expect(letter?.text).not.toContain(sent[0]?.messageId);
       expect(letter?.text).toContain(sent[4]?.messageId);
     });

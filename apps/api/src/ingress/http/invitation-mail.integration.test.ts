@@ -221,7 +221,7 @@ describe('integration: inviting by e-mail over HTTP', () => {
     ]);
     for (const letter of mail.posted) {
       expect(letter.text).not.toContain(`${ORIGIN}/invite#${made.token}`);
-      expect(letter.subject).toBe('Purlay’a davet edildin');
+      expect(letter.subject).toBe('Purlay’a davet edildiniz');
     }
     // A separate copy link and a link for each recipient.
     const links = await cloned.db

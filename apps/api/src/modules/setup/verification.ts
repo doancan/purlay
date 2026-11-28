@@ -209,13 +209,13 @@ const WORDS = {
       'If you are not setting up a Purlay server, you can ignore this email; nothing changes without the link.',
   },
   tr: {
-    subject: 'Purlay için adresini doğrula',
+    subject: 'Purlay için adresinizi doğrulayın',
     text: (appUrl: string): string =>
-      `${appUrl} adresindeki Purlay sunucusunu kuruyorsun; yöneticinin adresi bu. ` +
-      `Adresin senin olduğunu aşağıdaki düğmeyle doğrula. Bir kez ve ${String(TTL_HOURS)} saat boyunca çalışır.`,
+      `${appUrl} adresindeki Purlay sunucusunu kuruyorsunuz; yöneticinin adresi bu. ` +
+      `Adresin sizin olduğunu aşağıdaki düğmeyle doğrulayın. Bir kez ve ${String(TTL_HOURS)} saat boyunca çalışır.`,
     button: 'Adresimi doğrula',
     ignore:
-      'Bir Purlay sunucusu kurmuyorsan bu e-postayı görmezden gelebilirsin; bağlantı olmadan hiçbir şey değişmez.',
+      'Bir Purlay sunucusu kurmuyorsanız bu e-postayı görmezden gelebilirsiniz; bağlantı olmadan hiçbir şey değişmez.',
   },
 } as const;
 
@@ -256,9 +256,9 @@ const TEST_WORDS = {
     button: 'Open Purlay',
   },
   tr: {
-    subject: 'Purlay sunucundan bir deneme',
+    subject: 'Purlay sunucunuzdan bir deneme',
     text: (appUrl: string): string =>
-      `Bu, ${appUrl} adresindeki Purlay sunucusundan bir deneme: e-postası çalışıyor. Adresin zaten doğrulanmış, yapacak bir şey yok.`,
+      `Bu, ${appUrl} adresindeki Purlay sunucusundan bir deneme: e-postası çalışıyor. Adresiniz zaten doğrulanmış, yapacak bir şey yok.`,
     button: 'Purlay’ı aç',
   },
 } as const;

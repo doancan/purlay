@@ -26,17 +26,17 @@ const WORDS = {
     providerIgnore: 'If it was not you, you can ignore this email.',
   },
   tr: {
-    linkSubject: 'Purlay giriş bağlantın',
-    link: `Purlay’a girmek için aşağıdaki düğmeye bas. Bağlantı bir kez ve ${MINUTES} dakika boyunca çalışır.`,
-    linkButton: 'Purlay’a gir',
+    linkSubject: 'Purlay oturum açma bağlantınız',
+    link: `Purlay’da oturum açmak için aşağıdaki düğmeye basın. Bağlantı bir kez ve ${MINUTES} dakika boyunca çalışır.`,
+    linkButton: 'Purlay’da oturum aç',
     linkIgnore:
-      'Sen istemediysen bu e-postayı görmezden gelebilirsin: bu posta kutusu olmadan bağlantıyı kimse kullanamaz.',
-    providerSubject: 'Purlay’a giriş',
+      'Siz istemediyseniz bu e-postayı görmezden gelebilirsiniz: bu posta kutusu olmadan bağlantıyı kimse kullanamaz.',
+    providerSubject: 'Purlay’da oturum açma',
     provider: (name: string): string =>
-      `Biri bu adresle Purlay’a girmek istedi. Bu adres ${name} ile giriş yapan bir hesaba ait, ` +
-      `bu yüzden bağlantı gönderilmedi: giriş sayfasında “${name} ile devam et” düğmesini kullan.`,
+      `Biri bu adresle Purlay’da oturum açmak istedi. Bu adres ${name} ile oturum açan bir hesaba ait, ` +
+      `bu yüzden bağlantı gönderilmedi: oturum açma sayfasında “${name} ile devam et” düğmesini kullanın.`,
     providerButton: 'Purlay’ı aç',
-    providerIgnore: 'Sen değilsen bu e-postayı görmezden gelebilirsin.',
+    providerIgnore: 'Siz değilseniz bu e-postayı görmezden gelebilirsiniz.',
   },
 } as const;
 
