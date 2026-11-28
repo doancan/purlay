@@ -14,6 +14,7 @@ import { href } from '../../../router/routes';
 import { useSession } from '../../session/session';
 import { SettingsCard } from '../page';
 import { SecretValue, SecurityProblem, useExpired, useSecurityTask } from './parts';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 export const OwnerRecovery = ({
   workspaceId,
@@ -226,8 +227,7 @@ const RecoverySetup = ({
       <div className="flex flex-wrap gap-3">
         <a
           className={buttonStyle('secondary')}
-          target="_blank"
-          rel="noopener noreferrer"
+          {...EXTERNAL_LINK}
           href={`${href('signIn')}?independent=1&workspace=${encodeURIComponent(slug)}`}
         >
           {t('security.recovery.signInTab')}

@@ -28,6 +28,7 @@ import { useNowMinute } from './now-minute';
 import { PanelEmpty, PanelFrame, StaleBanner, usePanelFocus } from './panel-frame';
 import { useSidePanel } from './side-panel';
 import { attachmentUrl } from '../../../data/attachment-url';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 export const FILES_PANEL_ID = 'channel-files';
 
@@ -85,8 +86,7 @@ const FileRow = ({
           href={at(file)}
           {...(image
             ? {
-                target: '_blank',
-                rel: 'noopener noreferrer',
+                ...EXTERNAL_LINK,
                 'aria-haspopup': 'dialog',
                 onPointerEnter: onPreload,
                 onFocus: onPreload,

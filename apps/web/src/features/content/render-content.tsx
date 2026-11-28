@@ -39,6 +39,7 @@ import { cn } from '../../ui/cn';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { CodeBlock } from './code-block';
 import { readingCache } from './reading-cache';
+import { EXTERNAL_LINK } from '../../ui/external-link';
 
 /**
  * A diff's viewer, a chunk of its own (#687): a ```diff block is rare, and until the viewer arrives the
@@ -168,8 +169,7 @@ const ExternalLink = ({
     <a
       data-code-reference={codeReference ? '' : undefined}
       href={href.href}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...EXTERNAL_LINK}
       title={host === '' ? undefined : t('message.link.opens', { host })}
       className="break-all text-accent-text underline"
     >

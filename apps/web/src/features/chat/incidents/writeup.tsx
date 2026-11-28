@@ -16,6 +16,7 @@ import { renderContent } from '../../content/render-content';
 import { cn } from '../../../ui/cn';
 import { fieldClasses, headingClasses, sectionClasses } from './section';
 import type { IncidentActions } from './use-incident';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 /** Postmortem drafts by incident, with the version each began at: kept while the page is. */
 const drafts = new Map<string, { readonly text: string; readonly from: number }>();
@@ -100,8 +101,7 @@ const Runbook = ({
           ) : (
             <a
               href={url}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...EXTERNAL_LINK}
               className="max-w-full self-start truncate text-label text-accent-text underline"
             >
               {url}

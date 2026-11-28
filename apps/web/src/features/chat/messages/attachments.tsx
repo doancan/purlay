@@ -33,6 +33,7 @@ import { previewMarkdown, previewOf, type TextPreviewKind } from './attachment-p
 import { isPlainClick, useImageViewer, type ViewedImage } from './image-viewer-door';
 import { PdfAttachment } from './pdf-preview-door';
 import { attachmentUrl } from '../../../data/attachment-url';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 const at = (attachment: Attachment): string => attachmentUrl(attachment.id);
 
@@ -79,8 +80,7 @@ const ImageAttachment = ({
   return (
     <a
       href={at(attachment)}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...EXTERNAL_LINK}
       aria-label={t('attachment.open', { name: attachment.fileName })}
       aria-haspopup="dialog"
       // As wide as the picture, so the focus ring it gets back from the viewer is drawn around it.

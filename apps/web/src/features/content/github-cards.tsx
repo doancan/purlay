@@ -25,6 +25,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
 import { useWorkspace } from '../shell/workspace';
 import { readBody } from './render-content';
+import { EXTERNAL_LINK } from '../../ui/external-link';
 
 /** The server keeps a card this long (`ARCHITECTURE.md` §8.3); asking sooner would get the same one. */
 const CARD_FRESH_MS = 5 * 60 * 1000;
@@ -72,12 +73,7 @@ const Card = ({
           {t(`github.state.${card.state}`)}
         </span>
       </div>
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-body font-medium text-ink hover:underline"
-      >
+      <a href={url} {...EXTERNAL_LINK} className="text-body font-medium text-ink hover:underline">
         {card.title}
       </a>
       <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink-muted">

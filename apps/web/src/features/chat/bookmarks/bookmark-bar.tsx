@@ -28,6 +28,7 @@ import { Dialog } from '../../../ui/dialog';
 import { TextField } from '../../../ui/text-field';
 import { useToast } from '../../../ui/toast';
 import { bookmarkTitle, bookmarkUrl } from './bookmark-input';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 interface Added {
   readonly url: string;
@@ -169,8 +170,7 @@ const Chip = ({
     >
       <a
         href={bookmark.url}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...EXTERNAL_LINK}
         title={bookmark.url}
         className="flex max-w-field items-center gap-1 rounded-pill px-3 py-1 text-label text-ink"
       >

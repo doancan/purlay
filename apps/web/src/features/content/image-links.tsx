@@ -13,6 +13,7 @@ import type { Block, Inline } from '@purlay/markdown';
 import { useState } from 'react';
 import { useI18n } from '../../i18n/i18n-provider';
 import { readBody } from './render-content';
+import { EXTERNAL_LINK } from '../../ui/external-link';
 
 /** The most pictures one message shows; the rest stay links. */
 export const IMAGE_LINKS_DRAWN = 3;
@@ -70,12 +71,7 @@ const Picture = ({ href }: { readonly href: string }): React.JSX.Element | null 
   if (failed) return null;
   const host = new URL(href).hostname;
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block max-w-attachment rounded-xl"
-    >
+    <a href={href} {...EXTERNAL_LINK} className="block max-w-attachment rounded-xl">
       <img
         src={`/api/images?url=${encodeURIComponent(href)}`}
         alt={t('message.imageFrom', { host })}

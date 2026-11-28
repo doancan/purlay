@@ -9,6 +9,7 @@ import type { GitHubEvent, Message } from '@purlay/types';
 import { useI18n } from '../../i18n/i18n-provider';
 import type { Translate } from '../../i18n/types';
 import { cn } from '../../ui/cn';
+import { EXTERNAL_LINK } from '../../ui/external-link';
 
 const GITHUB = 'https://github.com';
 
@@ -97,7 +98,7 @@ export const GitHubEventCard = ({ event }: { readonly event: GitHubEvent }): Rea
   return (
     <div data-github-event={event.kind} className="flex flex-col gap-1">
       <p>
-        <a href={linkOf(event)} target="_blank" rel="noopener noreferrer" className={link}>
+        <a href={linkOf(event)} {...EXTERNAL_LINK} className={link}>
           {eventSentence(event, t)}
         </a>
       </p>
@@ -108,8 +109,7 @@ export const GitHubEventCard = ({ event }: { readonly event: GitHubEvent }): Rea
             <li key={commit.sha} className="flex min-w-0 gap-2">
               <a
                 href={`${repositoryUrl(event)}/commit/${commit.sha}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                {...EXTERNAL_LINK}
                 className={cn('shrink-0 font-mono', link)}
               >
                 {commit.sha.slice(0, 7)}
@@ -124,8 +124,7 @@ export const GitHubEventCard = ({ event }: { readonly event: GitHubEvent }): Rea
       )}
       <a
         href={repositoryUrl(event)}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...EXTERNAL_LINK}
         className={cn('font-mono text-caption text-ink-muted', link)}
       >
         {event.repository}
