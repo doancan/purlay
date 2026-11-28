@@ -1529,6 +1529,14 @@ export const API_MODULES_WORKSPACES: readonly Mutation[] = [
     tests: ['apps/api/src/ingress/http/member-departures.integration.test.ts'],
   },
   {
+    id: 'workspace-members-provisioned-removal-tells-no-module-in-source',
+    why: 'a path that ends a membership stops telling the modules, and nothing that reads the source notices (D-355: on every path that does)',
+    file: 'apps/api/src/modules/workspaces/provisioning/projection.ts',
+    find: '    await departures(\n',
+    replace: '    await Promise.resolve(\n',
+    tests: ['apps/api/src/member-departure-paths.test.ts'],
+  },
+  {
     id: 'workspace-members-removal-said-to-be-leaving',
     why: 'a removal by an admin is told to the modules as the person leaving (D-355)',
     file: 'apps/api/src/modules/workspaces/members.ts',
