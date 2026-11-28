@@ -892,6 +892,9 @@ const Inner = ({
             setFocused(true);
           }}
           onBlur={(event) => {
+            // Leaving the window is not leaving the box: the browser gives the focus back to what held it, and
+            // a formatting row hidden meanwhile would take a focused button with it.
+            if (event.relatedTarget === null && !document.hasFocus()) return;
             if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
           }}
           className={cn(
@@ -962,7 +965,14 @@ const Inner = ({
           </VisuallyHidden>
           {/* The formatting row is there while the box is in use and out of the way while it is not: an empty,
               unfocused box is a field and a Send, not a toolbar of eleven glyphs (D-362). */}
-          <div hidden={!(focused || trimEnd(text) !== '' || uploads.items.length > 0)}>
+          <div
+            hidden={!(focused || trimEnd(text) !== '' || uploads.items.length > 0)}
+            // A press on a tool must not take the focus from the box: Safari and Firefox on a Mac do not focus
+            // a button they click, so the box would blur, the row would hide and the click would never land.
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
+          >
             <FormatToolbar
               sourceMode={sourceMode}
               active={activeFormats}

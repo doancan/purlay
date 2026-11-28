@@ -302,6 +302,16 @@ describe('what it shows', () => {
     expect(view.container.querySelector('[data-hints-divider]')).toBeNull();
   });
 
+  test('pressing a formatting tool keeps the focus in the box, so the row stays for the click', async () => {
+    const { view, box } = await mount();
+    act(() => {
+      box().focus();
+    });
+    // Safari and Firefox on a Mac do not focus the button they press: an unprevented press would blur the box.
+    const pressed = fireEvent.mouseDown(view.getByRole('button', { name: 'Bold' }));
+    expect(pressed).toBe(false);
+  });
+
   test('the card turns its hairline a firmer grey while focus is inside it, and draws no ring of its own', async () => {
     const { view, box, user } = await mount();
     const card = view.container.querySelector('[data-composer-card]');
