@@ -29,6 +29,11 @@ const sizeClasses = {
   control:
     'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink active:bg-border-subtle active:text-ink aria-pressed:bg-surface-200 aria-pressed:text-ink',
   /**
+   * A tool in the composer's formatting row (D-361): the control's square, but the glyph a size larger and in the full ink,
+   * so a row of twelve reads at a glance instead of as a faint line of marks.
+   */
+  tool: 'h-control max-narrow:h-touch aspect-square rounded-md text-ink hover:bg-surface-200 active:bg-border-subtle aria-pressed:bg-surface-200 disabled:text-ink-muted',
+  /**
    * A control on a message's bar (D-150): the control's size on every window. A finger-tall bar
    * is taller than the band above a bubble and covered the author's name on a phone; at this size
    * it fits the band, and every target on the bar is the same (above the 24px WCAG minimum).
@@ -82,7 +87,7 @@ export const IconButton = ({
       aria-label={label}
       className={cn(iconButtonClasses, sizeClasses[size], className)}
     >
-      <Icon name={glyph} size={size === 'rail' ? 'lg' : 'md'} />
+      <Icon name={glyph} size={size === 'rail' || size === 'tool' ? 'lg' : 'md'} />
     </button>
   </Tooltip>
 );

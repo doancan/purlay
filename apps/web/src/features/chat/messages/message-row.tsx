@@ -172,7 +172,7 @@ const MessageRowView = ({
     <time
       dateTime={message.createdAt}
       title={absolute}
-      className={cn('font-mono text-caption text-ink-subtle', grouped && !on && 'opacity-0')}
+      className={cn('tabular-nums text-caption text-ink-subtle', grouped && !on && 'opacity-0')}
     >
       {grouped
         ? format.clock(message.createdAt)
@@ -196,7 +196,7 @@ const MessageRowView = ({
       tabIndex={tabIndex}
       aria-label={t('feed.row', { name: author.displayName, when: absolute })}
       className={cn(
-        'relative flex gap-3 rounded-lg px-2 transition-colors duration-hover ease-standard',
+        'relative flex gap-3 rounded-lg px-2 transition-colors duration-hover ease-standard hover:bg-surface-050',
         grouped ? 'pt-1' : 'pt-3',
         landed && 'bg-warning-subtle',
       )}

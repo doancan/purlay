@@ -267,7 +267,11 @@ export const BookmarkBar = ({
   return (
     <nav
       aria-label={t('bookmarks.label')}
-      className="flex shrink-0 items-center gap-2 border-b-hairline border-border-subtle px-4 py-2"
+      // With nothing pinned the row is only the way to add one: no line of its own under the header's, and less height (D-362).
+      className={cn(
+        'flex shrink-0 items-center gap-2 px-4',
+        bookmarks.length > 0 || unread ? 'border-b-hairline border-border-subtle py-2' : 'py-1',
+      )}
     >
       {/* The chips scroll on their own, so a long row never pushes "Add a bookmark" out of sight. */}
       {bookmarks.length > 0 && (

@@ -143,7 +143,7 @@ describe('the header', () => {
   test('draws the two views as one segmented control: a track, with the current view raised out of it', async () => {
     const view = await mountChannel({ messages: page([aMessage(1)]) });
     const track = view.getByRole('navigation', { name: 'Channel views' });
-    expect(track.className).toContain('rounded-lg');
+    expect(track.className).toContain('rounded-xl');
     expect(track.className).toContain('bg-surface-200');
     expect(track.querySelectorAll('a')).toHaveLength(2);
     // The raised mark is one element that slides under the current view, never a class on the link.

@@ -109,7 +109,7 @@ const FileRow = ({
           <Avatar name={sender.displayName} username={sender.username} size="sm" />
           <span className="truncate">{sender.displayName}</span>
           <span aria-hidden="true">·</span>
-          <time dateTime={file.sentAt} className="shrink-0 font-mono">
+          <time dateTime={file.sentAt} className="shrink-0 tabular-nums">
             {format.time(file.sentAt, now)}
           </time>
           <span aria-hidden="true">·</span>

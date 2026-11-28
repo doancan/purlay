@@ -76,7 +76,7 @@ const Line = ({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-label font-semibold text-ink">{author.displayName}</span>
-          <time dateTime={message.createdAt} className="font-mono text-caption text-ink-muted">
+          <time dateTime={message.createdAt} className="tabular-nums text-caption text-ink-muted">
             {format.time(message.createdAt, clock.now())}
           </time>
         </div>

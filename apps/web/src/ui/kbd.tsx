@@ -16,6 +16,7 @@
  * a person reads to learn them for the keyboard they will use (`touch="show"`).
  */
 import { Fragment } from 'react';
+import { Icon, type GlyphName } from '../components/icon';
 import { cn } from './cn';
 import { currentPlatformIsMac, formatShortcut, isSingleCharacter, printsAsMac } from './keys';
 import { VisuallyHidden } from './visually-hidden';
@@ -26,6 +27,12 @@ const capClasses =
 
 /** A glyph's cap is exactly square, however wide the glyph (⇧ is wider than ⌘); a word's is padded. */
 const widthOf = (key: string): string => (isSingleCharacter(key) ? 'w-kbd' : 'px-1');
+
+/**
+ * Off a Mac the keys print words, and the two that name a line (Enter, Shift) carry their arrow too, so a hint reads at a
+ * glance as a Windows or Linux keyboard's own keys; a Mac prints ⌘ ⇧ ↵ as glyphs and needs none (D-361).
+ */
+const KEY_ICONS: Readonly<Record<string, GlyphName>> = { Enter: 'key-enter', Shift: 'key-shift' };
 
 /**
  * The row of key hints under a list (the commands, the `@` people, the palette). It wraps: side by
@@ -69,9 +76,24 @@ export const Kbd = ({
   const asMac = printsAsMac(children, mac);
   const touchClasses = touch === 'hide' ? 'touch-only:hidden' : undefined;
   const caps = formatShortcut(children, asMac);
-  const cap = (key: string, extra?: string): React.JSX.Element => (
-    <kbd className={cn(capClasses, widthOf(key), toneClasses[tone], extra)}>{key}</kbd>
-  );
+  const cap = (key: string, extra?: string): React.JSX.Element => {
+    // Off a Mac the two keys that name a line carry their arrow, so the cap is a glyph and a word.
+    const icon = asMac ? undefined : KEY_ICONS[key];
+    return (
+      <kbd
+        className={cn(
+          capClasses,
+          widthOf(key),
+          toneClasses[tone],
+          icon !== undefined && 'gap-1',
+          extra,
+        )}
+      >
+        {icon === undefined ? null : <Icon name={icon} size="sm" />}
+        {key}
+      </kbd>
+    );
+  };
   if (caps.length <= 1) return cap(caps[0] ?? children, cn(touchClasses, className));
   return (
     <kbd className={cn('inline-flex items-center gap-1', touchClasses, className)}>

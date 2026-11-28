@@ -245,7 +245,7 @@ const Entry = ({ update }: { readonly update: IncidentUpdate }): React.JSX.Eleme
   return (
     <li className="flex flex-col gap-1 py-2 first:pt-0 not-first:border-t-hairline border-border-subtle">
       <span className="text-body text-ink">{said}</span>
-      <time dateTime={update.at} className="font-mono text-caption text-ink-subtle">
+      <time dateTime={update.at} className="tabular-nums text-caption text-ink-subtle">
         {format.absolute(update.at)}
       </time>
     </li>

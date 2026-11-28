@@ -38,7 +38,6 @@ import {
   PinOff,
   Bold,
   Eraser,
-  Braces,
   Eye,
   Italic,
   Link as LinkIcon,
@@ -47,6 +46,9 @@ import {
   Table2,
   Smile,
   SquareCode,
+  CornerDownLeft,
+  ArrowBigUp,
+  FileCode,
   Strikethrough,
   BellOff,
   BellRing,
@@ -204,8 +206,13 @@ const glyphs = {
   /** The formatting row (D-181): one glyph for each construct the renderer draws. */
   italic: Italic,
   strike: Strikethrough,
-  'inline-code': Braces,
+  'inline-code': Code,
   'code-block': SquareCode,
+  'markdown-source': FileCode,
+  /** The Enter key's return arrow, on a keyboard that prints words on its keys. */
+  'key-enter': CornerDownLeft,
+  /** The Shift key's arrow, likewise. */
+  'key-shift': ArrowBigUp,
   table: Table2,
   link: LinkIcon,
   'bullet-list': List,

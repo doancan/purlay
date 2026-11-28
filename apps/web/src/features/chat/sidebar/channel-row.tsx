@@ -14,7 +14,6 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Link } from '../../../router/router-provider';
 import { Badge } from '../../../ui/badge';
 import { cn } from '../../../ui/cn';
-import { navMarkerClasses } from '../../../ui/nav-row';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { useDeepWork } from '../../shell/deep-work';
 import { useRowMenu } from './row-menu';
@@ -126,11 +125,7 @@ export const ChannelRow = ({
         params={{ slug, channelId: channel.id }}
         {...(current ? { 'aria-current': 'page' as const } : {})}
         {...handlers}
-        className={cn(
-          rowClasses(content.avatar),
-          toneClasses[rowTone(current, content.unread)],
-          current && navMarkerClasses,
-        )}
+        className={cn(rowClasses(content.avatar), toneClasses[rowTone(current, content.unread)])}
       >
         <RowContent {...content}>{children}</RowContent>
       </Link>

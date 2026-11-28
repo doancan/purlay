@@ -36,12 +36,12 @@ const sizeClasses = {
 } as const;
 
 const baseClasses =
-  'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border-hairline px-3 text-label transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted';
+  'inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-md border-hairline px-4 text-label transition-colors duration-hover ease-standard disabled:cursor-not-allowed disabled:border-border-subtle disabled:bg-surface-200 disabled:text-ink-muted';
 
 const variantClasses = {
   // A filled button's ring is drawn outside it, with its gap: inset, a blue ring on a blue fill was 1.3:1 and unseen.
   primary:
-    'border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover active:bg-accent-hover active:brightness-90 focus-visible:outline-offset-focus',
+    'border-accent bg-accent text-on-accent shadow-card hover:border-accent-hover hover:bg-accent-hover active:bg-accent-hover active:brightness-90 focus-visible:outline-offset-focus',
   secondary:
     'border-border-default bg-surface-100 text-ink shadow-card hover:bg-surface-200 active:bg-border-subtle active:shadow-none',
   ghost:
