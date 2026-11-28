@@ -658,6 +658,7 @@ export const tr = {
     'Bu sunucu parolayla oturum açan her hesapta bunu zorunlu tutuyor. Devam etmek için açın; oturumunuz açık kalır.',
   'enrolTwoFactor.signOut': 'Oturumu kapat',
   'signIn.title': 'Purlay’e oturum açın',
+  'signIn.or': 'ya da',
   'signIn.lede': 'Bir sorunun, biri kapatana kadar açık kaldığı ekip sohbeti.',
   'signIn.github': 'GitHub ile devam et',
   'signIn.google': 'Google ile devam et',

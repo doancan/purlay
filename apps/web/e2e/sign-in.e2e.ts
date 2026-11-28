@@ -25,9 +25,8 @@ test.describe('the sign-in screen', () => {
   test('looks the same as it did', async ({ page }) => {
     await page.goto('/sign-in');
     await expect(page.getByRole('link', { name: 'Continue with GitHub' })).toBeVisible();
-    await expect(
-      page.getByRole('heading', { name: 'Sign in with your company', exact: true }),
-    ).toBeVisible();
+    // The company's door is closed until asked for: the summary is there, the field opens with it.
+    await page.getByText('Sign in with your company', { exact: true }).click();
     await expect(page.getByLabel('Workspace address', { exact: true })).toBeVisible();
     await expect(page).toHaveScreenshot('sign-in.png');
   });

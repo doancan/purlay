@@ -21,7 +21,7 @@ export const StandaloneScreen = ({
 }): React.JSX.Element => (
   <Main
     className={cn(
-      'flex min-h-screen justify-center bg-surface-000 p-4 text-ink',
+      'flex min-h-screen justify-center bg-linear-to-b from-nav-surface to-nav-rail p-4 text-ink',
       placement === 'top' ? 'items-start pt-16' : 'items-center',
     )}
   >
@@ -35,7 +35,7 @@ export const StandaloneCard = ({
 }: {
   readonly children: React.ReactNode;
 }): React.JSX.Element => (
-  <div className="flex w-full max-w-dialog flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-card">
+  <div className="flex w-full max-w-dialog flex-col rounded-2xl border-hairline border-border-subtle bg-surface-100 shadow-float">
     {children}
   </div>
 );

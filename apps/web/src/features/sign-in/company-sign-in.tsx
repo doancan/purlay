@@ -15,8 +15,11 @@ import { leave } from './leave';
 
 export const CompanySignIn = ({
   initialWorkspace,
+  bare = false,
 }: {
   readonly initialWorkspace: string;
+  /** Inside a disclosure that already names it: no rule above and no heading of its own. */
+  readonly bare?: boolean;
 }): React.JSX.Element => {
   const { t } = useI18n();
   const api = useApi();
@@ -70,9 +73,15 @@ export const CompanySignIn = ({
     }
   };
   return (
-    <div className="flex w-full flex-col gap-4 border-t-hairline border-border-subtle pt-6 text-left">
+    <div
+      className={
+        bare
+          ? 'flex w-full flex-col gap-4 pt-2 text-left'
+          : 'flex w-full flex-col gap-4 border-t-hairline border-border-subtle pt-6 text-left'
+      }
+    >
       <div className="flex flex-col gap-1">
-        <h2 className="text-heading text-ink">{t('company.signIn.title')}</h2>
+        {!bare && <h2 className="text-heading text-ink">{t('company.signIn.title')}</h2>}
         <p className="text-caption text-ink-muted">{t('company.signIn.description')}</p>
       </div>
       <form noValidate className="flex flex-col gap-3" onSubmit={submit}>

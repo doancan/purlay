@@ -500,12 +500,13 @@ describe('the sign-in screen', () => {
   test('is a card on the navigation tone, with the product mark above the title and the button the width of the card', async () => {
     const view = await visit('/sign-in', out());
     const main = view.getByRole('main');
-    expect(main.className).toContain('bg-surface-000');
+    expect(main.className).toContain('from-nav-surface');
+    expect(main.className).toContain('to-nav-rail');
     const card = view
       .getByRole('heading', { level: 1, name: 'Sign in to Purlay' })
       .closest('section');
     expect(card?.className).toContain('rounded-2xl');
-    expect(card?.className).toContain('shadow-card');
+    expect(card?.className).toContain('shadow-float');
     // The mark (D-339): decoration, so hidden from a screen reader, drawn from the brand file's picture
     // with no words of its own, and above the title it stands for.
     const mark = card?.querySelector('[aria-hidden="true"]');

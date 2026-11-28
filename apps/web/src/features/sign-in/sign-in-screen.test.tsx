@@ -139,11 +139,12 @@ describe('what the screen offers is what the server has connected', () => {
     view.unmount();
   });
 
-  test('both: the button and the form, parted by a rule', async () => {
+  test('both: the form leads, the button follows, parted by an “or”', async () => {
     const view = await open(signedOut(true, true));
     expect(view.queryByRole('link', { name: GITHUB })).not.toBeNull();
     const form = view.getByRole('form', { name: 'Sign in with a password' });
-    expect(form.className).toContain('border-t-hairline');
+    expect(form.className).not.toContain('border-t-hairline');
+    expect(view.queryByText('or')).not.toBeNull();
     expect(view.queryByRole('button', { name: 'Email me a sign-in link instead' })).not.toBeNull();
     view.unmount();
   });
@@ -200,10 +201,11 @@ describe('what the screen offers is what the server has connected', () => {
       none.unmount();
     });
 
-    test('with only single sign-on and mail, the form is not alone: a rule parts it from the button', async () => {
+    test('with only single sign-on and mail, the form leads and an “or” parts it from the button', async () => {
       const view = await open(withOidc({ name: null }, { email: true }));
       const form = view.getByRole('form', { name: 'Sign in with a password' });
-      expect(form.className).toContain('border-t-hairline');
+      expect(form.className).not.toContain('border-t-hairline');
+      expect(view.queryByText('or')).not.toBeNull();
       view.unmount();
     });
   });
@@ -234,10 +236,11 @@ describe('what the screen offers is what the server has connected', () => {
       view.unmount();
     });
 
-    test('with only Google and mail, the form is not alone: a rule parts it from the button', async () => {
+    test('with only Google and mail, the form leads and an “or” parts it from the button', async () => {
       const view = await open(withGoogle({ email: true }));
       const form = view.getByRole('form', { name: 'Sign in with a password' });
-      expect(form.className).toContain('border-t-hairline');
+      expect(form.className).not.toContain('border-t-hairline');
+      expect(view.queryByText('or')).not.toBeNull();
       view.unmount();
     });
 

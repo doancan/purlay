@@ -1325,6 +1325,14 @@ export const WEB_FEATURES: readonly Mutation[] = [
     tests: ['apps/web/src/features/shell/chatless-shell.test.tsx'],
   },
   {
+    id: 'web-company-door-closed-for-a-named-workspace',
+    why: "the company's door stays closed when the address already names a workspace, so the person has to open it to see the field they came for",
+    file: 'apps/web/src/features/sign-in/sign-in-screen.tsx',
+    find: "open={workspace !== ''}",
+    replace: 'open={false}',
+    tests: ['apps/web/src/features/sign-in/company-sign-in.test.tsx'],
+  },
+  {
     id: 'web-draws-the-modules-the-server-runs-in-every-workspace',
     why: 'a workspace that is not granted a module still shows its rail place and its screen (D-289)',
     file: 'apps/web/src/features/shell/workspace.tsx',
