@@ -16,6 +16,7 @@ import { LoadingStatus } from '../../../ui/skeleton';
 import { ErrorState } from '../../../ui/states';
 import { PDF_LIMITS, PdfPreviewError, type PageGeometry } from './pdf-limits';
 import { openPdf, type PdfReader } from './pdf-reader';
+import { attachmentUrl } from '../../../data/attachment-url';
 
 interface Props {
   readonly attachment: Attachment;
@@ -257,7 +258,7 @@ export const PdfPreview = ({
           ))}
         </Select>
         <a
-          href={`/api/attachments/${attachment.id}`}
+          href={attachmentUrl(attachment.id)}
           download={attachment.fileName}
           aria-label={t('attachment.download', {
             name: attachment.fileName,
