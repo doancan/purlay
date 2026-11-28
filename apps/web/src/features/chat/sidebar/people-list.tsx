@@ -4,12 +4,12 @@
  *
  * A person with a direct message is a link to it (and carries its unread treatment); a
  * person without one is a button that opens it — `POST …/dms` is idempotent, so pressing
- * twice, or from two tabs, lands in the same channel (I-5). The person themselves is in
- * the list, labelled "you": a direct message with yourself is the scratchpad
- * (`PRD.md` §4.3). Each has an avatar, with a dot when the person is online (D-136) and "online"
+ * twice, or from two tabs, lands in the same channel (I-5). The person themselves is not in
+ * the list — the account menu at the foot is who you are — though the direct message with yourself, the
+ * scratchpad (`PRD.md` §4.3), is still one `⌘K` away. Each has an avatar, with a dot when the person is online (D-136) and "online"
  * said beside the name to a screen reader; nothing when they are not, or nothing is known.
  *
- * Alone in a workspace, the section says so under the person's own row (`UX.md` §8), and offers an
+ * Alone in a workspace, the section says so (`UX.md` §8), and offers an
  * owner or an admin the invite dialog the workspace menu opens; a member is not offered what the
  * server would refuse them (D-115). The person may fold the section or switch it off (D-195); a person with no
  * conversation yet has nothing waiting, so a folded section, or only what is unread, lists the ones who do.
@@ -103,11 +103,13 @@ export const PeopleList = (): React.JSX.Element | null => {
   const failed = members.isError || (chat && channels.isError);
   const waiting = members.isPending || (chat && channels.isPending);
   // Every message moves the channels' cache; sorting every member again is only owed when they change.
+  // Not the person themself: a row for you is a door to a conversation with yourself, which the palette still opens.
   const entries = useMemo(
-    () => people(members.data ?? [], channels.data ?? []),
-    [members.data, channels.data],
+    () =>
+      people(members.data ?? [], channels.data ?? []).filter((entry) => entry.user.id !== me.id),
+    [members.data, channels.data, me.id],
   );
-  const alone = entries.every((entry) => entry.user.id === me.id);
+  const alone = entries.length === 0;
   const mayInvite = role === 'owner' || role === 'admin';
   const { preferences, change } = useSidebarPreferences();
   const collapsed = preferences.collapsed.includes('people');
@@ -162,13 +164,6 @@ export const PeopleList = (): React.JSX.Element | null => {
               const label = (
                 <>
                   {user.displayName}
-                  {user.id === me.id ? (
-                    // A tag beside the name, not a second word of it: smaller and quieter, as Slack's is.
-                    <span className="font-normal text-caption text-nav-ink-muted">
-                      {' '}
-                      {t('sidebar.you')}
-                    </span>
-                  ) : null}
                   <OnlineWords userId={user.id} meId={me.id} />
                 </>
               );

@@ -226,7 +226,7 @@ export const ImageViewer = ({
                 <span aria-hidden="true"> · </span>
                 <span className="font-mono">{format.bytes(attachment.sizeBytes)}</span>
                 <span aria-hidden="true"> · </span>
-                <time dateTime={image.sharedAt} className="font-mono">
+                <time dateTime={image.sharedAt} className="tabular-nums">
                   {format.absolute(image.sharedAt)}
                 </time>
               </RadixDialog.Description>

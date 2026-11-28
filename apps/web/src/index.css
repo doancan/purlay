@@ -32,7 +32,7 @@
   }
   .purlay-rich-editor[data-empty='true']::before {
     content: attr(data-placeholder);
-    @apply pointer-events-none float-left h-0 text-ink-subtle;
+    @apply pointer-events-none float-left h-0 text-ink-placeholder;
   }
   .purlay-rich-editor strong {
     @apply font-semibold;
@@ -98,6 +98,15 @@
     background-color: var(--surface-100);
     color: var(--ink);
     font-family: var(--font-sans);
+    /* Inter's single-storey a (cv11) and open digits, kerning on: the same face, set with more care (D-362). */
+    font-feature-settings:
+      'cv11' 1,
+      'ss03' 1,
+      'calt' 1;
+    font-kerning: normal;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   /*

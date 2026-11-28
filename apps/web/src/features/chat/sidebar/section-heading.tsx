@@ -44,7 +44,7 @@ export const SectionHeading = ({
         aria-controls={controls}
         onClick={onToggle}
         className={cn(
-          'group flex w-full items-center gap-1 rounded-md px-2 text-left text-label text-nav-ink-muted transition-colors duration-hover ease-standard hover:text-nav-ink',
+          'group flex w-full items-center gap-1 rounded-md px-2 text-left text-caption font-semibold text-nav-ink-muted transition-colors duration-hover ease-standard hover:text-nav-ink',
           wrap ? 'min-h-control max-narrow:min-h-touch py-2' : 'h-control max-narrow:h-touch',
         )}
       >

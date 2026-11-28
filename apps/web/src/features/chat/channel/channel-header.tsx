@@ -44,16 +44,16 @@ const ChannelDetailsDialog = lazy(async () => ({
 }));
 
 /**
- * One segment of the header's two-way control: the feed, or the open questions. `rounded-sm`, as the track's mark is
- * inside its `rounded-lg` and `p-1`, so a segment's focus ring follows the mark's corners.
+ * One segment of the header's two-way control: the feed, or the open questions. `rounded-md`, as the track's mark is
+ * inside its `rounded-xl` and `p-1`, so a segment's focus ring follows the mark's corners.
  */
 export const segmentClasses =
-  'relative inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-sm px-3 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
+  'relative inline-flex h-control items-center gap-2 whitespace-nowrap rounded-md px-4 text-label transition-colors duration-hover ease-standard hover:text-ink max-narrow:h-touch';
 /** The segment the person is on: raised out of the track by a one-pixel card shadow (D-110). */
 export const activeSegmentClasses = 'text-ink max-narrow:hidden';
 /** The track the two segments sit in; the title before it takes the room, so it sits at the right. */
 export const segmentTrackClasses =
-  'flex shrink-0 gap-1 rounded-lg bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
+  'flex shrink-0 gap-1 rounded-xl bg-surface-200 p-1 max-narrow:bg-transparent max-narrow:p-0';
 /** The track beside a panel: the questions alone, as on a narrow window. */
 const compactTrackClasses = 'flex shrink-0';
 /** The questions beside a panel: a glyph and its count, a control as tall as the actions beside it. */

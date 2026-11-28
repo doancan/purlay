@@ -73,7 +73,7 @@ const PinRow = ({
           <span className="flex min-w-0 items-center gap-1 text-caption text-ink-muted">
             <span className="truncate font-semibold text-ink">{name}</span>
             <span aria-hidden="true">·</span>
-            <time dateTime={message.createdAt} className="shrink-0 font-mono">
+            <time dateTime={message.createdAt} className="shrink-0 tabular-nums">
               {format.time(message.createdAt, now)}
             </time>
           </span>

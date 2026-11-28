@@ -3,7 +3,6 @@ import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link, useRoute } from '../../router/router-provider';
 import { cn } from '../../ui/cn';
-import { navMarkerClasses } from '../../ui/nav-row';
 import { useWorkspace } from './workspace';
 
 export const FollowedRow = (): React.JSX.Element => {
@@ -22,7 +21,6 @@ export const FollowedRow = (): React.JSX.Element => {
         current
           ? 'relative bg-nav-selected font-semibold text-nav-ink [&>svg]:text-accent-text'
           : 'text-nav-ink-muted hover:bg-nav-hover hover:text-nav-ink',
-        current && navMarkerClasses,
       )}
     >
       <Icon name="notifications" />

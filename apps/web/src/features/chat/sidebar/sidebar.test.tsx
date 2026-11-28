@@ -221,7 +221,7 @@ describe('the people section', () => {
   const direct = (id: string, peer: typeof ALICE, over = {}): ReturnType<typeof aChannel> =>
     aChannel(id, null, { type: 'direct_message', peer, ...over });
 
-  test('lists everyone, once, and labels the person themselves', async () => {
+  test('lists everyone else, once, and leaves the person themselves out', async () => {
     const view = await open();
     const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));
     // What is read aloud: the avatars are decorative, so what they say is not part of a name.
@@ -230,11 +230,8 @@ describe('the people section', () => {
       for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
       return copy.textContent.trim();
     };
-    expect([...section.querySelectorAll('li')].map(spoken)).toEqual([
-      'Alice',
-      'Bob',
-      'Dogancan you',
-    ]);
+    // Not the person themself: who you are is the account menu's, and the note to self is the palette's.
+    expect([...section.querySelectorAll('li')].map(spoken)).toEqual(['Alice', 'Bob']);
   });
 
   describe('alone in the workspace', () => {
@@ -261,11 +258,11 @@ describe('the people section', () => {
     const people = (view: View): HTMLElement =>
       some(view.getByRole('heading', { name: 'People' }).closest('section'));
 
-    test('an owner is told nobody else is here, keeps the note to self, and is offered the invite dialog', async () => {
+    test('an owner is told nobody else is here, sees no row for themself, and is offered the invite dialog', async () => {
       const view = await open(alone('owner'));
       const section = within(people(view));
       expect(section.getByText('Nobody else is here yet')).toBeDefined();
-      expect(section.getByRole('button', { name: 'Dogancan you' })).toBeDefined();
+      expect(section.queryByRole('button', { name: 'Dogancan you' })).toBeNull();
       await expectNoAxeViolations(view.container);
       await person().click(section.getByRole('button', { name: 'Invite people…' }));
       await settle();
@@ -289,7 +286,7 @@ describe('the people section', () => {
     const view = await open();
     const section = some(view.getByRole('heading', { name: 'People' }).closest('section'));
     const avatars = [...section.querySelectorAll('li [aria-hidden="true"].size-avatar-sm')];
-    expect(avatars.map((avatar) => avatar.textContent)).toEqual(['A', 'B', 'D']);
+    expect(avatars.map((avatar) => avatar.textContent)).toEqual(['A', 'B']);
     expect(section.querySelector('.size-dot')).toBeNull();
   });
 
@@ -330,8 +327,8 @@ describe('the people section', () => {
         view.world.sockets.open();
       });
       await settle();
-      expect(dotted(view)).toEqual(['A', 'D']);
-      expect(spoken(view)).toEqual(['Alice, online', 'Bob', 'Dogancan you, online']);
+      expect(dotted(view)).toEqual(['A']);
+      expect(spoken(view)).toEqual(['Alice, online', 'Bob']);
       await expectNoAxeViolations(peopleOf(view));
     });
 
@@ -355,24 +352,24 @@ describe('the people section', () => {
       // Not connected: nothing is known, and yourself is nothing.
       expect(rings()).toEqual([]);
       expect(dotted(view)).toEqual([]);
-      expect(spoken(view)).toEqual(['Alice', 'Bob', 'Dogancan you']);
+      expect(spoken(view)).toEqual(['Alice', 'Bob']);
       // Connected, yourself is what the server said: away.
       act(() => {
         view.world.sockets.open();
       });
       await settle();
-      expect(rings()).toEqual(['A', 'D']);
+      expect(rings()).toEqual(['A']);
       expect(dotted(view)).toEqual([]);
-      expect(spoken(view)).toEqual(['Alice, away', 'Bob', 'Dogancan you, away']);
+      expect(spoken(view)).toEqual(['Alice, away', 'Bob']);
     });
 
-    test('yourself, with nothing heard, is active while connected', async () => {
+    test('yourself, with nothing heard, is not drawn under People: the account menu says it', async () => {
       const view = await open(aSignedInApi());
       expect(dotted(view)).toEqual([]);
       act(() => {
         view.world.sockets.open();
       });
-      expect(dotted(view)).toEqual(['D']);
+      expect(dotted(view)).toEqual([]);
     });
 
     test('a frame moves the dot; one older than what was heard changes nothing', async () => {
@@ -390,13 +387,13 @@ describe('the people section', () => {
         view.world.sockets.deliver(told(BOB.id, true, 10));
       });
       await settle();
-      expect(dotted(view)).toEqual(['A', 'B', 'D']);
+      expect(dotted(view)).toEqual(['A', 'B']);
       act(() => {
         // Bob was offline at the snapshot's version 9: older than his online at 10.
         view.world.sockets.deliver(told(ALICE.id, false, 11));
         view.world.sockets.deliver(told(BOB.id, false, 8));
       });
-      expect(dotted(view)).toEqual(['B', 'D']);
+      expect(dotted(view)).toEqual(['B']);
     });
 
     test('a snapshot that fails draws no dot and no error: nothing known is not offline', async () => {
@@ -404,7 +401,7 @@ describe('the people section', () => {
         aSignedInApi({ presence: () => Promise.reject(new ApiError(500, 'INTERNAL', 'boom')) }),
       );
       expect(dotted(view)).toEqual([]);
-      expect(spoken(view)).toEqual(['Alice', 'Bob', 'Dogancan you']);
+      expect(spoken(view)).toEqual(['Alice', 'Bob']);
       expect(within(peopleOf(view)).queryByRole('alert')).toBeNull();
     });
 
@@ -608,12 +605,10 @@ describe('the people section', () => {
     expect(links(view, 'Channels')).toEqual(['api', 'deploys', 'incidents']);
   });
 
-  test('a note to self is named for the person, and says "you"', async () => {
+  test('a note to self is not a row under People', async () => {
     const channels = [...someChannels(), direct(IDS.dm, ME)];
     const view = await open(aSignedInApi({ channels: () => Promise.resolve(channels) }));
-    expect(view.getByRole('link', { name: 'Dogancan you' }).getAttribute('href')).toBe(
-      `/w/acme/c/${IDS.dm}`,
-    );
+    expect(view.queryByRole('link', { name: 'Dogancan you' })).toBeNull();
   });
 
   test('an unread conversation is bold and carries its count', async () => {

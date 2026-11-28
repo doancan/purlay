@@ -91,7 +91,7 @@ const Row = ({
                 <ChannelName channel={channel} />
               )}
             </span>
-            <time dateTime={item.activityAt} className="ml-auto font-mono text-caption">
+            <time dateTime={item.activityAt} className="ml-auto tabular-nums text-caption">
               {format.time(item.activityAt, now)}
             </time>
           </span>

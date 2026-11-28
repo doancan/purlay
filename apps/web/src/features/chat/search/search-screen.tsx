@@ -138,7 +138,10 @@ const Found = ({
                 <Icon name="reply" size="sm" />
               </span>
             )}
-            <time dateTime={message.createdAt} className="ml-auto shrink-0 font-mono text-caption">
+            <time
+              dateTime={message.createdAt}
+              className="ml-auto shrink-0 tabular-nums text-caption"
+            >
               {format.time(message.createdAt, now)}
             </time>
           </span>

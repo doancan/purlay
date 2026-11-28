@@ -168,7 +168,7 @@ const UpdateRow = ({ entry }: { readonly entry: InboxEntry }): React.JSX.Element
               {unread ? <VisuallyHidden>{`${t('sidebar.unread')} `}</VisuallyHidden> : null}
               {sentence}
             </span>
-            <time dateTime={entry.createdAt} className="ml-auto shrink-0 font-mono text-caption">
+            <time dateTime={entry.createdAt} className="ml-auto shrink-0 tabular-nums text-caption">
               {format.time(entry.createdAt, clock.now())}
             </time>
           </span>

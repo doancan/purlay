@@ -7,7 +7,6 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Link, useRoute } from '../../../router/router-provider';
 import { Icon } from '../../../components/icon';
 import { cn } from '../../../ui/cn';
-import { navMarkerClasses } from '../../../ui/nav-row';
 import { useWorkspace } from '../../shell/workspace';
 import { waitingChannels } from './waiting';
 
@@ -28,7 +27,6 @@ export const UnreadsRow = (): React.JSX.Element | null => {
         current
           ? 'relative bg-nav-selected font-semibold text-nav-ink [&>svg]:text-accent-text'
           : 'font-semibold text-nav-ink hover:bg-nav-hover',
-        current && navMarkerClasses,
       )}
     >
       <Icon name="channels" />

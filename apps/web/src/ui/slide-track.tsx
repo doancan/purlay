@@ -22,11 +22,11 @@ interface Place {
 /** Where each named track's mark was last drawn. */
 const lastPlace = new Map<string, Place>();
 
-// The pill is `rounded-sm` inside the tracks' `rounded-lg` and their 4px of padding, so the two corners are
-// one curve (4 + 4 = 8), as a menu's item follows the menu's. The pill's edge is what says "chosen" in a dark theme: there the conversation's ground is darker than the
+// The pill is `rounded-md` inside the tracks' `rounded-xl` and their 4px of padding, so the two corners are
+// one curve (8 + 4 = 12), as a menu's item follows the menu's. The pill's edge is what says "chosen" in a dark theme: there the conversation's ground is darker than the
 // sunk track, so a fill and a shadow alone read as a hole, not a raised chip.
 const markClasses: Record<Mark, string> = {
-  pill: 'left-0 rounded-sm border-hairline border-border-default bg-surface-100 shadow-card max-narrow:hidden',
+  pill: 'left-0 rounded-md border-hairline border-border-default bg-surface-100 shadow-card max-narrow:hidden',
   underline: 'bottom-0 left-0 border-b-marker border-accent',
 };
 

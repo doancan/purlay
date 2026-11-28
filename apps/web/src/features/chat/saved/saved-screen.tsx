@@ -146,7 +146,7 @@ const Row = ({
             </span>
             {/* A phone's line has room for the time alone: with "saved" it crowded the author and
                 channel down to an ellipsis, the longer Turkish words most. */}
-            <time dateTime={item.savedAt} className="ml-auto shrink-0 font-mono text-caption">
+            <time dateTime={item.savedAt} className="ml-auto shrink-0 tabular-nums text-caption">
               <span className="max-narrow:hidden">
                 {t('saved.when', { when: format.time(item.savedAt, now) })}
               </span>

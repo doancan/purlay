@@ -76,7 +76,7 @@ export const Avatar = ({
     aria-hidden="true"
     data-avatar=""
     className={cn(
-      'relative inline-flex shrink-0 select-none items-center justify-center font-semibold text-ink',
+      'relative inline-flex shrink-0 select-none items-center justify-center font-semibold text-ink shadow-card',
       TINTS[tintOf(username)],
       SIZES[size],
       className,

@@ -117,7 +117,7 @@ interface ListFilterProps<V extends string> {
  * whole, and a word too long for its share is cut short, rather than the track scrolling sideways with its last
  * choices out of sight (the whole word is still the button's name).
  *
- * The segments' corner and the track's add up: a `rounded-sm` segment, 4px in on a `rounded-lg` track,
+ * The segments' corner and the track's add up: a `rounded-md` segment, 4px in on a `rounded-xl` track,
  * is the track's corner drawn again — as the sliding mark is, here and in the header's views.
  */
 export const ListFilter = <V extends string>({
@@ -130,7 +130,7 @@ export const ListFilter = <V extends string>({
     memory={`list-filter:${label}`}
     role="group"
     aria-label={label}
-    className="flex max-w-full self-start overflow-x-auto rounded-lg bg-surface-200 p-1 scrollbar-thin max-narrow:w-full max-narrow:self-stretch"
+    className="flex max-w-full self-start overflow-x-auto rounded-xl bg-surface-200 p-1 scrollbar-thin max-narrow:w-full max-narrow:self-stretch"
   >
     {choices.map((choice) => (
       <button
@@ -141,7 +141,7 @@ export const ListFilter = <V extends string>({
           onChange(choice.value);
         }}
         className={cn(
-          'relative inline-flex h-control items-center justify-center gap-2 whitespace-nowrap rounded-sm border-hairline border-transparent px-3 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1 max-narrow:px-2',
+          'relative inline-flex h-control items-center justify-center gap-2 whitespace-nowrap rounded-md border-hairline border-transparent px-4 text-label transition-colors duration-hover ease-standard max-narrow:h-touch max-narrow:flex-1 max-narrow:px-2',
           value === choice.value
             ? 'text-ink max-narrow:min-w-fit max-narrow:border-border-default max-narrow:bg-surface-100 max-narrow:shadow-card'
             : 'text-ink-muted hover:text-ink max-narrow:min-w-0',
