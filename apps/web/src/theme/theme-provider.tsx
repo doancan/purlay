@@ -9,6 +9,7 @@
  */
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useStore } from 'zustand';
+import { rememberingStorage } from '../data/browser-storage';
 import {
   createThemeStore,
   type ResolvedTheme,
@@ -18,7 +19,7 @@ import {
 } from './theme';
 
 const browserPorts = (): ThemePorts => ({
-  storage: window.localStorage,
+  storage: rememberingStorage(),
   query: window.matchMedia('(prefers-color-scheme: dark)'),
   target: document.documentElement,
 });

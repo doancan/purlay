@@ -75,6 +75,15 @@ export const browserStorage = (): ClientStorage | null => {
   }
 };
 
+/**
+ * The page's storage for the things that only remember a choice (the theme, the language): blocked storage is a
+ * page that forgets them, never a page that does not draw — these are read before anything can catch a throw.
+ */
+export const rememberingStorage = (): {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+} => browserStorage() ?? { getItem: () => null, setItem: () => undefined };
+
 /** Whose the personal keys on this page are: the person who holds a session here now (#694). */
 export const PERSON_KEY = 'purlay.person';
 
