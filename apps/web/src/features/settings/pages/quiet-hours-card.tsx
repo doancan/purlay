@@ -8,7 +8,7 @@
  */
 import { MINUTES_PER_DAY, type QuietHours } from '@purlay/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useApi } from '../../../data/api-provider';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
@@ -55,11 +55,13 @@ export const QuietHoursCard = (): React.JSX.Element => {
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ ok: boolean; words: string } | null>(null);
 
+  const weekdayFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }),
+    [locale],
+  );
   const dayName = (day: number): string =>
     // 2023-01-01 was a Sunday: its week names each day in the reader's language.
-    new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(
-      new Date(Date.UTC(2023, 0, 1 + day)),
-    );
+    weekdayFormat.format(new Date(Date.UTC(2023, 0, 1 + day)));
 
   const readFailure = setting.isError ? (
     <div className="flex flex-wrap items-center gap-3 px-6 py-5 max-narrow:px-4">
