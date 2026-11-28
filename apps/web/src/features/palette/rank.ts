@@ -19,6 +19,7 @@
 import type { User } from '@purlay/types';
 import type { GlyphName } from '../../components/icon';
 import { matchText } from './match';
+import { compareText } from '../../lib/collation';
 
 /** `search` holds one row, searching the messages for what was typed: always last. */
 export type PaletteGroup = 'views' | 'channels' | 'people' | 'settings' | 'search';
@@ -75,7 +76,7 @@ const byGroup = (a: Shown, b: Shown): number =>
 const KEEP_ORDER: readonly PaletteGroup[] = ['views', 'settings'];
 
 const newestFirst = (a: PaletteItem, b: PaletteItem): number =>
-  a.recency < b.recency ? 1 : a.recency > b.recency ? -1 : a.label.localeCompare(b.label);
+  a.recency < b.recency ? 1 : a.recency > b.recency ? -1 : compareText(a.label, b.label);
 
 export const rank = (items: readonly PaletteItem[], query: string): readonly Shown[] => {
   const q = query.trim();

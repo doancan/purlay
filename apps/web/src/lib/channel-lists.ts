@@ -15,18 +15,19 @@
  * has, and ties fall back to the name, so a list never shuffles between renders for want of a rule.
  */
 import type { Channel, User, WorkspaceMember } from '@purlay/types';
+import { compareText } from './collation';
 
 const byActivity = (a: Channel, b: Channel): number => {
   const left = a.lastMessageAt ?? '';
   const right = b.lastMessageAt ?? '';
   if (left !== right) return left < right ? 1 : -1;
-  return (a.name ?? '').localeCompare(b.name ?? '');
+  return compareText(a.name ?? '', b.name ?? '');
 };
 
 const joined = (channels: readonly Channel[]): Channel[] =>
   channels.filter((c) => c.state !== null);
 
-const byName = (a: Channel, b: Channel): number => (a.name ?? '').localeCompare(b.name ?? '');
+const byName = (a: Channel, b: Channel): number => compareText(a.name ?? '', b.name ?? '');
 
 /**
  * Channels the person is in, not DMs and not starred, by name — a place stays put (D-160). A person who
@@ -48,13 +49,13 @@ export const joinedChannels = (
 export const starredChannels = (channels: readonly Channel[]): Channel[] =>
   joined(channels)
     .filter((c) => c.type !== 'direct_message' && c.starred)
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    .sort((a, b) => compareText(a.name ?? '', b.name ?? ''));
 
 /** Public channels the person could join, by name. */
 export const joinableChannels = (channels: readonly Channel[]): Channel[] =>
   channels
     .filter((c) => c.state === null && c.type === 'public')
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    .sort((a, b) => compareText(a.name ?? '', b.name ?? ''));
 
 /** Group conversations the person is in (D-127): three people or more, most recently active first. */
 export const groups = (channels: readonly Channel[]): Channel[] =>
@@ -96,7 +97,7 @@ export const people = (
     if (a.direct !== null && b.direct !== null) return byActivity(a.direct, b.direct);
     if (a.direct !== null) return -1;
     if (b.direct !== null) return 1;
-    return a.user.displayName.localeCompare(b.user.displayName);
+    return compareText(a.user.displayName, b.user.displayName);
   });
 };
 

@@ -9,6 +9,7 @@
 import { nameOf } from '../../lib/author';
 import type { Channel } from '@purlay/types';
 import { joinedChannels, starredChannels } from '../../lib/channel-lists';
+import { compareText } from '../../lib/collation';
 
 /** Only channels the person has joined: one they can merely see has nothing to read. */
 const joined = (channels: readonly Channel[]): Channel[] =>
@@ -18,7 +19,7 @@ const byActivity = (a: Channel, b: Channel): number => {
   const left = a.lastMessageAt ?? '';
   const right = b.lastMessageAt ?? '';
   if (left !== right) return left < right ? 1 : -1;
-  return (a.name ?? '').localeCompare(b.name ?? '');
+  return compareText(a.name ?? '', b.name ?? '');
 };
 
 /**
