@@ -75,6 +75,12 @@ export const PAIRS: readonly Pair[] = [
     TEXT,
     'message text, secondary text and meta',
   ),
+  ...cross(
+    ['ink-placeholder'],
+    ['surface-050', 'surface-100'],
+    TEXT,
+    'the hint inside an empty field: dimmer than typed text, still readable',
+  ),
   ...cross(['ink'], AVATARS, TEXT, 'the initials in an avatar'),
   // `accent` is a fill; its words are `accent-text`, on whatever the message sits on,
   // including a mention's tint and the active row (D-110).

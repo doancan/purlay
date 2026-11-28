@@ -18,6 +18,7 @@
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-ink-subtle: var(--ink-subtle);
+  --color-ink-placeholder: var(--ink-placeholder);
   --color-nav-rail: var(--nav-rail);
   --color-nav-surface: var(--nav-surface);
   --color-nav-hover: var(--nav-hover);
@@ -140,7 +141,6 @@
   --transition-duration-arrive: var(--duration-arrive);
   --transition-duration-slide: var(--duration-slide);
   --transition-duration-celebrate: var(--duration-celebrate);
-  --transition-duration-celebrate-grand: var(--duration-celebrate-grand);
   --transition-duration-nudge: var(--duration-nudge);
   --ease-standard: var(--easing-standard);
 
@@ -286,21 +286,6 @@
 @utility size-switcher {
   width: var(--size-switcher);
   height: var(--size-switcher);
-}
-
-@utility size-spark-xs {
-  width: var(--size-spark-xs);
-  height: var(--size-spark-xs);
-}
-
-@utility size-spark-sm {
-  width: var(--size-spark-sm);
-  height: var(--size-spark-sm);
-}
-
-@utility size-spark-lg {
-  width: var(--size-spark-lg);
-  height: var(--size-spark-lg);
 }
 
 @utility size-avatar {

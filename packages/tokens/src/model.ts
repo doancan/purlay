@@ -48,9 +48,9 @@ const RESERVED = [...Object.values(PREFIX), 'text-', 'font-'];
 const MAX_DURATION_MS = 200;
 
 /**
- * The motions allowed to run longer: a celebration is an event, not an interface transition (D-247). The family is
- * `duration-celebrate` and what is named under it (`duration-celebrate-grand`, D-261), under one and the same cap — five seconds, which a whole release show of
- * four and a half seconds fits.
+ * The motions allowed to run longer: a celebration is an event, not an interface transition (D-261). The family is
+ * `duration-celebrate` and what is named under it, under one and the same cap — five seconds, which a release's
+ * confetti fits.
  */
 const CELEBRATION_TOKEN = 'duration-celebrate';
 const isCelebration = (name: string): boolean =>
@@ -145,9 +145,9 @@ const PX = /^(\d+)px$/;
 const MS = /^(\d+)ms$/;
 const EM = /^-?\d*\.?\d+em$/;
 const LENGTH = '(?:0|-?\\d+px)';
-const SHADOW = new RegExp(
-  `^${LENGTH} ${LENGTH} ${LENGTH} ${LENGTH} (?:#[0-9a-f]{6,8}|rgba\\(\\d{1,3}, \\d{1,3}, \\d{1,3}, (?:0|1|0?\\.\\d{1,3})\\))$`,
-);
+const SHADOW_LAYER = `(?:inset )?${LENGTH} ${LENGTH} ${LENGTH} ${LENGTH} (?:#[0-9a-f]{6,8}|rgba\\(\\d{1,3}, \\d{1,3}, \\d{1,3}, (?:0|1|0?\\.\\d{1,3})\\))`;
+/** One layer, or several joined by ", ": a soft shadow is a contact line plus an ambient spread (D-362). */
+const SHADOW = new RegExp(`^${SHADOW_LAYER}(?:, ${SHADOW_LAYER})*$`);
 const BEZIER =
   /^cubic-bezier\((0|1|0?\.\d+), (-?\d+|-?\d*\.\d+), (0|1|0?\.\d+), (-?\d+|-?\d*\.\d+)\)$/;
 const STACK = /^[A-Za-z0-9 ,"_-]+$/;

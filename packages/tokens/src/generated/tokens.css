@@ -100,18 +100,19 @@
   --surface-100: #121215;
   --surface-200: #232227;
   --code-bg: #0c0c0e;
-  --border-subtle: #28282d;
+  --border-subtle: #313137;
   --border-strong: #797981;
   --ink: #f5f5f7;
-  --ink-muted: #a9a9b1;
-  --ink-subtle: #9696a0;
+  --ink-muted: #b4b4bc;
+  --ink-subtle: #a2a2ac;
+  --ink-placeholder: #8f8f99;
   --nav-rail: #070709;
   --nav-surface: #0d0d0f;
   --nav-hover: #212126;
   --nav-selected: #252d4a;
   --nav-border: #1b1b1f;
   --nav-ink: #f5f5f7;
-  --nav-ink-muted: #a5a5ad;
+  --nav-ink-muted: #b2b2ba;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-text: #8db4ff;
@@ -125,7 +126,7 @@
   --avatar-5: #3a1c2f;
   --avatar-6: #302b17;
   --focus-ring: #6f8fe8;
-  --border-default: #2a2d37;
+  --border-default: #383c48;
   --composer-rest: #22252d;
   --composer-hover: #30343f;
   --composer-focus: #434856;
@@ -153,9 +154,9 @@
   --brand-google-green: #34a853;
   --brand-google-yellow: #fbbc05;
   --brand-google-red: #ea4335;
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-raised: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
-  --shadow-float: 0 8px 24px 0 rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 2px 6px 0 rgba(0, 0, 0, 0.2);
+  --shadow-raised: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 4px 12px 0 rgba(0, 0, 0, 0.3), 0 12px 28px 0 rgba(0, 0, 0, 0.2);
+  --shadow-float: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 8px 24px 0 rgba(0, 0, 0, 0.4), 0 20px 48px 0 rgba(0, 0, 0, 0.3);
 }
 
 [data-theme='light'] {
@@ -165,18 +166,19 @@
   --surface-100: #ffffff;
   --surface-200: #ededf0;
   --code-bg: #f7f7f9;
-  --border-subtle: #e3e3e6;
+  --border-subtle: #dadade;
   --border-strong: #bcbcc1;
   --ink: #18181b;
-  --ink-muted: #52525b;
-  --ink-subtle: #5d5d68;
-  --nav-rail: #efeff1;
-  --nav-surface: #f3f3f5;
-  --nav-hover: #e7e7ea;
-  --nav-selected: #d5e1fc;
-  --nav-border: #e1e1e5;
-  --nav-ink: #18181b;
-  --nav-ink-muted: #52525b;
+  --ink-muted: #45454d;
+  --ink-subtle: #50505a;
+  --ink-placeholder: #676772;
+  --nav-rail: #e5e9f4;
+  --nav-surface: #f3f5fa;
+  --nav-hover: #d9deef;
+  --nav-selected: #d2defb;
+  --nav-border: #ccd2e4;
+  --nav-ink: #1b1c2e;
+  --nav-ink-muted: #40446a;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-text: #1d4ed8;
@@ -190,7 +192,7 @@
   --avatar-5: #f3e3ee;
   --avatar-6: #eeeadb;
   --focus-ring: #5479dd;
-  --border-default: #d7d7de;
+  --border-default: #c9c9d2;
   --composer-rest: #e4e4ea;
   --composer-hover: #d3d3db;
   --composer-focus: #b8b8c2;
@@ -218,9 +220,9 @@
   --brand-google-green: #34a853;
   --brand-google-yellow: #fbbc05;
   --brand-google-red: #ea4335;
-  --shadow-card: 0 1px 2px 0 rgba(16, 16, 24, 0.06);
-  --shadow-raised: 0 4px 12px 0 rgba(16, 16, 24, 0.07);
-  --shadow-float: 0 8px 24px 0 rgba(16, 16, 24, 0.1);
+  --shadow-card: 0 1px 2px 0 rgba(16, 16, 24, 0.05), 0 2px 6px 0 rgba(16, 16, 24, 0.04);
+  --shadow-raised: 0 1px 2px 0 rgba(16, 16, 24, 0.05), 0 4px 12px 0 rgba(16, 16, 24, 0.06), 0 12px 28px 0 rgba(16, 16, 24, 0.04);
+  --shadow-float: 0 1px 3px 0 rgba(16, 16, 24, 0.06), 0 8px 24px 0 rgba(16, 16, 24, 0.09), 0 20px 48px 0 rgba(16, 16, 24, 0.06);
 }
 
 [data-theme='midnight'] {
@@ -230,18 +232,19 @@
   --surface-100: #1a1a34;
   --surface-200: #25253f;
   --code-bg: #14142b;
-  --border-subtle: #2d2d4b;
+  --border-subtle: #35355a;
   --border-strong: #7d7da0;
   --ink: #f1f1f8;
-  --ink-muted: #a9a9c6;
-  --ink-subtle: #9696b6;
+  --ink-muted: #b4b4d0;
+  --ink-subtle: #a2a2c2;
+  --ink-placeholder: #9494b4;
   --nav-rail: #16162b;
   --nav-surface: #22223f;
   --nav-hover: #272745;
   --nav-selected: #282e56;
   --nav-border: #34345a;
   --nav-ink: #f4f4f8;
-  --nav-ink-muted: #a9a9c6;
+  --nav-ink-muted: #b4b4d0;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
   --accent-text: #8db4ff;
@@ -255,7 +258,7 @@
   --avatar-5: #512a4c;
   --avatar-6: #3d3a24;
   --focus-ring: #c4c4d8;
-  --border-default: #3a3a60;
+  --border-default: #44446e;
   --composer-rest: #34345a;
   --composer-hover: #42426e;
   --composer-focus: #58588a;
@@ -283,9 +286,9 @@
   --brand-google-green: #34a853;
   --brand-google-yellow: #fbbc05;
   --brand-google-red: #ea4335;
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-raised: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
-  --shadow-float: 0 8px 24px 0 rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 2px 6px 0 rgba(0, 0, 0, 0.2);
+  --shadow-raised: 0 1px 2px 0 rgba(0, 0, 0, 0.35), 0 4px 12px 0 rgba(0, 0, 0, 0.3), 0 12px 28px 0 rgba(0, 0, 0, 0.2);
+  --shadow-float: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 8px 24px 0 rgba(0, 0, 0, 0.4), 0 20px 48px 0 rgba(0, 0, 0, 0.3);
 }
 
 :root {
@@ -301,10 +304,10 @@
   --space-12: 48px;
   --space-16: 64px;
   --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --radius-2xl: 12px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
   --radius-pill: 9999px;
   --size-rail: 56px;
   --size-sidebar: 264px;
@@ -335,9 +338,6 @@
   --size-icon-md: 16px;
   --size-icon-lg: 20px;
   --size-switcher: 40px;
-  --size-spark-xs: 1px;
-  --size-spark-sm: 2px;
-  --size-spark-lg: 3px;
   --size-avatar: 28px;
   --size-avatar-sm: 20px;
   --size-avatar-lg: 36px;
@@ -361,8 +361,7 @@
   --duration-mark: 200ms;
   --duration-arrive: 200ms;
   --duration-slide: 200ms;
-  --duration-celebrate: 3200ms;
-  --duration-celebrate-grand: 4500ms;
+  --duration-celebrate: 3600ms;
   --duration-nudge: 200ms;
   --easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -379,12 +378,12 @@
   --text-title-size: 16px;
   --text-title-leading: 1.5;
   --text-title-weight: var(--weight-semibold);
-  --text-title-tracking: 0em;
+  --text-title-tracking: -0.011em;
   --text-heading-family: var(--font-sans);
   --text-heading-size: 15px;
   --text-heading-leading: 1.47;
   --text-heading-weight: var(--weight-semibold);
-  --text-heading-tracking: 0em;
+  --text-heading-tracking: -0.008em;
   --text-body-family: var(--font-sans);
   --text-body-size: 14px;
   --text-body-leading: 1.6;
@@ -419,7 +418,6 @@
     --duration-arrive: 0ms;
     --duration-slide: 0ms;
     --duration-celebrate: 0ms;
-    --duration-celebrate-grand: 0ms;
     --duration-nudge: 0ms;
   }
 }

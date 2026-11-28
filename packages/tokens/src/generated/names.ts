@@ -21,6 +21,7 @@ export const colorTokens = [
   'ink',
   'ink-muted',
   'ink-subtle',
+  'ink-placeholder',
   'nav-rail',
   'nav-surface',
   'nav-hover',
@@ -130,9 +131,6 @@ export const sizeTokens = [
   'size-icon-md',
   'size-icon-lg',
   'size-switcher',
-  'size-spark-xs',
-  'size-spark-sm',
-  'size-spark-lg',
   'size-avatar',
   'size-avatar-sm',
   'size-avatar-lg',
@@ -166,7 +164,6 @@ export const durationTokens = [
   'duration-arrive',
   'duration-slide',
   'duration-celebrate',
-  'duration-celebrate-grand',
   'duration-nudge',
 ] as const;
 
