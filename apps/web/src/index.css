@@ -366,69 +366,34 @@
 }
 
 /*
- * The party popper's firework (`ui/fireworks.tsx`): a rocket's trail draws upward, then its burst opens
- * from the centre and fades. One show, no loop; its length is `duration-celebrate` (0ms under reduced motion).
+ * The release confetti (`ui/confetti.tsx`): a piece is thrown up and inward from a bottom corner, slows at the
+ * top of its arc, then flutters down turning. Its path is its own custom properties; one run, no loop, its
+ * length is `duration-celebrate` (not drawn under reduced motion).
  */
-@keyframes firework-rocket {
+@keyframes confetti-pop {
   from {
-    stroke-dashoffset: 8;
     opacity: 1;
+    transform: none;
+    animation-timing-function: var(--easing-standard);
   }
-  80% {
+  38% {
     opacity: 1;
+    transform: translate(var(--x1), var(--y1)) rotate(calc(var(--spin) * 0.45));
+    animation-timing-function: ease-in;
   }
-  to {
-    stroke-dashoffset: -100;
-    opacity: 0;
-  }
-}
-
-@keyframes firework-burst {
-  from {
-    opacity: 0;
-    transform: scale(0.08);
-  }
-  8% {
-    opacity: 1;
-  }
-  45% {
-    transform: scale(0.94);
-  }
-  62% {
+  85% {
     opacity: 1;
   }
   to {
     opacity: 0;
-    transform: scale(1);
+    transform: translate(var(--x2), var(--y2)) rotate(var(--spin));
   }
 }
 
-/* The sparks sink as they go out, slowly, which is what makes a burst hang rather than pop. */
-@keyframes firework-fall {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    transform: translateY(calc(var(--sink, 1) * var(--space-1)));
-  }
-}
-
-@utility animate-firework-rocket {
+@utility animate-confetti-pop {
   opacity: 0;
-  /* A comet: a short bright run of the line (its length is a share of the whole, `pathLength` 100) that travels up it. */
-  stroke-dasharray: 8 100;
-  stroke-linecap: round;
-  animation: firework-rocket calc(var(--duration-celebrate) * 0.22) var(--easing-standard) both;
-}
-
-@utility animate-firework-burst {
-  transform-origin: 0 0;
-  opacity: 0;
-  animation: firework-burst calc(var(--duration-celebrate) * 0.55) var(--easing-standard) both;
-}
-
-@utility animate-firework-fall {
-  animation: firework-fall calc(var(--duration-celebrate) * 0.55) linear both;
+  animation: confetti-pop calc(var(--duration-celebrate) * var(--flight, 1))
+    calc(var(--duration-celebrate) * var(--stagger, 0)) both;
 }
 
 /*
@@ -500,25 +465,6 @@
   &[data-instant] {
     transition-property: none;
   }
-}
-
-@utility firework-spark-xs {
-  r: var(--size-spark-xs);
-}
-
-@utility firework-spark-sm {
-  r: var(--size-spark-sm);
-}
-
-@utility firework-spark-lg {
-  r: var(--size-spark-lg);
-}
-
-/* A firework's rays and sparks: a line of the marker's weight at any window size. */
-@utility firework-line {
-  stroke-width: var(--stroke-marker);
-  vector-effect: non-scaling-stroke;
-  stroke-linecap: round;
 }
 
 /*

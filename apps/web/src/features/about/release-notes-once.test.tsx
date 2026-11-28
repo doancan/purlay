@@ -11,7 +11,7 @@ import type { ClientStorage } from '../../data/browser-storage';
 import { installDom } from '../../testing/dom';
 import { memoryStorage } from '../../testing/fakes';
 import { aSignedInApi } from '../../testing/fixtures';
-import { Fireworks } from '../../ui/fireworks';
+import { Confetti } from '../../ui/confetti';
 import { notesFor } from '../../testing/release-notes';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
@@ -48,11 +48,11 @@ const visit = async (
     path = '/w/acme',
     api = {},
   } = options;
-  // The frame draws the fireworks (`app.tsx`); this harness has no frame, so it brings them.
+  // The frame draws the confetti (`app.tsx`); this harness has no frame, so it brings it.
   const view = await renderApp(
     <>
       <Outlet />
-      <Fireworks />
+      <Confetti />
     </>,
     {
       path,
@@ -120,10 +120,10 @@ describe('the release notes after an update', () => {
     view.unmount();
   });
 
-  test('opens with fireworks over it — a few shows, for a release — and none for a person who asked for less motion', async () => {
+  test('opens with confetti over it, for a release, and none for a person who asked for less motion', async () => {
     const view = await visit({ storage: memoryStorage() });
     await view.findByRole('dialog', DIALOG);
-    expect(view.queryByTestId('fireworks')).not.toBeNull();
+    expect(view.queryByTestId('confetti')).not.toBeNull();
     view.unmount();
 
     const original = globalThis.matchMedia;
@@ -137,7 +137,7 @@ describe('the release notes after an update', () => {
     try {
       const calm = await visit({ storage: memoryStorage() });
       await calm.findByRole('dialog', DIALOG);
-      expect(calm.queryByTestId('fireworks')).toBeNull();
+      expect(calm.queryByTestId('confetti')).toBeNull();
       calm.unmount();
     } finally {
       globalThis.matchMedia = original;

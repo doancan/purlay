@@ -248,22 +248,6 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/data/followed-cache.test.ts'],
   },
   {
-    id: 'grand-run-ignores-its-sparks',
-    why: 'a grand run is paced without the time its last sparks take to sink, so it ends early and the sparks are cut off',
-    file: 'apps/web/src/ui/fireworks.tsx',
-    find: 'const span = Math.max(...bursts.map((each) => each.at)) + FALL;',
-    replace: 'const span = Math.max(...bursts.map((each) => each.at)) + 0;',
-    tests: ['apps/web/src/ui/fireworks.test.tsx'],
-  },
-  {
-    id: 'grand-run-is-one-show',
-    why: "a grand run holds only one show's bursts, so the release is greeted with the same small show as a party popper",
-    file: 'apps/web/src/ui/fireworks.tsx',
-    find: 'also: grand ? nextShow(random) : null,',
-    replace: 'also: null,',
-    tests: ['apps/web/src/ui/fireworks.test.tsx'],
-  },
-  {
     id: 'guest-account-aborted-response-applied',
     why: 'A cancelled transport answer must not clear content or claim drafts for a newer account.',
     file: 'apps/web/src/data/queries.ts',

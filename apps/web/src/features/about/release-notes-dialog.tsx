@@ -54,9 +54,9 @@ export const ReleaseNotesDialog = ({
   readonly onOpenChange: (open: boolean) => void;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
-  // A release is a moment: one show of fireworks, a few seconds, over the window as it opens (reduced motion: none).
+  // A release is a moment: confetti, a few seconds, over the window as it opens (reduced motion: none).
   useEffect(() => {
-    if (open) celebrate('grand');
+    if (open) celebrate();
   }, [open]);
   const featured = notes.groups.find((group) => group.category === 'Featured');
   const rest = notes.groups.filter((group) => group.category !== 'Featured');

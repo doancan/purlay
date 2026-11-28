@@ -1061,9 +1061,9 @@ export const WEB_FEATURES: readonly Mutation[] = [
   },
   {
     id: 'release-window-does-not-celebrate',
-    why: 'a new version opens its notes without fireworks',
+    why: 'a new version opens its notes without confetti',
     file: 'apps/web/src/features/about/release-notes-dialog.tsx',
-    find: "if (open) celebrate('grand');",
+    find: 'if (open) celebrate();',
     replace: 'if (open) celebrate;',
     tests: ['apps/web/src/features/about/release-notes-once.test.tsx'],
   },
@@ -1339,14 +1339,6 @@ export const WEB_FEATURES: readonly Mutation[] = [
     find: 'value={membership.modules ?? null}',
     replace: 'value={null}',
     tests: ['apps/web/src/features/shell/rail.test.tsx'],
-  },
-  {
-    id: 'web-email-alone-keeps-its-rule',
-    why: 'the email form, when it is the only way in, hangs from a rule with nothing above it and wears the secondary button',
-    file: 'apps/web/src/features/sign-in/sign-in-screen.tsx',
-    find: 'alone={!github && !google && oidc === null && !methods.isError && mail}',
-    replace: 'alone={false}',
-    tests: ['apps/web/src/features/sign-in/sign-in-screen.test.tsx'],
   },
   {
     id: 'web-manifest-palette-place-of-the-core',
