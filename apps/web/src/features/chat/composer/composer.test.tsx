@@ -300,6 +300,9 @@ describe('what it shows', () => {
       document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className ?? '',
     ).not.toContain('text-caption');
     expect(view.container.querySelector('[data-hints-divider]')).toBeNull();
+    // Spoken on a phone too: a key cap hidden for touch would be hidden from the description as well.
+    const description = document.getElementById(box().getAttribute('aria-describedby') ?? '');
+    expect(description?.querySelector('.touch-only\\:hidden')).toBeNull();
   });
 
   test('pressing a formatting tool keeps the focus in the box, so the row stays for the click', async () => {

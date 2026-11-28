@@ -140,7 +140,7 @@ describe('a thread’s GitHub work', () => {
     const panel = within(view.getByRole('region', { name: 'GitHub' }));
     const link = panel.getByRole('link', { name: 'acme/api#12' });
     expect(link.getAttribute('href')).toBe('https://github.com/acme/api/issues/12');
-    expect(link.getAttribute('rel')).toBe('noreferrer');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     expect(panel.getByText('Open')).toBeDefined();
     expect(panel.getByText('Closed')).toBeDefined();
     expect(panel.queryByRole('button', { name: 'Create GitHub issue…' })).toBeNull();

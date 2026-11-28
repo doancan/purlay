@@ -192,7 +192,7 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
       <div className="flex items-center justify-between gap-2 text-caption text-ink-muted">
         <span className="flex flex-col">
           {keysOffered && (
-            // The keys as this keyboard prints them (⌘ ⇧ ↵ on a Mac), as the composer's own hints are.
+            // The keys as this keyboard prints them (⌘ ⇧ ↵ on a Mac), as the formatting tools' own tips print them.
             <span className="flex flex-wrap gap-x-3 gap-y-1">
               <span className="whitespace-nowrap">
                 <Kbd>{saveKey}</Kbd> {t('message.editHint.save')}

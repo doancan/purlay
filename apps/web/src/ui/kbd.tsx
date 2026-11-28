@@ -12,7 +12,7 @@
  * sees two caps — and on a Mac nothing is between them, as the Mac writes ⌘K.
  *
  * A device that is only touch has no keyboard to press it on, so there it is not shown at all
- * (`touch-only:`, the composer's own line for it, D-188) — except in the reference of shortcuts, which
+ * (`touch-only:`) — except in the reference of shortcuts, which
  * a person reads to learn them for the keyboard they will use (`touch="show"`).
  */
 import { Fragment } from 'react';

@@ -822,8 +822,7 @@ code block, table (two columns and a row to fill in, its first heading selected,
 at its end; under the text sit the mention, an emoji picker and the file
 attach. Buttons and their shortcuts apply formatting immediately; source mode inserts the equivalent
 Markdown (D-110, D-181). **A thread's
-box has the same row** (D-164, D-181): in the panel's width the key hints are not drawn (a screen reader
-still reads them) and Send is the icon alone.
+box has the same row** (D-164, D-181): the key hints are not drawn anywhere (D-362; a screen reader still reads them) and in the panel's width Send is the icon alone.
 
 The **emoji picker** is a grid of four groups (faces, hands and people, work, symbols), arrow keys move
 through it, `Enter` writes the emoji where the caret is and the focus goes back to the box; `Esc` closes it
