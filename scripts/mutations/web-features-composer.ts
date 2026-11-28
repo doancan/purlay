@@ -291,8 +291,8 @@ export const WEB_FEATURES_COMPOSER: readonly Mutation[] = [
     id: 'guest-mention-mode-not-passed',
     why: 'The hook must pass restricted access to the actual candidate filter.',
     file: 'apps/web/src/features/chat/composer/mention-candidates.ts',
-    find: '      session.user.id,\n      guest,\n',
-    replace: '      session.user.id,\n',
+    find: '        session.user.id,\n        guest,\n',
+    replace: '        session.user.id,\n',
     tests: [
       'apps/web/src/features/chat/composer/composer.test.tsx',
       'apps/web/src/features/chat/composer/mention-candidates.test.ts',
