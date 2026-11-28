@@ -18,7 +18,7 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
 import { Select } from '../../../ui/select';
 import { useWorkspace } from '../../shell/workspace';
-import { SaveOutcome, SettingsCard, SettingsRow } from '../page';
+import { SaveOutcome, SettingsCard, SettingsRow, cardPlainClasses, cardRowClasses } from '../page';
 
 /** The windows offered, in days; `null` is forever. */
 const OFFERED: readonly (number | null)[] = [null, 30, 90, 365, 730, 1825];
@@ -106,7 +106,7 @@ export const RetentionCard = (): React.JSX.Element => {
         }
       >
         {setting.isError ? (
-          <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+          <div className={cardRowClasses}>
             <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(setting.error)}</p>
             <Button
               onClick={() => {
@@ -117,7 +117,7 @@ export const RetentionCard = (): React.JSX.Element => {
             </Button>
           </div>
         ) : now === undefined ? (
-          <LoadingStatus label={t('common.loading')} className="px-6 py-5 max-narrow:px-4">
+          <LoadingStatus label={t('common.loading')} className={cardPlainClasses}>
             <Skeleton />
           </LoadingStatus>
         ) : (

@@ -24,7 +24,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
-import { SettingsCard } from '../page';
+import { SettingsCard, cardBodyClasses, cardRowClasses } from '../page';
 
 export const DevicesCard = (): React.JSX.Element => {
   const { t, format } = useI18n();
@@ -71,7 +71,7 @@ export const DevicesCard = (): React.JSX.Element => {
       description={t('settings.devices.description')}
     >
       {sessions.isError ? (
-        <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardRowClasses}>
           <p className="min-w-0 flex-1 text-body text-ink-muted">
             {t('settings.devices.failed')} {describe(sessions.error)}
           </p>
@@ -84,10 +84,7 @@ export const DevicesCard = (): React.JSX.Element => {
           </Button>
         </div>
       ) : sessions.data === undefined ? (
-        <LoadingStatus
-          label={t('common.loading')}
-          className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-        >
+        <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
           <Skeleton />
           <Skeleton />
         </LoadingStatus>

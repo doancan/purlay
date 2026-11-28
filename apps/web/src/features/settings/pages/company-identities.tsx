@@ -11,7 +11,7 @@ import { Dialog } from '../../../ui/dialog';
 import { useWorkspace } from '../../shell/workspace';
 import { useSession } from '../../session/session';
 import { leave } from '../../sign-in/leave';
-import { SettingsCard } from '../page';
+import { SettingsCard, cardNoteClasses } from '../page';
 import { CompanyLoading, useCompanyAlive } from './company-parts';
 
 export const CompanyIdentitiesCard = (): React.JSX.Element | null => {
@@ -107,9 +107,7 @@ const CompanyIdentities = (): React.JSX.Element => {
           }}
         />
       ) : entries.length === 0 ? (
-        <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-          {t('company.links.empty')}
-        </p>
+        <p className={cardNoteClasses}>{t('company.links.empty')}</p>
       ) : (
         <ul className="flex flex-col">
           {entries.map((entry) => (

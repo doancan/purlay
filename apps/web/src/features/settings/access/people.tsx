@@ -15,7 +15,7 @@ import { Button } from '../../../ui/button';
 import { Avatar } from '../../../ui/avatar';
 import { Select } from '../../../ui/select';
 import { Dialog } from '../../../ui/dialog';
-import { SettingsCard, SettingsPage } from '../page';
+import { SettingsCard, SettingsPage, cardPlainClasses } from '../page';
 import { useWorkspaceRole } from '../role';
 import { useSession } from '../../session/session';
 import {
@@ -293,7 +293,7 @@ const PersonAccess = ({
       </SettingsCard>
       {source !== undefined && (
         <SettingsCard title={sourceName(source, t)}>
-          <div className="px-6 py-5 max-narrow:px-4">
+          <div className={cardPlainClasses}>
             <AccessGrants
               subject={{ kind: 'source', sourceId: source.id }}
               revision={source.revision}

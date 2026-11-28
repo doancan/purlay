@@ -13,7 +13,7 @@ import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useWorkspace } from '../../shell/workspace';
-import { SettingsCard } from '../page';
+import { SettingsCard, cardBodyClasses, cardPlainClasses, cardRowClasses } from '../page';
 
 /** From here the bar is drawn in the warning tone: a team should hear of it before a file is refused. */
 const NEARLY_FULL = 0.9;
@@ -31,7 +31,7 @@ export const StorageCard = (): React.JSX.Element => {
   const body = ((): React.JSX.Element => {
     if (storage.isError) {
       return (
-        <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardRowClasses}>
           <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(storage.error)}</p>
           <Button
             onClick={() => {
@@ -45,7 +45,7 @@ export const StorageCard = (): React.JSX.Element => {
     }
     if (storage.data === undefined) {
       return (
-        <LoadingStatus label={t('common.loading')} className="px-6 py-5 max-narrow:px-4">
+        <LoadingStatus label={t('common.loading')} className={cardPlainClasses}>
           <Skeleton />
         </LoadingStatus>
       );
@@ -58,7 +58,7 @@ export const StorageCard = (): React.JSX.Element => {
       quota: format.bytes(quotaBytes),
     });
     return (
-      <div className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4">
+      <div className={cardBodyClasses}>
         <div className="flex items-baseline justify-between gap-6 max-narrow:flex-col max-narrow:gap-1">
           <span className="text-label text-ink">{t('storage.label')}</span>
           <span className="font-mono text-label text-ink">{said}</span>

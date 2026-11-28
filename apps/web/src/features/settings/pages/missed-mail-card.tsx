@@ -15,7 +15,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { Checkbox } from '../../../ui/checkbox';
 import { useToast } from '../../../ui/toast';
-import { SettingsCard, SettingsRow } from '../page';
+import { SettingsCard, SettingsRow, cardRowClasses } from '../page';
 
 export const MissedMailCard = (): React.JSX.Element | null => {
   const { t } = useI18n();
@@ -34,7 +34,7 @@ export const MissedMailCard = (): React.JSX.Element | null => {
     // Not known whether it can be offered: said, with the way to ask again, rather than silently not drawn.
     return (
       <SettingsCard title={t('missedMail.title')} description={t('missedMail.description')}>
-        <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardRowClasses}>
           <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(setting.error)}</p>
           <Button
             onClick={() => {

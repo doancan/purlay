@@ -17,7 +17,7 @@ import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useToast } from '../../../ui/toast';
 import { useWorkspace } from '../../shell/workspace';
-import { SettingsCard } from '../page';
+import { SettingsCard, cardBodyClasses, cardNoteClasses, cardRowClasses } from '../page';
 
 export const ArchivedChannelsCard = (): React.JSX.Element => {
   const { t, format } = useI18n();
@@ -65,7 +65,7 @@ export const ArchivedChannelsCard = (): React.JSX.Element => {
       description={t('settings.archived.description')}
     >
       {list.isError ? (
-        <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardRowClasses}>
           <p className="min-w-0 flex-1 text-body text-ink-muted">
             {t('settings.archived.loadFailed')}
           </p>
@@ -78,17 +78,12 @@ export const ArchivedChannelsCard = (): React.JSX.Element => {
           </Button>
         </div>
       ) : list.data === undefined ? (
-        <LoadingStatus
-          label={t('common.loading')}
-          className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-        >
+        <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
       ) : list.data.length === 0 ? (
-        <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-          {t('settings.archived.none')}
-        </p>
+        <p className={cardNoteClasses}>{t('settings.archived.none')}</p>
       ) : (
         <ul className="flex flex-col">
           {list.data.map((channel) => (

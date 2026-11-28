@@ -11,7 +11,14 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { InvitationForm } from '../../invitations/invitation-form';
 import { GuestInvitationSummary } from '../../invitations/guest-invitation-summary';
 import { useInvitations } from '../invitations';
-import { SettingsCard, SettingsPage } from '../page';
+import {
+  SettingsCard,
+  SettingsPage,
+  cardBodyClasses,
+  cardNoteClasses,
+  cardPlainClasses,
+  cardRowClasses,
+} from '../page';
 
 export const InvitationsPage = (): React.JSX.Element => {
   const { t, format } = useI18n();
@@ -27,7 +34,7 @@ export const InvitationsPage = (): React.JSX.Element => {
       description={t('settings.invitations.description')}
     >
       <SettingsCard title={t('settings.invitations.new')}>
-        <div className="px-6 py-5 max-narrow:px-4">
+        <div className={cardPlainClasses}>
           <InvitationForm invitations={invitations} methods={methods} />
         </div>
       </SettingsCard>
@@ -35,7 +42,7 @@ export const InvitationsPage = (): React.JSX.Element => {
       <InvitationRecipients />
       <SettingsCard title={t('invite.admin.open')}>
         {list.isError && list.data === undefined ? (
-          <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+          <div className={cardRowClasses}>
             <p className="min-w-0 flex-1 text-body text-ink-muted">
               {t('settings.invitations.failed')}
             </p>
@@ -48,17 +55,12 @@ export const InvitationsPage = (): React.JSX.Element => {
             </Button>
           </div>
         ) : list.data === undefined ? (
-          <LoadingStatus
-            label={t('common.loading')}
-            className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-          >
+          <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
             <Skeleton />
             <Skeleton />
           </LoadingStatus>
         ) : open.length === 0 ? (
-          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-            {t('invite.admin.none')}
-          </p>
+          <p className={cardNoteClasses}>{t('invite.admin.none')}</p>
         ) : (
           <ul aria-label={t('invite.admin.open')} className="flex flex-col">
             {open.map((invitation) => (

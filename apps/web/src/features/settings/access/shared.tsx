@@ -21,6 +21,7 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { TextField } from '../../../ui/text-field';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
+import { cardBodyClasses, cardNoteClasses } from '../page';
 
 export const useAccessScope = (): {
   readonly workspaceId: string;
@@ -172,15 +173,12 @@ export const AccessListState = ({
         </div>
       )}
       {pending && !failed && !paused ? (
-        <LoadingStatus
-          label={t('common.loading')}
-          className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-        >
+        <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
       ) : empty && !failed && !paused ? (
-        <p role="status" className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
+        <p role="status" className={cardNoteClasses}>
           {t('access.empty')}
         </p>
       ) : (

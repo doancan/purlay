@@ -21,7 +21,7 @@ import { Checkbox } from '../../../ui/checkbox';
 import { Dialog } from '../../../ui/dialog';
 import { Select } from '../../../ui/select';
 import { TextField } from '../../../ui/text-field';
-import { SettingsCard, SettingsPage } from '../page';
+import { SettingsCard, SettingsPage, cardNoteClasses } from '../page';
 import { useWorkspace } from '../../shell/workspace';
 import { SecretValue } from '../security/parts';
 import { systemClock } from '../../../system-clock';
@@ -370,9 +370,7 @@ const DirectoryDetail = ({
         }
       >
         {directory.credentials.length === 0 ? (
-          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-            {t('directory.noCredentials')}
-          </p>
+          <p className={cardNoteClasses}>{t('directory.noCredentials')}</p>
         ) : (
           <ul>
             {directory.credentials.map((credential) => (

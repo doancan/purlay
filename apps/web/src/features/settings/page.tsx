@@ -273,3 +273,13 @@ export const SettingsTextRow = ({
     </div>
   );
 };
+
+/**
+ * What goes inside a card's body, said once: a block that loads, fails or has nothing to show, a row of controls, a
+ * stack of fields. The same four strings were pasted into some sixty places, and each paste could drift from the
+ * card's own padding.
+ */
+export const cardBodyClasses = 'flex flex-col gap-3 px-6 py-5 max-narrow:px-4';
+export const cardNoteClasses = 'px-6 py-5 text-body text-ink-muted max-narrow:px-4';
+export const cardRowClasses = 'flex items-center gap-3 px-6 py-5 max-narrow:px-4';
+export const cardPlainClasses = 'px-6 py-5 max-narrow:px-4';

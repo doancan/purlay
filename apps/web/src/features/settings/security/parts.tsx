@@ -9,6 +9,7 @@ import { useContentPorts } from '../../content/content-ports';
 import { useToast } from '../../../ui/toast';
 import { systemClock } from '../../../system-clock';
 import type { Clock } from '../../../realtime/clock';
+import { cardBodyClasses } from '../page';
 
 interface SecurityTask {
   readonly current: () => boolean;
@@ -98,10 +99,7 @@ export const SecurityLoading = ({
       <Button onClick={retry}>{t('common.retry')}</Button>
     </div>
   ) : (
-    <LoadingStatus
-      label={t('common.loading')}
-      className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-    >
+    <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
       <Skeleton />
       <Skeleton />
     </LoadingStatus>
