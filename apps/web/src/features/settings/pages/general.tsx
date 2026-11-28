@@ -17,8 +17,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { href } from '../../../router/routes';
 import { Button } from '../../../ui/button';
 import { Dialog } from '../../../ui/dialog';
-import { useToast } from '../../../ui/toast';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { useModules, useSession } from '../../session/session';
 import { CreateWorkspace } from '../../shell/create-workspace';
 import { useWorkspace } from '../../shell/workspace';
@@ -30,8 +29,7 @@ import { UrgentMessagesCard } from './urgent-messages-card';
 export const GeneralPage = (): React.JSX.Element => {
   const { t } = useI18n();
   const describe = useDescribeFailure();
-  const { show } = useToast();
-  const { copy } = useContentPorts();
+  const copyText = useCopier();
   const { workspace, role, urgentMessagesEnabled } = useWorkspace();
   const { mayCreateWorkspace } = useSession();
   const modules = useModules();
@@ -133,14 +131,7 @@ export const GeneralPage = (): React.JSX.Element => {
               <Button
                 glyph="copy"
                 onClick={() => {
-                  copy(address).then(
-                    () => {
-                      show({ message: t('common.copied') });
-                    },
-                    () => {
-                      show({ message: t('failure.copy') });
-                    },
-                  );
+                  copyText(address);
                 }}
               >
                 {t('common.copy')}

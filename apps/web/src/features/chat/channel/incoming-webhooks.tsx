@@ -20,8 +20,7 @@ import { Icon } from '../../../components/icon';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { TextField } from '../../../ui/text-field';
-import { useToast } from '../../../ui/toast';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { nameOf } from '../../../lib/author';
 
 /** The address a tool posts to: this server's own origin and the path the hook was given. */
@@ -36,8 +35,7 @@ const Setup = ({
   readonly onDone: () => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { show } = useToast();
-  const ports = useContentPorts();
+  const copyText = useCopier();
   const api = useApi();
   const client = useQueryClient();
   const describe = useDescribeFailure();
@@ -51,14 +49,7 @@ const Setup = ({
   }, []);
   const address = addressOf(created);
   const copy = (text: string): void => {
-    ports.copy(text).then(
-      () => {
-        show({ message: t('common.copied') });
-      },
-      () => {
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(text);
   };
   const test = async (): Promise<void> => {
     setSending(true);

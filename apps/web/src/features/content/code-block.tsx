@@ -27,9 +27,8 @@ import { useEffect, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
-import { useToast } from '../../ui/toast';
 import { Tooltip } from '../../ui/tooltip';
-import { useContentPorts } from './content-ports';
+import { useContentPorts, useCopier } from './content-ports';
 import type { HighlightToken } from './highlight';
 
 /** The line count above which a block is clamped (`ARCHITECTURE.md` §8.2). */
@@ -135,8 +134,8 @@ export const CodeBlock = ({
   previewFirst = false,
 }: CodeBlockProps): React.JSX.Element => {
   const { t } = useI18n();
-  const { show } = useToast();
   const ports = useContentPorts();
+  const copyText = useCopier();
   const [lines, setLines] = useState<readonly (readonly HighlightToken[])[] | null>(null);
   const [open, setOpen] = useState(false);
   // A long line scrolls, under a scrollbar that is always drawn; wrapped, it is all in view at once.
@@ -160,16 +159,7 @@ export const CodeBlock = ({
   }, [code, language, ports]);
 
   const copy = (): void => {
-    ports.copy(code).then(
-      () => {
-        show({ message: t('common.copied') });
-      },
-      () => {
-        // The clipboard refuses outside a secure context or without permission: say so, and
-        // leave the code on the screen to be selected by hand.
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(code);
   };
 
   return (

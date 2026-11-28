@@ -30,8 +30,7 @@ import {
   MenuSeparator,
 } from '../../../ui/menu';
 import { useMembers } from '../../../data/queries';
-import { useToast } from '../../../ui/toast';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { useSession } from '../../session/session';
 import { LazyCreateWorkspace } from '../../shell/create-workspace-load';
 import { useMarkAllRead } from '../../shell/read-all';
@@ -77,8 +76,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   // The dialog is in the deferred chunk (D-163).
   const deferred = useDeferred([inviting, setInviting]);
   const [creating, setCreating] = useState(false);
-  const { show } = useToast();
-  const { copy } = useContentPorts();
+  const copyText = useCopier();
   const markAllRead = useMarkAllRead();
   const readAllKeys = useMemo(() => {
     const mac = isMacPlatform(navigator);
@@ -88,14 +86,7 @@ export const WorkspaceMenu = (): React.JSX.Element => {
   /** The workspace's own address, whole: what a person pastes to somebody who already has an account. */
   const copyLink = (): void => {
     const link = new URL(href('workspace', { slug: workspace.slug }), window.location.origin).href;
-    copy(link).then(
-      () => {
-        show({ message: t('rowMenu.linkCopied') });
-      },
-      () => {
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(link, t('rowMenu.linkCopied'));
   };
   const role = memberships.find((membership) => membership.workspace.id === workspace.id)?.role;
   // Inviting and the workspace's settings are an owner's and an admin's (D-115, D-146); a member is

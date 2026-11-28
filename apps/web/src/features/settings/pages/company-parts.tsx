@@ -2,9 +2,8 @@
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
-import { useToast } from '../../../ui/toast';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { useSession } from '../../session/session';
 import { leave } from '../../sign-in/leave';
 import { href } from '../../../router/routes';
@@ -54,8 +53,7 @@ export const CompanyCopyValue = ({
   readonly value: string;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { copy } = useContentPorts();
-  const { show } = useToast();
+  const copyText = useCopier();
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-label text-ink">{label}</span>
@@ -67,14 +65,7 @@ export const CompanyCopyValue = ({
           glyph="copy"
           aria-label={t('company.copyNamed', { label })}
           onClick={() => {
-            copy(value).then(
-              () => {
-                show({ message: t('common.copied') });
-              },
-              () => {
-                show({ message: t('failure.copy') });
-              },
-            );
+            copyText(value);
           }}
         >
           {t('common.copy')}

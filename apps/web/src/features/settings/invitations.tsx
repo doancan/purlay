@@ -21,7 +21,7 @@ import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
 import { useToast } from '../../ui/toast';
-import { useContentPorts } from '../content/content-ports';
+import { useCopier } from '../content/content-ports';
 import { useWorkspace } from '../shell/workspace';
 import { inviteLink } from '../invitations/pending';
 
@@ -53,7 +53,7 @@ export const useInvitations = (enabled: boolean): Invitations => {
   const client = useQueryClient();
   const describe = useDescribeFailure();
   const { show } = useToast();
-  const { copy } = useContentPorts();
+  const copyText = useCopier();
   const { workspace } = useWorkspace();
   // Keep the id with the one-time secret so revoking this invitation also removes its copy field.
   const [made, setMade] = useState<{
@@ -152,14 +152,7 @@ export const useInvitations = (enabled: boolean): Invitations => {
   };
 
   const copyLink = (text: string): void => {
-    copy(text).then(
-      () => {
-        show({ message: t('common.copied') });
-      },
-      () => {
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(text);
   };
 
   const forget = (): void => {

@@ -5,8 +5,7 @@ import { isLibraryFailure } from '../../../data/errors';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
-import { useContentPorts } from '../../content/content-ports';
-import { useToast } from '../../../ui/toast';
+import { useCopier } from '../../content/content-ports';
 import { systemClock } from '../../../system-clock';
 import type { Clock } from '../../../lib/clock';
 import { cardBodyClasses } from '../page';
@@ -114,8 +113,7 @@ export const SecretValue = ({
   readonly value: string;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { copy } = useContentPorts();
-  const { show } = useToast();
+  const copyText = useCopier();
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <span className="text-label text-ink">{label}</span>
@@ -126,14 +124,7 @@ export const SecretValue = ({
         <Button
           glyph="copy"
           onClick={() => {
-            void copy(value).then(
-              () => {
-                show({ message: t('common.copied') });
-              },
-              () => {
-                show({ message: t('failure.copy') });
-              },
-            );
+            copyText(value);
           }}
         >
           {t('common.copy')}

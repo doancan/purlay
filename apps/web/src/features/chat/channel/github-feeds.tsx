@@ -24,8 +24,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { TextField } from '../../../ui/text-field';
-import { useToast } from '../../../ui/toast';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { Checkbox } from '../../../ui/checkbox';
 
 /** `CreateGitHubFeedRequest`'s rule, so the common slip is answered before a round trip. */
@@ -48,8 +47,7 @@ const Setup = ({
   readonly onDone: () => void;
 }): React.JSX.Element => {
   const { t } = useI18n();
-  const { show } = useToast();
-  const ports = useContentPorts();
+  const copyText = useCopier();
   const titleId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   // The person's attention goes where the secret is, the one time it can be read.
@@ -57,14 +55,7 @@ const Setup = ({
     heading.current?.focus();
   }, []);
   const copy = (text: string): void => {
-    ports.copy(text).then(
-      () => {
-        show({ message: t('common.copied') });
-      },
-      () => {
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(text);
   };
   const rows: [string, string][] = [
     [t('feeds.setup.address'), addressOf(created)],

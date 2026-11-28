@@ -10,8 +10,7 @@ import { useCallback } from 'react';
 import type { Message } from '@purlay/types';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { messageHref } from '../../../router/routes';
-import { useToast } from '../../../ui/toast';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 
 /** How long the message a link opened is marked, before the tint fades. */
@@ -33,21 +32,13 @@ export const messageUrl = (
 export const useCopyMessageLink = (): ((message: Message) => void) | null => {
   const { t } = useI18n();
   const slug = useWorkspaceIfAny()?.workspace.slug ?? null;
-  const { copy } = useContentPorts();
-  const { show } = useToast();
+  const copyText = useCopier();
   const copyLink = useCallback(
     (message: Message): void => {
       if (slug === null) return;
-      copy(messageUrl(window.location.origin, slug, message)).then(
-        () => {
-          show({ message: t('message.linkCopied') });
-        },
-        () => {
-          show({ message: t('failure.copy') });
-        },
-      );
+      copyText(messageUrl(window.location.origin, slug, message), t('message.linkCopied'));
     },
-    [copy, slug, show, t],
+    [copyText, slug, t],
   );
   return slug === null ? null : copyLink;
 };
