@@ -17,7 +17,7 @@ import { useRef, useState } from 'react';
 import type { Message } from '@purlay/types';
 import { useCopyMessageLink } from './message-link';
 import { useActions } from '../../../data/actions-provider';
-import { useChannels } from '../../../data/queries';
+import { useJoinedChannel } from '../../../data/queries';
 import { useDescribeFailure } from '../../../data/failure';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
@@ -172,10 +172,7 @@ const MoreMenu = ({
   const copyLink = useCopyMessageLink();
   const scope = useWorkspaceIfAny();
   const role = scope?.role;
-  const channels = useChannels(scope?.workspace.id ?? '', scope !== null);
-  const member =
-    channels.data?.some((channel) => channel.id === message.channelId && channel.state !== null) ===
-    true;
+  const member = useJoinedChannel(scope?.workspace.id ?? '', message.channelId, scope !== null);
   const moderating = !mine && (role === 'owner' || role === 'admin');
   const quote = useQuoteReply();
   // A quote puts focus in its composer; the menu must not take it back to its button as it closes.

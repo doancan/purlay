@@ -167,6 +167,45 @@ export const useChannels = (workspaceId: string, enabled = true): UseQueryResult
 };
 
 /**
+ * Whether the person has joined a channel (`Channel.state` is set), from the channel list the workspace already
+ * reads. Selected, so a message row asking it re-renders when the answer changes and not on every new message in
+ * the workspace, which moves the list's `lastMessageAt` and would redraw every row that read the whole list.
+ */
+export const useJoinedChannel = (
+  workspaceId: string,
+  channelId: string,
+  enabled = true,
+): boolean => {
+  const api = useApi();
+  const mayRead = useChannelReadEnabled(workspaceId, enabled);
+  const read = useQuery({
+    queryKey: keys.channels(workspaceId),
+    queryFn: ({ signal }) => api.channels(workspaceId, signal),
+    enabled: mayRead,
+    select: (channels: Channel[]) =>
+      channels.find((channel) => channel.id === channelId)?.state != null,
+  });
+  return read.data === true;
+};
+
+/**
+ * A channel's kind (`public`, `private`, `direct_message`…) from the channel list, selected for the reason
+ * `useJoinedChannel` is: a composer asking it must not redraw on every message in the workspace.
+ */
+export const useChannelType = (workspaceId: string, channelId: string): Channel['type'] | null => {
+  const api = useApi();
+  const mayRead = useChannelReadEnabled(workspaceId, true);
+  const read = useQuery({
+    queryKey: keys.channels(workspaceId),
+    queryFn: ({ signal }) => api.channels(workspaceId, signal),
+    enabled: mayRead,
+    select: (channels: Channel[]) =>
+      channels.find((channel) => channel.id === channelId)?.type ?? null,
+  });
+  return read.data ?? null;
+};
+
+/**
  * The repository a channel's code references link into (`Channel.codeRepository`, D-223), from the
  * channel list the workspace already reads: null outside a workspace, until the list is read, and for a
  * channel with none. Selected, so a row re-renders when this changes and not when the list's other

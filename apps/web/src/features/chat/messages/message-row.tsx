@@ -21,7 +21,7 @@
  * the cache's, and the cache keeps untouched messages as they were), so React's shallow
  * comparison is the whole check.
  */
-import { memo, useId, useRef } from 'react';
+import { memo, useId, useMemo, useRef } from 'react';
 import type { Message } from '@purlay/types';
 import { Icon } from '../../../components/icon';
 import { Avatar } from '../../../ui/avatar';
@@ -117,11 +117,16 @@ const MessageRowView = ({
     message.channelId,
   );
   const mentionsMe = message.mentions.includes(meId);
-  const mentioned = new Set(
-    message.mentions.flatMap((id) => {
-      const name = members.get(id);
-      return name === undefined ? [] : [name.toLowerCase()];
-    }),
+  // Kept while its inputs are: a new set each render is a new scope for the whole body to draw again.
+  const mentioned = useMemo(
+    () =>
+      new Set(
+        message.mentions.flatMap((id) => {
+          const name = members.get(id);
+          return name === undefined ? [] : [name.toLowerCase()];
+        }),
+      ),
+    [message.mentions, members],
   );
   const absolute = format.absolute(message.createdAt);
   const failed = delivery === 'failed';
