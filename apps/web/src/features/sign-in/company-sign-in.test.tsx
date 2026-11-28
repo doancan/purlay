@@ -45,6 +45,14 @@ const open = async (
   return view;
 };
 
+test('the company door is closed until asked for, and open when the address names a workspace', async () => {
+  const closed = await open({}, '/sign-in');
+  expect(closed.container.querySelector('details')?.hasAttribute('open')).toBe(false);
+  closed.unmount();
+  const named = await open({}, '/sign-in?workspace=acme');
+  expect(named.container.querySelector('details')?.hasAttribute('open')).toBe(true);
+});
+
 test('normalizes an exact workspace address and starts only the selected native provider', async () => {
   const asked: unknown[] = [];
   const navigation = spyOn(leave, 'to').mockImplementation(() => undefined);
