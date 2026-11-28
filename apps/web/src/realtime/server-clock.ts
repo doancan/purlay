@@ -14,7 +14,7 @@
  * refuses surfaces as `failed` with a retry, the path `ARCHITECTURE.md` §5.3
  * already specifies. (D-33)
  */
-import type { Clock } from './clock';
+import type { Clock } from '../lib/clock';
 
 /** What one PING/PONG exchange tells us. */
 interface ClockSample {

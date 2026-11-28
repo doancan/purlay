@@ -9,9 +9,9 @@
  * for a layout engine that the test DOM does not have. The browser's own are the defaults.
  */
 import { createContext, useContext } from 'react';
-import type { Clock } from '../../../realtime/clock';
-import type { Schedule } from '../../../realtime/connection';
-import { browserSchedule } from '../../../realtime/socket';
+import type { Clock } from '../../../lib/clock';
+import type { Schedule } from '../../../lib/schedule';
+import { browserSchedule } from '../../../lib/schedule';
 import { systemClock } from '../../../system-clock';
 
 export interface FeedPorts {

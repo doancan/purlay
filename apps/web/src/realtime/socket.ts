@@ -6,7 +6,7 @@
  * reason: the adapter is tested against a stand-in that fires events on demand,
  * because the browser's own behaviour is not what is being asserted.
  */
-import type { OpenSocket, Schedule } from './connection';
+import type { OpenSocket } from './connection';
 
 /** The part of `WebSocket` this adapter uses. */
 export interface WebSocketLike {
@@ -39,10 +39,3 @@ export const createBrowserSocket =
   };
 
 export const browserSocket: OpenSocket = createBrowserSocket(WebSocket);
-
-export const browserSchedule: Schedule = (fn, ms) => {
-  const handle = setTimeout(fn, ms);
-  return (): void => {
-    clearTimeout(handle);
-  };
-};

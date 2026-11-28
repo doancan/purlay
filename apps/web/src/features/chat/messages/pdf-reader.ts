@@ -5,8 +5,8 @@ import type * as PdfLibrary from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { TextContent } from 'pdfjs-dist/types/src/display/api';
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
-import type { Schedule } from '../../../realtime/connection';
-import { browserSchedule } from '../../../realtime/socket';
+import type { Schedule } from '../../../lib/schedule';
+import { browserSchedule } from '../../../lib/schedule';
 import { PDF_LIMITS, PdfPreviewError, pageGeometry, type PageGeometry } from './pdf-limits';
 
 /** The third-party SDK and browser worker/timers are the fault-injection seams, not the reader. */

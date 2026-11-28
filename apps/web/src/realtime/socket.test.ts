@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { SocketHandlers } from './connection';
-import { browserSchedule, createBrowserSocket, type WebSocketLike } from './socket';
+import { createBrowserSocket, type WebSocketLike } from './socket';
+import { browserSchedule } from '../lib/schedule';
 
 type Listener = (event: never) => void;
 

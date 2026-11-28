@@ -8,8 +8,8 @@ import { ErrorState } from '../../../ui/states';
 import { PDF_LIMITS } from './pdf-limits';
 import type { ConnectedPdfPreview } from './pdf-preview';
 import type * as PdfModule from './pdf-preview';
-import type { Schedule } from '../../../realtime/connection';
-import { browserSchedule } from '../../../realtime/socket';
+import type { Schedule } from '../../../lib/schedule';
+import { browserSchedule } from '../../../lib/schedule';
 
 export interface PdfDoorPorts {
   readonly load: () => Promise<Pick<typeof PdfModule, 'ConnectedPdfPreview'>>;

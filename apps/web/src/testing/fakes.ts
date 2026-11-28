@@ -8,7 +8,8 @@
  */
 import type { HistoryPort } from '../router/router';
 import type { DarkQuery } from '../theme/theme';
-import type { OpenSocket, Schedule, SocketHandlers } from '../realtime/connection';
+import type { OpenSocket, SocketHandlers } from '../realtime/connection';
+import type { Schedule } from '../lib/schedule';
 import type { ServerFrame } from '@purlay/types';
 
 export interface MemoryStorage {

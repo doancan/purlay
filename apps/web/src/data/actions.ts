@@ -40,7 +40,7 @@ import {
 import { forgetPersonalData, type ClientStorage } from './browser-storage';
 import { keys } from './keys';
 import { advanceAccessRevision } from './access-revision';
-import type { Clock } from '../realtime/clock';
+import type { Clock } from '../lib/clock';
 import { systemClock } from '../system-clock';
 
 export interface Actions {

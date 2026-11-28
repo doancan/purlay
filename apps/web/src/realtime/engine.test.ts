@@ -35,7 +35,7 @@ import { createApi, type Api } from '../data/api';
 import { createHttp } from '../data/http';
 import { createActions } from '../data/actions';
 import { advanceAccessRevision } from '../data/access-revision';
-import type { Clock } from './clock';
+import type { Clock } from '../lib/clock';
 import type { SocketHandlers } from './connection';
 import { UNNAMED, createEngine, type Engine, type PendingMessage } from './engine';
 import { pendingKey, saveStored, loadStored } from './pending-store';

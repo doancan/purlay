@@ -7,7 +7,7 @@
  * `Clock`; this is that place, and `eslint.config.mjs` exempts this file and no
  * other. `apps/web` cannot import the API's `platform/clock.ts`. (CONTRIBUTING §6.5)
  */
-import type { Clock } from './realtime/clock';
+import type { Clock } from './lib/clock';
 
 export const systemClock: Clock = {
   now: (): Date => new Date(Date.now()),

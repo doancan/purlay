@@ -9,7 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { readAgain } from '../../../data/cache';
 import { keys } from '../../../data/keys';
 import { RealtimePortsContext } from '../../../realtime/realtime-provider';
-import { browserSchedule } from '../../../realtime/socket';
+import { browserSchedule } from '../../../lib/schedule';
 import { systemClock } from '../../../system-clock';
 
 export const LevelEnds = ({

@@ -17,7 +17,7 @@ import { useState } from 'react';
 import type { I18nPorts } from '../i18n/i18n-provider';
 import { I18nProvider } from '../i18n/i18n-provider';
 import { AppBoundary } from '../features/shell/failure-boundary';
-import type { Schedule } from '../realtime/connection';
+import type { Schedule } from '../lib/schedule';
 import type { HistoryPort } from '../router/router';
 import { RouterProvider } from '../router/router-provider';
 import type { ThemePorts } from '../theme/theme';

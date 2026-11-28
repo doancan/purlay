@@ -21,7 +21,7 @@ import { codeOf, failureKey, useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { RealtimePortsContext } from '../../../realtime/realtime-provider';
-import { browserSchedule } from '../../../realtime/socket';
+import { browserSchedule } from '../../../lib/schedule';
 import { Button } from '../../../ui/button';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useWorkspace } from '../../shell/workspace';
