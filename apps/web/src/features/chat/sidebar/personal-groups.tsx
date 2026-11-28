@@ -11,7 +11,7 @@ import { IconButton } from '../../../ui/icon-button';
 import { Menu, MenuItem } from '../../../ui/menu';
 import { useToast } from '../../../ui/toast';
 import { useWorkspace } from '../../shell/workspace';
-import { ChannelRow } from './channel-row';
+import { ChannelRows } from './channel-row';
 import { useChannelGroups } from './groups-data';
 import { useGroupActions } from './group-actions';
 import { rowOf, shownRows } from './preferences';
@@ -104,24 +104,11 @@ const GroupSection = ({
         {group.name}
       </SectionHeading>
       <div id={`sidebar-group-${group.id}`}>
-        <ul className="flex flex-col gap-1">
-          {shown.map(({ channel }) => (
-            <li key={channel.id}>
-              <ChannelRow
-                slug={workspace.slug}
-                channel={channel}
-                glyph={channel.type === 'private' ? 'private-channel' : 'channel'}
-                current={channel.id === currentId}
-                unread={(channel.state?.unreadCount ?? 0) > 0}
-                mentions={channel.state?.unreadMentionCount ?? 0}
-                incident={channel.incident}
-                muted={channel.notificationLevel === 'none'}
-              >
-                {channel.name}
-              </ChannelRow>
-            </li>
-          ))}
-        </ul>
+        <ChannelRows
+          slug={workspace.slug}
+          channels={shown.map((row) => row.channel)}
+          currentId={currentId}
+        />
         {mine.length === 0 && !group.collapsed && (
           <p className="px-2 py-1 text-caption text-nav-ink-muted">{t('channelGroups.empty')}</p>
         )}

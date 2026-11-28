@@ -141,6 +141,38 @@ const ChannelRowView = ({
  */
 export const ChannelRow = memo(ChannelRowView);
 
+/** The rows of a list of channels: the glyph by kind and what is unread, muted or on fire, said once for every list. */
+export const ChannelRows = ({
+  slug,
+  channels,
+  currentId,
+  id,
+}: {
+  readonly slug: string;
+  readonly channels: readonly Channel[];
+  readonly currentId: string | null;
+  readonly id?: string;
+}): React.JSX.Element => (
+  <ul {...(id === undefined ? {} : { id })} className="flex flex-col gap-1">
+    {channels.map((channel) => (
+      <li key={channel.id}>
+        <ChannelRow
+          slug={slug}
+          channel={channel}
+          glyph={channel.type === 'private' ? 'private-channel' : 'channel'}
+          current={channel.id === currentId}
+          unread={(channel.state?.unreadCount ?? 0) > 0}
+          mentions={channel.state?.unreadMentionCount ?? 0}
+          incident={channel.incident}
+          muted={channel.notificationLevel === 'none'}
+        >
+          {channel.name}
+        </ChannelRow>
+      </li>
+    ))}
+  </ul>
+);
+
 interface ActionRowProps extends Omit<RowContentProps, 'current'> {
   readonly onClick: () => void;
   readonly disabled?: boolean;
