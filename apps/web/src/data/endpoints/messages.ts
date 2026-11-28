@@ -22,6 +22,7 @@ import {
   type UnresolvedQuery,
 } from '@purlay/types';
 import type { Http } from '../http';
+import { attachmentUrl } from '../attachment-url';
 import { at, options, type PageQuery } from './request';
 
 export interface MessagesApi {
@@ -214,12 +215,11 @@ export const createMessagesApi = (http: Http): MessagesApi => ({
     ),
   deleteMessage: (messageId) =>
     http.send('DELETE', `/api/messages/${at(messageId)}`, options({ activity: true })),
-  discardAttachment: (attachmentId) =>
-    http.send('DELETE', `/api/attachments/${at(attachmentId)}`, options()),
+  discardAttachment: (attachmentId) => http.send('DELETE', attachmentUrl(attachmentId), options()),
   attachmentText: (attachmentId, signal) =>
-    http.text(`/api/attachments/${at(attachmentId)}`, options({}, signal)),
+    http.text(attachmentUrl(attachmentId), options({}, signal)),
   attachmentBytes: (attachmentId, maxBytes, signal) =>
-    http.bytes(`/api/attachments/${at(attachmentId)}`, maxBytes, options({}, signal)),
+    http.bytes(attachmentUrl(attachmentId), maxBytes, options({}, signal)),
   messageVersions: (messageId, before, signal) =>
     http.request(
       'GET',

@@ -22,6 +22,9 @@ export interface InvitationPorts {
  * Called once, as the page loads, before anything routes: an `/invite#token` address hands its token
  * to the tab and loses it. A fragment that is not a token is left alone and means nothing.
  */
+/** The link a person is sent: this page's origin and the token behind the `#`, which no server log sees. */
+export const inviteLink = (origin: string, token: string): string => `${origin}/invite#${token}`;
+
 export const captureInvitation = (
   location: Pick<Location, 'pathname' | 'hash'>,
   ports: InvitationPorts,

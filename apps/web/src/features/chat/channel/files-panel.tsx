@@ -27,10 +27,11 @@ import { useFeedPorts } from './feed-ports';
 import { useNowMinute } from './now-minute';
 import { PanelEmpty, PanelFrame, StaleBanner, usePanelFocus } from './panel-frame';
 import { useSidePanel } from './side-panel';
+import { attachmentUrl } from '../../../data/attachment-url';
 
 export const FILES_PANEL_ID = 'channel-files';
 
-const at = (file: ChannelFile): string => `/api/attachments/${file.attachment.id}`;
+const at = (file: ChannelFile): string => attachmentUrl(file.attachment.id);
 
 /** An image's thumbnail, or the file glyph when it is not an image or did not load. */
 const Preview = ({ file }: { readonly file: ChannelFile }): React.JSX.Element => {

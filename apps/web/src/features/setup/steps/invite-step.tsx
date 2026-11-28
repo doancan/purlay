@@ -13,6 +13,7 @@ import { isSetupFailure } from '../client';
 import { useSetup } from '../context';
 import { Actions, CopyField, FailureNote, Note, StepHeader } from '../parts';
 import type { StepProps } from './props';
+import { inviteLink } from '../../invitations/pending';
 
 export const InviteStep = ({ state, onBack }: StepProps): React.JSX.Element => {
   const { t, locale } = useI18n();
@@ -35,7 +36,7 @@ export const InviteStep = ({ state, onBack }: StepProps): React.JSX.Element => {
         workspaceId,
         mail ? { emails: valid, locale } : undefined,
       );
-      setLink(`${window.location.origin}/invite#${made.token}`);
+      setLink(inviteLink(window.location.origin, made.token));
       if (mail) {
         const sent = made.mail ?? [];
         setResults(sent);

@@ -32,8 +32,9 @@ import { renderContent } from '../../content/render-content';
 import { previewMarkdown, previewOf, type TextPreviewKind } from './attachment-preview';
 import { isPlainClick, useImageViewer, type ViewedImage } from './image-viewer-door';
 import { PdfAttachment } from './pdf-preview-door';
+import { attachmentUrl } from '../../../data/attachment-url';
 
-const at = (attachment: Attachment): string => `/api/attachments/${attachment.id}`;
+const at = (attachment: Attachment): string => attachmentUrl(attachment.id);
 
 const ImageAttachment = ({
   attachment,

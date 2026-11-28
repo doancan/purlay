@@ -31,6 +31,7 @@ import { InvitationMailOutcome } from '../invitations/invitation-form';
 import { guestExpiryFields, guestExpiryInstant } from './guest-expiry';
 import { MadeLink } from './invitations';
 import { SettingsCard } from './page';
+import { inviteLink } from '../invitations/pending';
 
 const defaultEnd = (): { readonly day: string; readonly time: string } => {
   const end = new Date(systemClock.now());
@@ -191,7 +192,7 @@ const GuestInvitationControls = ({
             <p className="break-words text-label text-ink-muted">
               {t('guestInvite.namedLink', { email: made.guest.email })}
             </p>
-            <MadeLink link={`${window.location.origin}/invite#${made.token}`} onCopy={copyLink} />
+            <MadeLink link={inviteLink(window.location.origin, made.token)} onCopy={copyLink} />
             {made.mail !== undefined && <InvitationMailOutcome results={made.mail} />}
             {refreshFailed && (
               <div

@@ -12,6 +12,7 @@ import { useWorkspace } from '../../shell/workspace';
 import { useChannelTitle } from '../channel/channel-header';
 import { FileAttachment } from '../messages/attachments';
 import { isPlainClick, useImageViewer } from '../messages/image-viewer-door';
+import { attachmentThumbnailUrl, attachmentUrl } from '../../../data/attachment-url';
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
   <span>{useChannelTitle(channel)}</span>
@@ -30,7 +31,7 @@ const ImageLink = ({
   const [failed, setFailed] = useState(false);
   return (
     <a
-      href={`/api/attachments/${file.attachment.id}`}
+      href={attachmentUrl(file.attachment.id)}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={t('attachment.open', { name: file.attachment.fileName })}
@@ -48,7 +49,7 @@ const ImageLink = ({
         <Icon name="file" />
       ) : (
         <img
-          src={`/api/attachments/${file.attachment.id}/thumbnail`}
+          src={attachmentThumbnailUrl(file.attachment.id)}
           alt=""
           loading="lazy"
           className="size-avatar-lg shrink-0 rounded-md bg-surface-200 object-cover"

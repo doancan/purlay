@@ -23,6 +23,7 @@ import { Button } from '../../ui/button';
 import { useToast } from '../../ui/toast';
 import { useContentPorts } from '../content/content-ports';
 import { useWorkspace } from '../shell/workspace';
+import { inviteLink } from '../invitations/pending';
 
 export interface Invitations {
   readonly list: UseInfiniteQueryResult<InfiniteData<InvitationPage>>;
@@ -99,7 +100,7 @@ export const useInvitations = (enabled: boolean): Invitations => {
         setMade({
           workspaceId: workspace.id,
           id: made.invitation.id,
-          link: `${window.location.origin}/invite#${made.token}`,
+          link: inviteLink(window.location.origin, made.token),
           mail: made.mail ?? null,
         });
       }

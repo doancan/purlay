@@ -23,8 +23,9 @@ import { IconButton } from '../../../ui/icon-button';
 import { LoadingStatus } from '../../../ui/skeleton';
 import { Tooltip } from '../../../ui/tooltip';
 import type { ViewedImage } from './image-viewer-door';
+import { attachmentUrl } from '../../../data/attachment-url';
 
-const at = (image: ViewedImage): string => `/api/attachments/${image.attachment.id}`;
+const at = (image: ViewedImage): string => attachmentUrl(image.attachment.id);
 
 /** A link that looks like the header's icon buttons: Download and Open original are places, not actions. */
 const linkClasses =
