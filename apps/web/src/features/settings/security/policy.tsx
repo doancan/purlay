@@ -19,6 +19,7 @@ import { Button, buttonStyle } from '../../../ui/button';
 import { Checkbox } from '../../../ui/checkbox';
 import { Select } from '../../../ui/select';
 import { SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
+import { keys } from '../../../data/keys';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { WorkspaceMfa } from './mfa';
@@ -135,7 +136,7 @@ const PolicyEditor = ({
     }
   });
   const providers = useQuery({
-    queryKey: ['workspace-security', user.id, workspaceId, 'providers'],
+    queryKey: keys.companyConnections(workspaceId, user.id),
     queryFn: async ({ signal }) => await api.companyConnections(workspaceId, signal),
   });
   const change = <K extends keyof WorkspacePolicySettings>(
