@@ -397,12 +397,16 @@ describe('replying', () => {
     connect(view);
     await showThread(view);
     const section = sectionOf(view);
-    for (const name of ['Bold', 'Code block', 'Mention someone', 'Attach a file']) {
-      expect(within(section).getByRole('button', { name })).toBeDefined();
-    }
     const box = within(section).getByRole<HTMLTextAreaElement>('textbox', {
       name: 'Message a thread in api',
     });
+    // The formatting row is drawn while the box is in use.
+    act(() => {
+      box.focus();
+    });
+    for (const name of ['Bold', 'Code block', 'Mention someone', 'Attach a file']) {
+      expect(within(section).getByRole('button', { name })).toBeDefined();
+    }
     await person().click(within(section).getByRole('button', { name: 'Bold' }));
     expect(box.value).toBe('****');
     const picker = section.querySelector<HTMLInputElement>('input[type="file"]');

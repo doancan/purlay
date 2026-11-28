@@ -249,6 +249,21 @@ const press = async (user: ReturnType<typeof person>, keys: string): Promise<voi
   await user.keyboard(keys);
 };
 
+/** The delivery menu's trigger, which names what is chosen: "Delivery: Standard". */
+const deliveryButton = (view: {
+  findByRole: (role: string, o: object) => Promise<HTMLElement>;
+}): Promise<HTMLElement> => view.findByRole('button', { name: /^Delivery/ });
+const chooseDelivery = async (
+  view: Parameters<typeof deliveryButton>[0] & {
+    getByRole: (role: string, o: object) => HTMLElement;
+  },
+  user: { click: (element: HTMLElement) => Promise<void> },
+  label: string,
+): Promise<void> => {
+  await user.click(await deliveryButton(view));
+  await user.click(view.getByRole('menuitemradio', { name: label }));
+};
+
 describe('what it shows', () => {
   test('names where it writes in Turkish without a suffix to agree with a channel or a person', async () => {
     const { box } = await mount({
@@ -273,38 +288,18 @@ describe('what it shows', () => {
     expect(send.className).toContain('bg-accent');
   });
 
-  test('the hints are drawn only while focus is in the card, and are described to a screen reader always', async () => {
+  test('the key hints are described to a screen reader and never drawn beside the buttons', async () => {
     const { view, box, user } = await mount();
     const described = (): string =>
       document.getElementById(box().getAttribute('aria-describedby') ?? '')?.textContent ?? '';
-    // Not focused: in the DOM, for the textarea's description, but visually hidden.
+    for (const hint of ['sends', 'new line', 'code block']) expect(described()).toContain(hint);
+    // Focused or not, the caps are not printed: the keys work without being shown.
+    await user.click(box());
     for (const hint of ['sends', 'new line', 'code block']) expect(described()).toContain(hint);
     expect(
       document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className ?? '',
     ).not.toContain('text-caption');
-    // The line that divides the buttons from the hints comes with them, and like them is not on a phone.
-    const divider = (): Element | null => view.container.querySelector('[data-hints-divider]');
-    expect(divider()).toBeNull();
-    await user.click(box());
-    expect(divider()?.className.split(' ')).toContain('max-narrow:hidden');
-    for (const hint of ['sends', 'new line', 'code block']) {
-      expect(view.getByText(hint)).toBeDefined();
-      expect(described()).toContain(hint);
-    }
-    expect(
-      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className,
-    ).toContain('text-caption');
-    // Tab goes to the Send button, which is still inside the card: the hints stay.
-    await user.tab();
-    expect(
-      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className,
-    ).toContain('text-caption');
-    act(() => {
-      (document.activeElement as HTMLElement).blur();
-    });
-    expect(
-      document.getElementById(box().getAttribute('aria-describedby') ?? '')?.className ?? '',
-    ).not.toContain('text-caption');
+    expect(view.container.querySelector('[data-hints-divider]')).toBeNull();
   });
 
   test('the card turns its hairline a firmer grey while focus is inside it, and draws no ring of its own', async () => {
@@ -445,13 +440,13 @@ describe('how much a message asks of its recipient (#1381)', () => {
   test('is offered in a direct message, sent with the message, and back to standard after', async () => {
     const { view, box, sent, user } = await mount({ api: aSignedInApi(direct()) });
     await user.click(box());
-    await user.selectOptions(await view.findByRole('combobox', { name: 'Delivery' }), 'urgent');
+    await chooseDelivery(view, user, 'Urgent');
     await user.type(box(), 'the release is blocked on you');
     await press(user, '{Enter}');
     expect(sent()).toEqual([
       { channelId: IDS.api, content: 'the release is blocked on you', priority: 'urgent' },
     ]);
-    expect(view.getByRole('combobox', { name: 'Delivery' })).toHaveProperty('value', 'normal');
+    expect((await deliveryButton(view)).getAttribute('aria-label')).toBe('Delivery: Standard');
   });
 
   test('a workspace update removes Urgent, keeps the draft, and clears the stale selection', async () => {
@@ -481,17 +476,20 @@ describe('how much a message asks of its recipient (#1381)', () => {
       });
       await settle();
     };
-    const delivery = await view.findByRole('combobox', { name: 'Delivery' });
-    await user.selectOptions(delivery, 'urgent');
+    await chooseDelivery(view, user, 'Urgent');
     await user.type(box(), 'Keep this draft');
     await update(false);
-    expect(view.queryByRole('option', { name: 'Urgent' }) === null).toBe(true);
-    expect(view.getByRole('option', { name: 'Important' })).toBeDefined();
-    expect(delivery).toHaveProperty('value', 'normal');
+    await user.click(await deliveryButton(view));
+    expect(view.queryByRole('menuitemradio', { name: 'Urgent' }) === null).toBe(true);
+    expect(view.getByRole('menuitemradio', { name: 'Important' })).toBeDefined();
+    await user.keyboard('{Escape}');
+    expect((await deliveryButton(view)).getAttribute('aria-label')).toBe('Delivery: Standard');
     expect(box()).toHaveProperty('value', 'Keep this draft');
     await update(true);
-    expect(view.getByRole('option', { name: 'Urgent' })).toBeDefined();
-    expect(delivery).toHaveProperty('value', 'normal');
+    await user.click(await deliveryButton(view));
+    expect(view.getByRole('menuitemradio', { name: 'Urgent' })).toBeDefined();
+    await user.keyboard('{Escape}');
+    expect((await deliveryButton(view)).getAttribute('aria-label')).toBe('Delivery: Standard');
     await user.click(view.getByRole('button', { name: 'Send' }));
     expect(sent()).toEqual([{ channelId: IDS.api, content: 'Keep this draft' }]);
   });
@@ -500,11 +498,11 @@ describe('how much a message asks of its recipient (#1381)', () => {
     const { view, box, sent, user } = await mount();
     await user.click(box());
     await user.type(box(), 'hello');
-    expect(view.queryByRole('combobox', { name: 'Delivery' })).toBeNull();
+    expect(view.queryByRole('button', { name: /^Delivery/ })).toBeNull();
     await user.type(box(), ' @ali');
-    await user.selectOptions(view.getByRole('combobox', { name: 'Delivery' }), 'important');
+    await chooseDelivery(view, user, 'Important');
     await user.type(box(), '{Backspace}{Backspace}{Backspace}{Backspace}{Backspace}');
-    expect(view.queryByRole('combobox', { name: 'Delivery' })).toBeNull();
+    expect(view.queryByRole('button', { name: /^Delivery/ })).toBeNull();
     await press(user, '{Enter}');
     expect(sent()).toEqual([{ channelId: IDS.api, content: 'hello' }]);
   });
@@ -900,6 +898,9 @@ describe('drafts', () => {
 
   test('missing or unreadable storage is also explained without blocking typing', async () => {
     const { view, box, timers, user } = await mount({ storage: null });
+    act(() => {
+      box().focus();
+    });
     await user.click(view.getByRole('button', { name: 'Markdown source' }));
     await user.type(box(), 'keep this page open');
     act(() => {
@@ -1031,6 +1032,9 @@ describe('drafts', () => {
     };
     for (const storage of [broken, null]) {
       const { box, sent, timers, user, view } = await mount({ storage });
+      act(() => {
+        box().focus();
+      });
       await user.click(view.getByRole('button', { name: 'Markdown source' }));
       await user.type(box(), 'still works');
       act(() => {
@@ -1060,7 +1064,10 @@ describe('focus', () => {
 
 describe('the three buttons under the box (D-110)', () => {
   test('are named, reachable by Tab, and sit in the card', async () => {
-    const { view } = await mount();
+    const { view, box } = await mount();
+    act(() => {
+      box().focus();
+    });
     const card = view.container.querySelector('[data-composer-card]');
     for (const name of ['Bold', 'Code block', 'Mention someone']) {
       expect(card?.contains(view.getByRole('button', { name }))).toBe(true);
@@ -1121,7 +1128,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     'Bold',
     'Italic',
     'Strikethrough',
-    'Code',
+    'Inline code',
     'Link',
     'Bulleted list',
     'Numbered list',
@@ -1133,6 +1140,9 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
 
   test('is there, in the channel and in a thread alike, each button named and reachable by Tab', async () => {
     const channel = await mount();
+    act(() => {
+      channel.box().focus();
+    });
     const card = channel.view.container.querySelector('[data-composer-card]');
     for (const name of [
       ...FORMATTING,
@@ -1152,13 +1162,19 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
     expect(stops.map((button) => button.getAttribute('aria-label'))).toEqual(['Bold']);
     channel.view.unmount();
     const thread = await mount({ props: { parentId: messageIdAt(1) } });
+    act(() => {
+      thread.box().focus();
+    });
     for (const name of FORMATTING) {
       expect(thread.view.getByRole('button', { name })).toBeDefined();
     }
   });
 
   test('the arrows move along the row, Home and End go to its ends, and Tab leaves it by the button last used', async () => {
-    const { view, user } = await mount();
+    const { view, box, user } = await mount();
+    act(() => {
+      box().focus();
+    });
     const toolbar = view.getByRole('toolbar', { name: 'Formatting' });
     const bold = within(toolbar).getByRole('button', { name: 'Bold' });
     const italic = within(toolbar).getByRole('button', { name: 'Italic' });
@@ -1205,7 +1221,7 @@ describe('the formatting row: every construct the renderer draws (D-110, D-181)'
   test.each([
     ['Italic', 'fix it', 4, 6, 'fix _it_'],
     ['Strikethrough', 'fix it', 4, 6, 'fix ~~it~~'],
-    ['Code', 'fix it', 4, 6, 'fix `it`'],
+    ['Inline code', 'fix it', 4, 6, 'fix `it`'],
     ['Bulleted list', 'one\ntwo', 0, 7, '- one\n- two'],
     ['Numbered list', 'one\ntwo', 0, 7, '1. one\n2. two'],
     ['Quote', 'one', 0, 3, '> one'],
@@ -2356,7 +2372,7 @@ describe('attaching files (D-109, #370)', () => {
         }),
       });
       paste(box(), [new File([new Uint8Array([1])], 'keep.txt')]);
-      await user.selectOptions(await view.findByRole('combobox', { name: 'Delivery' }), 'urgent');
+      await chooseDelivery(view, user, 'Urgent');
       await user.type(box(), 'Keep this attachment{Enter}');
       expect(view.getByText('Sends when the files finish uploading.')).toBeDefined();
       if (composer === 'closed') shown(false);
@@ -2874,6 +2890,9 @@ describe('formatted editing and Markdown source', () => {
     const storage = drafted(text);
     storage.items.set('purlay.composerSource', 'false');
     const { view, box } = await mount({ storage });
+    act(() => {
+      box().focus();
+    });
     await settle();
     expect(view.getByRole('button', { name: 'Markdown source' }).getAttribute('aria-pressed')).toBe(
       'true',
@@ -2951,6 +2970,9 @@ describe('formatted editing and Markdown source', () => {
 
   test('the source shortcut works while focus is on the toolbar', async () => {
     const { view, box, user } = await mount();
+    act(() => {
+      box().focus();
+    });
     const toggle = view.getByRole('button', { name: 'Markdown source' });
     await user.click(view.getByRole('button', { name: 'Bold' }));
     fireEvent.keyDown(view.getByRole('button', { name: 'Bold' }), {
@@ -3675,6 +3697,9 @@ describe('active formatting controls', () => {
 
   test('formatting with a button or shortcut updates the state immediately, including empty wrappers', async () => {
     const { view, box, user } = await mount();
+    act(() => {
+      box().focus();
+    });
     const bold = view.getByRole('button', { name: 'Bold' });
     await user.click(bold);
     expect(box().value).toBe('****');
@@ -3706,6 +3731,9 @@ describe('active formatting controls', () => {
     await user.click(bold);
     rerender({ channelId: IDS.deploys, channelName: 'deploys' });
     await settle();
+    act(() => {
+      box().focus();
+    });
     expect(view.getByRole('button', { name: 'Bold' }).getAttribute('aria-pressed')).toBe('false');
     expect(box().value).toBe('');
   });

@@ -13,6 +13,7 @@ import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { Button } from '../../../ui/button';
+import { Kbd } from '../../../ui/kbd';
 import { useToast } from '../../../ui/toast';
 import {
   continueList,
@@ -190,7 +191,20 @@ export const MessageEditor = ({ message }: { readonly message: Message }): React
       />
       <div className="flex items-center justify-between gap-2 text-caption text-ink-muted">
         <span className="flex flex-col">
-          {keysOffered && <span>{t('message.editHint', { save: saveKey })}</span>}
+          {keysOffered && (
+            // The keys as this keyboard prints them (⌘ ⇧ ↵ on a Mac), as the composer's own hints are.
+            <span className="flex flex-wrap gap-x-3 gap-y-1">
+              <span className="whitespace-nowrap">
+                <Kbd>{saveKey}</Kbd> {t('message.editHint.save')}
+              </span>
+              <span className="whitespace-nowrap">
+                <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
+              </span>
+              <span className="whitespace-nowrap">
+                <Kbd>Esc</Kbd> {t('message.editHint.cancel')}
+              </span>
+            </span>
+          )}
           <span>{t('message.editHistoryHint')}</span>
         </span>
         <span className="flex gap-2">
