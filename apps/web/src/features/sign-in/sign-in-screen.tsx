@@ -28,6 +28,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href, workspaceAccessHref } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button, buttonStyle } from '../../ui/button';
+import { Disclosure } from '../../ui/disclosure';
 import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { browserNativePorts, nativeAppName, pendingNativeHandoff } from '../native/pending';
@@ -170,22 +171,10 @@ export const SignInScreen = (): React.JSX.Element => {
                 </a>
               </div>
             )}
-          {(oidc !== null || github || google || methods.isError) && (
-            <div className="flex w-full flex-col items-center gap-3">
-              {oidc !== null && <OidcButton name={oidc.name} variant="secondary" />}
-              {(github || methods.isError) && (
-                <>
-                  <GitHubButton variant="secondary" />
-                  <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
-                </>
-              )}
-              {google && <GoogleButton variant="secondary" />}
-            </div>
-          )}
-          {/* The password unless the server turned it off (R30, D-239) — kept when the server could not be
-                asked; the link only where mail is on. */}
+          {/* The address and password lead: it is what most people came to type. Single sign-on and the
+              company's door sit under it, the second closed until it is asked for. */}
           <EmailSignInForm
-            alone={!github && !google && oidc === null && !methods.isError && mail}
+            alone
             withPassword={methods.data?.password !== false}
             mail={mail}
             {...(workspace === ''
@@ -196,16 +185,42 @@ export const SignInScreen = (): React.JSX.Element => {
                   },
                 })}
           />
+          {(oidc !== null || github || google || methods.isError) && (
+            <>
+              <p
+                aria-hidden="true"
+                className="flex w-full items-center gap-3 text-caption text-ink-muted before:flex-1 before:border-t-hairline before:border-border-subtle after:flex-1 after:border-t-hairline after:border-border-subtle"
+              >
+                {t('signIn.or')}
+              </p>
+              <div className="flex w-full flex-col items-center gap-3">
+                {oidc !== null && <OidcButton name={oidc.name} variant="secondary" />}
+                {(github || methods.isError) && (
+                  <>
+                    <GitHubButton variant="secondary" />
+                    <p className="text-balance text-caption text-ink-muted">{t('signIn.scope')}</p>
+                  </>
+                )}
+                {google && <GoogleButton variant="secondary" />}
+              </div>
+            </>
+          )}
           {methods.data?.company !== undefined && !independent && (
-            <Suspense
-              fallback={
-                <LoadingStatus label={t('common.loading')} className="w-full">
-                  <Skeleton />
-                </LoadingStatus>
-              }
+            <Disclosure
+              open={workspace !== ''}
+              className="w-full text-left text-label"
+              summary={t('company.signIn.title')}
             >
-              <CompanySignIn key={workspace} initialWorkspace={workspace} />
-            </Suspense>
+              <Suspense
+                fallback={
+                  <LoadingStatus label={t('common.loading')} className="w-full">
+                    <Skeleton />
+                  </LoadingStatus>
+                }
+              >
+                <CompanySignIn key={workspace} initialWorkspace={workspace} bare />
+              </Suspense>
+            </Disclosure>
           )}
           {methods.isError && (
             <p className="flex flex-wrap items-center justify-center gap-x-1 text-balance text-caption text-ink-muted">

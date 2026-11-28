@@ -642,6 +642,7 @@ export const en = {
     'This server requires it of every account that signs in with a password. Turn it on to carry on: you stay signed in.',
   'enrolTwoFactor.signOut': 'Sign out',
   'signIn.title': 'Sign in to Purlay',
+  'signIn.or': 'or',
   'signIn.lede': 'Team chat where a question stays open until somebody closes it.',
   'signIn.github': 'Continue with GitHub',
   'signIn.google': 'Continue with Google',

@@ -17,7 +17,7 @@ type Heading = 'h1' | 'h2';
 export const LogoMark = (): React.JSX.Element => (
   <span
     aria-hidden="true"
-    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-md border-hairline border-border-subtle bg-on-accent"
+    className="inline-flex size-avatar-lg shrink-0 items-center justify-center rounded-lg border-hairline border-border-subtle bg-on-accent shadow-card"
   >
     <img src="/purlay-mark.svg" alt="" className="size-full" />
   </span>

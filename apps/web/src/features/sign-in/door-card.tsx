@@ -18,7 +18,7 @@ export const DoorCard = ({
   readonly children: React.ReactNode;
 }): React.JSX.Element => (
   <StandaloneScreen>
-    <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-8 py-10 text-center shadow-card max-narrow:px-6 max-narrow:py-8">
+    <section className="flex w-full max-w-dialog flex-col items-center gap-6 rounded-2xl border-hairline border-border-subtle bg-surface-100 px-10 py-12 text-center shadow-float max-narrow:px-6 max-narrow:py-8">
       {children}
     </section>
   </StandaloneScreen>

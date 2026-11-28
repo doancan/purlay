@@ -41,7 +41,7 @@ const open = async (
     }),
   });
   views.push(view);
-  await view.findByRole('heading', { name: 'Sign in with your company' });
+  await view.findByText('Sign in with your company');
   return view;
 };
 
@@ -63,7 +63,7 @@ test('normalizes an exact workspace address and starts only the selected native 
       '/sign-in?workspace=ACME',
     );
     expect(asked).toEqual([]);
-    await person().click(view.getByRole('button', { name: 'Find company sign-in' }));
+    await person().click(await view.findByRole('button', { name: 'Find company sign-in' }));
     await person().click(await view.findByRole('button', { name: 'Continue with Office' }));
     expect(asked).toEqual(['acme', { workspace: 'acme', connectionId: IDS.api }]);
     expect(navigation.mock.calls).toEqual([['https://identity.example/authorize']]);
@@ -181,5 +181,5 @@ test('independent sign-in stays available to a company session instead of bounci
   views.push(view);
   await view.findByRole('form', { name: 'Sign in with a password' });
   expect(view.world.history.stack).toEqual(['/sign-in?independent=1']);
-  expect(view.queryByRole('heading', { name: 'Sign in with your company' })).toBeNull();
+  expect(view.queryByText('Sign in with your company')).toBeNull();
 });
