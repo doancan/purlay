@@ -8,12 +8,13 @@ import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
 import { Facts, QueryState } from './parts';
 import { ServerProblems } from './problems';
+import { keys } from '../../data/keys';
 
 export const Overview = (): React.JSX.Element => {
   const client = useAdministrationClient();
   const { t, format } = useI18n();
   const query = useQuery({
-    queryKey: ['server', 'overview'],
+    queryKey: keys.serverOverview,
     queryFn: async ({ signal }) => await client.overview(signal),
     retry: false,
   });
@@ -108,7 +109,7 @@ export const Operations = (): React.JSX.Element => {
   const client = useAdministrationClient();
   const { t, format } = useI18n();
   const query = useQuery({
-    queryKey: ['server', 'operations'],
+    queryKey: keys.serverOperations,
     queryFn: async ({ signal }) => await client.operations(signal),
     retry: false,
   });
@@ -176,7 +177,7 @@ const JOB_TONE = {
 export const DeploymentInventory = (): React.JSX.Element => {
   const client = useAdministrationClient();
   const query = useQuery({
-    queryKey: ['server', 'overview'],
+    queryKey: keys.serverOverview,
     queryFn: async ({ signal }) => await client.overview(signal),
     retry: false,
   });

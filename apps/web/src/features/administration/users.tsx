@@ -263,7 +263,7 @@ const UserList = ({
   const queries = useQueryClient();
   const providers = useServerClient();
   const query = useQuery({
-    queryKey: ['server', 'users', filter, pages.after],
+    queryKey: keys.serverUsers(filter, pages.after),
     queryFn: async ({ signal }) =>
       await client.users(
         { ...filter, ...(pages.after === undefined ? {} : { after: pages.after }) },
@@ -286,7 +286,7 @@ const UserList = ({
     }
   };
   const refresh = async (): Promise<void> => {
-    await queries.invalidateQueries({ queryKey: ['server'] });
+    await queries.invalidateQueries({ queryKey: keys.server });
     await queries.invalidateQueries({ queryKey: keys.me });
   };
   const change = async (user: ServerUser, action: AccountAction | 'restore'): Promise<void> => {
@@ -465,7 +465,7 @@ const UserDetail = ({
   const { t, format } = useI18n();
   const pages = usePages();
   const query = useQuery({
-    queryKey: ['server', 'user', id, pages.after],
+    queryKey: keys.serverUser(id, pages.after),
     queryFn: async ({ signal }) => await client.user(id, pages.after, signal),
     retry: false,
   });

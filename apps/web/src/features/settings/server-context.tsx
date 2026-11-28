@@ -4,6 +4,7 @@
  */
 import { createContext, useContext } from 'react';
 import { createServerClient, type CreatorsChoice, type ServerClient } from './server-client';
+import { keys } from '../../data/keys';
 
 export type { CreatorsChoice };
 
@@ -16,4 +17,4 @@ const platform = createServerClient(async (input, init) => await fetch(input, in
 export const useServerClient = (): ServerClient => useContext(ServerClientContext) ?? platform;
 
 /** The page's one query: read again after any change, never polled. */
-export const SERVER_SETTINGS_KEY = ['server', 'settings'] as const;
+export const SERVER_SETTINGS_KEY = keys.serverSettings;

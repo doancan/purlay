@@ -9,7 +9,7 @@ import { ChangeFailure, Inset } from '../settings/server-parts';
 import { useAdministrationClient } from './context';
 import { QueryState } from './parts';
 
-const KEY = ['server', 'push'] as const;
+const KEY = keys.serverPush;
 export const ServerPushCard = (): React.JSX.Element => {
   const client = useAdministrationClient();
   const queries = useQueryClient();
@@ -29,13 +29,13 @@ export const ServerPushCard = (): React.JSX.Element => {
       await queries.cancelQueries({ queryKey: KEY });
       const saved = await client.savePushSettings(enabled);
       queries.setQueryData(KEY, saved);
-      queries.setQueryData<ServerOverview>(['server', 'overview'], (current) =>
+      queries.setQueryData<ServerOverview>(keys.serverOverview, (current) =>
         current === undefined ? current : { ...current, pushConfigured: saved.enabled },
       );
       await Promise.all([
         queries.invalidateQueries({ queryKey: KEY }),
-        queries.invalidateQueries({ queryKey: ['server', 'overview'] }),
-        queries.invalidateQueries({ queryKey: ['server', 'audit'] }),
+        queries.invalidateQueries({ queryKey: keys.serverOverview }),
+        queries.invalidateQueries({ queryKey: keys.serverAudit }),
         queries.invalidateQueries({ queryKey: keys.pushKey }),
       ]);
     } catch (error) {

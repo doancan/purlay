@@ -10,6 +10,7 @@ import { SettingsCard } from '../settings/page';
 import { ChangeFailure, Inset } from '../settings/server-parts';
 import { useAdministrationClient } from './context';
 import { QueryState } from './parts';
+import { keys } from '../../data/keys';
 
 export const ServerPreferencesCard = ({
   identity = false,
@@ -18,7 +19,7 @@ export const ServerPreferencesCard = ({
 }): React.JSX.Element => {
   const client = useAdministrationClient();
   const query = useQuery({
-    queryKey: ['server', 'preferences'],
+    queryKey: keys.serverPreferences,
     queryFn: async ({ signal }) => await client.preferences(signal),
     retry: false,
   });
@@ -91,13 +92,13 @@ const PreferencesForm = ({
     try {
       await client.savePreferences(input);
       // Keep the confirmed change if reading the server again fails.
-      queries.setQueryData<ServerPreferences>(['server', 'preferences'], (before) =>
+      queries.setQueryData<ServerPreferences>(keys.serverPreferences, (before) =>
         before === undefined ? undefined : { ...before, ...input },
       );
       setDirty(false);
       setSaved(true);
       await queries.invalidateQueries({ queryKey: ['instance'] });
-      await queries.invalidateQueries({ queryKey: ['server', 'audit'] });
+      await queries.invalidateQueries({ queryKey: keys.serverAudit });
     } catch (error) {
       setFailure(error);
     } finally {

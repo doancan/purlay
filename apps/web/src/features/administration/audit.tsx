@@ -12,6 +12,7 @@ import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
 import { Empty, Pagination, QueryState, usePages } from './parts';
 import { AuditPersonPicker } from './audit-person-picker';
+import { keys } from '../../data/keys';
 
 export const Audit = (): React.JSX.Element => {
   const { t } = useI18n();
@@ -148,7 +149,7 @@ const AuditList = ({
     return `/api/server/audit/export?${params.toString()}`;
   };
   const query = useQuery({
-    queryKey: ['server', 'audit', filter, pages.after],
+    queryKey: keys.serverAuditPage(filter, pages.after),
     queryFn: async ({ signal }) =>
       await client.audit(
         { ...filter, ...(pages.after === undefined ? {} : { after: pages.after }) },

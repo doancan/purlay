@@ -22,8 +22,9 @@ import { isSetupFailure } from '../setup/client';
 import { Note } from '../setup/parts';
 import { useAdministrationClient } from './context';
 import { Facts, QueryState } from './parts';
+import { keys } from '../../data/keys';
 
-const MODULES_KEY = ['server', 'modules'] as const;
+const MODULES_KEY = keys.serverModules;
 
 /** A refusal the console words itself; anything else is said as every console card says it. */
 const Refusal = ({
@@ -140,7 +141,7 @@ const ModuleCard = ({
     } catch (error) {
       setFailure(error);
     } finally {
-      await queries.invalidateQueries({ queryKey: ['server'] });
+      await queries.invalidateQueries({ queryKey: keys.server });
       setBusy(false);
     }
   };
@@ -238,7 +239,7 @@ const StopDialog = ({
     } catch (error) {
       setFailure(error);
     } finally {
-      await queries.invalidateQueries({ queryKey: ['server'] });
+      await queries.invalidateQueries({ queryKey: keys.server });
       setBusy(false);
     }
   };

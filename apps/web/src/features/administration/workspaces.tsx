@@ -10,6 +10,7 @@ import { SettingsCard } from '../settings/page';
 import { ChangeFailure } from '../settings/server-parts';
 import { useAdministrationClient } from './context';
 import { Empty, Facts, Pagination, QueryState, usePages } from './parts';
+import { keys } from '../../data/keys';
 
 export const Workspaces = ({
   dataOnly = false,
@@ -72,7 +73,7 @@ const WorkspaceList = ({
   const { t, format } = useI18n();
   const pages = usePages();
   const query = useQuery({
-    queryKey: ['server', 'workspaces', filter, pages.after],
+    queryKey: keys.serverWorkspaces(filter, pages.after),
     queryFn: async ({ signal }) =>
       await client.workspaces(
         { ...filter, ...(pages.after === undefined ? {} : { after: pages.after }) },
@@ -208,7 +209,7 @@ const QuotaForm = ({
     } catch (error) {
       setFailure(error);
     } finally {
-      await queries.invalidateQueries({ queryKey: ['server'] });
+      await queries.invalidateQueries({ queryKey: keys.server });
       setBusy(false);
     }
   };
@@ -293,7 +294,7 @@ const ModulesForm = ({
     } catch (error) {
       setFailure(error);
     } finally {
-      await queries.invalidateQueries({ queryKey: ['server'] });
+      await queries.invalidateQueries({ queryKey: keys.server });
       setBusy(false);
     }
   };
