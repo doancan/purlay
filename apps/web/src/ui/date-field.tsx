@@ -9,7 +9,7 @@
  * `YYYY-MM-DD` or `''`, exactly what the input held, so callers change only the element.
  */
 import * as Popover from '@radix-ui/react-popover';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/icon';
 import { useI18n } from '../i18n/i18n-provider';
 import { addDays, addMonths, isDay, monthGrid, monthOf } from './calendar-month';
@@ -60,13 +60,20 @@ export const DateField = ({
     gridRef.current?.querySelector<HTMLButtonElement>(`[data-day="${focused}"]`)?.focus();
   }, [open, focused]);
 
-  const dayName = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' });
-  const monthName = new Intl.DateTimeFormat(locale, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+  // Built once per language: constructing a formatter is the costly part of formatting, and this is drawn on every
+  // arrow key through the grid.
+  const { dayName, monthName, weekday } = useMemo(
+    () => ({
+      dayName: new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }),
+      monthName: new Intl.DateTimeFormat(locale, {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }),
+      weekday: new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }),
+    }),
+    [locale],
+  );
   const asUtc = (day: string): Date => new Date(`${day}T00:00:00Z`);
   const allowed = (day: string): boolean =>
     (min === undefined || day >= min) && (max === undefined || day <= max);
