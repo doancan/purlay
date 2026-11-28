@@ -109,6 +109,28 @@ interface ListFilterProps<V extends string> {
 }
 
 /**
+ * The bar over a list screen (Saved, Inbox, Drafts, Unreads, Followed, Questions, Shared, Search, Issues): a
+ * header's height, one hairline under it, the column's gutter. Each screen drew its own copy of these classes, so
+ * a change to the bar was nine edits and the nine drifted.
+ */
+export const ListHeader = ({
+  gap = 'md',
+  children,
+}: {
+  readonly gap?: 'sm' | 'md';
+  readonly children: React.ReactNode;
+}): React.JSX.Element => (
+  <header
+    className={cn(
+      'flex h-header shrink-0 items-center border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4',
+      gap === 'sm' ? 'gap-2' : 'gap-3',
+    )}
+  >
+    {children}
+  </header>
+);
+
+/**
  * Which part of the list is shown — Unread, Archived — at the top of the column, over the rows it
  * filters, in every list screen alike: the chosen one raised on a sunk track, the raised mark sliding to a
  * new choice as the header's Feed | Open questions does (D-247). On a phone it is the column's width, each

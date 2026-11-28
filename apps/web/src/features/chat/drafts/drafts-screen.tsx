@@ -30,6 +30,7 @@ import {
   ListSkeleton,
   listButtonClasses,
   listRowClasses,
+  ListHeader,
 } from '../../../ui/list-column';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
@@ -288,7 +289,7 @@ export const DraftsScreen = (): React.JSX.Element => {
       : t(`drafts.tab.${choice}`);
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader>
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
@@ -296,7 +297,7 @@ export const DraftsScreen = (): React.JSX.Element => {
           </HeaderTile>
           <h1 className="whitespace-nowrap text-heading text-ink">{t('drafts.title')}</h1>
         </div>
-      </header>
+      </ListHeader>
       <ListColumn>
         <ListFilter
           label={t('drafts.tabs')}

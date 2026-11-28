@@ -25,7 +25,7 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import { Link } from '../../../router/router-provider';
 import { Avatar } from '../../../ui/avatar';
 import { Button } from '../../../ui/button';
-import { ListCard, ListColumn, ListSkeleton } from '../../../ui/list-column';
+import { ListCard, ListColumn, ListSkeleton, ListHeader } from '../../../ui/list-column';
 import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { useToast } from '../../../ui/toast';
@@ -361,7 +361,7 @@ export const UnreadsScreen = (): React.JSX.Element => {
   );
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader>
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <HeaderTile>
@@ -369,7 +369,7 @@ export const UnreadsScreen = (): React.JSX.Element => {
           </HeaderTile>
           <h1 className="whitespace-nowrap text-heading text-ink">{t('unreads.title')}</h1>
         </div>
-      </header>
+      </ListHeader>
       <ListColumn>
         {channels.isPending ? (
           <ListSkeleton label={t('unreads.loading')} />

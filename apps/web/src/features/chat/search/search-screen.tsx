@@ -45,7 +45,13 @@ import { TextField } from '../../../ui/text-field';
 import { HeaderTile, useChannelTitle } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../../shell/nav';
-import { ListCard, ListColumn, listButtonClasses, listRowClasses } from '../../../ui/list-column';
+import {
+  ListCard,
+  ListColumn,
+  listButtonClasses,
+  listRowClasses,
+  ListHeader,
+} from '../../../ui/list-column';
 import { Select } from '../../../ui/select';
 import { useWorkspace } from '../../shell/workspace';
 import { authorOf } from '../../../lib/author';
@@ -362,13 +368,13 @@ const SearchView = ({
 
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-2 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader gap="sm">
         <NavToggle />
         <HeaderTile>
           <Icon name="search" size="lg" />
         </HeaderTile>
         <h1 className="whitespace-nowrap text-heading text-ink">{t('search.title')}</h1>
-      </header>
+      </ListHeader>
       <ListColumn>
         <form
           role="search"

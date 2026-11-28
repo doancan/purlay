@@ -47,6 +47,7 @@ import {
   ListFilter,
   ListSkeleton,
   listRowClasses,
+  ListHeader,
 } from '../../ui/list-column';
 import { Select } from '../../ui/select';
 import { ErrorState, GlyphEmptyState } from '../../ui/states';
@@ -499,7 +500,7 @@ export const IssuesScreen = (): React.JSX.Element => {
 
   return (
     <div data-screen={ISSUES_SCREEN} className="flex min-h-0 flex-1 flex-col">
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader>
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           <span
@@ -510,7 +511,7 @@ export const IssuesScreen = (): React.JSX.Element => {
           </span>
           <h1 className="whitespace-nowrap text-heading text-ink">{t('issues.title')}</h1>
         </div>
-      </header>
+      </ListHeader>
       <ListColumn>
         <NewIssue />
         <ListFilter

@@ -25,7 +25,13 @@ import { ErrorState, GlyphEmptyState } from '../../../ui/states';
 import { HeaderTile } from '../channel/channel-header';
 import { useFeedPorts } from '../channel/feed-ports';
 import { NavToggle } from '../../shell/nav';
-import { ListCard, ListColumn, ListFilter, ListSkeleton } from '../../../ui/list-column';
+import {
+  ListCard,
+  ListColumn,
+  ListFilter,
+  ListSkeleton,
+  ListHeader,
+} from '../../../ui/list-column';
 import { useWorkspace } from '../../shell/workspace';
 import { useSession } from '../../session/session';
 import { noticesOf } from '../../../modules/registry';
@@ -198,7 +204,7 @@ export const InboxScreen = (): React.JSX.Element => {
 
   return (
     <>
-      <header className="flex h-header shrink-0 items-center gap-3 border-b-hairline border-border-subtle pr-4 pl-6 max-narrow:pl-4">
+      <ListHeader>
         <div data-header-title="" className="flex min-w-0 flex-1 items-center gap-2">
           <NavToggle />
           {/* The rail's mark for the inbox, and its All tab's: the bell is Followed conversations'. */}
@@ -227,7 +233,7 @@ export const InboxScreen = (): React.JSX.Element => {
             {t('inbox.readAll')}
           </Button>
         )}
-      </header>
+      </ListHeader>
       <ListColumn>
         <div className="flex flex-wrap items-center gap-2">
           <ListFilter
