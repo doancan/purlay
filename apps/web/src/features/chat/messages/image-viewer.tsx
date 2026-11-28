@@ -24,6 +24,7 @@ import { LoadingStatus } from '../../../ui/skeleton';
 import { Tooltip } from '../../../ui/tooltip';
 import type { ViewedImage } from './image-viewer-door';
 import { attachmentUrl } from '../../../data/attachment-url';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 const at = (image: ViewedImage): string => attachmentUrl(image.attachment.id);
 
@@ -242,8 +243,7 @@ export const ImageViewer = ({
               label={t('viewer.original')}
               glyph="external"
               href={at(image)}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...EXTERNAL_LINK}
             />
             <RadixDialog.Close asChild>
               <IconButton size="nav" glyph="close" label={t('viewer.close')} shortcut="Esc" />

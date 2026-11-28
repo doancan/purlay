@@ -15,6 +15,7 @@ import { Select } from '../../../ui/select';
 import { TextField } from '../../../ui/text-field';
 import { useWorkspace } from '../../shell/workspace';
 import { renderContent } from '../../content/render-content';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 /** The decision is read with its source; editing is a deliberate, versioned form. */
 export const KnowledgePanel = ({
@@ -110,8 +111,7 @@ export const KnowledgePanel = ({
       {kept?.decisionUrl != null && (
         <a
           href={kept.decisionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+          {...EXTERNAL_LINK}
           className="break-all text-label text-accent-text hover:underline"
         >
           {t('knowledge.reference')}

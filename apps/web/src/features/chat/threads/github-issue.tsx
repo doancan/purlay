@@ -33,6 +33,7 @@ import { Note } from '../../setup/parts';
 import { GitHubLinkDialog } from './github-link';
 import { leave } from '../../sign-in/leave';
 import { useWorkspace } from '../../shell/workspace';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 /** The first line of the question, cut to what a title may be. */
 const titleOf = (content: string): string =>
@@ -100,8 +101,7 @@ export const GitHubWorkPanel = ({
             <li key={link.id} className="flex flex-wrap items-baseline gap-2 text-body">
               <a
                 href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
+                {...EXTERNAL_LINK}
                 className="break-all text-accent-text hover:underline"
               >
                 {`${link.repository}#${String(link.number)}`}
@@ -418,12 +418,7 @@ const Outcome = ({ outcome }: { readonly outcome: GitHubIssueOutcome }): React.J
             repository: outcome.link.repository,
             number: String(outcome.link.number),
           })}{' '}
-          <a
-            href={outcome.link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="break-all underline"
-          >
+          <a href={outcome.link.url} {...EXTERNAL_LINK} className="break-all underline">
             {outcome.link.url}
           </a>
         </Note>

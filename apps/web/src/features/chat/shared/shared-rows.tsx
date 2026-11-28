@@ -13,6 +13,7 @@ import { useChannelTitle } from '../channel/channel-header';
 import { FileAttachment } from '../messages/attachments';
 import { isPlainClick, useImageViewer } from '../messages/image-viewer-door';
 import { attachmentThumbnailUrl, attachmentUrl } from '../../../data/attachment-url';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 const ChannelName = ({ channel }: { readonly channel: Channel }): React.JSX.Element => (
   <span>{useChannelTitle(channel)}</span>
@@ -32,8 +33,7 @@ const ImageLink = ({
   return (
     <a
       href={attachmentUrl(file.attachment.id)}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...EXTERNAL_LINK}
       aria-label={t('attachment.open', { name: file.attachment.fileName })}
       aria-haspopup="dialog"
       className="flex min-w-0 items-center gap-3 rounded-md py-1 text-label text-ink hover:text-accent-text"
@@ -109,8 +109,7 @@ export const SharedRows = ({
                   <div className="min-w-0 flex-1">
                     <a
                       href={item.link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      {...EXTERNAL_LINK}
                       className="block truncate rounded-sm text-label font-medium text-ink hover:text-accent-text"
                     >
                       {item.link.label}

@@ -21,6 +21,7 @@ import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { ReleaseNotesDialog } from '../../about/release-notes-dialog';
 import { useReleaseNotes } from '../../about/release-notes-source';
 import { SettingsCard, SettingsPage, SettingsRow, cardPlainClasses } from '../page';
+import { EXTERNAL_LINK } from '../../../ui/external-link';
 
 /** Three numbers, as a version is written; anything else cannot be compared. */
 const partsOf = (version: string): readonly number[] | null => {
@@ -50,8 +51,7 @@ const ExternalAnchor = ({
   return (
     <a
       href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+      {...EXTERNAL_LINK}
       className="inline-flex items-center gap-1 text-label text-accent-text underline"
     >
       {children}
@@ -160,12 +160,7 @@ export const AboutPage = (): React.JSX.Element => {
           <span className="font-mono text-label text-ink">{LICENCE}</span>
         </SettingsRow>
         <SettingsRow label={t('about.source.repository')}>
-          <a
-            href={REPOSITORY_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonStyle('secondary')}
-          >
+          <a href={REPOSITORY_URL} {...EXTERNAL_LINK} className={buttonStyle('secondary')}>
             {REPOSITORY_URL.replace('https://', '')}
             <Icon name="external" size="sm" />
             <VisuallyHidden>{` (${t('message.link.external')})`}</VisuallyHidden>

@@ -9,6 +9,7 @@ import { useApi } from '../../data/api-provider';
 import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { VisuallyHidden } from '../../ui/visually-hidden';
+import { EXTERNAL_LINK } from '../../ui/external-link';
 
 const Cover = ({ url }: { readonly url: string }): React.JSX.Element | null => {
   const [failed, setFailed] = useState(false);
@@ -63,8 +64,7 @@ const WebLinkCardsContent = ({
         >
           <a
             href={url}
-            target="_blank"
-            rel="noopener noreferrer"
+            {...EXTERNAL_LINK}
             className="group flex min-w-0 items-start gap-3 rounded-xl px-3 py-2 text-ink focus-visible:-outline-offset-focus"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-1">
