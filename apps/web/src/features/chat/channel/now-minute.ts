@@ -3,9 +3,8 @@
  * The feed and the thread panel each keep one, through the same ports, so a test moves both.
  */
 import { useEffect, useState } from 'react';
+import { MINUTE_MS } from '../../../lib/time';
 import type { FeedPorts } from './feed-ports';
-
-const MINUTE_MS = 60_000;
 
 const floorMinute = (date: Date): number => Math.floor(date.getTime() / MINUTE_MS) * MINUTE_MS;
 

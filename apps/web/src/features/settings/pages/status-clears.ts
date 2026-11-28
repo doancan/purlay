@@ -8,26 +8,15 @@
  */
 import { STATUS_UNTIL_MAX_DAYS } from '@purlay/types';
 import type { Formatters } from '../../../i18n/format';
+import { dayAfter, HOUR_MS, MINUTE_MS, weekdayOf } from '../../../lib/time';
 
 export const STATUS_CLEARS = ['never', '30m', '1h', '4h', 'today', 'week'] as const;
 export type StatusClear = (typeof STATUS_CLEARS)[number];
 
 type Zone = Pick<Formatters, 'isoDay' | 'dayStart'>;
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
 const SPANS = { '30m': 30 * MINUTE_MS, '1h': HOUR_MS, '4h': 4 * HOUR_MS } as const;
 const MONDAY = 1;
-
-/** The calendar day `days` after `day` (`YYYY-MM-DD`), and its weekday: days of the calendar, never 24 hours. */
-const dayAfter = (day: string, days: number): string => {
-  const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-};
-const weekdayOf = (day: string): number => {
-  const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-};
 
 /**
  * The instant a choice made at `now` clears the line at, as the API's UTC timestamp; null for "don't clear".

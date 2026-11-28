@@ -9,11 +9,10 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
 import { useApi } from '../../data/api-provider';
 import { keys } from '../../data/keys';
+import { MINUTE_MS } from '../../lib/time';
 import { RealtimePortsContext } from '../../realtime/realtime-provider';
 import { browserSchedule } from '../../realtime/socket';
 import { systemClock } from '../../system-clock';
-
-const MINUTE_MS = 60_000;
 
 /** The person's quiet hours as the server keeps them: read once, and set again by whoever saves them. */
 export const useQuietHoursSetting = (): UseQueryResult<QuietHoursSetting> => {

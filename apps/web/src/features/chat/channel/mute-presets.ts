@@ -9,15 +9,14 @@
  */
 import { DEEP_WORK_MAX_HOURS } from '@purlay/types';
 import type { Formatters } from '../../../i18n/format';
-import { dayAfter, morningOf } from '../reminders/presets';
+import { dayAfter, HOUR_MS, MINUTE_MS } from '../../../lib/time';
+import { morningOf } from '../reminders/presets';
 
 export const MUTE_CHOICES = ['15m', '1h', '8h', '24h', 'tomorrow'] as const;
 export type MuteChoice = (typeof MUTE_CHOICES)[number];
 
 type Zone = Pick<Formatters, 'isoDay' | 'inputValue' | 'instantOf'>;
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
 const SPANS = {
   '15m': 15 * MINUTE_MS,
   '1h': HOUR_MS,

@@ -5,12 +5,10 @@
  */
 import { SCHEDULE_AHEAD_MAX_DAYS } from '@purlay/types';
 import type { Formatters } from '../../../i18n/format';
+import { dayAfter, DAY_MS, HOUR_MS, MINUTE_MS, weekdayOf } from '../../../lib/time';
 
 export type Zone = Pick<Formatters, 'isoDay' | 'inputValue' | 'instantOf'>;
 
-const MINUTE_MS = 60_000;
-const HOUR_MS = 60 * MINUTE_MS;
-const DAY_MS = 24 * HOUR_MS;
 const MORNING = '09:00';
 const MONDAY = 1;
 
@@ -25,18 +23,6 @@ export interface Preset {
   /** The instant, as the API's UTC timestamp. */
   readonly at: string;
 }
-
-/** The calendar day `days` after `day` (`YYYY-MM-DD`): a day of the calendar, never 24 hours. */
-/** Shared with Send later's presets: both are the viewer's wall clock. */
-export const dayAfter = (day: string, days: number): string => {
-  const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-};
-
-export const weekdayOf = (day: string): number => {
-  const [y = 0, m = 1, d = 1] = day.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-};
 
 /** The wall clock `HH:mm` on a calendar day, as an instant; the day is always real, so never null. */
 export const morningOf = (day: string, zone: Zone): string => {
