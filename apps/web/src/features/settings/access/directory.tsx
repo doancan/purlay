@@ -1,4 +1,6 @@
 /** Native directory setup preserves exact company identity mappings and never caches bearer secrets. */
+import { keys } from '../../../data/keys';
+import { useSession } from '../../session/session';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Value } from '@sinclair/typebox/value';
@@ -131,7 +133,8 @@ const DirectoryEditor = ({
   const { t } = useI18n();
   const api = useApi();
   const { workspace } = useWorkspace();
-  const { workspaceId, queryKey } = useAccessScope();
+  const { workspaceId } = useAccessScope();
+  const { user } = useSession();
   const [name, setName] = useState(directory?.name ?? '');
   const [connectionId, setConnectionId] = useState(directory?.connectionId ?? '');
   const [claim, setClaim] = useState<DirectoryIdentityClaim>(directory?.claim ?? 'sub');
@@ -139,7 +142,7 @@ const DirectoryEditor = ({
   const [invalid, setInvalid] = useState(false);
   const task = useAccessTask();
   const providers = useQuery({
-    queryKey: [...queryKey, 'directory-providers'],
+    queryKey: keys.companyConnections(workspaceId, user.id),
     queryFn: async ({ signal }) => await api.companyConnections(workspaceId, signal),
     enabled: directory === null,
   });
@@ -279,7 +282,8 @@ const DirectoryDetail = ({
 }): React.JSX.Element => {
   const { t, format } = useI18n();
   const api = useApi();
-  const { workspaceId, queryKey } = useAccessScope();
+  const { workspaceId } = useAccessScope();
+  const { user } = useSession();
   const [editing, setEditing] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [disabling, setDisabling] = useState(false);
@@ -288,7 +292,7 @@ const DirectoryDetail = ({
   const [issued, setIssued] = useState<IssuedDirectoryCredential | null>(null);
   const task = useAccessTask();
   const providers = useQuery({
-    queryKey: [...queryKey, 'directory-providers'],
+    queryKey: keys.companyConnections(workspaceId, user.id),
     queryFn: async ({ signal }) => await api.companyConnections(workspaceId, signal),
   });
   const providerName =
