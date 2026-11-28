@@ -13,7 +13,7 @@ import { anApi } from '../../testing/fake-api';
 import { renderApp } from '../../testing/render';
 import { person } from '../../testing/user';
 import { SetupFailure } from './client';
-import { useReducedMotion } from './motion';
+import { useReducedMotion } from '../../ui/reduced-motion';
 import { CopyField } from './parts';
 import { aClient, aState, openSetup, ORIGIN, settle } from './testing';
 import { SetupScreen } from './setup-screen';
