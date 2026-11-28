@@ -1,5 +1,7 @@
 # D-343. One neutral family for every grey, light and dark, on even steps — changes D-180's light navigation tint
 
+*Amended by D-361: the light navigation is two cool blue tones again, calibrated; the dark and Midnight themes and every other grey stand.*
+
 **Decided (the owner, 2026-11-26).** The segmented control's rail did not read against the page: `surface-200` was
 #f2f2f4 on a `surface-000` of #f5f5f7, 1.03:1, a smudge rather than a groove. Measured in OKLCH, the light theme also
 had three families of grey side by side: the content's at hue 286 (chroma 2.7), `surface-050`/`100` at no hue, and the
