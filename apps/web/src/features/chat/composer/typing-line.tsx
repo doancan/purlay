@@ -1,5 +1,5 @@
 /**
- * Who else is typing in the channel (D-114), in the composer's footer beside the hints: the row is
+ * Who else is typing in the channel (D-114), in the composer's footer, beside its buttons: the row is
  * always there, so nothing moves when somebody starts or stops. The region is always there too, so
  * a screen reader hears the change politely rather than missing a region that appeared with it.
  *

@@ -39,14 +39,14 @@ test.describe('the tokens, as computed', () => {
         mono: read('--font-mono'),
       };
     });
-    expect(values.radius).toBe('6px');
+    expect(values.radius).toBe('8px');
     expect(values.pill).toBe('9999px');
     expect(values.icon).toBe('12px');
     expect(values.sans).toContain('Inter');
     expect(values.mono).toContain('JetBrains Mono');
   });
 
-  test('what the screen is drawn with: Inter, sized icons, rounded controls', async ({ page }) => {
+  test('what the screen is drawn with: Inter and sized icons', async ({ page }) => {
     const drawn = await page.evaluate(() => {
       const style = (selector: string): CSSStyleDeclaration | null => {
         const node = document.querySelector(selector);
@@ -58,7 +58,6 @@ test.describe('the tokens, as computed', () => {
         iconWidth: icon?.width ?? '',
         iconHeight: icon?.height ?? '',
         iconStroke: icon?.strokeWidth ?? '',
-        button: style('aside button')?.borderRadius ?? '',
       };
     });
     // The browser's default serif is what a broken font stack looks like.

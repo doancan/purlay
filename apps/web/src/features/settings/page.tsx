@@ -8,7 +8,7 @@
  * with a hairline and the card shadow, so in both themes the card is a step above its ground.
  *
  * Below the narrow breakpoint a row stacks — label, then a full-width control — because a label and a
- * 320px field do not fit beside each other in 390px.
+ * 360px field do not fit beside each other in 390px.
  */
 import { useId } from 'react';
 import { Icon } from '../../components/icon';

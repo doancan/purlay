@@ -64,7 +64,6 @@ export const colorTokens = [
   'syntax-number',
   'syntax-comment',
   'syntax-function',
-  'syntax-type',
   'syntax-operator',
   'brand-google-blue',
   'brand-google-green',
@@ -130,7 +129,6 @@ export const sizeTokens = [
   'size-icon-sm',
   'size-icon-md',
   'size-icon-lg',
-  'size-switcher',
   'size-avatar',
   'size-avatar-sm',
   'size-avatar-lg',
@@ -155,7 +153,6 @@ export const borderWidthTokens = [
 
 export const durationTokens = [
   'duration-collapse',
-  'duration-bar',
   'duration-hover',
   'duration-overlay',
   'duration-exit',

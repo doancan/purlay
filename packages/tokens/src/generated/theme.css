@@ -63,7 +63,6 @@
   --color-syntax-number: var(--syntax-number);
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-function: var(--syntax-function);
-  --color-syntax-type: var(--syntax-type);
   --color-syntax-operator: var(--syntax-operator);
   --color-brand-google-blue: var(--brand-google-blue);
   --color-brand-google-green: var(--brand-google-green);
@@ -114,7 +113,6 @@
   --height-attachment-preview: var(--size-attachment-preview);
   --container-toast: var(--size-toast);
   --outline-offset-focus: var(--size-focus-offset);
-  --height-switcher: var(--size-switcher);
   --height-row: var(--size-row);
   --breakpoint-narrow: 900px;
 
@@ -132,7 +130,6 @@
 
   /* Motion: duration-, ease- */
   --transition-duration-collapse: var(--duration-collapse);
-  --transition-duration-bar: var(--duration-bar);
   --transition-duration-hover: var(--duration-hover);
   --transition-duration-overlay: var(--duration-overlay);
   --transition-duration-exit: var(--duration-exit);
@@ -281,11 +278,6 @@
 @utility size-icon-lg {
   width: var(--size-icon-lg);
   height: var(--size-icon-lg);
-}
-
-@utility size-switcher {
-  width: var(--size-switcher);
-  height: var(--size-switcher);
 }
 
 @utility size-avatar {

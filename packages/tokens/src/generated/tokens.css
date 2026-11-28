@@ -148,7 +148,6 @@
   --syntax-number: #e0a458;
   --syntax-comment: #8e8e96;
   --syntax-function: #7aa7f7;
-  --syntax-type: #f2a877;
   --syntax-operator: #a9a9b1;
   --brand-google-blue: #4285f4;
   --brand-google-green: #34a853;
@@ -214,7 +213,6 @@
   --syntax-number: #b45309;
   --syntax-comment: #6b6b73;
   --syntax-function: #2563eb;
-  --syntax-type: #9a3412;
   --syntax-operator: #52525b;
   --brand-google-blue: #4285f4;
   --brand-google-green: #34a853;
@@ -280,7 +278,6 @@
   --syntax-number: #e0a458;
   --syntax-comment: #8e8e96;
   --syntax-function: #7aa7f7;
-  --syntax-type: #f2a877;
   --syntax-operator: #a9a9c6;
   --brand-google-blue: #4285f4;
   --brand-google-green: #34a853;
@@ -337,7 +334,6 @@
   --size-icon-sm: 12px;
   --size-icon-md: 16px;
   --size-icon-lg: 20px;
-  --size-switcher: 40px;
   --size-avatar: 28px;
   --size-avatar-sm: 20px;
   --size-avatar-lg: 36px;
@@ -353,7 +349,6 @@
   --stroke-marker: 2px;
   --stroke-icon: 1.5px;
   --duration-collapse: 120ms;
-  --duration-bar: 120ms;
   --duration-hover: 120ms;
   --duration-overlay: 150ms;
   --duration-exit: 100ms;
@@ -409,7 +404,6 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-collapse: 0ms;
-    --duration-bar: 0ms;
     --duration-hover: 0ms;
     --duration-overlay: 0ms;
     --duration-exit: 0ms;

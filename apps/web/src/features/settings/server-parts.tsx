@@ -49,15 +49,9 @@ export const useRefresh = (): ((saved?: Partial<ServerSettingsView>) => Promise<
 };
 
 /** A form's reveal: a movement of the wizard's, and none under reduced motion. */
-export const Reveal = ({
-  children,
-  className,
-}: {
-  readonly children: React.ReactNode;
-  readonly className?: string;
-}): React.JSX.Element => {
+export const Reveal = ({ children }: { readonly children: React.ReactNode }): React.JSX.Element => {
   const reduced = useReducedMotion();
-  return <div className={cn(movementClass('step-in', reduced), className)}>{children}</div>;
+  return <div className={movementClass('step-in', reduced)}>{children}</div>;
 };
 
 /** A call that failed outright: the wizard's sentence, or the one for a setup still open. */

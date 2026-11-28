@@ -8,7 +8,7 @@
  * words and a hairline between lines. The window scrolls inside itself and draws its bar only under the pointer.
  *
  * It is the product's one dialog (`ui/dialog.tsx`): labelled by its title, described by the date, focus held in it,
- * Escape and a click on the scrim closing it. A new version opens it with a show of fireworks over it; where it is
+ * Escape and a click on the scrim closing it. A new version opens it with confetti thrown over it; where it is
  * opened and when is the caller's business.
  */
 import type { ReleaseNotes, ReleaseNotesGroup } from '@purlay/types';
