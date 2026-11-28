@@ -35,6 +35,7 @@ import { SettingsCard, SettingsPage, SettingsRow } from '../page';
 import { MissedMailCard } from './missed-mail-card';
 import { QuietHoursCard } from './quiet-hours-card';
 import { AlertDeliveryCard } from './alert-delivery-card';
+import { compareText } from '../../../lib/collation';
 
 const LEVELS: readonly NotificationLevel[] = ['all', 'mentions', 'none'];
 const INTERRUPTS = [
@@ -203,7 +204,7 @@ const ChannelLevels = (): React.JSX.Element => {
 
   const joined = (channels.data ?? [])
     .filter((channel) => channel.type !== 'direct_message' && channel.notificationLevel !== null)
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    .sort((a, b) => compareText(a.name ?? '', b.name ?? ''));
 
   return (
     <SettingsCard

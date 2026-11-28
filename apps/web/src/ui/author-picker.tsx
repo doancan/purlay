@@ -13,19 +13,16 @@ import { Icon } from '../components/icon';
 import { useI18n } from '../i18n/i18n-provider';
 import { Avatar } from './avatar';
 import { Menu, MenuRadioGroup, MenuRadioItem } from './menu';
+import { compareText } from '../lib/collation';
 
 /** The person themself first, then everybody by name in the reader's language. */
-const authorChoices = (
-  members: readonly WorkspaceMember[],
-  meId: string,
-  locale: string,
-): WorkspaceMember[] =>
+const authorChoices = (members: readonly WorkspaceMember[], meId: string): WorkspaceMember[] =>
   [...members].sort((a, b) =>
     a.user.id === meId
       ? -1
       : b.user.id === meId
         ? 1
-        : a.user.displayName.localeCompare(b.user.displayName, locale),
+        : compareText(a.user.displayName, b.user.displayName),
   );
 
 interface AuthorPickerProps {
@@ -51,7 +48,7 @@ export const AuthorPicker = ({
   chosenName,
   onChange,
 }: AuthorPickerProps): React.JSX.Element => {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const buttonId = useId();
   const chosen = value === null ? undefined : members.find((m) => m.user.id === value)?.user;
   return (
@@ -81,7 +78,7 @@ export const AuthorPicker = ({
           }}
         >
           <MenuRadioItem value={ANYONE}>{t('search.anyone')}</MenuRadioItem>
-          {authorChoices(members, meId, locale).map(({ user }) => (
+          {authorChoices(members, meId).map(({ user }) => (
             <MenuRadioItem
               key={user.id}
               value={user.id}

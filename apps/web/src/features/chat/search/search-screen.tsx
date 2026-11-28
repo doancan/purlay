@@ -53,6 +53,7 @@ import { useMessageText } from '../../content/github-event';
 import { useSession } from '../../session/session';
 import { AuthorPicker } from '../../../ui/author-picker';
 import { markedExcerpt, marksIn } from './excerpt';
+import { compareText } from '../../../lib/collation';
 
 /** Where a found message is read: its own address, which opens the feed — or its thread — at it (D-149). */
 export const placeOf = (slug: string, message: Message): string =>
@@ -259,7 +260,7 @@ const SearchView = ({
     () =>
       (channels.data ?? [])
         .map((channel) => ({ id: channel.id, name: placeName(channel) }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => compareText(a.name, b.name)),
     [channels.data],
   );
   const narrowed = channelId === null ? undefined : byId.get(channelId);

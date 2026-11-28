@@ -37,6 +37,7 @@ import { useWorkspace } from '../../shell/workspace';
 import { SaveOutcome, SettingsCard, SettingsPage } from '../page';
 import { useWorkspaceRole, useWorkspaceCapabilities } from '../role';
 import { GuestAdministration } from '../guests';
+import { compareText } from '../../../lib/collation';
 
 const ROLES: readonly UserRole[] = ['owner', 'admin', 'member'];
 const ALL = 'all';
@@ -211,7 +212,7 @@ export const MembersPage = (): React.JSX.Element => {
     .sort(
       (a, b) =>
         ROLES.indexOf(a.role) - ROLES.indexOf(b.role) ||
-        a.user.displayName.localeCompare(b.user.displayName),
+        compareText(a.user.displayName, b.user.displayName),
     );
   const count = (of: UserRole): number => all.filter((member) => member.role === of).length;
 

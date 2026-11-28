@@ -16,6 +16,7 @@
 import { BROADCAST_NAMES } from '@purlay/markdown';
 import type { User } from '@purlay/types';
 import { insideFence } from './composer-text';
+import { compareText } from '../../../lib/collation';
 
 /** The most people the list shows: past this a person types another letter, they do not scroll. */
 export const SUGGESTIONS_MAX = 8;
@@ -102,8 +103,8 @@ export const suggest = (people: readonly User[], query: string): readonly User[]
   ranked.sort(
     (a, b) =>
       a.tier - b.tier ||
-      a.person.displayName.localeCompare(b.person.displayName) ||
-      a.person.username.localeCompare(b.person.username),
+      compareText(a.person.displayName, b.person.displayName) ||
+      compareText(a.person.username, b.person.username),
   );
   const [only, ...others] = ranked;
   if (only !== undefined && others.length === 0 && fold(only.person.username) === q) return [];

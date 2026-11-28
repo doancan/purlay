@@ -23,6 +23,7 @@ import {
   useState,
 } from 'react';
 import { rememberingStorage } from '../data/browser-storage';
+import { setCollationLocale } from '../lib/collation';
 import { createFormatters, type Formatters } from './format';
 import {
   detectLocale,
@@ -125,18 +126,17 @@ export const I18nProvider = ({
     setWanted(locale);
   }, []);
 
-  const value = useMemo<I18n | null>(
-    () =>
-      loaded === null
-        ? null
-        : {
-            locale: loaded.locale,
-            setLocale,
-            t: createTranslate(loaded.locale, loaded.catalogue),
-            format: createFormatters(loaded.locale, resolved.timeZone),
-          },
-    [loaded, setLocale, resolved],
-  );
+  const value = useMemo<I18n | null>(() => {
+    if (loaded === null) return null;
+    // Before any child renders in this language: what they sort is sorted by it (`lib/collation.ts`).
+    setCollationLocale(loaded.locale);
+    return {
+      locale: loaded.locale,
+      setLocale,
+      t: createTranslate(loaded.locale, loaded.catalogue),
+      format: createFormatters(loaded.locale, resolved.timeZone),
+    };
+  }, [loaded, setLocale, resolved]);
 
   if (failure !== null) throw failure;
   if (value === null) return <>{fallback}</>;

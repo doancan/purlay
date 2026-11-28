@@ -18,6 +18,7 @@ import { rowOf, shownRows } from './preferences';
 import { useSidebarPreferences } from './preferences-context';
 import { SectionHeading } from './section-heading';
 import { SectionError, SectionLoading } from './section-state';
+import { compareText } from '../../../lib/collation';
 
 const GroupSection = ({
   group,
@@ -154,7 +155,7 @@ export const PersonalGroups = (): React.JSX.Element => {
       )}
       {channels.data !== undefined &&
         [...(groups.data?.data ?? [])]
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => compareText(a.name, b.name))
           .map((group) => (
             <GroupSection
               key={group.id}
