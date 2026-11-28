@@ -29,11 +29,13 @@
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent, type MessagePriority } from '@purlay/types';
 import { useChannelType } from '../../../data/queries';
+import { RenderBoundary } from '../../shell/failure-boundary';
 import { useWorkspace } from '../../shell/workspace';
 import { PriorityChoice } from '../messages/priority';
 import {
   lazy,
   Suspense,
+  useCallback,
   useContext,
   useEffect,
   useId,
@@ -174,6 +176,10 @@ const Inner = ({
   const [sourceMode, setSourceMode] = useState(
     () => readSourceMode(ports.storage) || unitsOver(text) > 0,
   );
+  /** The formatted editor's code did not arrive (a stale deploy, no network): the Markdown box is there, so write in it. */
+  const leaveFormatted = useCallback((): void => {
+    setSourceMode(true);
+  }, []);
   const input = (): ComposerInput | null => (sourceMode ? rawField.current : richField.current);
   field.current = {
     get value(): string {
@@ -198,6 +204,9 @@ const Inner = ({
   const modeChanged = useRef(false);
   const modeSelection = useRef<Selection | null>(null);
   const [linkSelection, setLinkSelection] = useState<Selection | null>(null);
+  const closeLinkDialog = useCallback((): void => {
+    setLinkSelection(null);
+  }, []);
   const pendingLink = useRef<Selection | null>(null);
   const [editingLink, setEditingLink] = useState<{
     readonly label: string;
@@ -1029,53 +1038,57 @@ const Inner = ({
               onPaste={pasteHandler.onPaste}
             />
             {
-              <Suspense
-                fallback={
-                  <div role="status" className="min-h-touch flex-1 text-body text-ink-muted">
-                    {t('composer.loadingEditor')}
-                  </div>
-                }
-              >
-                <RichEditor
-                  input={richField}
-                  hidden={sourceMode}
-                  autoFocus={autoFocus}
-                  value={text}
-                  label={fieldLabel}
-                  description={hintsId}
-                  placeholder={fieldPlaceholder}
-                  taskLabel={t('composer.tasks')}
-                  invalid={error !== null}
-                  controls={controls}
-                  activeDescendant={activeDescendant}
-                  onChange={(next, selected) => {
-                    if (sourceMode) inserted.current = selected;
-                    change(next, richField.current?.empty !== true);
-                    setSelection(selected);
-                  }}
-                  onSelect={(selected, formats) => {
-                    setSelection(selected);
-                    setRichFormats(formats);
-                  }}
-                  onKeyDown={onKeyDown}
-                  onPaste={pasteHandler.onPaste}
-                  onUseSource={() => {
-                    setSourceMode(true);
-                  }}
-                  onReady={() => {
-                    setRichReady(true);
-                    const queued = pendingLink.current;
-                    const editor = richField.current;
-                    if (queued !== null && editor !== null) {
-                      pendingLink.current = null;
-                      if (sourceMode && unitsOver(latest.current) <= 0)
-                        editor.loadSource(latest.current, queued);
-                      setEditingLink(unitsOver(latest.current) <= 0 ? editor.currentLink() : null);
-                      setLinkSelection(queued);
-                    }
-                  }}
-                />
-              </Suspense>
+              <RenderBoundary fallback={<AfterFailure run={leaveFormatted} />}>
+                <Suspense
+                  fallback={
+                    <div role="status" className="min-h-touch flex-1 text-body text-ink-muted">
+                      {t('composer.loadingEditor')}
+                    </div>
+                  }
+                >
+                  <RichEditor
+                    input={richField}
+                    hidden={sourceMode}
+                    autoFocus={autoFocus}
+                    value={text}
+                    label={fieldLabel}
+                    description={hintsId}
+                    placeholder={fieldPlaceholder}
+                    taskLabel={t('composer.tasks')}
+                    invalid={error !== null}
+                    controls={controls}
+                    activeDescendant={activeDescendant}
+                    onChange={(next, selected) => {
+                      if (sourceMode) inserted.current = selected;
+                      change(next, richField.current?.empty !== true);
+                      setSelection(selected);
+                    }}
+                    onSelect={(selected, formats) => {
+                      setSelection(selected);
+                      setRichFormats(formats);
+                    }}
+                    onKeyDown={onKeyDown}
+                    onPaste={pasteHandler.onPaste}
+                    onUseSource={() => {
+                      setSourceMode(true);
+                    }}
+                    onReady={() => {
+                      setRichReady(true);
+                      const queued = pendingLink.current;
+                      const editor = richField.current;
+                      if (queued !== null && editor !== null) {
+                        pendingLink.current = null;
+                        if (sourceMode && unitsOver(latest.current) <= 0)
+                          editor.loadSource(latest.current, queued);
+                        setEditingLink(
+                          unitsOver(latest.current) <= 0 ? editor.currentLink() : null,
+                        );
+                        setLinkSelection(queued);
+                      }
+                    }}
+                  />
+                </Suspense>
+              </RenderBoundary>
             }
           </div>
           {!sourceMode && richFormats.has('code') && (
@@ -1147,38 +1160,40 @@ const Inner = ({
             </span>
           </div>
           {linkSelection !== null && (
-            <Suspense fallback={null}>
-              <LinkDialog
-                existing={editingLink}
-                selection={
-                  !sourceMode
-                    ? (richField.current?.selectedText ?? '')
-                    : text.slice(linkSelection.start, linkSelection.end)
-                }
-                returnFocus={() =>
-                  sourceMode ? rawField.current : (richField.current?.element ?? null)
-                }
-                onClose={() => {
-                  setLinkSelection(null);
-                }}
-                onInsert={(label, address) => {
-                  if ((!sourceMode || editingLink !== null) && richField.current !== null) {
-                    richField.current.insertLink(label, address);
-                    setLinkSelection(null);
-                    return;
+            <RenderBoundary fallback={<AfterFailure run={closeLinkDialog} />}>
+              <Suspense fallback={null}>
+                <LinkDialog
+                  existing={editingLink}
+                  selection={
+                    !sourceMode
+                      ? (richField.current?.selectedText ?? '')
+                      : text.slice(linkSelection.start, linkSelection.end)
                   }
-                  const next = insertLink(text, linkSelection, label, address);
-                  if (next === null) return;
-                  inserted.current = next.selection;
-                  change(next.text);
-                  setLinkSelection(null);
-                }}
-                onRemove={() => {
-                  richField.current?.removeLink();
-                  setLinkSelection(null);
-                }}
-              />
-            </Suspense>
+                  returnFocus={() =>
+                    sourceMode ? rawField.current : (richField.current?.element ?? null)
+                  }
+                  onClose={() => {
+                    setLinkSelection(null);
+                  }}
+                  onInsert={(label, address) => {
+                    if ((!sourceMode || editingLink !== null) && richField.current !== null) {
+                      richField.current.insertLink(label, address);
+                      setLinkSelection(null);
+                      return;
+                    }
+                    const next = insertLink(text, linkSelection, label, address);
+                    if (next === null) return;
+                    inserted.current = next.selection;
+                    change(next.text);
+                    setLinkSelection(null);
+                  }}
+                  onRemove={() => {
+                    richField.current?.removeLink();
+                    setLinkSelection(null);
+                  }}
+                />
+              </Suspense>
+            </RenderBoundary>
           )}
         </div>
         {draft.failed && (
@@ -1228,6 +1243,14 @@ const Inner = ({
       </div>
     </div>
   );
+};
+
+/** What a boundary draws when a lazily loaded part failed: nothing, and one step to carry on without it. */
+const AfterFailure = ({ run }: { readonly run: () => void }): null => {
+  useEffect(() => {
+    run();
+  }, [run]);
+  return null;
 };
 
 export const Composer = (props: ComposerProps): React.JSX.Element => {
