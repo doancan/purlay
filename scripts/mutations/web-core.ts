@@ -200,6 +200,17 @@ export const WEB_CORE: readonly Mutation[] = [
     tests: ['apps/web/src/features/chat/composer/composer.test.tsx'],
   },
   {
+    id: 'external-links-open-without-noopener',
+    why: "a link that leaves the product hands the reader's tab to the other page (window.opener) and says where they came from",
+    file: 'apps/web/src/ui/external-link.ts',
+    find: "{ target: '_blank', rel: 'noopener noreferrer' }",
+    replace: "{ target: '_blank' }",
+    tests: [
+      'apps/web/src/ui/external-link.test.ts',
+      'apps/web/src/features/content/github-cards.test.tsx',
+    ],
+  },
+  {
     id: 'feed-read-in-flight-never-read-again',
     why: 'a feed being read when the subscription was answered keeps what it read, and a reply that landed in that gap is never shown',
     file: 'apps/web/src/data/cache.ts',
