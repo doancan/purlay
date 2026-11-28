@@ -32,7 +32,7 @@ import { isTransient } from '../../../data/errors';
 import { useDescribeFailure } from '../../../data/failure';
 import { keys } from '../../../data/keys';
 import { captureAccess, useAccessRevision } from '../../../data/access-revision';
-import { useChannels } from '../../../data/queries';
+import { useJoinedChannel } from '../../../data/queries';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { useToast } from '../../../ui/toast';
 import { useWorkspace } from '../../shell/workspace';
@@ -179,10 +179,9 @@ export const usePin = (message: Message): PinControl => {
   const describe = useDescribeFailure();
   const { workspace } = useWorkspace();
   const intents = useIntents();
-  const channels = useChannels(workspace.id);
+  const canPin = useJoinedChannel(workspace.id, message.channelId);
   const pinned = useIsPinned(message);
   const pending = intents.byMessage.has(message.id);
-  const canPin = channels.data?.find((channel) => channel.id === message.channelId)?.state != null;
   const key = keys.pins(message.channelId);
 
   /** Pinned now, by the intent or the server's list as they are at this moment. */

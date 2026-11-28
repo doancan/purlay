@@ -28,7 +28,7 @@
  */
 import { Value } from '@sinclair/typebox/value';
 import { MessageContent, type MessagePriority } from '@purlay/types';
-import { useChannels } from '../../../data/queries';
+import { useChannelType } from '../../../data/queries';
 import { useWorkspace } from '../../shell/workspace';
 import { PriorityChoice } from '../messages/priority';
 import {
@@ -162,11 +162,9 @@ const Inner = ({
   const [chosenPriority, setChosenPriority] = useState<MessagePriority>('normal');
   const { workspace, urgentMessagesEnabled } = useWorkspace();
   const allowUrgent = urgentMessagesEnabled !== false;
-  const channels = useChannels(workspace.id);
+  const channelType = useChannelType(workspace.id, channelId);
   // Offered where the server would accept it: a direct message, or words that name somebody.
-  const mayPrioritise =
-    channels.data?.find((channel) => channel.id === channelId)?.type === 'direct_message' ||
-    /(^|\s)@\w/.test(text);
+  const mayPrioritise = channelType === 'direct_message' || /(^|\s)@\w/.test(text);
   const choice = allowUrgent || chosenPriority !== 'urgent' ? chosenPriority : 'normal';
   if (choice !== chosenPriority) setChosenPriority(choice);
   const priority = mayPrioritise ? choice : 'normal';

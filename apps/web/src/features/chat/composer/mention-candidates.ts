@@ -8,7 +8,7 @@
  *   workspace. The server tells nobody outside a private channel, so offering anybody else there would
  *   offer a name it silently drops; and while the members are being read, nobody rather than a guess.
  */
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { Channel, User, WorkspaceMember } from '@purlay/types';
 import { useChannelMembers, useChannels, useMembers } from '../../../data/queries';
 import { useSession } from '../../session/session';
@@ -64,14 +64,21 @@ export const useMentionCandidates = (channelId: string): MentionCandidates => {
   const refresh = useCallback((): void => {
     if (needsParticipants && isStale) void refetch();
   }, [needsParticipants, isStale, refetch]);
+  const participants = inChannel.data;
+  // Not on every keystroke: only when who could be mentioned changes.
+  const people = useMemo(
+    () =>
+      candidatesFor(
+        channel,
+        members.data ?? [],
+        participants?.map((member) => member.user),
+        session.user.id,
+        guest,
+      ),
+    [channel, members.data, participants, session.user.id, guest],
+  );
   return {
-    people: candidatesFor(
-      channel,
-      members.data ?? [],
-      inChannel.data?.map((member) => member.user),
-      session.user.id,
-      guest,
-    ),
+    people,
     state:
       !needsParticipants || inChannel.data !== undefined
         ? 'ready'
