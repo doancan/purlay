@@ -13,7 +13,7 @@ import { keys } from '../../data/keys';
 import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
 import { TwoFactorCard } from '../settings/pages/two-factor-card';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { useSignOut } from '../shell/sign-out';
 import { IndependentSignInNotice } from '../settings/pages/company-parts';
 import { StandaloneScreen } from '../shell/standalone';

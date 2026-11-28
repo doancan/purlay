@@ -32,7 +32,7 @@ import { Disclosure } from '../../ui/disclosure';
 import { cn } from '../../ui/cn';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { browserNativePorts, nativeAppName, pendingNativeHandoff } from '../native/pending';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';
 import { GoogleButton } from './google-button';

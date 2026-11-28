@@ -5,11 +5,11 @@
  *
  * - `DoorCard` is a card with something to do in it: the mark, a heading, and a form or a choice, centred.
  * - `DoorNotice` is a card that only says something — a link that does not open, a step that is done — and offers
- *   the way on: the notice the rest of the product uses (`shell/notice`), framed, with its glyph and no mark, since
+ *   the way on: the notice the rest of the product uses (`ui/notice`), framed, with its glyph and no mark, since
  *   a mark above a glyph is two pictures for one sentence.
  */
 import type { GlyphName } from '../../components/icon';
-import { Notice } from '../shell/notice';
+import { Notice } from '../../ui/notice';
 import { StandaloneCard, StandaloneScreen } from '../shell/standalone';
 
 export const DoorCard = ({

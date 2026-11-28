@@ -12,7 +12,7 @@ import { href } from '../../router/routes';
 import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { useEffect } from 'react';
 import { EmailSignInForm } from './email-sign-in-form';
 import { GitHubButton } from './github-button';

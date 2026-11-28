@@ -2,7 +2,7 @@
 import { useI18n } from '../../i18n/i18n-provider';
 import { Link } from '../../router/router-provider';
 import { buttonStyle } from '../../ui/button';
-import { Notice } from './notice';
+import { Notice } from '../../ui/notice';
 import { StandaloneCard, StandaloneScreen } from './standalone';
 
 export const NotFound = (): React.JSX.Element => {

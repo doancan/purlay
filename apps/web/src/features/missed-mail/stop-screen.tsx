@@ -12,7 +12,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { Button, buttonStyle } from '../../ui/button';
 import { browserInvitationPorts } from '../invitations/pending';
-import { Notice } from '../shell/notice';
+import { Notice } from '../../ui/notice';
 import { StandaloneCard, StandaloneScreen } from '../shell/standalone';
 
 const FRAGMENT = /^#([0-9a-f]{64})$/;

@@ -12,7 +12,7 @@ import { href } from '../../router/routes';
 import { Button, buttonStyle } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { browserInvitationPorts } from '../invitations/pending';
-import { Notice } from '../shell/notice';
+import { Notice } from '../../ui/notice';
 import { createSetupClient, isSetupFailure, type SetupClient } from './client';
 import { failureWords } from './errors';
 import { StandaloneCard, StandaloneScreen } from '../shell/standalone';

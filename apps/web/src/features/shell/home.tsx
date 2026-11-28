@@ -14,7 +14,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
-import { LogoMark } from './notice';
+import { LogoMark } from '../../ui/notice';
 import { ScheduledDeletions } from './scheduled-deletions';
 import { useSession } from '../session/session';
 import { browserInvitationPorts, pendingInvitation } from '../invitations/pending';

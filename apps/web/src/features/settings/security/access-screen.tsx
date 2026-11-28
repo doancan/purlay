@@ -11,7 +11,7 @@ import { useRoute } from '../../../router/router-provider';
 import { Main } from '../../../ui/main';
 import { Button, buttonStyle } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
-import { LogoMark } from '../../shell/notice';
+import { LogoMark } from '../../../ui/notice';
 import { useSession } from '../../session/session';
 import { CompanySignIn } from '../../sign-in/company-sign-in';
 import { SettingsCard } from '../page';

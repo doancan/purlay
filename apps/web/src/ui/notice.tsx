@@ -10,7 +10,7 @@
  * the white card of the light theme as on the dark one. It stands beside a visible title or name on every screen that has
  * it, so it is decoration and says nothing to a screen reader.
  */
-import { Icon, type GlyphName } from '../../components/icon';
+import { Icon, type GlyphName } from '../components/icon';
 
 type Heading = 'h1' | 'h2';
 

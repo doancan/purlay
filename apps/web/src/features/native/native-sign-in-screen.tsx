@@ -26,7 +26,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { useSession } from '../session/session';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { useSignOut } from '../shell/sign-out';
 import { leave } from '../sign-in/leave';
 import {
