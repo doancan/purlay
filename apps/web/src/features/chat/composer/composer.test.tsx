@@ -629,20 +629,21 @@ describe('what is refused before it is sent, in words', () => {
     expect(sent()).toEqual([]);
   });
 
-  test('the counter appears only near the limit, and is announced politely', async () => {
+  test('the counter appears only near the limit, and is spoken only where it crosses a point', async () => {
     const quiet = await mount({ storage: drafted('a'.repeat(MESSAGE_CONTENT_MAX - 501)) });
     expect(quiet.view.queryByText(/characters? left/)).toBeNull();
     quiet.view.unmount();
     const near = await mount({ storage: drafted('a'.repeat(MESSAGE_CONTENT_MAX - 500)) });
-    expect(
-      near.view.getByText('500 characters left').closest('[aria-live]')?.getAttribute('aria-live'),
-    ).toBe('polite');
+    // Drawn at every count, spoken only at the points: the drawn one is not a live region.
+    const drawn = near.view.getAllByText('500 characters left');
+    expect(drawn.some((each) => each.closest('[aria-live]') !== null)).toBe(false);
+    expect(drawn.some((each) => each.getAttribute('role') === 'status')).toBe(true);
     near.view.unmount();
     const last = await mount({ storage: drafted('a'.repeat(MESSAGE_CONTENT_MAX - 1)) });
-    expect(last.view.getByText('1 character left')).toBeDefined();
+    expect(last.view.getAllByText('1 character left').length).toBeGreaterThan(0);
     last.view.unmount();
     const over = await mount({ storage: drafted('a'.repeat(MESSAGE_CONTENT_MAX + 1)) });
-    expect(over.view.getByText('That is 1 character over the limit.')).toBeDefined();
+    expect(over.view.getAllByText('That is 1 character over the limit.').length).toBeGreaterThan(0);
   });
 
   test('a character the contract refuses is named, and nothing is sent', async () => {
@@ -2847,7 +2848,7 @@ describe('typing', () => {
     ts: 0,
   });
   const line = (view: Mounted['view']): string =>
-    view.container.querySelector('[aria-live="polite"].truncate')?.textContent ?? '';
+    view.container.querySelector('[data-typing]')?.textContent ?? '';
 
   test('typing says so to the room once, naming the channel; spaces alone say nothing', async () => {
     const { view, box, user } = await mount();

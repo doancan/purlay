@@ -1,7 +1,8 @@
 /**
  * Who else is typing in the channel (D-114), in the composer's footer, beside its buttons: the row is
- * always there, so nothing moves when somebody starts or stops. The region is always there too, so
- * a screen reader hears the change politely rather than missing a region that appeared with it.
+ * always there, so nothing moves when somebody starts or stops. It is not a live region: in a busy channel it
+ * changes whenever anyone starts or stops, and a person writing with a screen reader would be interrupted at every
+ * keystroke of somebody else's. It is read where it is, beside the box.
  *
  * Names come from the workspace's members, read only once somebody is typing; a person not among
  * them yet is "someone" rather than an id.
@@ -27,7 +28,7 @@ const Names = ({ typists }: { readonly typists: readonly string[] }): string => 
 export const TypingLine = ({ channelId }: { readonly channelId: string }): React.JSX.Element => {
   const typists = useTyping(channelId);
   return (
-    <span aria-live="polite" className="min-w-0 truncate text-caption text-ink-muted">
+    <span data-typing="" className="min-w-0 truncate text-caption text-ink-muted">
       {typists.length > 0 && <Names typists={typists} />}
     </span>
   );

@@ -59,6 +59,7 @@ import { VisuallyHidden } from '../../../ui/visually-hidden';
 import {
   broadcastMention,
   continueList,
+  counterStretch,
   enterAction,
   formatKey,
   insertMarkdown,
@@ -819,20 +820,28 @@ const Inner = ({
     (!sourceMode && richFormats.has('code')) ||
     insideFence(text.slice(0, caretAt)) ||
     (ports.touchOnly?.() ?? false);
+  const counterText =
+    left === null
+      ? ''
+      : left >= 0
+        ? t('composer.remaining', { count: left })
+        : t('composer.tooLong', { count: -left });
+  // What a screen reader hears is held between the points where it should speak (`counterStretch`).
+  const stretch = counterStretch(left);
+  const spoken = useRef({ stretch: 0, text: '' });
+  if (spoken.current.stretch !== stretch) spoken.current = { stretch, text: counterText };
   const counter = (
-    <span
-      aria-live="polite"
-      className={cn(
-        'ml-auto text-caption tabular-nums',
-        left !== null && left < 0 ? 'text-danger-text' : 'text-ink-muted',
-      )}
-    >
-      {left === null
-        ? null
-        : left >= 0
-          ? t('composer.remaining', { count: left })
-          : t('composer.tooLong', { count: -left })}
-    </span>
+    <>
+      <span
+        className={cn(
+          'ml-auto text-caption tabular-nums',
+          left !== null && left < 0 ? 'text-danger-text' : 'text-ink-muted',
+        )}
+      >
+        {counterText}
+      </span>
+      <VisuallyHidden role="status">{spoken.current.text}</VisuallyHidden>
+    </>
   );
   const sendButton = (
     <button

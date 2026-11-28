@@ -5,6 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseMarkdown, readMarkdown } from '@purlay/markdown';
 import { MESSAGE_CONTENT_MAX } from '@purlay/types';
 import {
+  counterStretch,
   asCodeBlock,
   broadcastMention,
   continueList,
@@ -739,5 +740,19 @@ describe('taking a pasted block out again (D-259)', () => {
     });
     expect(withoutBlock('BLOCK', 0, 'BLOCK')).toEqual({ text: '', caret: 0 });
     expect(withoutBlock('a\nBLOCK', 2, 'BLOCK')).toEqual({ text: 'a\n', caret: 2 });
+  });
+});
+
+describe('where the counter speaks', () => {
+  test('it holds still between the points, and moves at each', () => {
+    expect(counterStretch(null)).toBe(0);
+    expect(counterStretch(501)).toBe(0);
+    expect(counterStretch(500)).toBe(1);
+    expect(counterStretch(499)).toBe(1);
+    expect(counterStretch(301)).toBe(1);
+    expect(counterStretch(300)).toBe(2);
+    expect(counterStretch(1)).toBe(9);
+    expect(counterStretch(0)).toBe(10);
+    expect(counterStretch(-40)).toBe(10);
   });
 });
