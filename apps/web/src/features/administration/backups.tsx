@@ -5,12 +5,13 @@ import { SettingsCard } from '../settings/page';
 import { Inset } from '../settings/server-parts';
 import { useAdministrationClient } from './context';
 import { Facts, QueryState } from './parts';
+import { keys } from '../../data/keys';
 
 export const Backups = (): React.JSX.Element => {
   const { t, format } = useI18n();
   const client = useAdministrationClient();
   const query = useQuery({
-    queryKey: ['server', 'backups'],
+    queryKey: keys.serverBackups,
     queryFn: async ({ signal }) => await client.backups(signal),
     retry: false,
   });

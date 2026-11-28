@@ -6,6 +6,7 @@ import { Button } from '../../ui/button';
 import { Disclosure } from '../../ui/disclosure';
 import { SettingsCard } from '../settings/page';
 import { useAdministrationClient } from './context';
+import { keys } from '../../data/keys';
 
 /** Read-only operational reports: server policy decides job and backup freshness. */
 export const ServerProblems = ({
@@ -16,12 +17,12 @@ export const ServerProblems = ({
   const client = useAdministrationClient();
   const { t, format } = useI18n();
   const operations = useQuery({
-    queryKey: ['server', 'operations'],
+    queryKey: keys.serverOperations,
     queryFn: async ({ signal }) => await client.operations(signal),
     retry: false,
   });
   const backups = useQuery({
-    queryKey: ['server', 'backups'],
+    queryKey: keys.serverBackups,
     queryFn: async ({ signal }) => await client.backups(signal),
     retry: false,
   });

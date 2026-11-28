@@ -9,6 +9,7 @@ import { Dialog } from '../../ui/dialog';
 import { TextField } from '../../ui/text-field';
 import { useAdministrationClient } from './context';
 import { Empty, Pagination, QueryState, usePages } from './parts';
+import { keys } from '../../data/keys';
 
 /** A choice in the chooser. Its list is drawn out by the row's padding, so the text sits on the field's edge and the hover wash in the dialog's gutter. */
 const personRowClasses =
@@ -117,7 +118,7 @@ const People = ({
   const client = useAdministrationClient();
   const pages = usePages();
   const query = useQuery({
-    queryKey: ['server', 'audit-people', filter, pages.after],
+    queryKey: keys.serverAuditPeople(filter, pages.after),
     queryFn: async ({ signal }) =>
       await client.users(
         { q: filter, ...(pages.after === undefined ? {} : { after: pages.after }) },

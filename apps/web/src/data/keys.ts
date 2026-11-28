@@ -15,6 +15,25 @@ import type {
  * frame names a channel and not the workspace it is in.
  */
 export const keys = {
+  // The server administrator's console (`features/administration`, the server settings): one family, so a change
+  // to the server can name the whole of it (`keys.server`) or one screen's read.
+  server: ['server'] as const,
+  serverSettings: ['server', 'settings'] as const,
+  serverOverview: ['server', 'overview'] as const,
+  serverOperations: ['server', 'operations'] as const,
+  serverBackups: ['server', 'backups'] as const,
+  serverAudit: ['server', 'audit'] as const,
+  serverMailTest: ['server', 'mail-test'] as const,
+  serverModules: ['server', 'modules'] as const,
+  serverPush: ['server', 'push'] as const,
+  serverPreferences: ['server', 'preferences'] as const,
+  serverWorkspaces: (filter: unknown, after: unknown) =>
+    ['server', 'workspaces', filter, after] as const,
+  serverUsers: (filter: unknown, after: unknown) => ['server', 'users', filter, after] as const,
+  serverUser: (id: string, after: unknown) => ['server', 'user', id, after] as const,
+  serverAuditPage: (filter: unknown, after: unknown) => ['server', 'audit', filter, after] as const,
+  serverAuditPeople: (filter: unknown, after: unknown) =>
+    ['server', 'audit-people', filter, after] as const,
   companyDomains: (workspaceId: string, userId: string) =>
     ['company-domains', workspaceId, userId] as const,
   companyConnections: (workspaceId: string, userId: string) =>

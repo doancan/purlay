@@ -6,6 +6,7 @@ import { SettingsCard } from '../settings/page';
 import { ChangeFailure, Inset } from '../settings/server-parts';
 import { useAdministrationClient } from './context';
 import { QueryState } from './parts';
+import { keys } from '../../data/keys';
 
 export const SavedMailTest = ({
   enabled,
@@ -18,7 +19,7 @@ export const SavedMailTest = ({
   const { t, format } = useI18n();
   const queries = useQueryClient();
   const query = useQuery({
-    queryKey: ['server', 'mail-test'],
+    queryKey: keys.serverMailTest,
     queryFn: async ({ signal }) => await client.mailStatus(signal),
     retry: false,
   });
@@ -30,8 +31,8 @@ export const SavedMailTest = ({
     setFailure(null);
     try {
       const report = await client.testMail();
-      queries.setQueryData(['server', 'mail-test'], { lastTest: report });
-      await queries.invalidateQueries({ queryKey: ['server', 'audit'] });
+      queries.setQueryData(keys.serverMailTest, { lastTest: report });
+      await queries.invalidateQueries({ queryKey: keys.serverAudit });
     } catch (error) {
       setFailure(error);
     } finally {
