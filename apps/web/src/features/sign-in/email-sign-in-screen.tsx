@@ -27,7 +27,7 @@ import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { browserInvitationPorts, keepInvitation } from '../invitations/pending';
 import { browserNativePorts, keepNativeHandoff, nativePlatformIn } from '../native/pending';
 import { DoorCard, DoorNotice } from './door-card';

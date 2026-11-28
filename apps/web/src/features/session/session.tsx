@@ -22,7 +22,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { href } from '../../router/routes';
 import { useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
-import { Notice } from '../shell/notice';
+import { Notice } from '../../ui/notice';
 import { StandaloneCard, StandaloneScreen } from '../shell/standalone';
 import { PushProvider } from '../push/push';
 import { AlertPreferencesProvider } from '../alerts/preferences-context';

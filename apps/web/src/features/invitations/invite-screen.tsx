@@ -30,7 +30,7 @@ import { Link, useRoute } from '../../router/router-provider';
 import { Button } from '../../ui/button';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { SessionGate } from '../session/session';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { DoorCard, DoorNotice } from '../sign-in/door-card';
 import { EmailSignInForm } from '../sign-in/email-sign-in-form';
 import { GitHubButton } from '../sign-in/github-button';

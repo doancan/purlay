@@ -11,7 +11,7 @@ import { buttonStyle } from '../../ui/button';
 import { useRuns } from '../session/session';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { lastChannel } from '../../data/last-channel';
-import { Notice } from './notice';
+import { Notice } from '../../ui/notice';
 import { ScreenBar } from './screen-bar';
 import { useWorkspace } from './workspace';
 

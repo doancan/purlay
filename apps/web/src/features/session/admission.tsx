@@ -6,7 +6,7 @@ import { useI18n } from '../../i18n/i18n-provider';
 import { Button } from '../../ui/button';
 import { useRoute } from '../../router/router-provider';
 import { href } from '../../router/routes';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { DoorCard } from '../sign-in/door-card';
 
 export const useOwnAdmission = (enabled: boolean): ReturnType<typeof useQuery<OwnAdmission>> => {

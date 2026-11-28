@@ -20,7 +20,7 @@ import { cn } from '../../ui/cn';
 import { Main } from '../../ui/main';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { VisuallyHidden } from '../../ui/visually-hidden';
-import { LogoMark } from '../shell/notice';
+import { LogoMark } from '../../ui/notice';
 import { DoorNotice } from '../sign-in/door-card';
 import { createSetupClient, isSetupFailure, type SetupClient } from './client';
 import { SETUP_STATE_KEY, SetupProvider } from './context';
