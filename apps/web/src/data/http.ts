@@ -14,8 +14,8 @@
 import { Value } from '@sinclair/typebox/value';
 import { AppErrorBody } from '@purlay/types';
 import type { Static, TSchema } from '@sinclair/typebox';
-import type { Schedule } from '../realtime/connection';
-import { browserSchedule } from '../realtime/socket';
+import type { Schedule } from '../lib/schedule';
+import { browserSchedule } from '../lib/schedule';
 import { ApiError, LibraryFailure } from './errors';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

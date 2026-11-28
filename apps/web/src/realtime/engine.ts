@@ -68,14 +68,14 @@ import { accountChanged, isApiError } from '../data/errors';
 import { families, keys } from '../data/keys';
 import { workspaceAccessChanged, workspaceAccessRequired } from '../data/access-change';
 import { captureAccess, watchAccessChanges } from '../data/access-revision';
-import type { Clock } from './clock';
+import type { Clock } from '../lib/clock';
 import {
   createConnection,
   type Connection,
   type ConnectionStatus,
   type OpenSocket,
-  type Schedule,
 } from './connection';
+import { type Schedule } from '../lib/schedule';
 import { loadStored, saveStored, type StoredMessage } from './pending-store';
 import { createServerClock } from './server-clock';
 

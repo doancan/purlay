@@ -11,7 +11,7 @@ import { useApi } from '../../data/api-provider';
 import { keys } from '../../data/keys';
 import { MINUTE_MS } from '../../lib/time';
 import { RealtimePortsContext } from '../../realtime/realtime-provider';
-import { browserSchedule } from '../../realtime/socket';
+import { browserSchedule } from '../../lib/schedule';
 import { systemClock } from '../../system-clock';
 
 /** The person's quiet hours as the server keeps them: read once, and set again by whoever saves them. */

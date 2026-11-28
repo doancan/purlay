@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { isClaimedBy, noteStorageFailure } from '../../../data/browser-storage';
-import type { Schedule } from '../../../realtime/connection';
+import type { Schedule } from '../../../lib/schedule';
 import type { KeyValueStorage } from '../../../theme/theme';
 
 export interface DraftStorage extends KeyValueStorage {

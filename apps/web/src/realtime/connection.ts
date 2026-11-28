@@ -37,7 +37,8 @@ import {
   TOO_BUSY_BACKOFF_STEP,
 } from '@purlay/types';
 import { reconnectDelay } from './backoff';
-import type { Clock } from './clock';
+import type { Clock } from '../lib/clock';
+import type { Schedule } from '../lib/schedule';
 import { createCursors } from './cursors';
 import type { ServerClock } from './server-clock';
 
@@ -55,9 +56,6 @@ interface Socket {
 }
 
 export type OpenSocket = (url: string, handlers: SocketHandlers) => Socket;
-
-/** Runs `fn` after `ms`; the returned function cancels it. */
-export type Schedule = (fn: () => void, ms: number) => () => void;
 
 /**
  * `idle` before `start` and after `stop` · `connecting` · `open` · `waiting` for

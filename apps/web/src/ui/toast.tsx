@@ -21,8 +21,8 @@
 import { createContext, useContext, useState } from 'react';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { useStore } from 'zustand';
-import type { Schedule } from '../realtime/connection';
-import { browserSchedule } from '../realtime/socket';
+import type { Schedule } from '../lib/schedule';
+import { browserSchedule } from '../lib/schedule';
 import { Button } from './button';
 import { IconButton } from './icon-button';
 

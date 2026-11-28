@@ -23,10 +23,12 @@ import { useChannels } from '../data/queries';
 import { useSession } from '../features/session/session';
 import { useWorkspace } from '../features/shell/workspace';
 import { systemClock } from '../system-clock';
-import type { Clock } from './clock';
-import type { ConnectionStatus, OpenSocket, Schedule } from './connection';
+import type { Clock } from '../lib/clock';
+import type { ConnectionStatus, OpenSocket } from './connection';
+import type { Schedule } from '../lib/schedule';
 import { createEngine, type DegradedReason, type Engine, type PendingMessage } from './engine';
-import { browserSchedule, browserSocket } from './socket';
+import { browserSocket } from './socket';
+import { browserSchedule } from '../lib/schedule';
 
 export interface RealtimePorts {
   readonly openSocket?: OpenSocket;

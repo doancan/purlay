@@ -8,7 +8,7 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 import { useContentPorts } from '../../content/content-ports';
 import { useToast } from '../../../ui/toast';
 import { systemClock } from '../../../system-clock';
-import type { Clock } from '../../../realtime/clock';
+import type { Clock } from '../../../lib/clock';
 import { cardBodyClasses } from '../page';
 
 interface SecurityTask {

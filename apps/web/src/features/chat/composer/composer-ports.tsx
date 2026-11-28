@@ -6,8 +6,8 @@
  * (D-50), and `localStorage` may be missing or throw even where there is one.
  */
 import { createContext } from 'react';
-import type { Schedule } from '../../../realtime/connection';
-import { browserSchedule } from '../../../realtime/socket';
+import type { Schedule } from '../../../lib/schedule';
+import { browserSchedule } from '../../../lib/schedule';
 import type { DraftStorage } from './drafts';
 
 export interface ComposerPorts {

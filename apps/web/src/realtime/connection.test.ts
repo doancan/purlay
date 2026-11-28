@@ -17,7 +17,7 @@ import {
   TOO_BUSY_BACKOFF_STEP,
 } from '@purlay/types';
 import { reconnectDelay } from './backoff';
-import type { Clock } from './clock';
+import type { Clock } from '../lib/clock';
 import {
   createConnection,
   SESSION_CHECK_DEADLINE_MS,

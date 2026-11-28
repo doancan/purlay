@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { isPlausibleMessageId, messageId, messageIdTime } from '@purlay/types';
-import type { Clock } from './clock';
+import type { Clock } from '../lib/clock';
 import { createServerClock } from './server-clock';
 
 /** A clock a test moves by hand, so time passes without waiting for it. */
