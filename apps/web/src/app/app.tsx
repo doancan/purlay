@@ -19,7 +19,7 @@ import { useRoute } from '../router/router-provider';
 import { NarrowPortContext, useNarrow } from '../features/shell/narrow';
 import { MAIN_ID, MainFocus, takeFocus } from '../ui/main';
 import { SkipLink } from '../ui/skip-link';
-import { Fireworks } from '../ui/fireworks';
+import { Confetti } from '../ui/confetti';
 import { Toaster } from '../ui/toast';
 import { Outlet } from './outlet';
 import { AppProviders, type AppPorts } from './providers';
@@ -55,7 +55,7 @@ const Frame = (): React.JSX.Element => {
         <Outlet />
       </MainFocus.Provider>
       <Toaster dismissLabel={t('common.close')} />
-      <Fireworks />
+      <Confetti />
     </>
   );
 };
