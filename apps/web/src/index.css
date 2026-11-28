@@ -308,11 +308,6 @@
     arrive-glow calc(var(--duration-arrive) * 4) var(--easing-standard);
 }
 
-/* A mark that just became true — saved, starred, pinned — settles into place, as a finished step's does. */
-@utility animate-settle {
-  animation: mark-settle var(--duration-arrive) var(--easing-standard);
-}
-
 /*
  * The setup wizard's three movements (UX §11): a step enters from the right, a finished step's mark
  * settles, a refused field nudges once. Lengths are tokens (0ms under reduced motion); none loops.

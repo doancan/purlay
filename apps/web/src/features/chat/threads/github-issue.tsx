@@ -101,7 +101,7 @@ export const GitHubWorkPanel = ({
               <a
                 href={link.url}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="break-all text-accent-text hover:underline"
               >
                 {`${link.repository}#${String(link.number)}`}
@@ -421,7 +421,7 @@ const Outcome = ({ outcome }: { readonly outcome: GitHubIssueOutcome }): React.J
           <a
             href={outcome.link.url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="break-all underline"
           >
             {outcome.link.url}

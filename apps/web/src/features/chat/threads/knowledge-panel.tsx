@@ -111,7 +111,7 @@ export const KnowledgePanel = ({
         <a
           href={kept.decisionUrl}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="break-all text-label text-accent-text hover:underline"
         >
           {t('knowledge.reference')}

@@ -20,22 +20,12 @@ export interface KeyHintsProps {
 
 export const KeyHints = ({ id, fenced, labels, chord }: KeyHintsProps): React.JSX.Element => {
   const { t } = useI18n();
-  const hints = (
-    <>
-      <span className="whitespace-nowrap">
-        <Kbd>{fenced ? chord(labels.mod, labels.enter) : 'Enter'}</Kbd> {t('composer.hint.send')}
-      </span>
-      <span className="whitespace-nowrap">
-        <Kbd>Shift+Enter</Kbd> {t('composer.hint.newline')}
-      </span>
-      <span className="whitespace-nowrap">
-        <Kbd>```</Kbd> {t('composer.hint.code')}
-      </span>
-    </>
-  );
+  // `touch="show"`: this is spoken, not drawn, and a phone's reader must hear the key that sends there.
   return (
-    <VisuallyHidden>
-      <span id={id}>{hints}</span>
+    <VisuallyHidden id={id}>
+      <Kbd touch="show">{fenced ? chord(labels.mod, labels.enter) : 'Enter'}</Kbd>{' '}
+      {t('composer.hint.send')} <Kbd touch="show">Shift+Enter</Kbd> {t('composer.hint.newline')}{' '}
+      <Kbd touch="show">```</Kbd> {t('composer.hint.code')}
     </VisuallyHidden>
   );
 };
