@@ -75,15 +75,15 @@ const WORDS: Readonly<Record<PushLocale, Words>> = {
     stop: 'To stop these emails, open this link:',
   },
   tr: {
-    subject: 'Purlay’da seni bekleyen mesajlar var',
-    intro: 'Seni ilgilendiren mesajlar bir süredir okunmadan bekliyor.',
+    subject: 'Purlay’da sizi bekleyen mesajlar var',
+    intro: 'Sizi ilgilendiren mesajlar bir süredir okunmadan bekliyor.',
     count: (count) => `${String(count)} mesaj`,
     more: (count) => `ve ${String(count)} tane daha`,
     someone: 'Biri',
     workspace: 'Bir çalışma alanı',
     open: 'Purlay’ı aç',
-    why: 'Bunu, okumadığın doğrudan mesajlar ve bahsetmeler için e-posta istediğin için alıyorsun (Ayarlar → Bildirimler). Saatte en fazla bir tane.',
-    stop: 'Bu e-postaları durdurmak için bu bağlantıyı aç:',
+    why: 'Bunu, okumadığınız doğrudan mesajlar ve bahsetmeler için e-posta istediğiniz için alıyorsunuz (Ayarlar → Bildirimler). Saatte en fazla bir tane.',
+    stop: 'Bu e-postaları durdurmak için bu bağlantıyı açın:',
   },
 };
 

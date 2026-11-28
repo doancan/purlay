@@ -84,15 +84,15 @@ const WORDS = {
       'If you did not expect this, you can ignore it; nothing happens until somebody opens the link.',
   },
   tr: {
-    subject: 'Purlay’a davet edildin',
+    subject: 'Purlay’a davet edildiniz',
     someone: 'Biri',
     workspace: 'bir çalışma alanı',
     invited: (inviter: string, workspace: string): string =>
-      `${inviter} seni Purlay’da “${workspace}” alanına katılmaya davet etti.`,
+      `${inviter} sizi Purlay’da “${workspace}” alanına katılmaya davet etti.`,
     button: 'Daveti kabul et',
     until: (until: string): string =>
-      `Bağlantı ${until} tarihine kadar, elinde olan herkes için çalışır; kimseyle paylaşma.`,
-    ignore: 'Beklemiyorsan görmezden gelebilirsin; biri bağlantıyı açmadıkça hiçbir şey olmaz.',
+      `Bağlantı ${until} tarihine kadar, elinde olan herkes için çalışır; kimseyle paylaşmayın.`,
+    ignore: 'Beklemiyorsanız görmezden gelebilirsiniz; biri bağlantıyı açmadıkça hiçbir şey olmaz.',
   },
 } as const;
 
@@ -128,7 +128,7 @@ export const invitationLetter = (to: string, head: Letterhead): MailMessage => {
             kind: 'paragraph' as const,
             text:
               head.locale === 'tr'
-                ? `Bu davet yalnızca bu e-posta adresiyle doğrulanan hesap içindir. Misafir olarak ${String(guest.channelCount)} kanala erişebilirsin; yalnızca katıldıktan sonraki mesaj ve dosyaları göreceksin.`
+                ? `Bu davet yalnızca bu e-posta adresiyle doğrulanan hesap içindir. Misafir olarak ${String(guest.channelCount)} kanala erişebilirsiniz; yalnızca katıldıktan sonraki mesaj ve dosyaları göreceksiniz.`
                 : `This invitation is only for the account verified with this email address. As a guest you can access ${String(guest.channelCount)} channels, and only messages and files shared after you join.`,
           },
           ...(guest.accessExpiresAt === null
@@ -163,7 +163,7 @@ export const invitationLetter = (to: string, head: Letterhead): MailMessage => {
           guest === undefined
             ? words.until(untilWords(head.expiresAt, head.locale))
             : head.locale === 'tr'
-              ? `Davet bağlantısının bitişi: ${untilWords(head.expiresAt, head.locale)}; kimseyle paylaşma.`
+              ? `Davet bağlantısının bitişi: ${untilWords(head.expiresAt, head.locale)}; kimseyle paylaşmayın.`
               : `The invitation link expires: ${untilWords(head.expiresAt, head.locale)}; do not share it.`,
       },
       { kind: 'note', text: words.ignore },

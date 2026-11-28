@@ -337,7 +337,7 @@ const TEST_WORDS = {
     button: 'Open Purlay',
   },
   tr: {
-    subject: 'Purlay sunucundan bir deneme',
+    subject: 'Purlay sunucunuzdan bir deneme',
     text: (server: string): string =>
       `Bu, ${server} adresindeki Purlay sunucusundan bir deneme: bir yönetici bir e-posta sunucusunu denedi, e-posta çalışıyor. Yapacak bir şey yok.`,
     button: 'Purlay’ı aç',

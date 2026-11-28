@@ -14,8 +14,8 @@ describe('the sign-in link letter', () => {
     expect(en.html).toContain(`href="${URL_OPENED}"`);
     expect(en.html).toContain('>Sign in to Purlay</a>');
     const tr = linkLetter('a@example.test', 'tr', URL_OPENED);
-    expect(tr.subject).toBe('Purlay giriş bağlantın');
-    expect(tr.text).toContain(`Purlay’a gir:\n${URL_OPENED}`);
+    expect(tr.subject).toBe('Purlay oturum açma bağlantınız');
+    expect(tr.text).toContain(`Purlay’da oturum aç:\n${URL_OPENED}`);
     expect(tr.text).toContain(`${String(SIGN_IN_LINK_TTL_MINUTES)} dakika`);
     expect(tr.html).toContain('<html lang="tr">');
   });
@@ -32,7 +32,7 @@ describe('the word to an account GitHub made', () => {
 
   test('says the same in Turkish', () => {
     const letter = githubLetter('a@example.test', 'tr', 'https://purlay.test');
-    expect(letter.subject).toBe('Purlay’a giriş');
+    expect(letter.subject).toBe('Purlay’da oturum açma');
     expect(letter.text).toContain('“GitHub ile devam et” düğmesini kullan');
     expect(letter.text).toContain('Purlay’ı aç:\nhttps://purlay.test');
   });
@@ -50,7 +50,7 @@ describe('the word to an account Google made', () => {
 
   test('says the same in Turkish', () => {
     const letter = googleLetter('a@example.test', 'tr', 'https://purlay.test');
-    expect(letter.subject).toBe('Purlay’a giriş');
+    expect(letter.subject).toBe('Purlay’da oturum açma');
     expect(letter.text).toContain('“Google ile devam et” düğmesini kullan');
   });
 });

@@ -66,10 +66,10 @@ describe('the invitation letter', () => {
 
   test('is written in Turkish for a Turkish interface, with the same fixed subject', () => {
     const letter = invitationLetter('bob@example.test', head({ locale: 'tr' }));
-    expect(letter.subject).toBe('Purlay’a davet edildin');
-    expect(letter.text).toContain('Alice Doe seni Purlay’da “Acme” alanına');
+    expect(letter.subject).toBe('Purlay’a davet edildiniz');
+    expect(letter.text).toContain('Alice Doe sizi Purlay’da “Acme” alanına');
     expect(letter.text).toContain('28 Ekim 2026');
-    expect(letter.text).toContain('görmezden gelebilirsin');
+    expect(letter.text).toContain('görmezden gelebilirsiniz');
   });
 
   test('puts nobody’s words in the subject, whatever the names say', () => {

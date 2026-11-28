@@ -51,7 +51,7 @@ const WORDS: Readonly<Record<LetterLocale, { open: string; fallback: string }>> 
   },
   tr: {
     open: 'Aç',
-    fallback: 'Düğme çalışmazsa bu adresi tarayıcına yapıştır:',
+    fallback: 'Düğme çalışmazsa bu adresi tarayıcınıza yapıştırın:',
   },
 };
 

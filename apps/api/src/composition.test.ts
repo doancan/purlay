@@ -875,7 +875,7 @@ describe('what a process that does not run a module offers of it', () => {
       'Ada assigned an issue to you',
     );
     expect(compositionFor('issues').noticeWords('issue_assigned', 'tr', 'Ada')?.body).toBe(
-      'Ada sana bir sorun atadı',
+      'Ada size bir sorun atadı',
     );
     // A kind it does not word is none: the sender then says so, and tells nobody.
     expect(compositionFor('issues').noticeWords('issue_closed', 'en', 'Ada')).toBeUndefined();

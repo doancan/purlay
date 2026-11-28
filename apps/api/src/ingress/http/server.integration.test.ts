@@ -1575,7 +1575,7 @@ describe('integration: server runtime compatibility paths', () => {
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
-    expect(relay.received[0]?.data).toContain('Purlay sunucundan bir deneme');
+    expect(relay.received[0]?.data).toContain('Purlay sunucunuzdan bir deneme');
     expect(relay.received[0]?.data).not.toContain('A test from your Purlay server');
   });
 });
