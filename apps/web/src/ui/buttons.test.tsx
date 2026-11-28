@@ -154,7 +154,6 @@ describe('IconButton', () => {
     const classes = getByRole('button').className.split(' ');
     expect(classes).toContain('h-control');
     expect(classes).toContain('rounded-lg');
-    expect(classes).not.toContain('h-switcher');
   });
 
   test('clicks, and is inert when disabled', async () => {

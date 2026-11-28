@@ -3518,8 +3518,6 @@ export const tr = {
   'setup.verify.error.title': 'Adres doğrulanamadı',
   'settings.group.server': 'Sunucu',
   'settings.server.nav': 'Sunucu',
-  'settings.server.description':
-    'Bu sunucunun insanları nasıl içeri aldığı. Bu sayfayı yalnızca siz, sunucunun yöneticisi, görürsünüz.',
   'settings.server.loadError.title': 'Sunucu ayarları okunamadı',
   'settings.server.loadError.body': 'Hiçbir şey değişmedi. Yeniden deneyin.',
   'settings.server.refreshError.body':
@@ -3950,7 +3948,6 @@ export const tr = {
   'admin.job.overdue': 'İnceleme gerekiyor',
   'admin.lastSuccess': 'Son başarı',
   'admin.failures': 'Ardışık hata',
-  'admin.actor': 'İşlemi yapan kimliği',
   'admin.action': 'İşlem',
   'admin.from': 'Başlangıç (yerel saat)',
   'admin.to': 'Bitiş (yerel saat)',

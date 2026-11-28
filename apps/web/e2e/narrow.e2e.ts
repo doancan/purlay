@@ -407,7 +407,7 @@ test.describe('at a phone width', () => {
       const toggle = page.getByRole('button', { name: 'Open navigation' });
       await toggle.click();
       await expect(page.getByRole('dialog', { name: 'Workspace' })).toBeVisible();
-      // The panel is the rail and the sidebar, 296px wide; the scrim is everything to its right. Radix starts listening for a
+      // The panel is the rail and the sidebar, 320px wide; the scrim is everything to its right. Radix starts listening for a
       // press outside a moment after the panel mounts, so a click in that first moment is a click
       // on nothing: the click is repeated until the panel answers, which is what a person does.
       await expect(async () => {

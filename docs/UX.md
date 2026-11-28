@@ -831,7 +831,7 @@ available, and support Send. `Mod+Shift+P` changes modes and focuses the text. B
 twelve text lines or 40% of the current viewport; longer content scrolls inside.
 The writing area starts at two lines and grows for soft wraps as well as typed newlines. On narrow
 screens the text is at least 16px and the send button is an icon; with a keyboard the visible Send
-label is visible; the hints below the text name the shortcut appropriate to a normal message or an open code fence.
+label is visible; the keys that send or break a line are described to a screen reader, appropriate to a normal message or an open code fence (D-362).
 
 **Active formatting** follows the caret and text selection. Emphasis, list and quote controls
 show their pressed state with the existing selected colours and `aria-pressed`. Code-block insertion

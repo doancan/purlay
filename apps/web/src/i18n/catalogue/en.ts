@@ -3524,8 +3524,6 @@ export const en = {
   'setup.verify.error.title': 'Could not verify the address',
   'settings.group.server': 'Server',
   'settings.server.nav': 'Server',
-  'settings.server.description':
-    'How this server lets people in. Only you, its administrator, see this page.',
   'settings.server.loadError.title': 'Could not read the server settings',
   'settings.server.loadError.body': 'Nothing was changed. Try again.',
   'settings.server.refreshError.body':
@@ -3952,7 +3950,6 @@ export const en = {
   'admin.job.overdue': 'Needs attention',
   'admin.lastSuccess': 'Last success',
   'admin.failures': 'Consecutive failures',
-  'admin.actor': 'Actor ID',
   'admin.action': 'Action',
   'admin.from': 'From (local time)',
   'admin.to': 'To (local time)',

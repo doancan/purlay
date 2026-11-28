@@ -56,7 +56,6 @@ const toneClasses = {
 } as const;
 
 interface KbdProps {
-  readonly className?: string;
   readonly tone?: keyof typeof toneClasses;
   /** The shortcut, in either spelling: `Mod+K`, `Ctrl+Shift+R`, `⌘K`, `Esc`. */
   readonly children: string;
@@ -67,7 +66,6 @@ interface KbdProps {
 }
 
 export const Kbd = ({
-  className,
   tone = 'page',
   children,
   mac = currentPlatformIsMac(),
@@ -94,9 +92,9 @@ export const Kbd = ({
       </kbd>
     );
   };
-  if (caps.length <= 1) return cap(caps[0] ?? children, cn(touchClasses, className));
+  if (caps.length <= 1) return cap(caps[0] ?? children, touchClasses);
   return (
-    <kbd className={cn('inline-flex items-center gap-1', touchClasses, className)}>
+    <kbd className={cn('inline-flex items-center gap-1', touchClasses)}>
       {caps.map((key, at) => (
         // A chord may name a key twice (`Ctrl++`), so a cap is keyed by its place; caps never reorder.
         <Fragment key={at}>

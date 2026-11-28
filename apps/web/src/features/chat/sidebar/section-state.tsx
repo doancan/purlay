@@ -19,18 +19,19 @@ import { LoadingStatus, Skeleton } from '../../../ui/skeleton';
 /** As a row's words in the sidebar, or at the edge of a dialog. */
 const edge = (flush: boolean): string => (flush ? 'py-1' : 'px-2 py-1');
 
+/** How many rows of outline a loading section draws. */
+const LOADING_ROWS = 3;
+
 export const SectionLoading = ({
   label,
-  rows = 3,
   flush = false,
 }: {
   readonly label: string;
-  readonly rows?: number;
   readonly flush?: boolean;
 }): React.JSX.Element =>
   flush ? (
     <LoadingStatus label={label} className={cn('flex flex-col gap-3', edge(flush))}>
-      {Array.from({ length: rows }, (_, index) => (
+      {Array.from({ length: LOADING_ROWS }, (_, index) => (
         <Skeleton key={index} className={index % 2 === 0 ? 'w-members' : 'w-1/2'} />
       ))}
     </LoadingStatus>
@@ -38,7 +39,7 @@ export const SectionLoading = ({
     // In the column, the outline of its rows: a row's height and step, a glyph's square and the words' line, so
     // nothing below moves when the list lands.
     <LoadingStatus label={label} className="flex flex-col gap-1">
-      {Array.from({ length: rows }, (_, index) => (
+      {Array.from({ length: LOADING_ROWS }, (_, index) => (
         <span
           key={index}
           aria-hidden="true"

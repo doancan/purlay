@@ -41,12 +41,11 @@ const contentClasses =
   'relative mx-auto flex flex-col gap-4 bg-surface-100 text-ink outline-none data-[state=open]:animate-overlay-in data-[state=closed]:animate-pop-out';
 
 /**
- * The two widths (D-154). A dialog is 480px, a margin inside the window on a phone. A **wide** one —
- * a surface with tabs, such as a channel's details — is 640px, and below the narrow width it is a
+ * The two widths (D-154). A dialog is 520px, a margin inside the window on a phone. A **wide** one —
+ * a surface with tabs, such as a channel's details — is 760px, and below the narrow width it is a
  * sheet that fills the screen: a phone has no room for a card's margins around a whole surface.
  * Each size's classes are whole, never one overriding the other (`cn` does not merge them).
- */
-/**
+ *
  * The close button sits on the title's line, centred on it, its glyph's edge on the content's edge: the
  * title's 24px line starts at the padding, so a 32px button starts 4px above it and 8px out to the side.
  * On a narrow window the button is a finger tall (44px), and moves up and out by the difference.

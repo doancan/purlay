@@ -114,13 +114,12 @@ export const WorkspaceMfa = ({
       },
     );
   };
-  const enroll = (authorizationChallengeId?: string): void => {
+  const enroll = (): void => {
     void task.run(
       () =>
         api.startWorkspaceMfaEnrollment(workspaceId, {
           policyRevision: revision,
           factorRevision: mine.factor?.revision ?? null,
-          ...(authorizationChallengeId === undefined ? {} : { authorizationChallengeId }),
         }),
       (enrollment) => {
         setStep({ kind: 'enroll', enrollment });

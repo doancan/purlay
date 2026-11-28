@@ -116,7 +116,7 @@ const aClient = (over: Partial<ServerClient> = {}): ServerClient => ({
 /** Test-only card composition: production categorizes these across the independent console. */
 const ProviderCards = (): React.JSX.Element =>
   useSession().isServerAdmin ? (
-    <SettingsPage title="Server" description={en['settings.server.description']}>
+    <SettingsPage title="Server" description="How this server lets people in.">
       <ServerSettingsState>
         {(view) => (
           <>
