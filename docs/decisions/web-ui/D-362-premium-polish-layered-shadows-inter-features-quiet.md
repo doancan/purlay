@@ -9,6 +9,10 @@ and the front door.
 - **Layered shadows.** `shadow-card`, `shadow-raised` and `shadow-float` are each a contact line plus one or two soft
   ambient layers; the token grammar accepts layers joined by ", " (and `inset`). Regions are still separated by tone, not
   by shadow (D-110 §2): the layers only soften what already stood above something.
+- **Lighter, bluer light pages.** The light theme's page grounds, hover tracks, code ground and hairlines move toward the
+  navigation's cool blue and a step lighter (`surface-000` #f5f7fc, `surface-050` #f9fafd, `surface-200` #eef1f8,
+  `border-subtle` #dfe3ee, `border-default` #cdd3e3, the composer's three edges alike); text, accent and the dark themes
+  are unchanged, and the generator's contrast audit still passes.
 - **Inter, set with more care.** `cv11`, `ss03`, `calt` and kerning on the page, grayscale smoothing, and a little
   negative tracking on `title` (-0.011em) and `heading` (-0.008em). Times are Inter with tabular figures, no longer
   JetBrains Mono: mono keeps code, a hash, a key and a count. Amends D-110 §1, which put a time in mono.
