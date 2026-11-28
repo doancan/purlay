@@ -14,7 +14,8 @@ import { TextField } from '../../ui/text-field';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { isSetupFailure } from './client';
 import { failureWords, reasonWords } from './errors';
-import { movementClass, useReducedMotion } from './motion';
+import { useReducedMotion } from '../../ui/reduced-motion';
+import { movementClass } from './motion';
 
 /**
  * A step can show itself in more than one state — a form, then "connected", then "sent". The step's

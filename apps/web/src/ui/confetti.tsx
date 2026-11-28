@@ -7,6 +7,7 @@
  * not drawn at all under reduced motion. It sits over everything, takes no pointer and is hidden from
  * assistive technology: it is a flourish, never information.
  */
+import { prefersReducedMotion } from './reduced-motion';
 import { useEffect, useRef, useState } from 'react';
 import { onCelebrate } from './celebrate';
 
@@ -57,9 +58,6 @@ const piecesFor = (random: () => number): readonly Piece[] =>
       };
     }),
   );
-
-const prefersReducedMotion = (): boolean =>
-  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export interface ConfettiProps {
   /** A number in [0, 1). Injected so a test names the throw. */

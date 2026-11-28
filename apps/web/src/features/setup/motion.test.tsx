@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { act } from '@testing-library/react';
 import { installDom } from '../../testing/dom';
 import { renderApp } from '../../testing/render';
-import { movementClass, useReducedMotion } from './motion';
+import { useReducedMotion } from '../../ui/reduced-motion';
+import { movementClass } from './motion';
 
 installDom();
 
