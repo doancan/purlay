@@ -14,6 +14,10 @@ import type * as EmojiChoiceModule from './emoji-choices';
 
 const choices = (): Promise<typeof EmojiChoiceModule> => import('./emoji-choices');
 const EmojiChoices = lazy(() => choices().then((module) => ({ default: module.EmojiChoices })));
+/** Reads the list ahead of the click; a failed read is the click's to say, so it is not an unhandled rejection here. */
+const warm = (): void => {
+  choices().catch(() => undefined);
+};
 
 export const EmojiPicker = ({
   onPick,
@@ -37,12 +41,8 @@ export const EmojiPicker = ({
         <IconButton
           label={t('composer.emoji')}
           glyph="emoji"
-          onFocus={() => {
-            void choices();
-          }}
-          onPointerEnter={() => {
-            void choices();
-          }}
+          onFocus={warm}
+          onPointerEnter={warm}
         />
       }
     >
