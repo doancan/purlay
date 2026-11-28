@@ -23,6 +23,7 @@ import {
   type Channel,
   type WorkspaceMember,
 } from '@purlay/types';
+import { dayAfter } from '../../../lib/time';
 import { fold } from '../composer/mention-suggest';
 
 const OPERATOR_KEYS = ['in', 'from', 'has', 'is', 'repo', 'before', 'after', 'on'] as const;
@@ -135,7 +136,6 @@ const personNamed = (value: string, directory: Directory): string | undefined =>
 const FIRST_YEAR = 1970;
 const LAST_YEAR = 9998;
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/u;
-const DAY_MS = 86_400_000;
 
 /** A real calendar day as `YYYY-MM-DD` (no 2026-02-30), or null. */
 const dayOf = (value: string): string | null => {
@@ -143,9 +143,6 @@ const dayOf = (value: string): string | null => {
   if (!(year >= FIRST_YEAR && year <= LAST_YEAR)) return null;
   return new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value ? value : null;
 };
-
-const dayAfter = (day: string): string =>
-  new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
 
 const FLAGS: Readonly<Record<string, Readonly<Record<string, SearchFilters>>>> = {
   has: { code: { kind: 'code' }, file: { kind: 'file' }, files: { kind: 'file' } },

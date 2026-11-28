@@ -7,9 +7,9 @@
  */
 import type { Formatters } from '../../../i18n/format';
 import type { Translate } from '../../../i18n/types';
-import { dayAfter, morningOf, weekdayOf, type Zone } from '../reminders/presets';
+import { dayAfter, HOUR_MS, weekdayOf } from '../../../lib/time';
+import { morningOf, type Zone } from '../reminders/presets';
 
-const HOUR_MS = 60 * 60_000;
 const SUNDAY = 0;
 const MONDAY = 1;
 const DAYS_IN_WEEK = 7;

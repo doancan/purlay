@@ -10,6 +10,7 @@
  * Only the filter's own vocabulary is read back from an address: a person by id, an action the client
  * knows, a day that is one. Anything else is left out rather than sent to be refused.
  */
+import { dayAfter } from '../../../lib/time';
 import {
   AUDIT_ACTIONS,
   type AuditAction,
@@ -71,11 +72,6 @@ export const isNarrowed = (view: AuditView): boolean => auditSearchOf(view) !== 
 /** A window whose last day comes before its first: the page says so and asks nothing. */
 export const isBackwards = (view: AuditView): boolean =>
   view.from !== null && view.to !== null && view.to < view.from;
-
-const dayAfter = (isoDay: string): string => {
-  const [y = 0, m = 1, d = 1] = isoDay.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-};
 
 /** The filter as the server takes it: days become the instants they begin in the reader's zone. */
 export const auditFilterOf = (
