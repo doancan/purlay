@@ -116,7 +116,7 @@ export const Rail = ({ overlay = false }: RailProps): React.JSX.Element => {
     >
       {/* The first place sits level with the workspace's name in the sidebar's band and the screen's header; the places
           are one column of squares a step apart, and the gear at the foot sits level with the account's row beside it. */}
-      <div className="flex flex-col items-center gap-2 pt-1">
+      <div className="flex flex-col items-center gap-2 pt-2">
         {running(modules).flatMap((module) =>
           module.rail.map((entry) => (
             <RailItem key={`${module.id}.${entry.route}`} entry={entry} />
