@@ -31,7 +31,7 @@ import { useWorkspace } from '../../shell/workspace';
 import { buildFeed, newestConfirmedId, type FeedItem } from './feed-model';
 import { FeedList } from './feed-list';
 import { useFeedPorts } from './feed-ports';
-import { useNowMinute } from './now-minute';
+import { dayStamp, useNowMinute } from './now-minute';
 import { useFeedPaging } from './use-feed-paging';
 import { useFeedPlacement } from './use-feed-placement';
 import { useFeedReveal } from './use-feed-reveal';
@@ -158,9 +158,11 @@ export const MessageFeed = ({
   );
   const today = t('message.today');
   const yesterday = t('message.yesterday');
+  // A label is a day: it follows the quarter hour, not the minute, so the feed is not built again every minute.
+  const labelledAt = dayStamp(nowMinute);
   const dayLabel = useCallback(
-    (iso: string): string => format.day(iso, new Date(nowMinute), { today, yesterday }),
-    [format, nowMinute, today, yesterday],
+    (iso: string): string => format.day(iso, new Date(labelledAt), { today, yesterday }),
+    [format, labelledAt, today, yesterday],
   );
 
   const { seeking, marker } = useFeedPlacement(feed, messages, markerAfter, windowed);
