@@ -354,7 +354,7 @@ The web client: design system, layout, screens, interaction, accessibility, copy
 | [D-351](web-ui/D-351-english-uses-typographic-apostrophes-british-spelling.md) | English uses typographic apostrophes and British spelling | 2026-11-27 |  |
 | [D-359](web-ui/D-359-one-product-glossary-owned-by-this-repository.md) | One product glossary, owned by this repository, and Apple's words for signing in and out | 2026-11-27 |  |
 | [D-361](web-ui/D-361-release-confetti-only-two-tone-blue-light.md) | Release confetti only, a two-tone blue light navigation, and no row for yourself under People | 2026-11-28 |  |
-| [D-362](web-ui/D-362-premium-polish-layered-shadows-inter-features-quiet.md) | Premium polish: layered shadows, Inter features, quiet composer, front door | 2026-11-28 |  |
+| [D-362](web-ui/D-362-premium-polish-layered-shadows-inter-features-quiet.md) | Premium polish: layered shadows, Inter features, calmer composer, front door | 2026-11-28 |  |
 
 ### mobile (15)
 

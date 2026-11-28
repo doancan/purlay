@@ -1148,7 +1148,7 @@ says the minutes left. A mode you can forget you are in is a mode that loses you
 
 ## 9. Visual system
 
-Decided here so Phase 0 does not invent one at random. Shadows are layered (a contact line and a soft spread), times are set in Inter with tabular figures, and the composer's formatting row is drawn only while the box is in use (D-362). The words on screen follow one set of rules in both languages:
+Decided here so Phase 0 does not invent one at random. Shadows are layered (a contact line and a soft spread), times are set in Inter with tabular figures, and the composer's key hints are spoken, not printed (D-362). The words on screen follow one set of rules in both languages:
 no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-348),
 and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-350); apostrophes are typographic and English is British (D-351).
 

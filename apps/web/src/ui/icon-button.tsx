@@ -29,8 +29,8 @@ const sizeClasses = {
   control:
     'h-control max-narrow:h-touch aspect-square rounded-md text-ink-muted hover:bg-surface-200 hover:text-ink active:bg-border-subtle active:text-ink aria-pressed:bg-surface-200 aria-pressed:text-ink',
   /**
-   * A tool in the composer's formatting row (D-361): the control's square, but the glyph a size larger and in the full ink,
-   * so a row of twelve reads at a glance instead of as a faint line of marks.
+   * A tool in the composer's formatting row (D-361): the control's square and glyph, in the full ink, so a row of
+   * twelve reads at a glance instead of as a faint line of marks.
    */
   tool: 'h-control max-narrow:h-touch aspect-square rounded-md text-ink hover:bg-surface-200 active:bg-border-subtle aria-pressed:bg-surface-200 disabled:text-ink-muted',
   /**
@@ -87,7 +87,7 @@ export const IconButton = ({
       aria-label={label}
       className={cn(iconButtonClasses, sizeClasses[size], className)}
     >
-      <Icon name={glyph} size={size === 'rail' || size === 'tool' ? 'lg' : 'md'} />
+      <Icon name={glyph} size={size === 'rail' ? 'lg' : 'md'} />
     </button>
   </Tooltip>
 );

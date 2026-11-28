@@ -1,6 +1,6 @@
 # D-110. The interface is flat and quiet: one tone for getting around, one for the conversation
 
-*Amended by D-362: layered shadows, times in Inter with tabular figures, a quiet composer.*
+*Amended by D-362: layered shadows, times in Inter with tabular figures, unprinted key hints in the composer.*
 
 *Amended by D-206: The workspace is drawn once, at the head of the sidebar; the dark theme is layered greys, not black.*
 
