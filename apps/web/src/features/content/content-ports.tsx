@@ -6,7 +6,9 @@
  * returns, to see the plain state) and a clipboard that records. A code block never names
  * `navigator`.
  */
-import { createContext, useContext } from 'react';
+import { createContext, useCallback, useContext } from 'react';
+import { useI18n } from '../../i18n/i18n-provider';
+import { useToast } from '../../ui/toast';
 import { browserHighlighter, type Highlighter } from './highlight';
 
 export interface ContentPorts {
@@ -26,3 +28,27 @@ const browserPorts: ContentPorts = {
 export const ContentPortsContext = createContext<ContentPorts>(browserPorts);
 
 export const useContentPorts = (): ContentPorts => useContext(ContentPortsContext);
+
+/**
+ * Puts text on the clipboard and says what happened: "Copied", or that the browser refused (outside a secure context,
+ * or without permission), so a person knows to select it by hand. The same ten lines were written at fifteen call
+ * sites. `copied` is the words for success where the generic "Copied" is not what was copied ("Link copied").
+ */
+export const useCopier = (): ((text: string, copied?: string) => void) => {
+  const { copy } = useContentPorts();
+  const { show } = useToast();
+  const { t } = useI18n();
+  return useCallback(
+    (text, copied) => {
+      copy(text).then(
+        () => {
+          show({ message: copied ?? t('common.copied') });
+        },
+        () => {
+          show({ message: t('failure.copy') });
+        },
+      );
+    },
+    [copy, show, t],
+  );
+};

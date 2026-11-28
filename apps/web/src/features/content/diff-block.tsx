@@ -16,10 +16,9 @@ import { useMemo, useState } from 'react';
 import { Icon } from '../../components/icon';
 import { useI18n } from '../../i18n/i18n-provider';
 import { cn } from '../../ui/cn';
-import { useToast } from '../../ui/toast';
 import { VisuallyHidden } from '../../ui/visually-hidden';
 import { CLAMP_ABOVE_LINES, CodeBlock } from './code-block';
-import { useContentPorts } from './content-ports';
+import { useCopier } from './content-ports';
 import { parseDiff, splitRows, type DiffFile, type DiffLine } from './parse-diff';
 
 type View = 'unified' | 'split';
@@ -195,8 +194,7 @@ const Diff = ({
   readonly diff: ReturnType<typeof parseDiff>;
 }): React.JSX.Element => {
   const { t, format } = useI18n();
-  const { show } = useToast();
-  const ports = useContentPorts();
+  const copyText = useCopier();
   const [view, setView] = useState<View>('unified');
   const [open, setOpen] = useState(false);
   // The lines as pasted, as a code block counts them, so the two clamp alike.
@@ -204,14 +202,7 @@ const Diff = ({
   const clamped = count > CLAMP_ABOVE_LINES && !open;
 
   const copy = (): void => {
-    ports.copy(code).then(
-      () => {
-        show({ message: t('common.copied') });
-      },
-      () => {
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(code);
   };
 
   return (

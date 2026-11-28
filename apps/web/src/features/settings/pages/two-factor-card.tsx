@@ -24,9 +24,8 @@ import { useI18n } from '../../../i18n/i18n-provider';
 import type { PlainKey } from '../../../i18n/types';
 import { Button } from '../../../ui/button';
 import { TextField } from '../../../ui/text-field';
-import { useToast } from '../../../ui/toast';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
-import { useContentPorts } from '../../content/content-ports';
+import { useCopier } from '../../content/content-ports';
 import { PASSWORD_FIELD_MAX } from '../../password/password-rules';
 import { SettingsCard, SettingsRow } from '../page';
 import { TwoFactorQr } from './two-factor-qr';
@@ -92,8 +91,7 @@ export const TwoFactorCard = ({
   const { t } = useI18n();
   const api = useApi();
   const client = useQueryClient();
-  const { copy } = useContentPorts();
-  const { show } = useToast();
+  const copyText = useCopier();
   const formId = useId();
   const [step, setStep] = useState<Step>({ kind: 'idle' });
   const [password, setPassword] = useState('');
@@ -156,14 +154,7 @@ export const TwoFactorCard = ({
   };
 
   const copyCodes = (codes: readonly string[]): void => {
-    copy(codes.join('\n')).then(
-      () => {
-        show({ message: t('common.copied') });
-      },
-      () => {
-        show({ message: t('failure.copy') });
-      },
-    );
+    copyText(codes.join('\n'));
   };
 
   const cancel = (
