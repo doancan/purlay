@@ -1,5 +1,7 @@
 # D-247. Interface polish: two gate exceptions, one native-first select — builds on D-97, D-211, D-207; closes #892
 
+*Amended by D-361: the party popper sets off nothing; the one celebration is the release confetti.*
+
 **Context.** Using the product day to day showed seams in how it feels: a ring on a button the mouse had just pressed,
 a date field that was three spinning segments, a view switch that jumped and sat at a different place on each screen,
 light-blue chrome in the dark themes, hard black-looking control edges in the light theme, and a list of choices that

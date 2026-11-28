@@ -1,5 +1,7 @@
 # D-261. A release's notes lead with what it is about, list the rest plainly, and are greeted — builds on D-185, D-247, D-248, D-259
 
+*Amended by D-361: a release is greeted by confetti, not fireworks.*
+
 **Context.** D-248's window listed six Keep a Changelog categories as plain headings with plain bullets: a release
 that added one big thing and forty small ones read as forty-one equal lines, a person could not tell a security fix
 from a layout tweak without reading both, and a new version opened as quietly as an old one. The owner asked for

@@ -31,7 +31,7 @@
 
 ## 2. Layout
 
-One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — a light neutral in the light theme (every grey, the navigation's too, from one neutral family on even lightness steps: D-343), the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
+One fixed shell, flat: a rail and a sidebar in one tone that follows the theme — two cool blue tones in the light theme — the rail the deeper, the sidebar the lighter, every other grey one neutral family on even lightness steps (D-343, the navigation's tint restored by D-361), the dark navy in the dark (D-180, which changes D-118), the dark theme layered dark greys with the navigation a step deeper than the conversation (D-206), and the indigo family as a theme of its own, Midnight (D-183, D-184) — the channel on the window's ground, and an
 optional members column. No resizable panes in Phase 1 — a saved layout is one more state to sync
 for no benefit at this size; what the person arranges about the sidebar is what it shows, not where things sit (D-195). Regions are separated by tone and one hairline, not by boxes (D-110).
 
@@ -76,7 +76,7 @@ shown in the section's quiet tone with a tooltip each, never revealed only under
   starts the conversation of exactly them (D-127) —
   each drawn with the faces of its first two people, the second overlapping the first, and "+N"
   for the rest, in the height of any row (D-167) —
-  then the people, and your own row at the foot — your avatar with your own dot or ring, the name over the
+  then the people — everyone but yourself — and your own row at the foot — your avatar with your own dot or ring, the name over the
   handle, and the up-and-down chevron — which opens the **account menu** (D-124, D-146, D-207): who
   you are, as a card; **Deep Work ▸**, a submenu of whiles — 30 minutes, an hour, two hours or until
   tomorrow — or, while it is on, until when, the minutes left and its end, in the menu itself; **Set yourself as away** ("Uzakta görün"),
@@ -460,8 +460,7 @@ it. On a narrow window the navigation opens as the sidebar does.
   would read as a button; each line has its area (the bold word it starts with) as a small label above its
   words, drawn as the markdown it was written in, with a hairline between lines. The dot's colour is never the only
   voice: the word is beside it. A link at the foot opens that release on GitHub in another tab. A new release is greeted
-  by one show of fireworks over the window — two shows' bursts and, on a wide screen, the sides — about four and a half
-  seconds, smooth, then gone; opening the notes by hand shows it too; a person who asked for less motion sees none. Long
+  by confetti thrown from the window's two bottom corners, a few seconds, then gone (D-361); opening the notes by hand shows it too; a person who asked for less motion sees none. Long
   notes scroll inside the window, which a keyboard reaches by a stop of its own; its scrollbar is drawn only while the
   pointer is over it (or a keyboard has focus in it), so a quiet window stays quiet. Focus is held in it; **Got it**, the close button, **Esc** and a click on the scrim close it, and each
   of them remembers the version in this browser (`purlay.releaseNotesSeen`), so a reload, a return or another screen
@@ -1120,7 +1119,7 @@ missing specified behaviour and does not merge.
 | Stop link (`/mail/stop`) | n/a — a link always asks, or says it is not complete | The button busy while it asks | "This link does not open" for one too old or unknown, with the way to Purlay; any other failure said above the button, which tries again (D-240) |
 | Erasing one's account | n/a — the dialog always says what goes and what stays | The button is busy while it asks | A username that is not theirs under the field; a session too old, with the way to sign in again; the workspaces they are the last owner of, by name; any other failure above the buttons. Done, the sign-in screen says the account was erased (D-139 §5) |
 | Open invitation links | "No links are open" + **Make a link** | Skeleton rows | Retry |
-| People (sidebar) | "Nobody else is here yet" under your own row + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
+| People (sidebar) | "Nobody else is here yet" + **Invite people…** for an owner or an admin | Skeleton rows | Retry |
 | Channel details: members | "Nobody is in this channel. Anyone can join it." | Skeleton rows | Retry |
 | Channel details: GitHub repositories | "No repository is connected…" above the Connect form | Skeleton row | Retry |
 | Channel details: incoming webhooks | "No incoming webhook…" above the Make webhook form | Skeleton row | Retry; a make or a revoke refused is said above the form, a name refused on its field (D-245) |
@@ -1150,7 +1149,7 @@ says the minutes left. A mode you can forget you are in is a mode that loses you
 
 ## 9. Visual system
 
-Decided here so Phase 0 does not invent one at random. The words on screen follow one set of rules in both languages:
+Decided here so Phase 0 does not invent one at random. Shadows are layered (a contact line and a soft spread), times are set in Inter with tabular figures, and the composer's formatting row is drawn only while the box is in use (D-362). The words on screen follow one set of rules in both languages:
 no period after a short string, error titles that say what did not load, one Turkish name for each thing (D-348),
 and Turkish addresses the person as *siz*, with a control's command left as the bare verb (D-350); apostrophes are typographic and English is British (D-351).
 
@@ -1178,10 +1177,10 @@ and Turkish addresses the person as *siz*, with a control's command left as the 
   animation — at conversational speed it reads as lag. The selected tab of a side-by-side group, and of every list's filter, slides to
   its new place in 200ms. What the person adds to a list — an issue, a bookmark, a reaction — rises into its
   place in 200ms over a fill of the accent that fades in four times that, so the eye finds it without a toast;
-  a message never does. The one longer motion is a celebration: sending 🎉 (in a message or as a
-  reaction) sets off a one-shot SVG firework show over the screen (about 3s, one of five shows, never looping, the token gate's single
-  exception). Everything is instant under reduced motion, and the firework is not drawn.
-- **Radius / elevation:** 6px for a control, 8px for a row, 10px for a card, 12px for the composer
+  a message never does. The one longer motion is a celebration: a new release's notes opening throws
+  confetti over the screen (about 3.6s, never looping, the token gate's single exception; sending 🎉 sets off nothing, D-361). Everything
+  is instant under reduced motion, and the confetti is not drawn.
+- **Radius / elevation:** 8px for a control, 10px for a row, 12px for a card, 14px for the composer
   and an overlay. The interface is flat: regions are told apart by tone, and only what sits above
   something — an overlay, the hover controls, the composer, a card inside a message — has a shadow.
 - **The mark:** the owner's artwork, light blue gradients, on a white tile, the same picture in the tab's
