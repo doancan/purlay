@@ -54,7 +54,6 @@ import { cn } from '../../../ui/cn';
 import { IconButton } from '../../../ui/icon-button';
 import { useToast } from '../../../ui/toast';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
-import { celebrate, hasPartyPopper } from '../../../ui/celebrate';
 import {
   broadcastMention,
   continueList,
@@ -171,7 +170,7 @@ const Inner = ({
   const choice = allowUrgent || chosenPriority !== 'urgent' ? chosenPriority : 'normal';
   if (choice !== chosenPriority) setChosenPriority(choice);
   const priority = mayPrioritise ? choice : 'normal';
-  // Whether focus is anywhere in the card: the hints are drawn only then, and are read always.
+  // Whether focus is anywhere in the card: the formatting row is drawn only then.
   const [focused, setFocused] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const [sourceMode, setSourceMode] = useState(
@@ -576,7 +575,6 @@ const Inner = ({
       setError(t('composer.accountChanged'));
       return;
     }
-    if (hasPartyPopper(content)) celebrate();
     setChosenPriority('normal');
     clearWritten();
     onSent?.(id);
@@ -962,18 +960,22 @@ const Inner = ({
                 ? t('shortcode.results', { count: shortcodeChoices.length })
                 : ''}
           </VisuallyHidden>
-          <FormatToolbar
-            sourceMode={sourceMode}
-            active={activeFormats}
-            labels={labels}
-            chord={chord}
-            onInsert={insert}
-            onTogglePreview={togglePreview}
-            editingReady={richReady && unitsOver(text) <= 0}
-            onClear={() => {
-              prepareEditor()?.clearFormatting();
-            }}
-          />
+          {/* The formatting row is there while the box is in use and out of the way while it is not: an empty,
+              unfocused box is a field and a Send, not a toolbar of eleven glyphs (D-362). */}
+          <div hidden={!(focused || trimEnd(text) !== '' || uploads.items.length > 0)}>
+            <FormatToolbar
+              sourceMode={sourceMode}
+              active={activeFormats}
+              labels={labels}
+              chord={chord}
+              onInsert={insert}
+              onTogglePreview={togglePreview}
+              editingReady={richReady && unitsOver(text) <= 0}
+              onClear={() => {
+                prepareEditor()?.clearFormatting();
+              }}
+            />
+          </div>
           <div className="flex gap-2 px-4 pb-2 pt-3 max-narrow:px-3">
             <textarea
               data-composer={sourceMode ? '' : undefined}
@@ -989,7 +991,7 @@ const Inner = ({
               aria-activedescendant={activeDescendant}
               placeholder={fieldPlaceholder}
               hidden={!sourceMode}
-              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-subtle max-narrow:text-title max-narrow:font-normal scrollbar-thin"
+              className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body text-ink outline-none placeholder:text-ink-placeholder max-narrow:text-title max-narrow:font-normal scrollbar-thin"
               onChange={(event) => {
                 const { value, selectionStart, selectionEnd } = event.target;
                 madeEmoji.current = null;
@@ -1119,24 +1121,8 @@ const Inner = ({
                   picker.current?.click();
                 }}
               />
-              {/* Between the buttons and the hints, and only where the hints are drawn: unfocused, in a
-                  thread, on a phone or where there is no keyboard it divided the buttons from nothing. */}
-              {focused && !compact && (
-                <span
-                  aria-hidden="true"
-                  data-hints-divider=""
-                  // As far from the last button as the row's gap puts the hints after it.
-                  className="ml-2 h-4 border-l-hairline border-border-subtle max-narrow:hidden touch-only:hidden"
-                />
-              )}
             </span>
-            <KeyHints
-              id={hintsId}
-              drawn={focused && !compact}
-              fenced={fenced}
-              labels={labels}
-              chord={chord}
-            />
+            <KeyHints id={hintsId} fenced={fenced} labels={labels} chord={chord} />
             {!compact && <TypingLine channelId={channelId} />}
             {counter}
             {/* What decides how the message goes, one group beside the button that sends it. */}

@@ -9,11 +9,10 @@ import { useState } from 'react';
 import type { GlyphName } from '../../../components/icon';
 import { useI18n } from '../../../i18n/i18n-provider';
 import { IconButton } from '../../../ui/icon-button';
-import { Tooltip } from '../../../ui/tooltip';
 import type { KeyLabels } from '../../shortcuts/platform';
 import type { MarkdownKind } from './composer-text';
 
-/** Where the mode toggle sits in the row's order of stops, after the eleven formatting buttons. */
+/** Where the mode toggle sits in the row's order of stops, after the formatting buttons. */
 const PREVIEW_STOP = 12;
 const FORMATTING_STATES: ReadonlySet<MarkdownKind> = new Set([
   'bold',
@@ -86,6 +85,7 @@ export const FormatToolbar = ({
   ): React.JSX.Element => (
     <IconButton
       key={kind}
+      size="tool"
       label={label}
       glyph={glyph}
       {...(shortcut === undefined ? {} : { shortcut })}
@@ -118,7 +118,7 @@ export const FormatToolbar = ({
       onKeyDown={onToolbarKey}
     >
       {/* One row on every width: on a phone it scrolls sideways instead of breaking into two, and
-          the preview toggle stays where it is. Where the row is cut, its last space fades out instead of
+          the mode toggle stays where it is, at the row's end. Where the row is cut, its last space fades out instead of
           slicing a glyph in half beside the toggle. The row only overflows below about 440px, so the fade is
           never wider than the end padding and scroll padding: the last button and a focused one stand clear. */}
       <div className="flex min-w-0 flex-1 items-center overflow-x-auto py-1 pl-1 pr-12 scrollbar-thin scroll-pr-12 mask-r-from-90%">
@@ -155,6 +155,7 @@ export const FormatToolbar = ({
         {tool(10, 'table', t('composer.table'), 'table')}
         <Divider />
         <IconButton
+          size="tool"
           label={t('composer.clearFormatting')}
           tooltip={t('composer.clearFormattingHint')}
           glyph="clear-formatting"
@@ -166,25 +167,20 @@ export const FormatToolbar = ({
           onClick={onClear}
         />
       </div>
-      <Tooltip
-        content={t(sourceMode ? 'composer.formattedView' : 'composer.sourceView')}
+      <IconButton
+        size="tool"
+        label={t('composer.sourceView')}
+        tooltip={t(sourceMode ? 'composer.formattedView' : 'composer.sourceView')}
         shortcut={chord(labels.mod, labels.shift, 'P')}
-      >
-        <button
-          type="button"
-          aria-label={t('composer.sourceView')}
-          aria-pressed={sourceMode}
-          tabIndex={stopAt === PREVIEW_STOP ? 0 : -1}
-          onFocus={() => {
-            setStopAt(PREVIEW_STOP);
-          }}
-          // A word and no glyph: the braces it carried were the inline-code button's, two buttons apart.
-          className="inline-flex h-control shrink-0 items-center rounded-md px-2 text-label text-ink-muted transition-colors duration-hover ease-standard hover:bg-surface-200 hover:text-ink aria-pressed:bg-accent-subtle aria-pressed:text-accent-text max-narrow:h-touch"
-          onClick={onTogglePreview}
-        >
-          Markdown
-        </button>
-      </Tooltip>
+        glyph="markdown-source"
+        aria-pressed={sourceMode}
+        className="aria-pressed:bg-accent-subtle aria-pressed:text-accent-text"
+        tabIndex={stopAt === PREVIEW_STOP ? 0 : -1}
+        onFocus={() => {
+          setStopAt(PREVIEW_STOP);
+        }}
+        onClick={onTogglePreview}
+      />
     </div>
   );
 };

@@ -404,12 +404,12 @@ describe('editing', () => {
         box.setSelectionRange(box.value.length, box.value.length);
         fireEvent.select(box);
       });
-      expect(view.getByText(/Ctrl\+Enter to save/)).toBeDefined();
+      expect(view.getByText('saves').textContent).toBe('Ctrl+Enter saves');
       act(() => {
         box.setSelectionRange(0, 0);
         fireEvent.select(box);
       });
-      expect(view.getByText(/^Enter to save/)).toBeDefined();
+      expect(view.getByText('saves').textContent).toBe('Enter saves');
       view.unmountAll();
     });
 

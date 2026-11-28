@@ -34,7 +34,6 @@ import { Menu, MenuTile, MenuTiles } from '../../../ui/menu';
 import { useToast } from '../../../ui/toast';
 import { cn } from '../../../ui/cn';
 import { Tooltip } from '../../../ui/tooltip';
-import { celebrate, hasPartyPopper } from '../../../ui/celebrate';
 import { useWorkspaceIfAny } from '../../shell/workspace';
 
 /** The emoji offered, and the words that name each one. */
@@ -68,7 +67,6 @@ const useToggle = (message: Message, meId: string): ((emoji: string) => void) =>
       show({ message: t('message.reactionLimit', { count: REACTIONS_PER_PERSON_MAX }) });
       return;
     }
-    if (!mine && hasPartyPopper(emoji)) celebrate();
     (mine ? unreact(message, emoji) : react(message, emoji)).catch((failure: unknown) => {
       show({ message: `${t('message.reactionFailed')} ${describe(failure)}` });
     });
