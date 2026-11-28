@@ -111,6 +111,17 @@ export const composerBounds = (
   };
 };
 
+/**
+ * Where the characters-left counter speaks. The counter is drawn at every keystroke from 500 characters on, but a
+ * screen reader that read it each time would repeat itself under the person's hands; it speaks when the count
+ * crosses one of these, and once when the limit is passed.
+ */
+const COUNTER_SPEAKS_AT = [500, 300, 200, 100, 50, 20, 10, 5, 1, 0] as const;
+
+/** Which stretch between those points the count is in: it changes only where the counter should speak. */
+export const counterStretch = (left: number | null): number =>
+  left === null ? 0 : COUNTER_SPEAKS_AT.filter((point) => left <= point).length;
+
 /** Rows to show: as many as the lines, within the bounds that keep the composer a line and not a page. */
 export const rowsFor = (text: string, min = MIN_LINES, max = MAX_LINES): number =>
   Math.min(max, Math.max(min, text.split('\n').length));
