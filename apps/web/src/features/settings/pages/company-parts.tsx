@@ -8,7 +8,7 @@ import { useContentPorts } from '../../content/content-ports';
 import { useSession } from '../../session/session';
 import { leave } from '../../sign-in/leave';
 import { href } from '../../../router/routes';
-import { SettingsCard } from '../page';
+import { SettingsCard, cardBodyClasses, cardRowClasses } from '../page';
 
 export type CompanyTask = (name: string, work: () => Promise<unknown>) => Promise<boolean>;
 
@@ -32,17 +32,14 @@ export const CompanyLoading = ({
 }): React.JSX.Element => {
   const { t } = useI18n();
   return failed ? (
-    <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+    <div className={cardRowClasses}>
       <p role="alert" className="min-w-0 flex-1 text-body text-ink-muted">
         {t('company.loadFailed')}
       </p>
       <Button onClick={retry}>{t('common.retry')}</Button>
     </div>
   ) : (
-    <LoadingStatus
-      label={t('common.loading')}
-      className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-    >
+    <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
       <Skeleton />
       <Skeleton />
     </LoadingStatus>

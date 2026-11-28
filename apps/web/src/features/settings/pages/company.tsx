@@ -18,7 +18,7 @@ import { useToast } from '../../../ui/toast';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
 import { leave } from '../../sign-in/leave';
-import { SettingsCard, SettingsPage } from '../page';
+import { SettingsCard, SettingsPage, cardBodyClasses, cardNoteClasses } from '../page';
 import { CompanyDomains } from './company-domains';
 import { CompanyConnectionEditor } from './company-connection-editor';
 import {
@@ -47,9 +47,7 @@ export const CompanyPage = (): React.JSX.Element => {
         </SettingsCard>
       ) : methods.data.company === undefined ? (
         <SettingsCard>
-          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-            {t('company.unavailable')}
-          </p>
+          <p className={cardNoteClasses}>{t('company.unavailable')}</p>
         </SettingsCard>
       ) : (
         <CompanyManagement
@@ -202,9 +200,7 @@ const CompanyManagement = ({
             }}
           />
         ) : entries.length === 0 ? (
-          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-            {t('company.connections.empty')}
-          </p>
+          <p className={cardNoteClasses}>{t('company.connections.empty')}</p>
         ) : (
           <ul className="flex flex-col">
             {entries.map((entry) => (
@@ -323,7 +319,7 @@ const CompanyManagement = ({
         />
       )}
       <SettingsCard title={t('company.entry.title')} description={t('company.entry.description')}>
-        <div className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardBodyClasses}>
           <CompanyCopyValue label={t('company.entry.title')} value={signInAddress.toString()} />
           <Button
             className="self-start"

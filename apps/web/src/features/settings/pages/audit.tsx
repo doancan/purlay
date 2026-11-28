@@ -38,7 +38,13 @@ import { auditActionsOf } from '../../../modules/registry';
 import { AuthorPicker } from '../../../ui/author-picker';
 import { useModules, useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
-import { SettingsCard, SettingsPage } from '../page';
+import {
+  SettingsCard,
+  SettingsPage,
+  cardBodyClasses,
+  cardNoteClasses,
+  cardRowClasses,
+} from '../page';
 import {
   NO_FILTER,
   auditExportHref,
@@ -539,7 +545,7 @@ export const AuditPage = (): React.JSX.Element => {
       {!backwards && (
         <SettingsCard>
           {trail.isError && trail.data === undefined ? (
-            <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+            <div className={cardRowClasses}>
               <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(trail.error)}</p>
               <Button
                 onClick={() => {
@@ -550,16 +556,13 @@ export const AuditPage = (): React.JSX.Element => {
               </Button>
             </div>
           ) : trail.data === undefined ? (
-            <LoadingStatus
-              label={t('common.loading')}
-              className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-            >
+            <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
               <Skeleton />
               <Skeleton />
               <Skeleton />
             </LoadingStatus>
           ) : entries.length === 0 ? (
-            <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
+            <p className={cardNoteClasses}>
               {isNarrowed(view) ? t('audit.emptyFiltered') : t('audit.empty')}
             </p>
           ) : (

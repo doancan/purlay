@@ -34,7 +34,7 @@ import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { fold } from '../../chat/composer/mention-suggest';
 import { useRuns, useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
-import { SaveOutcome, SettingsCard, SettingsPage } from '../page';
+import { SaveOutcome, SettingsCard, SettingsPage, cardBodyClasses, cardRowClasses } from '../page';
 import { useWorkspaceRole, useWorkspaceCapabilities } from '../role';
 import { GuestAdministration } from '../guests';
 import { compareText } from '../../../lib/collation';
@@ -340,7 +340,7 @@ export const MembersPage = (): React.JSX.Element => {
             </div>
 
             {members.isError && (
-              <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+              <div className={cardRowClasses}>
                 <p role="alert" className="min-w-0 flex-1 text-body text-ink-muted">
                   {members.data !== undefined && t('members.refreshFailed')}{' '}
                   {describe(members.error)}
@@ -357,10 +357,7 @@ export const MembersPage = (): React.JSX.Element => {
             )}
             {members.data === undefined ? (
               !members.isError && (
-                <LoadingStatus
-                  label={t('common.loading')}
-                  className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-                >
+                <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
                   <Skeleton />
                   <Skeleton />
                   <Skeleton />

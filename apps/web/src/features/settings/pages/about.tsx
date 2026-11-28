@@ -20,7 +20,7 @@ import { ErrorState } from '../../../ui/states';
 import { VisuallyHidden } from '../../../ui/visually-hidden';
 import { ReleaseNotesDialog } from '../../about/release-notes-dialog';
 import { useReleaseNotes } from '../../about/release-notes-source';
-import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import { SettingsCard, SettingsPage, SettingsRow, cardPlainClasses } from '../page';
 
 /** Three numbers, as a version is written; anything else cannot be compared. */
 const partsOf = (version: string): readonly number[] | null => {
@@ -110,7 +110,7 @@ export const AboutPage = (): React.JSX.Element => {
     }
     if (running === undefined) {
       return (
-        <LoadingStatus label={t('common.loading')} className="px-6 py-5 max-narrow:px-4">
+        <LoadingStatus label={t('common.loading')} className={cardPlainClasses}>
           <Skeleton />
         </LoadingStatus>
       );

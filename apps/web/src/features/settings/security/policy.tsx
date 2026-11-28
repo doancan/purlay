@@ -18,7 +18,7 @@ import { href } from '../../../router/routes';
 import { Button, buttonStyle } from '../../../ui/button';
 import { Checkbox } from '../../../ui/checkbox';
 import { Select } from '../../../ui/select';
-import { SettingsCard, SettingsPage, SettingsRow, SettingsTextRow } from '../page';
+import { SettingsCard, SettingsPage, SettingsRow, SettingsTextRow, cardBodyClasses } from '../page';
 import { keys } from '../../../data/keys';
 import { useSession } from '../../session/session';
 import { useWorkspace } from '../../shell/workspace';
@@ -532,7 +532,7 @@ const PolicyTestResult = ({
   return (
     <>
       <SettingsCard title={t(`security.status.${tested.status.state}`)}>
-        <div className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardBodyClasses}>
           {expired ? (
             <p role="status" className="text-body text-warning-text">
               {t('security.code.expired')}

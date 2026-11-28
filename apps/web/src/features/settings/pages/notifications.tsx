@@ -31,7 +31,14 @@ import { mustInstallForPush } from '../../push/device';
 import { usePushControls } from '../../push/push';
 import { DEEP_WORK_CHOICES, useDeepWorkControls } from '../../shell/deep-work';
 import { useWorkspace } from '../../shell/workspace';
-import { SettingsCard, SettingsPage, SettingsRow } from '../page';
+import {
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  cardBodyClasses,
+  cardNoteClasses,
+  cardRowClasses,
+} from '../page';
 import { MissedMailCard } from './missed-mail-card';
 import { QuietHoursCard } from './quiet-hours-card';
 import { AlertDeliveryCard } from './alert-delivery-card';
@@ -212,7 +219,7 @@ const ChannelLevels = (): React.JSX.Element => {
       description={t('settings.notifications.channelsHint')}
     >
       {channels.isError ? (
-        <div className="flex items-center gap-3 px-6 py-5 max-narrow:px-4">
+        <div className={cardRowClasses}>
           <p className="min-w-0 flex-1 text-body text-ink-muted">{describe(channels.error)}</p>
           <Button
             onClick={() => {
@@ -223,18 +230,13 @@ const ChannelLevels = (): React.JSX.Element => {
           </Button>
         </div>
       ) : channels.data === undefined ? (
-        <LoadingStatus
-          label={t('common.loading')}
-          className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-        >
+        <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
           <Skeleton />
           <Skeleton />
           <Skeleton />
         </LoadingStatus>
       ) : joined.length === 0 ? (
-        <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">
-          {t('settings.notifications.noChannels')}
-        </p>
+        <p className={cardNoteClasses}>{t('settings.notifications.noChannels')}</p>
       ) : (
         joined.map((channel) => {
           const current = channel.notificationLevel ?? 'mentions';

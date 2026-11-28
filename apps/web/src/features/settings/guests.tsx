@@ -18,7 +18,7 @@ import { Select } from '../../ui/select';
 import { LoadingStatus, Skeleton } from '../../ui/skeleton';
 import { TextField, FINDABLE_FROM } from '../../ui/text-field';
 import { useWorkspace } from '../shell/workspace';
-import { SettingsCard } from './page';
+import { SettingsCard, cardBodyClasses, cardNoteClasses } from './page';
 import { useGuestDirectory } from './guest-directory';
 import { guestExpiryFields, guestExpiryInstant } from './guest-expiry';
 import { GuestInvitationForm } from './guest-invitation';
@@ -574,16 +574,13 @@ export const GuestAdministration = (): React.JSX.Element => {
         )}
         {list.data === undefined ? (
           !list.isError && (
-            <LoadingStatus
-              label={t('common.loading')}
-              className="flex flex-col gap-3 px-6 py-5 max-narrow:px-4"
-            >
+            <LoadingStatus label={t('common.loading')} className={cardBodyClasses}>
               <Skeleton />
               <Skeleton />
             </LoadingStatus>
           )
         ) : rows.length === 0 ? (
-          <p className="px-6 py-5 text-body text-ink-muted max-narrow:px-4">{t('guests.none')}</p>
+          <p className={cardNoteClasses}>{t('guests.none')}</p>
         ) : (
           <ul aria-label={t('guests.title')} className="flex min-w-0 flex-col">
             {rows.map((guest) => (

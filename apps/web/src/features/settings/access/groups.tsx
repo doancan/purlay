@@ -13,7 +13,7 @@ import { Checkbox } from '../../../ui/checkbox';
 import { Dialog } from '../../../ui/dialog';
 import { TextField } from '../../../ui/text-field';
 import { Avatar } from '../../../ui/avatar';
-import { SettingsCard, SettingsPage } from '../page';
+import { SettingsCard, SettingsPage, cardPlainClasses } from '../page';
 import {
   AccessConfirm,
   AccessListState,
@@ -330,7 +330,7 @@ const GroupDetail = ({
         </AccessListState>
       </SettingsCard>
       <SettingsCard title={t('access.grants.title')}>
-        <div className="px-6 py-5 max-narrow:px-4">
+        <div className={cardPlainClasses}>
           <AccessGrants
             subject={{ kind: 'group', groupId: group.id }}
             revision={group.revision}
