@@ -15,6 +15,7 @@ import {
   isClaimedBy,
   PERSON_KEY,
   noteStorageFailure,
+  rememberingStorage,
   resetStorageNotes,
   type ClientStorage,
 } from './browser-storage';
@@ -145,6 +146,23 @@ describe("the browser's storage", () => {
     try {
       expect(browserStorage()).toBeNull();
       expect(note()).toBe('unavailable');
+    } finally {
+      if (original !== undefined) Object.defineProperty(window, 'localStorage', original);
+    }
+  });
+
+  test('a remembering store is a store that forgets when the property throws, so the page still draws', () => {
+    const original = Object.getOwnPropertyDescriptor(window, 'localStorage');
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get: (): never => {
+        throw new Error('blocked');
+      },
+    });
+    try {
+      const store = rememberingStorage();
+      store.setItem('purlay.theme', 'dark');
+      expect(store.getItem('purlay.theme')).toBeNull();
     } finally {
       if (original !== undefined) Object.defineProperty(window, 'localStorage', original);
     }

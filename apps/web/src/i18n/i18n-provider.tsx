@@ -22,6 +22,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { rememberingStorage } from '../data/browser-storage';
 import { createFormatters, type Formatters } from './format';
 import {
   detectLocale,
@@ -43,7 +44,7 @@ export interface I18nPorts {
 }
 
 const browserPorts = (): I18nPorts => ({
-  storage: window.localStorage,
+  storage: rememberingStorage(),
   languages: navigator.languages,
   load: loadCatalogue,
   target: document.documentElement,
